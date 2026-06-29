@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildCoord — Product Requirements Document</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap');
+
+  :root {
+    --green-deep: #1B4332;
+    --green-mid: #2D6A4F;
+    --green-bright: #52B788;
+    --green-light: #D8F3DC;
+    --green-pale: #F0FBF3;
+    --amber: #E76F51;
+    --amber-light: #FDF0EC;
+    --ink: #1A1A1A;
+    --ink-mid: #444;
+    --ink-light: #777;
+    --border: #E2EBE6;
+    --bg: #FAFBF9;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* Cover */
+  .cover {
+    background: var(--green-deep);
+    color: white;
+    padding: 80px 48px 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 320px; height: 320px;
+    border-radius: 50%;
+    background: rgba(82,183,136,0.12);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -40px; left: 40px;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: rgba(82,183,136,0.08);
+  }
+  .cover-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--green-bright);
+    margin-bottom: 16px;
+  }
+  .cover h1 {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: clamp(48px, 8vw, 80px);
+    font-weight: 400;
+    line-height: 1;
+    margin-bottom: 12px;
+    color: white;
+  }
+  .cover-sub {
+    font-size: 18px;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 40px;
+  }
+  .cover-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding-top: 24px;
+  }
+  .cover-meta span { display: flex; align-items: center; gap: 6px; }
+  .cover-meta strong { color: rgba(255,255,255,0.85); }
+
+  /* Layout */
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* TOC */
+  .toc {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin: 40px 0;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin-bottom: 16px;
+  }
+  .toc ol {
+    columns: 2;
+    column-gap: 32px;
+    padding-left: 20px;
+  }
+  .toc li {
+    margin-bottom: 6px;
+    break-inside: avoid;
+  }
+  .toc a {
+    color: var(--green-mid);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .toc a:hover { color: var(--green-deep); text-decoration: underline; }
+
+  /* Sections */
+  .section {
+    padding: 48px 0 0;
+    border-top: 1px solid var(--border);
+    margin-top: 48px;
+  }
+  .section:first-of-type { border-top: none; margin-top: 0; }
+
+  .section-num {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--green-bright);
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: clamp(24px, 4vw, 32px);
+    font-weight: 400;
+    color: var(--green-deep);
+    margin-bottom: 20px;
+    line-height: 1.2;
+  }
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--green-mid);
+    margin: 28px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  h3::before {
+    content: '';
+    display: block;
+    width: 4px; height: 16px;
+    background: var(--green-bright);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  h4 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin: 24px 0 8px;
+  }
+  p { color: var(--ink-mid); margin-bottom: 14px; }
+
+  /* Lists */
+  ul, ol {
+    padding-left: 20px;
+    margin-bottom: 14px;
+  }
+  li { color: var(--ink-mid); margin-bottom: 6px; }
+  li::marker { color: var(--green-bright); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin: 20px 0; border-radius: 10px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  thead th {
+    background: var(--green-mid);
+    color: white;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 12px 16px;
+    text-align: left;
+  }
+  tbody td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink-mid);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: var(--green-pale); }
+
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink-mid);
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before {
+    content: '☐';
+    color: var(--green-bright);
+    font-size: 16px;
+    flex-shrink: 0;
+    line-height: 1.4;
+  }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 20px 0;
+    border-left: 4px solid;
+  }
+  .callout.green {
+    background: var(--green-pale);
+    border-color: var(--green-bright);
+  }
+  .callout.amber {
+    background: var(--amber-light);
+    border-color: var(--amber);
+  }
+  .callout-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .callout.green .callout-title { color: var(--green-mid); }
+  .callout.amber .callout-title { color: var(--amber); }
+
+  /* Personas */
+  .persona-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+  .persona-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .persona-icon { font-size: 28px; margin-bottom: 10px; }
+  .persona-name { font-weight: 600; color: var(--green-deep); margin-bottom: 6px; font-size: 15px; }
+  .persona-desc { font-size: 13px; color: var(--ink-light); line-height: 1.5; }
+
+  /* Phase pills */
+  .phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0; }
+  .phase-card {
+    border-radius: 10px;
+    padding: 20px 22px;
+    border: 1px solid var(--border);
+  }
+  .phase-card.p1 { background: var(--green-pale); border-color: var(--green-bright); }
+  .phase-card.p2 { background: white; }
+  .phase-card.p3 { background: white; }
+  .phase-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green-mid); margin-bottom: 6px; }
+  .phase-title { font-weight: 600; color: var(--green-deep); margin-bottom: 8px; }
+  .phase-desc { font-size: 13px; color: var(--ink-light); line-height: 1.5; }
+
+  /* AI feature highlight */
+  .ai-nudge {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 8px 0;
+    font-size: 14px;
+    color: var(--ink-mid);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .ai-nudge::before { content: '✦'; color: var(--green-bright); flex-shrink: 0; font-size: 12px; margin-top: 2px; }
+
+  /* Print styles */
+  @media print {
+    .cover { background: white; color: var(--ink); padding: 40px 0; }
+    .cover h1 { color: var(--green-deep); }
+    .cover::before, .cover::after { display: none; }
+    body { font-size: 12px; }
+    .section { page-break-inside: avoid; }
+    a { color: var(--green-mid); }
+  }
+
+  @media (max-width: 600px) {
+    .cover { padding: 48px 24px 40px; }
+    .toc ol { columns: 1; }
+    .container { padding: 0 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-label">Product Requirements Document</div>
+  <h1>BuildCoord</h1>
+  <div class="cover-sub">Community build & renovation coordination</div>
+  <div class="cover-meta">
+    <span><strong>Version</strong> 2.0</span>
+    <span><strong>Date</strong> June 2026</span>
+    <span><strong>Author</strong> Emelie</span>
+    <span><strong>Status</strong> Ready for Design</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#overview">Product Overview</a></li>
+      <li><a href="#problem">Problem Statement</a></li>
+      <li><a href="#goals">Goals</a></li>
+      <li><a href="#nongoals">Non-Goals</a></li>
+      <li><a href="#personas">User Personas</a></li>
+      <li><a href="#concepts">Core Concepts</a></li>
+      <li><a href="#joinflow">Volunteer Join Flow</a></li>
+      <li><a href="#materials">Materials & Tools</a></li>
+      <li><a href="#food">Food & Meal Planning</a></li>
+      <li><a href="#ai">AI Project Assistant</a></li>
+      <li><a href="#events">Build Events</a></li>
+      <li><a href="#stories">User Stories</a></li>
+      <li><a href="#requirements">Requirements</a></li>
+      <li><a href="#ia">Information Architecture</a></li>
+      <li><a href="#screens">Key Screens</a></li>
+      <li><a href="#design">Design Direction</a></li>
+      <li><a href="#tech">Technical Considerations</a></li>
+      <li><a href="#metrics">Success Metrics</a></li>
+      <li><a href="#phasing">Phasing</a></li>
+    </ol>
+  </div>
+
+  <!-- 1 -->
+  <div class="section" id="overview">
+    <div class="section-num">01</div>
+    <h2>Product Overview</h2>
+    <p>BuildCoord is a mobile-friendly web app for coordinating community build and renovation projects — from large-scale home extensions with 50+ volunteers to a weekend chicken coop build with 5 friends. It handles areas, tasks, tools, materials, people, food, and AI-powered project health in one place.</p>
+    <p>The app is <strong>project-based</strong>: each project is a self-contained workspace. A <strong>Contacts list</strong> carries people, skills, and dietary info across projects so you never re-enter the same information twice. Scale adapts naturally — a small project simply has fewer areas and a simpler view.</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="section" id="problem">
+    <div class="section-num">02</div>
+    <h2>Problem Statement</h2>
+    <p>Coordinating a community build across people with different skill levels is genuinely hard. Information lives in group chats, spreadsheets, and people's heads simultaneously. Materials get forgotten, tasks get duplicated, allergies get overlooked at lunch, and novices end up attempting work that requires expertise.</p>
+    <p>There is no dedicated tool that covers the full coordination surface — areas, tasks, tools, materials, people, and food — in one place, at any scale from a small weekend project to a multi-week renovation.</p>
+  </div>
+
+  <!-- 3 -->
+  <div class="section" id="goals">
+    <div class="section-num">03</div>
+    <h2>Goals</h2>
+    <ul>
+      <li>An organizer can set up a complete project — areas, tasks, people, materials, food — in under 30 minutes.</li>
+      <li>Volunteers can open the app on their phone and immediately know where they're needed today and what their tasks are.</li>
+      <li>The shopping list for both materials and food is always accurate, consolidated, and printable.</li>
+      <li>No task requiring skilled labor is accidentally assigned without an organizer decision.</li>
+      <li>The app works as well for a 3-person chicken coop weekend as for a 50-person house extension.</li>
+      <li>The AI assistant proactively surfaces risks and suggestions so the organizer doesn't have to track everything mentally.</li>
+    </ul>
+  </div>
+
+  <!-- 4 -->
+  <div class="section" id="nongoals">
+    <div class="section-num">04</div>
+    <h2>Non-Goals</h2>
+    <ul>
+      <li><strong>Not a professional construction tool.</strong> No Gantt charts, no contract tracking, no earned value management.</li>
+      <li><strong>No payment processing in v1.</strong> Cost estimates on materials are fine; splitting bills is out of scope.</li>
+      <li><strong>Not a chat app.</strong> Announcements and task comments are included, but real-time messaging belongs in Signal or WhatsApp.</li>
+      <li><strong>No calendar sync in v1.</strong> Availability is managed within the app.</li>
+      <li><strong>No public marketplace or template sharing in v1.</strong></li>
+    </ul>
+  </div>
+
+  <!-- 5 -->
+  <div class="section" id="personas">
+    <div class="section-num">05</div>
+    <h2>User Personas</h2>
+    <div class="persona-grid">
+      <div class="persona-card">
+        <div class="persona-icon">🏗️</div>
+        <div class="persona-name">The Organizer</div>
+        <div class="persona-desc">Creates and manages the project. Sets up areas, tasks, materials, tools, assigns people, plans food. Needs desktop overview but will use mobile on-site.</div>
+      </div>
+      <div class="persona-card">
+        <div class="persona-icon">🔧</div>
+        <div class="persona-name">The Skilled Volunteer</div>
+        <div class="persona-desc">A tradesperson or experienced builder. Wants clear tasks, confirmed materials and tools, and to know who else is on their crew. Quick check-in, done.</div>
+      </div>
+      <div class="persona-card">
+        <div class="persona-icon">🙋</div>
+        <div class="persona-name">The General Volunteer</div>
+        <div class="persona-desc">Willing hands, limited expertise. Needs clear, safe task assignments and a way to find somewhere useful to contribute.</div>
+      </div>
+      <div class="persona-card">
+        <div class="persona-icon">🍲</div>
+        <div class="persona-name">The Food Manager</div>
+        <div class="persona-desc">Feeds everyone. Needs the allergy matrix, a proper meal plan, and a shopping list. May not care about the build side at all.</div>
+      </div>
+      <div class="persona-card">
+        <div class="persona-icon">👋</div>
+        <div class="persona-name">The Drop-in Guest</div>
+        <div class="persona-desc">Shows up for one day, possibly without an account. Joins via link, fills a short form, gets assigned, and gets going. Account creation is optional.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="section" id="concepts">
+    <div class="section-num">06</div>
+    <h2>Core Concepts</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Concept</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Project</strong></td><td>Top-level container. Name, description, start date, location, join settings.</td></tr>
+          <tr><td><strong>Area</strong></td><td>A physical space or work zone (Kitchen, Roof, Garden, Coop). Works indoors and out.</td></tr>
+          <tr><td><strong>Task</strong></td><td>A unit of work inside an Area. Has skill requirement, difficulty, status, assignees, and linked materials/tools.</td></tr>
+          <tr><td><strong>Material</strong></td><td>A consumable item. Product name, reseller, price, specs, link, quantity, status, tracking info.</td></tr>
+          <tr><td><strong>Tool</strong></td><td>Equipment needed for a task. Name, status, and who is bringing it — e.g. "Erik is bringing the tile saw."</td></tr>
+          <tr><td><strong>Person</strong></td><td>A project participant. Skills, skill level, dietary needs, contact info.</td></tr>
+          <tr><td><strong>Contacts</strong></td><td>A personal roster from past projects. Skills and dietary info carry across projects automatically.</td></tr>
+          <tr><td><strong>Build Event</strong></td><td>A date or date range when work happens. Volunteers sign up to individual days or the whole event.</td></tr>
+          <tr><td><strong>AI Assistant</strong></td><td>A smart dashboard layer that flags risks, scheduling suggestions, allergy gaps, and weather-aware advice.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="section" id="joinflow">
+    <div class="section-num">07</div>
+    <h2>Volunteer Join Flow</h2>
+    <p>The join flow is deliberately lightweight. No account required to participate.</p>
+    <ol>
+      <li>Organizer sends an invite via <strong>link and/or email</strong>.</li>
+      <li>Volunteer opens the link and fills out a <strong>project-specific form</strong> (fields configured by organizer, optionally AI-suggested based on task types in the project).</li>
+      <li>Form always includes: name, contact info. Optionally: skills, dietary requirements, availability, t-shirt size, or any custom field.</li>
+      <li>On submission they are <strong>immediately added</strong> to the project as a participant.</li>
+      <li>Optional prompt at the end: <em>"Save your details for future projects?"</em> — creates a lightweight account if accepted.</li>
+      <li>Drop-ins who decline are stored as <strong>named guests</strong> within the project.</li>
+    </ol>
+    <div class="callout green">
+      <div class="callout-title">AI-assisted form setup</div>
+      When the organizer sets up the join form, the AI reads the project's task list and suggests relevant fields: "You have electrical and tiling tasks — suggest asking volunteers about these skills." Organizer accepts, edits, or adds fields.
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="section" id="materials">
+    <div class="section-num">08</div>
+    <h2>Materials & Tools</h2>
+
+    <h3>Materials (Consumables)</h3>
+    <p>Items that get used up — screws, timber, paint, insulation, grout.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Field</th><th>Required</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Product name</td><td>Yes</td><td></td></tr>
+          <tr><td>Reseller / supplier</td><td>No</td><td>Name and optional link</td></tr>
+          <tr><td>Price</td><td>No</td><td>Per unit</td></tr>
+          <tr><td>Specifications</td><td>No</td><td>Dimensions, grade, colour code, etc.</td></tr>
+          <tr><td>Link</td><td>No</td><td>Direct URL to product</td></tr>
+          <tr><td>Quantity + unit</td><td>Yes</td><td>e.g. 47 × 120cm planks</td></tr>
+          <tr><td>Area / Task</td><td>No</td><td>Can be attached to both</td></tr>
+          <tr><td>Status</td><td>Yes</td><td>Needed / Ordered / Delivered / On site / Used</td></tr>
+          <tr><td>Tracking info</td><td>No</td><td>Order or delivery tracking number</td></tr>
+          <tr><td>Notes</td><td>No</td><td>Manual free-text</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Tools (Equipment)</h3>
+    <p>Items that are reused — drills, tile saws, scaffolding, ladders.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Field</th><th>Required</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Tool name</td><td>Yes</td><td></td></tr>
+          <tr><td>Area / Task</td><td>No</td><td>Where it's needed</td></tr>
+          <tr><td>Status</td><td>Yes</td><td>On site / Needed / Being brought</td></tr>
+          <tr><td>Brought by</td><td>No</td><td>Person's name — e.g. "Erik is bringing the tile saw"</td></tr>
+          <tr><td>Notes</td><td>No</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Materials generate a <strong>buy list</strong>. Tools generate a <strong>"confirm on-site" checklist</strong>. Both appear in the Shopping section.</p>
+  </div>
+
+  <!-- 9 -->
+  <div class="section" id="food">
+    <div class="section-num">09</div>
+    <h2>Food & Meal Planning</h2>
+    <p>Food management is a first-class feature. The Food Manager role can be held by anyone (combinable with other roles).</p>
+
+    <h3>Allergy & Dietary Matrix</h3>
+    <p>Every confirmed attendee's dietary flags are visible in a matrix view per event: rows = people, columns = dietary flags. Presets: vegetarian, vegan, gluten-free, nut allergy, dairy-free, halal, kosher, plus a free-text overflow field. Updates in real-time as people sign up.</p>
+
+    <h3>Meal Planning</h3>
+    <p>Per build event, per day: breakfast, lunch, and dinner slots. Each slot supports:</p>
+    <ul>
+      <li>Dish name</li>
+      <li>Full recipe: ingredients with quantity and unit, method notes, base serving size</li>
+      <li>Confirmed headcount auto-pulled from event sign-ups</li>
+      <li>Ingredients auto-scale to headcount</li>
+      <li>AI recipe assistant built into the UI</li>
+    </ul>
+
+    <h3>Food Shopping List</h3>
+    <p>Auto-generated from the meal plan across the full event. Grouped by category (produce, dairy, dry goods, etc.), scaled to headcount, printable as PDF or plain text. Allergy flags shown inline where relevant.</p>
+  </div>
+
+  <!-- 10 -->
+  <div class="section" id="ai">
+    <div class="section-num">10</div>
+    <h2>AI Project Assistant</h2>
+    <p>The AI assistant lives in the project dashboard as a persistent smart layer. It surfaces things the organizer might miss — it doesn't replace them.</p>
+
+    <h3>Proactive Nudges</h3>
+    <div class="ai-nudge">"3 tasks in the bathroom are unassigned and your event is in 2 days — want me to suggest assignments based on available skills?"</div>
+    <div class="ai-nudge">"You have 2 confirmed vegans on Saturday but no vegan option on the lunch menu."</div>
+    <div class="ai-nudge">"Materials for the roof haven't been marked as delivered yet — event is in 3 days."</div>
+    <div class="ai-nudge">"Looks like rain is forecast for Saturday. The roof work is scheduled — want to swap it with the interior plastering instead?"</div>
+    <div class="ai-nudge">"Erik said he's bringing the tile saw but it hasn't been confirmed for Friday's event yet."</div>
+
+    <h3>Other AI Surfaces</h3>
+    <ul>
+      <li><strong>Join form configuration:</strong> Reads task list and suggests relevant form fields.</li>
+      <li><strong>Recipe assistant:</strong> Built into the meal planner — "Suggest a hearty nut-free lunch for 20, easy to batch cook outdoors."</li>
+    </ul>
+
+    <div class="callout amber">
+      <div class="callout-title">Design principle</div>
+      All AI suggestions are presented as optional, dismissable cards. The organizer always has final say. No AI action takes effect without a confirmation step.
+    </div>
+  </div>
+
+  <!-- 11 -->
+  <div class="section" id="events">
+    <div class="section-num">11</div>
+    <h2>Build Events</h2>
+    <p>A Build Event is a date or date range when work happens. Projects can have multiple events.</p>
+    <ul>
+      <li>Events can span a <strong>single day or multiple days/weeks</strong>.</li>
+      <li>Volunteers sign up at the <strong>event level</strong> ("I'm coming to the whole weekend") or <strong>day level</strong> ("I can only make Saturday"). Both always available.</li>
+      <li>Organizer sees confirmed headcount per day.</li>
+      <li>Day-of view shows each volunteer their assigned tasks, food info, and announcements.</li>
+      <li>Pre-event reminder sent the day before: who's coming, their tasks, today's menu, any notes.</li>
+    </ul>
+  </div>
+
+  <!-- 12 -->
+  <div class="section" id="stories">
+    <div class="section-num">12</div>
+    <h2>User Stories</h2>
+
+    <h3>Organizer</h3>
+    <ul>
+      <li>As an organizer, I want to create a project with a name, description, and location so everyone knows what we're building and where.</li>
+      <li>As an organizer, I want to configure a project-specific join form (with AI suggestions) so volunteers give me the information I actually need.</li>
+      <li>As an organizer, I want to add areas and define tasks with skill requirements and difficulty levels so work is matchable to the right people.</li>
+      <li>As an organizer, I want to attach materials and tools to tasks or areas so the procurement list is always accurate.</li>
+      <li>As an organizer, I want to assign people to tasks — or allow self-assignment — and override either way.</li>
+      <li>As an organizer, I want to see a build readiness indicator per area so I can spot gaps before the event.</li>
+      <li>As an organizer, I want to upload reference images to areas so volunteers see the intended result.</li>
+      <li>As an organizer, I want the AI assistant to flag risks proactively so I don't have to track everything manually.</li>
+      <li>As an organizer, I want a printable day-of briefing sheet as a fallback for on-site use.</li>
+    </ul>
+
+    <h3>Volunteer</h3>
+    <ul>
+      <li>As a volunteer, I want to join from a link without creating an account so participation is instant.</li>
+      <li>As a volunteer, I want to see my assigned tasks for today in one tap.</li>
+      <li>As a volunteer, I want to browse open tasks filtered by skill level if self-assign is enabled.</li>
+      <li>As a volunteer, I want to log progress notes so the organizer knows the status without asking me.</li>
+      <li>As a volunteer, I want to sign up for specific days of a multi-day event so I can help on my own terms.</li>
+    </ul>
+
+    <h3>Food Manager</h3>
+    <ul>
+      <li>As a food manager, I want to see the allergy matrix for all confirmed attendees so I can plan safe meals.</li>
+      <li>As a food manager, I want to create a proper meal plan with recipes that auto-scale to headcount.</li>
+      <li>As a food manager, I want AI to suggest recipes based on dietary constraints and practical cooking conditions.</li>
+      <li>As a food manager, I want a consolidated, printable food shopping list.</li>
+    </ul>
+  </div>
+
+  <!-- 13 -->
+  <div class="section" id="requirements">
+    <div class="section-num">13</div>
+    <h2>Requirements</h2>
+
+    <h4>P0 — Must Have</h4>
+
+    <h3>Project</h3>
+    <ul class="checklist">
+      <li>Create / edit / archive a project (name, description, location, start date, join settings)</li>
+      <li>Invite participants via shareable link and/or email</li>
+      <li>Participant roles: Organizer, Volunteer, Food Manager — combinable on one person</li>
+      <li>Project dashboard: overall progress, AI assistant panel, upcoming events, announcements</li>
+    </ul>
+
+    <h3>Areas & Tasks</h3>
+    <ul class="checklist">
+      <li>Create areas (name, description, optional cover photo)</li>
+      <li>Create tasks within areas (name, description, skill requirement, difficulty, estimated hours, status)</li>
+      <li>Assign people to tasks — organizer-assigned or self-assign, configurable per project, organizer overridable</li>
+      <li>Build readiness indicator per area: % tasks assigned, % materials on site, % complete</li>
+      <li>Upload reference images to areas (flooring, wallpaper, panel, paint samples)</li>
+      <li>Per-task progress log (comments / updates from assignees)</li>
+    </ul>
+
+    <h3>Materials & Tools</h3>
+    <ul class="checklist">
+      <li>Add materials with full schema (name, reseller, price, specs, link, quantity, status, tracking, notes)</li>
+      <li>Add tools (name, status, brought-by person)</li>
+      <li>Auto-generated material shopping list, grouped by category, filterable by area / task / status</li>
+      <li>Tool checklist: confirm what's on site vs. still needed</li>
+      <li>Mark materials as ordered / delivered / on site / used</li>
+      <li>Add order tracking information to materials</li>
+    </ul>
+
+    <h3>People & Contacts</h3>
+    <ul class="checklist">
+      <li>Add people to a project (name, contact info, skills, skill level, dietary requirements)</li>
+      <li>Guest join flow: link → form → added to project, optional account save at end</li>
+      <li>AI-assisted join form configuration based on project task types</li>
+      <li>Contacts list: people from past projects available as suggestions, with carried-over skills and dietary info</li>
+    </ul>
+
+    <h3>Food</h3>
+    <ul class="checklist">
+      <li>Allergy / dietary matrix per build event (real-time, preset flags + free text)</li>
+      <li>Meal plan per event with breakfast / lunch / dinner slots</li>
+      <li>Proper recipe support: ingredients with quantity and unit, method notes, serves X</li>
+      <li>Headcount auto-pulled from confirmed event sign-ups</li>
+      <li>Ingredient quantities auto-scale to headcount</li>
+      <li>AI recipe assistant built into the meal planner UI</li>
+      <li>Food shopping list: auto-generated, grouped by category, scaled to headcount, printable</li>
+    </ul>
+
+    <h3>Build Events</h3>
+    <ul class="checklist">
+      <li>Create events (name, date or date range, description)</li>
+      <li>Volunteers sign up at event level or individual day level</li>
+      <li>Organizer sees confirmed headcount per day</li>
+      <li>Day-of view per volunteer: my tasks, food info, announcements</li>
+      <li>Pre-event reminder (email / notification) sent day before</li>
+    </ul>
+
+    <h3>AI Assistant</h3>
+    <ul class="checklist">
+      <li>Dashboard panel with proactive project health nudges</li>
+      <li>Weather-aware scheduling suggestions</li>
+      <li>Allergy gap detection in meal plans</li>
+      <li>Unassigned task alerts before events</li>
+      <li>Missing materials / unconfirmed tool alerts</li>
+      <li>Join form field suggestions based on task types</li>
+      <li>Recipe suggestions in meal planner</li>
+    </ul>
+
+    <h3>Communication & Output</h3>
+    <ul class="checklist">
+      <li>Project-level announcement board (organizer posts, all see, organizer can pin)</li>
+      <li>Printable day-of briefing sheet PDF: who's coming, area summary, menu, announcements</li>
+      <li>Material shopping list: printable / shareable as PDF and plain text</li>
+      <li>Food shopping list: printable / shareable as PDF and plain text</li>
+      <li>Build badges: tag contributors when a task is marked done</li>
+    </ul>
+
+    <h4 style="margin-top:32px;">P1 — Nice to Have</h4>
+    <ul>
+      <li>Photo progress log per area (before / during / after with timestamps)</li>
+      <li>Punch list per area before area is marked done</li>
+      <li>Task dependencies (Task B cannot start until Task A is complete)</li>
+      <li>Material cost totals and simple budget tracker (read-only)</li>
+      <li>Leftover materials log at project close</li>
+      <li>QR code for project join link</li>
+      <li>PDF export of full project plan</li>
+      <li>Push / email notifications for assignment changes and announcements</li>
+      <li>Crew lead designation per area</li>
+    </ul>
+
+    <h4>P2 — Future Considerations</h4>
+    <ul>
+      <li>Project templates (save a completed project as a reusable starting point)</li>
+      <li>Native mobile app (iOS / Android)</li>
+      <li>Offline / PWA mode for on-site use without signal</li>
+      <li>Calendar sync (Google Calendar, iCal)</li>
+      <li>Hardware store API integration for direct ordering</li>
+      <li>Time tracking: log actual hours vs. estimated</li>
+    </ul>
+  </div>
+
+  <!-- 14 -->
+  <div class="section" id="ia">
+    <div class="section-num">14</div>
+    <h2>Information Architecture</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Section</th><th>Contents</th><th>Primary User</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Dashboard</strong></td><td>Project health, AI nudges, event countdown, announcements, quick links</td><td>Organizer</td></tr>
+          <tr><td><strong>Areas</strong></td><td>Area list → Area detail (Tasks / Materials & Tools / Images / Readiness)</td><td>Organizer + Volunteer</td></tr>
+          <tr><td><strong>People</strong></td><td>Participant list with skills and dietary info, invite management</td><td>Organizer</td></tr>
+          <tr><td><strong>Events</strong></td><td>Event list → Event detail (sign-ups, day-of view, food plan)</td><td>All</td></tr>
+          <tr><td><strong>Food</strong></td><td>Meal planner, allergy matrix, food shopping list</td><td>Food Manager</td></tr>
+          <tr><td><strong>Shopping</strong></td><td>Material shopping list + tool checklist, filterable by area / task / status</td><td>Organizer</td></tr>
+          <tr><td><strong>Announcements</strong></td><td>Project-wide board, pinned posts</td><td>All</td></tr>
+          <tr><td><strong>Contacts</strong></td><td>Personal roster from past projects, carry-over suggestions</td><td>Organizer</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 15 -->
+  <div class="section" id="screens">
+    <div class="section-num">15</div>
+    <h2>Key Screens</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Screen</th><th>Primary Action</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Project dashboard</td><td>Status at a glance + AI nudges</td><td>Cards per area, event countdown, assistant panel</td></tr>
+          <tr><td>Area detail</td><td>Manage tasks, materials, tools, images</td><td>Tab layout: Tasks / Materials & Tools / Images / Readiness</td></tr>
+          <tr><td>Task detail</td><td>Update status, log notes, see assignees</td><td>Mobile-optimized, one-hand use</td></tr>
+          <tr><td>Day-of view</td><td>See my tasks today</td><td>Volunteer-facing, minimal UI, largest text</td></tr>
+          <tr><td>People list</td><td>Browse and filter by skill</td><td>Useful during assignment planning</td></tr>
+          <tr><td>Event detail</td><td>Sign-up, day plan, food, headcount</td><td>Both organizer and volunteer views</td></tr>
+          <tr><td>Allergy matrix</td><td>See all dietary flags for an event</td><td>Table view, food manager primary</td></tr>
+          <tr><td>Meal planner</td><td>Plan meals with AI recipe assistant</td><td>Per event, per day slot</td></tr>
+          <tr><td>Material shopping list</td><td>Consolidated list, mark as purchased</td><td>Groupable by category, printable</td></tr>
+          <tr><td>Food shopping list</td><td>Ingredients scaled to headcount</td><td>Printable, shareable</td></tr>
+          <tr><td>Join form</td><td>Complete profile and join project</td><td>Guest-friendly, AI-configured fields</td></tr>
+          <tr><td>Briefing sheet</td><td>Printable PDF day-of summary</td><td>Auto-generated, one-click</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 16 -->
+  <div class="section" id="design">
+    <div class="section-num">16</div>
+    <h2>Design Direction</h2>
+
+    <h3>Character</h3>
+    <p>BuildCoord is for people doing real physical work together — friends, family, neighbours. It should feel honest, warm, and practical. Think of a well-organised site office: clear, legible, no clutter. Not corporate, not cutesy. The kind of tool a competent person would trust on a muddy Saturday morning.</p>
+
+    <h3>Scale & Touch</h3>
+    <p>Must work on a phone held in one hand with dusty fingers. Touch targets minimum 48px. Key actions reachable in one tap. Text large enough for outdoor sunlight reading. The volunteer's first-tap destination — "what am I doing today" — should be instant.</p>
+
+    <h3>Colour & Status</h3>
+    <p>One strong accent colour for actions. Neutral base. Status colours must be semantically clear and distinguishable without colour alone: <strong>green</strong> = done / ready, <strong>amber</strong> = in progress / pending, <strong>red</strong> = blocked / missing, <strong>blue</strong> = AI suggestion.</p>
+
+    <h3>Print</h3>
+    <p>The day-of briefing sheet and both shopping lists must print cleanly on A4 — no background colours, no decorative elements, clean hierarchy.</p>
+
+    <h3>Empty States</h3>
+    <p>Every empty state should suggest the first action. The app should feel like it's inviting you to build something, not waiting for you to figure it out.</p>
+
+    <h3>AI Suggestions</h3>
+    <p>AI nudges should feel like a thoughtful assistant leaving a note, not a chatbot demanding attention. Dismissable cards, calm tone, always optional. Never blocking.</p>
+  </div>
+
+  <!-- 17 -->
+  <div class="section" id="tech">
+    <div class="section-num">17</div>
+    <h2>Technical Considerations</h2>
+    <ul>
+      <li><strong>Web app, mobile-responsive.</strong> No native app in v1.</li>
+      <li><strong>Real-time collaboration</strong> required. Consider WebSockets or Supabase Realtime.</li>
+      <li><strong>Authentication:</strong> email/password minimum; magic link preferred for low-friction guest join.</li>
+      <li><strong>Image storage:</strong> cloud storage for reference images and progress photos. Compress on upload.</li>
+      <li><strong>AI integration:</strong> Claude API (or equivalent) for assistant nudges, recipe suggestions, and join form configuration. Design data models to be AI-ready — structured ingredients, task skill tags, dietary flags.</li>
+      <li><strong>Weather:</strong> lightweight weather API integration for AI scheduling suggestions.</li>
+      <li><strong>Multi-tenancy:</strong> each project is isolated. Users can belong to multiple projects.</li>
+      <li><strong>Offline consideration:</strong> day-of view should be cacheable for low-signal use. Lay PWA groundwork in v1 even if full offline is P2.</li>
+    </ul>
+  </div>
+
+  <!-- 18 -->
+  <div class="section" id="metrics">
+    <div class="section-num">18</div>
+    <h2>Success Metrics</h2>
+
+    <h3>Leading Indicators</h3>
+    <ul>
+      <li>Organizer completes full project setup in first session.</li>
+      <li>Volunteer reaches day-of task list in ≤2 taps from app open.</li>
+      <li>Shopping list viewed and used on ≥80% of projects with materials added.</li>
+      <li>At least one AI nudge acted on per project.</li>
+    </ul>
+
+    <h3>Lagging Indicators</h3>
+    <ul>
+      <li>App used across ≥3 distinct project types (house, coop, other).</li>
+      <li>No reported allergy incidents traced to a gap in the food planner.</li>
+      <li>Food manager considers the allergy matrix reliable enough to replace a separate spreadsheet.</li>
+      <li>Contacts list used on second project by returning organizer.</li>
+    </ul>
+  </div>
+
+  <!-- 19 -->
+  <div class="section" id="phasing">
+    <div class="section-num">19</div>
+    <h2>Phasing</h2>
+    <div class="phases">
+      <div class="phase-card p1">
+        <div class="phase-label">Phase 1 — MVP</div>
+        <div class="phase-title">Core loop end-to-end</div>
+        <div class="phase-desc">All P0 requirements. Single organizer per project. Full flow: areas, tasks, materials, tools, people, food, events, AI assistant. Prove it works at both small and large scale.</div>
+      </div>
+      <div class="phase-card p2">
+        <div class="phase-label">Phase 2</div>
+        <div class="phase-title">Smoother projects</div>
+        <div class="phase-desc">Photo log, punch lists, task dependencies, cost tracker, leftover materials, QR codes, PDF export, notifications, crew leads.</div>
+      </div>
+      <div class="phase-card p3">
+        <div class="phase-label">Phase 3</div>
+        <div class="phase-title">Scale & polish</div>
+        <div class="phase-desc">Templates, native app, offline/PWA, calendar sync, hardware store integration, time tracking.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
