@@ -1,0 +1,314 @@
+/*
+ * bob — design tokens.
+ * Three themes lifted straight from the mockup (forest / dusk / birch).
+ * `birch` is the default. Switch by setting data-theme on <html>.
+ */
+
+:root,
+:root[data-theme='birch'] {
+  --accent: #7e9b52;
+  --accent-2: #6e8a45;
+  --accent-ink: #19200c;
+  --brand: #41513f;
+  --brand-2: #374635;
+  --brand-ink: #f3f1e8;
+  --canvas: #faf8f1;
+  --surface: #ffffff;
+  --surface-2: #f4f1e6;
+  --ink: #272620;
+  --ink-soft: #6a675b;
+  --ink-faint: #9d9886;
+  --line: #eae5d6;
+  --leaf: #5e9c68;
+  --leaf-bg: #e7f0e1;
+  --honey: #c98b2e;
+  --honey-bg: #f6ecd6;
+  --clay: #c15740;
+  --clay-bg: #f6e1d9;
+}
+
+:root[data-theme='forest'] {
+  --accent: #e8a23c;
+  --accent-2: #d98e26;
+  --accent-ink: #2a1e0a;
+  --brand: #2c3a2e;
+  --brand-2: #222e25;
+  --brand-ink: #f2eee3;
+  --canvas: #f2ecdf;
+  --surface: #ffffff;
+  --surface-2: #faf6ec;
+  --ink: #2a2922;
+  --ink-soft: #6a6557;
+  --ink-faint: #9c9583;
+  --line: #e8e1d0;
+  --leaf: #5e9c68;
+  --leaf-bg: #e5efdf;
+  --honey: #d98c2b;
+  --honey-bg: #f6ecd6;
+  --clay: #c15740;
+  --clay-bg: #f6e1d9;
+}
+
+:root[data-theme='dusk'] {
+  --accent: #e08a5b;
+  --accent-2: #cf7848;
+  --accent-ink: #241410;
+  --brand: #26302e;
+  --brand-2: #1e2725;
+  --brand-ink: #efe9dd;
+  --canvas: #e8e2d7;
+  --surface: #fbf7ef;
+  --surface-2: #f2ebdd;
+  --ink: #272420;
+  --ink-soft: #665f54;
+  --ink-faint: #988f80;
+  --line: #e1d8c6;
+  --leaf: #6aa070;
+  --leaf-bg: #e7efe0;
+  --honey: #cf8b36;
+  --honey-bg: #f4e9d3;
+  --clay: #bd5640;
+  --clay-bg: #f3ded6;
+}
+
+:root {
+  --r-sm: 10px;
+  --r: 14px;
+  --r-lg: 22px;
+  --shadow: 0 1px 2px rgba(38, 32, 18, 0.05), 0 14px 34px -12px rgba(38, 32, 18, 0.16);
+  --shadow-sm: 0 1px 2px rgba(38, 32, 18, 0.07);
+  --sidebar-w: 232px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background-color: var(--canvas);
+  background-image: radial-gradient(rgba(44, 58, 46, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: 'Baloo 2', cursive;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+@keyframes bobfloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* App layout */
+.app-shell {
+  display: flex;
+  min-height: 100%;
+}
+
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page {
+  flex: 1;
+  padding: 26px clamp(18px, 3.5vw, 38px) 90px;
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+  animation: fadeUp 0.3s ease both;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-weight: 700;
+  font-size: clamp(24px, 4vw, 30px);
+  color: var(--ink);
+  line-height: 1.05;
+}
+
+.page-sub {
+  margin-top: 5px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 11px;
+  padding: 10px 15px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  transition: background 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
+}
+.btn:hover {
+  background: var(--surface-2);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent-2);
+  color: var(--accent-ink);
+  box-shadow: 0 2px 0 var(--accent-2);
+}
+.btn-primary:hover {
+  background: var(--accent-2);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+
+/* Pills */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Generic responsive helpers */
+.grid {
+  display: grid;
+  gap: 13px;
+}
+
+.cluster {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  .dash-grid,
+  .area-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .task-right {
+    flex-direction: column;
+    align-items: flex-end !important;
+    gap: 8px !important;
+  }
+}
+
+/* Show the bottom tab bar only on small screens; sidebar only on large. */
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    display: none !important;
+  }
+  .mobile-nav {
+    display: flex !important;
+  }
+  .main-col {
+    padding-bottom: 64px;
+  }
+}
+
+@media print {
+  @page {
+    margin: 1.2cm;
+  }
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .app-shell {
+    display: block;
+  }
+  .page {
+    padding: 0;
+    max-width: none;
+  }
+}
