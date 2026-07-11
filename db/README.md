@@ -10,27 +10,38 @@ schema-qualified, and nothing relies on `search_path`.
 ```
 db/
 ├── migrations/
-│   └── 0001_create_bob_schema.sql   schema `bob` + all tables, enums, view, RLS, grants
-├── seed.sql                         the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
-└── README.md                        this file
+│   ├── 0001_create_bob_schema.sql        schema `bob` + all tables, enums, view, RLS, grants
+│   └── 0003_expose_schema_to_api.sql     appends `bob` to PostgREST's pgrst.db_schemas (shared DB safe)
+├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
+└── README.md                             this file
 ```
 
 ## Applying it
 
 ```bash
 psql "$DATABASE_URL" -f db/migrations/0001_create_bob_schema.sql
+psql "$DATABASE_URL" -f db/migrations/0003_expose_schema_to_api.sql   # PostgREST/Supabase only
 psql "$DATABASE_URL" -f db/seed.sql        # optional sample data
 ```
 
 Migrations are numbered and run once, in order. The seed is idempotent —
 re-running it is a no-op.
 
+**Ordering is load-bearing: 0001 before 0003.** PostgREST fails its entire
+schema-cache load — a `PGRST002`/503 outage for *every* app on the shared
+API — if any schema in `pgrst.db_schemas` doesn't exist. This bit us on
+2026-07-11 (0003 was run before 0001); 0003 now refuses to run when the
+schema is missing.
+
 ### On Supabase
 
-1. Run the migration (SQL editor, or `supabase db push` with the file in your
+1. Run `0001` (SQL editor, or `supabase db push` with the file in your
    migrations dir).
-2. Expose the schema to the API: **Project settings → API → Exposed schemas →
-   add `bob`.**
+2. Expose the schema to the API by running `0003`. (The dashboard checkbox
+   under **Project settings → API → Exposed schemas** is inert on this
+   project — a role-level `pgrst.db_schemas` setting exists and takes
+   precedence, so exposure changes must go through `ALTER ROLE`, which is
+   exactly what 0003 does.)
 3. Point the client at the schema when creating it (see below).
 
 ## How it maps to the app
