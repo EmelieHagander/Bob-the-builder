@@ -294,6 +294,179 @@ select {
   }
 }
 
+/* Modal (shared) */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(32, 27, 14, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 470px;
+  max-height: 90vh;
+  overflow: auto;
+  padding: 20px;
+  animation: fadeUp 0.2s ease both;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* Account calendar (month grid ported from the Djuvanäs farm portal) */
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0 14px;
+}
+
+.calendar-toolbar h2 {
+  min-width: 175px;
+  font-size: 21px;
+  text-align: center;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.calendar-grid {
+  display: grid;
+  /* minmax(0, 1fr): content can NEVER widen a day column — long project
+     names truncate instead (the mobile fix). */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-weekday {
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 8px 2px;
+}
+
+.calendar-day {
+  background: var(--surface);
+  min-height: 104px;
+  min-width: 0; /* lets the column shrink; chips truncate instead */
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-day .day-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding: 2px 4px;
+}
+
+.calendar-day.outside .day-number {
+  color: var(--ink-faint);
+}
+
+.calendar-day.today .day-number {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 999px;
+  align-self: flex-start;
+  padding: 2px 8px;
+}
+
+.cal-chip {
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding: 2px 6px;
+  border: none;
+  border-left: 3px solid;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cal-chip.upcoming {
+  background: var(--honey-bg);
+  border-left-color: var(--honey);
+  color: #9a6313;
+}
+
+.cal-chip.ongoing {
+  background: var(--leaf-bg);
+  border-left-color: var(--leaf);
+  color: #3d7247;
+}
+
+.cal-chip.finished {
+  background: var(--surface-2);
+  border-left-color: var(--ink-faint);
+  color: var(--ink-soft);
+}
+
+@media (max-width: 720px) {
+  .calendar-day {
+    min-height: 72px;
+    padding: 2px;
+  }
+  /* On mobile: up to two wrapped lines instead of one truncated — more
+     readable in narrow columns. */
+  .cal-chip {
+    font-size: 10px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    word-break: break-word;
+  }
+}
+
 @media print {
   @page {
     margin: 1.2cm;

@@ -2,32 +2,13 @@ import { useState, type FormEvent } from 'react'
 import * as db from '../data/database'
 import type { ThemeName } from '../data/types'
 import { Icon } from '../components/ui'
+import { Field, FormError, inputStyle } from '../components/form'
 
 const THEMES: { name: ThemeName; label: string }[] = [
   { name: 'birch', label: 'Birch' },
   { name: 'forest', label: 'Forest' },
   { name: 'dusk', label: 'Dusk' },
 ]
-
-const inputStyle = {
-  width: '100%',
-  border: '1px solid var(--line)',
-  borderRadius: 10,
-  background: 'var(--surface)',
-  padding: '10px 12px',
-  fontSize: 14,
-  color: 'var(--ink)',
-  outline: 'none',
-} as const
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'block' }}>
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 5 }}>{label}</div>
-      {children}
-    </label>
-  )
-}
 
 /**
  * Shown when the database has no project yet (fresh install, or right after
@@ -50,7 +31,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await db.createProject({
+      const project = await db.createProject({
         name: name.trim(),
         description: description.trim(),
         location: location.trim(),
@@ -58,6 +39,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
         theme,
         startLabel: startLabel.trim(),
       })
+      db.setActiveProject(project.id)
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -123,11 +105,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
             </Field>
           </div>
 
-          {error && (
-            <div style={{ background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>
-              {error}
-            </div>
-          )}
+          {error && <FormError>{error}</FormError>}
 
           <button type="submit" className="btn btn-primary" disabled={!name.trim() || busy} style={{ padding: '12px 0', fontSize: 14.5 }}>
             {busy ? 'Creating…' : 'Start the project'}
