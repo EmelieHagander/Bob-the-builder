@@ -10,7 +10,8 @@ schema-qualified, and nothing relies on `search_path`.
 ```
 db/
 ├── migrations/
-│   └── 0001_create_bob_schema.sql   schema `bob` + all tables, enums, view, RLS, grants
+│   ├── 0001_create_bob_schema.sql   schema `bob` + all tables, enums, view, RLS, grants
+│   └── 0002_add_display_order.sql   sort_order for areas & people (list order is content)
 ├── seed.sql                         the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 └── README.md                        this file
 ```
@@ -18,7 +19,7 @@ db/
 ## Applying it
 
 ```bash
-psql "$DATABASE_URL" -f db/migrations/0001_create_bob_schema.sql
+for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 psql "$DATABASE_URL" -f db/seed.sql        # optional sample data
 ```
 
@@ -60,25 +61,12 @@ future work and only touches this schema + `src/data/database.ts`.
 
 ## Wiring the app to it
 
-All data access already goes through the single module
-[`src/data/database.ts`](../src/data/database.ts). To read from the database
-instead of the mock, create the client **scoped to the `bob` schema** and flip
-`USE_MOCK`:
-
-```ts
-import { createClient } from '@supabase/supabase-js'
-
-const db = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-  { db: { schema: 'bob' } },          // ◄ shared database — always scope to bob
-)
-const USE_MOCK = false
-```
-
-Then each function body becomes the equivalent query, e.g.
-`db.from('areas').select('*')` — the client already targets schema `bob`, so
-table names stay bare.
+Already done — all data access goes through the single module
+[`src/data/database.ts`](../src/data/database.ts), which queries these tables
+whenever `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set (copy
+`.env.example` to `.env.local`). The client is created **scoped to the `bob`
+schema** (`{ db: { schema: 'bob' } }`), so table names in queries stay bare.
+With no env config the app falls back to the in-memory mock data.
 
 ## Security posture
 
