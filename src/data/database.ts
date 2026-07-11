@@ -38,11 +38,18 @@ import type {
 } from './types'
 
 /* ─────────────────────────── CONNECTION ───────────────────────────
- * When moving to a real backend, instantiate the client here. Example:
+ * When moving to a real backend, instantiate the client here. The database is
+ * SHARED with other apps, so bob's objects live in their own Postgres schema
+ * (`bob`, defined in db/migrations/) — always scope the client to it:
  *
  *   import { createClient } from '@supabase/supabase-js'
- *   const db = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+ *   const db = createClient(
+ *     import.meta.env.VITE_SUPABASE_URL,
+ *     import.meta.env.VITE_SUPABASE_ANON_KEY,
+ *     { db: { schema: 'bob' } },
+ *   )
  *
+ * See db/README.md for the schema itself, seed data and setup steps.
  * For now we run against the in-memory mock source. `USE_MOCK` is the single
  * flag that decides which path everything below takes.
  * ──────────────────────────────────────────────────────────────── */
