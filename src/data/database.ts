@@ -50,18 +50,49 @@ import type {
  * Schema + seed live in db/; see db/README.md for setup.
  * ──────────────────────────────────────────────────────────────── */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+/**
+ * Accepts the full project URL ("https://xyz.supabase.co") or just the bare
+ * project ref ("xyz") — a common slip when copying config around. Anything
+ * unusable falls back to demo mode with a console warning instead of
+ * crashing the whole app at startup.
+ */
+function resolveSupabaseUrl(raw: string | undefined): string | null {
+  const value = raw?.trim()
+  if (!value) return null
+  const url = /^[a-z0-9]{16,}$/.test(value) ? `https://${value}.supabase.co` : value
+  try {
+    new URL(url)
+    return url
+  } catch {
+    console.warn(`bob: VITE_SUPABASE_URL is not a usable URL ("${value}") — running on demo data.`)
+    return null
+  }
+}
 
-const db =
-  SUPABASE_URL && SUPABASE_ANON_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        db: { schema: 'bob' },
-        // PKCE puts the magic-link token in the query string instead of the
-        // URL hash, which would otherwise collide with the HashRouter.
-        auth: { flowType: 'pkce' },
-      })
-    : null
+const SUPABASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+
+function connect() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.info('bob: no database configured — running on the in-memory demo data.')
+    return null
+  }
+  try {
+    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      db: { schema: 'bob' },
+      // PKCE puts the magic-link token in the query string instead of the
+      // URL hash, which would otherwise collide with the HashRouter.
+      auth: { flowType: 'pkce' },
+    })
+    console.info(`bob: live database mode (${new URL(SUPABASE_URL).host}, schema bob)`)
+    return client
+  } catch (err) {
+    console.warn('bob: could not create the database client — running on demo data.', err)
+    return null
+  }
+}
+
+const db = connect()
 
 /** Simulated network latency (ms) so the mock path exercises loading states. */
 const LATENCY = 120
