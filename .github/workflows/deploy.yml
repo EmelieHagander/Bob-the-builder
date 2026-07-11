@@ -19,6 +19,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The Supabase secrets live on the github-pages environment, and Vite
+    # bakes them into the bundle at BUILD time — so the build job must run
+    # in that environment too, or `secrets.*` resolves to nothing here.
+    environment: github-pages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
