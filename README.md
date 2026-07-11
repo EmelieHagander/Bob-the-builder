@@ -79,6 +79,14 @@ cares which one is active.
 
 That's it — restart `npm run dev` and every screen reads from the database.
 
+### Signing in
+
+Live mode has real login (magic link or email + password, `/#/signin`).
+Reading is open to everyone; signing in identifies you: an email the
+organiser has invited (see [`db/README.md`](./db/README.md#login--membership))
+claims that person on the crew list, any other email joins as a fresh
+volunteer. Demo mode skips auth entirely — the first organiser plays "you".
+
 ## Project layout
 
 ```

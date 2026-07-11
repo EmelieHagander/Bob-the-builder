@@ -15,6 +15,7 @@ import { FoodShopping } from './pages/FoodShopping'
 import { Shopping } from './pages/Shopping'
 import { Announcements } from './pages/Announcements'
 import { Today } from './pages/Today'
+import { SignIn } from './pages/SignIn'
 import { NotFound } from './pages/NotFound'
 
 export function App() {
@@ -54,6 +55,7 @@ export function App() {
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/announcements" element={<Announcements />} />
         <Route path="/today" element={<Today />} />
+        <Route path="/signin" element={<SignIn />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>

@@ -3,11 +3,18 @@
  * project switcher, and the floating "Ask bob" button + drawer.
  */
 
-import { useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, NavLink } from 'react-router-dom'
 import * as db from '../data/database'
 import { Avatar, Icon, useAsync } from './ui'
 import { AskBob } from './AskBob'
+
+/** Re-render dependency that bumps on every sign-in/out (no-op in demo mode). */
+export function useAuthTick(): number {
+  const [tick, setTick] = useState(0)
+  useEffect(() => db.onAuthChange(() => setTick((t) => t + 1)), [])
+  return tick
+}
 
 interface NavItem {
   to: string
@@ -28,8 +35,9 @@ const NAV: NavItem[] = [
 ]
 
 function Sidebar() {
+  const tick = useAuthTick()
   const { data: project } = useAsync(() => db.getProject(), [])
-  const { data: me } = useAsync(() => db.getCurrentUser(), [])
+  const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
 
   return (
     <aside
@@ -117,14 +125,32 @@ function Sidebar() {
             Ask bob — he keeps the whole build in his head so you don't have to.
           </div>
         </div>
-        {me && (
+        {me ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, borderTop: '1px solid #ffffff1f' }}>
             <Avatar person={me} size={32} />
-            <div style={{ lineHeight: 1.2 }}>
+            <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{me.name.split(' ')[0]}</div>
               <div style={{ fontSize: 11, color: '#ffffff85' }}>{me.role}</div>
             </div>
+            {db.authEnabled() && (
+              <button
+                onClick={() => db.signOut()}
+                title="Sign out"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffffff85', padding: 4 }}
+              >
+                <Icon name="sign-out" size={17} />
+              </button>
+            )}
           </div>
+        ) : (
+          db.authEnabled() && (
+            <Link
+              to="/signin"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #ffffff1f', fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}
+            >
+              <Icon name="sign-in" size={16} /> Sign in
+            </Link>
+          )
         )}
       </div>
     </aside>
@@ -143,7 +169,9 @@ function MobileNav() {
         right: 0,
         zIndex: 40,
         background: 'var(--brand)',
-        display: 'flex',
+        // display is owned by theme.css (.mobile-nav): none on desktop, flex
+        // under 860px. An inline display here would override the desktop rule
+        // and leave an invisible click-swallowing bar across the bottom.
         justifyContent: 'space-around',
         padding: '8px 6px calc(8px + env(safe-area-inset-bottom))',
         borderTop: '1px solid #ffffff1f',

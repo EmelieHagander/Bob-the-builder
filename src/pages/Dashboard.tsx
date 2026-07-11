@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
+import { useAuthTick } from '../components/Layout'
 
 export function Dashboard() {
   const { data: project } = useAsync(() => db.getProject(), [])
@@ -10,7 +11,8 @@ export function Dashboard() {
   const { data: next } = useAsync(() => db.getNextEvent(), [])
   const { data: attention } = useAsync(() => db.getAttention(), [])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [])
-  const { data: me } = useAsync(() => db.getCurrentUser(), [])
+  const tick = useAuthTick()
+  const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
