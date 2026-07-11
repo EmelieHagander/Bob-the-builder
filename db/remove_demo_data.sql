@@ -5,9 +5,10 @@
 -- known ids — real data added since is untouched unless it was attached to the
 -- demo project (everything cascades from bob.projects). Safe to re-run.
 --
--- ⚠ The app needs at least one row in bob.projects to run in live mode.
---   Edit and uncomment the "YOUR REAL PROJECT" block below (or insert your
---   project some other way) before/right after removing the demo.
+-- After removal the app shows its "start your project" screen (the RLS
+-- bootstrap policy from migration 0004 allows creating a project while the
+-- table is empty), so you can set up the real project in the UI. Prefer SQL?
+-- Edit and uncomment the "YOUR REAL PROJECT" block below instead.
 --
 -- Apply with:  psql "$DATABASE_URL" -f db/remove_demo_data.sql
 -- ─────────────────────────────────────────────────────────────────────────────

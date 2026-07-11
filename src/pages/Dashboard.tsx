@@ -10,6 +10,7 @@ export function Dashboard() {
   const { data: next } = useAsync(() => db.getNextEvent(), [])
   const { data: attention } = useAsync(() => db.getAttention(), [])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [])
+  const { data: me } = useAsync(() => db.getCurrentUser(), [])
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
@@ -18,8 +19,12 @@ export function Dashboard() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">God morgon, Emelie!</h1>
-          <p className="page-sub">{project ? `Here's where ${project.name} stands today. The big build day is Saturday.` : ''}</p>
+          <h1 className="page-title">God morgon{me ? `, ${me.name.split(' ')[0]}` : ''}!</h1>
+          <p className="page-sub">
+            {project
+              ? `Here's where ${project.name} stands today.${next ? ` The big build day is ${next.day}.` : ''}`
+              : ''}
+          </p>
         </div>
         <div className="cluster no-print">
           <Link to="/announcements" className="btn">

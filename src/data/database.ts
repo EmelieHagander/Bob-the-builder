@@ -123,15 +123,7 @@ type TodayTaskRow = {
 
 /* ─────────────────────────── PROJECT ─────────────────────────── */
 
-export async function getProject(): Promise<Project> {
-  if (!db) return read(mock.project)
-  const row = unwrap<ProjectRow>(
-    await db
-      .from('projects')
-      .select('id, slug, name, description, location, type, theme, start_label')
-      .limit(1)
-      .single(),
-  )
+function mapProject(row: ProjectRow): Project {
   return {
     id: row.id,
     slug: row.slug,
@@ -142,6 +134,59 @@ export async function getProject(): Promise<Project> {
     theme: row.theme as ThemeName,
     startLabel: row.start_label,
   }
+}
+
+/** The active project — `null` when the database has none yet (fresh install). */
+export async function getProject(): Promise<Project | null> {
+  if (!db) return read(mock.project)
+  const res = await db
+    .from('projects')
+    .select('id, slug, name, description, location, type, theme, start_label')
+    .limit(1)
+    .maybeSingle()
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return res.data ? mapProject(res.data as ProjectRow) : null
+}
+
+export interface NewProject {
+  name: string
+  description: string
+  location: string
+  type: string
+  theme: ThemeName
+  startLabel: string
+}
+
+/**
+ * Create the project. Only possible while the database has none — the RLS
+ * policy (db/migrations/0004) closes the bootstrap window as soon as one
+ * exists, since the anon key is public.
+ */
+export async function createProject(input: NewProject): Promise<Project> {
+  if (!db) throw new Error('Running on demo data — creating a project needs the live database.')
+  const slug = input.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'project'
+  const row = unwrap<ProjectRow>(
+    await db
+      .from('projects')
+      .insert({
+        id: `p_${slug}`,
+        slug,
+        name: input.name,
+        description: input.description,
+        location: input.location,
+        type: input.type,
+        theme: input.theme,
+        start_label: input.startLabel,
+      })
+      .select('id, slug, name, description, location, type, theme, start_label')
+      .single(),
+  )
+  return mapProject(row)
 }
 
 /* ─────────────────────────── PEOPLE ─────────────────────────── */
@@ -167,6 +212,16 @@ export async function getPeople(): Promise<Person[]> {
 
 export async function getPerson(id: string): Promise<Person | undefined> {
   return (await getPeople()).find((p) => p.id === id)
+}
+
+/**
+ * Who is using the app. There is no auth yet, so v1 approximates: the first
+ * organiser, else the first person, else nobody. Swap this for the real
+ * session user when auth lands — it is the only place that decides.
+ */
+export async function getCurrentUser(): Promise<Person | null> {
+  const people = await getPeople()
+  return people.find((p) => p.role.toLowerCase().includes('organiser')) ?? people[0] ?? null
 }
 
 /** Resolve a list of person ids to people, preserving order. */
@@ -405,16 +460,36 @@ export async function getTodayTasks(): Promise<TodayTask[]> {
 }
 
 /* ─────────────────────────── ASK BOB ───────────────────────────
- * The assistant conversation is scripted client-side content, not project
- * data — it stays out of the database in both modes.
+ * There is no assistant backend yet. In mock mode bob plays the scripted
+ * Skogsstuga conversation from the mockup; in live mode he introduces
+ * himself and surfaces the real "needs attention" feed, so he never talks
+ * about demo content that isn't there.
  * ──────────────────────────────────────────────────────────────── */
 
-export function getAskBobChat(): Promise<ChatMessage[]> {
-  return read(mock.askBobChat)
+export async function getAskBobChat(): Promise<ChatMessage[]> {
+  if (!db) return read(mock.askBobChat)
+  const [project, attention, next] = await Promise.all([getProject(), getAttention(), getNextEvent()])
+  const messages: ChatMessage[] = [
+    {
+      from: 'bob',
+      text: `Hej! I've got the whole ${project?.name ?? ''} build in my head — ask me anything.`,
+    },
+  ]
+  if (attention.length > 0) {
+    messages.push({
+      from: 'bob',
+      text: next ? `Things I'd nudge before ${next.day}:` : "Things I'd nudge:",
+      list: attention.map((a) => ({ icon: a.icon, tone: a.tone, text: a.text })),
+    })
+  } else {
+    messages.push({ from: 'bob', text: 'Nothing needs attention right now — the build is looking tidy.' })
+  }
+  return messages
 }
 
 export function getAskBobChips(): Promise<string[]> {
-  return read(mock.askBobChips)
+  if (!db) return read(mock.askBobChips)
+  return Promise.resolve(["What's blocking us?", 'Who has signed up?', 'What still needs buying?', 'Draft an announcement'])
 }
 
 /* ─────────────────────────── DERIVED / DASHBOARD ───────────────────────────
@@ -492,8 +567,9 @@ export async function getFoodSummary(): Promise<string> {
   const [columns, matrix, next] = await Promise.all([getDietColumns(), getDietMatrix(), getNextEvent()])
   const counts = columns.map((_, i) => matrix.filter((r) => r.flags[i]).length)
   const confirmed = next ? next.spots.split('/')[0].trim() : String(matrix.length)
+  const when = next ? next.day : 'the next build day'
   const parts = columns
     .map((c, i) => (counts[i] > 0 ? `${counts[i]} ${c.toLowerCase()}` : null))
     .filter(Boolean)
-  return `${confirmed} confirmed for Saturday · ${parts.join(' · ')}`
+  return `${confirmed} confirmed for ${when}${parts.length > 0 ? ' · ' + parts.join(' · ') : ''}`
 }

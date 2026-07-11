@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import * as db from './data/database'
-import { useAsync } from './components/ui'
+import { Loading, useAsync } from './components/ui'
 import { Layout } from './components/Layout'
+import { StartProject } from './pages/StartProject'
 import { Dashboard } from './pages/Dashboard'
 import { Areas } from './pages/Areas'
 import { AreaDetail } from './pages/AreaDetail'
@@ -18,11 +19,26 @@ import { NotFound } from './pages/NotFound'
 
 export function App() {
   // The active project decides the colour theme (forest / dusk / birch).
-  const { data: project } = useAsync(() => db.getProject(), [])
+  // Bumped after the first project is created so everything refetches.
+  const [projectVersion, setProjectVersion] = useState(0)
+  const { data: project, loading } = useAsync(() => db.getProject(), [projectVersion])
 
   useEffect(() => {
     if (project) document.documentElement.setAttribute('data-theme', project.theme)
   }, [project])
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loading />
+      </div>
+    )
+  }
+
+  // Fresh install (or demo data just removed): no project in the database yet.
+  if (!project) {
+    return <StartProject onCreated={() => setProjectVersion((v) => v + 1)} />
+  }
 
   return (
     <Layout>
