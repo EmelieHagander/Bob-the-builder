@@ -73,9 +73,9 @@ cares which one is active.
 
 1. Apply the migrations in [`db/migrations/`](./db/migrations) and optionally
    the sample data in `db/seed.sql` — see [`db/README.md`](./db/README.md).
-2. On Supabase, expose the schema: **API settings → Exposed schemas → add
-   `bob`.**
-3. Copy `.env.example` to `.env.local` and fill in the URL + anon key.
+   API exposure is part of the migrations (`0003` appends `bob` to the
+   exposed schemas in SQL and reloads PostgREST — no dashboard step).
+2. Copy `.env.example` to `.env.local` and fill in the URL + anon key.
 
 That's it — restart `npm run dev` and every screen reads from the database.
 
