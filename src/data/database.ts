@@ -53,7 +53,12 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const db =
   SUPABASE_URL && SUPABASE_ANON_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: 'bob' } })
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        db: { schema: 'bob' },
+        // PKCE puts the magic-link token in the query string instead of the
+        // URL hash, which would otherwise collide with the HashRouter.
+        auth: { flowType: 'pkce' },
+      })
     : null
 
 /** Simulated network latency (ms) so the mock path exercises loading states. */
@@ -214,14 +219,80 @@ export async function getPerson(id: string): Promise<Person | undefined> {
   return (await getPeople()).find((p) => p.id === id)
 }
 
-/**
- * Who is using the app. There is no auth yet, so v1 approximates: the first
- * organiser, else the first person, else nobody. Swap this for the real
- * session user when auth lands — it is the only place that decides.
- */
+/* ─────────────────────────── AUTH / CURRENT USER ───────────────────────────
+ * Live mode: Supabase Auth (magic link or password). Signing in calls
+ * bob.join_project() server-side, which claims the invited person matching
+ * the email — or creates a fresh Volunteer profile. Mock mode: no auth, the
+ * first organiser plays "you", exactly as before.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** Whether real sign-in exists (live mode). Mock mode has no auth. */
+export function authEnabled(): boolean {
+  return db !== null
+}
+
+let sessionPerson: Person | null = null
+
+/** Who is using the app: the signed-in member, or null when signed out. */
 export async function getCurrentUser(): Promise<Person | null> {
-  const people = await getPeople()
-  return people.find((p) => p.role.toLowerCase().includes('organiser')) ?? people[0] ?? null
+  if (!db) {
+    // Demo mode: the first organiser plays the signed-in user.
+    const people = await getPeople()
+    return people.find((p) => p.role.toLowerCase().includes('organiser')) ?? people[0] ?? null
+  }
+  const { data } = await db.auth.getSession()
+  if (!data.session) return null
+  if (sessionPerson) return sessionPerson
+  const res = await db.rpc('join_project')
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  const row = res.data as { id: string }
+  // Re-read through getPeople so skills come along and shapes stay identical.
+  sessionPerson = (await getPerson(row.id)) ?? null
+  return sessionPerson
+}
+
+/** Sends the sign-in link. The link returns to the app, which finishes the session. */
+export async function signInWithMagicLink(email: string): Promise<void> {
+  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  const { error } = await db.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+  })
+  if (error) throw new Error(error.message)
+}
+
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  const { error } = await db.auth.signInWithPassword({ email, password })
+  if (error) throw new Error(error.message)
+}
+
+/** Returns true when the account is ready, false when email confirmation is pending. */
+export async function signUpWithPassword(email: string, password: string): Promise<boolean> {
+  if (!db) throw new Error('Running on demo data — sign-up needs the live database.')
+  const { data, error } = await db.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname },
+  })
+  if (error) throw new Error(error.message)
+  return data.session !== null
+}
+
+export async function signOut(): Promise<void> {
+  if (!db) return
+  sessionPerson = null
+  await db.auth.signOut()
+}
+
+/** Subscribe to sign-in/out; returns an unsubscribe function. */
+export function onAuthChange(callback: () => void): () => void {
+  if (!db) return () => {}
+  const { data } = db.auth.onAuthStateChange(() => {
+    sessionPerson = null
+    callback()
+  })
+  return () => data.subscription.unsubscribe()
 }
 
 /** Resolve a list of person ids to people, preserving order. */

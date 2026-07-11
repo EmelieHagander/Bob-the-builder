@@ -13,7 +13,8 @@ db/
 │   ├── 0001_create_bob_schema.sql        schema `bob` + all tables, enums, view, RLS, grants
 │   ├── 0002_add_display_order.sql        sort_order for areas & people (list order is content)
 │   ├── 0003_expose_schema_to_api.sql     expose `bob` to PostgREST in SQL (no dashboard step)
-│   └── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
+│   ├── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
+│   └── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
@@ -95,6 +96,27 @@ whenever `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set (copy
 `.env.example` to `.env.local`). The client is created **scoped to the `bob`
 schema** (`{ db: { schema: 'bob' } }`), so table names in queries stay bare.
 With no env config the app falls back to the in-memory mock data.
+
+## Login & membership
+
+Sign-in uses Supabase Auth (magic link or email + password — enable the
+**Email** provider under Authentication → Providers, and set the site URL to
+the deployed app so magic links return there). The shared database means
+`auth.users` is project-wide; bob links accounts to his own crew via
+`bob.people.auth_user_id`, resolved by `bob.join_project()` (security
+definer) at sign-in:
+
+- **Invited**: register a crew member's email and their sign-in claims that
+  person row —
+
+  ```sql
+  insert into bob.person_emails (person_id, email) values ('he', 'henrik@example.se');
+  ```
+
+  `person_emails` is deliberately unreachable through the API (RLS deny-all,
+  no grants), so invite emails are never exposed.
+- **Anyone with the link**: an unknown email joins as a fresh Volunteer
+  profile, named from the address.
 
 ## Security posture
 
