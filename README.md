@@ -62,16 +62,30 @@ already **async** and return **deep clones**, so they behave exactly like real
 network queries — which means swapping in a real backend touches *only this one
 file*.
 
+### The real schema — [`db/`](./db)
+
+The Postgres schema now exists in [`db/migrations/`](./db/migrations), with a
+seed script mirroring the Skogsstuga sample data. The database is **shared**
+with other apps, so everything bob owns lives in its own schema, `bob` — see
+[`db/README.md`](./db/README.md) for how to apply it and how it maps to
+`types.ts`.
+
 ### Swapping in a real backend later
 
 The PRD suggests Supabase (for realtime + auth + image storage). When you're
 ready:
 
-1. Open `src/data/database.ts`.
-2. In the `CONNECTION` block, create the client and flip `USE_MOCK` to `false`:
+1. Apply `db/migrations/0001_create_bob_schema.sql` (and optionally
+   `db/seed.sql`) — see [`db/README.md`](./db/README.md).
+2. Open `src/data/database.ts`. In the `CONNECTION` block, create the client
+   **scoped to the `bob` schema** and flip `USE_MOCK` to `false`:
    ```ts
    import { createClient } from '@supabase/supabase-js'
-   const db = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+   const db = createClient(
+     import.meta.env.VITE_SUPABASE_URL,
+     import.meta.env.VITE_SUPABASE_ANON_KEY,
+     { db: { schema: 'bob' } },
+   )
    const USE_MOCK = false
    ```
 3. Replace each function body with the equivalent query, e.g.
