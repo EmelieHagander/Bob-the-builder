@@ -26,7 +26,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # With these two configured (repo Variables or Secrets), the published
+      # site runs LIVE against the shared database's `bob` schema; without
+      # them it falls back to the in-memory demo data. The anon key is a
+      # publishable key by design — it ends up in the browser bundle either way.
       - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/configure-pages@v5
         with:
           # Enable the Pages site via the API if it isn't already, so no manual

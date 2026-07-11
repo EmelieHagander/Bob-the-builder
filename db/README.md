@@ -14,6 +14,7 @@ db/
 │   ├── 0002_add_display_order.sql        sort_order for areas & people (list order is content)
 │   └── 0003_expose_schema_to_api.sql     expose `bob` to PostgREST in SQL (no dashboard step)
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
+├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
 ```
 
@@ -26,6 +27,16 @@ psql "$DATABASE_URL" -f db/seed.sql        # optional sample data
 
 Migrations are numbered and run once, in order. The seed is idempotent —
 re-running it is a no-op.
+
+### Going live for real
+
+When you're done demoing, `db/remove_demo_data.sql` deletes the Skogsstuga
+sample project and everything attached to it (known seed ids only — real rows
+survive; verified). The app needs at least one row in `bob.projects` to run
+live, so the script ends with a commented, edit-me insert for your real
+project. The deploy workflow passes `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` from the repo's Actions **Variables** (or Secrets)
+into the build, so the published site goes live as soon as those two are set.
 
 ### On Supabase
 
