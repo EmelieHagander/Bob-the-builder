@@ -29,7 +29,7 @@ const NAV: NavItem[] = [
 
 function Sidebar() {
   const { data: project } = useAsync(() => db.getProject(), [])
-  const { data: me } = useAsync(() => db.getPerson('em'), [])
+  const { data: me } = useAsync(() => db.getCurrentUser(), [])
 
   return (
     <aside

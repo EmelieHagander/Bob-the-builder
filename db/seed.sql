@@ -20,15 +20,15 @@ on conflict (id) do nothing;
 
 -- ─────────────── people ───────────────
 
-insert into bob.people (id, project_id, name, initials, color, role, diet) values
-  ('em', 'p_skogsstuga', 'Emelie Karlsson', 'EM', '#7E9B52', 'Organiser',            'No restrictions'),
-  ('he', 'p_skogsstuga', 'Henrik Lund',     'HE', '#5E87A6', 'Crew lead · Taket',    'Vegetarian'),
-  ('as', 'p_skogsstuga', 'Astrid Berg',     'AS', '#B5675A', 'Crew lead · Bastun',   'Gluten-free'),
-  ('ma', 'p_skogsstuga', 'Maja Holm',       'MA', '#C98B2E', 'Volunteer',            'Nut allergy'),
-  ('la', 'p_skogsstuga', 'Lars Ek',         'LA', '#8A6FA8', 'Volunteer',            'No restrictions'),
-  ('si', 'p_skogsstuga', 'Sigrid Nyström',  'SI', '#B07F4F', 'Volunteer',            'Vegan · dairy-free'),
-  ('os', 'p_skogsstuga', 'Oskar Falk',      'OS', '#5E9C68', 'Crew lead · Verandan', 'No restrictions'),
-  ('tv', 'p_skogsstuga', 'Tomas Vik',       'TV', '#C07A4E', 'Drop-in volunteer',    'Gluten-free')
+insert into bob.people (id, project_id, name, initials, color, role, diet, sort_order) values
+  ('em', 'p_skogsstuga', 'Emelie Karlsson', 'EM', '#7E9B52', 'Organiser',            'No restrictions',    1),
+  ('he', 'p_skogsstuga', 'Henrik Lund',     'HE', '#5E87A6', 'Crew lead · Taket',    'Vegetarian',         2),
+  ('as', 'p_skogsstuga', 'Astrid Berg',     'AS', '#B5675A', 'Crew lead · Bastun',   'Gluten-free',        3),
+  ('ma', 'p_skogsstuga', 'Maja Holm',       'MA', '#C98B2E', 'Volunteer',            'Nut allergy',        4),
+  ('la', 'p_skogsstuga', 'Lars Ek',         'LA', '#8A6FA8', 'Volunteer',            'No restrictions',    5),
+  ('si', 'p_skogsstuga', 'Sigrid Nyström',  'SI', '#B07F4F', 'Volunteer',            'Vegan · dairy-free', 6),
+  ('os', 'p_skogsstuga', 'Oskar Falk',      'OS', '#5E9C68', 'Crew lead · Verandan', 'No restrictions',    7),
+  ('tv', 'p_skogsstuga', 'Tomas Vik',       'TV', '#C07A4E', 'Drop-in volunteer',    'Gluten-free',        8)
 on conflict (id) do nothing;
 
 insert into bob.person_skills (person_id, name, level) values
@@ -49,13 +49,13 @@ on conflict do nothing;
 -- ─────────────── areas ───────────────
 
 insert into bob.areas (id, project_id, slug, name, description, icon, lead_id,
-                       assigned_pct, materials_pct, done_pct, task_summary) values
-  ('a_koket',      'p_skogsstuga', 'koket',      'Köket',      'The kitchen — heart of the cabin.',                       'cooking-pot', 'em',  80, 65, 40, '6 tasks · 2 need a skilled hand'),
-  ('a_taket',      'p_skogsstuga', 'taket',      'Taket',      'The roof — battens, underlay and the ridge beam.',        'house-line',  'he', 100, 90, 70, '6 tasks · on track'),
-  ('a_bastun',     'p_skogsstuga', 'bastun',     'Bastun',     'The sauna — cladding, benches and the wiring.',           'fire',        'as',  50, 30, 10, '7 tasks · waiting on the door'),
-  ('a_tradgarden', 'p_skogsstuga', 'tradgarden', 'Trädgården', 'The garden — beds, paths and planting.',                  'plant',       'ma',  40, 55, 25, '5 tasks · easy-going'),
-  ('a_loftet',     'p_skogsstuga', 'loftet',     'Loftet',     'The loft — stairs, floor and the railing.',               'stairs',      'la',  20, 10,  0, '4 tasks · not started yet'),
-  ('a_verandan',   'p_skogsstuga', 'verandan',   'Verandan',   'The porch — decking, rails and a coat of linseed oil.',   'park',        'os',  90, 70, 55, '5 tasks · nearly there')
+                       assigned_pct, materials_pct, done_pct, task_summary, sort_order) values
+  ('a_koket',      'p_skogsstuga', 'koket',      'Köket',      'The kitchen — heart of the cabin.',                       'cooking-pot', 'em',  80, 65, 40, '6 tasks · 2 need a skilled hand', 1),
+  ('a_taket',      'p_skogsstuga', 'taket',      'Taket',      'The roof — battens, underlay and the ridge beam.',        'house-line',  'he', 100, 90, 70, '6 tasks · on track',              2),
+  ('a_bastun',     'p_skogsstuga', 'bastun',     'Bastun',     'The sauna — cladding, benches and the wiring.',           'fire',        'as',  50, 30, 10, '7 tasks · waiting on the door',   3),
+  ('a_tradgarden', 'p_skogsstuga', 'tradgarden', 'Trädgården', 'The garden — beds, paths and planting.',                  'plant',       'ma',  40, 55, 25, '5 tasks · easy-going',            4),
+  ('a_loftet',     'p_skogsstuga', 'loftet',     'Loftet',     'The loft — stairs, floor and the railing.',               'stairs',      'la',  20, 10,  0, '4 tasks · not started yet',       5),
+  ('a_verandan',   'p_skogsstuga', 'verandan',   'Verandan',   'The porch — decking, rails and a coat of linseed oil.',   'park',        'os',  90, 70, 55, '5 tasks · nearly there',          6)
 on conflict (id) do nothing;
 
 insert into bob.area_crew (area_id, person_id) values

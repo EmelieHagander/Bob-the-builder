@@ -10,28 +10,57 @@ schema-qualified, and nothing relies on `search_path`.
 ```
 db/
 ├── migrations/
-│   └── 0001_create_bob_schema.sql   schema `bob` + all tables, enums, view, RLS, grants
-├── seed.sql                         the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
-└── README.md                        this file
+│   ├── 0001_create_bob_schema.sql        schema `bob` + all tables, enums, view, RLS, grants
+│   ├── 0002_add_display_order.sql        sort_order for areas & people (list order is content)
+│   ├── 0003_expose_schema_to_api.sql     expose `bob` to PostgREST in SQL (no dashboard step)
+│   └── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
+├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
+├── remove_demo_data.sql                  delete the demo project again (real data untouched)
+└── README.md                             this file
 ```
 
 ## Applying it
 
 ```bash
-psql "$DATABASE_URL" -f db/migrations/0001_create_bob_schema.sql
+for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 psql "$DATABASE_URL" -f db/seed.sql        # optional sample data
 ```
 
 Migrations are numbered and run once, in order. The seed is idempotent —
 re-running it is a no-op.
 
+### Going live for real
+
+When you're done demoing, `db/remove_demo_data.sql` deletes the Skogsstuga
+sample project and everything attached to it (known seed ids only — real rows
+survive; verified). With the database empty, the app then shows a **"start
+your project"** screen and creates your real project from the UI — allowed by
+the RLS bootstrap policy in migration `0004` *only while `bob.projects` is
+empty*, so the public anon key can't create anything once your project
+exists. (Prefer SQL? The script ends with a commented insert block instead.)
+The deploy workflow passes `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
+from the repo's Actions **Variables** (or Secrets) into the build, so the
+published site goes live as soon as those two are set.
+
 ### On Supabase
 
-1. Run the migration (SQL editor, or `supabase db push` with the file in your
-   migrations dir).
-2. Expose the schema to the API: **Project settings → API → Exposed schemas →
-   add `bob`.**
-3. Point the client at the schema when creating it (see below).
+1. Run the migrations in order (SQL editor, or `supabase db push` with the
+   files in your migrations dir).
+2. That's the whole list — **API exposure is handled in SQL by migration
+   `0003`**, not the dashboard. It appends `bob` to the `pgrst.db_schemas`
+   setting on the `authenticator` role (never overwriting the other apps'
+   entries — shared database) and fires `notify pgrst, 'reload config'` +
+   `'reload schema'` so PostgREST picks it up immediately. Re-running it is a
+   no-op.
+3. The app's client is already scoped to the schema (see below).
+
+If the API ever serves stale table shapes after a future DDL migration, the
+fix is the reload notifies from `0003`:
+
+```sql
+notify pgrst, 'reload config';
+notify pgrst, 'reload schema';
+```
 
 ## How it maps to the app
 
@@ -60,25 +89,12 @@ future work and only touches this schema + `src/data/database.ts`.
 
 ## Wiring the app to it
 
-All data access already goes through the single module
-[`src/data/database.ts`](../src/data/database.ts). To read from the database
-instead of the mock, create the client **scoped to the `bob` schema** and flip
-`USE_MOCK`:
-
-```ts
-import { createClient } from '@supabase/supabase-js'
-
-const db = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-  { db: { schema: 'bob' } },          // ◄ shared database — always scope to bob
-)
-const USE_MOCK = false
-```
-
-Then each function body becomes the equivalent query, e.g.
-`db.from('areas').select('*')` — the client already targets schema `bob`, so
-table names stay bare.
+Already done — all data access goes through the single module
+[`src/data/database.ts`](../src/data/database.ts), which queries these tables
+whenever `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set (copy
+`.env.example` to `.env.local`). The client is created **scoped to the `bob`
+schema** (`{ db: { schema: 'bob' } }`), so table names in queries stay bare.
+With no env config the app falls back to the in-memory mock data.
 
 ## Security posture
 

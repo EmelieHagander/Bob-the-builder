@@ -57,46 +57,27 @@ mock data directly — they only ever call `database` functions like
    src/data/mockData.ts   (sample "Skogsstuga" content; swappable)
 ```
 
-Today `database.ts` serves the in-memory data in `mockData.ts`. The functions are
-already **async** and return **deep clones**, so they behave exactly like real
-network queries — which means swapping in a real backend touches *only this one
-file*.
+`database.ts` runs in one of two modes, decided once at startup:
 
-### The real schema — [`db/`](./db)
+- **Live** — when `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set,
+  every function queries the real Postgres database (Supabase). The database is
+  **shared** with other apps, so everything bob owns lives in its own schema,
+  `bob`, and the client is pinned to it.
+- **Mock** — with no env config, the app serves the in-memory Skogsstuga sample
+  data in `mockData.ts`, exactly as before. Zero setup, great for dev and demos.
 
-The Postgres schema now exists in [`db/migrations/`](./db/migrations), with a
-seed script mirroring the Skogsstuga sample data. The database is **shared**
-with other apps, so everything bob owns lives in its own schema, `bob` — see
-[`db/README.md`](./db/README.md) for how to apply it and how it maps to
-`types.ts`.
+The function signatures are identical in both modes, so no UI code knows or
+cares which one is active.
 
-### Swapping in a real backend later
+### Running against the real database
 
-The PRD suggests Supabase (for realtime + auth + image storage). When you're
-ready:
+1. Apply the migrations in [`db/migrations/`](./db/migrations) and optionally
+   the sample data in `db/seed.sql` — see [`db/README.md`](./db/README.md).
+   API exposure is part of the migrations (`0003` appends `bob` to the
+   exposed schemas in SQL and reloads PostgREST — no dashboard step).
+2. Copy `.env.example` to `.env.local` and fill in the URL + anon key.
 
-1. Apply `db/migrations/0001_create_bob_schema.sql` (and optionally
-   `db/seed.sql`) — see [`db/README.md`](./db/README.md).
-2. Open `src/data/database.ts`. In the `CONNECTION` block, create the client
-   **scoped to the `bob` schema** and flip `USE_MOCK` to `false`:
-   ```ts
-   import { createClient } from '@supabase/supabase-js'
-   const db = createClient(
-     import.meta.env.VITE_SUPABASE_URL,
-     import.meta.env.VITE_SUPABASE_ANON_KEY,
-     { db: { schema: 'bob' } },
-   )
-   const USE_MOCK = false
-   ```
-3. Replace each function body with the equivalent query, e.g.
-   ```ts
-   export async function getAreas(): Promise<Area[]> {
-     return (await db.from('areas').select('*')).data ?? []
-   }
-   ```
-
-Because the function signatures and return types don't change, **no UI code needs
-to be touched.**
+That's it — restart `npm run dev` and every screen reads from the database.
 
 ## Project layout
 
