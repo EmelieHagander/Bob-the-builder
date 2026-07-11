@@ -15,7 +15,8 @@ db/
 │   ├── 0003_expose_schema_to_api.sql     expose `bob` to PostgREST in SQL (no dashboard step)
 │   ├── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
 │   ├── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
-│   └── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
+│   ├── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
+│   └── 0007_invite_people.sql            bob.invite_person(): the account dashboard's "Invite" button
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
@@ -109,8 +110,10 @@ the deployed app so magic links return there). The shared database means
 `bob.people.auth_user_id`, resolved by `bob.join_project()` (security
 definer) at sign-in:
 
-- **Invited**: register a crew member's email and their sign-in claims that
-  person row —
+- **Invited**: the account dashboard's **Invite** button registers a crew
+  member (name + email) via `bob.invite_person()` (security definer,
+  migration `0007`); their sign-in then claims that person row. Prefer SQL?
+  The manual equivalent is still:
 
   ```sql
   insert into bob.person_emails (person_id, email) values ('he', 'henrik@example.se');
@@ -120,6 +123,12 @@ definer) at sign-in:
   no grants), so invite emails are never exposed.
 - **Anyone with the link**: an unknown email joins as a fresh Volunteer
   profile, named from the address.
+- **Guest**: the sign-in screen's "Continue as guest" uses one shared,
+  pre-created auth user (`guest@bob.local`, credentials public by design —
+  they live in the client bundle). The guest is an ordinary authenticated
+  member named "Guest", so writes still carry an identity. Live mode shows
+  the sign-in screen INSTEAD of the app until a session exists; reads stay
+  open at the API level (household posture), the gate is UX.
 
 ## Security posture
 

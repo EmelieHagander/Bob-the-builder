@@ -25,7 +25,9 @@ export function AccountDashboard() {
   const { data: projects, loading } = useAsync(() => db.getProjects(), [version, projectVersion])
   const { data: active } = useAsync(() => db.getProject(), [version, projectVersion])
   const { data: notes } = useAsync(() => db.getNotes(), [notesVersion])
-  const [modal, setModal] = useState<{ kind: 'new' } | { kind: 'project'; project: Project; editing: boolean } | null>(null)
+  const [modal, setModal] = useState<
+    { kind: 'new' } | { kind: 'invite' } | { kind: 'project'; project: Project; editing: boolean } | null
+  >(null)
 
   const reload = () => setVersion((v) => v + 1)
   const openProject = (p: Project) => {
@@ -60,6 +62,9 @@ export function AccountDashboard() {
           <Link to="/account/settings" className="btn">
             <Icon name="gear-six" size={16} /> Settings
           </Link>
+          <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
+            <Icon name="user-plus" size={16} /> Invite
+          </button>
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
             <Icon name="plus" weight="bold" size={15} /> New project
           </button>
@@ -185,6 +190,9 @@ export function AccountDashboard() {
           }}
         />
       )}
+      {modal?.kind === 'invite' && (
+        <InviteModal projects={projects ?? []} defaultProjectId={active?.id ?? ''} onClose={() => setModal(null)} />
+      )}
       {modal?.kind === 'project' && (
         <ProjectModal project={modal.project} startEditing={modal.editing} onClose={() => setModal(null)} onChanged={reload} />
       )}
@@ -270,6 +278,73 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
         </div>
       )}
     </div>
+  )
+}
+
+/* ─────────────────────────── Invite ─────────────────────────── */
+
+function InviteModal({ projects, defaultProjectId, onClose }: { projects: Project[]; defaultProjectId: string; onClose: () => void }) {
+  const [projectId, setProjectId] = useState(defaultProjectId || projects[0]?.id || '')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [invited, setInvited] = useState<string[]>([])
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || !email.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await db.invitePerson(projectId, name.trim(), email.trim())
+      setInvited((list) => [...list, `${name.trim()} (${email.trim()})`])
+      setName('')
+      setEmail('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="Invite to the crew" onClose={onClose}>
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45, marginBottom: 14 }}>
+        They join the project's crew right away. When they sign in with this email — magic link or password — the profile becomes theirs.
+      </p>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+        <Field label="Project">
+          <select style={{ ...inputStyle, appearance: 'auto' }} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Name *">
+          <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Henrik Lund" autoFocus />
+        </Field>
+        <Field label="Email *">
+          <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="henrik@example.se" />
+        </Field>
+        {error && <FormError>{error}</FormError>}
+        {invited.length > 0 && (
+          <div style={{ background: 'var(--leaf-bg)', border: '1px solid #c4d6ab', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#3f5c22' }}>
+            Invited: {invited.join(', ')}
+          </div>
+        )}
+        <div className="cluster" style={{ justifyContent: 'flex-end' }}>
+          <button type="button" className="btn" onClick={onClose} disabled={busy}>
+            {invited.length > 0 ? 'Done' : 'Cancel'}
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!name.trim() || !email.trim() || busy}>
+            {busy ? 'Inviting…' : 'Invite'}
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

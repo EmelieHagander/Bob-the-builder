@@ -475,6 +475,44 @@ export async function signInWithPassword(email: string, password: string): Promi
   if (error) throw new Error(error.message)
 }
 
+/** Is anyone signed in? Mock mode has no auth, so always "yes". */
+export async function hasSession(): Promise<boolean> {
+  if (!db) return true
+  const { data } = await db.auth.getSession()
+  return data.session !== null
+}
+
+/*
+ * The shared GUEST account: one click on the sign-in screen, no email
+ * needed. The credentials are public by design — the guest is just another
+ * signed-in member named "Guest" (household posture; the account exists so
+ * writes still go through `authenticated` policies and carry an identity).
+ */
+const GUEST_EMAIL = 'guest@bob.local'
+const GUEST_PASSWORD = 'bob-guest-2026'
+
+export async function signInAsGuest(): Promise<void> {
+  if (!db) throw new Error('Running on demo data — sign-in needs the live database.')
+  const { error } = await db.auth.signInWithPassword({ email: GUEST_EMAIL, password: GUEST_PASSWORD })
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Register an invite: creates the person on the project's crew and records
+ * their email server-side (bob.invite_person, security definer — the invite
+ * email is never readable through the API). When they sign in with that
+ * email they claim the person row.
+ */
+export async function invitePerson(projectId: string, name: string, email: string): Promise<void> {
+  if (!db) throw new Error('Running on demo data — inviting needs the live database.')
+  const res = await db.rpc('invite_person', {
+    p_project_id: projectId,
+    p_name: name.trim(),
+    p_email: email.trim(),
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
 /** Returns true when the account is ready, false when email confirmation is pending. */
 export async function signUpWithPassword(email: string, password: string): Promise<boolean> {
   if (!db) throw new Error('Running on demo data — sign-up needs the live database.')
