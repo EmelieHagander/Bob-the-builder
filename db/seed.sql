@@ -10,12 +10,29 @@
 
 begin;
 
--- ─────────────── project ───────────────
+-- ─────────────── projects ───────────────
+-- Skogsstuga carries the full sample content; Växthuset and Bastun exist so
+-- the account dashboard and calendar have something to show.
 
-insert into bob.projects (id, slug, name, description, location, type, theme, start_label) values
+insert into bob.projects (id, slug, name, description, location, type, theme, start_label, start_date, end_date) values
   ('p_skogsstuga', 'skogsstuga', 'Skogsstuga',
    'A hand-built cabin in the Dalarna woods, raised by friends over a summer of build weekends.',
-   'Dalarna, Sweden', 'Cabin / stuga', 'birch', 'Sat 5 Jul')
+   'Dalarna, Sweden', 'Cabin / stuga', 'birch', 'Sat 5 Jul', '2026-07-05', '2026-08-15'),
+  ('p_vaxthuset', 'vaxthuset', 'Växthuset',
+   'A greenhouse built from recycled windows, going up next to the vegetable beds in one long weekend push.',
+   'Dalarna, Sweden', 'Greenhouse', 'forest', 'Sat 12 Sep', '2026-09-12', '2026-09-20'),
+  ('p_bastun', 'bastun', 'Bastun',
+   'The lakeside sauna — finished this spring, first löyly already thrown.',
+   'Dalarna, Sweden', 'Sauna', 'dusk', 'Sat 2 May', '2026-05-02', '2026-05-24')
+on conflict (id) do nothing;
+
+-- ─────────────── account notes ───────────────
+-- Fixed uuids so re-running stays a no-op and removal can target them.
+
+insert into bob.account_notes (id, text, pinned, created_at) values
+  ('00000000-0000-4000-8000-00000000d001', 'Ask Henrik''s cousin about borrowing the scaffolding again for Växthuset.', true,  '2026-07-08T09:15:00Z'),
+  ('00000000-0000-4000-8000-00000000d002', 'Byggmax has 20% off screws and fittings until the end of July — stock up for both builds.', false, '2026-07-06T18:40:00Z'),
+  ('00000000-0000-4000-8000-00000000d003', 'Photos from the Bastun build are in the shared album — pick a few for the winter recap.', false, '2026-06-28T20:05:00Z')
 on conflict (id) do nothing;
 
 -- ─────────────── people ───────────────

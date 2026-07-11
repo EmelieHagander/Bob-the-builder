@@ -5,10 +5,10 @@
 -- known ids — real data added since is untouched unless it was attached to the
 -- demo project (everything cascades from bob.projects). Safe to re-run.
 --
--- After removal the app shows its "start your project" screen (the RLS
--- bootstrap policy from migration 0004 allows creating a project while the
--- table is empty), so you can set up the real project in the UI. Prefer SQL?
--- Edit and uncomment the "YOUR REAL PROJECT" block below instead.
+-- After removal the app shows its "start your project" screen, so you can
+-- set up the real project in the UI (project creation is a normal app
+-- feature since migration 0006 — the account dashboard's "New project").
+-- Prefer SQL? Edit and uncomment the "YOUR REAL PROJECT" block below instead.
 --
 -- Apply with:  psql "$DATABASE_URL" -f db/remove_demo_data.sql
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -28,7 +28,15 @@ end $$;
 
 -- One delete: people, areas, tasks, materials, events, meals, diet columns,
 -- food groups/items and announcements all cascade from the project row.
-delete from bob.projects where id = 'p_skogsstuga';
+-- Växthuset and Bastun are the account-level demo projects from the seed.
+delete from bob.projects where id in ('p_skogsstuga', 'p_vaxthuset', 'p_bastun');
+
+-- The seeded account notes (fixed uuids — real notes survive).
+delete from bob.account_notes where id in (
+  '00000000-0000-4000-8000-00000000d001',
+  '00000000-0000-4000-8000-00000000d002',
+  '00000000-0000-4000-8000-00000000d003'
+);
 
 -- Local-verification sentinel, in case it was ever seeded anywhere real.
 delete from bob.people where id = 'zz';

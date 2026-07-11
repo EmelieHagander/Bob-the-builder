@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { PROJECT_CHANGED_EVENT } from '../data/database'
 import type { MaterialStatus, Person, SkillLevel, TaskStatus } from '../data/types'
 
 /* ─────────────────────────── Icon ─────────────────────────── */
@@ -48,6 +49,20 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { d
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
   return { data, loading }
+}
+
+/**
+ * Bumps whenever the active project changes (project switch, first project
+ * created) — pass it to useAsync deps so the screen refetches.
+ */
+export function useProjectVersion(): number {
+  const [version, setVersion] = useState(0)
+  useEffect(() => {
+    const bump = () => setVersion((v) => v + 1)
+    window.addEventListener(PROJECT_CHANGED_EVENT, bump)
+    return () => window.removeEventListener(PROJECT_CHANGED_EVENT, bump)
+  }, [])
+  return version
 }
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {

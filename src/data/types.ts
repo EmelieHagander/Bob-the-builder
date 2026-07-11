@@ -38,6 +38,27 @@ export interface Project {
   type: string
   theme: ThemeName
   startLabel: string
+  /** ISO date (YYYY-MM-DD) the build window starts — null while unscheduled */
+  startDate: string | null
+  /** ISO date (YYYY-MM-DD) the build window ends — null while unscheduled */
+  endDate: string | null
+}
+
+/** The account that owns all projects. One per install — there is no auth yet. */
+export interface Account {
+  id: string
+  name: string
+  ownerName: string
+  email: string
+}
+
+/** A free-form account-level note — things that span projects. */
+export interface AccountNote {
+  id: string
+  text: string
+  pinned: boolean
+  /** ISO timestamp */
+  createdAt: string
 }
 
 export interface Area {

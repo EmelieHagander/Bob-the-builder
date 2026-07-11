@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import * as db from './data/database'
-import { Loading, useAsync } from './components/ui'
+import { Loading, useAsync, useProjectVersion } from './components/ui'
 import { Layout } from './components/Layout'
 import { StartProject } from './pages/StartProject'
+import { AccountDashboard } from './pages/account/AccountDashboard'
+import { AccountCalendar } from './pages/account/AccountCalendar'
+import { AccountSettings } from './pages/account/AccountSettings'
 import { Dashboard } from './pages/Dashboard'
 import { Areas } from './pages/Areas'
 import { AreaDetail } from './pages/AreaDetail'
@@ -20,9 +23,11 @@ import { NotFound } from './pages/NotFound'
 
 export function App() {
   // The active project decides the colour theme (forest / dusk / birch).
-  // Bumped after the first project is created so everything refetches.
-  const [projectVersion, setProjectVersion] = useState(0)
-  const { data: project, loading } = useAsync(() => db.getProject(), [projectVersion])
+  // Refetches when the active project changes (switch from the account
+  // level) and after the first project is created.
+  const projectVersion = useProjectVersion()
+  const [bootVersion, setBootVersion] = useState(0)
+  const { data: project, loading } = useAsync(() => db.getProject(), [projectVersion, bootVersion])
 
   useEffect(() => {
     if (project) document.documentElement.setAttribute('data-theme', project.theme)
@@ -38,13 +43,16 @@ export function App() {
 
   // Fresh install (or demo data just removed): no project in the database yet.
   if (!project) {
-    return <StartProject onCreated={() => setProjectVersion((v) => v + 1)} />
+    return <StartProject onCreated={() => setBootVersion((v) => v + 1)} />
   }
 
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/account" element={<AccountDashboard />} />
+        <Route path="/account/calendar" element={<AccountCalendar />} />
+        <Route path="/account/settings" element={<AccountSettings />} />
         <Route path="/areas" element={<Areas />} />
         <Route path="/areas/:slug" element={<AreaDetail />} />
         <Route path="/people" element={<People />} />

@@ -10,6 +10,8 @@
  */
 
 import type {
+  Account,
+  AccountNote,
   Announcement,
   Area,
   BuildEvent,
@@ -24,16 +26,79 @@ import type {
   TodayTask,
 } from './types'
 
-export const project: Project = {
-  id: 'p_skogsstuga',
-  slug: 'skogsstuga',
-  name: 'Skogsstuga',
-  description: 'A hand-built cabin in the Dalarna woods, raised by friends over a summer of build weekends.',
-  location: 'Dalarna, Sweden',
-  type: 'Cabin / stuga',
-  theme: 'birch',
-  startLabel: 'Sat 5 Jul',
+/*
+ * The account level: all projects the crew has going. Skogsstuga is the one
+ * with full sample content below; the other two exist so the account
+ * dashboard and calendar have something real to show. The arrays are mutable
+ * on purpose — in mock mode the database layer writes to them in-memory, so
+ * demo changes behave like real ones until the page reloads.
+ */
+export const projects: Project[] = [
+  {
+    id: 'p_skogsstuga',
+    slug: 'skogsstuga',
+    name: 'Skogsstuga',
+    description: 'A hand-built cabin in the Dalarna woods, raised by friends over a summer of build weekends.',
+    location: 'Dalarna, Sweden',
+    type: 'Cabin / stuga',
+    theme: 'birch',
+    startLabel: 'Sat 5 Jul',
+    startDate: '2026-07-05',
+    endDate: '2026-08-15',
+  },
+  {
+    id: 'p_vaxthuset',
+    slug: 'vaxthuset',
+    name: 'Växthuset',
+    description: 'A greenhouse built from recycled windows, going up next to the vegetable beds in one long weekend push.',
+    location: 'Dalarna, Sweden',
+    type: 'Greenhouse',
+    theme: 'forest',
+    startLabel: 'Sat 12 Sep',
+    startDate: '2026-09-12',
+    endDate: '2026-09-20',
+  },
+  {
+    id: 'p_bastun',
+    slug: 'bastun',
+    name: 'Bastun',
+    description: 'The lakeside sauna — finished this spring, first löyly already thrown.',
+    location: 'Dalarna, Sweden',
+    type: 'Sauna',
+    theme: 'dusk',
+    startLabel: 'Sat 2 May',
+    startDate: '2026-05-02',
+    endDate: '2026-05-24',
+  },
+]
+
+export const account: Account = {
+  id: 'account',
+  name: 'Skogsfolket',
+  ownerName: 'Emelie Karlsson',
+  email: 'emelie@skogsfolket.se',
 }
+
+export const accountNotes: AccountNote[] = [
+  {
+    id: 'note_scaffolding',
+    text: "Ask Henrik's cousin about borrowing the scaffolding again for Växthuset.",
+    pinned: true,
+    createdAt: '2026-07-08T09:15:00Z',
+  },
+  {
+    id: 'note_byggmax',
+    text: 'Byggmax has 20% off screws and fittings until the end of July — stock up for both builds.',
+    pinned: false,
+    createdAt: '2026-07-06T18:40:00Z',
+  },
+  {
+    id: 'note_photos',
+    text: 'Photos from the Bastun build are in the shared album — pick a few for the winter recap.',
+    pinned: false,
+    createdAt: '2026-06-28T20:05:00Z',
+  },
+]
 
 export const people: Person[] = [
   {

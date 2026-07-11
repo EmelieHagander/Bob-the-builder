@@ -6,7 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import * as db from '../data/database'
-import { Avatar, Icon, useAsync } from './ui'
+import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
 import { AskBob } from './AskBob'
 
 /** Re-render dependency that bumps on every sign-in/out (no-op in demo mode). */
@@ -32,12 +32,14 @@ const NAV: NavItem[] = [
   { to: '/shopping', icon: 'shopping-cart-simple', label: 'Shopping' },
   { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
   { to: '/today', icon: 'sun-horizon', label: 'Today' },
+  { to: '/account', icon: 'user-circle', label: 'Account' },
 ]
 
 function Sidebar() {
   const tick = useAuthTick()
-  const { data: project } = useAsync(() => db.getProject(), [])
-  const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
+  const projectVersion = useProjectVersion()
+  const { data: project } = useAsync(() => db.getProject(), [projectVersion])
+  const { data: me } = useAsync(() => db.getCurrentUser(), [tick, projectVersion])
 
   return (
     <aside
@@ -66,7 +68,9 @@ function Sidebar() {
         </div>
       </div>
 
-      <button
+      <Link
+        to="/account"
+        title="All projects — account dashboard"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -89,7 +93,7 @@ function Sidebar() {
           <div style={{ fontSize: 11, color: '#ffffff85' }}>{project ? `${project.type} · ${project.location.split(',')[0]}` : ''}</div>
         </div>
         <Icon name="caret-up-down" size={14} color="#ffffffaa" />
-      </button>
+      </Link>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {NAV.map((n) => (
@@ -158,7 +162,8 @@ function Sidebar() {
 }
 
 function MobileNav() {
-  const items = NAV.slice(0, 5)
+  // The first project tabs, plus the account level — it must stay reachable on mobile.
+  const items = [...NAV.slice(0, 4), NAV[NAV.length - 1]]
   return (
     <nav
       className="no-print mobile-nav"

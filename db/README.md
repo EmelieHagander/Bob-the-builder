@@ -14,7 +14,8 @@ db/
 │   ├── 0002_add_display_order.sql        sort_order for areas & people (list order is content)
 │   ├── 0003_expose_schema_to_api.sql     expose `bob` to PostgREST in SQL (no dashboard step)
 │   ├── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
-│   └── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
+│   ├── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
+│   └── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
@@ -33,12 +34,12 @@ re-running it is a no-op.
 ### Going live for real
 
 When you're done demoing, `db/remove_demo_data.sql` deletes the Skogsstuga
-sample project and everything attached to it (known seed ids only — real rows
-survive; verified). With the database empty, the app then shows a **"start
-your project"** screen and creates your real project from the UI — allowed by
-the RLS bootstrap policy in migration `0004` *only while `bob.projects` is
-empty*, so the public anon key can't create anything once your project
-exists. (Prefer SQL? The script ends with a commented insert block instead.)
+sample projects, notes and everything attached to them (known seed ids only —
+real rows survive; verified). With the database empty, the app then shows a
+**"start your project"** screen and creates your real project from the UI.
+(Prefer SQL? The script ends with a commented insert block instead.) Since
+migration `0006`, creating and scheduling projects is a normal app feature —
+see the security posture below.
 The deploy workflow passes `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`
 from the repo's Actions **Variables** (or Secrets) into the build, so the
 published site goes live as soon as those two are set.
@@ -70,7 +71,9 @@ become join tables:
 
 | TS type / field | Database |
 | --- | --- |
-| `Project` | `bob.projects` |
+| `Project` (incl. `.startDate` / `.endDate`) | `bob.projects` |
+| `Account` | `bob.account` (single row, `id = 'account'`) |
+| `AccountNote` | `bob.account_notes` |
 | `Person`, `Person.skills` | `bob.people`, `bob.person_skills` |
 | `Area`, `.crewIds`, `.referenceImages` | `bob.areas`, `bob.area_crew`, `bob.area_reference_images` |
 | `Task`, `.assigneeIds` | `bob.tasks`, `bob.task_assignees` |
@@ -121,9 +124,16 @@ definer) at sign-in:
 ## Security posture
 
 - **RLS is enabled on every table** from day one (shared database).
-- v1 of the app is read-only, so each table carries a single public
-  `for select` policy and nothing else — all writes are blocked until proper
-  auth-based policies are added alongside the write features.
+- Reads: every table carries a public `for select` policy.
+- Writes: the account level (migration `0006`) brought the app's first write
+  features — create/schedule projects, account notes, account settings — and
+  its policies require a **signed-in member** (`authenticated`). Anyone with
+  the link can become one via the sign-in page (migration `0005`), so this is
+  still the household-tool posture, but writes are gated behind login and
+  carry an identity. The one exception is the `0004` bootstrap: creating the
+  FIRST project stays open while `bob.projects` is empty, so a fresh install
+  works before anyone can sign in. Everything else (people, areas, tasks,
+  materials, …) stays read-only until its write feature arrives.
 - The grants block in the migration is Supabase-aware (`anon` /
   `authenticated` / `service_role`) and a no-op on a plain Postgres — there,
   grant your app's role instead:
