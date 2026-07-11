@@ -466,6 +466,7 @@ export function authEnabled(): boolean {
 }
 
 let sessionPerson: Person | null = null
+let joinInFlight: Promise<Person | null> | null = null
 
 /** Who is using the app: the signed-in member, or null when signed out. */
 export async function getCurrentUser(): Promise<Person | null> {
@@ -474,20 +475,28 @@ export async function getCurrentUser(): Promise<Person | null> {
     const people = await getPeople()
     return people.find((p) => p.role.toLowerCase().includes('organiser')) ?? people[0] ?? null
   }
-  const { data } = await db.auth.getSession()
+  const client = db
+  const { data } = await client.auth.getSession()
   if (!data.session) return null
   if (sessionPerson) return sessionPerson
-  const res = await db.rpc('join_project')
-  if (res.error) throw new Error(`database: ${res.error.message}`)
-  const row = res.data as { id: string; name: string; initials: string; color: string; role: string; diet: string }
-  // Re-read through getPeople so skills come along and shapes stay identical.
-  // getPeople is scoped to the ACTIVE project; when the member's person row
-  // lives in another project, fall back to the row join_project returned so
-  // the signed-in identity stays visible across the account.
-  sessionPerson =
-    (await getPerson(row.id)) ??
-    { id: row.id, name: row.name, initials: row.initials, color: row.color, role: row.role, diet: row.diet, skills: [] }
-  return sessionPerson
+  // Several components ask "who am I" at once right after sign-in — share a
+  // single join_project call instead of racing parallel first-joins.
+  joinInFlight ??= (async () => {
+    const res = await client.rpc('join_project')
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+    const row = res.data as { id: string; name: string; initials: string; color: string; role: string; diet: string }
+    // Re-read through getPeople so skills come along and shapes stay identical.
+    // getPeople is scoped to the ACTIVE project; when the member's person row
+    // lives in another project, fall back to the row join_project returned so
+    // the signed-in identity stays visible across the account.
+    sessionPerson =
+      (await getPerson(row.id)) ??
+      { id: row.id, name: row.name, initials: row.initials, color: row.color, role: row.role, diet: row.diet, skills: [] }
+    return sessionPerson
+  })().finally(() => {
+    joinInFlight = null
+  })
+  return joinInFlight
 }
 
 /** Sends the sign-in link. The link returns to the app, which finishes the session. */

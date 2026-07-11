@@ -16,7 +16,8 @@ db/
 │   ├── 0004_allow_first_project_insert.sql  bootstrap policy: create the FIRST project from the app
 │   ├── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
 │   ├── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
-│   └── 0007_invite_people.sql            bob.invite_person(): the account dashboard's "Invite" button
+│   ├── 0007_invite_people.sql            bob.invite_person(): the account dashboard's "Invite" button
+│   └── 0008_join_project_race.sql        serialize concurrent join_project() calls (advisory lock)
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
