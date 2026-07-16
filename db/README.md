@@ -17,7 +17,8 @@ db/
 │   ├── 0005_auth_membership.sql          login: invited emails claim their person, others join as volunteers
 │   ├── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
 │   ├── 0007_invite_people.sql            bob.invite_person(): the account dashboard's "Invite" button
-│   └── 0008_join_project_race.sql        serialize concurrent join_project() calls (advisory lock)
+│   ├── 0008_join_project_race.sql        serialize concurrent join_project() calls (advisory lock)
+│   └── 0009_content_write_policies.sql   write policies: areas, tasks, materials, events, sign-ups, announcements
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file
@@ -142,8 +143,11 @@ definer) at sign-in:
   still the household-tool posture, but writes are gated behind login and
   carry an identity. The one exception is the `0004` bootstrap: creating the
   FIRST project stays open while `bob.projects` is empty, so a fresh install
-  works before anyone can sign in. Everything else (people, areas, tasks,
-  materials, …) stays read-only until its write feature arrives.
+  works before anyone can sign in. Migration `0009` extends the same posture
+  to project content — areas, tasks (and assignees), materials, events (and
+  sign-ups), announcements, reference-image labels. People rows are still
+  only created via the security-definer functions (`invite_person`,
+  `join_project`), and `person_emails` keeps its deny-all posture.
 - The grants block in the migration is Supabase-aware (`anon` /
   `authenticated` / `service_role`) and a no-op on a plain Postgres — there,
   grant your app's role instead:

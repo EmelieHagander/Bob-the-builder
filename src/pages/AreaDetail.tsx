@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as db from '../data/database'
+import type { MaterialStatus, Task, TaskStatus } from '../data/types'
 import {
   AvatarStack,
   EmptyState,
@@ -13,25 +14,44 @@ import {
   statusCheck,
   useAsync,
 } from '../components/ui'
+import { AddImageModal, AssignModal, NewMaterialModal, NewTaskModal } from '../components/editors'
 
 type Tab = 'tasks' | 'materials' | 'images'
 
+/** Tap the status icon to walk a task through its life. Blocked goes back to work. */
+const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus> = { todo: 'doing', doing: 'done', done: 'todo', blocked: 'doing' }
+/** Tap the pill to advance a material along the buying flow. */
+const NEXT_MATERIAL_STATUS: Record<MaterialStatus, MaterialStatus> = { needed: 'ordered', ordered: 'delivered', delivered: 'needed', backorder: 'ordered' }
+
 export function AreaDetail() {
   const { slug = '' } = useParams()
-  const { data: area, loading } = useAsync(() => db.getArea(slug), [slug])
+  const [version, setVersion] = useState(0)
+  const { data: area, loading } = useAsync(() => db.getArea(slug), [slug, version])
   const { data: people } = useAsync(() => db.getPeople(), [])
-  const { data: allTasks } = useAsync(() => db.getTasks(), [])
-  const { data: allMaterials } = useAsync(() => db.getMaterials(), [])
+  const { data: allTasks } = useAsync(() => db.getTasks(), [version])
+  const { data: allMaterials } = useAsync(() => db.getMaterials(), [version])
   const [tab, setTab] = useState<Tab>('tasks')
+  const [modal, setModal] = useState<{ kind: 'task' } | { kind: 'material' } | { kind: 'image' } | { kind: 'assign'; task: Task } | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
+
+  const reload = () => {
+    setModal(null)
+    setVersion((v) => v + 1)
+  }
+  const act = (action: () => Promise<unknown>) => {
+    setError(null)
+    action().then(reload).catch((err) => setError(err instanceof Error ? err.message : String(err)))
+  }
 
   if (loading) return <div className="page"><Loading /></div>
   if (!area) return <div className="page"><EmptyState icon="magnifying-glass" title="Area not found" hint="It may have been renamed or removed." /></div>
 
   const tasks = (allTasks ?? []).filter((t) => t.areaId === area.id)
   const materials = (allMaterials ?? []).filter((m) => m.area === area.name)
+  const materialCategories = [...new Set((allMaterials ?? []).map((m) => m.category))]
   const lead = byId.get(area.leadId ?? '')
 
   const tabs: { key: Tab; label: string; count: number }[] = [
@@ -61,10 +81,16 @@ export function AreaDetail() {
           </div>
         </div>
         <div className="cluster no-print">
-          <button className="btn"><Icon name="package" size={15} /> Add material</button>
-          <button className="btn btn-primary"><Icon name="plus" weight="bold" size={14} /> Add task</button>
+          <button className="btn" onClick={() => setModal({ kind: 'material' })}><Icon name="package" size={15} /> Add material</button>
+          <button className="btn btn-primary" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" weight="bold" size={14} /> Add task</button>
         </div>
       </div>
+
+      {error && (
+        <div style={{ marginTop: 12, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>
+          {error}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginTop: 18, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
@@ -102,7 +128,14 @@ export function AreaDetail() {
                 const matReady = got === total
                 return (
                   <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
-                    <Icon name={chk.icon} size={22} color={chk.color} />
+                    <button
+                      className="no-print"
+                      title={`Mark as ${NEXT_TASK_STATUS[t.status]}`}
+                      onClick={() => act(() => db.setTaskStatus(t.id, NEXT_TASK_STATUS[t.status]))}
+                      style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}
+                    >
+                      <Icon name={chk.icon} size={22} color={chk.color} />
+                    </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
@@ -112,13 +145,19 @@ export function AreaDetail() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="task-right">
-                      {t.assigneeIds.length === 0 ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--clay)', border: '1.5px dashed var(--clay)', borderRadius: 999, padding: '4px 10px' }}>
-                          <Icon name="user-plus" size={13} /> Assign
-                        </span>
-                      ) : (
-                        <AvatarStack people={resolve(t.assigneeIds)} max={3} />
-                      )}
+                      <button
+                        title="Choose who's on this task"
+                        onClick={() => setModal({ kind: 'assign', task: t })}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                      >
+                        {t.assigneeIds.length === 0 ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--clay)', border: '1.5px dashed var(--clay)', borderRadius: 999, padding: '4px 10px' }}>
+                            <Icon name="user-plus" size={13} /> Assign
+                          </span>
+                        ) : (
+                          <AvatarStack people={resolve(t.assigneeIds)} max={3} />
+                        )}
+                      </button>
                       <StatusPill status={t.status} />
                     </div>
                   </div>
@@ -136,7 +175,13 @@ export function AreaDetail() {
                     <div style={{ fontSize: 14.5, fontWeight: 700 }}>{m.name}</div>
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3 }}>{m.qty} · {m.supplier} · {m.cost}</div>
                   </div>
-                  <MaterialPill status={m.status} />
+                  <button
+                    title={`Mark as ${NEXT_MATERIAL_STATUS[m.status]}`}
+                    onClick={() => act(() => db.setMaterialStatus(m.id, NEXT_MATERIAL_STATUS[m.status]))}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    <MaterialPill status={m.status} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -144,7 +189,7 @@ export function AreaDetail() {
 
           {tab === 'images' && (
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-              {area.referenceImages.length === 0 && <EmptyState icon="image" title="No reference images" hint="Upload finish samples so volunteers can see the intended result." />}
+              {area.referenceImages.length === 0 && <EmptyState icon="image" title="No reference images" hint="Add finish samples so volunteers can see the intended result." />}
               {area.referenceImages.map((im, i) => (
                 <div
                   key={i}
@@ -183,7 +228,13 @@ export function AreaDetail() {
           <div className="card" style={{ padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
               <span style={{ fontSize: 14, fontWeight: 700 }}>Reference images</span>
-              <Icon name="plus-circle" size={18} color="var(--accent-2)" />
+              <button
+                title="Add reference image"
+                onClick={() => setModal({ kind: 'image' })}
+                style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}
+              >
+                <Icon name="plus-circle" size={18} color="var(--accent-2)" />
+              </button>
             </div>
             {area.referenceImages.length === 0 ? (
               <div style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Nothing uploaded yet.</div>
@@ -210,6 +261,13 @@ export function AreaDetail() {
           </div>
         </div>
       </div>
+
+      {modal?.kind === 'task' && <NewTaskModal areas={[area]} areaId={area.id} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'material' && (
+        <NewMaterialModal areas={[area]} categories={materialCategories} defaultArea={area.name} onClose={() => setModal(null)} onDone={reload} />
+      )}
+      {modal?.kind === 'image' && <AddImageModal areaId={area.id} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'assign' && <AssignModal task={modal.task} people={people ?? []} onClose={() => setModal(null)} onDone={reload} />}
     </div>
   )
 }

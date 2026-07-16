@@ -1,12 +1,16 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
+import { NewTaskModal } from '../components/editors'
 
 export function Dashboard() {
+  const [version, setVersion] = useState(0)
+  const [addingTask, setAddingTask] = useState(false)
   const { data: project } = useAsync(() => db.getProject(), [])
-  const { data: stats } = useAsync(() => db.getDashboardStats(), [])
-  const { data: areas } = useAsync(() => db.getAreas(), [])
+  const { data: stats } = useAsync(() => db.getDashboardStats(), [version])
+  const { data: areas } = useAsync(() => db.getAreas(), [version])
   const { data: people } = useAsync(() => db.getPeople(), [])
   const { data: next } = useAsync(() => db.getNextEvent(), [])
   const { data: attention } = useAsync(() => db.getAttention(), [])
@@ -32,7 +36,12 @@ export function Dashboard() {
           <Link to="/announcements" className="btn">
             <Icon name="megaphone" size={16} /> Post update
           </Link>
-          <button className="btn btn-primary">
+          <button
+            className="btn btn-primary"
+            onClick={() => setAddingTask(true)}
+            disabled={(areas ?? []).length === 0}
+            title={(areas ?? []).length === 0 ? 'Add an area first — tasks live inside areas' : undefined}
+          >
             <Icon name="plus" weight="bold" size={15} /> New task
           </button>
         </div>
@@ -147,6 +156,17 @@ export function Dashboard() {
           </div>
         </section>
       </div>
+
+      {addingTask && (
+        <NewTaskModal
+          areas={areas ?? []}
+          onClose={() => setAddingTask(false)}
+          onDone={() => {
+            setAddingTask(false)
+            setVersion((v) => v + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

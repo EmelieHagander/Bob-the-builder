@@ -205,6 +205,23 @@ function readScoped<T>(value: T[]): Promise<T[]> {
   return read(active?.id === 'p_skogsstuga' ? value : [])
 }
 
+/** URL-safe slug from a display name ("Växthuset" → "vaxthuset"). */
+function slugify(name: string, fallback: string): string {
+  return (
+    name
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || fallback
+  )
+}
+
+/** Collision-safe text id with a readable prefix ("t_ab12cd34"). */
+function newId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`
+}
+
 /* ─────────────────────────── PROJECTS ─────────────────────────── */
 
 const PROJECT_COLS = 'id, slug, name, description, location, type, theme, start_label, start_date, end_date'
@@ -257,12 +274,7 @@ export interface NewProject {
  * lives in memory until the page reloads.
  */
 export async function createProject(input: NewProject): Promise<Project> {
-  const slug = input.name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'project'
+  const slug = slugify(input.name, 'project')
   if (!db) {
     if (mock.projects.some((p) => p.id === `p_${slug}`)) {
       throw new Error(`database: a project called "${input.name}" already exists`)
@@ -543,8 +555,25 @@ export async function signInAsGuest(): Promise<void> {
  * email is never readable through the API). When they sign in with that
  * email they claim the person row.
  */
+const AVATAR_COLORS = ['#7E9B52', '#5E87A6', '#B5675A', '#C98B2E', '#8A6FA8', '#B07F4F', '#5E9C68', '#C07A4E']
+
 export async function invitePerson(projectId: string, name: string, email: string): Promise<void> {
-  if (!db) throw new Error('Running on demo data — inviting needs the live database.')
+  if (!db) {
+    // Demo mode: no real emails, but the person still joins the crew so the
+    // flow feels like the live one. (Content lives on the sample project.)
+    const person: Person = {
+      id: newId('i'),
+      name: name.trim(),
+      initials: name.trim().slice(0, 2).toUpperCase(),
+      color: AVATAR_COLORS[mock.people.length % AVATAR_COLORS.length],
+      role: 'Volunteer',
+      diet: 'No restrictions',
+      skills: [],
+    }
+    mock.people.push(person)
+    await read(null)
+    return
+  }
   const res = await db.rpc('invite_person', {
     p_project_id: projectId,
     p_name: name.trim(),
@@ -625,6 +654,72 @@ export async function getArea(slug: string): Promise<Area | undefined> {
   return (await getAreas()).find((a) => a.slug === slug)
 }
 
+export interface NewArea {
+  name: string
+  description: string
+  icon: string
+  leadId?: string | null
+}
+
+/** Create a work area on the active project. Progress starts at zero. */
+export async function createArea(input: NewArea): Promise<Area> {
+  const existing = await getAreas()
+  const baseSlug = slugify(input.name, 'area')
+  // Keep slugs unique within the project — the router looks areas up by slug.
+  const slug = existing.some((a) => a.slug === baseSlug) ? `${baseSlug}-${existing.length + 1}` : baseSlug
+  const area: Area = {
+    id: newId('a'),
+    slug,
+    name: input.name,
+    description: input.description,
+    icon: input.icon || 'hammer',
+    leadId: input.leadId ?? null,
+    assignedPct: 0,
+    materialsPct: 0,
+    donePct: 0,
+    taskSummary: 'No tasks yet',
+    crewIds: input.leadId ? [input.leadId] : [],
+    referenceImages: [],
+  }
+  if (!db) {
+    mock.areas.push(area)
+    return read(area)
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before adding areas')
+  const res = await db.from('areas').insert({
+    id: area.id,
+    project_id: pid,
+    slug: area.slug,
+    name: area.name,
+    description: area.description,
+    icon: area.icon,
+    lead_id: area.leadId,
+    task_summary: area.taskSummary,
+    sort_order: existing.length + 1,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (area.leadId) {
+    const crew = await db.from('area_crew').insert({ area_id: area.id, person_id: area.leadId })
+    if (crew.error) throw new Error(`database: ${crew.error.message}`)
+  }
+  return area
+}
+
+/** Add a reference-image label to an area (v1 stores labels, not files). */
+export async function addReferenceImage(areaId: string, label: string): Promise<void> {
+  if (!db) {
+    const area = mock.areas.find((a) => a.id === areaId)
+    if (!area) throw new Error('database: no such area')
+    area.referenceImages.push({ label })
+    await read(null)
+    return
+  }
+  const count = (await getAreas()).find((a) => a.id === areaId)?.referenceImages.length ?? 0
+  const res = await db.from('area_reference_images').insert({ area_id: areaId, label, sort_order: count + 1 })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
 export async function getTasks(): Promise<Task[]> {
   if (!db) return readScoped(mock.tasks)
   const pid = await activeProjectId()
@@ -651,6 +746,68 @@ export async function getTasks(): Promise<Task[]> {
 
 export async function getTasksByArea(areaId: string): Promise<Task[]> {
   return (await getTasks()).filter((t) => t.areaId === areaId)
+}
+
+export interface NewTask {
+  areaId: string
+  name: string
+  skill: SkillLevel
+  hours: string
+}
+
+export async function createTask(input: NewTask): Promise<Task> {
+  const task: Task = {
+    id: newId('t'),
+    areaId: input.areaId,
+    name: input.name,
+    skill: input.skill,
+    hours: input.hours,
+    status: 'todo',
+    assigneeIds: [],
+    materials: '0 / 0',
+  }
+  if (!db) {
+    mock.tasks.push(task)
+    return read(task)
+  }
+  const res = await db.from('tasks').insert({
+    id: task.id,
+    area_id: task.areaId,
+    name: task.name,
+    skill: task.skill,
+    hours: task.hours,
+    status: task.status,
+    materials: task.materials,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return task
+}
+
+export async function setTaskStatus(id: string, status: TaskStatus): Promise<void> {
+  if (!db) {
+    const task = mock.tasks.find((t) => t.id === id)
+    if (task) task.status = status
+    await read(null)
+    return
+  }
+  const res = await db.from('tasks').update({ status }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+/** Replace a task's assignees with exactly this set of people. */
+export async function setTaskAssignees(id: string, personIds: string[]): Promise<void> {
+  if (!db) {
+    const task = mock.tasks.find((t) => t.id === id)
+    if (task) task.assigneeIds = [...personIds]
+    await read(null)
+    return
+  }
+  const cleared = await db.from('task_assignees').delete().eq('task_id', id)
+  if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
+  if (personIds.length > 0) {
+    const res = await db.from('task_assignees').insert(personIds.map((pid) => ({ task_id: id, person_id: pid })))
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  }
 }
 
 /* ─────────────────────────── MATERIALS ─────────────────────────── */
@@ -696,6 +853,79 @@ export async function getMaterialsGrouped(): Promise<
   return groups
 }
 
+/** Category → icon, matching the seed content; anything new gets 'package'. */
+const CATEGORY_ICONS: Record<string, string> = {
+  timber: 'tree',
+  'fasteners & glue': 'nut',
+  electrical: 'lightning',
+  'paint & finish': 'paint-roller',
+  'sauna & plumbing': 'drop',
+  tools: 'wrench',
+  food: 'basket',
+}
+
+export interface NewMaterial {
+  name: string
+  qty: string
+  /** area display name (or "Several") */
+  area: string
+  supplier: string
+  cost: string
+  category: string
+  status?: MaterialStatus
+}
+
+export async function createMaterial(input: NewMaterial): Promise<Material> {
+  const existing = await getMaterials()
+  const category = input.category.trim() || 'Other'
+  const material: Material = {
+    id: newId('m'),
+    name: input.name,
+    qty: input.qty,
+    area: input.area || 'Several',
+    supplier: input.supplier,
+    status: input.status ?? 'needed',
+    cost: input.cost,
+    category,
+    categoryIcon:
+      existing.find((m) => m.category === category)?.categoryIcon ??
+      CATEGORY_ICONS[category.toLowerCase()] ??
+      'package',
+  }
+  if (!db) {
+    mock.materials.push(material)
+    return read(material)
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before adding materials')
+  const res = await db.from('materials').insert({
+    id: material.id,
+    project_id: pid,
+    name: material.name,
+    qty: material.qty,
+    area_label: material.area,
+    supplier: material.supplier,
+    status: material.status,
+    cost: material.cost,
+    category: material.category,
+    category_icon: material.categoryIcon,
+    sort_order: existing.length + 1,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return material
+}
+
+export async function setMaterialStatus(id: string, status: MaterialStatus): Promise<void> {
+  if (!db) {
+    const material = mock.materials.find((m) => m.id === id)
+    if (material) material.status = status
+    await read(null)
+    return
+  }
+  const res = await db.from('materials').update({ status }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
 /* ─────────────────────────── EVENTS ─────────────────────────── */
 
 export async function getEvents(): Promise<BuildEvent[]> {
@@ -730,6 +960,88 @@ export async function getEvent(slug: string): Promise<BuildEvent | undefined> {
 /** The soonest upcoming event — drives the dashboard "next build day" card. */
 export async function getNextEvent(): Promise<BuildEvent | undefined> {
   return (await getEvents())[0]
+}
+
+export interface NewEvent {
+  title: string
+  day: string
+  time: string
+  place: string
+  capacity: number
+  food: string
+}
+
+export async function createEvent(input: NewEvent): Promise<BuildEvent> {
+  const existing = await getEvents()
+  const baseSlug = slugify(input.title, 'event')
+  const slug = existing.some((e) => e.slug === baseSlug) ? `${baseSlug}-${existing.length + 1}` : baseSlug
+  const event: BuildEvent = {
+    id: newId('e'),
+    slug,
+    title: input.title,
+    day: input.day,
+    time: input.time,
+    place: input.place,
+    spots: `0 / ${input.capacity}`,
+    status: 'open',
+    attendeeIds: [],
+    food: input.food,
+  }
+  if (!db) {
+    mock.events.push(event)
+    return read(event)
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before adding events')
+  const res = await db.from('events').insert({
+    id: event.id,
+    project_id: pid,
+    slug: event.slug,
+    title: event.title,
+    day: event.day,
+    time: event.time,
+    place: event.place,
+    spots: event.spots,
+    status: event.status,
+    food: event.food,
+    sort_order: existing.length + 1,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return event
+}
+
+/** Sign the current user up for a build day (idempotent). */
+export async function joinEvent(id: string): Promise<void> {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Sign in first so the organiser knows who is coming.')
+  const bumpSpots = (spots: string, attendees: number): string => {
+    const cap = spots.split('/')[1]?.trim() ?? '0'
+    return `${attendees} / ${cap}`
+  }
+  if (!db) {
+    const event = mock.events.find((e) => e.id === id)
+    if (!event) throw new Error('database: no such event')
+    if (!event.attendeeIds.includes(me.id)) {
+      event.attendeeIds.push(me.id)
+      const taken = parseInt(event.spots, 10) || 0
+      event.spots = bumpSpots(event.spots, taken + 1)
+    }
+    event.status = 'going'
+    await read(null)
+    return
+  }
+  const already = await db.from('event_attendees').select('person_id').eq('event_id', id).eq('person_id', me.id)
+  if (already.error) throw new Error(`database: ${already.error.message}`)
+  const event = (await getEvents()).find((e) => e.id === id)
+  if (!event) throw new Error('database: no such event')
+  const patch: { status: EventStatus; spots?: string } = { status: 'going' }
+  if ((already.data ?? []).length === 0) {
+    const joined = await db.from('event_attendees').insert({ event_id: id, person_id: me.id })
+    if (joined.error) throw new Error(`database: ${joined.error.message}`)
+    patch.spots = bumpSpots(event.spots, (parseInt(event.spots, 10) || 0) + 1)
+  }
+  const res = await db.from('events').update(patch).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
 }
 
 /* ─────────────────────────── FOOD ─────────────────────────── */
@@ -824,6 +1136,37 @@ export async function getAnnouncements(): Promise<Announcement[]> {
     reacts: row.reacts,
     comments: row.comments,
   }))
+}
+
+/** Post an announcement as the current user. */
+export async function postAnnouncement(text: string): Promise<Announcement> {
+  const me = await getCurrentUser()
+  if (!me) throw new Error('Sign in first to post to the crew.')
+  const announcement: Announcement = {
+    id: newId('an'),
+    authorId: me.id,
+    time: 'Just now',
+    pinned: false,
+    text,
+    reacts: 0,
+    comments: 0,
+  }
+  if (!db) {
+    mock.announcements.unshift(announcement)
+    return read(announcement)
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before posting')
+  const res = await db.from('announcements').insert({
+    id: announcement.id,
+    project_id: pid,
+    author_id: me.id,
+    time_label: announcement.time,
+    pinned: false,
+    text,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return announcement
 }
 
 /* ─────────────────────────── DAY-OF / TODAY ─────────────────────────── */

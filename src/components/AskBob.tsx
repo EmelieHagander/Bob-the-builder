@@ -14,7 +14,7 @@ const toneColor = {
   leaf: { c: 'var(--leaf)', bg: 'var(--leaf-bg)' },
 }
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: string) => void }) {
   const isUser = msg.from === 'user'
   return (
     <div style={{ display: 'flex', gap: 10, justifyContent: isUser ? 'flex-end' : 'flex-start', alignItems: 'flex-start' }}>
@@ -48,7 +48,7 @@ function Bubble({ msg }: { msg: ChatMessage }) {
           </div>
         )}
         {msg.action && (
-          <button className="btn btn-primary" style={{ marginTop: 11, fontSize: 13 }}>
+          <button className="btn btn-primary" style={{ marginTop: 11, fontSize: 13 }} onClick={() => onAction?.(msg.action!)}>
             <Icon name="sparkle" weight="fill" size={14} /> {msg.action}
           </button>
         )}
@@ -67,6 +67,34 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
   const { data: chat } = useAsync(() => db.getAskBobChat(), [])
   const { data: chips } = useAsync(() => db.getAskBobChips(), [])
   const [draft, setDraft] = useState('')
+  // Messages typed this session. Bob has no real brain yet, so he answers
+  // honestly with the live "needs attention" feed instead of pretending.
+  const [extra, setExtra] = useState<ChatMessage[]>([])
+
+  const send = () => {
+    const text = draft.trim()
+    if (!text) return
+    setDraft('')
+    setExtra((list) => [...list, { from: 'user', text }])
+    db.getAttention().then((attention) =>
+      setExtra((list) => [
+        ...list,
+        attention.length > 0
+          ? {
+              from: 'bob',
+              text: "I can't hold a real conversation yet — but here's what I'd flag on the build right now:",
+              list: attention.map((a) => ({ icon: a.icon, tone: a.tone, text: a.text })),
+            }
+          : { from: 'bob', text: "I can't hold a real conversation yet — but nothing needs attention right now. The build looks tidy." },
+      ]),
+    )
+  }
+
+  const handleAction = (action: string) =>
+    setExtra((list) => [
+      ...list,
+      { from: 'bob', text: `"${action}" — I can't do that for you quite yet. Head to the area page and use the Assign button; real hands-on help from me is coming.` },
+    ])
 
   if (!open) return null
 
@@ -102,7 +130,8 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
         </header>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {chat?.map((m, i) => <Bubble key={i} msg={m} />)}
+          {chat?.map((m, i) => <Bubble key={i} msg={m} onAction={handleAction} />)}
+          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} />)}
         </div>
 
         <div style={{ padding: '0 18px 8px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
@@ -120,7 +149,7 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            setDraft('')
+            send()
           }}
           style={{ display: 'flex', gap: 8, padding: 18, borderTop: '1px solid var(--line)' }}
         >

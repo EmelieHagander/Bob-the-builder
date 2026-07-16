@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
-import { Icon, Loading, ProgressBar, Ring, useAsync } from '../components/ui'
+import { EmptyState, Icon, Loading, ProgressBar, Ring, useAsync } from '../components/ui'
+import { NewAreaModal } from '../components/editors'
 
 export function Areas() {
-  const { data: areas } = useAsync(() => db.getAreas(), [])
+  const [version, setVersion] = useState(0)
+  const { data: areas } = useAsync(() => db.getAreas(), [version])
   const { data: people } = useAsync(() => db.getPeople(), [])
+  const [adding, setAdding] = useState(false)
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
 
   return (
@@ -14,13 +18,17 @@ export function Areas() {
           <h1 className="page-title">Areas</h1>
           <p className="page-sub">Every work zone in the build — drill into one to manage its tasks and materials.</p>
         </div>
-        <button className="btn btn-primary no-print">
+        <button className="btn btn-primary no-print" onClick={() => setAdding(true)}>
           <Icon name="plus" weight="bold" size={15} /> Add area
         </button>
       </div>
 
       {!areas ? (
         <Loading />
+      ) : areas.length === 0 ? (
+        <div style={{ marginTop: 22 }}>
+          <EmptyState icon="squares-four" title="No areas yet" hint="Split the build into zones — kitchen, roof, garden — and add the first one." />
+        </div>
       ) : (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginTop: 22 }}>
           {areas.map((a) => {
@@ -50,6 +58,17 @@ export function Areas() {
             )
           })}
         </div>
+      )}
+
+      {adding && (
+        <NewAreaModal
+          people={people ?? []}
+          onClose={() => setAdding(false)}
+          onDone={() => {
+            setAdding(false)
+            setVersion((v) => v + 1)
+          }}
+        />
       )}
     </div>
   )
