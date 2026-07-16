@@ -2,7 +2,8 @@ import { useState } from 'react'
 import * as db from '../data/database'
 import { Avatar, Icon, Loading, skillDotColor, useAsync } from '../components/ui'
 import { InviteModal } from '../components/InviteModal'
-import type { SkillLevel } from '../data/types'
+import { PersonModal } from '../components/editors'
+import type { Person, SkillLevel } from '../data/types'
 
 const dietWarn = /allerg|gluten|vegan|dairy/i
 
@@ -14,6 +15,7 @@ export function People() {
   const { data: projects } = useAsync(() => db.getProjects(), [])
   const { data: project } = useAsync(() => db.getProject(), [])
   const [inviting, setInviting] = useState(false)
+  const [editing, setEditing] = useState<Person | null>(null)
   const [query, setQuery] = useState('')
 
   const filtered = (people ?? []).filter(
@@ -59,6 +61,14 @@ export function People() {
                     <div style={{ fontSize: 15.5, fontWeight: 700 }}>{p.name}</div>
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>{p.role}</div>
                   </div>
+                  <button
+                    className="no-print"
+                    title={`Edit ${p.name.split(' ')[0]}`}
+                    onClick={() => setEditing(p)}
+                    style={{ background: 'none', border: 'none', padding: 4, display: 'flex', color: 'var(--ink-faint)', cursor: 'pointer' }}
+                  >
+                    <Icon name="pencil-simple" size={16} />
+                  </button>
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 13 }}>
@@ -78,6 +88,17 @@ export function People() {
             )
           })}
         </div>
+      )}
+
+      {editing && (
+        <PersonModal
+          person={editing}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null)
+            setVersion((v) => v + 1)
+          }}
+        />
       )}
 
       {inviting && (

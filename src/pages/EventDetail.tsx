@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import * as db from '../data/database'
 import {
   AvatarStack,
@@ -11,23 +11,27 @@ import {
   statusCheck,
   useAsync,
 } from '../components/ui'
+import { EventModal } from '../components/editors'
 
 export function EventDetail() {
   const { slug = '' } = useParams()
   const [version, setVersion] = useState(0)
-  const [joining, setJoining] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { data: event, loading } = useAsync(() => db.getEvent(slug), [slug, version])
   const { data: people } = useAsync(() => db.getPeople(), [])
   const { data: dayTasks } = useAsync(() => db.getTodayTasks(), [])
+  const { data: me } = useAsync(() => db.getCurrentUser(), [])
+  const navigate = useNavigate()
 
-  const join = (id: string) => {
-    setJoining(true)
+  const act = (action: () => Promise<unknown>) => {
+    setBusy(true)
     setError(null)
-    db.joinEvent(id)
+    action()
       .then(() => setVersion((v) => v + 1))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setJoining(false))
+      .finally(() => setBusy(false))
   }
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
@@ -36,7 +40,8 @@ export function EventDetail() {
   if (loading) return <div className="page"><Loading /></div>
   if (!event) return <div className="page"><EmptyState icon="magnifying-glass" title="Event not found" hint="Check the events list for the right date." /></div>
 
-  const going = event.status === 'going'
+  const going = db.isAttending(event, me?.id)
+  const full = db.isFull(event)
   const tasks = going ? dayTasks ?? [] : []
 
   return (
@@ -45,6 +50,13 @@ export function EventDetail() {
         <Link to="/events">Events</Link>
         <Icon name="caret-right" size={12} />
         <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{event.title}</span>
+        <button
+          className="btn no-print"
+          onClick={() => setEditing(true)}
+          style={{ marginLeft: 'auto', padding: '6px 11px', fontSize: 12.5 }}
+        >
+          <Icon name="pencil-simple" size={14} /> Edit event
+        </button>
       </div>
 
       <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 22, marginTop: 16 }}>
@@ -101,8 +113,8 @@ export function EventDetail() {
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>One tap. We'll remind you the day before and show your tasks on the day.</p>
             <button
               className="font-display no-print"
-              disabled={going || joining}
-              onClick={() => join(event.id)}
+              disabled={busy || going || (full && !going)}
+              onClick={() => act(() => db.joinEvent(event.id))}
               style={{
                 width: '100%',
                 marginTop: 13,
@@ -114,16 +126,26 @@ export function EventDetail() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 7,
-                cursor: going ? 'default' : 'pointer',
+                cursor: going || full ? 'default' : 'pointer',
                 border: going ? '1px solid var(--leaf)' : 'none',
-                background: going ? 'var(--leaf-bg)' : 'var(--accent)',
-                color: going ? 'var(--leaf)' : 'var(--accent-ink)',
-                boxShadow: going ? 'none' : '0 3px 0 var(--accent-2)',
+                background: going ? 'var(--leaf-bg)' : full ? 'var(--surface-2)' : 'var(--accent)',
+                color: going ? 'var(--leaf)' : full ? 'var(--ink-faint)' : 'var(--accent-ink)',
+                boxShadow: going || full ? 'none' : '0 3px 0 var(--accent-2)',
               }}
             >
-              <Icon name={going ? 'check' : 'hand-waving'} size={16} weight={going ? 'bold' : 'fill'} />
-              {going ? "You're going" : joining ? 'Signing you up…' : "I'm coming!"}
+              <Icon name={going ? 'check' : full ? 'prohibit' : 'hand-waving'} size={16} weight={going ? 'bold' : full ? 'regular' : 'fill'} />
+              {going ? "You're going" : full ? 'This day is full' : busy ? 'Signing you up…' : "I'm coming!"}
             </button>
+            {going && (
+              <button
+                className="no-print"
+                disabled={busy}
+                onClick={() => act(() => db.leaveEvent(event.id))}
+                style={{ width: '100%', marginTop: 8, background: 'none', border: 'none', fontSize: 12.5, fontWeight: 600, color: 'var(--ink-faint)', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                Can't make it after all? Take me off the list
+              </button>
+            )}
             {error && (
               <div style={{ marginTop: 10, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '9px 11px', fontSize: 12.5, color: '#8a3b2b' }}>
                 {error}
@@ -144,6 +166,18 @@ export function EventDetail() {
           </Link>
         </div>
       </div>
+
+      {editing && (
+        <EventModal
+          event={event}
+          onClose={() => setEditing(false)}
+          onDone={() => {
+            setEditing(false)
+            // A delete leaves nothing to show here — back to the list.
+            void db.getEvent(slug).then((still) => (still ? setVersion((v) => v + 1) : navigate('/events')))
+          }}
+        />
+      )}
     </div>
   )
 }

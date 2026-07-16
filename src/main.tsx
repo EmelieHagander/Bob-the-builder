@@ -9,11 +9,14 @@ import '@phosphor-icons/web/fill'
 
 import './theme.css'
 import { App } from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HashRouter>
-      <App />
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )

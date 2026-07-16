@@ -41,3 +41,18 @@ export function formatDateRange(startIso: string, endIso: string): string {
   if (startIso === endIso) return formatDate(startIso)
   return `${formatDate(startIso)} – ${formatDate(endIso)}`
 }
+
+/** ISO timestamp → "just now" / "35 min ago" / "2 h ago" / "3 days ago" / a date. */
+export function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return iso
+  const minutes = Math.floor((Date.now() - then) / 60_000)
+  if (minutes < 2) return 'just now'
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 14) return `${days} days ago`
+  return formatDate(iso)
+}

@@ -1,14 +1,18 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
+import type { BuildEvent } from '../data/types'
 import { AvatarStack, EmptyState, Icon, Loading, useAsync } from '../components/ui'
-import { NewEventModal } from '../components/editors'
+import { useAuthTick } from '../components/Layout'
+import { EventModal } from '../components/editors'
 
 export function Events() {
+  const tick = useAuthTick()
   const [version, setVersion] = useState(0)
   const { data: events } = useAsync(() => db.getEvents(), [version])
   const { data: people } = useAsync(() => db.getPeople(), [version])
-  const [adding, setAdding] = useState(false)
+  const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
+  const [modal, setModal] = useState<{ kind: 'new' } | { kind: 'edit'; event: BuildEvent } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
@@ -27,7 +31,7 @@ export function Events() {
           <h1 className="page-title">Build events</h1>
           <p className="page-sub">The days when work happens. Sign up so the organiser knows to expect you.</p>
         </div>
-        <button className="btn btn-primary no-print" onClick={() => setAdding(true)}>
+        <button className="btn btn-primary no-print" onClick={() => setModal({ kind: 'new' })}>
           <Icon name="plus" weight="bold" size={15} /> New event
         </button>
       </div>
@@ -49,13 +53,24 @@ export function Events() {
           {events.map((e) => {
             const [taken, cap] = e.spots.split('/').map((s) => parseInt(s, 10))
             const pct = cap > 0 ? Math.round((taken / cap) * 100) : 0
-            const going = e.status === 'going'
+            const going = db.isAttending(e, me?.id)
+            const full = db.isFull(e)
             return (
               <div key={e.id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                   <Link to={`/events/${e.slug}`} className="font-display" style={{ fontWeight: 700, fontSize: 18, color: 'var(--ink)' }}>{e.title}</Link>
-                  <span className="pill" style={going ? { color: 'var(--leaf)', background: 'var(--leaf-bg)' } : { color: '#9A6313', background: 'var(--honey-bg)' }}>
-                    {going ? "You're going" : 'Spots open'}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="pill" style={going ? { color: 'var(--leaf)', background: 'var(--leaf-bg)' } : full ? { color: 'var(--clay)', background: 'var(--clay-bg)' } : { color: '#9A6313', background: 'var(--honey-bg)' }}>
+                      {going ? "You're going" : full ? 'Full' : 'Spots open'}
+                    </span>
+                    <button
+                      className="no-print"
+                      title="Edit event"
+                      onClick={() => setModal({ kind: 'edit', event: e })}
+                      style={{ background: 'none', border: 'none', padding: 2, display: 'flex', color: 'var(--ink-faint)', cursor: 'pointer' }}
+                    >
+                      <Icon name="pencil-simple" size={15} />
+                    </button>
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 11, fontSize: 13, color: 'var(--ink-soft)' }}>
@@ -104,6 +119,7 @@ export function Events() {
                   <button
                     className="font-display no-print"
                     onClick={() => join(e.id)}
+                    disabled={full}
                     style={{
                       marginTop: 'auto',
                       border: 'none',
@@ -111,7 +127,7 @@ export function Events() {
                       padding: '14px 0 0',
                       fontWeight: 800,
                       fontSize: 14.5,
-                      cursor: 'pointer',
+                      cursor: full ? 'default' : 'pointer',
                     }}
                   >
                     <span
@@ -123,13 +139,13 @@ export function Events() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: 7,
-                        background: 'var(--accent)',
-                        color: 'var(--accent-ink)',
-                        boxShadow: '0 3px 0 var(--accent-2)',
+                        ...(full
+                          ? { background: 'var(--surface-2)', color: 'var(--ink-faint)', border: '1px solid var(--line)' }
+                          : { background: 'var(--accent)', color: 'var(--accent-ink)', boxShadow: '0 3px 0 var(--accent-2)' }),
                       }}
                     >
-                      <Icon name="hand-waving" size={16} weight="fill" />
-                      I'm coming!
+                      <Icon name={full ? 'prohibit' : 'hand-waving'} size={16} weight={full ? 'regular' : 'fill'} />
+                      {full ? 'This day is full' : "I'm coming!"}
                     </span>
                   </button>
                 )}
@@ -139,11 +155,12 @@ export function Events() {
         </div>
       )}
 
-      {adding && (
-        <NewEventModal
-          onClose={() => setAdding(false)}
+      {modal && (
+        <EventModal
+          event={modal.kind === 'edit' ? modal.event : undefined}
+          onClose={() => setModal(null)}
           onDone={() => {
-            setAdding(false)
+            setModal(null)
             setVersion((v) => v + 1)
           }}
         />

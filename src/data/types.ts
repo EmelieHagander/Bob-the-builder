@@ -134,18 +134,28 @@ export interface DietMatrixRow {
 export interface Announcement {
   id: string
   authorId: string
+  /** display label; derived from createdAt when available, authored otherwise */
   time: string
   pinned: boolean
   text: string
   reacts: number
   comments: number
+  /** ISO timestamp — null on authored seed content */
+  createdAt: string | null
 }
 
 export interface FoodItem {
+  id: string
   name: string
   qty: string
   note: string
   checked: boolean
+}
+
+/** A column of the allergy / dietary matrix. */
+export interface DietColumn {
+  id: string
+  name: string
 }
 
 export interface FoodGroup {
