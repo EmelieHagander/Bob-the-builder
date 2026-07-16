@@ -179,4 +179,6 @@ export interface ChatMessage {
   list?: { icon: string; tone: 'clay' | 'honey' | 'leaf'; text: string }[]
   action?: string
   note?: string
+  /** A longer written-out answer from the builders, shown as its own block. */
+  report?: string
 }

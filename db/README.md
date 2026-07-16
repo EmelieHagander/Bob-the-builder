@@ -88,7 +88,7 @@ become join tables:
 | `FoodGroup` / `FoodItem` | `bob.food_groups`, `bob.food_items` |
 | `Announcement` | `bob.announcements` |
 | `TodayTask` | `bob.today_tasks` (a view over tasks + areas, not a table) |
-| `ChatMessage` (Ask bob) | *not in the DB* — scripted assistant content stays client-side |
+| `ChatMessage` (Ask bob) | *not in the DB* — chat stays client-side; live answers come from Launchpad via the `ask-launchpad` edge function (`supabase/README.md`), which touches no `bob` tables |
 
 Display strings the UI consumes verbatim (`hours: '6h'`, `spots: '12 / 20'`,
 `cost: '1 920 kr'`, `day: 'Lör 5 juli'`) are stored as authored text for now,
