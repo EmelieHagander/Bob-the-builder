@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as db from '../data/database'
 import { EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
-import { NewMaterialModal } from '../components/editors'
+import { MaterialModal } from '../components/editors'
 import type { Material } from '../data/types'
 
 /** Parse "1 920 kr" → 1920 for a rough running total. */
@@ -105,7 +105,7 @@ export function Shopping() {
       )}
 
       {adding && (
-        <NewMaterialModal
+        <MaterialModal
           areas={areas ?? []}
           categories={[...new Set((materials ?? []).map((m) => m.category))]}
           onClose={() => setAdding(false)}

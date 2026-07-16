@@ -375,7 +375,8 @@ export const dietMatrix: DietMatrixRow[] = [
   { personId: 'tv', flags: [false, false, true, false, false] },
 ]
 
-export const announcements: Announcement[] = [
+// Authored seed posts — createdAt stays null so the authored time labels show.
+const announcementSeeds = [
   {
     id: 'an1',
     authorId: 'em',
@@ -423,7 +424,10 @@ export const announcements: Announcement[] = [
   },
 ]
 
-export const foodShopping: FoodGroup[] = [
+export const announcements: Announcement[] = announcementSeeds.map((a) => ({ ...a, createdAt: null }))
+
+// Seed items get stable synthetic ids so ticking them can persist in-memory.
+const foodShoppingSeeds = [
   {
     category: 'Fresh & veg',
     icon: 'carrot',
@@ -462,6 +466,11 @@ export const foodShopping: FoodGroup[] = [
     ],
   },
 ]
+
+export const foodShopping: FoodGroup[] = foodShoppingSeeds.map((g, gi) => ({
+  ...g,
+  items: g.items.map((it, ii) => ({ ...it, id: `fi_${gi}_${ii}` })),
+}))
 
 /** "My tasks today" — the day-of view for the next build day. */
 export const todayTasks: TodayTask[] = [

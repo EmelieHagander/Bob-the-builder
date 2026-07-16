@@ -31,6 +31,16 @@ export function Announcements() {
       .finally(() => setBusy(false))
   }
 
+  const act = (action: () => Promise<unknown>) => {
+    setError(null)
+    action()
+      .then(() => setVersion((v) => v + 1))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+  }
+  // One heart per post per session — enough to stop accidental double-taps.
+  const [hearted, setHearted] = useState<Record<string, boolean>>({})
+  const [confirming, setConfirming] = useState<string | null>(null)
+
   return (
     <div className="page">
       <div className="page-head">
@@ -88,9 +98,32 @@ export function Announcements() {
                       )}
                     </div>
                     <p style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.5, marginTop: 7 }}>{a.text}</p>
-                    <div className="no-print" style={{ display: 'flex', gap: 18, marginTop: 11, fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="heart" size={16} /> {a.reacts}</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="chat-circle" size={16} /> {a.comments}</span>
+                    <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 11, fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>
+                      <button
+                        title="React"
+                        disabled={!!hearted[a.id]}
+                        onClick={() => {
+                          setHearted((h) => ({ ...h, [a.id]: true }))
+                          act(() => db.reactToAnnouncement(a.id))
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, font: 'inherit', color: hearted[a.id] ? 'var(--clay)' : 'inherit', cursor: 'pointer' }}
+                      >
+                        <Icon name="heart" weight={hearted[a.id] ? 'fill' : 'regular'} size={16} /> {a.reacts}
+                      </button>
+                      <button
+                        title={a.pinned ? 'Unpin' : 'Pin to top'}
+                        onClick={() => act(() => db.setAnnouncementPinned(a.id, !a.pinned))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                      >
+                        <Icon name="push-pin" weight={a.pinned ? 'fill' : 'regular'} size={16} /> {a.pinned ? 'Unpin' : 'Pin'}
+                      </button>
+                      <button
+                        title="Delete post"
+                        onClick={() => (confirming === a.id ? act(() => db.deleteAnnouncement(a.id)) : setConfirming(a.id))}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, font: 'inherit', color: confirming === a.id ? 'var(--clay)' : 'inherit', cursor: 'pointer', marginLeft: 'auto' }}
+                      >
+                        <Icon name="trash" size={15} /> {confirming === a.id ? 'Really delete?' : ''}
+                      </button>
                     </div>
                   </div>
                 </div>

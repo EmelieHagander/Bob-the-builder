@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
-import { NewTaskModal } from '../components/editors'
+import { TaskModal } from '../components/editors'
 
 export function Dashboard() {
   const [version, setVersion] = useState(0)
@@ -158,7 +158,7 @@ export function Dashboard() {
       </div>
 
       {addingTask && (
-        <NewTaskModal
+        <TaskModal
           areas={areas ?? []}
           onClose={() => setAddingTask(false)}
           onDone={() => {

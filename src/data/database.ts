@@ -21,6 +21,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { relativeTime } from '../lib/format'
 import * as mock from './mockData'
 import type {
   Account,
@@ -29,6 +30,7 @@ import type {
   Area,
   BuildEvent,
   ChatMessage,
+  DietColumn,
   DietMatrixRow,
   EventStatus,
   FoodGroup,
@@ -37,6 +39,7 @@ import type {
   Meal,
   Person,
   Project,
+  Skill,
   SkillLevel,
   Task,
   TaskStatus,
@@ -150,12 +153,12 @@ type EventRow = {
 }
 type MealRow = { id: string; meal: string; time: string; icon: string; dish: string; notes: string }
 type FoodGroupRow = {
-  category: string; icon: string
-  food_items: { name: string; qty: string; note: string; checked: boolean; sort_order: number }[]
+  id: string; category: string; icon: string
+  food_items: { id: number; name: string; qty: string; note: string; checked: boolean; sort_order: number }[]
 }
 type AnnouncementRow = {
   id: string; author_id: string | null; time_label: string; pinned: boolean
-  text: string; reacts: number; comments: number
+  text: string; reacts: number; comments: number; created_at: string | null
 }
 type TodayTaskRow = {
   id: string; area_name: string; name: string; skill: string; status: string
@@ -315,6 +318,38 @@ export async function createProject(input: NewProject): Promise<Project> {
   return mapProject(row)
 }
 
+export interface ProjectDetailsUpdate {
+  name: string
+  description: string
+  location: string
+  type: string
+  theme: ThemeName
+}
+
+/** Edit a project's descriptive fields (the slug stays — links keep working). */
+export async function updateProjectDetails(id: string, input: ProjectDetailsUpdate): Promise<void> {
+  if (!db) {
+    const project = mock.projects.find((p) => p.id === id)
+    if (!project) throw new Error('database: no such project')
+    Object.assign(project, input)
+  } else {
+    const res = await db
+      .from('projects')
+      .update({
+        name: input.name,
+        description: input.description,
+        location: input.location,
+        type: input.type,
+        theme: input.theme,
+      })
+      .eq('id', id)
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  }
+  // Theme and name show in the shell — nudge mounted screens to refetch.
+  window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
+  if (!db) await read(null)
+}
+
 /** Set or clear a project's build window (both dates, or both null). */
 export async function updateProjectSchedule(
   id: string,
@@ -465,6 +500,58 @@ export async function getPerson(id: string): Promise<Person | undefined> {
   return (await getPeople()).find((p) => p.id === id)
 }
 
+export interface PersonUpdate {
+  role: string
+  diet: string
+  skills: Skill[]
+}
+
+export async function updatePerson(id: string, input: PersonUpdate): Promise<void> {
+  if (!db) {
+    const person = mock.people.find((p) => p.id === id)
+    if (!person) throw new Error('database: no such person')
+    person.role = input.role
+    person.diet = input.diet
+    person.skills = input.skills.map((s) => ({ ...s }))
+    await read(null)
+    return
+  }
+  const res = await db.from('people').update({ role: input.role, diet: input.diet }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  const cleared = await db.from('person_skills').delete().eq('person_id', id)
+  if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
+  if (input.skills.length > 0) {
+    const added = await db
+      .from('person_skills')
+      .insert(input.skills.map((s) => ({ person_id: id, name: s.name, level: s.level })))
+    if (added.error) throw new Error(`database: ${added.error.message}`)
+  }
+}
+
+/** Remove someone from the crew. Their assignments and sign-ups go with them. */
+export async function deletePerson(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.people.findIndex((p) => p.id === id)
+    if (i >= 0) mock.people.splice(i, 1)
+    mock.tasks.forEach((t) => {
+      t.assigneeIds = t.assigneeIds.filter((a) => a !== id)
+    })
+    mock.areas.forEach((a) => {
+      a.crewIds = a.crewIds.filter((c) => c !== id)
+      if (a.leadId === id) a.leadId = null
+    })
+    mock.events.forEach((e) => {
+      e.attendeeIds = e.attendeeIds.filter((a) => a !== id)
+    })
+    const m = mock.dietMatrix.findIndex((r) => r.personId === id)
+    if (m >= 0) mock.dietMatrix.splice(m, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('people').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
 /* ─────────────────────────── AUTH / CURRENT USER ───────────────────────────
  * Live mode: Supabase Auth (magic link or password). Signing in calls
  * bob.join_project() server-side, which claims the invited person matching
@@ -571,6 +658,7 @@ export async function invitePerson(projectId: string, name: string, email: strin
       skills: [],
     }
     mock.people.push(person)
+    mock.dietMatrix.push({ personId: person.id, flags: mock.dietColumns.map(() => false) })
     await read(null)
     return
   }
@@ -619,7 +707,41 @@ export async function getPeopleByIds(ids: string[]): Promise<Person[]> {
 
 /* ─────────────────────────── AREAS & TASKS ─────────────────────────── */
 
+/**
+ * Progress and the task summary are DERIVED from the actual tasks and
+ * materials, never trusted from storage — the stored columns are legacy
+ * seed content and go stale the moment anyone edits anything.
+ */
+function deriveAreaStats(area: Area, tasks: Task[], materials: Material[]): Area {
+  const own = tasks.filter((t) => t.areaId === area.id)
+  const mats = materials.filter((m) => m.area === area.name)
+  const pct = (n: number, of: number) => (of === 0 ? 0 : Math.round((n / of) * 100))
+  const done = own.filter((t) => t.status === 'done').length
+  const assigned = own.filter((t) => t.assigneeIds.length > 0).length
+  const blocked = own.filter((t) => t.status === 'blocked').length
+  const expertOpen = own.filter((t) => t.skill === 'expert' && t.status !== 'done' && t.assigneeIds.length === 0).length
+  let summary = 'No tasks yet'
+  if (own.length > 0) {
+    const parts = [`${own.length} task${own.length === 1 ? '' : 's'}`, `${done} done`]
+    if (blocked > 0) parts.push(`${blocked} blocked`)
+    else if (expertOpen > 0) parts.push(`${expertOpen} need a skilled hand`)
+    summary = parts.join(' · ')
+  }
+  return {
+    ...area,
+    assignedPct: pct(assigned, own.length),
+    materialsPct: pct(mats.filter((m) => m.status === 'delivered').length, mats.length),
+    donePct: pct(done, own.length),
+    taskSummary: summary,
+  }
+}
+
 export async function getAreas(): Promise<Area[]> {
+  const [areas, tasks, materials] = await Promise.all([fetchAreas(), getTasks(), getMaterials()])
+  return areas.map((a) => deriveAreaStats(a, tasks, materials))
+}
+
+async function fetchAreas(): Promise<Area[]> {
   if (!db) return readScoped(mock.areas)
   const pid = await activeProjectId()
   if (!pid) return []
@@ -704,6 +826,72 @@ export async function createArea(input: NewArea): Promise<Area> {
     if (crew.error) throw new Error(`database: ${crew.error.message}`)
   }
   return area
+}
+
+export interface AreaUpdate {
+  name: string
+  description: string
+  icon: string
+  leadId: string | null
+}
+
+/** Edit an area. Materials are linked by area NAME, so a rename follows through. */
+export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
+  if (!db) {
+    const area = mock.areas.find((a) => a.id === id)
+    if (!area) throw new Error('database: no such area')
+    const oldName = area.name
+    area.name = input.name
+    area.description = input.description
+    area.icon = input.icon
+    area.leadId = input.leadId
+    if (input.leadId && !area.crewIds.includes(input.leadId)) area.crewIds.push(input.leadId)
+    if (oldName !== input.name) {
+      mock.materials.forEach((m) => {
+        if (m.area === oldName) m.area = input.name
+      })
+    }
+    await read(null)
+    return
+  }
+  const before = (await fetchAreas()).find((a) => a.id === id)
+  if (!before) throw new Error('database: no such area')
+  const res = await db
+    .from('areas')
+    .update({ name: input.name, description: input.description, icon: input.icon, lead_id: input.leadId })
+    .eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (input.leadId && !before.crewIds.includes(input.leadId)) {
+    const crew = await db.from('area_crew').insert({ area_id: id, person_id: input.leadId })
+    if (crew.error) throw new Error(`database: ${crew.error.message}`)
+  }
+  if (before.name !== input.name) {
+    const pid = await activeProjectId()
+    const mats = await db.from('materials').update({ area_label: input.name }).eq('project_id', pid).eq('area_label', before.name)
+    if (mats.error) throw new Error(`database: ${mats.error.message}`)
+  }
+}
+
+/** Delete an area and everything in it (tasks cascade; its materials go too). */
+export async function deleteArea(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.areas.findIndex((a) => a.id === id)
+    if (i < 0) return
+    const name = mock.areas[i].name
+    mock.areas.splice(i, 1)
+    for (let t = mock.tasks.length - 1; t >= 0; t--) if (mock.tasks[t].areaId === id) mock.tasks.splice(t, 1)
+    for (let m = mock.materials.length - 1; m >= 0; m--) if (mock.materials[m].area === name) mock.materials.splice(m, 1)
+    await read(null)
+    return
+  }
+  const area = (await fetchAreas()).find((a) => a.id === id)
+  const res = await db.from('areas').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  if (area) {
+    const pid = await activeProjectId()
+    const mats = await db.from('materials').delete().eq('project_id', pid).eq('area_label', area.name)
+    if (mats.error) throw new Error(`database: ${mats.error.message}`)
+  }
 }
 
 /** Add a reference-image label to an area (v1 stores labels, not files). */
@@ -808,6 +996,35 @@ export async function setTaskAssignees(id: string, personIds: string[]): Promise
     const res = await db.from('task_assignees').insert(personIds.map((pid) => ({ task_id: id, person_id: pid })))
     if (res.error) throw new Error(`database: ${res.error.message}`)
   }
+}
+
+export interface TaskUpdate {
+  name: string
+  skill: SkillLevel
+  hours: string
+}
+
+export async function updateTask(id: string, input: TaskUpdate): Promise<void> {
+  if (!db) {
+    const task = mock.tasks.find((t) => t.id === id)
+    if (!task) throw new Error('database: no such task')
+    Object.assign(task, input)
+    await read(null)
+    return
+  }
+  const res = await db.from('tasks').update({ name: input.name, skill: input.skill, hours: input.hours }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.tasks.findIndex((t) => t.id === id)
+    if (i >= 0) mock.tasks.splice(i, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('tasks').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
 }
 
 /* ─────────────────────────── MATERIALS ─────────────────────────── */
@@ -915,6 +1132,54 @@ export async function createMaterial(input: NewMaterial): Promise<Material> {
   return material
 }
 
+export interface MaterialUpdate {
+  name: string
+  qty: string
+  area: string
+  supplier: string
+  cost: string
+  category: string
+}
+
+export async function updateMaterial(id: string, input: MaterialUpdate): Promise<void> {
+  const category = input.category.trim() || 'Other'
+  const icon =
+    (await getMaterials()).find((m) => m.category === category && m.id !== id)?.categoryIcon ??
+    CATEGORY_ICONS[category.toLowerCase()] ??
+    'package'
+  if (!db) {
+    const material = mock.materials.find((m) => m.id === id)
+    if (!material) throw new Error('database: no such material')
+    Object.assign(material, { ...input, category, categoryIcon: icon })
+    await read(null)
+    return
+  }
+  const res = await db
+    .from('materials')
+    .update({
+      name: input.name,
+      qty: input.qty,
+      area_label: input.area,
+      supplier: input.supplier,
+      cost: input.cost,
+      category,
+      category_icon: icon,
+    })
+    .eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function deleteMaterial(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.materials.findIndex((m) => m.id === id)
+    if (i >= 0) mock.materials.splice(i, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('materials').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
 export async function setMaterialStatus(id: string, status: MaterialStatus): Promise<void> {
   if (!db) {
     const material = mock.materials.find((m) => m.id === id)
@@ -1010,21 +1275,37 @@ export async function createEvent(input: NewEvent): Promise<BuildEvent> {
   return event
 }
 
+/** "taken / cap" helpers for the authored spots string. */
+function spotsParts(spots: string): { taken: number; cap: number } {
+  const [taken, cap] = spots.split('/').map((s) => parseInt(s, 10) || 0)
+  return { taken, cap }
+}
+
+/** Is this person on the attendee list? The "You're going" state is per-user. */
+export function isAttending(event: BuildEvent, personId: string | undefined): boolean {
+  return Boolean(personId && event.attendeeIds.includes(personId))
+}
+
+export function isFull(event: BuildEvent): boolean {
+  const { taken, cap } = spotsParts(event.spots)
+  return cap > 0 && taken >= cap
+}
+
 /** Sign the current user up for a build day (idempotent). */
 export async function joinEvent(id: string): Promise<void> {
   const me = await getCurrentUser()
   if (!me) throw new Error('Sign in first so the organiser knows who is coming.')
-  const bumpSpots = (spots: string, attendees: number): string => {
-    const cap = spots.split('/')[1]?.trim() ?? '0'
-    return `${attendees} / ${cap}`
+  const bump = (spots: string, delta: number): string => {
+    const { taken, cap } = spotsParts(spots)
+    return `${Math.max(0, taken + delta)} / ${cap}`
   }
   if (!db) {
     const event = mock.events.find((e) => e.id === id)
     if (!event) throw new Error('database: no such event')
     if (!event.attendeeIds.includes(me.id)) {
+      if (isFull(event)) throw new Error('This build day is full — ask the organiser to add spots.')
       event.attendeeIds.push(me.id)
-      const taken = parseInt(event.spots, 10) || 0
-      event.spots = bumpSpots(event.spots, taken + 1)
+      event.spots = bump(event.spots, +1)
     }
     event.status = 'going'
     await read(null)
@@ -1036,11 +1317,82 @@ export async function joinEvent(id: string): Promise<void> {
   if (!event) throw new Error('database: no such event')
   const patch: { status: EventStatus; spots?: string } = { status: 'going' }
   if ((already.data ?? []).length === 0) {
+    if (isFull(event)) throw new Error('This build day is full — ask the organiser to add spots.')
     const joined = await db.from('event_attendees').insert({ event_id: id, person_id: me.id })
     if (joined.error) throw new Error(`database: ${joined.error.message}`)
-    patch.spots = bumpSpots(event.spots, (parseInt(event.spots, 10) || 0) + 1)
+    patch.spots = bump(event.spots, +1)
   }
   const res = await db.from('events').update(patch).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+/** Take the current user off a build day's attendee list. */
+export async function leaveEvent(id: string): Promise<void> {
+  const me = await getCurrentUser()
+  if (!me) return
+  const bump = (spots: string): string => {
+    const { taken, cap } = spotsParts(spots)
+    return `${Math.max(0, taken - 1)} / ${cap}`
+  }
+  if (!db) {
+    const event = mock.events.find((e) => e.id === id)
+    if (!event) return
+    const i = event.attendeeIds.indexOf(me.id)
+    if (i >= 0) {
+      event.attendeeIds.splice(i, 1)
+      event.spots = bump(event.spots)
+    }
+    event.status = 'open'
+    await read(null)
+    return
+  }
+  const event = (await getEvents()).find((e) => e.id === id)
+  if (!event || !event.attendeeIds.includes(me.id)) return
+  const gone = await db.from('event_attendees').delete().eq('event_id', id).eq('person_id', me.id)
+  if (gone.error) throw new Error(`database: ${gone.error.message}`)
+  const res = await db.from('events').update({ status: 'open' as EventStatus, spots: bump(event.spots) }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export interface EventUpdate {
+  title: string
+  day: string
+  time: string
+  place: string
+  capacity: number
+  food: string
+}
+
+export async function updateEvent(id: string, input: EventUpdate): Promise<void> {
+  const patch = (spots: string) => ({
+    title: input.title,
+    day: input.day,
+    time: input.time,
+    place: input.place,
+    spots: `${spotsParts(spots).taken} / ${Math.max(1, input.capacity)}`,
+    food: input.food,
+  })
+  if (!db) {
+    const event = mock.events.find((e) => e.id === id)
+    if (!event) throw new Error('database: no such event')
+    Object.assign(event, patch(event.spots))
+    await read(null)
+    return
+  }
+  const event = (await getEvents()).find((e) => e.id === id)
+  if (!event) throw new Error('database: no such event')
+  const res = await db.from('events').update(patch(event.spots)).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.events.findIndex((e) => e.id === id)
+    if (i >= 0) mock.events.splice(i, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('events').delete().eq('id', id)
   if (res.error) throw new Error(`database: ${res.error.message}`)
 }
 
@@ -1063,14 +1415,115 @@ export async function getMeals(): Promise<Meal[]> {
   }))
 }
 
-export async function getDietColumns(): Promise<string[]> {
-  if (!db) return readScoped(mock.dietColumns)
+export interface MealInput {
+  meal: string
+  time: string
+  icon: string
+  dish: string
+  notes: string
+}
+
+export async function createMeal(input: MealInput): Promise<Meal> {
+  const meal: Meal = { id: newId('meal'), ...input }
+  if (!db) {
+    mock.meals.push(meal)
+    return read(meal)
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before planning meals')
+  const res = await db.from('meals').insert({
+    id: meal.id,
+    project_id: pid,
+    meal: input.meal,
+    time: input.time,
+    icon: input.icon,
+    dish: input.dish,
+    notes: input.notes,
+    sort_order: (await getMeals()).length + 1,
+  })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return meal
+}
+
+export async function updateMeal(id: string, input: MealInput): Promise<void> {
+  if (!db) {
+    const meal = mock.meals.find((m) => m.id === id)
+    if (!meal) throw new Error('database: no such meal')
+    Object.assign(meal, input)
+    await read(null)
+    return
+  }
+  const res = await db
+    .from('meals')
+    .update({ meal: input.meal, time: input.time, icon: input.icon, dish: input.dish, notes: input.notes })
+    .eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function deleteMeal(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.meals.findIndex((m) => m.id === id)
+    if (i >= 0) mock.meals.splice(i, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('meals').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+/** Default matrix columns, created on first use for projects without any. */
+const DEFAULT_DIET_COLUMNS = ['Vegetarian', 'Vegan', 'Gluten-free', 'Nut allergy', 'Dairy-free']
+
+export async function getDietColumns(): Promise<DietColumn[]> {
+  if (!db) return read(mock.dietColumns.map((name, i) => ({ id: `dc_${i}`, name })))
   const pid = await activeProjectId()
   if (!pid) return []
-  const rows = unwrap<{ name: string }[]>(
-    await db.from('diet_columns').select('name').eq('project_id', pid).order('sort_order'),
+  const rows = unwrap<{ id: string; name: string }[]>(
+    await db.from('diet_columns').select('id, name').eq('project_id', pid).order('sort_order'),
   )
-  return rows.map((row) => row.name)
+  return rows
+}
+
+/**
+ * Flip one cell of the allergy matrix. Projects that never seeded columns get
+ * the default set created on the first toggle.
+ */
+export async function setDietFlag(personId: string, columnId: string, on: boolean): Promise<void> {
+  if (!db) {
+    const index = Number(columnId.replace('dc_', ''))
+    let row = mock.dietMatrix.find((r) => r.personId === personId)
+    if (!row) {
+      row = { personId, flags: mock.dietColumns.map(() => false) }
+      mock.dietMatrix.push(row)
+    }
+    row.flags[index] = on
+    await read(null)
+    return
+  }
+  if (on) {
+    const res = await db.from('diet_flags').insert({ person_id: personId, column_id: columnId })
+    if (res.error && !/duplicate/i.test(res.error.message)) throw new Error(`database: ${res.error.message}`)
+  } else {
+    const res = await db.from('diet_flags').delete().eq('person_id', personId).eq('column_id', columnId)
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  }
+}
+
+/** Create the default diet columns for the active project (no-op if any exist). */
+export async function ensureDietColumns(): Promise<DietColumn[]> {
+  const existing = await getDietColumns()
+  if (existing.length > 0 || !db) return existing
+  const pid = await activeProjectId()
+  if (!pid) return []
+  const rows = DEFAULT_DIET_COLUMNS.map((name, i) => ({
+    id: newId('dc'),
+    project_id: pid,
+    name,
+    sort_order: i + 1,
+  }))
+  const res = await db.from('diet_columns').insert(rows)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+  return rows.map((r) => ({ id: r.id, name: r.name }))
 }
 
 export async function getDietMatrix(): Promise<DietMatrixRow[]> {
@@ -1099,7 +1552,7 @@ export async function getFoodShopping(): Promise<FoodGroup[]> {
   const rows = unwrap<FoodGroupRow[]>(
     await db
       .from('food_groups')
-      .select('category, icon, food_items(name, qty, note, checked, sort_order)')
+      .select('id, category, icon, food_items(id, name, qty, note, checked, sort_order)')
       .eq('project_id', pid)
       .order('sort_order'),
   )
@@ -1108,20 +1561,86 @@ export async function getFoodShopping(): Promise<FoodGroup[]> {
     icon: row.icon,
     items: [...row.food_items]
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((i) => ({ name: i.name, qty: i.qty, note: i.note, checked: i.checked })),
+      .map((i) => ({ id: String(i.id), name: i.name, qty: i.qty, note: i.note, checked: i.checked })),
   }))
+}
+
+/** Tick / untick a food-shopping item — persists for the whole crew. */
+export async function setFoodItemChecked(id: string, checked: boolean): Promise<void> {
+  if (!db) {
+    for (const group of mock.foodShopping) {
+      const item = group.items.find((i) => i.id === id)
+      if (item) item.checked = checked
+    }
+    await read(null)
+    return
+  }
+  const res = await db.from('food_items').update({ checked }).eq('id', Number(id))
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+const FOOD_GROUP_ICONS: Record<string, string> = {
+  'fresh & veg': 'carrot',
+  'meat & dairy': 'cow',
+  'bread & dry': 'bread',
+  drinks: 'coffee',
+}
+
+export interface NewFoodItem {
+  category: string
+  name: string
+  qty: string
+  note: string
+}
+
+/** Add an item to the food shopping list, creating its category if needed. */
+export async function createFoodItem(input: NewFoodItem): Promise<void> {
+  const category = input.category.trim() || 'Other'
+  if (!db) {
+    let group = mock.foodShopping.find((g) => g.category === category)
+    if (!group) {
+      group = { category, icon: FOOD_GROUP_ICONS[category.toLowerCase()] ?? 'basket', items: [] }
+      mock.foodShopping.push(group)
+    }
+    group.items.push({ id: newId('fi'), name: input.name, qty: input.qty, note: input.note, checked: false })
+    await read(null)
+    return
+  }
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('database: create a project before planning food')
+  const groups = unwrap<{ id: string; category: string }[]>(
+    await db.from('food_groups').select('id, category').eq('project_id', pid),
+  )
+  let groupId = groups.find((g) => g.category === category)?.id
+  if (!groupId) {
+    groupId = newId('fg')
+    const made = await db.from('food_groups').insert({
+      id: groupId,
+      project_id: pid,
+      category,
+      icon: FOOD_GROUP_ICONS[category.toLowerCase()] ?? 'basket',
+      sort_order: groups.length + 1,
+    })
+    if (made.error) throw new Error(`database: ${made.error.message}`)
+  }
+  const res = await db.from('food_items').insert({ group_id: groupId, name: input.name, qty: input.qty, note: input.note })
+  if (res.error) throw new Error(`database: ${res.error.message}`)
 }
 
 /* ─────────────────────────── COMMUNICATION ─────────────────────────── */
 
 export async function getAnnouncements(): Promise<Announcement[]> {
-  if (!db) return readScoped(mock.announcements)
+  if (!db) {
+    const posts = await readScoped(mock.announcements)
+    // Real posts carry a timestamp; authored seed content keeps its label.
+    return posts.map((a) => ({ ...a, time: a.createdAt ? relativeTime(a.createdAt) : a.time }))
+  }
   const pid = await activeProjectId()
   if (!pid) return []
   const rows = unwrap<AnnouncementRow[]>(
     await db
       .from('announcements')
-      .select('id, author_id, time_label, pinned, text, reacts, comments')
+      .select('id, author_id, time_label, pinned, text, reacts, comments, created_at')
       .eq('project_id', pid)
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
@@ -1130,11 +1649,12 @@ export async function getAnnouncements(): Promise<Announcement[]> {
   return rows.map((row) => ({
     id: row.id,
     authorId: row.author_id ?? '',
-    time: row.time_label,
+    time: row.created_at ? relativeTime(row.created_at) : row.time_label,
     pinned: row.pinned,
     text: row.text,
     reacts: row.reacts,
     comments: row.comments,
+    createdAt: row.created_at,
   }))
 }
 
@@ -1145,11 +1665,12 @@ export async function postAnnouncement(text: string): Promise<Announcement> {
   const announcement: Announcement = {
     id: newId('an'),
     authorId: me.id,
-    time: 'Just now',
+    time: 'just now',
     pinned: false,
     text,
     reacts: 0,
     comments: 0,
+    createdAt: new Date().toISOString(),
   }
   if (!db) {
     mock.announcements.unshift(announcement)
@@ -1167,6 +1688,41 @@ export async function postAnnouncement(text: string): Promise<Announcement> {
   })
   if (res.error) throw new Error(`database: ${res.error.message}`)
   return announcement
+}
+
+/** One more heart on a post. Household posture: no per-person bookkeeping. */
+export async function reactToAnnouncement(id: string): Promise<void> {
+  if (!db) {
+    const post = mock.announcements.find((a) => a.id === id)
+    if (post) post.reacts += 1
+    await read(null)
+    return
+  }
+  const current = unwrap<{ reacts: number }>(await db.from('announcements').select('reacts').eq('id', id).single())
+  const res = await db.from('announcements').update({ reacts: current.reacts + 1 }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function setAnnouncementPinned(id: string, pinned: boolean): Promise<void> {
+  if (!db) {
+    const post = mock.announcements.find((a) => a.id === id)
+    if (post) post.pinned = pinned
+    await read(null)
+    return
+  }
+  const res = await db.from('announcements').update({ pinned }).eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  if (!db) {
+    const i = mock.announcements.findIndex((a) => a.id === id)
+    if (i >= 0) mock.announcements.splice(i, 1)
+    await read(null)
+    return
+  }
+  const res = await db.from('announcements').delete().eq('id', id)
+  if (res.error) throw new Error(`database: ${res.error.message}`)
 }
 
 /* ─────────────────────────── DAY-OF / TODAY ─────────────────────────── */
@@ -1302,7 +1858,7 @@ export async function getFoodSummary(): Promise<string> {
   const confirmed = next ? next.spots.split('/')[0].trim() : String(matrix.length)
   const when = next ? next.day : 'the next build day'
   const parts = columns
-    .map((c, i) => (counts[i] > 0 ? `${counts[i]} ${c.toLowerCase()}` : null))
+    .map((c, i) => (counts[i] > 0 ? `${counts[i]} ${c.name.toLowerCase()}` : null))
     .filter(Boolean)
   return `${confirmed} confirmed for ${when}${parts.length > 0 ? ' · ' + parts.join(' · ') : ''}`
 }

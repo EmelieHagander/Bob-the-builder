@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { EmptyState, Icon, Loading, ProgressBar, Ring, useAsync } from '../components/ui'
-import { NewAreaModal } from '../components/editors'
+import { AreaModal } from '../components/editors'
 
 export function Areas() {
   const [version, setVersion] = useState(0)
@@ -61,7 +61,7 @@ export function Areas() {
       )}
 
       {adding && (
-        <NewAreaModal
+        <AreaModal
           people={people ?? []}
           onClose={() => setAdding(false)}
           onDone={() => {

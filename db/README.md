@@ -18,7 +18,8 @@ db/
 │   ├── 0006_account_level.sql            account level: project schedule dates, bob.account, bob.account_notes, write policies
 │   ├── 0007_invite_people.sql            bob.invite_person(): the account dashboard's "Invite" button
 │   ├── 0008_join_project_race.sql        serialize concurrent join_project() calls (advisory lock)
-│   └── 0009_content_write_policies.sql   write policies: areas, tasks, materials, events, sign-ups, announcements
+│   ├── 0009_content_write_policies.sql   write policies: areas, tasks, materials, events, sign-ups, announcements
+│   └── 0010_food_people_write_policies.sql  write policies: meals, food shopping, diet matrix, people editing
 ├── seed.sql                              the "Skogsstuga" sample project (mirrors src/data/mockData.ts)
 ├── remove_demo_data.sql                  delete the demo project again (real data untouched)
 └── README.md                             this file

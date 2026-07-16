@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import * as db from '../data/database'
-import type { MaterialStatus, Task, TaskStatus } from '../data/types'
+import type { Material, MaterialStatus, Task, TaskStatus } from '../data/types'
 import {
   AvatarStack,
   EmptyState,
@@ -14,7 +14,7 @@ import {
   statusCheck,
   useAsync,
 } from '../components/ui'
-import { AddImageModal, AssignModal, NewMaterialModal, NewTaskModal } from '../components/editors'
+import { AddImageModal, AreaModal, AssignModal, MaterialModal, TaskModal } from '../components/editors'
 
 type Tab = 'tasks' | 'materials' | 'images'
 
@@ -25,13 +25,21 @@ const NEXT_MATERIAL_STATUS: Record<MaterialStatus, MaterialStatus> = { needed: '
 
 export function AreaDetail() {
   const { slug = '' } = useParams()
+  const navigate = useNavigate()
   const [version, setVersion] = useState(0)
   const { data: area, loading } = useAsync(() => db.getArea(slug), [slug, version])
   const { data: people } = useAsync(() => db.getPeople(), [])
   const { data: allTasks } = useAsync(() => db.getTasks(), [version])
   const { data: allMaterials } = useAsync(() => db.getMaterials(), [version])
   const [tab, setTab] = useState<Tab>('tasks')
-  const [modal, setModal] = useState<{ kind: 'task' } | { kind: 'material' } | { kind: 'image' } | { kind: 'assign'; task: Task } | null>(null)
+  const [modal, setModal] = useState<
+    | { kind: 'task'; task?: Task }
+    | { kind: 'material'; material?: Material }
+    | { kind: 'image' }
+    | { kind: 'assign'; task: Task }
+    | { kind: 'area' }
+    | null
+  >(null)
   const [error, setError] = useState<string | null>(null)
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
@@ -81,6 +89,7 @@ export function AreaDetail() {
           </div>
         </div>
         <div className="cluster no-print">
+          <button className="btn" onClick={() => setModal({ kind: 'area' })}><Icon name="pencil-simple" size={15} /> Edit</button>
           <button className="btn" onClick={() => setModal({ kind: 'material' })}><Icon name="package" size={15} /> Add material</button>
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" weight="bold" size={14} /> Add task</button>
         </div>
@@ -137,11 +146,20 @@ export function AreaDetail() {
                       <Icon name={chk.icon} size={22} color={chk.color} />
                     </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+                      <button
+                        title="Edit task"
+                        onClick={() => setModal({ kind: 'task', task: t })}
+                        style={{ background: 'none', border: 'none', padding: 0, fontSize: 14.5, fontWeight: 700, color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        {t.name}
+                      </button>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
                         <SkillPill level={t.skill} />
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}><Icon name="clock" size={13} />{t.hours}</span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: matReady ? 'var(--leaf)' : 'var(--clay)' }}><Icon name="package" size={13} />{t.materials} materials</span>
+                        {/* authored "x / y" readiness from the seed content — hide when there's nothing behind it */}
+                        {total !== '0' && total !== '' && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: matReady ? 'var(--leaf)' : 'var(--clay)' }}><Icon name="package" size={13} />{t.materials} materials</span>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="task-right">
@@ -172,7 +190,13 @@ export function AreaDetail() {
               {materials.map((m) => (
                 <div key={m.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 700 }}>{m.name}</div>
+                    <button
+                      title="Edit material"
+                      onClick={() => setModal({ kind: 'material', material: m })}
+                      style={{ background: 'none', border: 'none', padding: 0, fontSize: 14.5, fontWeight: 700, color: 'var(--ink)', cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      {m.name}
+                    </button>
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3 }}>{m.qty} · {m.supplier} · {m.cost}</div>
                   </div>
                   <button
@@ -262,12 +286,29 @@ export function AreaDetail() {
         </div>
       </div>
 
-      {modal?.kind === 'task' && <NewTaskModal areas={[area]} areaId={area.id} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'task' && <TaskModal areas={[area]} areaId={area.id} task={modal.task} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'material' && (
-        <NewMaterialModal areas={[area]} categories={materialCategories} defaultArea={area.name} onClose={() => setModal(null)} onDone={reload} />
+        <MaterialModal areas={[area]} categories={materialCategories} defaultArea={area.name} material={modal.material} onClose={() => setModal(null)} onDone={reload} />
       )}
       {modal?.kind === 'image' && <AddImageModal areaId={area.id} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'assign' && <AssignModal task={modal.task} people={people ?? []} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'area' && (
+        <AreaModal
+          people={people ?? []}
+          area={area}
+          onClose={() => setModal(null)}
+          onDone={() => {
+            setModal(null)
+            // A delete leaves nothing here; a rename changes the slug lookup target.
+            void db.getAreas().then((all) => {
+              const still = all.find((a) => a.id === area.id)
+              if (!still) navigate('/areas')
+              else if (still.slug !== slug) navigate(`/areas/${still.slug}`)
+              else setVersion((v) => v + 1)
+            })
+          }}
+        />
+      )}
     </div>
   )
 }
