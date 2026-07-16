@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as db from '../data/database'
 import {
@@ -13,9 +14,21 @@ import {
 
 export function EventDetail() {
   const { slug = '' } = useParams()
-  const { data: event, loading } = useAsync(() => db.getEvent(slug), [slug])
+  const [version, setVersion] = useState(0)
+  const [joining, setJoining] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const { data: event, loading } = useAsync(() => db.getEvent(slug), [slug, version])
   const { data: people } = useAsync(() => db.getPeople(), [])
   const { data: dayTasks } = useAsync(() => db.getTodayTasks(), [])
+
+  const join = (id: string) => {
+    setJoining(true)
+    setError(null)
+    db.joinEvent(id)
+      .then(() => setVersion((v) => v + 1))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setJoining(false))
+  }
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
@@ -88,6 +101,8 @@ export function EventDetail() {
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>One tap. We'll remind you the day before and show your tasks on the day.</p>
             <button
               className="font-display no-print"
+              disabled={going || joining}
+              onClick={() => join(event.id)}
               style={{
                 width: '100%',
                 marginTop: 13,
@@ -99,6 +114,7 @@ export function EventDetail() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 7,
+                cursor: going ? 'default' : 'pointer',
                 border: going ? '1px solid var(--leaf)' : 'none',
                 background: going ? 'var(--leaf-bg)' : 'var(--accent)',
                 color: going ? 'var(--leaf)' : 'var(--accent-ink)',
@@ -106,8 +122,13 @@ export function EventDetail() {
               }}
             >
               <Icon name={going ? 'check' : 'hand-waving'} size={16} weight={going ? 'bold' : 'fill'} />
-              {going ? "You're going" : "I'm coming!"}
+              {going ? "You're going" : joining ? 'Signing you up…' : "I'm coming!"}
             </button>
+            {error && (
+              <div style={{ marginTop: 10, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '9px 11px', fontSize: 12.5, color: '#8a3b2b' }}>
+                {error}
+              </div>
+            )}
             {going && (
               <Link to="/today" className="btn no-print" style={{ width: '100%', justifyContent: 'center', marginTop: 9 }}>
                 <Icon name="sun-horizon" size={15} /> See my tasks today

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import * as db from '../data/database'
 import { Avatar, Icon, Loading, skillDotColor, useAsync } from '../components/ui'
+import { InviteModal } from '../components/InviteModal'
 import type { SkillLevel } from '../data/types'
 
 const dietWarn = /allerg|gluten|vegan|dairy/i
@@ -8,7 +9,11 @@ const dietWarn = /allerg|gluten|vegan|dairy/i
 const SKILL_LABEL: Record<SkillLevel, string> = { novice: 'novice', intermediate: 'intermediate', expert: 'expert' }
 
 export function People() {
-  const { data: people } = useAsync(() => db.getPeople(), [])
+  const [version, setVersion] = useState(0)
+  const { data: people } = useAsync(() => db.getPeople(), [version])
+  const { data: projects } = useAsync(() => db.getProjects(), [])
+  const { data: project } = useAsync(() => db.getProject(), [])
+  const [inviting, setInviting] = useState(false)
   const [query, setQuery] = useState('')
 
   const filtered = (people ?? []).filter(
@@ -25,7 +30,7 @@ export function People() {
           <h1 className="page-title">People</h1>
           <p className="page-sub">Everyone on the build, their skills and what they can't eat.</p>
         </div>
-        <button className="btn btn-primary no-print">
+        <button className="btn btn-primary no-print" onClick={() => setInviting(true)}>
           <Icon name="paper-plane-tilt" size={15} /> Invite people
         </button>
       </div>
@@ -73,6 +78,18 @@ export function People() {
             )
           })}
         </div>
+      )}
+
+      {inviting && (
+        <InviteModal
+          projects={projects ?? []}
+          defaultProjectId={project?.id ?? ''}
+          onClose={() => {
+            setInviting(false)
+            setVersion((v) => v + 1)
+          }}
+          onInvited={() => setVersion((v) => v + 1)}
+        />
       )}
     </div>
   )

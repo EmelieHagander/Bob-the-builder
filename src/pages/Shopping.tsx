@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as db from '../data/database'
-import { Icon, Loading, MaterialPill, useAsync } from '../components/ui'
+import { EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
+import { NewMaterialModal } from '../components/editors'
 import type { Material } from '../data/types'
 
 /** Parse "1 920 kr" → 1920 for a rough running total. */
@@ -10,8 +11,11 @@ function parseCost(cost: string): number {
 }
 
 export function Shopping() {
-  const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [])
-  const { data: materials } = useAsync(() => db.getMaterials(), [])
+  const [version, setVersion] = useState(0)
+  const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [version])
+  const { data: materials } = useAsync(() => db.getMaterials(), [version])
+  const { data: areas } = useAsync(() => db.getAreas(), [])
+  const [adding, setAdding] = useState(false)
   const [bought, setBought] = useState<Record<string, boolean>>({})
 
   // Treat already-delivered materials as ticked off.
@@ -22,6 +26,16 @@ export function Shopping() {
     setBought(seed)
   }, [materials])
 
+  // Ticking persists: got it = delivered, unticked goes back to needed.
+  // Optimistic — the checkbox flips immediately and reverts if the write fails.
+  const toggle = (m: Material) => {
+    const next = !bought[m.id]
+    setBought((b) => ({ ...b, [m.id]: next }))
+    db.setMaterialStatus(m.id, next ? 'delivered' : 'needed').catch(() => {
+      setBought((b) => ({ ...b, [m.id]: !next }))
+    })
+  }
+
   const total = materials?.length ?? 0
   const picked = Object.values(bought).filter(Boolean).length
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
@@ -30,7 +44,7 @@ export function Shopping() {
     const on = bought[m.id]
     return (
       <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 2px', borderBottom: last ? 'none' : '1px solid var(--line)', cursor: 'pointer' }}>
-        <input type="checkbox" checked={!!on} onChange={() => setBought((b) => ({ ...b, [m.id]: !b[m.id] }))} style={{ display: 'none' }} />
+        <input type="checkbox" checked={!!on} onChange={() => toggle(m)} style={{ display: 'none' }} />
         <Icon name={on ? 'check-square' : 'square'} weight={on ? 'fill' : 'regular'} size={20} color={on ? 'var(--leaf)' : 'var(--ink-faint)'} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{m.name}</div>
@@ -51,6 +65,9 @@ export function Shopping() {
         </div>
         <div className="cluster no-print">
           <button className="btn" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" weight="bold" size={15} /> Add material
+          </button>
         </div>
       </div>
 
@@ -68,6 +85,10 @@ export function Shopping() {
 
       {!groups ? (
         <Loading />
+      ) : groups.length === 0 ? (
+        <div style={{ marginTop: 18 }}>
+          <EmptyState icon="package" title="Nothing on the list yet" hint="Add the first material — it lands here grouped by category." />
+        </div>
       ) : (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', marginTop: 18, alignItems: 'start' }}>
           {groups.map((g) => (
@@ -81,6 +102,18 @@ export function Shopping() {
             </div>
           ))}
         </div>
+      )}
+
+      {adding && (
+        <NewMaterialModal
+          areas={areas ?? []}
+          categories={[...new Set((materials ?? []).map((m) => m.category))]}
+          onClose={() => setAdding(false)}
+          onDone={() => {
+            setAdding(false)
+            setVersion((v) => v + 1)
+          }}
+        />
       )}
     </div>
   )
