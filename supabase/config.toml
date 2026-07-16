@@ -1,0 +1,9 @@
+# Supabase CLI config — only what deploys need. The database schema is NOT
+# managed from here (it lives in db/, applied with psql — see db/README.md).
+
+project_id = "bob-the-builder"
+
+# bob's window to the Launchpad builders team. Platform JWT verification stays
+# on; the function additionally requires a signed-in user (see its source).
+[functions.ask-launchpad]
+verify_jwt = true

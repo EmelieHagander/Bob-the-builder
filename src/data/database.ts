@@ -1225,6 +1225,85 @@ export function getAskBobChips(): Promise<string[]> {
   return Promise.resolve(["What's blocking us?", 'Who has signed up?', 'What still needs buying?', 'Draft an announcement'])
 }
 
+/* ─────────────────────────── ASK BOB × LAUNCHPAD ───────────────────────────
+ * bob's real brain lives on Launchpad: the `ask-launchpad` edge function
+ * (supabase/README.md) forwards a question to a team of AI builders running
+ * on Launchpad's platform and bob relays the answer. The contract is async
+ * and info-only — send a question, poll the task, maybe answer a follow-up
+ * question mid-run. When the seam isn't configured (or in mock mode) these
+ * return `unavailable`, and the drawer falls back to the scripted feed.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface BuildersQuestion {
+  id: string
+  text: string
+  options?: string[]
+}
+
+export interface BuildersUpdate {
+  status: 'working' | 'input-required' | 'completed' | 'failed'
+  summary?: string
+  report?: string
+  question?: BuildersQuestion
+  errorCode?: string
+}
+
+type BuildersSeamResponse = {
+  ok: boolean
+  error?: string
+  taskId?: string
+  status?: BuildersUpdate['status']
+  summary?: string
+  report?: string
+  question?: { id?: string; text?: string; options?: string[] }
+  errorCode?: string
+}
+
+async function callBuildersSeam(body: Record<string, unknown>): Promise<BuildersSeamResponse> {
+  if (!db) return { ok: false, error: 'not_configured' }
+  try {
+    const { data, error } = await db.functions.invoke('ask-launchpad', { body })
+    if (error || !data) return { ok: false, error: 'seam_unreachable' }
+    return data as BuildersSeamResponse
+  } catch {
+    return { ok: false, error: 'seam_unreachable' }
+  }
+}
+
+/**
+ * Hand a question to the Launchpad builders. Resolves to a task id to poll,
+ * or `{ unavailable }` when there is no live seam (mock mode, seam not yet
+ * configured, signed out, or Launchpad unreachable) — callers fall back to
+ * the scripted answer, never fake one.
+ */
+export async function askBuilders(message: string): Promise<{ taskId: string } | { unavailable: string }> {
+  const res = await callBuildersSeam({ action: 'send', message })
+  if (res.ok && res.taskId) return { taskId: res.taskId }
+  return { unavailable: res.error ?? 'gateway_error' }
+}
+
+/** One poll of a running builders task. */
+export async function getBuildersUpdate(taskId: string): Promise<BuildersUpdate> {
+  const res = await callBuildersSeam({ action: 'status', taskId })
+  if (!res.ok || !res.status) return { status: 'failed', errorCode: res.error ?? 'gateway_error' }
+  return {
+    status: res.status,
+    summary: res.summary,
+    report: res.report,
+    question:
+      res.question?.id && res.question?.text
+        ? { id: res.question.id, text: res.question.text, options: res.question.options }
+        : undefined,
+    errorCode: res.errorCode,
+  }
+}
+
+/** Answer a mid-run question from the builders; the task then resumes. */
+export async function answerBuilders(taskId: string, questionId: string, answer: string): Promise<boolean> {
+  const res = await callBuildersSeam({ action: 'reply', taskId, questionId, answer })
+  return res.ok
+}
+
 /* ─────────────────────────── DERIVED / DASHBOARD ───────────────────────────
  * Aggregations the dashboard needs. Built on the getters above, so they work
  * identically in live and mock mode; if they ever get heavy they can become

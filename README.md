@@ -26,7 +26,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/shopping` | Materials shopping list, grouped by category (checkable, printable) |
 | `/announcements` | Announcement board |
 | `/today` | Day-of "what needs doing today" view |
-| — | **Ask bob** assistant drawer (floating button on every screen) |
+| — | **Ask bob** assistant drawer (floating button on every screen). With the Launchpad seam configured (see `supabase/README.md`) questions go to a real team of AI builders on the Launchpad platform; without it bob answers with his honest scripted feed |
 
 ## Running it
 
@@ -100,7 +100,7 @@ src/
 │   └── database.ts       ◄ the single data-access layer
 ├── components/
 │   ├── Layout.tsx        sidebar, mobile nav, Ask bob button
-│   ├── AskBob.tsx        assistant drawer
+│   ├── AskBob.tsx        assistant drawer (Launchpad builders when live)
 │   └── ui.tsx            shared primitives (pills, rings, avatars, etc.)
 └── pages/                one file per screen
 ```
