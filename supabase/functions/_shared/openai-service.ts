@@ -1116,8 +1116,20 @@ export interface ImagePostOptions {
   /** Cut the sheet into its sub-images. A number also asks the model for that
    *  many and is validated against what was actually found. Implies clean. */
   split?: boolean | number;
-  /** Normalise each result: a number is the longest edge, or give both. */
-  scale?: number | { width?: number; height?: number };
+  /** Normalise each result.
+   *
+   *  A number, or a single dimension, resizes and keeps the aspect ratio.
+   *
+   *  Giving BOTH width and height with `fit: "contain"` produces an exact
+   *  canvas: the subject is scaled to fit inside and centred, and the rest is
+   *  left transparent. That is what an asset spec usually means by a size —
+   *  Akr's plant assets are "256 x 512", not "about 256 wide" — and a plain
+   *  resize would distort or crop instead. */
+  scale?: number | {
+    width?: number;
+    height?: number;
+    fit?: "contain" | "stretch";
+  };
 }
 
 /** Squared RGB distance — cheap, and good enough against a flat background. */
@@ -1205,12 +1217,15 @@ function clearBackground(img: InstanceType<typeof Image>): void {
  * found from the pixels rather than from arithmetic, so the model is free to
  * lay them out however it likes.
  */
-function findSubImages(img: InstanceType<typeof Image>): { x: number; y: number; w: number; h: number }[] {
+function findSubImages(
+  img: InstanceType<typeof Image>,
+  minArea: number,
+): { x: number; y: number; w: number; h: number }[] {
   const w = img.width, h = img.height;
   const bmp = img.bitmap as unknown as Uint8ClampedArray;
   const seen = new Uint8Array(w * h);
   const boxes: { x: number; y: number; w: number; h: number }[] = [];
-  const MIN_AREA = (w * h) / 400; // ignore specks and stray flecks
+  const MIN_AREA = minArea;
 
   for (let start = 0; start < w * h; start++) {
     if (seen[start] || bmp[start * 4 + 3] < 24) continue;
@@ -1257,7 +1272,33 @@ async function applyPost(
 
   let pieces: InstanceType<typeof Image>[] = [img];
   if (wantSplit) {
-    const boxes = findSubImages(img);
+    // The speck filter is adaptive, because a legitimately tiny asset and a
+    // fleck of stray pigment look identical by area alone. A six-stage plant
+    // set includes a SEED, which at honest relative scale is smaller than any
+    // fixed threshold that also excludes noise — the first run silently
+    // dropped it and returned five stages.
+    //
+    // So when the caller says how many to expect, that expectation is the
+    // signal: start strict, and relax until the count is reached.
+    const expected = typeof post.split === "number" ? post.split : 0;
+    const full = img.width * img.height;
+    let boxes = findSubImages(img, full / 400);
+    if (expected > 1) {
+      for (const divisor of [1_500, 6_000, 25_000]) {
+        if (boxes.length >= expected) break;
+        boxes = findSubImages(img, full / divisor);
+      }
+      // Relaxing can overshoot into noise; keep the largest `expected` regions
+      // but restore reading order afterwards.
+      if (boxes.length > expected) {
+        boxes = boxes
+          .map((b, i) => ({ b, i, area: b.w * b.h }))
+          .sort((a, z) => z.area - a.area)
+          .slice(0, expected)
+          .sort((a, z) => a.i - z.i)
+          .map((e) => e.b);
+      }
+    }
     if (boxes.length > 1) {
       pieces = boxes.map((b) => img.clone().crop(b.x, b.y, b.w, b.h));
     } else {
@@ -1272,9 +1313,28 @@ async function applyPost(
   }
 
   if (post.scale !== undefined) {
-    const target = typeof post.scale === "number" ? { width: post.scale } : post.scale;
+    const target = typeof post.scale === "number"
+      ? { width: post.scale, height: undefined, fit: undefined }
+      : post.scale;
+    const auto = Image.RESIZE_AUTO;
+
     pieces = pieces.map((piece) => {
-      const auto = Image.RESIZE_AUTO;
+      // Exact canvas: fit inside, centre, leave the rest transparent.
+      if (target.width && target.height && (target.fit ?? "contain") === "contain") {
+        // Never enlarge. Upscaling a small region to fill the canvas both
+        // destroys quality — a seed blown up to 256x512 is visibly mushy — and
+        // is wrong on a scaled canvas: a seed should not render as large as a
+        // mature plant. Anything smaller than the target simply sits centred
+        // at its native size, which preserves relative scale for free.
+        const ratio = Math.min(target.width / piece.width, target.height / piece.height, 1);
+        const w = Math.max(1, Math.round(piece.width * ratio));
+        const h = Math.max(1, Math.round(piece.height * ratio));
+        const fitted = piece.resize(w, h);
+        const canvas = new Image(target.width, target.height);
+        canvas.fill(0x00000000);
+        canvas.composite(fitted, Math.round((target.width - w) / 2), Math.round((target.height - h) / 2));
+        return canvas;
+      }
       if (target.width && target.height) return piece.resize(target.width, target.height);
       if (target.width) return piece.resize(target.width, auto);
       if (target.height) return piece.resize(auto, target.height);
