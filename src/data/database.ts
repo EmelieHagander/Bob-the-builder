@@ -1827,14 +1827,22 @@ async function callBuildersSeam(body: Record<string, unknown>): Promise<Builders
 }
 
 /**
- * Hand a question to the Launchpad builders. Resolves to a task id to poll,
- * or `{ unavailable }` when there is no live seam (mock mode, seam not yet
- * configured, signed out, or Launchpad unreachable) — callers fall back to
- * the scripted answer, never fake one.
+ * Hand a question to whichever AI backend is live. Resolves to one of three
+ * things, because the two backends genuinely differ:
+ *
+ *   { taskId }     Launchpad accepted it — a run is in flight, poll it.
+ *   { answer }     OpenAI answered outright; there is nothing to poll.
+ *   { unavailable} no live seam (mock mode, not configured, signed out, or
+ *                  the backend failed) — the caller falls back to the
+ *                  scripted answer and never fakes one.
  */
-export async function askBuilders(message: string): Promise<{ taskId: string } | { unavailable: string }> {
+export async function askBuilders(
+  message: string,
+): Promise<{ taskId: string } | { answer: string } | { unavailable: string }> {
   const res = await callBuildersSeam({ action: 'send', message })
   if (res.ok && res.taskId) return { taskId: res.taskId }
+  // The synchronous backend returns the finished answer on the send itself.
+  if (res.ok && res.status === 'completed' && res.summary) return { answer: res.summary }
   return { unavailable: res.error ?? 'gateway_error' }
 }
 

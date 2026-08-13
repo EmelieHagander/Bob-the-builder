@@ -1,5 +1,26 @@
 /*
- * launchpad.ts — the ONE shared client for Launchpad's partner gateway.
+ * launchpad.ts — the Ask seam: the ONE shared client for Launchpad's partner
+ * gateway, and the router that picks which backend answers a question.
+ *
+ * TWO BACKENDS, IN PRIORITY ORDER
+ * -------------------------------
+ *   1. Launchpad — a team of AI builders. Async: send returns a task handle
+ *      and the client polls for minutes. Produces reports and artifacts, and
+ *      may pause to ask a clarifying question. Used whenever the LAUNCHPAD_*
+ *      secrets are set, because it is the richer answer.
+ *   2. OpenAI direct — one model, one turn, seconds, answering from a briefing
+ *      of the app's own data (see ask-openai.ts). Used when Launchpad is not
+ *      configured. The answer comes back on the `send` call itself with
+ *      status 'completed'; there is nothing to poll, and the client must not
+ *      pretend otherwise by polling a task that was never created.
+ *
+ * Both are INFO-ONLY: they answer questions and never write to the app's
+ * database. When neither is configured the handler answers { ok: false,
+ * error: "not_configured" } and the app falls back to its scripted behavior —
+ * honest, never fake.
+ *
+ * The gateway protocol plumbing below is app-agnostic. Everything app-specific
+ * is pinned in the per-app function's source (see serveLaunchpad).
  *
  * Every app in this shared Supabase project talks to Launchpad through this
  * module: bob today, sibling apps tomorrow. The pattern is "shared code,
@@ -32,13 +53,19 @@
  */
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { answerWithOpenAi } from './ask-openai.ts'
 
 /* ── config ────────────────────────────────────────────────────────────── */
 
 export interface LaunchpadAppConfig {
   /** The app's identity, pinned in the per-app function source ('bob', …).
-   *  Sent to Launchpad as external_workspace_id — never client-supplied. */
+   *  Sent to Launchpad as external_workspace_id — never client-supplied.
+   *  Also the `app` key for ai.settings and ai.usage_events. */
   app: string
+  /** The app's Postgres schema, for the OpenAI backend's briefing queries.
+   *  Pinned in source for the same reason `app` is: a browser must never be
+   *  able to point this at another app's data. Defaults to `app`. */
+  dbSchema?: string
 }
 
 interface ResolvedConfig {
@@ -238,13 +265,67 @@ async function handleAction(cfg: ResolvedConfig, body: ActionBody): Promise<Resp
   }
 }
 
+/* ── the OpenAI backend ────────────────────────────────────────────────── */
+
+/**
+ * The direct-OpenAI path, shaped to the same action vocabulary as the gateway
+ * so the client speaks one protocol either way.
+ *
+ * The difference the client DOES see is honest and deliberate: `send` comes
+ * back already `completed`, carrying the answer, because a single model turn
+ * finishes in seconds. There is no task to poll and no `status` to call — the
+ * alternative would be inventing a fake task id and a fake working state for a
+ * run that already finished, which is exactly the kind of theatre this project
+ * refuses.
+ */
+async function handleOpenAiAction(
+  appCfg: LaunchpadAppConfig,
+  authHeader: string,
+  userId: string,
+  body: ActionBody,
+): Promise<Response> {
+  switch (body.action) {
+    case 'send':
+    case 'reply': {
+      // 'reply' only exists because the gateway can pause mid-run to ask a
+      // question. This backend never does, so a reply is simply the next
+      // question — treated as such rather than rejected on a technicality.
+      const message = (body.action === 'reply' ? body.answer : body.message)?.trim()
+      if (!message) return fail('empty_message')
+      if (message.length > MAX_MESSAGE_CHARS) return fail('message_too_long')
+
+      const result = await answerWithOpenAi({
+        authHeader,
+        app: appCfg.app,
+        dbSchema: appCfg.dbSchema ?? appCfg.app,
+        userId,
+        message,
+      })
+      if (!result.ok) return fail(result.error)
+
+      return json({ ok: true, status: 'completed', summary: result.answer })
+    }
+
+    case 'status':
+      // Nothing to poll: `send` already returned the answer.
+      return fail('no_task_to_poll')
+
+    case 'artifact':
+      // A single model turn produces prose, not artifacts.
+      return fail('artifacts_unavailable')
+
+    default:
+      return fail('unknown_action', 400)
+  }
+}
+
 /* ── entry point ───────────────────────────────────────────────────────── */
 
 /**
  * The whole handler, ready to hand to Deno.serve from a per-app function:
  *
  *   import { serveLaunchpad } from '../_shared/launchpad.ts'
- *   Deno.serve(serveLaunchpad({ app: 'bob' }))
+ *   Deno.serve(serveLaunchpad({ app: 'bob', dbSchema: 'bob' }))
  */
 export function serveLaunchpad(appCfg: LaunchpadAppConfig): (req: Request) => Promise<Response> {
   return async (req: Request): Promise<Response> => {
@@ -265,15 +346,21 @@ export function serveLaunchpad(appCfg: LaunchpadAppConfig): (req: Request) => Pr
     const { data, error } = await supabase.auth.getUser(token)
     if (error || !data?.user) return fail('unauthorized', 401)
 
-    const cfg = resolveConfig(appCfg)
-    if (!cfg) return fail('not_configured')
-
     let body: ActionBody
     try {
       body = (await req.json()) as ActionBody
     } catch {
       return fail('bad_request', 400)
     }
-    return handleAction(cfg, body)
+
+    // Launchpad first when it is configured — it is the richer answer.
+    const cfg = resolveConfig(appCfg)
+    if (cfg) return handleAction(cfg, body)
+
+    // Otherwise the direct-OpenAI backend. No key check here on purpose: the
+    // shared AI service is the only place OPENAI_API_KEY is ever read, and it
+    // reports 'not_configured' itself when the key is absent — which is the
+    // same error the app already falls back on.
+    return handleOpenAiAction(appCfg, authHeader, data.user.id, body)
   }
 }

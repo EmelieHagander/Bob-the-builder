@@ -181,12 +181,17 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
       return
     }
 
-    // Fresh question → hand it to the Launchpad builders.
+    // Fresh question → hand it to whichever AI backend is live.
     setWorking(true)
     const result = await db.askBuilders(text)
     if (!alive.current) return
     if ('taskId' in result) {
       await followRun(result.taskId)
+    } else if ('answer' in result) {
+      // The synchronous backend already finished — render it, don't poll a
+      // task that was never created.
+      setWorking(false)
+      push({ from: 'bob', text: result.answer })
     } else {
       setWorking(false)
       // No live seam (mock mode / not configured / signed out) keeps the
