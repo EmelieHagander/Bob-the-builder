@@ -12,6 +12,7 @@
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 
 /**
  * Service-role client pinned to the `shared` schema — the cross-app model
@@ -1058,6 +1059,232 @@ async function logAIUsage(
  * .prompt_template can override one without a deploy.
  * ══════════════════════════════════════════════════════════════════════════ */
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * IMAGE POST-PROCESSING
+ *
+ * The provider gives back one flat PNG. Several apps need something else from
+ * it — a cut-out icon, four growth stages as separate assets, a normalised
+ * size — and that work is identical wherever it happens, so it lives here
+ * rather than in each app.
+ *
+ * The three steps compose:
+ *
+ *   clean   the background becomes transparent
+ *   split   the cleaned image is cut into its separate sub-images
+ *   scale   each result is normalised to a size
+ *
+ * `split` IMPLIES `clean`: sub-images are found as connected regions of
+ * non-background pixels, so there is nothing to find until the background is
+ * gone. It is not a meaningful option on its own.
+ *
+ * WHY THE PIPELINE EDITS THE PROMPT
+ * ---------------------------------
+ * Cleaning is only reliable against a flat, uniform, shadowless background,
+ * and that has to be asked for at generation time. Leaving it to each caller
+ * means one app eventually forgets and gets ragged cut-outs with a grey halo.
+ * So when clean/split is requested this file appends the background contract
+ * to the prompt itself — the pipeline owns both halves of it.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** Appended to the prompt whenever the result will be cut out. */
+const FLAT_BACKGROUND_INSTRUCTION =
+  "IMPORTANT: place the subject on a completely flat, uniform pure white background. " +
+  "No shadows, no drop shadow, no gradient, no vignette, no texture, no paper grain, " +
+  "no border and no framing. The background must be a single solid colour.";
+
+/**
+ * Appended when several sub-images are wanted on one sheet.
+ *
+ * ORDER IS REQUESTED EXPLICITLY. Splitting returns the pieces in reading order
+ * (left to right, top to bottom), which is only the caller's intended order if
+ * the model laid them out that way. A first run drew a carrot's four growth
+ * stages as mature, young, harvested, seedling — geometrically fine, and
+ * semantically scrambled. Callers should still treat order as a strong hint
+ * rather than a guarantee, and label the pieces where it matters.
+ */
+function sheetInstruction(count: number): string {
+  return `Draw ${count} SEPARATE subjects arranged in ONE horizontal row, ` +
+    `in exactly the order they are listed above, left to right, first to last. ` +
+    `Space them clearly apart with generous empty background between them so none of them touch or overlap. ` +
+    `All ${count} must be drawn in the same style, palette and lighting, as one matching set.`;
+}
+
+export interface ImagePostOptions {
+  /** Turn the flat background transparent. */
+  clean?: boolean;
+  /** Cut the sheet into its sub-images. A number also asks the model for that
+   *  many and is validated against what was actually found. Implies clean. */
+  split?: boolean | number;
+  /** Normalise each result: a number is the longest edge, or give both. */
+  scale?: number | { width?: number; height?: number };
+}
+
+/** Squared RGB distance — cheap, and good enough against a flat background. */
+function colourDistance(
+  b: Uint8ClampedArray, i: number, r: number, g: number, bl: number,
+): number {
+  const dr = b[i] - r, dg = b[i + 1] - g, db = b[i + 2] - bl;
+  return dr * dr + dg * dg + db * db;
+}
+
+/**
+ * Background to alpha, flooding inward FROM THE BORDER rather than clearing
+ * every pixel that matches. That distinction matters: a white flower petal in
+ * the middle of a subject must survive, and it only does if the fill has to
+ * reach it from outside.
+ *
+ * Two thresholds give a soft edge. Anything within `hard` of the background is
+ * fully transparent; anything within `soft` that borders it gets proportional
+ * alpha, which is what stops watercolour edges showing a grey halo.
+ */
+function clearBackground(img: InstanceType<typeof Image>): void {
+  const w = img.width, h = img.height;
+  const bmp = img.bitmap as unknown as Uint8ClampedArray;
+
+  // The background colour is whatever dominates the border.
+  const counts = new Map<string, { n: number; r: number; g: number; b: number }>();
+  const sample = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    const key = `${bmp[i] >> 3},${bmp[i + 1] >> 3},${bmp[i + 2] >> 3}`;
+    const e = counts.get(key) ?? { n: 0, r: bmp[i], g: bmp[i + 1], b: bmp[i + 2] };
+    e.n++;
+    counts.set(key, e);
+  };
+  for (let x = 0; x < w; x++) { sample(x, 0); sample(x, h - 1); }
+  for (let y = 0; y < h; y++) { sample(0, y); sample(w - 1, y); }
+  let bg = { n: 0, r: 255, g: 255, b: 255 };
+  for (const e of counts.values()) if (e.n > bg.n) bg = e;
+
+  const HARD = 18 * 18 * 3;   // fully background
+  const SOFT = 46 * 46 * 3;   // edge blend zone
+
+  // Flood inward from every border pixel.
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const push = (x: number, y: number) => {
+    const p = y * w + x;
+    if (seen[p]) return;
+    if (colourDistance(bmp, p * 4, bg.r, bg.g, bg.b) > HARD) return;
+    seen[p] = 1;
+    stack.push(p);
+  };
+  for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+  for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+
+  while (stack.length) {
+    const p = stack.pop()!;
+    bmp[p * 4 + 3] = 0;
+    const x = p % w, y = (p / w) | 0;
+    if (x > 0) push(x - 1, y);
+    if (x < w - 1) push(x + 1, y);
+    if (y > 0) push(x, y - 1);
+    if (y < h - 1) push(x, y + 1);
+  }
+
+  // Feather: soften pixels that still touch transparency.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      if (bmp[p * 4 + 3] === 0) continue;
+      const touches =
+        (x > 0 && bmp[(p - 1) * 4 + 3] === 0) ||
+        (x < w - 1 && bmp[(p + 1) * 4 + 3] === 0) ||
+        (y > 0 && bmp[(p - w) * 4 + 3] === 0) ||
+        (y < h - 1 && bmp[(p + w) * 4 + 3] === 0);
+      if (!touches) continue;
+      const d = colourDistance(bmp, p * 4, bg.r, bg.g, bg.b);
+      if (d < SOFT) bmp[p * 4 + 3] = Math.round(255 * (d / SOFT));
+    }
+  }
+}
+
+/**
+ * Bounding boxes of the connected non-transparent regions, in reading order.
+ * This is what makes a sheet splittable without assuming a grid: the cells are
+ * found from the pixels rather than from arithmetic, so the model is free to
+ * lay them out however it likes.
+ */
+function findSubImages(img: InstanceType<typeof Image>): { x: number; y: number; w: number; h: number }[] {
+  const w = img.width, h = img.height;
+  const bmp = img.bitmap as unknown as Uint8ClampedArray;
+  const seen = new Uint8Array(w * h);
+  const boxes: { x: number; y: number; w: number; h: number }[] = [];
+  const MIN_AREA = (w * h) / 400; // ignore specks and stray flecks
+
+  for (let start = 0; start < w * h; start++) {
+    if (seen[start] || bmp[start * 4 + 3] < 24) continue;
+    let minX = w, minY = h, maxX = 0, maxY = 0, area = 0;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length) {
+      const p = stack.pop()!;
+      const x = p % w, y = (p / w) | 0;
+      area++;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      const step = (nx: number, ny: number) => {
+        const q = ny * w + nx;
+        if (seen[q] || bmp[q * 4 + 3] < 24) return;
+        seen[q] = 1;
+        stack.push(q);
+      };
+      if (x > 0) step(x - 1, y);
+      if (x < w - 1) step(x + 1, y);
+      if (y > 0) step(x, y - 1);
+      if (y < h - 1) step(x, y + 1);
+    }
+    if (area >= MIN_AREA) boxes.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 });
+  }
+
+  // Reading order: rows first (grouped by vertical overlap), then left to right.
+  boxes.sort((a, b) => (Math.abs(a.y - b.y) > Math.min(a.h, b.h) / 2 ? a.y - b.y : a.x - b.x));
+  return boxes;
+}
+
+/** Applies the requested post-processing. Always returns at least one image. */
+async function applyPost(
+  png: Uint8Array,
+  post: ImagePostOptions,
+): Promise<Uint8Array[]> {
+  const wantSplit = post.split === true || typeof post.split === "number";
+  if (!post.clean && !wantSplit && post.scale === undefined) return [png];
+
+  const img = await Image.decode(png);
+  if (post.clean || wantSplit) clearBackground(img);
+
+  let pieces: InstanceType<typeof Image>[] = [img];
+  if (wantSplit) {
+    const boxes = findSubImages(img);
+    if (boxes.length > 1) {
+      pieces = boxes.map((b) => img.clone().crop(b.x, b.y, b.w, b.h));
+    } else {
+      // One region means the subjects touched, or the model drew a single
+      // scene. Returning the whole image is honest; silently handing back one
+      // "stage" that is really four would be worse.
+      console.warn(`[OpenAI Service] split requested but found ${boxes.length} region(s); returning whole image`);
+    }
+    if (typeof post.split === "number" && pieces.length !== post.split) {
+      console.warn(`[OpenAI Service] split expected ${post.split}, found ${pieces.length}`);
+    }
+  }
+
+  if (post.scale !== undefined) {
+    const target = typeof post.scale === "number" ? { width: post.scale } : post.scale;
+    pieces = pieces.map((piece) => {
+      const auto = Image.RESIZE_AUTO;
+      if (target.width && target.height) return piece.resize(target.width, target.height);
+      if (target.width) return piece.resize(target.width, auto);
+      if (target.height) return piece.resize(auto, target.height);
+      return piece;
+    });
+  }
+
+  return await Promise.all(pieces.map((piece) => piece.encode() as Promise<Uint8Array>));
+}
+
 const IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
 
 export interface ImageCallOptions {
@@ -1076,10 +1303,20 @@ export interface ImageCallOptions {
   /** Override the configured model. Still checked against the catalogue. */
   model?: string;
   timeoutMs?: number;
+  /** Optional cut-out / split / resize applied to the result. */
+  post?: ImagePostOptions;
 }
 
 export type ImageCallResult =
-  | { ok: true; image: Uint8Array; model: string; costUsd: number | null }
+  | {
+    ok: true;
+    /** Always an array — one entry unless `post.split` found more. A result
+     *  that is sometimes bytes and sometimes a list is what callers get
+     *  wrong, so it is a list either way. */
+    images: Uint8Array[];
+    model: string;
+    costUsd: number | null;
+  }
   | { ok: false; error: string };
 
 /** Decodes base64 without blowing the stack on a multi-megabyte image. */
@@ -1141,7 +1378,18 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   // A prompt override in the database wins as art direction; the caller's
   // prompt is the subject appended to it.
   const artDirection = settings?.prompt_template?.trim();
-  const prompt = artDirection ? `${artDirection}\n\n${options.prompt}` : options.prompt;
+  let prompt = artDirection ? `${artDirection}\n\n${options.prompt}` : options.prompt;
+
+  // The pipeline owns both halves of the cut-out contract: if the result is
+  // going to be matted, the generation has to be asked for a flat background.
+  const post = options.post;
+  const wantSplit = post?.split === true || typeof post?.split === "number";
+  if (post?.clean || wantSplit) {
+    if (typeof post?.split === "number" && post.split > 1) {
+      prompt += `\n\n${sheetInstruction(post.split)}`;
+    }
+    prompt += `\n\n${FLAT_BACKGROUND_INSTRUCTION}`;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 180_000);
@@ -1214,7 +1462,17 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
       return { ok: false, error: "empty_response" };
     }
 
-    return { ok: true, image: base64ToBytes(b64), model: model.model_name, costUsd };
+    let images: Uint8Array[];
+    try {
+      images = await applyPost(base64ToBytes(b64), post ?? {});
+    } catch (postErr) {
+      // The image cost real money and is fine — hand back the original rather
+      // than losing it because the matting failed.
+      console.error("[OpenAI Service] Post-processing failed; returning the raw image", postErr);
+      images = [base64ToBytes(b64)];
+    }
+
+    return { ok: true, images, model: model.model_name, costUsd };
   } catch (err) {
     const timedOut = err instanceof DOMException && err.name === "AbortError";
     const error = timedOut ? "timeout" : "openai_unreachable";
