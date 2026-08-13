@@ -23,8 +23,11 @@ import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
  * SAME module in every app's repo, and it may not depend on any one app's
  * client factory. It is only ever used for AI configuration and accounting,
  * never for app data.
+ *
+ * Exported so the prompt loader can reach shared.ai_prompts through the same
+ * client, rather than each repo growing its own copy of this factory.
  */
-function createAiClient(): SupabaseClient {
+export function createAiClient(): SupabaseClient {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !serviceKey) {

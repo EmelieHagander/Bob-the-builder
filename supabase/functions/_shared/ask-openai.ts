@@ -19,6 +19,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { buildContext } from './bob-context.ts'
 import { callOpenAIResponses } from './openai-service.ts'
+import { loadPrompt } from './prompt-loader.ts'
 
 export interface AskOpenAiOptions {
   /** The caller's raw Authorization header, forwarded so RLS applies. */
@@ -39,6 +40,17 @@ export type AskOpenAiResult =
   | { ok: true; answer: string }
   | { ok: false; error: string }
 
+/**
+ * bob's voice, as a fallback.
+ *
+ * The live version is a row in `shared.ai_prompts` (`bob` / `ask-bob-system`),
+ * editable from the family admin without a deploy. This copy is what answers if
+ * that row is missing or empty — never an empty instruction, which a model does
+ * not refuse so much as quietly answer badly.
+ *
+ * The briefing is NOT part of it. That is assembled per call from the caller's
+ * own rows, under their RLS, and appended below.
+ */
 const SYSTEM_PROMPT = `You are bob — the coordinator of a community build project.
 
 Who you are:
@@ -82,7 +94,9 @@ export async function answerWithOpenAi(opts: AskOpenAiOptions): Promise<AskOpenA
   // The briefing rides in the system prompt rather than as a turn: it is
   // context, not something the user said, and keeping it in `instructions`
   // makes it the stable prefix that prompt caching can actually reuse.
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n${
+  const persona = await loadPrompt(opts.app, 'ask-bob-system', SYSTEM_PROMPT)
+
+  const systemPrompt = `${persona}\n\n${
     briefing
       ? `THE BRIEFING — the current state of the build:\n\n${briefing}`
       : 'THE BRIEFING is empty: there is no project set up yet, or you have no access to one. Say so honestly and suggest starting a project in the app.'
