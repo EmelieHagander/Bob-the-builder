@@ -26,7 +26,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/shopping` | Materials shopping list, grouped by category (checkable, printable) |
 | `/announcements` | Announcement board |
 | `/today` | Day-of "what needs doing today" view |
-| — | **Ask bob** assistant drawer (floating button on every screen). With the Launchpad seam configured (see `supabase/README.md`) questions go to a real team of AI builders on the Launchpad platform; without it bob answers with his honest scripted feed |
+| — | **Ask bob** assistant drawer (floating button on every screen). With the Launchpad seam configured (see `supabase/README.md`) questions go to a real team of AI builders on the Launchpad platform; otherwise, with an OpenAI key set, bob answers directly from a live briefing of the project; with neither, his honest scripted feed |
 
 ## Running it
 
