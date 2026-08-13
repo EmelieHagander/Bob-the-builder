@@ -32,7 +32,8 @@
  * ---------------
  * `callAi()` never throws. It returns a discriminated result so callers fall
  * back to honest non-AI behavior rather than showing an error page. Usage
- * logging is fire-and-forget and can never fail a call that already succeeded.
+ * logging is awaited (see logUsage) but can never fail a call that already
+ * succeeded.
  */
 
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -276,18 +277,25 @@ function extractUsage(body: Record<string, unknown>): AiUsage {
 
 /* ── usage logging ────────────────────────────────────────────────────────── */
 
-/** Fire-and-forget. A failure to record usage must never fail a call that
- *  already produced an answer, so this is deliberately not awaited. */
-function logUsage(
+/**
+ * Write one row to the shared usage ledger.
+ *
+ * AWAITED, deliberately. Fire-and-forget loses rows: an edge isolate can be
+ * torn down the moment the response is returned, and an insert still in flight
+ * simply never lands — observed in practice, where successful calls recorded
+ * nothing at all. That makes the ledger quietly under-report rather than
+ * visibly break, which is the worse failure for a cost record.
+ *
+ * A few milliseconds against a call that already took seconds. It still never
+ * throws: a ledger failure must not fail a call that already produced an
+ * answer.
+ */
+async function logUsage(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
-): void {
-  supabase
-    .from("usage_events")
-    .insert(row)
-    .then(({ error }: { error: { message: string } | null }) => {
-      if (error) console.error(`[ai-service] usage log failed: ${error.message}`);
-    });
+): Promise<void> {
+  const { error } = await supabase.from("usage_events").insert(row);
+  if (error) console.error(`[ai-service] usage log failed: ${error.message}`);
 }
 
 /* ── entry point ──────────────────────────────────────────────────────────── */
@@ -337,8 +345,17 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
     return { ok: false, error: "no_model" };
   }
 
-  // Never ask for more than the model can produce.
-  const requestedTokens = options.maxOutputTokens ?? setting?.max_output_tokens ?? 1000;
+  // The DB setting may RAISE the caller's ceiling, then the model's own limit
+  // caps it. That direction matters on a reasoning model: reasoning tokens are
+  // billed out of max_output_tokens, so a call site compiled with a small
+  // budget (Akr's journal asks for 180) would spend it all on reasoning and
+  // return nothing. Letting ai.settings lift the ceiling fixes that with a row
+  // instead of a deploy.
+  const requestedTokens = Math.max(
+    options.maxOutputTokens ?? 0,
+    setting?.max_output_tokens ?? 0,
+    1000,
+  );
   const maxOutputTokens = Math.min(requestedTokens, model.max_output_tokens);
 
   const promptOverride = setting?.prompt_template?.trim();
@@ -412,7 +429,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
         : res.status === 401 || res.status === 403
         ? "bad_api_key"
         : "openai_error";
-      logUsage(supabase, {
+      await logUsage(supabase, {
         ...baseUsageRow,
         success: false,
         error_code: error,
@@ -430,7 +447,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
       // A truncated run (hit max_output_tokens mid-answer) lands here too —
       // it cost real tokens, so it is still logged.
       console.error(`[ai-service] responses API returned no text (status: ${body.status})`);
-      logUsage(supabase, {
+      await logUsage(supabase, {
         ...baseUsageRow,
         input_tokens: usage.inputTokens,
         cached_input_tokens: usage.cachedInputTokens,
@@ -451,7 +468,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
         data = JSON.parse(text) as T;
       } catch {
         console.error("[ai-service] structured output was not valid JSON");
-        logUsage(supabase, {
+        await logUsage(supabase, {
           ...baseUsageRow,
           input_tokens: usage.inputTokens,
           cached_input_tokens: usage.cachedInputTokens,
@@ -467,7 +484,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
       }
     }
 
-    logUsage(supabase, {
+    await logUsage(supabase, {
       ...baseUsageRow,
       input_tokens: usage.inputTokens,
       cached_input_tokens: usage.cachedInputTokens,
@@ -484,7 +501,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
     const timedOut = err instanceof DOMException && err.name === "AbortError";
     const error = timedOut ? "timeout" : "openai_unreachable";
     console.error(`[ai-service] ${error}`, timedOut ? "" : err);
-    logUsage(supabase, {
+    await logUsage(supabase, {
       ...baseUsageRow,
       success: false,
       error_code: error,
