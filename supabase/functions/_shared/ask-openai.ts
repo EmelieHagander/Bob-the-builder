@@ -18,7 +18,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { buildContext } from './bob-context.ts'
-import { callAi } from './ai-service.ts'
+import { callOpenAIResponses } from './openai-service.ts'
 
 export interface AskOpenAiOptions {
   /** The caller's raw Authorization header, forwarded so RLS applies. */
@@ -88,21 +88,21 @@ export async function answerWithOpenAi(opts: AskOpenAiOptions): Promise<AskOpenA
       : 'THE BRIEFING is empty: there is no project set up yet, or you have no access to one. Say so honestly and suggest starting a project in the app.'
   }`
 
-  const result = await callAi({
+  const result = await callOpenAIResponses<string>({
     app: opts.app,
     coworkerId: 'bob',
     functionName: 'ask-bob',
+    aiFunction: 'ask-bob',
+    module: 'global',
     userId: opts.userId,
-    systemPrompt,
-    messages: [
-      ...(opts.history ?? []).map((m) => ({ role: m.role, content: m.content })),
-      { role: 'user' as const, content: opts.message },
-    ],
+    systemMessage: systemPrompt,
+    prompt: [...(opts.history ?? []).map((m) => m.content), opts.message].join('\n\n'),
     maxOutputTokens: 700,
-    temperature: 0.5,
-    timeoutMs: 30_000,
+    timeoutMs: 60_000,
   })
 
-  if (!result.ok) return { ok: false, error: result.error }
-  return { ok: true, answer: result.text }
+  if (!result.success || typeof result.data !== 'string' || !result.data.trim()) {
+    return { ok: false, error: result.error ?? 'empty_response' }
+  }
+  return { ok: true, answer: result.data.trim() }
 }
