@@ -11,21 +11,21 @@
  *
  * WHERE THE CONFIGURATION LIVES
  * -----------------------------
- * Not here. The shared `ai` schema owns it (see the migration
+ * Not here. The `shared` schema owns it (see the migration
  * 20260813092414_shared_ai_schema.sql in the hearthandlarder repo):
  *
- *   ai.models        the catalogue AND price list. THE gate on which models
+ *   shared.ai_models        the catalogue AND price list. THE gate on which models
  *                    may be called — there is deliberately no allow-list in
  *                    this file to drift out of sync with it. Adding a model is
  *                    a row insert, never a deploy.
- *   ai.settings      per (app, coworker, function, module): model, token
+ *   shared.ai_settings      per (app, coworker, function, module): model, token
  *                    ceiling, temperature, prompt override, kill switch.
- *   ai.usage_events  one row per call, with the price snapshot used, so the
+ *   shared.ai_usage_events  one row per call, with the price snapshot used, so the
  *                    cost of a call stays true after the price list changes.
  *
  * Resolution order for the model: an explicit `options.model` override, else
  * the setting row, else the catalogue's `is_default` row. Whatever comes out
- * must exist in `ai.models` and be active, or the default is used instead and
+ * must exist in `shared.ai_models` and be active, or the default is used instead and
  * a warning is logged.
  *
  * FAILURE POSTURE
@@ -43,7 +43,7 @@ const RESPONSES_ENDPOINT = "https://api.openai.com/v1/responses";
 /** How long resolved config is reused inside one warm instance, in ms.
  *  The previous implementation cached prices forever, so a warm instance
  *  billed at last week's rates indefinitely after a change. A short TTL means
- *  an edit to ai.models or ai.settings is live within a minute without adding
+ *  an edit to shared.ai_models or shared.ai_settings is live within a minute without adding
  *  a database round-trip to every single call. */
 const CONFIG_TTL_MS = 60_000;
 
@@ -60,13 +60,13 @@ export interface AiCallOptions {
   /** Which AI persona this is, e.g. 'gardener', 'bob', 'meal-planner'. */
   coworkerId: string;
   /** Which function, e.g. 'journal-message'. With app + coworker + module this
-   *  is the key into ai.settings. */
+   *  is the key into shared.ai_settings. */
   functionName: string;
   /** Optional sub-scope; falls back to the app's 'global' row. */
   module?: string;
   /** Who the call is for — recorded on the usage row. */
   userId?: string;
-  /** The system prompt. A non-empty ai.settings.prompt_template replaces it. */
+  /** The system prompt. A non-empty shared.ai_settings.prompt_template replaces it. */
   systemPrompt?: string;
   /** The conversation, oldest first. */
   messages: AiMessage[];
@@ -141,14 +141,14 @@ function fresh<T>(entry: CacheEntry<T> | undefined, now: number): entry is Cache
   return Boolean(entry) && now - entry!.at < CONFIG_TTL_MS;
 }
 
-/** Service-role client pinned to the shared `ai` schema. Only ever used to read
+/** Service-role client pinned to the `shared` schema. Only ever used to read
  *  configuration and write usage rows — never for app data, and never with an
  *  end-user's token, because no end-user JWT is in scope inside this service. */
 function aiClient(): SupabaseClient | null {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, { db: { schema: "ai" } });
+  return createClient(url, serviceKey, { db: { schema: "shared" } });
 }
 
 async function loadModels(supabase: SupabaseClient): Promise<ModelRow[]> {
@@ -157,7 +157,7 @@ async function loadModels(supabase: SupabaseClient): Promise<ModelRow[]> {
   if (fresh(hit, now)) return hit.value;
 
   const { data, error } = await supabase
-    .from("models")
+    .from("ai_models")
     .select(
       "model_name, input_cost_per_1m_tokens, output_cost_per_1m_tokens, cached_input_cost_per_1m_tokens, max_output_tokens, supports_reasoning, is_active, is_default",
     )
@@ -189,7 +189,7 @@ async function loadSetting(
   // Both the module row and the app's 'global' row in one round trip; the
   // more specific one wins below.
   const { data, error } = await supabase
-    .from("settings")
+    .from("ai_settings")
     .select("model, max_output_tokens, temperature, reasoning_effort, prompt_template, is_enabled, module_id")
     .eq("app", app)
     .eq("coworker_id", coworkerId)
@@ -294,7 +294,7 @@ async function logUsage(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabase.from("usage_events").insert(row);
+  const { error } = await supabase.from("ai_usage_events").insert(row);
   if (error) console.error(`[ai-service] usage log failed: ${error.message}`);
 }
 
@@ -341,7 +341,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
   }
   if (!model) {
     // An empty catalogue is a configuration failure, not a model choice.
-    console.error("[ai-service] no active models in ai.models");
+    console.error("[ai-service] no active models in shared.ai_models");
     return { ok: false, error: "no_model" };
   }
 
@@ -349,7 +349,7 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
   // caps it. That direction matters on a reasoning model: reasoning tokens are
   // billed out of max_output_tokens, so a call site compiled with a small
   // budget (Akr's journal asks for 180) would spend it all on reasoning and
-  // return nothing. Letting ai.settings lift the ceiling fixes that with a row
+  // return nothing. Letting shared.ai_settings lift the ceiling fixes that with a row
   // instead of a deploy.
   const requestedTokens = Math.max(
     options.maxOutputTokens ?? 0,
