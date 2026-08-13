@@ -5,9 +5,14 @@
  * Every AI call in every app goes through `callAi()`. No edge function talks to
  * a provider directly, and OPENAI_API_KEY is read ONLY in this file.
  *
- * It speaks the OpenAI **Responses API** (`/v1/responses`) — not chat
- * completions — which is what gives us structured JSON output, prompt caching
- * and reasoning effort from one call shape.
+ * Two modalities, one service:
+ *   callAi()         text, via the **Responses API** (`/v1/responses`) — not
+ *                    chat completions — which is what gives us structured JSON
+ *                    output, prompt caching and reasoning effort in one shape.
+ *   generateImage()  images, via `/v1/images/generations`.
+ *
+ * A new modality extends this file rather than being bolted on beside it, so
+ * every app's images are costed and configured exactly like its text.
  *
  * WHERE THE CONFIGURATION LIVES
  * -----------------------------
@@ -116,6 +121,8 @@ interface ModelRow {
   cached_input_cost_per_1m_tokens: number | null;
   max_output_tokens: number;
   supports_reasoning: boolean;
+  /** The model GENERATES images. Distinct from reading one as input. */
+  supports_image_output: boolean;
   is_active: boolean;
   is_default: boolean;
 }
@@ -159,7 +166,7 @@ async function loadModels(supabase: SupabaseClient): Promise<ModelRow[]> {
   const { data, error } = await supabase
     .from("ai_models")
     .select(
-      "model_name, input_cost_per_1m_tokens, output_cost_per_1m_tokens, cached_input_cost_per_1m_tokens, max_output_tokens, supports_reasoning, is_active, is_default",
+      "model_name, input_cost_per_1m_tokens, output_cost_per_1m_tokens, cached_input_cost_per_1m_tokens, max_output_tokens, supports_reasoning, supports_image_output, is_active, is_default",
     )
     .eq("is_active", true);
 
@@ -501,6 +508,191 @@ export async function callAi<T = unknown>(options: AiCallOptions): Promise<AiCal
     const timedOut = err instanceof DOMException && err.name === "AbortError";
     const error = timedOut ? "timeout" : "openai_unreachable";
     console.error(`[ai-service] ${error}`, timedOut ? "" : err);
+    await logUsage(supabase, {
+      ...baseUsageRow,
+      success: false,
+      error_code: error,
+      latency_ms: Date.now() - startedAt,
+    });
+    return { ok: false, error };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * IMAGE GENERATION
+ *
+ * Same catalogue, same settings, same ledger as the text path above — so an
+ * image call is as visible in shared.ai_usage_events as any other, which
+ * matters because images are the most expensive thing any of these apps call.
+ *
+ * This deliberately does NOT touch storage. It returns raw PNG bytes and the
+ * calling app decides where they belong: Hearth writes recipe cards to
+ * hearth-recipe-images, Akr's asset pipeline writes elsewhere. Bucket names,
+ * path conventions and RLS around them are app concerns, not this file's.
+ *
+ * Prompts are likewise the app's. This service supplies the pipe, never the
+ * words — a per-app prompt is the normal case, and shared.ai_settings
+ * .prompt_template can override one without a deploy.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+const IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
+
+export interface ImageCallOptions {
+  /** Owning app, by schema name: 'hearth' | 'akr' | 'bob' | 'maidin'. */
+  app: string;
+  coworkerId: string;
+  functionName: string;
+  module?: string;
+  userId?: string;
+  /** What to draw. A non-empty prompt_template setting is prepended as art
+   *  direction, so the house style can be retuned without a deploy. */
+  prompt: string;
+  /** Portrait by default — cards and plates are portrait artefacts. */
+  size?: "1024x1024" | "1024x1536" | "1536x1024";
+  quality?: "low" | "medium" | "high";
+  /** Override the configured model. Still checked against the catalogue. */
+  model?: string;
+  timeoutMs?: number;
+}
+
+export type ImageCallResult =
+  | { ok: true; image: Uint8Array; model: string; costUsd: number | null }
+  | { ok: false; error: string };
+
+/** Decodes base64 without blowing the stack on a multi-megabyte image. */
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Generate one image. Never throws — returns a discriminated result with the
+ * same honest error codes as callAi, so a caller can mark a job failed rather
+ * than crash.
+ */
+export async function generateImage(options: ImageCallOptions): Promise<ImageCallResult> {
+  const startedAt = Date.now();
+  const module = options.module ?? "global";
+
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.error("[ai-service] OPENAI_API_KEY is not set");
+    return { ok: false, error: "not_configured" };
+  }
+
+  const supabase = aiClient();
+  if (!supabase) {
+    console.error("[ai-service] Supabase service credentials are not set");
+    return { ok: false, error: "not_configured" };
+  }
+
+  const [models, setting] = await Promise.all([
+    loadModels(supabase),
+    loadSetting(supabase, options.app, options.coworkerId, options.functionName, module),
+  ]);
+
+  if (setting && setting.is_enabled === false) return { ok: false, error: "disabled" };
+
+  // Only a model that can actually produce an image. The catalogue flag is the
+  // gate, so switching image models stays a row edit like everything else.
+  const imageModels = models.filter((m) => m.supports_image_output);
+  const requested = options.model ?? setting?.model;
+  const model = imageModels.find((m) => m.model_name === requested) ?? imageModels[0];
+
+  if (!model) {
+    console.error("[ai-service] no image-capable model in shared.ai_models");
+    return { ok: false, error: "no_model" };
+  }
+
+  // A prompt override in the database wins as art direction; the caller's
+  // prompt is the subject appended to it.
+  const artDirection = setting?.prompt_template?.trim();
+  const prompt = artDirection ? `${artDirection}\n\n${options.prompt}` : options.prompt;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 180_000);
+
+  const baseUsageRow = {
+    app: options.app,
+    user_id: options.userId ?? null,
+    module,
+    ai_function: options.functionName,
+    model: model.model_name,
+    input_price_per_1m: model.input_cost_per_1m_tokens,
+    output_price_per_1m: model.output_cost_per_1m_tokens,
+  };
+
+  try {
+    const res = await fetch(IMAGES_ENDPOINT, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: model.model_name,
+        prompt,
+        size: options.size ?? "1024x1536",
+        quality: options.quality ?? "high",
+        n: 1,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      // Status only — an error body can echo the prompt back.
+      console.error(`[ai-service] images API returned ${res.status}`);
+      const error = res.status === 429
+        ? "rate_limited"
+        : res.status === 401 || res.status === 403
+        ? "bad_api_key"
+        : "openai_error";
+      await logUsage(supabase, {
+        ...baseUsageRow,
+        success: false,
+        error_code: error,
+        latency_ms: Date.now() - startedAt,
+      });
+      return { ok: false, error };
+    }
+
+    const body = await res.json();
+    const b64: string | undefined = body?.data?.[0]?.b64_json;
+
+    const usage = {
+      inputTokens: body?.usage?.input_tokens ?? 0,
+      cachedInputTokens: body?.usage?.input_tokens_details?.cached_tokens ?? 0,
+      outputTokens: body?.usage?.output_tokens ?? 0,
+      reasoningTokens: 0,
+      totalTokens: body?.usage?.total_tokens ?? 0,
+    };
+    const costUsd = computeCost(model, usage);
+
+    await logUsage(supabase, {
+      ...baseUsageRow,
+      input_tokens: usage.inputTokens,
+      cached_input_tokens: usage.cachedInputTokens,
+      output_tokens: usage.outputTokens,
+      reasoning_tokens: 0,
+      total_tokens: usage.totalTokens,
+      cost_usd: costUsd,
+      success: Boolean(b64),
+      error_code: b64 ? null : "empty_response",
+      latency_ms: Date.now() - startedAt,
+    });
+
+    if (!b64) {
+      console.error("[ai-service] images API returned no image data");
+      return { ok: false, error: "empty_response" };
+    }
+
+    return { ok: true, image: base64ToBytes(b64), model: model.model_name, costUsd };
+  } catch (err) {
+    const timedOut = err instanceof DOMException && err.name === "AbortError";
+    const error = timedOut ? "timeout" : "openai_unreachable";
+    console.error(`[ai-service] image ${error}`, timedOut ? "" : err);
     await logUsage(supabase, {
       ...baseUsageRow,
       success: false,
