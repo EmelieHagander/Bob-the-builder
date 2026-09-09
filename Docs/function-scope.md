@@ -279,6 +279,32 @@ It validates the two defining seams that the next product layer depends on:
 
 If either boundary is wrong, measurements, visual proposals, drawings, BOM and task guidance will all be built on the wrong skeleton.
 
+### UI alignment — fit the new loop into Bob instead of building a second app
+
+The domain may call the underlying object `MediaAsset`, but the UI should stay human. The user-facing concept for this slice is **“Show bob what you're working with”** / **“Visa Bob projektet”**, not “manage media assets”.
+
+Slice 1 should reuse Bob's existing UI anatomy rather than introduce a new top-level planning studio or media product:
+
+- **Project creation:** keep the current compact project form. After the basic project exists, offer a clear next action such as **Show bob what you're working with** / **Add project photos**. Do not turn project creation into a long AI wizard.
+- **Dashboard:** this is the project-understanding surface. It may show a compact project brief/evidence summary and Bob's next concrete request, e.g. “I still need the width of the opening”. It should remain scannable rather than becoming an editor.
+- **Area detail:** evolve the existing **Reference images** concept into real project/area images instead of creating a competing media hierarchy. Existing `Tasks / Materials / Reference images` navigation remains a good fit; the image surface grows up rather than moving elsewhere.
+- **Ask bob:** keep the existing drawer as the conversational surface. A photo may offer **Ask bob about this**, or the drawer may attach/select an authorised project image, but the drawer is not the media manager.
+- **Today:** no new planning/media complexity in Slice 1. Today remains the phone-first “what do I do now?” fast path. Relevant task images can be surfaced later from the task without turning Today into another dashboard.
+- **Account/project switcher:** remain account/project administration. Evidence analysis belongs inside the active project, not in the account modal.
+
+### Media presentation rules for Slice 1
+
+- Thumbnail grids may crop for scanning, but opening an image must provide the complete original without forced square cropping.
+- Real construction photos, portrait images, sections and drawings must not be treated as if every asset were a square social-media tile.
+- Media purpose labels such as **Current state**, **Target**, **Section**, **Guidance**, **Progress** or **As-built** should use neutral/secondary styling. Do not consume Bob's green/honey/clay status colors for media taxonomy; those colors already mean ready/done, pending/in-progress and blocked/warning.
+- Purpose/provenance is visible when it matters, but implementation nouns such as `MediaAsset`, storage keys or revision ids stay out of ordinary user copy.
+- Loading, upload progress/failure, permission denial and missing-image states must be explicit and recoverable; a placeholder must not imply an upload succeeded.
+- Mobile upload/view flows must remain usable one-handed and must not collide with the fixed mobile navigation or floating Ask bob affordance.
+
+### UI placement decision
+
+For Slice 1, **do not add a new top-level “Media”, “Design studio” or “Evidence” navigation item**. The first slice should prove that real evidence naturally lives in the existing project surfaces. A dedicated project-wide media library may be added later only if the volume/journey proves it is needed; until then, Dashboard + Area/Task + Ask bob are the primary consumers.
+
 ### Slice 1 end-to-end path
 
 ```text
@@ -336,7 +362,10 @@ Slice 1 is done only when:
 5. Ask bob can consume that authorised image and answer about it;
 6. AI output clearly keeps visual observation separate from verified measurement;
 7. tests/browser proof cover positive path, denied path and reload/read-back;
-8. no UI surface bypasses `database.ts`/the owning media command/read seam.
+8. no UI surface bypasses `database.ts`/the owning media command/read seam;
+9. the flow reuses the existing project shell, Dashboard/Area/Ask bob surfaces rather than adding a parallel top-level navigation model;
+10. upload, loading, failure, denied and read-back states are honest on both desktop and mobile;
+11. opening a stored image exposes the complete original even if a thumbnail preview is cropped.
 
 ---
 
