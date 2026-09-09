@@ -5,11 +5,12 @@
 > **Audited against:** current `main` runtime/schema/code after the user-story contract was added  
 > **Related product intent:** `Docs/user-stories.md`
 
-> **Slice 0 branch delta (2026-09-09):** project membership/RLS, explicit-project
+> **Slice 0 release delta (2026-09-09):** project membership/RLS, explicit-project
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
-> local tests. OpenAI is the permanent provider; Launchpad is retired. These changes are **not yet
-> deployed**; the audit below remains the pre-Slice-0 deployed baseline.
-> [Verification and open release gates](slice-0-verification.md) own the evidence.
+> local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
+> backend and frontend are deployed; the audit below is the **historical pre-Slice-0
+> baseline**. Read the release delta and verification record before treating an old gap as current.
+> [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
 This inventory is deliberately stricter than a feature wishlist. A capability is only marked **BUILT** when the current runtime/data model materially supports the user goal. **PARTIAL** means useful pieces exist but an important part of the target journey is missing. **GAP** means the target capability has no meaningful current implementation.
 

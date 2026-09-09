@@ -269,10 +269,10 @@ Each slice must be independently mergeable, useful and truthful. Do not hide unf
 
 ## Slice 0 — Trust foundation
 
-Implementation is in progress: membership, bounded lookup and OpenAI tool wiring
-have automated proof, including the production frontend's project-switch flow in CI.
-Deployed Supabase/OpenAI proof and the coordinated rollout remain;
-see [the verification record](slice-0-verification.md). This is not yet a live exit.
+Slice 0 is deployed. Membership/RLS, bounded lookup and OpenAI tool wiring have
+live proof, including an ordinary Auth/PostgREST/OpenAI round trip. The production
+frontend's project-switch flow passes in CI at three widths. See
+[the verification record](slice-0-verification.md) for the evidence and its limits.
 
 **Goal:** make project identity, authority and provenance safe enough for V1 data.
 
@@ -289,7 +289,8 @@ Includes:
 
 **Exit:** a project-aware backend lookup proves authorised success, cross-project
 denial and isolation after project switching, using only the allowed data. The
-lookup contract has a local implementation; deployed provider and browser proof are still required.
+lookup contract is implemented and its deployed lookup/denial checks pass; browser
+project-switch proof uses fixture HTTP services, as recorded in the verification owner.
 
 ## Slice 1 — Show bob the real project
 

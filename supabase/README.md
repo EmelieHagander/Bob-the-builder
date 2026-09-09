@@ -1,6 +1,6 @@
 # bob — edge functions (the Ask seam)
 
-> Slice 0 implementation: locally tested, not deployed. See
+> Slice 0 backend and matching frontend deployed on 2026-09-09. See
 > [verification and rollout](../Docs/slice-0-verification.md) for evidence and open gates.
 
 **Provider decision (2026-09-09): Bob uses OpenAI directly for all AI work.**
@@ -45,7 +45,7 @@ other repositories/deployments were not rewritten as part of this Bob slice.
 
 ## Project lookup contract — Slice 0
 
-> **Status:** implemented in this branch with local Postgres/HTTP tests; deployed provider and browser proof are still pending.
+> **Status:** deployed; the verification record distinguishes live checks from local/CI fixtures.
 > **Owns:** Ask bob's bounded project lookup, allowed datasets/fields and result
 > semantics. `db/README.md` owns the membership/RLS implementation; the release
 > ordering remains in `Docs/v1-plan.md`.
@@ -77,7 +77,7 @@ invitations and guest/volunteer joining must establish explicit project access,
 and ordinary content edits must not let a caller grant themselves membership.
 The legacy first-project join and globally unique person/auth link did not
 provide that multi-project contract. This branch replaces them with membership-aware
-RLS for the exposed parent/child tables; deployment remains a release gate.
+RLS for the exposed parent/child tables, now applied to the shared database.
 A request filter alone does not close public API paths. See [Supabase's RLS guide](https://supabase.com/docs/guides/database/postgres/row-level-security).
 
 ### Initial allowlist
@@ -195,7 +195,7 @@ A → B → A responses. Failure messages never substitute another project's fee
 First follow the reviewed membership migration and coordinated rollout in
 [db/README.md](../db/README.md). Then deploy the edge function and frontend together.
 Merging frontend code alone triggers Pages but does **not** migrate Supabase or
-deploy the edge function; this PR must stay draft until those gates are resolved.
+deploy the edge function; future authority/API changes also require coordinated releases.
 
 ```bash
 supabase functions deploy ask-bob --project-ref <ref>

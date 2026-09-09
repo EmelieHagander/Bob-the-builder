@@ -1,8 +1,8 @@
 # Slice 0 — implementation and verification
 
-Status: implementation branch, **not deployed**. PR #23 (the lookup contract) was
+Status: **Slice 0 deployed; live OpenAI lookup verified** on 2026-09-09. PR #23 (the lookup contract) was
 merged into main at `ab9158cfe07077ee0b52dac5271754e2bdaaef92` before this work.
-The branch also incorporates PR #24's installation changes from main
+The release also incorporates PR #24's installation changes from main
 `794fe0a925f24a81193bcc765127610ac66e9c02`; its CI gates are preserved.
 
 ## What changed
@@ -42,7 +42,7 @@ the new Ask bob browser suite. The screenshots are retained in its
 | Postgres migration + RLS suite | Passed on PGlite with real SQL/roles/RLS | Auth claims/users are fixtures; not hosted Supabase/PostgREST |
 | Seven lookup projections | Passed: fixed fields, same-project joins, literal text search | No model-generated SQL |
 | Positive/negative authority | Own project works; non-member/anonymous denied; cross-project keys/links rejected; view obeys RLS | Role-specific organiser permissions are outside Slice 0 |
-| Membership transition | Orphan preflight rejects; links preserved; confirmed invitations and atomic creator membership work | Existing entré project still needs reviewed mapping |
+| Membership transition | Orphan preflight rejects; links preserved; confirmed invitations and atomic creator membership work | Reviewed mapping is now applied; the Test membership remains intact |
 | Limits/errors | Parent/join/UTF-8 byte caps, malformed args, timeout, empty vs error, lookup budget and revoked access tested | Does not benchmark large production datasets |
 | HTTP → tools → SQL → answer | Passed using the actual request/answer dispatcher and real Postgres lookup | Model transport is deterministic fixture; **no live OpenAI call claimed** |
 | Two-project reads and response generation | Separate results; A → B → A/sign-out invalidate old callbacks | Not a browser interaction test |
@@ -61,7 +61,7 @@ never production credentials. Existing installation/PWA browser gates are preser
 
 The local CLI initially tried a newer Supabase binary that could not start in
 this environment. CLI 2.81.3 successfully created the timestamped migration.
-No production database or Supabase function was modified.
+The following deployment section records the subsequent production changes.
 
 A read-only configuration check found Bob's `ask-bob`/`global` OpenAI settings
 enabled and its selected catalogue model active. This confirms routing configuration,
@@ -74,34 +74,58 @@ annotations; service runtime behavior is unchanged. Sibling repository copies
 were already at different versions and need their normal canonical sync; this
 branch does not claim byte identity with every sibling.
 
-## Remaining release gates
+## Deployment evidence — 2026-09-09
 
-1. The user identified the intended confirmed account on 2026-09-09. It is already
-   a member of Test. The migration now takes an operator-reviewed mapping and
-   preserves both memberships in the same transaction as the uniqueness/policy
-   change. Local tests pass for approved and rejected mappings. A private recovery
-   snapshot of 18 affected tables (122 rows) passed exact local read-back.
-   Applying the coordinated transaction is the remaining step.
-2. Follow the coordinated rollout in [db/README.md](../db/README.md).
-   A normal main merge automatically publishes Pages but does not apply SQL or
-   deploy edge functions. This implementation PR must not be merged as a
-   frontend-only release.
-3. In an accessible preview/staging environment, verify real Supabase JWT/
-   PostgREST positive and denied calls; invitation claim and new project creation;
-   a real OpenAI tool call reaching an item outside the project-only briefing.
-4. Repeat the now-passing CI project-switch flow after the coordinated rollout
-   with real sessions, and inspect desktop/mobile source disclosure.
-5. Confirm OpenAI model settings/key availability and deploy the retirement
-   response at the old endpoint. Launchpad is retired, with no re-enable gate.
+- PR #25 merged as `5289c72d7fa0a86ff6252ab3a33b796dbe70fe3e` after the
+  [final implementation CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34399066415)
+  passed all gates. The [Pages release](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34399374166)
+  completed successfully.
+- The hosted registry records `20260909200654_bob_project_scope_and_bounded_lookup`.
+  Its reviewed mapping linked the intended confirmed account to the entrance
+  project while retaining Test. The repository source keeps its CLI authoring timestamp.
+- `ask-bob` v1 is active with Auth verification; `ask-launchpad` v15 is the
+  retirement response. OpenAI is the sole provider path.
+- Hosted SQL checks under `authenticated` and the intended user's claims show
+  both projects and the entrance materials. Guest claims show zero projects.
+  These checks exercise hosted RLS, not an Auth HTTP login.
+- All 122 pre-existing rows are identical after the migration; exactly one new
+  member row was added. The private recovery snapshot passed exact local read-back
+  for all 18 affected tables. It also preserves the previous edge bundle and
+  relevant schema/policy/grant metadata; it is not a full shared-database backup.
+- Bob's advisor errors/warnings were cleared. The remaining informational
+  [no-policy notice](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+  is intentional for `person_emails`: all client access is revoked, and only the
+  guarded internal invitation functions read it. Other apps were not modified.
 
-`Live Bob release check` runs when its workflow/script first reaches main, or on
-manual dispatch. It signs in with the existing public guest account, proves the
-real entré project is denied, creates a disposable project through the actual RPC,
-and requires a real OpenAI answer whose source evidence includes an inserted material
+## Live OpenAI release check
+
+The [live release check](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34400203806)
+passed on `5ebb9b62ee15455ba9d4d5f2ff0ec1d6925ef727`, as did the
+[Pages deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34400203811).
+It proved actual password authentication, denied entrance access (403), legacy
+endpoint retirement (410), project creation and member-scoped material read-back,
+then a real OpenAI tool call whose source evidence included the inserted material
+outside the project-only briefing. The answer contained its recorded quantity, 37.
+
+Two test setup errors were corrected before that pass: Node 20 lacked native
+WebSocket for Supabase 2.110.2 (PR #26 moved the check to Node 24), and the fixture
+used `missing` instead of the existing `needed` material status. Neither required
+a change to the deployed app or edge functions. Both disposable projects were
+subsequently removed, including their member/material rows. Only the two real
+projects and their intended memberships remain.
+
+`Live Bob release check` signs in with the existing public guest account, proves
+entrance access is denied, creates a disposable project through the actual RPC,
+and requires an OpenAI answer whose source evidence includes an inserted material
 outside the briefing. It prints only the fixture project id and safe result messages.
-An operator must delete that exact fixture project afterwards; no project-delete
-RPC or service key is introduced just to clean up a test. Real project memberships
-must never be granted to the public guest for this check.
+An operator removes that exact project afterwards; no deletion RPC or service key
+is introduced just for test cleanup. Never grant the public guest access to a real
+project to make a test pass.
 
-The original Slice 0 exit is retained. Local implementation evidence does not
-turn the remaining deployed-provider/browser checks into completed work.
+## Verification limits
+
+The actual browser project-switch flow passes at three widths with fixture HTTP
+responses. Manual screenshot inspection and a browser walkthrough with the real
+owner's signed-in session were unavailable in this environment. Invitation claim
+edge cases are proven by the real local Postgres suite; they do not represent a
+complete live multi-user invitation acceptance test.

@@ -107,13 +107,19 @@ With no env config the app falls back to the in-memory mock data.
 
 ## Slice 0 membership and project policies
 
-> Implemented and locally tested; not applied to the shared database yet.
+> Applied to the shared database on 2026-09-09; see the verification record for release evidence.
 > Legacy migrations 0001–0010 describe the previous household-wide policies.
 
 Apply `supabase/migrations/20260909182548_project_scope_and_bounded_lookup.sql`
 **after** the ten legacy migrations. It was created with `supabase migration new`.
 Do not replay the legacy migrations or use an unreviewed `db push` against this
 shared project's migration history.
+
+The hosted migration registry records this rollout as
+`20260909200654_bob_project_scope_and_bounded_lookup`. The CLI-created source file
+keeps its original authoring timestamp; these are the same applied change, not
+two migrations to replay. The deployment supplied the reviewed mapping only in
+its transaction-local setting.
 
 The authority source remains `bob.people`: a protected `(project_id, auth_user_id)`
 link, unique per project. One Auth user can belong to several projects. Editable
@@ -152,15 +158,15 @@ The migration aborts if any existing project lacks an authenticated member.
 This avoids silently removing access or guessing ownership. The read-only
 deployment check on 2026-09-09 found:
 
-| Project | Existing authenticated member links |
-| --- | --- |
-| Bygga in entrén (`p_bygga_in_entren`) | 0 — needs an explicitly reviewed mapping |
-| Test (`p_test`) | 1 — preserved by the migration |
+| Project | Before rollout | After rollout |
+| --- | --- | --- |
+| Bygga in entrén (`p_bygga_in_entren`) | 0 | 1 — reviewed confirmed account |
+| Test (`p_test`) | 1 | 1 — original membership preserved |
 
 Review the intended accounts for each project, including guest/collaborator access.
 Do not copy a different project's user merely because it is the only linked user.
-The user has now identified the intended confirmed account. It already belongs
-to Test, so both memberships must be preserved. Keep the supplied email and
+The user identified the intended confirmed account and it is now linked to both
+projects. The original Test membership was preserved. Keep the supplied email and
 resolved Auth id out of this public repository.
 
 The migration accepts an operator-reviewed JSON array through the transaction-local
