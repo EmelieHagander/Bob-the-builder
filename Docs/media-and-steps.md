@@ -1,7 +1,8 @@
 # Project images and illustrated task steps
 
-**Status:** specified for milestones 1A and 1B; implementation and deployment evidence
-must be recorded before calling this built. The V1 plan owns delivery order.
+**Status:** milestones 1A and 1B are implemented and deployed (2026-09-09).
+[Verification and rollout evidence](foundation-verification.md) owns the actual
+checks and their limits. The V1 plan owns delivery order; vision remains 1C.
 
 ## Ownership and authority
 
@@ -101,5 +102,5 @@ The owner does not need to test Bob or invoke AI for foundation work to proceed.
 - [Storage RLS](https://supabase.com/docs/guides/storage/security/access-control)
 - [Storage schema and API-only object deletion](https://supabase.com/docs/guides/storage/schema/design)
 
-See the implementation verification record for the applied migration and actual
-test/deployment results when available.
+See [the verification record](foundation-verification.md) for the applied migration
+and actual test/deployment results.

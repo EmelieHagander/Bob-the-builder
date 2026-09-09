@@ -294,7 +294,10 @@ project-switch proof uses fixture HTTP services, as recorded in the verification
 
 ## Slice 1 — Show bob the real project
 
-Selected in `Docs/function-scope.md`. **Status: planned; real media and task steps are not implemented.**
+Selected in `Docs/function-scope.md`. **Status: 1A real media and 1B manual
+illustrated task steps are implemented and deployed; 1C vision remains planned.**
+[Foundation verification](foundation-verification.md) records database, browser
+and live Storage evidence. Full Slice 1 is still open until its vision gate passes.
 
 **Goal:** persist a real current-state image and let bob reason about it in the correct authorised project.
 
@@ -305,18 +308,18 @@ The owner does not want to test Bob now. Implementer-run database/storage and
 browser verification remains required; an owner chat/vision trial is not a gate
 for continuing foundation work.
 
-1. **1A — Real project media.** Define the minimum media/storage/authority
+1. **1A — Real project media — deployed.** Define the minimum media/storage/authority
    contract, then implement image upload, durable metadata, project/area/task
    attachment and image read-back. Record purpose, source/actor and timestamps.
    File access must follow project membership. The existing public app-asset
    bucket alone does not satisfy this contract.
-2. **1B — Tasks with illustrated steps.** Add manually editable task instructions
+2. **1B — Tasks with illustrated steps — deployed.** Add manually editable task instructions
    and ordered steps, each with instruction text, completion state and optional
    images using the same media model. Support completion checks, distinguish
    instruction images from recorded evidence, and preserve everything after
    reload. A step belongs to one task in the same authorised project as its
    attachments. Keep the normal task card concise; expand detail on demand.
-3. **1C — Bob consumes the foundation.** Connect selected authorised project
+3. **1C — Bob consumes the foundation — planned.** Connect selected authorised project
    images to OpenAI vision after 1A and 1B. Preserve the existing assessment/fact
    boundary and produce a concrete request for missing evidence.
 

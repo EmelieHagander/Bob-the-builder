@@ -8,31 +8,40 @@
 > **Slice 0 release delta (2026-09-09):** project membership/RLS, explicit-project
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
-> backend and frontend are deployed; the audit below is the **historical pre-Slice-0
-> baseline**. Read the release delta and verification record before treating an old gap as current.
+> backend and frontend are deployed; the numbered audit below is the **historical
+> baseline before Slice 0 and milestones 1A/1B**. Read both release deltas and their
+> verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
-## Media and task foundation recheck — 2026-09-09
+## Media and task foundation release delta — 2026-09-09
 
-**Evidence:** current frontend/data-layer code and live Bob table/column and Storage
-bucket metadata. This is a capability check, not a successful upload test.
+**Status:** 1A and 1B are implemented, merged and deployed. The
+[verification record](foundation-verification.md) owns SQL/RLS tests, browser
+checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 
 | Foundation | Verified status |
 |---|---|
-| Storage infrastructure | A public `bob-assets` bucket and an empty `bob.asset` catalog exist. The catalog has no project/area/task/step relation. This does not establish authorised project-photo storage. |
-| Project/area photos | `area_reference_images` and the UI store/render labels and placeholder tiles. No app upload/file read-back path exists. |
-| Task details and ordered steps | Basic tasks exist; no durable instruction/step/checkpoint model exists in the live Bob schema or frontend task type. |
-| Images on tasks or steps | No task/step-media relation or rendering path exists. |
+| Private project images | **BUILT.** `bob-project-media`, `media_assets` and membership-guarded commands store JPEG/PNG/WebP originals up to 6 MiB, with purpose, actor, time and immutable file identity. Authenticated read-back, interrupted-upload recovery and retryable deletion are supported. Public app assets retain their separate role. |
+| Project/area photos | **BUILT.** Dashboard and Area images upload and display real project files. Originals open without cropping. Existing reference labels remain clearly labelled notes. |
+| Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
+| Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
+| Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
+| Full evidence/planning loop | **PARTIAL.** Real media and manual task guidance now exist. Measurements, component records, solution/drawing revisions, calculations and structured progress/as-built history retain their later gates. |
 
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
-prioritises these foundations before the next vision flow. They remain **gaps**,
-not shipped capabilities.
+prioritises persistent foundations before new AI consumers. No owner Bob trial
+was required to deliver these milestones.
 
 This inventory is deliberately stricter than a feature wishlist. A capability is only marked **BUILT** when the current runtime/data model materially supports the user goal. **PARTIAL** means useful pieces exist but an important part of the target journey is missing. **GAP** means the target capability has no meaningful current implementation.
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Executive summary
+## Historical audit — before Slice 0 and milestones 1A/1B
+
+The executive summary and numbered sections below preserve the original audit.
+They are not current claims where the release deltas above supersede them.
+
+### Executive summary
 
 ### Strongly built today
 

@@ -266,6 +266,11 @@ V0 does **not** need every construction type or every automation. It needs one c
 
 ## Slice 1: **Show bob the real project**
 
+**Delivery status (2026-09-09):** manual foundations 1A and 1B are deployed;
+[foundation verification](foundation-verification.md) owns the evidence. Image
+analysis is the later 1C gate, so this full slice remains open. The V1 plan owns
+the foundations-first delivery order.
+
 ### User goal
 
 > As a project owner, I can upload a real current-state photo to the project, return later and still see it, and Ask bob can reason about **that photo in the explicitly active project** and tell me one concrete piece of evidence/measurement it needs next without pretending its visual assessment is a measured fact.
@@ -405,13 +410,13 @@ These are ordering proposals, not commitments beyond Slice 1.
 
 # 16. Pre-build blockers for Slice 1
 
-Resolve before implementation begins:
+Track each blocker against its owning contract and delivery gate:
 
-- **BLOCKER-01 — media authority boundary:** define how MediaAsset proves project ownership/access and how storage paths/policies align with DB membership.
+- **BLOCKER-01 — media authority boundary:** resolved by the deployed private media contract in `Docs/media-and-steps.md`; DB relations and Storage policies enforce project membership.
 - **BLOCKER-02 — active project AI contract:** resolved by deployed Slice 0; reuse the explicit `projectId` and backend membership validation contract in `supabase/README.md` when adding media consumption.
-- **BLOCKER-03 — media provenance and attachment minimum:** define actor, purpose/type, created time, storage identity and same-project project/area/task/step relations. Define upload failure, replacement and deletion behavior before coding; the existing public app-asset bucket is not a private project-media contract.
+- **BLOCKER-03 — media provenance and attachment minimum:** resolved by `Docs/media-and-steps.md` and deployed 1A/1B. Server actor/time, immutable file identity, purpose, same-project attachments and upload/deletion recovery are implemented.
 - **BLOCKER-04 — truth language:** define how AI visual observations are represented/labeled so they cannot be mistaken for measured facts.
-- **BLOCKER-05 — verification:** add the minimum automated DB/RLS + browser proof required for upload, reload and denial.
+- **BLOCKER-05 — verification:** foundation DB/RLS, browser and live Storage checks pass as recorded in `Docs/foundation-verification.md`. Full vision-loop verification remains a 1C gate.
 
 Everything else above is **slice-gated** or **post-V0** and should not delay Slice 1.
 

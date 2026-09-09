@@ -101,10 +101,12 @@ future work and only touches this schema + `src/data/database.ts`.
 ## Image and task-step foundation
 
 [`Docs/media-and-steps.md`](../Docs/media-and-steps.md) owns the storage,
-attachment, provenance, lifecycle and manual-step contract. The additive
-`supabase/migrations/20260909210642_media_and_task_steps.sql` must be applied
-before deploying its frontend. A committed migration does not prove deployment;
-record the applied version and runtime evidence with the release.
+attachment, provenance, lifecycle and manual-step contract. The additive source
+`supabase/migrations/20260909210642_media_and_task_steps.sql` was applied before
+its frontend on 2026-09-09. The hosted history records the same migration as
+`20260909214606_bob_media_and_task_steps`; do not replay it under the authoring
+timestamp. [Verification and rollout](../Docs/foundation-verification.md) records
+the deployed private bucket, unchanged existing data and actual runtime evidence.
 
 Object upload and deletion use the Storage API. Keep the original bytes when
 detaching media or deleting an area/task/step. Delete project media explicitly

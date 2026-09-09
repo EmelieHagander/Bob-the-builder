@@ -29,10 +29,10 @@ Do not create another thesis/roadmap document for V1 unless this owner is intent
 
 ## FINDING-A03 — Major new media workflow needs one owning implementation contract
 
-**Status:** resolved for the 1A/1B contract; runtime verification remains a release gate
+**Status:** resolved; the 1A/1B contract and runtime verification are delivered
 
-`Docs/user-stories.md` defines the user-facing media roles (current-state photos, proposals/mockups, cut-through diagrams, drawings, progress/as-built photos and task guidance). `Docs/function-inventory.md` confirms that current runtime only stores reference-image labels/placeholders rather than real media. `Docs/function-scope.md` selects real authorised current-state media as the first vertical slice, and `Docs/v1-plan.md` makes that slice part of the V1 release gate.
+`Docs/user-stories.md` defines the user-facing media roles (current-state photos, proposals/mockups, cut-through diagrams, drawings, progress/as-built photos and task guidance). The original inventory found only reference-image labels/placeholders. Its 1A/1B release delta now records private project images and manual illustrated task steps. `Docs/function-scope.md` selects real authorised current-state media as the first vertical slice, and `Docs/v1-plan.md` makes that slice part of the V1 release gate.
 
 **Why it matters:** storage, provenance, project/area/task attachment, RLS and runtime consumption must be one coherent contract before implementation; otherwise the first defining new domain object can fork immediately.
 
-**Resolution:** `Docs/media-and-steps.md` now owns the minimum media/storage/authority/runtime contract and the manual illustrated steps brought forward by the owner's foundations-first decision. `Docs/index.md` and `db/README.md` route to it. It defines immutable private file identity, lifecycle recovery, same-project attachments, provenance, deletion behavior and runtime/read-back verification. Vision remains the later 1C gate in `Docs/v1-plan.md`; closing this documentation finding does not claim it has shipped.
+**Resolution:** `Docs/media-and-steps.md` owns the implemented media/storage/authority/runtime contract and manual illustrated steps brought forward by the owner's foundations-first decision. `Docs/index.md` and `db/README.md` route to it. It defines immutable private file identity, lifecycle recovery, same-project attachments, provenance and deletion behavior. `Docs/foundation-verification.md` records the applied migration, production deployment, SQL/RLS tests, browser checks and live Storage proof. Vision remains the later 1C gate in `Docs/v1-plan.md`; this finding does not claim vision has shipped.
