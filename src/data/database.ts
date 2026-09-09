@@ -25,6 +25,7 @@ import { relativeTime } from '../lib/format'
 import type { AnswerEvidence } from './provenance'
 import { createRequestScope } from '../lib/projectRequest'
 import { createProjectFiles } from './projectFiles'
+import { createProjectFacts } from './projectFacts'
 import * as mock from './mockData'
 import type {
   Account,
@@ -191,6 +192,11 @@ function captureFileContext(projectId: string) {
 }
 export const MEDIA_CHANGED_EVENT = 'bob:media-changed'
 const projectFiles = createProjectFiles(db, captureFileContext, () => window.dispatchEvent(new Event(MEDIA_CHANGED_EVENT)))
+const projectFacts = createProjectFacts(db, captureFileContext)
+export const getProjectFacts = projectFacts.list
+export const getProjectFact = projectFacts.get
+export const getProjectFactHistory = projectFacts.history
+export const editProjectFact = projectFacts.command
 export const getProjectImages = projectFiles.getMedia
 export const uploadProjectImage = projectFiles.uploadImage
 export const downloadProjectImage = projectFiles.downloadImage

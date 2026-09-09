@@ -84,6 +84,8 @@ become join tables:
 | `Task`, `.assigneeIds` | `bob.tasks`, `bob.task_assignees` |
 | `TaskDetail`, `TaskStep` | `bob.tasks.instructions`, `bob.task_steps` (milestones 1A/1B migration) |
 | `MediaAsset` and attachments | `bob.media_assets`, `bob.media_links`, private `bob-project-media` Storage bucket |
+| `Measurement` | `bob.measurements`, append-only `bob.measurement_revisions`, invoker `bob.current_measurements` |
+| `ExistingComponent` | `bob.existing_components`, append-only `bob.component_revisions`, invoker `bob.current_components` |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
@@ -114,6 +116,16 @@ before deleting a project that owns files. Do not convert the public app-asset
 bucket into project storage or delete Storage object metadata with SQL.
 
 ## Wiring the app to it
+
+### Manual project facts
+
+[`Docs/project-facts.md`](../Docs/project-facts.md) owns the measurement/component
+contract. Source migration
+`supabase/migrations/20260909221503_measurements_and_existing_components.sql`
+is additive and requires the deployed 1A/1B migration. Apply it before releasing
+the new frontend; deployment evidence is pending. Normal clients read under RLS
+and use `bob.evidence_command` for revisioned writes. Do not overwrite historical
+values or run these source files blindly against the shared migration registry.
 
 Already done — all data access goes through the single module
 [`src/data/database.ts`](../src/data/database.ts), which queries these tables

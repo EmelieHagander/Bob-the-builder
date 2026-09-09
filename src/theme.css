@@ -316,6 +316,7 @@ select {
   max-width: 470px;
   max-height: 90vh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   animation: fadeUp 0.2s ease both;
 }
@@ -333,7 +334,7 @@ select {
 .foundation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .foundation-heading h2, .foundation-heading h3 { margin: 0; font-size: 18px; }
 .foundation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.foundation-actions .btn, .task-detail .btn, .project-images .btn, .modal .btn { min-height: 44px; min-width: 44px; }
+.foundation-actions .btn, .task-detail .btn, .project-images .btn, .project-facts .btn, .modal .btn { min-height: 44px; min-width: 44px; }
 .foundation-form { display: flex; flex-direction: column; gap: 16px; }
 .foundation-form input[type='file'] { max-width: 100%; min-height: 44px; }
 .foundation-hint { font-size: 13px; line-height: 1.5; color: var(--ink-soft); margin: 8px 0; overflow-wrap: anywhere; }
@@ -626,4 +627,25 @@ select {
     padding: 0;
     max-width: none;
   }
+}
+/* Manual project facts reuse the existing cards, forms and mobile-safe actions. */
+.facts-entry { display: flex; align-items: center; gap: 14px; }
+.facts-entry > div { flex: 1; min-width: 0; }
+.project-facts .page-head { margin-top: 18px; }
+.fact-list, .fact-history { display: grid; gap: 14px; margin: 16px 0; padding: 0; list-style: none; }
+.fact-card { padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.fact-card h3, .fact-card h4 { margin-bottom: 8px; }
+.fact-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.fact-details { display: grid; gap: 10px; margin: 8px 0; font-size: 14px; }
+.fact-details p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fact-card summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-weight: 600; }
+.fact-filters, .fact-form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.fact-filters { margin-top: 16px; }
+.fact-tabs { margin-top: 20px; }
+.fact-fieldset { border: 0; min-width: 0; }
+.fact-checkbox { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.fact-checkbox input { width: 20px; height: 20px; accent-color: var(--brand); }
+.fact-source { display: grid; gap: 8px; padding: 12px; background: var(--surface-2); border-radius: var(--r-sm); }
+@media (max-width: 380px) {
+  .fact-filters, .fact-form-row { grid-template-columns: minmax(0, 1fr); }
 }

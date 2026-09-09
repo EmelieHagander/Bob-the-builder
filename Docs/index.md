@@ -17,6 +17,7 @@
 | documentation placement/precedence | `.claude/agents/archie.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
+| measurements, provenance history and existing components | `Docs/project-facts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -69,6 +70,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
 - `Docs/media-and-steps.md` — owning media and manual-step contract: private files, same-project attachments, lifecycle/recovery, task checks and runtime consumption for milestones 1A/1B.
 - `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
+- `Docs/project-facts.md` — owning manual measurement/component contract: truth states, exact length units, revision history, source images, authority and recovery for milestones 2A/2B.
+- `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 

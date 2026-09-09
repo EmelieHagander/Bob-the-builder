@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon } from './ui'
 
 export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -30,7 +31,9 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
     return () => { window.removeEventListener('keydown', onKey); if (previous?.isConnected) previous.focus() }
   }, [])
 
-  return (
+  // Page/parent animations create containing blocks and stacking contexts.
+  // A body portal keeps long and nested dialogs above the fixed mobile controls.
+  return createPortal(
     <div
       className="modal-overlay"
       onClick={(event) => {
@@ -46,6 +49,6 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
         </div>
         {children}
       </div>
-    </div>
+    </div>, document.body
   )
 }

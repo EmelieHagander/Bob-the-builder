@@ -340,6 +340,14 @@ does not by itself close this later vision gate.
 
 ## Slice 2 — Measure what matters
 
+**Manual foundation delivery (owner decision, 2026-09-09):** continue with 2A
+measurements/provenance/history and 2B existing components before adding the next
+AI consumer. The owner reaffirmed foundations first after 1A/1B. These manual
+milestones are independently useful and do not require the pending 1C vision gate.
+Implementation is in progress; [the project facts contract](project-facts.md) owns
+scope, relations, source-image behavior and verification. Full Slice 2 still
+requires Bob to consume the verified values; it is not closed by manual storage.
+
 **Goal:** turn bob's missing-evidence request into durable, provenance-aware project truth.
 
 Includes:

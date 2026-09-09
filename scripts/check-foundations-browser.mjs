@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { chromium } from 'playwright-core'
+import { createFactsFixture, verifyFactsBrowser } from './project-facts-browser.mjs'
 
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
@@ -31,6 +32,7 @@ try {
     let imageBytes, failUpload = false, slowDownload = null
     let clock = 0
     const timestamp = () => new Date(Date.UTC(2026, 8, 9, 12, 0, ++clock)).toISOString()
+    const facts = createFactsFixture(timestamp, assets)
     const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
     const area = { id: 'areaA', project_id: 'A', slug: 'entry', name: 'Entry', description: 'Entry work', icon: 'house', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: '', area_crew: [], area_reference_images: [{ label: 'Old reference note', sort_order: 1 }] }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
@@ -46,6 +48,7 @@ try {
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
       if (path.startsWith('/rest/') || path.startsWith('/storage/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
+      if (await facts.handle(request, url, respond)) return
       if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (path === '/rest/v1/projects') return respond({ json: projects })
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
@@ -213,6 +216,7 @@ try {
       assert(!box || (box.width >= 44 && box.height >= 44), 'Task/image actions need 44px targets')
     }
     await page.screenshot({ path: 'test-results/foundations-' + viewport.width + '.png', fullPage: true })
+    await verifyFactsBrowser(page, base, facts, viewport.width)
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
@@ -235,6 +239,10 @@ try {
     waiting.resolve()
     await page.getByRole('region', { name: 'Project images', exact: true }).getByText('No images here yet.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('img', { name: 'Entry before work', exact: true }).count(), 0)
+    await page.goto(base + '#/facts')
+    await page.getByText('No measurements in this selection. Add a known length or an unknown one to collect later.', { exact: true }).waitFor()
+    assert.equal(await page.getByRole('article', { name: 'Opening width', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('article', { name: 'Window width', exact: true }).count(), 0)
     assert.deepEqual(errors, [])
     console.log('Foundation UI upload/attach/original/steps/checks/reload/recovery/project-switch passed at ' + viewport.width + 'px; HTTP fixtures, no AI.')
     await context.close()
