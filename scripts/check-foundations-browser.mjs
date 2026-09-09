@@ -226,7 +226,7 @@ try {
     assert.equal(assets.size, 1); assert.equal(objects.size, 1)
     const waiting = delay()
     slowDownload = waiting
-    const request = page.waitForRequest(r => r.url().includes('/storage/v1/object/authenticated/'))
+    const request = page.waitForRequest(r => r.method() === 'GET' && r.url().includes('/storage/v1/object/'))
     await page.getByRole('button', { name: 'Open image: Entry before work', exact: true }).click()
     await request
     await page.getByRole('dialog', { name: 'Entry before work', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()

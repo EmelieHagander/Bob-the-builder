@@ -67,9 +67,10 @@ create table bob.media_links (
   unique (media_id, step_id)
 );
 create index media_links_project_idx on bob.media_links(project_id);
-create index media_links_area_idx on bob.media_links(area_id) where area_id is not null;
-create index media_links_task_idx on bob.media_links(task_id) where task_id is not null;
-create index media_links_step_idx on bob.media_links(step_id) where step_id is not null;
+create index media_links_asset_project_idx on bob.media_links(media_id, project_id);
+create index media_links_area_idx on bob.media_links(area_id);
+create index media_links_task_idx on bob.media_links(task_id);
+create index media_links_step_project_idx on bob.media_links(step_id, project_id);
 
 alter table bob.task_steps enable row level security;
 alter table bob.media_assets enable row level security;
