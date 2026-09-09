@@ -140,7 +140,7 @@ function FactEditor({ projectId, kind, record, areas, initialArea, component, on
         <Field label="Notes"><textarea style={inputStyle} rows={2} maxLength={4000} value={notes} onChange={e => setNotes(e.target.value)} /></Field>
         <div className="fact-source">
           <strong>Source image</strong>
-          <p className="foundation-hint">{sourceImage.title || 'No image selected'}</p>
+          <p className="foundation-hint">{sourceImage.id ? sourceImage.title : sourceImage.title ? 'Previous image removed: ' + sourceImage.title : 'No image selected'}</p>
           <div className="foundation-actions">
             <button type="button" className="btn" onClick={() => setChooseImage(true)}>Choose source image</button>
             {sourceImage.title && <button type="button" className="btn" onClick={() => setSourceImage({ id: null, title: '' })}>Clear image</button>}
