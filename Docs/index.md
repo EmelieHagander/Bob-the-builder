@@ -7,6 +7,7 @@
 | I need to understand… | Start with |
 |---|---|
 | what bob is / current app shape | `README.md` |
+| what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
@@ -19,13 +20,14 @@
 ## Product
 
 - `README.md` — current repository/app overview and implemented route/architecture summary.
+- `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop. It intentionally does not yet choose V0/next-slice priority.
 - `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
 - `Docs/Mockups and initial plans/bob-the-builder.html` — original visual/product mockup; use as historical composition reference, not runtime truth.
 
 ### Product-document status
 
-`Docs/user-stories.md` now owns current user-story wording. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days). A future product-thesis/V0 contract should build from the current stories rather than silently editing the historical PRD.
+`Docs/user-stories.md` owns **what users should be able to achieve**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days). A future product-thesis/V0 contract should build from the current stories + inventory rather than silently editing the historical PRD.
 
 ## UI / design
 
@@ -40,6 +42,7 @@
 
 Current collaboration behavior is primarily expressed in runtime code plus the current story contract:
 
+- `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
 - `src/pages/People.tsx` — crew, skills and dietary context.
 - `src/pages/Events.tsx` + `src/pages/EventDetail.tsx` — build-day planning and attendance.
@@ -84,10 +87,11 @@ When a new major journey moves toward implementation, give it one canonical succ
 When sources conflict, use this order:
 
 1. **Verified runtime behavior + current schema/code** for claims about what is built today.
-2. **Later explicit canonical decision** in the relevant owning contract.
-3. **Domain-specific current contract**, including `Docs/user-stories.md` for current user-goal intent.
-4. **Original PRD** for product intent not explicitly superseded.
-5. **Mockups/sample content** for visual or illustrative intent only.
+2. **`Docs/function-inventory.md`** as the maintained audit summary of that runtime.
+3. **Later explicit canonical decision** in the relevant owning contract.
+4. **Domain-specific current contract**, including `Docs/user-stories.md` for current user-goal intent.
+5. **Original PRD** for product intent not explicitly superseded.
+6. **Mockups/sample content** for visual or illustrative intent only.
 
 A runtime bug is not a new product decision: fix the bug against the owning contract. Conversely, do not preserve stale documentation merely because old code still happens to implement it.
 
