@@ -18,9 +18,15 @@
 
 ## 2026-09-09 — Browser verification is currently part of frontend proof
 
-**Lesson:** bob has build/typecheck but no automated browser test suite yet; `.claude/skills/verify/SKILL.md` defines the practical end-to-end verification flow.
+**Lesson:** bob now has automated production-frontend checks for install/PWA, project isolation and the manual foundations at 320, 390 and 1280px. These use HTTP fixtures; separate live API checks prove deployed Auth/PostgREST/Storage. `.claude/skills/verify/SKILL.md` owns the verification procedure and its evidence boundaries.
 
 **Rule:** for material UI behavior changes, a clean build is necessary but not sufficient. Drive the relevant runtime flow before calling it done.
+
+## 2026-09-09 — Shared fields and modals need real interaction proof
+
+**Lesson:** a wrapping label can include select-option text in the accessible name. A transformed page can trap a fixed modal below navigation and Ask bob, even with a high local z-index.
+
+**Rule:** shared `Field` explicitly labels native controls with its visible label. Shared `Modal` portals to the document body and contains scroll. Exercise long forms on narrow screens; wait for entrance animations to finish before measuring touch targets.
 
 ## 2026-09-09 — Collaboration is product structure, not decoration
 

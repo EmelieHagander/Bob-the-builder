@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B**. Read both release deltas and their
+> baseline before Slice 0 and milestones 1A/1B and 2A/2B**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -26,7 +26,24 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Real media and manual task guidance now exist. Measurements, component records, solution/drawing revisions, calculations and structured progress/as-built history retain their later gates. |
+| Full evidence/planning loop | **PARTIAL.** Real media and manual task guidance exist; measurements and existing parts are delivered in 2A/2B below. Solution/drawing revisions, calculations and structured progress/as-built history retain their later gates. |
+
+## Measurement and component foundation release delta — 2026-09-09
+
+**Status:** manual milestones 2A and 2B are implemented, merged and deployed in
+[PR 29](https://github.com/EmelieHagander/Bob-the-builder/pull/29). The
+[project facts contract](project-facts.md) owns behavior and the
+[verification record](foundation-verification.md) owns release evidence.
+
+| Foundation | Verified status |
+|---|---|
+| Manual length measurements | **BUILT.** Project/area records keep subject, decimal value, mm/cm/m, exact millimetre conversion and source. Measured, provided-spec, estimated and unknown remain distinct; unknown contains no numeric placeholder. |
+| Measurement provenance/history | **BUILT.** Server-attributed append-only revisions retain earlier values, sources, timestamps and change reasons. Revision checks reject stale writes. Archive/restore preserves history. |
+| Missing measurements | **PARTIAL.** A manual To measure list shows unknown/estimated records and whether they are required. Bob-generated requests and deliverable-specific checklists remain later scope. |
+| Existing parts | **BUILT.** Name, kind, nullable known count, condition, specification and inspect/reuse/remove/replace intent persist. Linked measurements hold dimensions in the same project/area. Reuse intent is not a suitability approval. |
+| Source images | **BUILT.** Measurements and parts reuse authorised project images and original viewing. Removing an image clears its file link while retaining its recorded title, values and history. |
+| Runtime consumption | **BUILT manually.** Dashboard/Area lead to a focused page with current records, paging, detail/history and reload persistence. Project changes reject old responses. Bob's lookup allowlist is unchanged. |
+| Stock and calculation integration | **GAP.** Parts are separate from shopping, but stock deduction, deterministic calculations and downstream artifact/task generation remain later gates. |
 
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
 prioritises persistent foundations before new AI consumers. No owner Bob trial
@@ -36,7 +53,7 @@ This inventory is deliberately stricter than a feature wishlist. A capability is
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B
+## Historical audit — before Slice 0 and milestones 1A/1B and 2A/2B
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.

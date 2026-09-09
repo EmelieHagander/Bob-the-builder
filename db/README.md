@@ -115,17 +115,23 @@ detaching media or deleting an area/task/step. Delete project media explicitly
 before deleting a project that owns files. Do not convert the public app-asset
 bucket into project storage or delete Storage object metadata with SQL.
 
-## Wiring the app to it
-
-### Manual project facts
+## Measurement and component foundation
 
 [`Docs/project-facts.md`](../Docs/project-facts.md) owns the measurement/component
 contract. Source migration
 `supabase/migrations/20260909221503_measurements_and_existing_components.sql`
-is additive and requires the deployed 1A/1B migration. Apply it before releasing
-the new frontend; deployment evidence is pending. Normal clients read under RLS
-and use `bob.evidence_command` for revisioned writes. Do not overwrite historical
-values or run these source files blindly against the shared migration registry.
+is additive and requires the deployed 1A/1B migration. It was applied before its
+frontend on 2026-09-09; the hosted registry records the same change as
+`20260909224644_bob_measurements_and_existing_components`. Do not replay it under
+the authoring timestamp or edit the applied migration. The
+[verification record](../Docs/foundation-verification.md) owns release evidence.
+
+Normal clients read the four new tables under RLS and their current-revision views
+with invoker authority, then use `bob.evidence_command` for revisioned writes.
+Historical values remain append-only. A removed source image clears the file link
+while preserving its recorded title and the measurement/component history.
+
+## Wiring the app to it
 
 Already done — all data access goes through the single module
 [`src/data/database.ts`](../src/data/database.ts), which queries these tables

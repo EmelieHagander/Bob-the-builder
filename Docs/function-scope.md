@@ -94,6 +94,12 @@ These are small in UI surface but shape the correctness of everything after them
 
 # 4. Measurements and existing conditions
 
+**Delivery status (2026-09-09):** manual length measurements, provenance/history,
+existing parts with linked dimensions, source images and a manual To measure list
+are deployed as 2A/2B. [Project facts](project-facts.md) owns the supported scope;
+[foundation verification](foundation-verification.md) owns evidence. Bob-generated
+requests, deliverable checklists, AI consumption and stock deduction remain later.
+
 | Function | Difficulty | Scope | Notes |
 |---|---:|---|---|
 | Store a measurement as numeric value + unit + subject | D3 | **V0-CORE** | Required for trustworthy downstream plans/calculations. |
@@ -384,9 +390,13 @@ Slice 1 is done only when:
 
 # 15. Proposed follow-on slices
 
-These are ordering proposals, not commitments beyond Slice 1.
+These preserve the original scope proposals. The V1 plan now owns delivery order;
+manual 2A/2B was brought forward under its foundations-first decision.
 
 ### Slice 2 — **Measure what matters**
+
+The manual 2A/2B records and history are deployed. The complete path below remains
+open until Bob requests and consumes the authorised measurements with provenance.
 
 `MediaAsset → missing measurement request → Measurement record with provenance → verified replacement of estimate → Bob sees the measurement.`
 

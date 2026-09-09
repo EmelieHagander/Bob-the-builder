@@ -344,9 +344,13 @@ does not by itself close this later vision gate.
 measurements/provenance/history and 2B existing components before adding the next
 AI consumer. The owner reaffirmed foundations first after 1A/1B. These manual
 milestones are independently useful and do not require the pending 1C vision gate.
-Implementation is in progress; [the project facts contract](project-facts.md) owns
-scope, relations, source-image behavior and verification. Full Slice 2 still
-requires Bob to consume the verified values; it is not closed by manual storage.
+**2A and 2B are implemented, merged and deployed.** The
+[project facts contract](project-facts.md) owns scope, relations and source-image
+behavior; [foundation verification](foundation-verification.md) records the
+release checks. Lengths, provenance, retained revisions, a manual To measure list,
+existing parts and their dimensions/source images are available from Dashboard
+and Area. Full Slice 2 still requires Bob to consume the verified values; it is
+not closed by manual storage. The 1C vision gate also remains planned.
 
 **Goal:** turn bob's missing-evidence request into durable, provenance-aware project truth.
 

@@ -1,7 +1,8 @@
 # Measurements and existing components
 
-**Status:** specified for manual foundation milestones 2A/2B; implementation and
-release checks are in progress. The V1 plan owns order and release scope.
+**Status:** manual foundation milestones 2A/2B are implemented, merged and deployed
+on 2026-09-09. [Foundation verification](foundation-verification.md) owns the
+release evidence and its limits. The V1 plan owns order and release scope.
 
 ## User goal and scope
 

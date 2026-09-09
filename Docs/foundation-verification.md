@@ -1,18 +1,77 @@
-# Milestones 1A/1B — verification and rollout
+# Foundation verification and rollout
 
-## Next manual foundation: 2A/2B (in progress)
+## Delivered measurements and existing components (2A/2B)
 
-The [project facts contract](project-facts.md) owns measurements, provenance and
-existing components. All 22 local tests pass, including eight new checks for exact
-length input, immutable history, project/parent authority, source-image deletion,
-stale writes, component archive/restore and delayed responses after project switching.
-TypeScript and Vite pass. Production browser and deployment checks are pending;
-this section does not yet claim the new foundation is released.
+**Status:** manual milestones 2A and 2B implemented, merged and deployed on
+2026-09-09. The [project facts contract](project-facts.md) owns behavior.
+[PR 29](https://github.com/EmelieHagander/Bob-the-builder/pull/29) merged as
+`6b3b3667050d82608abb982f9c8292204593bcbb`. Manual records are available from
+Dashboard/Area; Bob/vision consumers and full Slice 2 remain later gates.
 
-Source migration: `20260909221503_measurements_and_existing_components.sql`.
-The browser foundation harness now includes `scripts/project-facts-browser.mjs`;
-the live foundation harness includes `scripts/check-live-project-facts.mjs` in the
-same disposable project and cleanup process.
+### Automated evidence
+
+- All 22 tests pass locally and in
+  [CI 34414133902](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34414133902)
+  on feature head `5abc1f8b8c8a90e0af0d389b3c62cd95a283bfd5`.
+  Eight new tests cover decimal input, exact length conversion, unknown vs known
+  values, retained provenance/history, same-project parents and source images,
+  actor/raw-write denial, stale edits, archive/restore, deletion/revocation and
+  rejection of delayed writes after project switching. SQL/RLS checks execute the
+  actual new migration in PGlite/Postgres.
+- TypeScript/Vite, edge, PWA/install and existing Ask bob isolation checks pass.
+- `scripts/project-facts-browser.mjs` extends the existing foundation harness.
+  The production frontend and Supabase client pass at 320, 390 and 1280px against
+  HTTP fixtures: unknown → estimate → measured, exact units/source image, To measure
+  filtering, history, original viewing, reload, stale-save input recovery, existing
+  part creation/archive/restore, linked dimensions, paging and project switching.
+  Earlier upload/step flows also pass at all three widths. Screenshots are retained
+  as CI artifacts; this is automated browser evidence, not a manual device trial.
+- Browser findings fixed shared native-control labels, modals trapped below mobile
+  navigation by a transformed page, and unfinished-upload recovery in the source
+  picker. Geometry checks wait for page animations; pagination checks await the
+  changed rows. The 44px action-target requirement remains intact.
+
+### Deployed database and frontend
+
+Source migration:
+`supabase/migrations/20260909221503_measurements_and_existing_components.sql`.
+Applied before the frontend; hosted history records the same change as
+`20260909224644_bob_measurements_and_existing_components`. Do not replay the
+authoring timestamp or edit an already applied migration.
+
+All four new tables have RLS; both current-revision views use invoker authority.
+New relations have no security-advisor findings and no missing foreign-key indexes.
+Fresh unused-index notices are informational. Original task and membership row
+checksums match before deployment and after disposable-fixture cleanup.
+[Pages 34414587303](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34414587303)
+successfully deploys the merge.
+
+### Live Auth, PostgREST and Storage
+
+[Live foundation release check 34414587288](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34414587288)
+passes on the merge. `scripts/check-live-project-facts.mjs` runs inside the existing
+image/step check's single disposable project, using the ordinary guest Auth client.
+It proves three measurement revisions (unknown, 1.25 m estimate, 1254 mm measured),
+exact conversion, linked component dimensions, server attribution, stale/invalid
+write denial, component count/intent/archive/restore and denied real-project access.
+The full original-byte Storage and illustrated-step checks also pass. No AI is invoked.
+
+After Storage API removal, current records and all three measurement revisions
+have null file references while keeping the recorded image title and values/history.
+The log confirms complete API cleanup of image bytes, metadata and attachments.
+The operator then removed only the printed disposable project
+`p_cc2ce9f8ca25476e827bc19e8231a249`, matching nonce
+`0039ddaf-a938-4500-85f3-c1e1ce8f6e42`, its exact name/description, sole guest
+membership and absence of remaining images/objects. Related facts and revisions
+cascaded with that fixture. Storage metadata was not deleted with SQL.
+
+Final read-only checks find the original two projects, 36 tasks, two members,
+seven areas, 71 materials and five reference labels. No verification projects,
+image bytes/metadata/links, steps, measurements/components or revisions remain
+from the fixture. Full-row task checksum `704d5cd43312a57ef70d010fb6e34b41` and
+membership checksum `dd2453a80a1391f3b9b2286d4c262454` match preflight.
+Both use `md5(string_agg(to_jsonb(row)::text, '' order by id))`; this release's task
+checksum includes the instructions column already delivered by 1A/1B.
 
 ## Delivered image and step foundation (1A/1B)
 
@@ -28,7 +87,7 @@ completing the manual foundation does not close full Slice 1 or the V1 release.
 - Follow-up `fa363071709bbd03b6aeda766eccc32f31991d6c` repairs the PNG verification
   fixture's chunk CRC. It changes test data only, not application or database behavior.
 
-## Automated evidence
+### 1A/1B automated evidence
 
 - All 14 tests pass locally and in
   [CI 34408699848](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34408699848)
@@ -52,7 +111,7 @@ completing the manual foundation does not close full Slice 1 or the V1 release.
   now fans out one SDK subscription: mounting another view does not create a new
   initial-session event that incorrectly cancels a current project read.
 
-## Deployed database and frontend
+### 1A/1B deployed database and frontend
 
 Source migration: `supabase/migrations/20260909210642_media_and_task_steps.sql`.
 It was applied before the frontend. Hosted history records the same change as
@@ -72,7 +131,7 @@ timestamp or edit an already applied migration.
   and fixture follow-up
   ([34409586992](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34409586992)).
 
-## Live Auth, PostgREST and Storage
+### 1A/1B live Auth, PostgREST and Storage
 
 [Live foundation release check 34409586950](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34409586950)
 passes on `fa363071709bbd03b6aeda766eccc32f31991d6c`. A valid PNG was uploaded,
@@ -108,5 +167,7 @@ PGlite checks actual SQL/RLS but emulates Storage metadata rows; it is not an ob
 storage server. Browser checks use HTTP fixtures and cannot prove deployed Storage.
 The live API script provides that separate deployed-service proof. Do not describe
 fixture screenshots as a manual authenticated walkthrough on the owner's phone.
-No owner Bob/vision trial was required. Vision, generated guidance, measurements,
-solution/drawing revisions and full progress/as-built history remain later scope.
+No owner Bob/vision trial was required. Vision, AI consumption of the manual
+foundations, generated guidance, solution/drawing revisions, calculations and full
+progress/as-built history remain later scope. Manual 1A/1B and 2A/2B completion
+does not close full Slice 1, full Slice 2 or the V1 release.
