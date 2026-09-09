@@ -82,6 +82,8 @@ become join tables:
 | `Person`, `Person.skills` | `bob.people`, `bob.person_skills` |
 | `Area`, `.crewIds`, `.referenceImages` | `bob.areas`, `bob.area_crew`, `bob.area_reference_images` |
 | `Task`, `.assigneeIds` | `bob.tasks`, `bob.task_assignees` |
+| `TaskDetail`, `TaskStep` | `bob.tasks.instructions`, `bob.task_steps` (milestones 1A/1B migration) |
+| `MediaAsset` and attachments | `bob.media_assets`, `bob.media_links`, private `bob-project-media` Storage bucket |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
@@ -95,6 +97,19 @@ Display strings the UI consumes verbatim (`hours: '6h'`, `spots: '12 / 20'`,
 `cost: '1 920 kr'`, `day: 'Lör 5 juli'`) are stored as authored text for now,
 exactly like the mock data. Normalising them into numeric/date columns is
 future work and only touches this schema + `src/data/database.ts`.
+
+## Image and task-step foundation
+
+[`Docs/media-and-steps.md`](../Docs/media-and-steps.md) owns the storage,
+attachment, provenance, lifecycle and manual-step contract. The additive
+`supabase/migrations/20260909210642_media_and_task_steps.sql` must be applied
+before deploying its frontend. A committed migration does not prove deployment;
+record the applied version and runtime evidence with the release.
+
+Object upload and deletion use the Storage API. Keep the original bytes when
+detaching media or deleting an area/task/step. Delete project media explicitly
+before deleting a project that owns files. Do not convert the public app-asset
+bucket into project storage or delete Storage object metadata with SQL.
 
 ## Wiring the app to it
 

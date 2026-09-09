@@ -90,6 +90,43 @@ export interface Task {
   materials: string
 }
 
+export type MediaPurpose = 'current_state' | 'reference' | 'instruction' | 'proposal' | 'progress' | 'as_built'
+export type MediaTarget = { kind: 'project' | 'area' | 'task' | 'step'; id: string }
+export interface MediaAsset {
+  id: string
+  projectId: string
+  bucket: string
+  path: string
+  title: string
+  originalName: string
+  purpose: MediaPurpose
+  contentType: string
+  byteSize: number
+  width: number
+  height: number
+  state: 'pending' | 'ready' | 'deleting'
+  createdAt: string
+  links: { id: string; kind: 'area' | 'task' | 'step'; targetId: string }[]
+}
+export interface MediaPage { items: MediaAsset[]; hasMore: boolean }
+export interface TaskStep {
+  id: string
+  taskId: string
+  title: string
+  instructions: string
+  position: number
+  isCheckpoint: boolean
+  required: boolean
+  completedAt: string | null
+  revision: number
+}
+export interface TaskDetail {
+  task: Task
+  instructions: string
+  updatedAt: string
+  steps: TaskStep[]
+}
+
 export interface Material {
   id: string
   name: string

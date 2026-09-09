@@ -3,17 +3,32 @@
  * Ported from the Djuvanäs farm portal, restyled with bob's tokens.
  */
 
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from './ui'
 
-export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const dialog = useRef<HTMLDivElement>(null)
+  const close = useRef(onClose)
+  close.current = onClose
   useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const element = dialog.current
+    if (!element?.contains(document.activeElement)) element?.querySelector<HTMLElement>('input,textarea,select,button,a[href]')?.focus()
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      const dialogs = document.querySelectorAll('[role="dialog"]')
+      if (dialogs[dialogs.length - 1] !== element) return
+      if (event.key === 'Escape') { event.stopImmediatePropagation(); close.current() }
+      if (event.key === 'Tab') {
+        const targets = Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex="0"]') ?? [])
+          .filter(node => node.getClientRects().length > 0)
+        const first = targets[0], last = targets[targets.length - 1]
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+    return () => { window.removeEventListener('keydown', onKey); if (previous?.isConnected) previous.focus() }
+  }, [])
 
   return (
     <div
@@ -22,7 +37,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={dialog} className={'modal' + (wide ? ' modal-wide' : '')} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h3 style={{ fontSize: 19, margin: 0 }}>{title}</h3>
           <button type="button" className="btn" style={{ padding: '6px 9px' }} onClick={onClose} aria-label="Close">
