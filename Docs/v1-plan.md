@@ -294,11 +294,46 @@ project-switch proof uses fixture HTTP services, as recorded in the verification
 
 ## Slice 1 — Show bob the real project
 
-Already selected in `Docs/function-scope.md`.
+Selected in `Docs/function-scope.md`. **Status: planned; real media and task steps are not implemented.**
 
 **Goal:** persist a real current-state image and let bob reason about it in the correct authorised project.
 
-**Exit:** upload → reload/read-back → Ask bob vision → concrete missing evidence request, with assessment vs fact language preserved.
+### Delivery order — foundations first (owner decision, 2026-09-09)
+
+Build useful, persistent project structures before adding the next AI interaction.
+The owner does not want to test Bob now. Implementer-run database/storage and
+browser verification remains required; an owner chat/vision trial is not a gate
+for continuing foundation work.
+
+1. **1A — Real project media.** Define the minimum media/storage/authority
+   contract, then implement image upload, durable metadata, project/area/task
+   attachment and image read-back. Record purpose, source/actor and timestamps.
+   File access must follow project membership. The existing public app-asset
+   bucket alone does not satisfy this contract.
+2. **1B — Tasks with illustrated steps.** Add manually editable task instructions
+   and ordered steps, each with instruction text, completion state and optional
+   images using the same media model. Support completion checks, distinguish
+   instruction images from recorded evidence, and preserve everything after
+   reload. A step belongs to one task in the same authorised project as its
+   attachments. Keep the normal task card concise; expand detail on demand.
+3. **1C — Bob consumes the foundation.** Connect selected authorised project
+   images to OpenAI vision after 1A and 1B. Preserve the existing assessment/fact
+   boundary and produce a concrete request for missing evidence.
+
+**Foundation exit (1A + 1B):** create a task with ordered instructions, attach an
+image to a step, record completion, reload, and recover the same image, order and
+state; project switching and normal API access cannot expose another project's
+records/files. This must work without an AI call.
+
+These milestones are independently mergeable. Manual steps and their media
+attachment are brought forward from the task-guidance journey; generated guidance,
+solution-aware diagrams and the full progress/as-built workflow retain their
+later slice gates. Apply the same delivery rule to later domains: establish
+persisted manual records and relations before building AI consumers on them.
+
+**Full Slice 1 exit:** upload → reload/read-back → Ask bob vision → concrete missing
+evidence request, with assessment vs fact language preserved. Foundation completion
+does not by itself close this later vision gate.
 
 ## Slice 2 — Measure what matters
 

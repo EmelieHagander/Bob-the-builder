@@ -12,6 +12,22 @@
 > baseline**. Read the release delta and verification record before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
+## Media and task foundation recheck — 2026-09-09
+
+**Evidence:** current frontend/data-layer code and live Bob table/column and Storage
+bucket metadata. This is a capability check, not a successful upload test.
+
+| Foundation | Verified status |
+|---|---|
+| Storage infrastructure | A public `bob-assets` bucket and an empty `bob.asset` catalog exist. The catalog has no project/area/task/step relation. This does not establish authorised project-photo storage. |
+| Project/area photos | `area_reference_images` and the UI store/render labels and placeholder tiles. No app upload/file read-back path exists. |
+| Task details and ordered steps | Basic tasks exist; no durable instruction/step/checkpoint model exists in the live Bob schema or frontend task type. |
+| Images on tasks or steps | No task/step-media relation or rendering path exists. |
+
+The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
+prioritises these foundations before the next vision flow. They remain **gaps**,
+not shipped capabilities.
+
 This inventory is deliberately stricter than a feature wishlist. A capability is only marked **BUILT** when the current runtime/data model materially supports the user goal. **PARTIAL** means useful pieces exist but an important part of the target journey is missing. **GAP** means the target capability has no meaningful current implementation.
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
