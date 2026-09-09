@@ -723,16 +723,25 @@ export async function signOut(): Promise<void> {
   await db.auth.signOut()
 }
 
-/** Subscribe to sign-in/out; returns an unsubscribe function. */
+// One SDK observer for the lifetime of this client. Supabase sends INITIAL_SESSION
+// to each new SDK subscriber: mounting a sidebar must not invalidate an unrelated
+// task/image read that is already in flight for the same signed-in user.
+const authListeners = new Set<() => void>()
+let observingAuth = false
+/** Subscribe to actual shared auth events; returns an unsubscribe function. */
 export function onAuthChange(callback: () => void): () => void {
   if (!db) return () => {}
-  const { data } = db.auth.onAuthStateChange(() => {
-    claimedUser = null
-    contextVersion++
-    askScope.invalidate()
-    callback()
-  })
-  return () => data.subscription.unsubscribe()
+  authListeners.add(callback)
+  if (!observingAuth) {
+    observingAuth = true
+    db.auth.onAuthStateChange(() => {
+      claimedUser = null
+      contextVersion++
+      askScope.invalidate()
+      for (const listener of authListeners) listener()
+    })
+  }
+  return () => { authListeners.delete(callback) }
 }
 
 /** Resolve a list of person ids to people, preserving order. */
