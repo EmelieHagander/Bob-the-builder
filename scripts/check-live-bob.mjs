@@ -31,7 +31,7 @@ try {
   console.log(`BOB_SMOKE_PROJECT_ID=${project.id}`)
   const materialId = `m_${randomUUID()}`
   const name = `Verification bolt ${nonce}`
-  checked(await client.from('materials').insert({ id: materialId, project_id: project.id, name, qty: '37 pieces', status: 'missing' }))
+  checked(await client.from('materials').insert({ id: materialId, project_id: project.id, name, qty: '37 pieces', status: 'needed' }))
   assert.deepEqual(checked(await client.from('materials').select('id').eq('id', materialId)), [{ id: materialId }])
   const answer = checked(await client.functions.invoke('ask-bob', { body: {
     action: 'send', projectId: project.id,
