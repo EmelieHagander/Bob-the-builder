@@ -191,7 +191,7 @@ export interface OpenAIServiceResponse<T = unknown> {
       arguments: string;
     };
   }>;
-  estimatedCostUsd?: number;
+  estimatedCostUsd?: number | null;
 }
 
 function sanitizeJsonSchema(schema: Record<string, unknown>, strict: boolean = false): Record<string, unknown> {
@@ -1021,7 +1021,7 @@ async function logAIUsage(
     outputPricePer1m: number;
     success: boolean;
   }
-): void {
+): Promise<void> {
   const { error } = await aiClient.from('ai_usage_events').insert({
     app: params.app,
     user_id: params.userId || null,

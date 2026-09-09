@@ -31,15 +31,23 @@ export function Icon({
 /* ─────────────────────────── Data loading ─────────────────────────── */
 
 /** Run an async loader and track its result + loading state. */
-export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { data: T | null; loading: boolean } {
+export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { data: T | null; loading: boolean; error: Error | null } {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
   useEffect(() => {
     let alive = true
     setLoading(true)
+    setError(null)
     loader().then((value) => {
       if (alive) {
         setData(value)
+        setLoading(false)
+      }
+    }).catch((reason: unknown) => {
+      if (alive) {
+        setData(null)
+        setError(reason instanceof Error ? reason : new Error('Could not load data.'))
         setLoading(false)
       }
     })
@@ -48,7 +56,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { d
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
-  return { data, loading }
+  return { data, loading, error }
 }
 
 /**

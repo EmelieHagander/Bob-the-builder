@@ -196,7 +196,7 @@ function MobileNav() {
   )
 }
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } }) {
   const [bobOpen, setBobOpen] = useState(false)
 
   return (
@@ -233,7 +233,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </button>
 
       <MobileNav />
-      <AskBob open={bobOpen} onClose={() => setBobOpen(false)} />
+      <AskBob project={project} open={bobOpen} onClose={() => setBobOpen(false)} />
     </div>
   )
 }

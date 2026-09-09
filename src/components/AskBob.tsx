@@ -1,26 +1,20 @@
 /*
- * "Ask bob" — the assistant drawer. When the Launchpad seam is live
- * (supabase/README.md), a question goes to a real team of AI builders on
- * Launchpad: bob submits it, shows an honest working state while the run is
- * genuinely in flight, answers a mid-run follow-up question if the builders
- * ask one, and renders the result. Without the seam he falls back to the
- * scripted answer — the live "needs attention" feed — and says so.
+ * Project-bound assistant drawer. The direct backend can read allowed project
+ * records and suggest next steps; responses remain AI assessments. Layout
+ * remounts this drawer when project/auth context changes.
  */
 
 import { useEffect, useRef, useState } from 'react'
 import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
 import type { ChatMessage } from '../data/types'
+import { createRequestScope } from '../lib/projectRequest'
 
 const toneColor = {
   clay: { c: 'var(--clay)', bg: 'var(--clay-bg)' },
   honey: { c: '#9A6313', bg: 'var(--honey-bg)' },
   leaf: { c: 'var(--leaf)', bg: 'var(--leaf-bg)' },
 }
-
-/** How long bob keeps polling a run before calling it honestly lost (ms). */
-const RUN_PATIENCE = 4 * 60_000
-const POLL_EVERY = 4_000
 
 function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: string) => void }) {
   const isUser = msg.from === 'user'
@@ -34,6 +28,8 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
       <div
         style={{
           maxWidth: '80%',
+          minWidth: 0,
+          overflowWrap: 'anywhere',
           padding: '12px 15px',
           fontSize: 14.5,
           lineHeight: 1.5,
@@ -42,7 +38,19 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
             : { background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)' }),
         }}
       >
-        <div>{msg.text}</div>
+        {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
+        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+        {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
+          <summary>Project records consulted ({msg.evidence.sources.length})</summary>
+          <p>Stored project information; measurements and specifications are not verified.</p>
+          {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
+          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}>
+            <strong>{source.label}</strong> · {source.dataset}<br />
+            Record {source.recordId}<br />
+            Retrieved {new Date(source.retrievedAt).toLocaleString()}
+            {source.updatedAt ? ` · updated ${new Date(source.updatedAt).toLocaleString()}` : ' · update time unknown'}
+          </li>)}</ul>
+        </details>}
         {msg.report && (
           <div style={{ marginTop: 10, background: 'var(--canvas)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
             {msg.report}
@@ -76,7 +84,7 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
   )
 }
 
-/** Shown only while a Launchpad run is genuinely in flight. */
+/** Shown only while a question is genuinely in flight. */
 function WorkingBubble() {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -85,124 +93,43 @@ function WorkingBubble() {
       </span>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)', padding: '12px 15px', fontSize: 13.5, color: 'var(--ink-soft)', display: 'flex', gap: 8, alignItems: 'center' }}>
         <Icon name="hammer" weight="fill" size={15} color="var(--honey)" />
-        <span>The builders are on it — this can take a minute or two…</span>
+        <span>Bob is checking the project…</span>
       </div>
     </div>
   )
 }
 
-export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { data: chat } = useAsync(() => db.getAskBobChat(), [])
-  const { data: chips } = useAsync(() => db.getAskBobChips(), [])
+export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
+  const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
   const [extra, setExtra] = useState<ChatMessage[]>([])
   const [working, setWorking] = useState(false)
-  // A mid-run question from the builders: the next send answers it.
-  const [pendingQuestion, setPendingQuestion] = useState<{ taskId: string; questionId: string } | null>(null)
-  const alive = useRef(true)
+  const scope = useRef(createRequestScope())
+  useEffect(() => () => scope.current.invalidate(), [project.id])
 
-  useEffect(() => {
-    alive.current = true
-    return () => {
-      alive.current = false
-    }
-  }, [])
-
-  const push = (...msgs: ChatMessage[]) => {
-    if (alive.current) setExtra((list) => [...list, ...msgs])
-  }
-
-  /** The pre-Launchpad behavior: answer honestly with the live attention feed. */
-  const scriptedAnswer = async (lead: string) => {
-    const attention = await db.getAttention()
-    push(
-      attention.length > 0
-        ? { from: 'bob', text: `${lead} — but here's what I'd flag on the build right now:`, list: attention.map((a) => ({ icon: a.icon, tone: a.tone, text: a.text })) }
-        : { from: 'bob', text: `${lead} — but nothing needs attention right now. The build looks tidy.` },
-    )
-  }
-
-  /** Poll one Launchpad run to its end and render what actually happened. */
-  const followRun = async (taskId: string) => {
-    setWorking(true)
-    const deadline = Date.now() + RUN_PATIENCE
-    try {
-      while (alive.current && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, POLL_EVERY))
-        const update = await db.getBuildersUpdate(taskId)
-        if (!alive.current) return
-
-        if (update.status === 'completed') {
-          push({ from: 'bob', text: update.summary || 'The builders are done.', report: update.report })
-          return
-        }
-        if (update.status === 'input-required' && update.question) {
-          setPendingQuestion({ taskId, questionId: update.question.id })
-          push({
-            from: 'bob',
-            text: `The builders have a question before they go on: ${update.question.text}`,
-            note: 'Reply below to answer them — the run continues once you do.',
-          })
-          return
-        }
-        if (update.status === 'failed') {
-          await scriptedAnswer("The builders couldn't finish that one")
-          return
-        }
-        // still working — keep polling
-      }
-      if (alive.current) {
-        await scriptedAnswer('That took longer than I was willing to keep you waiting')
-      }
-    } finally {
-      if (alive.current) setWorking(false)
-    }
-  }
+  const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
   const send = async () => {
     const text = draft.trim()
     if (!text || working) return
+    const isCurrent = scope.current.capture()
     setDraft('')
     push({ from: 'user', text })
-
-    // Mid-run answer to the builders' question?
-    if (pendingQuestion) {
-      const { taskId, questionId } = pendingQuestion
-      setPendingQuestion(null)
-      setWorking(true)
-      const ok = await db.answerBuilders(taskId, questionId, text)
-      if (!alive.current) return
-      if (ok) {
-        await followRun(taskId)
-      } else {
-        setWorking(false)
-        await scriptedAnswer("I couldn't get your answer through to the builders")
-      }
-      return
-    }
-
-    // Fresh question → hand it to whichever AI backend is live.
     setWorking(true)
-    const result = await db.askBuilders(text)
-    if (!alive.current) return
-    if ('taskId' in result) {
-      await followRun(result.taskId)
-    } else if ('answer' in result) {
-      // The synchronous backend already finished — render it, don't poll a
-      // task that was never created.
-      setWorking(false)
-      push({ from: 'bob', text: result.answer })
-    } else {
-      setWorking(false)
-      // No live seam (mock mode / not configured / signed out) keeps the
-      // original honest script; a real failure says a builder-flavored truth.
-      await scriptedAnswer(
-        result.unavailable === 'not_configured'
-          ? "I can't hold a real conversation yet"
-          : result.unavailable === 'unauthorized'
-            ? 'Sign in first so I know who I’m building with — I couldn’t send that'
-            : "I couldn't reach the builders just now",
-      )
+    const result = await db.askBob(project.id, text)
+    if (!isCurrent()) return
+    setWorking(false)
+    if ('answer' in result) {
+      push({ from: 'bob', text: result.answer, evidence: result.evidence })
+    } else if (result.unavailable !== 'project_changed') {
+      const message = result.unavailable === 'not_configured'
+        ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
+        : result.unavailable === 'unauthorized'
+          ? 'Please sign in again before asking about this project.'
+          : result.unavailable === 'project_denied'
+            ? 'I could not access this project. Your membership may have changed.'
+            : 'I could not retrieve an answer for this project. Please try again.'
+      push({ from: 'bob', text: message })
     }
   }
 
@@ -215,6 +142,7 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
     <div className="no-print" style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside
+        aria-label={`Ask bob for ${project.name}`}
         style={{
           position: 'absolute',
           top: 0,
@@ -233,17 +161,17 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" />
           </span>
-          <div style={{ flex: 1, lineHeight: 1.2 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
             <div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div>
-            <div style={{ fontSize: 12, color: '#ffffffaa' }}>He keeps the whole build in his head.</div>
+            <div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div>
           </div>
-          <button onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}>
+          <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}>
             <Icon name="x" size={16} />
           </button>
         </header>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {chat?.map((m, i) => <Bubble key={i} msg={m} onAction={handleAction} />)}
+          <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}. I can read project records and suggest next steps.` }} />
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} />)}
           {working && <WorkingBubble />}
         </div>
@@ -270,10 +198,12 @@ export function AskBob({ open, onClose }: { open: boolean; onClose: () => void }
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={pendingQuestion ? 'Answer the builders…' : 'Ask bob anything about the build…'}
-            style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }}
+            aria-label="Question for bob"
+            maxLength={4096}
+            placeholder="Ask bob about this project…"
+            style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }}
           />
-          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working} style={working ? { opacity: 0.55 } : undefined}>
+          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working} style={{ minWidth: 44, minHeight: 44, ...(working ? { opacity: 0.55 } : {}) }}>
             <Icon name="paper-plane-right" weight="fill" size={16} />
           </button>
         </form>

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import * as db from '../data/database'
 import type { ThemeName } from '../data/types'
-import { Icon } from '../components/ui'
+import { Icon, useAsync } from '../components/ui'
 import { Field, FormError, inputStyle } from '../components/form'
 
 const THEMES: { name: ThemeName; label: string }[] = [
@@ -11,11 +11,11 @@ const THEMES: { name: ThemeName; label: string }[] = [
 ]
 
 /**
- * Shown when the database has no project yet (fresh install, or right after
- * removing the demo data). Creating one is only possible while the database
- * is empty — see db/migrations/0004.
+ * Choose an accessible project after a stale selection, or create a new
+ * project with atomic creator membership.
  */
 export function StartProject({ onCreated }: { onCreated: () => void }) {
+  const { data: projects } = useAsync(() => db.getProjects(), [])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
@@ -55,10 +55,17 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
           <div>
             <h1 style={{ fontSize: 22, margin: 0 }}>Welcome to bob</h1>
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '2px 0 0' }}>
-              No project here yet — let's start yours.
+              Choose a project you belong to, or start a new one.
             </p>
           </div>
         </div>
+
+        {projects && projects.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+          {projects.map(project => <button key={project.id} className="btn" onClick={() => {
+            db.setActiveProject(project.id)
+            onCreated()
+          }}>{project.name}</button>)}
+        </div>}
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 20 }}>
           <Field label="Project name *">

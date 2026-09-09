@@ -46,7 +46,7 @@ A difficult feature can still be `V0-CORE`; the answer is a **narrow honest impl
 | Basic day-of task surface | D2 | **BASE** | Keep lightweight; enrich progressively. |
 | Project announcements | D2 | **BASE** | Intentionally not a chat product. |
 | Meal planning + diet/allergy matrix + food shopping | D2-D3 | **BASE** | Preserve; deeper automation is later. |
-| Ask bob UI + OpenAI/Launchpad seam | D4 | **BASE** | Important existing AI foundation; context correctness must be fixed. |
+| Ask bob UI + OpenAI seam | D4 | **BASE** | Existing AI foundation; provider decision and project context are owned by `supabase/README.md`. |
 | Live Supabase + mock mode | D3 | **BASE** | Preserve single `database.ts` app-facing seam. |
 | Responsive shell + print behavior | D2 | **BASE** | Vera remains owner of UI consistency. |
 

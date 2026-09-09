@@ -28,7 +28,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/shopping` | Materials shopping list, grouped by category (checkable, printable) |
 | `/announcements` | Announcement board |
 | `/today` | Day-of "what needs doing today" view |
-| — | **Ask bob** assistant drawer (floating button on every screen). With the Launchpad seam configured (see `supabase/README.md`) questions go to a real team of AI builders on the Launchpad platform; otherwise, with an OpenAI key set, bob answers directly from a live briefing of the project; with neither, his honest scripted feed |
+| — | **Ask bob** assistant drawer. Slice 0 binds OpenAI and read-only lookups to the active authorised project, with source disclosure. OpenAI is Bob's permanent AI integration. [Setup](supabase/README.md) · [verification and rollout gates](Docs/slice-0-verification.md) |
 
 ## Running it
 
@@ -149,7 +149,7 @@ src/
 │   └── database.ts       ◄ the single data-access layer
 ├── components/
 │   ├── Layout.tsx        sidebar, mobile nav, Ask bob button
-│   ├── AskBob.tsx        assistant drawer (Launchpad builders when live)
+│   ├── AskBob.tsx        project-bound assistant drawer and consulted sources
 │   └── ui.tsx            shared primitives (pills, rings, avatars, etc.)
 └── pages/                one file per screen
 ```

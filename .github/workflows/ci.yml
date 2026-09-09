@@ -14,6 +14,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm test
+      - run: node --check scripts/check-live-bob.mjs
+      - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
       - run: npm run build
@@ -27,6 +30,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: installation-test-only
       - name: Verify public installation before login
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
+      - name: Verify Ask bob project isolation and mobile source disclosure
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
       - uses: actions/upload-artifact@v4
         if: always()
         with:

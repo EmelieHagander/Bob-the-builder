@@ -22,6 +22,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { relativeTime } from '../lib/format'
+import type { AnswerEvidence } from './provenance'
+import { createRequestScope } from '../lib/projectRequest'
 import * as mock from './mockData'
 import type {
   Account,
@@ -174,8 +176,12 @@ type TodayTaskRow = {
 
 const ACTIVE_PROJECT_KEY = 'bob:active-project'
 export const PROJECT_CHANGED_EVENT = 'bob:project-changed'
+let activeProjectMemory: string | null | undefined
+let contextVersion = 0
+const askScope = createRequestScope()
 
 export function getActiveProjectId(): string | null {
+  if (activeProjectMemory !== undefined) return activeProjectMemory
   try {
     return localStorage.getItem(ACTIVE_PROJECT_KEY)
   } catch {
@@ -184,6 +190,9 @@ export function getActiveProjectId(): string | null {
 }
 
 export function setActiveProject(id: string): void {
+  activeProjectMemory = id
+  contextVersion++
+  askScope.invalidate()
   try {
     localStorage.setItem(ACTIVE_PROJECT_KEY, id)
   } catch {
@@ -247,6 +256,14 @@ function mapProject(row: ProjectRow): Project {
 /** Every project on the account — the account dashboard and calendar feed. */
 export async function getProjects(): Promise<Project[]> {
   if (!db) return read(mock.projects)
+  const { data } = await db.auth.getSession()
+  if (!data.session) return []
+  const uid = data.session.user.id
+  if (claimedUser !== uid) {
+    const { error } = await db.rpc('claim_project_invites')
+    if (error) throw new Error('Could not check your project invitations. Please try again.')
+    claimedUser = uid
+  }
   const rows = unwrap<ProjectRow[]>(await db.from('projects').select(PROJECT_COLS).order('created_at'))
   return rows.map(mapProject)
 }
@@ -255,7 +272,15 @@ export async function getProjects(): Promise<Project[]> {
 export async function getProject(): Promise<Project | null> {
   const projects = await getProjects()
   const activeId = getActiveProjectId()
-  return projects.find((p) => p.id === activeId) ?? projects[0] ?? null
+  if (activeId) return projects.find((p) => p.id === activeId) ?? null
+  const first = projects[0] ?? null
+  if (first) {
+    // Initial selection is visible in the UI. An invalid stored selection never
+    // silently falls back to another project (the gate asks the user to choose).
+    activeProjectMemory = first.id
+    try { localStorage.setItem(ACTIVE_PROJECT_KEY, first.id) } catch { /* memory suffices */ }
+  }
+  return first
 }
 
 export interface NewProject {
@@ -271,10 +296,8 @@ export interface NewProject {
 }
 
 /**
- * Create a project. In live mode this needs a signed-in member — see the
- * RLS policies in db/migrations/0006 (the 0004 bootstrap keeps the FIRST
- * project open while the database is empty). In mock mode the project
- * lives in memory until the page reloads.
+ * Create a project and creator membership in one guarded server transaction.
+ * In mock mode the project lives in memory until the page reloads.
  */
 export async function createProject(input: NewProject): Promise<Project> {
   const slug = slugify(input.name, 'project')
@@ -298,11 +321,7 @@ export async function createProject(input: NewProject): Promise<Project> {
     return read(project)
   }
   const row = unwrap<ProjectRow>(
-    await db
-      .from('projects')
-      .insert({
-        id: `p_${slug}`,
-        slug,
+    await db.rpc('create_project', { p_input: {
         name: input.name,
         description: input.description,
         location: input.location,
@@ -311,9 +330,7 @@ export async function createProject(input: NewProject): Promise<Project> {
         start_label: input.startLabel,
         start_date: input.startDate ?? null,
         end_date: input.endDate ?? null,
-      })
-      .select(PROJECT_COLS)
-      .single(),
+      } }),
   )
   return mapProject(row)
 }
@@ -553,9 +570,9 @@ export async function deletePerson(id: string): Promise<void> {
 }
 
 /* ─────────────────────────── AUTH / CURRENT USER ───────────────────────────
- * Live mode: Supabase Auth (magic link or password). Signing in calls
- * bob.join_project() server-side, which claims the invited person matching
- * the email — or creates a fresh Volunteer profile. Mock mode: no auth, the
+ * Live mode: Supabase Auth (magic link or password), confirmed invitations and
+ * an explicit per-project member row. Unknown accounts do not auto-join.
+ * Mock mode: no auth, the
  * first organiser plays "you", exactly as before.
  * ──────────────────────────────────────────────────────────────────────── */
 
@@ -564,8 +581,7 @@ export function authEnabled(): boolean {
   return db !== null
 }
 
-let sessionPerson: Person | null = null
-let joinInFlight: Promise<Person | null> | null = null
+let claimedUser: string | null = null
 
 /** Who is using the app: the signed-in member, or null when signed out. */
 export async function getCurrentUser(): Promise<Person | null> {
@@ -577,25 +593,16 @@ export async function getCurrentUser(): Promise<Person | null> {
   const client = db
   const { data } = await client.auth.getSession()
   if (!data.session) return null
-  if (sessionPerson) return sessionPerson
-  // Several components ask "who am I" at once right after sign-in — share a
-  // single join_project call instead of racing parallel first-joins.
-  joinInFlight ??= (async () => {
-    const res = await client.rpc('join_project')
-    if (res.error) throw new Error(`database: ${res.error.message}`)
-    const row = res.data as { id: string; name: string; initials: string; color: string; role: string; diet: string }
-    // Re-read through getPeople so skills come along and shapes stay identical.
-    // getPeople is scoped to the ACTIVE project; when the member's person row
-    // lives in another project, fall back to the row join_project returned so
-    // the signed-in identity stays visible across the account.
-    sessionPerson =
-      (await getPerson(row.id)) ??
-      { id: row.id, name: row.name, initials: row.initials, color: row.color, role: row.role, diet: row.diet, skills: [] }
-    return sessionPerson
-  })().finally(() => {
-    joinInFlight = null
-  })
-  return joinInFlight
+  const version = contextVersion
+  const projectId = await activeProjectId()
+  if (!projectId || version !== contextVersion) return null
+  const { data: row, error } = await client.from('people')
+    .select('id, name, initials, color, role, diet, person_skills(name, level)')
+    .eq('project_id', projectId).eq('auth_user_id', data.session.user.id).maybeSingle()
+  if (error) throw new Error('Could not load your project membership.')
+  if (!row || version !== contextVersion) return null
+  return { id: row.id, name: row.name, initials: row.initials, color: row.color,
+    role: row.role, diet: row.diet, skills: row.person_skills as Skill[] }
 }
 
 /** Sends the sign-in link. The link returns to the app, which finishes the session. */
@@ -684,7 +691,9 @@ export async function signUpWithPassword(email: string, password: string): Promi
 
 export async function signOut(): Promise<void> {
   if (!db) return
-  sessionPerson = null
+  claimedUser = null
+  contextVersion++
+  askScope.invalidate()
   await db.auth.signOut()
 }
 
@@ -692,7 +701,9 @@ export async function signOut(): Promise<void> {
 export function onAuthChange(callback: () => void): () => void {
   if (!db) return () => {}
   const { data } = db.auth.onAuthStateChange(() => {
-    sessionPerson = null
+    claimedUser = null
+    contextVersion++
+    askScope.invalidate()
     callback()
   })
   return () => data.subscription.unsubscribe()
@@ -1781,91 +1792,46 @@ export function getAskBobChips(): Promise<string[]> {
   return Promise.resolve(["What's blocking us?", 'Who has signed up?', 'What still needs buying?', 'Draft an announcement'])
 }
 
-/* ─────────────────────────── ASK BOB × LAUNCHPAD ───────────────────────────
- * bob's real brain lives on Launchpad: the `ask-launchpad` edge function
- * (supabase/README.md) forwards a question to a team of AI builders running
- * on Launchpad's platform and bob relays the answer. The contract is async
- * and info-only — send a question, poll the task, maybe answer a follow-up
- * question mid-run. When the seam isn't configured (or in mock mode) these
- * return `unavailable`, and the drawer falls back to the scripted feed.
- * ──────────────────────────────────────────────────────────────────────── */
-
-export interface BuildersQuestion {
-  id: string
-  text: string
-  options?: string[]
-}
-
-export interface BuildersUpdate {
-  status: 'working' | 'input-required' | 'completed' | 'failed'
-  summary?: string
-  report?: string
-  question?: BuildersQuestion
-  errorCode?: string
-}
-
-type BuildersSeamResponse = {
+/* Ask bob captures project and scope generation before starting a request. */
+type AskBobResponse = {
   ok: boolean
   error?: string
-  taskId?: string
-  status?: BuildersUpdate['status']
+  projectId?: string
+  status?: string
   summary?: string
-  report?: string
-  question?: { id?: string; text?: string; options?: string[] }
-  errorCode?: string
+  evidence?: AnswerEvidence
 }
 
-async function callBuildersSeam(body: Record<string, unknown>): Promise<BuildersSeamResponse> {
+async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {
   if (!db) return { ok: false, error: 'not_configured' }
   try {
-    const { data, error } = await db.functions.invoke('ask-launchpad', { body })
-    if (error || !data) return { ok: false, error: 'seam_unreachable' }
-    return data as BuildersSeamResponse
-  } catch {
-    return { ok: false, error: 'seam_unreachable' }
+    const { data, error } = await db.functions.invoke('ask-bob', { body })
+    if (error) {
+      // Preserve the auth/denial distinction from non-2xx function responses.
+      const response = (error as { context?: Response }).context
+      if (response instanceof Response) {
+        if (response.status === 401) return { ok: false, error: 'unauthorized' }
+        if (response.status === 403) return { ok: false, error: 'project_denied' }
+      }
+      return { ok: false, error: 'seam_unreachable' }
+    }
+    return data ?? { ok: false, error: 'seam_unreachable' }
+  } catch { return { ok: false, error: 'seam_unreachable' } }
+}
+
+export async function askBob(
+  projectId: string, message: string,
+): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string }> {
+  const isCurrent = askScope.capture()
+  if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
+  const res = await callAskBob({ action: 'send', projectId, message })
+  if (!isCurrent() || projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
+  if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
+  if (res.ok && res.status === 'completed' && res.summary && res.evidence?.kind === 'ai_assessment'
+    && Array.isArray(res.evidence.sources) && res.evidence.sources.every(s => s.projectId === projectId)) {
+    return { answer: res.summary, evidence: res.evidence }
   }
-}
-
-/**
- * Hand a question to whichever AI backend is live. Resolves to one of three
- * things, because the two backends genuinely differ:
- *
- *   { taskId }     Launchpad accepted it — a run is in flight, poll it.
- *   { answer }     OpenAI answered outright; there is nothing to poll.
- *   { unavailable} no live seam (mock mode, not configured, signed out, or
- *                  the backend failed) — the caller falls back to the
- *                  scripted answer and never fakes one.
- */
-export async function askBuilders(
-  message: string,
-): Promise<{ taskId: string } | { answer: string } | { unavailable: string }> {
-  const res = await callBuildersSeam({ action: 'send', message })
-  if (res.ok && res.taskId) return { taskId: res.taskId }
-  // The synchronous backend returns the finished answer on the send itself.
-  if (res.ok && res.status === 'completed' && res.summary) return { answer: res.summary }
-  return { unavailable: res.error ?? 'gateway_error' }
-}
-
-/** One poll of a running builders task. */
-export async function getBuildersUpdate(taskId: string): Promise<BuildersUpdate> {
-  const res = await callBuildersSeam({ action: 'status', taskId })
-  if (!res.ok || !res.status) return { status: 'failed', errorCode: res.error ?? 'gateway_error' }
-  return {
-    status: res.status,
-    summary: res.summary,
-    report: res.report,
-    question:
-      res.question?.id && res.question?.text
-        ? { id: res.question.id, text: res.question.text, options: res.question.options }
-        : undefined,
-    errorCode: res.errorCode,
-  }
-}
-
-/** Answer a mid-run question from the builders; the task then resumes. */
-export async function answerBuilders(taskId: string, questionId: string, answer: string): Promise<boolean> {
-  const res = await callBuildersSeam({ action: 'reply', taskId, questionId, answer })
-  return res.ok
+  return { unavailable: res.error ?? 'unsupported_response' }
 }
 
 /* ─────────────────────────── DERIVED / DASHBOARD ───────────────────────────

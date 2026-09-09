@@ -40,7 +40,7 @@ function ProjectApp() {
   const projectVersion = useProjectVersion()
   const authTick = useAuthTick()
   const [bootVersion, setBootVersion] = useState(0)
-  const { data: project, loading } = useAsync(() => db.getProject(), [projectVersion, bootVersion])
+  const { data: project, loading, error } = useAsync(() => db.getProject(), [projectVersion, bootVersion, authTick])
   const { data: signedIn, loading: sessionLoading } = useAsync(() => db.hasSession(), [authTick])
 
   useEffect(() => {
@@ -72,6 +72,10 @@ function ProjectApp() {
   if (db.authEnabled() && !signedIn) {
     return <SignIn />
   }
+  if (error) return <div className="card" role="alert" style={{ margin: 32, padding: 24 }}>
+    <p>Could not load your project. Your access may have changed.</p>
+    <button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
+  </div>
 
   // Fresh install (or demo data just removed): no project in the database yet.
   if (!project) {
@@ -79,7 +83,7 @@ function ProjectApp() {
   }
 
   return (
-    <Layout>
+    <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project}>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/account" element={<AccountDashboard />} />
