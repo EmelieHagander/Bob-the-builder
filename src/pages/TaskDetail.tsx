@@ -100,7 +100,7 @@ export function TaskDetail() {
     </div>
     {!editable && <p className="foundation-hint">This demo shows the task layout. Saved instructions, steps and images are available in connected projects.</p>}
     {error && <div role="alert"><FormError>{error}</FormError><button className="btn" onClick={reload}>Reload task</button></div>}
-    <div className="task-state"><Field label="Task status"><select style={inputStyle} value={task.status} disabled={busy || loading}
+    <div className="task-state"><Field label="Task status"><select aria-label="Task status" style={inputStyle} value={task.status} disabled={busy || loading}
       onChange={e => void act(() => db.setTaskStatus(task.id, e.target.value as TaskStatus))}>
       <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
     </select></Field></div>

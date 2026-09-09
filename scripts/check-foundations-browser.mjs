@@ -9,7 +9,7 @@ import { chromium } from 'playwright-core'
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
-let logs = '', browser
+let logs = '', browser, activePage
 server.stdout.on('data', data => { logs += data })
 server.stderr.on('data', data => { logs += data })
 const projects = ['A', 'B'].map(id => ({ id, slug: id.toLowerCase(), name: 'Porch ' + id, description: '', location: '', type: 'Renovation', theme: 'birch', start_label: '', start_date: null, end_date: null }))
@@ -137,6 +137,7 @@ try {
       return respond({ status: 500, json: { message: 'Unexpected fixture request' } })
     })
     const page = await context.newPage()
+    activePage = page
     page.setDefaultTimeout(15000)
     page.on('pageerror', error => errors.push(error.message))
     await page.goto(base + '#/signin')
@@ -196,7 +197,9 @@ try {
     await chooser.getByRole('button', { name: 'Use image', exact: true }).click()
     await chooser.waitFor({ state: 'hidden' })
     await work.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
+    const statusSaved = page.waitForResponse(response => response.url().includes('/rest/v1/tasks?') && response.request().method() === 'PATCH')
     await page.getByLabel('Task status', { exact: true }).selectOption('done')
+    await statusSaved
     await page.reload()
     await page.getByText('Keep the original opening visible until the checks are complete.', { exact: true }).waitFor()
     assert.equal(await page.getByLabel('Task status', { exact: true }).inputValue(), 'done')
@@ -236,4 +239,10 @@ try {
     console.log('Foundation UI upload/attach/original/steps/checks/reload/recovery/project-switch passed at ' + viewport.width + 'px; HTTP fixtures, no AI.')
     await context.close()
   }
+} catch (error) {
+  if (activePage && !activePage.isClosed()) {
+    console.error('Foundation UI at failure:\n' + (await activePage.locator('body').innerText()).slice(0, 9000))
+    await activePage.screenshot({ path: 'test-results/foundations-failure.png', fullPage: true })
+  }
+  throw error
 } finally { await browser?.close(); server.kill() }
