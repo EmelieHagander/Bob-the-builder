@@ -95,9 +95,11 @@ migration `20260813092414_shared_ai_schema.sql` in the hearthandlarder repo:
 
 - **Info-only, both backends.** They answer questions and produce reports; they
   never write into bob's database. No "bob will add it to your list" copy.
-- **The briefing is RLS-scoped.** The OpenAI backend reads the project with the
-  caller's JWT, never the service-role key, so a user cannot reach a project
-  they aren't a member of by asking bob nicely.
+- **The briefing uses the caller's JWT.** The OpenAI backend uses the caller's
+  database permissions, never the service-role key for project reads. Current
+  policies still allow broad reads, and the briefing selects the first project;
+  this is not yet proof of project isolation. Slice 0 must establish the
+  membership and explicit-project boundary described below and in `db/README.md`.
 - **Async vs. sync is visible and honest.** Launchpad's `send` returns a task
   id to poll and the UI shows a working state. OpenAI's `send` returns
   `status: 'completed'` with the answer and there is nothing to poll — the UI
@@ -108,7 +110,136 @@ migration `20260813092414_shared_ai_schema.sql` in the hearthandlarder repo:
 - **Artifacts by reference (Launchpad only).** Rich outputs come back as ids
   redeemed via `artifact`. A single model turn produces prose, not artifacts.
 
-## Actions (what the frontend calls)
+## Project lookup contract — Slice 0
+
+> **Status:** specified for implementation; not available in current runtime.
+> **Owns:** Ask bob's bounded project lookup, allowed datasets/fields and result
+> semantics. `db/README.md` owns the membership/RLS implementation; the release
+> ordering remains in `Docs/v1-plan.md`.
+
+Bob should be able to look up relevant persisted project data when answering a
+question, in addition to receiving a short briefing. For example, "Which
+materials are still missing for the porch?" should trigger a scoped materials
+lookup rather than assume that the capped briefing contains every item.
+
+### Request and authority
+
+The browser supplies the explicit active `projectId` through `database.ts` to
+the Ask edge function. The server authenticates the caller, validates their
+membership in that project and binds the request/run to that user and project.
+The identifier is the Bob project row id, not the shared Supabase project ref.
+
+The model may call a typed `search_project_data` tool with a dataset and approved
+filters. It does not choose the project, schema, table, columns or SQL. A
+server-owned dispatcher maps the dataset to fixed queries, binds the validated
+project id and reads using the caller's JWT. Unknown arguments, datasets and
+operations are rejected; this tool exposes no write operation or arbitrary RPC.
+
+Every lookup rechecks project access. Missing/invalid project context or failed
+authorization ends the lookup before any project data reaches a provider.
+There is no fallback to another project or to privileged project reads.
+
+Membership must be trustworthy before this tool is enabled: project creation,
+invitations and guest/volunteer joining must establish explicit project access,
+and ordinary content edits must not let a caller grant themselves membership.
+The current first-project join and globally unique person/auth link do not
+provide that multi-project contract. Implement and test membership-aware RLS
+for the exposed parent/child tables as part of Slice 0; a request filter alone
+does not close the existing public API paths. See [Supabase's RLS guide](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+### Initial allowlist
+
+All sources below belong to schema `bob`. The planned lookup exposes only the
+listed projections, subject to project membership; supporting joins are not independent
+model-selectable datasets. Server-generated source ids/timestamps are described
+under result semantics.
+
+| Dataset | Source tables | Allowed project information |
+| --- | --- | --- |
+| `project` | `projects` | `id`, `slug`, `name`, `description`, `location`, `type`, `start_label`, `start_date`, `end_date`; only the bound project |
+| `areas` | `areas` | `id`, `slug`, `name`, `description`, `lead_id`; filter by `project_id` |
+| `tasks` | `tasks`, `areas`, `task_assignees`, `people` | Task `id`, `area_id`, `name`, `skill`, `hours`, `status`, `materials`; area name and assignee ids/names; scope tasks through their area |
+| `materials` | `materials` | `id`, `name`, `qty`, `area_label`, `supplier`, `status`, `cost`, `category`; filter by `project_id` |
+| `crew` | `people`, `person_skills` | Person `id`, `name`, `role`; skill `name` and `level`; scope skills through their person |
+| `events` | `events`, `event_attendees`, `people` | Event `id`, `slug`, `title`, `day`, `time`, `place`, `spots`, `status`; attendee ids/names; scope attendees through their event |
+| `announcements` | `announcements`, `people` | `id`, `text`, `pinned`, `time_label`; author id/name; filter by `project_id` |
+
+Linked people and both ends of an assignment/attendance relation must belong to
+the bound project. A foreign area/task/person id cannot widen the lookup.
+Materials currently use `area_label`, not an area foreign key; filtering by
+area must resolve that label inside the bound project and must not invent a
+task-material relation. Role/skill labels are recorded project data, not proof
+of backend authority or professional qualification.
+
+Everything outside this allowlist is excluded from the new construction lookup
+and its briefing projection: `person_emails`, `people.auth_user_id`, dietary/allergy
+fields, food tables, account settings/notes, other apps' schemas, Auth records,
+secrets, raw storage paths and AI configuration/usage records. Internal provider
+configuration and usage bookkeeping remain server concerns, never tool results.
+Media, measurements and selected solutions can extend this owner in their later
+slices once their data/access contracts exist. The current briefing includes
+dietary text; those fields must not implicitly enter the construction lookup.
+Any retained AI food/diet workflow needs its own purpose-specific projection and
+the same project authority checks. The existing Food surfaces keep their contract.
+
+### Bounded lookup and honest results
+
+- Start with fixed exact-id/status filters and text matching on the allowed
+  name/title/description/text fields. The dispatcher owns each dataset's filter
+  schema; it parameterizes values and rejects raw filter expressions. An area
+  filter must also be scoped. No unrestricted SQL, table browsing or generated
+  query language is accepted.
+- Initial budgets: at most 200 search-text characters, 25 parent records and 25
+  joined records per lookup, 16 KiB serialized output and three lookups per user
+  question. Enforce a 10-second lookup timeout. Truncated rows, joined data or
+  text must be marked explicitly; the model cannot claim an exhaustive list
+  from partial results. Broader searches require a narrower follow-up question.
+- Results include the bound `projectId`, dataset, stable record ids, retrieval
+  time and truncation/partial flags. Preserve source `updated_at` where present;
+  retrieval time is not the time a physical condition was observed. Answers
+  should reference the relevant existing project/area/task record where possible.
+- Distinguish successful no-match, invalid request, denied access and unavailable
+  data. A database error is not an empty project or "nothing missing". Return
+  no project details on denial and do not expose raw database errors to the model.
+- Stored text is evidence to interpret, not instructions for tool execution.
+  It cannot change the dataset allowlist, project binding or authority rules.
+- Reading a row does not promote it to a verified fact. Authored quantities,
+  costs, dates and task readiness strings retain their current limitations;
+  assumptions, estimates and unknowns stay labelled. New numeric/provenance
+  models arrive in their owning V1 slices.
+
+### Integration and implementation proof
+
+Use one dispatcher and projection for the construction briefing and subsequent
+lookups. Keep UI access through `database.ts`; extend the existing Ask backend
+instead of giving a browser/model a separate database connection.
+
+Apply the same user/project boundary to both provider paths. Direct OpenAI
+currently builds the briefing; Launchpad currently forwards messages with an
+app workspace id, which is not a Bob project binding. Provider tool integration
+must be verified before lookup support is claimed. Async task/status/reply and
+artifact access must be bound server-side to the originating user/project as
+well, not authorized merely because a caller supplies a remote task/artifact id.
+Project switching must isolate conversation/history, in-flight results and any
+cache by user/project; an old answer must not appear as the new project's truth.
+
+The following are required implementation tests, **not passing tests today**:
+
+1. A member can search the explicitly active project and retrieve a matching
+   item omitted from the initial capped briefing; sources identify that project.
+2. A member of two projects gets separate correct results after switching;
+   requests/results/history from the previous project cannot leak into the new one.
+3. A non-member, signed-out caller, forged project id, foreign child id or
+   unrelated async run/artifact is denied at the applicable backend boundary.
+   Exercise permitted and denied membership with ordinary JWT/API/RLS paths.
+4. Forbidden fields/datasets, arbitrary SQL, writes and self-granted membership
+   fail; successful reads contain only the allowlisted projection, including joins.
+5. Empty results, timeouts, revoked access and row/byte/lookup limits preserve
+   distinct honest states. Stored prompt-like text cannot alter tool permissions.
+6. Both configured provider paths prove their actual lookup and project-binding
+   behavior before being labelled supported; no mock result counts as live proof.
+
+## Actions (what the frontend calls today)
 
 `POST` body → response, always `{ ok: boolean, ... }`:
 
