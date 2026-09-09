@@ -4,6 +4,7 @@ import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { TaskModal } from '../components/editors'
+import { ProjectImages } from '../components/ProjectImages'
 
 export function Dashboard() {
   const [version, setVersion] = useState(0)
@@ -156,6 +157,8 @@ export function Dashboard() {
           </div>
         </section>
       </div>
+
+      {project && <div className="card foundation-section"><ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" /></div>}
 
       {addingTask && (
         <TaskModal

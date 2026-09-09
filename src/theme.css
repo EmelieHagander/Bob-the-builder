@@ -328,6 +328,52 @@ select {
   margin-bottom: 14px;
 }
 
+/* Project photos and illustrated work reuse the existing controls and tokens. */
+.foundation-section { margin-top: 22px; padding: 18px; min-width: 0; }
+.foundation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.foundation-heading h2, .foundation-heading h3 { margin: 0; font-size: 18px; }
+.foundation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.foundation-actions .btn, .task-detail .btn, .project-images .btn, .modal .btn { min-height: 44px; min-width: 44px; }
+.foundation-form { display: flex; flex-direction: column; gap: 16px; }
+.foundation-form input[type='file'] { max-width: 100%; min-height: 44px; }
+.foundation-hint { font-size: 13px; line-height: 1.5; color: var(--ink-soft); margin: 8px 0; overflow-wrap: anywhere; }
+.foundation-check { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.foundation-check input { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--accent-2); }
+.project-images { min-width: 0; }
+.project-image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 14px; margin: 12px 0; }
+.project-image-card { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.project-image-preview { display: flex; flex-direction: column; gap: 6px; }
+.project-image-thumbnail { display: block; width: 100%; height: 175px; object-fit: cover; border-radius: 8px; background: var(--surface-2); }
+.project-image-original { display: block; width: 100%; height: auto; max-height: 68vh; object-fit: contain; }
+.project-image-caption { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin: 10px 0; overflow-wrap: anywhere; }
+.image-purpose { display: inline-block; font-size: 12px; padding: 3px 7px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 6px; }
+.image-loading, .image-failure { min-height: 100px; padding: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: var(--surface-2); color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+.image-failure { color: var(--clay); }
+.modal-wide { max-width: 960px; }
+.modal { overflow-wrap: anywhere; }
+.task-detail { max-width: 1040px; }
+.task-state { max-width: 260px; margin: 18px 0; }
+.task-title-link, .task-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 700; overflow-wrap: anywhere; color: var(--ink); }
+.task-title-link:hover { text-decoration: underline; }
+.task-step-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.task-step { padding: 16px; min-width: 0; }
+.step-completion { flex: 1 1 210px; min-width: 0; overflow-wrap: anywhere; }
+.step-number { color: var(--ink-soft); }
+.instruction-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin: 12px 0; }
+.checkpoint-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.step-images { margin-top: 12px; border-top: 1px solid var(--line); }
+.step-images summary { padding: 12px 0; min-height: 44px; cursor: pointer; font-weight: 700; }
+.task-detail .page-title { overflow-wrap: anywhere; }
+.foundation-form textarea { resize: vertical; }
+.foundation-form :focus-visible, .project-images :focus-visible, .task-detail :focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+@media (max-width: 560px) {
+  .foundation-section { padding: 12px; }
+  .task-step { padding: 12px; }
+  .task-detail .page-head { flex-wrap: wrap; }
+  .modal-overlay { padding: 12px; }
+  .modal { padding: 16px; max-height: calc(100dvh - 32px); }
+}
+
 /* Installation uses the same cards, buttons and palette as the app. */
 .install-page {
   max-width: 660px;

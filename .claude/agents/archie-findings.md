@@ -29,10 +29,10 @@ Do not create another thesis/roadmap document for V1 unless this owner is intent
 
 ## FINDING-A03 — Major new media workflow needs one owning implementation contract
 
-**Status:** open / Slice 1 blocker
+**Status:** resolved for the 1A/1B contract; runtime verification remains a release gate
 
 `Docs/user-stories.md` defines the user-facing media roles (current-state photos, proposals/mockups, cut-through diagrams, drawings, progress/as-built photos and task guidance). `Docs/function-inventory.md` confirms that current runtime only stores reference-image labels/placeholders rather than real media. `Docs/function-scope.md` selects real authorised current-state media as the first vertical slice, and `Docs/v1-plan.md` makes that slice part of the V1 release gate.
 
 **Why it matters:** storage, provenance, project/area/task attachment, RLS and runtime consumption must be one coherent contract before implementation; otherwise the first defining new domain object can fork immediately.
 
-**Owning follow-up:** before coding Slice 1, define the minimum media data/storage/authority/runtime contract. Coordinate with Vera for upload/read-back UI and with data/auth owners for storage/RLS. Keep the contract narrow to the selected slice rather than designing every future artifact type in advance.
+**Resolution:** `Docs/media-and-steps.md` now owns the minimum media/storage/authority/runtime contract and the manual illustrated steps brought forward by the owner's foundations-first decision. `Docs/index.md` and `db/README.md` route to it. It defines immutable private file identity, lifecycle recovery, same-project attachments, provenance, deletion behavior and runtime/read-back verification. Vision remains the later 1C gate in `Docs/v1-plan.md`; closing this documentation finding does not claim it has shipped.

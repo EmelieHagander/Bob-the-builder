@@ -33,7 +33,7 @@ export function Today() {
                   <Icon name={chk.icon} size={24} color={chk.color} style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>{t.areaName}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</div>
+                    <Link to={'/tasks/' + t.id} className="task-title-link" style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</Link>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                       <SkillPill level={t.skill} />
                       <StatusPill status={t.status} />

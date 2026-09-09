@@ -10,6 +10,7 @@ import { AccountSettings } from './pages/account/AccountSettings'
 import { Dashboard } from './pages/Dashboard'
 import { Areas } from './pages/Areas'
 import { AreaDetail } from './pages/AreaDetail'
+import { TaskDetail } from './pages/TaskDetail'
 import { People } from './pages/People'
 import { Events } from './pages/Events'
 import { EventDetail } from './pages/EventDetail'
@@ -91,6 +92,7 @@ function ProjectApp() {
         <Route path="/account/settings" element={<AccountSettings />} />
         <Route path="/areas" element={<Areas />} />
         <Route path="/areas/:slug" element={<AreaDetail />} />
+        <Route path="/tasks/:taskId" element={<TaskDetail />} />
         <Route path="/people" element={<People />} />
         <Route path="/events" element={<Events />} />
         <Route path="/events/:slug" element={<EventDetail />} />

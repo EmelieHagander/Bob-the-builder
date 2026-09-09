@@ -24,6 +24,7 @@ import { createClient } from '@supabase/supabase-js'
 import { relativeTime } from '../lib/format'
 import type { AnswerEvidence } from './provenance'
 import { createRequestScope } from '../lib/projectRequest'
+import { createProjectFiles } from './projectFiles'
 import * as mock from './mockData'
 import type {
   Account,
@@ -179,6 +180,31 @@ export const PROJECT_CHANGED_EVENT = 'bob:project-changed'
 let activeProjectMemory: string | null | undefined
 let contextVersion = 0
 const askScope = createRequestScope()
+
+function captureFileContext(projectId: string) {
+  const capturedVersion = contextVersion
+  return () => {
+    if (!projectId || capturedVersion !== contextVersion || getActiveProjectId() !== projectId) {
+      throw new Error('Project or sign-in changed. Reopen the project before continuing.')
+    }
+  }
+}
+export const MEDIA_CHANGED_EVENT = 'bob:media-changed'
+const projectFiles = createProjectFiles(db, captureFileContext, () => window.dispatchEvent(new Event(MEDIA_CHANGED_EVENT)))
+export const getProjectImages = projectFiles.getMedia
+export const uploadProjectImage = projectFiles.uploadImage
+export const downloadProjectImage = projectFiles.downloadImage
+export const finalizeProjectImage = projectFiles.finalizeImage
+export const removeProjectImage = projectFiles.removeImage
+export const attachProjectImage = projectFiles.attachImage
+export const unlinkProjectImage = projectFiles.unlinkImage
+export const editTaskSteps = projectFiles.editTaskSteps
+export async function getTaskDetail(projectId: string, taskId: string): Promise<import('./types').TaskDetail> {
+  if (db) return projectFiles.getTaskDetail(projectId, taskId)
+  const task = (await getTasks()).find(t => t.id === taskId)
+  if (!task) throw new Error('Task not found.')
+  return { task, instructions: '', updatedAt: '', steps: [] }
+}
 
 export function getActiveProjectId(): string | null {
   if (activeProjectMemory !== undefined) return activeProjectMemory

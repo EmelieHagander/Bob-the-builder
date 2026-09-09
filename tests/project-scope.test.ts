@@ -59,7 +59,7 @@ before(async () => {
     -- Reproduce a live policy absent from the legacy migration history.
     create policy authenticated_insert_projects on bob.projects for insert to authenticated with check(true);
   `)
-  const migration = await readFile(new URL((await readdir(migrations)).find(f => f.endsWith('.sql'))!, migrations), 'utf8')
+  const migration = await readFile(new URL((await readdir(migrations)).find(f => f.endsWith('_project_scope_and_bounded_lookup.sql'))!, migrations), 'utf8')
   await assert.rejects(pg.exec(migration), /reviewed member mapping/)
   await pg.exec('rollback')
   const reviewed = (project_id: string, email: string) => migration.replace('begin;',

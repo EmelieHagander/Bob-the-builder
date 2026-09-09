@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm test
@@ -32,6 +32,8 @@ jobs:
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
       - name: Verify Ask bob project isolation and mobile source disclosure
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
+      - name: Verify image storage flow and illustrated task steps
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - uses: actions/upload-artifact@v4
         if: always()
         with:

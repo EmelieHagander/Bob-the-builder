@@ -16,6 +16,7 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
+| project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -66,6 +67,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
 - `supabase/migrations/` — new CLI-created migrations, applied after the legacy database bootstrap.
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
+- `Docs/media-and-steps.md` — owning media and manual-step contract: private files, same-project attachments, lifecycle/recovery, task checks and runtime consumption for milestones 1A/1B.
+- `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 
