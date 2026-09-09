@@ -273,10 +273,15 @@ Includes:
 - explicit active project id through Ask bob;
 - project access validation;
 - V1 membership/RLS pattern;
+- bounded read-only project lookup for Ask bob, with a fixed dataset/field
+  allowlist; the [project lookup contract](../supabase/README.md#project-lookup-contract--slice-0)
+  in `supabase/README.md` owns the detail;
 - minimum truth/provenance vocabulary;
 - test harness needed for denied/cross-project behavior.
 
-**Exit:** a project-aware backend action can prove both authorised success and cross-project denial.
+**Exit:** a project-aware backend lookup proves authorised success, cross-project
+denial and isolation after project switching, using only the allowed data. The
+lookup contract is specified; provider wiring and runtime proof are still required.
 
 ## Slice 1 — Show bob the real project
 

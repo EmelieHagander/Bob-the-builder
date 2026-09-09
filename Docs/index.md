@@ -15,7 +15,7 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
-| Ask bob / Launchpad / OpenAI seams | `supabase/README.md` |
+| Ask bob / Launchpad / OpenAI seams / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
 
@@ -68,7 +68,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
-- `supabase/README.md` — AI backend modes and runtime setup.
+- `supabase/README.md` — AI backend modes, runtime setup and the specified Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `supabase/functions/_shared/bob-context.ts` — project briefing supplied to the AI.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
 - `supabase/functions/_shared/launchpad.ts` and `supabase/functions/ask-launchpad/` — Launchpad seam.
