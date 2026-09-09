@@ -1,13 +1,10 @@
-/** Keep the deployed ask-launchpad URL stable while Bob uses the provider that
- * supports bounded server-side tools. The former app-wide Launchpad workspace
- * and unbound task ids are disabled; see supabase/README.md for re-enable gates.
- * This module belongs to Bob's deployment, not other apps' edge bundles. */
+/** Bob's authenticated OpenAI entry point. Project reads use the caller JWT;
+ * model configuration and billing stay in the shared OpenAI service. */
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { answerWithOpenAi } from './ask-openai.ts'
 import { createBobHandler } from './bob-request.ts'
 
-export function serveLaunchpad(config: { app: 'bob'; dbSchema: 'bob' }) {
-  if (config.app !== 'bob' || config.dbSchema !== 'bob') throw new Error('Bob identity must be pinned in source')
+export function serveBob() {
   return createBobHandler({
     authenticate: async authHeader => {
       const url = Deno.env.get('SUPABASE_URL')

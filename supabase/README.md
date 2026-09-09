@@ -3,22 +3,25 @@
 > Slice 0 implementation: locally tested, not deployed. See
 > [verification and rollout](../Docs/slice-0-verification.md) for evidence and open gates.
 
-Bob answers through the existing `ask-launchpad` URL using **direct OpenAI with
+**Provider decision (2026-09-09): Bob uses OpenAI directly for all AI work.**
+OpenAI is the permanent integration, not a temporary fallback. Later V1 slices
+extend this path. Provider configuration and tools are owned here.
+
+Bob answers through `ask-bob` using **direct OpenAI with
 bounded, read-only project tools**. The browser sends an explicit Bob project id;
 the backend authenticates the user and uses their JWT for all project reads.
 
-The former Launchpad path is disabled for Bob, including when `LAUNCHPAD_*`
-secrets remain configured. Its app-wide workspace and raw task/artifact handles
-do not meet project isolation, and the current partner contract does not implement
-partner-supplied lookup tools. Re-enabling it requires verified project workspace
-isolation, server-bound user/project run handles, access checks for every action,
-and actual lookup capability. Other apps' deployments are not changed.
+Launchpad is retired from Bob's architecture. The old `ask-launchpad` endpoint
+has only a 410 retirement response for outdated clients; it makes no provider or
+database calls, even if old secrets remain configured. Deploy that response as
+part of the rollout so the previous live gateway cannot keep accepting requests.
 
 ## Code ownership
 
 | File | Responsibility |
 | --- | --- |
-| `ask-launchpad/index.ts`, `_shared/launchpad.ts` | Pin Bob identity; validate Supabase Auth user. Stable endpoint name. |
+| `ask-bob/index.ts`, `_shared/serve-bob.ts` | Bob's OpenAI endpoint; validate Supabase Auth user. |
+| `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
@@ -144,12 +147,9 @@ Use one dispatcher and projection for the construction briefing and subsequent
 lookups. Keep UI access through `database.ts`; extend the existing Ask backend
 instead of giving a browser/model a separate database connection.
 
-Apply the same user/project boundary to both provider paths. Direct OpenAI
-builds the briefing and executes tools in this branch. The previous Launchpad
-app-workspace path is disabled because it is not a Bob project binding. Provider tool integration
-must be verified before lookup support is claimed. Async task/status/reply and
-artifact access must be bound server-side to the originating user/project as
-well, not authorized merely because a caller supplies a remote task/artifact id.
+OpenAI builds the briefing and executes tools through the shared service. Its
+actual tool integration must be verified before live lookup support is claimed.
+Legacy task/status/reply and artifact handles are not accepted by the new API.
 Project switching must isolate conversation/history, in-flight results and any
 cache by user/project; an old answer must not appear as the new project's truth.
 
@@ -166,8 +166,9 @@ The following remain the acceptance contract. Local evidence and outstanding liv
    fail; successful reads contain only the allowlisted projection, including joins.
 5. Empty results, timeouts, revoked access and row/byte/lookup limits preserve
    distinct honest states. Stored prompt-like text cannot alter tool permissions.
-6. Both configured provider paths prove their actual lookup and project-binding
-   behavior before being labelled supported; no mock result counts as live proof.
+6. The OpenAI path proves its actual lookup and project-binding behavior before
+   being labelled live; no mock result counts as live proof. The retired endpoint
+   rejects old requests without contacting a provider.
 
 ## Actions
 
@@ -197,8 +198,12 @@ Merging frontend code alone triggers Pages but does **not** migrate Supabase or
 deploy the edge function; this PR must stay draft until those gates are resolved.
 
 ```bash
+supabase functions deploy ask-bob --project-ref <ref>
 supabase functions deploy ask-launchpad --project-ref <ref>
 ```
+
+The second command retires the old deployment. Older clients must reload to use
+`ask-bob`; unbound legacy requests are never forwarded automatically.
 
 Required existing server configuration: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, and Bob's enabled settings/model in

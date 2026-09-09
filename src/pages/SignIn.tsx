@@ -12,8 +12,8 @@ import { Field, FormError, inputStyle } from '../components/form'
  *   * magic link (recommended for the crew)
  *   * email + password
  *   * the shared guest account, one click, no email
- * Invited emails claim their person on the crew list; anyone else joins as a
- * fresh Volunteer — both handled server-side by bob.join_project().
+ * Confirmed invited emails claim their project membership server-side.
+ * New accounts can start a project; signing in alone grants no project access.
  */
 export function SignIn() {
   const [email, setEmail] = useState('')
@@ -84,7 +84,7 @@ export function SignIn() {
         <div className="card" style={{ padding: 26 }}>
           <h1 style={{ fontSize: 20, margin: 0 }}>Sign in</h1>
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
-            Invited? Use the email your organiser has for you and your profile is waiting. New? You'll join the crew as a volunteer.
+            Invited? Sign in with your confirmed invitation email to find your project. New? You can start your own project or ask the organiser for an invitation.
           </p>
 
           <form onSubmit={magicLink} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
@@ -133,7 +133,7 @@ export function SignIn() {
             <Icon name="footprints" size={16} /> Continue as guest
           </button>
           <p style={{ fontSize: 11.5, color: 'var(--ink-faint)', margin: '8px 0 0', textAlign: 'center' }}>
-            One shared guest profile — have a look around without an email.
+            One shared guest profile — access is limited to projects that have invited it.
           </p>
 
           {notice && (

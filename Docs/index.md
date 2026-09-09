@@ -16,7 +16,7 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
-| Ask bob / Launchpad / OpenAI seams / scoped project lookup | `supabase/README.md` |
+| Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
 
@@ -75,7 +75,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
 - `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
-- `supabase/functions/_shared/launchpad.ts` and `supabase/functions/ask-launchpad/` — authenticated Bob endpoint; the former Launchpad branch is disabled.
+- `supabase/functions/_shared/serve-bob.ts` and `supabase/functions/ask-bob/` — authenticated OpenAI endpoint for Bob. The old `ask-launchpad/` contains only a retirement response.
 - `src/components/AskBob.tsx` — frontend interaction contract for Ask bob.
 
 ## Quality / runtime

@@ -162,6 +162,18 @@ Do not copy a different project's user merely because it is the only linked user
 Preserve project ids and data; add the approved member mapping in a separate,
 reviewed data migration before applying the policy migration.
 
+The current account's owner name and email are both empty, and the entré project
+has no crew rows. Neither can establish the intended account. The required input
+is the intended member's confirmed Bob sign-in email; resolve that exact Auth user
+before drafting the concrete mapping. Do not grant the public guest access by default.
+
+The legacy `people_auth_user_idx` allows an Auth user in only one project. If the
+approved account already belongs to Test, the mapping and change to per-project
+uniqueness must be reviewed and applied together in one transaction before the
+orphan check; the current migration ordering must be adjusted for that rollout.
+Do not unlink the Test membership to make the insert pass. This is an explicit
+remaining rollout task, not a reason to guess a different member.
+
 Preflight (read only):
 
 ```sql

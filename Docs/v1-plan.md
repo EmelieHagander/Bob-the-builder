@@ -6,6 +6,9 @@
 
 V1 is the next product release after bob's existing collaboration/coordination core. It adds the missing planning/evidence layer without rebuilding areas, tasks, people, shopping, build days, food or announcements.
 
+Bob's AI work uses OpenAI directly throughout V1. The permanent provider decision,
+project lookup and deployment contract are owned by [supabase/README.md](../supabase/README.md).
+
 ## Naming note
 
 `Docs/function-scope.md` uses labels such as `V0-CORE`, `V0-AUTO` and `V0-STRETCH`. Those labels were created as **next-phase scope buckets before release naming was settled**. They are not historical app version numbers.

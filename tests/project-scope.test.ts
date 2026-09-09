@@ -213,7 +213,7 @@ test('HTTP + model tool continuation uses real authorised SQL and server-only re
       },
     }),
   })
-  const post = (body: unknown, auth = 'Bearer fixture-user') => handler(new Request('http://bob.test/ask-launchpad', { method:'POST',headers:{ Authorization:auth },body:JSON.stringify(body) }))
+  const post = (body: unknown, auth = 'Bearer fixture-user') => handler(new Request('http://bob.test/ask-bob', { method:'POST',headers:{ Authorization:auth },body:JSON.stringify(body) }))
   const success = await post({action:'send',projectId:'A',message:'Which task?'})
   assert.equal(success.status, 200)
   const answer = await success.json()

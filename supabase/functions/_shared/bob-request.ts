@@ -28,9 +28,8 @@ export function createBobHandler(deps: {
       let body: Record<string, unknown>
       try { body = JSON.parse(text) } catch { return fail('bad_request', 400) }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('bad_request', 400)
-      // App-wide workspace + raw run/artifact ids cannot satisfy project isolation.
-      // No gateway request is made, even if old Launchpad secrets remain set.
-      if (body.action !== 'send') return fail('async_backend_unavailable', 409)
+      // Bob accepts one project-bound OpenAI question, not asynchronous run handles.
+      if (body.action !== 'send') return fail('unsupported_action', 409)
       if (Object.keys(body).some(k => !['action', 'projectId', 'message'].includes(k))) return fail('bad_request', 400)
       if (typeof body.projectId !== 'string' || !body.projectId.trim() || body.projectId.length > 200) return fail('project_required', 400)
       if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > 4096) return fail('invalid_message', 400)

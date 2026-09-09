@@ -29,6 +29,8 @@ jobs:
           VITE_SUPABASE_ANON_KEY: installation-test-only
       - name: Verify public installation before login
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
+      - name: Verify Ask bob project isolation and mobile source disclosure
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
       - uses: actions/upload-artifact@v4
         if: always()
         with:

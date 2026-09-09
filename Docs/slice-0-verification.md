@@ -19,9 +19,13 @@ The branch also incorporates PR #24's installation changes from main
   retain unknown verification. No measurements, decisions or AI writes are added.
 - Project/auth changes clear the drawer state and invalidate late responses,
   including switching A → B → A. Stale selected project ids require a fresh choice.
-- Bob's previous Launchpad branch is disabled, including legacy status/reply/
-  artifact handles. The gateway's current partner contract does not implement
-  partner-provided lookup tools; no speculative manifest/callback was added.
+- OpenAI is Bob's permanent provider, as recorded in the owning
+  [AI contract](../supabase/README.md). `ask-bob` is the new endpoint;
+  `ask-launchpad` is only a 410 retirement response with no downstream calls.
+- CI now drives the production frontend through sign-in, source disclosure,
+  denied/unavailable/wrong-project responses, A → B → A during a delayed answer,
+  draft reset, reload and sign-out at 320, 390 and 1280px. HTTP services are fixtures.
+  Long source ids wrap, and send/close controls have 44px touch targets.
 
 ## Local evidence — 2026-09-09
 
@@ -37,11 +41,17 @@ The branch also incorporates PR #24's installation changes from main
 | HTTP → tools → SQL → answer | Passed using the actual request/answer dispatcher and real Postgres lookup | Model transport is deterministic fixture; **no live OpenAI call claimed** |
 | Two-project reads and response generation | Separate results; A → B → A/sign-out invalidate old callbacks | Not a browser interaction test |
 | Edge type check | Local attempt blocked fetching existing shared-service `esm.sh` import | CI runs the real Deno check |
-| Visual/browser pass | Not completed: cloud browser rejected local preview with `ERR_BLOCKED_BY_CLIENT` | Must run in an accessible preview before release |
+| Ask bob browser flow | Added `verify:project`; current CI result must be checked before marking passed | Real production frontend; fixture Auth/PostgREST/AI responses, not a live provider test |
+| Interactive visual pass | Cloud browser rejected local preview with `ERR_BLOCKED_BY_CLIENT` | CI captures source disclosure at three widths; interactive inspection remains separate |
 
 Reproduce the automated suite with `npm ci`, `npm test`, `npm run build` and
 `npm run check:edge`. Dependencies are pinned for PGlite, tsx, Deno and the
 Supabase migration CLI. CI runs tests, edge type checking and the build.
+
+For the Ask bob browser suite, build with `VITE_SUPABASE_URL=https://pwa-proof.invalid`
+and `VITE_SUPABASE_ANON_KEY=installation-test-only`, then run `npm run verify:project`
+with `CHROME_PATH` pointing to an installed Chrome. These settings are fixtures,
+never production credentials. Existing installation/PWA browser gates are preserved.
 
 The local CLI initially tried a newer Supabase binary that could not start in
 this environment. CLI 2.81.3 successfully created the timestamped migration.
@@ -58,7 +68,9 @@ branch does not claim byte identity with every sibling.
 
 1. Review the intended authenticated member mapping for
    `p_bygga_in_entren` (currently zero links). Preserve all real data and intended
-   collaborators. Apply the mapping separately before the policy migration.
+   collaborators. The account owner/email fields are empty, so they cannot establish
+   the intended account. Review mapping together with the legacy uniqueness
+   transition as described in the database rollout.
 2. Follow the coordinated rollout in [db/README.md](../db/README.md).
    A normal main merge automatically publishes Pages but does not apply SQL or
    deploy edge functions. This implementation PR must not be merged as a
@@ -66,12 +78,10 @@ branch does not claim byte identity with every sibling.
 3. In an accessible preview/staging environment, verify real Supabase JWT/
    PostgREST positive and denied calls; invitation claim and new project creation;
    a real OpenAI tool call reaching an item outside the project-only briefing.
-4. Drive Ask bob in project A, switch to B during a slow request, then back to A.
-   Verify project title, fresh chat/draft, no old result, readable source disclosure,
-   and usable desktop/mobile controls.
-5. Confirm model settings/key availability on the direct path before switching
-   off the old deployed provider. Launchpad remains unsupported until its own
-   project workspace, run binding and lookup integration have live proof.
+4. Confirm the new CI browser flow passes, inspect its desktop/mobile source
+   screenshots, and repeat the project-switch smoke check after the coordinated rollout.
+5. Confirm OpenAI model settings/key availability and deploy the retirement
+   response at the old endpoint. Launchpad is retired, with no re-enable gate.
 
 The original Slice 0 exit is retained. Local implementation evidence does not
 turn the remaining deployed-provider/browser checks into completed work.

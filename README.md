@@ -28,7 +28,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/shopping` | Materials shopping list, grouped by category (checkable, printable) |
 | `/announcements` | Announcement board |
 | `/today` | Day-of "what needs doing today" view |
-| — | **Ask bob** assistant drawer. Slice 0 binds direct OpenAI and read-only lookups to the active authorised project, with source disclosure. The previous Launchpad path is disabled. [Setup](supabase/README.md) · [verification and rollout gates](Docs/slice-0-verification.md) |
+| — | **Ask bob** assistant drawer. Slice 0 binds OpenAI and read-only lookups to the active authorised project, with source disclosure. OpenAI is Bob's permanent AI integration. [Setup](supabase/README.md) · [verification and rollout gates](Docs/slice-0-verification.md) |
 
 ## Running it
 

@@ -28,6 +28,8 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
       <div
         style={{
           maxWidth: '80%',
+          minWidth: 0,
+          overflowWrap: 'anywhere',
           padding: '12px 15px',
           fontSize: 14.5,
           lineHeight: 1.5,
@@ -114,7 +116,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setDraft('')
     push({ from: 'user', text })
     setWorking(true)
-    const result = await db.askBuilders(project.id, text)
+    const result = await db.askBob(project.id, text)
     if (!isCurrent()) return
     setWorking(false)
     if ('answer' in result) {
@@ -140,6 +142,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     <div className="no-print" style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside
+        aria-label={`Ask bob for ${project.name}`}
         style={{
           position: 'absolute',
           top: 0,
@@ -158,11 +161,11 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" />
           </span>
-          <div style={{ flex: 1, lineHeight: 1.2 }}>
+          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}>
             <div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div>
             <div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div>
           </div>
-          <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}>
+          <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}>
             <Icon name="x" size={16} />
           </button>
         </header>
@@ -198,9 +201,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             aria-label="Question for bob"
             maxLength={4096}
             placeholder="Ask bob about this project…"
-            style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }}
+            style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }}
           />
-          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working} style={working ? { opacity: 0.55 } : undefined}>
+          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working} style={{ minWidth: 44, minHeight: 44, ...(working ? { opacity: 0.55 } : {}) }}>
             <Icon name="paper-plane-right" weight="fill" size={16} />
           </button>
         </form>

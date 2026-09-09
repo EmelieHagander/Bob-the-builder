@@ -10,9 +10,10 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check:edge": "deno check --node-modules-dir=auto supabase/functions/ask-launchpad/index.ts",
+    "check:edge": "deno check --node-modules-dir=auto supabase/functions/ask-bob/index.ts supabase/functions/ask-launchpad/index.ts",
     "verify:pwa": "node scripts/check-pwa.mjs",
-    "verify:install": "node scripts/check-installation-browser.mjs"
+    "verify:install": "node scripts/check-installation-browser.mjs",
+    "verify:project": "node scripts/check-project-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.1",

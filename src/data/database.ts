@@ -1793,7 +1793,7 @@ export function getAskBobChips(): Promise<string[]> {
 }
 
 /* Ask bob captures project and scope generation before starting a request. */
-type BuildersSeamResponse = {
+type AskBobResponse = {
   ok: boolean
   error?: string
   projectId?: string
@@ -1802,10 +1802,10 @@ type BuildersSeamResponse = {
   evidence?: AnswerEvidence
 }
 
-async function callBuildersSeam(body: Record<string, unknown>): Promise<BuildersSeamResponse> {
+async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {
   if (!db) return { ok: false, error: 'not_configured' }
   try {
-    const { data, error } = await db.functions.invoke('ask-launchpad', { body })
+    const { data, error } = await db.functions.invoke('ask-bob', { body })
     if (error) {
       // Preserve the auth/denial distinction from non-2xx function responses.
       const response = (error as { context?: Response }).context
@@ -1819,12 +1819,12 @@ async function callBuildersSeam(body: Record<string, unknown>): Promise<Builders
   } catch { return { ok: false, error: 'seam_unreachable' } }
 }
 
-export async function askBuilders(
+export async function askBob(
   projectId: string, message: string,
 ): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string }> {
   const isCurrent = askScope.capture()
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
-  const res = await callBuildersSeam({ action: 'send', projectId, message })
+  const res = await callAskBob({ action: 'send', projectId, message })
   if (!isCurrent() || projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
   if (res.ok && res.status === 'completed' && res.summary && res.evidence?.kind === 'ai_assessment'

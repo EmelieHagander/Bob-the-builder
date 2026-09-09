@@ -1,9 +1,12 @@
-# Supabase CLI config — only what deploys need. The database schema is NOT
-# managed from here (it lives in db/, applied with psql — see db/README.md).
+# Supabase CLI config. Legacy bootstrap lives in db/; newer CLI migrations live
+# in supabase/migrations/. Follow the coordinated rollout in db/README.md.
 
 project_id = "bob-the-builder"
 
-# bob's window to the Launchpad builders team. Platform JWT verification stays
-# on; the function additionally requires a signed-in user (see its source).
+# Bob's direct OpenAI endpoint also validates the Auth user and project access.
+[functions.ask-bob]
+verify_jwt = true
+
+# Retired endpoint: returns 410 without calling a provider or reading project data.
 [functions.ask-launchpad]
 verify_jwt = true

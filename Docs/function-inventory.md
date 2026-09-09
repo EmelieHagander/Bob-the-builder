@@ -7,7 +7,7 @@
 
 > **Slice 0 branch delta (2026-09-09):** project membership/RLS, explicit-project
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
-> local tests. Launchpad's unscoped path is disabled. These changes are **not yet
+> local tests. OpenAI is the permanent provider; Launchpad is retired. These changes are **not yet
 > deployed**; the audit below remains the pre-Slice-0 deployed baseline.
 > [Verification and open release gates](slice-0-verification.md) own the evidence.
 
