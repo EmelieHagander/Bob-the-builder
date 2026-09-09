@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses } from './openai-service.ts'
 import { createProjectLookup } from './project-lookup.ts'
 import { runProjectAnswer, type ProjectAnswer } from './project-answer.ts'
