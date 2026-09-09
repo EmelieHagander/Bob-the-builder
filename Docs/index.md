@@ -23,7 +23,7 @@
 ## Product
 
 - `README.md` — current repository/app overview and implemented route/architecture summary.
-- `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, golden-path acceptance, slice sequence and release gates. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
+- `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, golden-path acceptance, slice sequence, foundations-first delivery order (media and illustrated task steps before vision) and release gates. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.

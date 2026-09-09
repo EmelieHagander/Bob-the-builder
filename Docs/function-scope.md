@@ -307,6 +307,12 @@ For Slice 1, **do not add a new top-level “Media”, “Design studio” or �
 
 ### Slice 1 end-to-end path
 
+The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
+owns the updated sequence: 1A media, 1B manual illustrated task steps, then 1C
+vision. The path below is the **full Slice 1** acceptance path, not a prerequisite
+for merging or continuing the foundation milestones. The owner's Bob trial is
+deferred; technical persistence, access and browser verification remain required.
+
 ```text
 real authenticated session
 → explicit active project
@@ -326,13 +332,14 @@ real authenticated session
 
 ### Scope included in Slice 1
 
-- fix active-project AI-context selection;
+- reuse the deployed Slice 0 explicit-project AI and membership boundary;
 - project-scoped media storage path;
 - `MediaAsset` minimum model;
 - current-state media type;
 - upload UI;
 - render/read-back UI;
-- project/area association (task association can follow immediately after if cheap);
+- project/area/task association, extended to ordered task steps in milestone 1B;
+- manually editable task instructions, ordered steps, completion state/checks and step images, as scoped in the V1 delivery order;
 - media RLS/project membership proof;
 - AI vision input for a selected project image;
 - assessment vs fact/measurement language boundary;
@@ -346,8 +353,8 @@ real authenticated session
 - drawings;
 - BOM calculations;
 - AI writes to project truth;
-- task guidance;
-- progress/as-built workflows.
+- AI-generated task guidance and solution-aware construction diagrams (manual steps and attached images are included in 1B);
+- full progress/as-built workflows.
 
 Those are deliberately kept out so the first slice proves the skeleton rather than becoming a mini-rewrite.
 
@@ -365,7 +372,8 @@ Slice 1 is done only when:
 8. no UI surface bypasses `database.ts`/the owning media command/read seam;
 9. the flow reuses the existing project shell, Dashboard/Area/Ask bob surfaces rather than adding a parallel top-level navigation model;
 10. upload, loading, failure, denied and read-back states are honest on both desktop and mobile;
-11. opening a stored image exposes the complete original even if a thumbnail preview is cropped.
+11. opening a stored image exposes the complete original even if a thumbnail preview is cropped;
+12. the manual task/step foundation meets the independent 1A + 1B exit in the V1 plan before vision is added.
 
 ---
 
@@ -400,8 +408,8 @@ These are ordering proposals, not commitments beyond Slice 1.
 Resolve before implementation begins:
 
 - **BLOCKER-01 — media authority boundary:** define how MediaAsset proves project ownership/access and how storage paths/policies align with DB membership.
-- **BLOCKER-02 — active project AI contract:** define the trusted `projectId` flow from client to AI edge function and validation rule.
-- **BLOCKER-03 — media provenance minimum:** define actor, purpose/type, created time and storage identity; do not build a generic anonymous file bucket.
+- **BLOCKER-02 — active project AI contract:** resolved by deployed Slice 0; reuse the explicit `projectId` and backend membership validation contract in `supabase/README.md` when adding media consumption.
+- **BLOCKER-03 — media provenance and attachment minimum:** define actor, purpose/type, created time, storage identity and same-project project/area/task/step relations. Define upload failure, replacement and deletion behavior before coding; the existing public app-asset bucket is not a private project-media contract.
 - **BLOCKER-04 — truth language:** define how AI visual observations are represented/labeled so they cannot be mistaken for measured facts.
 - **BLOCKER-05 — verification:** add the minimum automated DB/RLS + browser proof required for upload, reload and denial.
 
