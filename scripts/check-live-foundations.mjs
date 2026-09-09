@@ -14,7 +14,7 @@ const options = { db: { schema: 'bob' }, auth: { persistSession: false, autoRefr
 const client = createClient(url, key, options)
 const anonymous = createClient(url, key, options)
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
-const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j7xkAAAAASUVORK5CYII=', 'base64')
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNwDLT/DwADeQHRghinsQAAAABJRU5ErkJggg==', 'base64')
 let signedIn = false, project
 const media = (action, id, data = {}) => client.rpc('media_command', { p_project: project.id, p_action: action, p_media: id, p_data: data })
 try {
