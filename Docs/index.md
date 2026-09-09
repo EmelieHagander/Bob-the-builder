@@ -7,6 +7,7 @@
 | I need to understand… | Start with |
 |---|---|
 | what bob is / current app shape | `README.md` |
+| current user goals / next-phase product stories | `Docs/user-stories.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` |
@@ -18,12 +19,13 @@
 ## Product
 
 - `README.md` — current repository/app overview and implemented route/architecture summary.
-- `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope.
+- `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop. It intentionally does not yet choose V0/next-slice priority.
+- `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
 - `Docs/Mockups and initial plans/bob-the-builder.html` — original visual/product mockup; use as historical composition reference, not runtime truth.
 
 ### Product-document status
 
-The original PRD remains useful product intent, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days). The runtime has evolved since that draft. New product decisions should be captured in a current owning product contract rather than silently editing historical intent into unrelated files.
+`Docs/user-stories.md` now owns current user-story wording. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days). A future product-thesis/V0 contract should build from the current stories rather than silently editing the historical PRD.
 
 ## UI / design
 
@@ -36,8 +38,9 @@ The original PRD remains useful product intent, especially for the collaborative
 
 ## Interaction / collaboration
 
-Current collaboration behavior is primarily expressed in runtime code plus the original PRD:
+Current collaboration behavior is primarily expressed in runtime code plus the current story contract:
 
+- `Docs/user-stories.md` — current desired journeys and acceptance intent.
 - `src/pages/People.tsx` — crew, skills and dietary context.
 - `src/pages/Events.tsx` + `src/pages/EventDetail.tsx` — build-day planning and attendance.
 - `src/pages/Today.tsx` — day-of task surface.
@@ -45,7 +48,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the o
 - `src/pages/Food.tsx` + `src/pages/FoodShopping.tsx` — meal/allergy coordination.
 - `src/pages/AreaDetail.tsx` — tasks, materials, crew and reference-image surface.
 
-When a new major journey is specified, give it one canonical success/failure path rather than encoding the contract only in component behavior.
+When a new major journey moves toward implementation, give it one canonical success/failure path rather than encoding the contract only in component behavior.
 
 ## Data / auth
 
@@ -82,7 +85,7 @@ When sources conflict, use this order:
 
 1. **Verified runtime behavior + current schema/code** for claims about what is built today.
 2. **Later explicit canonical decision** in the relevant owning contract.
-3. **Domain-specific current contract** (data/auth/UI/AI/etc.).
+3. **Domain-specific current contract**, including `Docs/user-stories.md` for current user-goal intent.
 4. **Original PRD** for product intent not explicitly superseded.
 5. **Mockups/sample content** for visual or illustrative intent only.
 

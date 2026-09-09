@@ -11,7 +11,8 @@
 1. Read `Docs/index.md`.
 2. Classify the work:
    - UI/frontend → read `.claude/agents/vera.md`, `Docs/ui-index.md`, `src/theme.css`, and the relevant page/component.
-   - documentation/product-contract work → read `.claude/agents/archie.md` and `Docs/index.md`.
+   - product/user-goal work → read `Docs/user-stories.md`, `.claude/agents/archie.md`, and `Docs/index.md`.
+   - documentation/contract placement → read `.claude/agents/archie.md` and `Docs/index.md`.
    - data/auth/RLS → read `db/README.md` and the relevant migrations/data layer.
    - AI / Ask bob → read `supabase/README.md`, `src/components/AskBob.tsx`, and the shared AI context code.
    - verification → read `.claude/skills/verify/SKILL.md`.
