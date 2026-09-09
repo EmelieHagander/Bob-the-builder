@@ -4,23 +4,23 @@
 
 ## FINDING-V01 — Reference images are labels/placeholders, not real project media
 
-**Status:** open
+**Status:** open / Slice 1 scoped
 
 The Area UI has a reference-image concept, but current frontend/domain data represents images as labels and renders placeholder tiles rather than real uploaded/renderable media.
 
 **Why it matters:** the emerging bob workflow depends heavily on current-state photos, target mockups, construction cut-throughs, drawings and step-specific instructional images being available when work happens.
 
-**Owning follow-up:** product/media data contract + storage/runtime consumption + Area/task UI. Do not solve this as a cosmetic tile change only.
+**Owning follow-up:** `Docs/function-scope.md` now defines the Slice 1 UI placement: evolve the existing project/Area image surface, keep Ask bob conversational, avoid a new top-level media studio, preserve complete originals, and keep media-purpose styling separate from status colors. Implementation still needs the media data/storage/authority contract plus real runtime consumption. Do not solve this as a cosmetic tile change only.
 
 ## FINDING-V02 — Current visual contract is implicit rather than fully documented
 
-**Status:** partially addressed
+**Status:** sufficiently addressed for Slice 1; broader blueprint deferred
 
-`Docs/ui-index.md` now documents the current ownership and invariants, but bob still does not have a separate page blueprint or formal component/design standard beyond `theme.css`, shared components and runtime convention.
+`Docs/ui-index.md` documents current ownership and invariants, and `Docs/function-scope.md` now records the concrete UI-placement decisions needed for the first media/evidence vertical slice. A separate page blueprint is therefore **not required before Slice 1**.
 
 **Why it matters:** the app is growing into new planning/media/instruction surfaces, increasing the chance of local UI dialects.
 
-**Owning follow-up:** create a deeper design/page blueprint only when upcoming UI work needs it; do not produce documentation for its own sake.
+**Owning follow-up:** create a deeper design/page blueprint only if later slices introduce repeated patterns that cannot be owned cleanly by the existing shell, shared primitives and slice contracts. Do not produce documentation for its own sake.
 
 ## FINDING-V03 — Inline visual values are common
 
