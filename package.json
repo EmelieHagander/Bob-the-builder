@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "verify:pwa": "node scripts/check-pwa.mjs",
+    "verify:install": "node scripts/check-installation-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.1",
@@ -21,6 +23,7 @@
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "playwright-core": "1.62.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
   }

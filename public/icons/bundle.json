@@ -1,0 +1,37 @@
+{
+  "source": "public/favicon.svg",
+  "source_sha256": "3d96f0edb88906577e56eff41a9259dcde1795fdc711dfd775e29532eaf701f8",
+  "generator": "scripts/render-icons.py",
+  "exports": [
+    {
+      "path": "favicon.png",
+      "size": 32,
+      "sha256": "aa3c878dfb50cdd46c1a4cb80c63245f69e2f92d96d5971fc7efda0b2414c9da"
+    },
+    {
+      "path": "icons/favicon-16.png",
+      "size": 16,
+      "sha256": "d70b7c485a6f426c1e81d0ce6d2be9c1fd91578b2a3a7a51c633af86ab5db9cc"
+    },
+    {
+      "path": "icons/apple-touch-icon.png",
+      "size": 180,
+      "sha256": "bc51698e66f9e1a3eafca9d3251f8e8717b17d3614fb5576a4a092f0d0da8326"
+    },
+    {
+      "path": "icons/icon-192.png",
+      "size": 192,
+      "sha256": "9d25e1f321476b4cf35bd1e1c45c8e2e91e822b42b35b6b730b52b5cf6213066"
+    },
+    {
+      "path": "icons/icon-512.png",
+      "size": 512,
+      "sha256": "c6169cae65709601daed38bea14fa2ea889e94fd13b016438027cc8f9e7804e3"
+    },
+    {
+      "path": "icons/maskable-512.png",
+      "size": 512,
+      "sha256": "e247881fd0a513234a653b2b97d28dc9aa052bc3869ebe45dda1bac56c31acb6"
+    }
+  ]
+}

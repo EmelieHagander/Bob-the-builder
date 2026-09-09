@@ -7,6 +7,7 @@
 | I need to understand… | Start with |
 |---|---|
 | what bob is / current app shape | `README.md` |
+| install Bob on a phone / app icons / updates | `README.md` → Install Bob on a phone |
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |

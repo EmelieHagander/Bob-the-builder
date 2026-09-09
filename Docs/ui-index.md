@@ -62,6 +62,7 @@ Use existing classes/primitives before inventing a local dialect.
 | Announcements | share changes with the whole crew | pinned/current updates should dominate old noise |
 | Ask bob | ask about the current build | honest working/failure states; must not block unrelated UI accidentally |
 | Account | choose/manage projects | project context must remain clear when switching |
+| Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; Swedish phone steps |
 
 ## Frontend invariants
 
@@ -84,6 +85,7 @@ Use existing classes/primitives before inventing a local dialect.
 - Modal frame: `src/components/Modal.tsx`
 - Domain editors: `src/components/editors.tsx`
 - AI drawer: `src/components/AskBob.tsx`
+- Installation behavior, assets and verification: `README.md` → Install Bob on a phone; public guide in `src/pages/Install.tsx`, account entry in `src/components/InstallSettingsCard.tsx`
 
 A page should compose these pieces and own domain-specific layout/meaning; it should not silently fork their generic behavior.
 

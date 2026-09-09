@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 *.tsbuildinfo
+test-results/
 
 # Local env
 .env

@@ -367,7 +367,8 @@ Missing capabilities include:
 | Print support | **BUILT on list surfaces** | Shopping lists and no-print handling. | Drawings/work packs/PDF exports not built. |
 | Type/build gate | **BUILT** | `npm run build` and `typecheck`. | — |
 | Automated unit/component/E2E suite | **GAP** | Verify skill describes manual/browser verification; package has no test runner. | Increasing domain calculation/authority complexity will need deterministic tests. |
-| Offline/PWA | **GAP / later** | — | Relevant on-site, but not required before the first new vertical slice unless chosen. |
+| Home-screen installation / PWA | **BUILT** | Public Swedish phone guide, installation entry in account settings/sign-in, manifest and original tree icon bundle. See `README.md` → Install Bob on a phone. | Final installation is controlled by the phone/browser; existing login and project authority still apply. |
+| Offline project work | **GAP / later** | A public connection/retry page is available when navigation loses the network. | No offline project/media cache or queued writes; offline work packs remain later scope. |
 
 ---
 

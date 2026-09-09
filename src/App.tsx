@@ -20,8 +20,19 @@ import { Announcements } from './pages/Announcements'
 import { Today } from './pages/Today'
 import { SignIn } from './pages/SignIn'
 import { NotFound } from './pages/NotFound'
+import { Install } from './pages/Install'
 
 export function App() {
+  // Installation help is public, even while project/session loading is slow.
+  return (
+    <Routes>
+      <Route path="/install" element={<Install />} />
+      <Route path="*" element={<ProjectApp />} />
+    </Routes>
+  )
+}
+
+function ProjectApp() {
   const navigate = useNavigate()
   // The active project decides the colour theme (forest / dusk / birch).
   // Refetches when the active project changes (switch from the account
