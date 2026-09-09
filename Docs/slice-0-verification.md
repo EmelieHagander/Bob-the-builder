@@ -12,7 +12,7 @@ The branch also incorporates PR #24's installation changes from main
   immutable project/parent/auth keys; both-end relation checks; invoker today view.
 - Explicit active project through Ask bob, fixed SQL dataset projections, caller
   JWT, three lookups including briefing, row/join/byte/time limits and safe errors.
-- Direct OpenAI tool continuation through the unchanged shared service. Model
+- Direct OpenAI tool continuation through the existing shared service. Model
   response ids stay server-side within one question. Access is rechecked before
   model calls and before releasing the result.
 - AI assessment and consulted-record provenance in chat. Legacy display values
@@ -46,6 +46,13 @@ Supabase migration CLI. CI runs tests, edge type checking and the build.
 The local CLI initially tried a newer Supabase binary that could not start in
 this environment. CLI 2.81.3 successfully created the timestamped migration.
 No production database or Supabase function was modified.
+
+The first CI run passed the nine tests and exposed five diagnostics from two
+pre-existing shared-service declarations: nullable estimated cost and an async
+logger declared as returning void. This branch corrects only those generic type
+annotations; service runtime behavior is unchanged. Sibling repository copies
+were already at different versions and need their normal canonical sync; this
+branch does not claim byte identity with every sibling.
 
 ## Remaining release gates
 
