@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import * as db from '../../data/database'
 import { Icon, Loading, useAsync } from '../../components/ui'
 import { Field, FormError, inputStyle } from '../../components/form'
+import { InstallSettingsCard } from '../../components/InstallSettingsCard'
 
 export function AccountSettings() {
   const { data: account, loading } = useAsync(() => db.getAccount(), [])
@@ -55,6 +56,7 @@ export function AccountSettings() {
       </div>
 
       <div style={{ maxWidth: 520, marginTop: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <InstallSettingsCard />
         <div className="card" style={{ padding: 20 }}>
           {loading || !form ? (
             <Loading />

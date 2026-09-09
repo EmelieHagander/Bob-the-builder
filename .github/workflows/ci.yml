@@ -17,3 +17,19 @@ jobs:
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
       - run: npm run build
+      - run: npm run verify:pwa
+      - name: Verify settings, phone guide and offline retry
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install
+      - name: Build with a dummy live configuration
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify public installation before login
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installation-screenshots
+          path: test-results/
+          if-no-files-found: ignore

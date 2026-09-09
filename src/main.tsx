@@ -10,6 +10,11 @@ import '@phosphor-icons/web/fill'
 import './theme.css'
 import { App } from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { startInstallSupport } from './lib/pwa-install'
+import { registerServiceWorker } from './lib/register-service-worker'
+
+startInstallSupport()
+registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

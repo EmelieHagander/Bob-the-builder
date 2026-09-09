@@ -17,6 +17,8 @@ A React + TypeScript single-page app built with Vite. Screens:
 
 | Route | Screen |
 | --- | --- |
+| `/install` | Public Swedish home-screen installation guide, available before sign-in |
+| `/account/settings` | Account details and a prominent **Installera appen** entry |
 | `/` | Dashboard — status at a glance, areas, next build day, what needs attention |
 | `/areas`, `/areas/:slug` | Areas list and area detail (tasks / materials / reference images) |
 | `/people` | People, their skills and dietary needs |
@@ -36,6 +38,53 @@ npm run dev        # http://localhost:5173
 npm run build      # type-check + production build to dist/
 npm run preview    # serve the production build
 ```
+
+## Install Bob on a phone
+
+Open **Account → Settings → Installera appen**, or use the same button above
+the sign-in form. The [public installation guide](https://emeliehagander.github.io/Bob-the-builder/#/install)
+walks users through Safari on iPhone/iPad and Chrome on Android in Swedish.
+Supporting browsers offer a native installation prompt after a user clicks.
+Other browsers keep the manual instructions available. No app-store account
+or paid store licence is required.
+
+The installed app uses the same code, login and database as the website.
+Projects, media and Ask bob need an internet connection. The service worker
+caches **only `public/offline.html`**, a public connection/retry page. It never
+caches API responses, project data, user images or authentication responses,
+and never queues writes. Normal HTTP/browser and media-server cache rules
+continue to apply to images; installation adds no separate asset database.
+
+New website deployments also update the installed app. Save your work, close
+Bob (including other open Bob windows/tabs), and reopen it to load the new
+version. The worker never forces a reload or interrupts an open form.
+
+### Installation assets and verification
+
+`public/favicon.svg` is the existing gran/tree identity used as the source
+for the favicon, Apple touch icon, 192/512 px app icons and full-bleed maskable
+icon. This also aligns the older PNG favicon with the tree identity in Bob's
+app shell. `public/icons/bundle.json` records the source and export checksums.
+To regenerate, install **Pillow 12.3.0** in your Python environment and run
+`python3 scripts/render-icons.py`; commit the exports and bundle together.
+No image-generation service or runtime image dependency is needed.
+
+`public/manifest.webmanifest` uses relative identity, start and scope URLs.
+Vite expands `%BASE_URL%` in HTML and `import.meta.env.BASE_URL` in code, so
+the app stays inside `/Bob-the-builder/` on GitHub Pages. Hash routes remain
+unchanged. Installation must be served over HTTPS (localhost is also valid).
+
+After `npm ci`, run `npm run build` and `npm run verify:pwa` to check the
+production manifest, icon bundle, installation states and worker boundaries.
+Run `CHROME_PATH=/path/to/chrome npm run verify:install` for the relevant
+browser flow at 320/390 px and desktop widths, including a real offline
+fallback. CI runs this against both demo data and a dummy, intercepted live
+configuration; it never uses a real account or writes to the database.
+The device's final installation dialog still belongs to iOS/Android and
+should be checked on a real phone when changing the installation instructions.
+
+Guide references: [Apple's Swedish iPhone instructions](https://support.apple.com/sv-se/guide/iphone/iph42ab2f3a7/ios)
+and [Google's Android installation instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en-GB).
 
 ## Architecture — the database layer
 

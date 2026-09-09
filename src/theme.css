@@ -328,6 +328,101 @@ select {
   margin-bottom: 14px;
 }
 
+/* Installation uses the same cards, buttons and palette as the app. */
+.install-page {
+  max-width: 660px;
+  padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  line-height: 1.6;
+}
+.install-header {
+  margin: 28px 0 20px;
+}
+.install-header h1 {
+  margin: 14px 0 10px;
+}
+.install-header p + p,
+.install-card p + p {
+  margin-top: 10px;
+}
+.install-card {
+  padding: 20px;
+  line-height: 1.6;
+}
+.install-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.install-card-heading img {
+  flex-shrink: 0;
+}
+.install-card h2 {
+  font-size: 22px;
+  line-height: 1.2;
+}
+.install-card > p {
+  margin-top: 12px;
+}
+.install-card > .btn {
+  width: 100%;
+  margin-top: 16px;
+}
+.install-hint {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.install-primary {
+  width: 100%;
+}
+.install-page .btn,
+.install-card .btn,
+.install-signin .btn {
+  min-height: 48px;
+  font-size: 15px;
+}
+.install-page :focus-visible,
+.install-card :focus-visible,
+.install-signin :focus-visible {
+  outline: 3px solid var(--brand);
+  outline-offset: 4px;
+}
+.install-status:not(:empty) {
+  margin-top: 14px;
+}
+.install-page > .card,
+.install-questions {
+  margin-top: 20px;
+}
+.install-devices {
+  margin: 16px 0;
+}
+.install-steps {
+  padding-left: 24px;
+}
+.install-steps li {
+  padding-left: 4px;
+  margin-top: 16px;
+}
+.install-steps strong {
+  display: block;
+}
+.install-questions details + details {
+  margin-top: 12px;
+}
+.install-questions summary {
+  padding: 16px 20px;
+  min-height: 48px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.install-questions p {
+  padding: 0 20px 20px;
+}
+.install-signin {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
 /* Account calendar (month grid ported from the Djuvanäs farm portal) */
 .calendar-toolbar {
   display: flex;

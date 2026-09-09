@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { Icon } from '../components/ui'
 import { Field, FormError, inputStyle } from '../components/form'
@@ -75,6 +76,10 @@ export function SignIn() {
             <div style={{ fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 3 }}>build crew</div>
           </div>
         </div>
+
+        <p className="install-signin" lang="sv">
+          <Link className="btn" to="/install"><Icon name="device-mobile" size={18} /> Installera appen</Link>
+        </p>
 
         <div className="card" style={{ padding: 26 }}>
           <h1 style={{ fontSize: 20, margin: 0 }}>Sign in</h1>
