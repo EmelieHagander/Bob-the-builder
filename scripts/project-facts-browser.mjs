@@ -175,10 +175,13 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await page.getByRole('article', { name: 'Window width', exact: true }).waitFor()
   assert.equal(await opening.count(), 0, 'Part scope must exclude unrelated measurements')
   assert.equal([...fixture.records.measurement.values()].find(r => r.subject === 'Window width').component_id, [...fixture.records.component.keys()][0])
+  await page.locator('.project-facts').evaluate(async element => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished))
+  })
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Facts must fit the viewport')
   for (const button of await page.locator('.project-facts').getByRole('button').all()) {
     const box = await button.boundingBox()
-    assert(!box || (box.width >= 44 && box.height >= 44), 'Fact actions need 44px targets')
+    assert(!box || (box.width >= 44 && box.height >= 44), 'Fact action needs 44px target: ' + await button.innerText() + ' ' + JSON.stringify(box))
   }
   await page.screenshot({ path: 'test-results/project-facts-' + width + '.png', fullPage: true })
   for (let i = 0; i < 25; i++) fixture.remember('measurement', {
