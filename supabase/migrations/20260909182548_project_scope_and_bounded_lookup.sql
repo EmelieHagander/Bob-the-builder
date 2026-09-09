@@ -1,8 +1,55 @@
 -- Slice 0. Apply AFTER db/migrations/0001..0010. No other app schema is changed.
 begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
 
--- Do not guess who owns an existing project. Resolve these memberships in a
--- reviewed data migration before deploying this policy change (see db/README).
+-- Bootstrap and policy changes commit together. Preserve existing memberships
+-- when the reviewed account already belongs to another project.
+lock table bob.projects, bob.people in share row exclusive mode;
+drop index bob.people_auth_user_idx;
+create unique index people_project_auth_idx on bob.people(project_id, auth_user_id)
+  where auth_user_id is not null;
+create index people_auth_projects_idx on bob.people(auth_user_id, project_id)
+  where auth_user_id is not null;
+
+-- An operator may supply an explicitly reviewed mapping as transaction-local
+-- JSON. No emails or generated Auth ids belong in repository migration files.
+-- This executes only during the privileged migration, never through an RPC.
+do $$
+declare m record; v_users uuid[]; v_user uuid;
+begin
+  for m in select * from jsonb_to_recordset(coalesce(
+    nullif(current_setting('bob.reviewed_member_mapping', true), '')::jsonb, '[]'::jsonb
+  )) as approved(project_id text, email text, name text)
+  loop
+    if nullif(trim(m.project_id), '') is null or nullif(trim(m.email), '') is null
+      or nullif(trim(m.name), '') is null then
+      raise exception 'Bob bootstrap blocked: project, confirmed email and member name are required';
+    end if;
+    if not exists(select 1 from bob.projects where id = m.project_id) then
+      raise exception 'Bob bootstrap blocked: reviewed project does not exist';
+    end if;
+    select array_agg(id) into v_users from auth.users where lower(email) = lower(trim(m.email));
+    if coalesce(cardinality(v_users), 0) <> 1 then
+      raise exception 'Bob bootstrap blocked: reviewed email must resolve to exactly one Auth account';
+    end if;
+    v_user := v_users[1];
+    if not exists(select 1 from auth.users where id = v_user and email_confirmed_at is not null) then
+      raise exception 'Bob bootstrap blocked: reviewed Auth email is not confirmed';
+    end if;
+    if exists(select 1 from bob.people where project_id = m.project_id and auth_user_id = v_user) then
+      continue;
+    end if;
+    if exists(select 1 from bob.people where project_id = m.project_id) then
+      raise exception 'Bob bootstrap blocked: existing crew requires an explicit person mapping';
+    end if;
+    insert into bob.people(id, project_id, name, initials, role, auth_user_id)
+    values ('u_' || replace(gen_random_uuid()::text, '-', ''), m.project_id,
+      trim(m.name), upper(left(trim(m.name), 2)), 'Organiser', v_user);
+  end loop;
+end $$;
+
+-- Do not guess ownership or silently remove access to an existing project.
 do $$ begin
   if exists (select 1 from bob.projects p where not exists (
     select 1 from bob.people m where m.project_id = p.id and m.auth_user_id is not null
@@ -15,12 +62,7 @@ create schema if not exists bob_private;
 revoke all on schema bob_private from public, anon;
 grant usage on schema bob_private to authenticated;
 alter default privileges in schema bob_private revoke execute on functions from public;
-
-drop index bob.people_auth_user_idx;
-create unique index people_project_auth_idx on bob.people(project_id, auth_user_id)
-  where auth_user_id is not null;
-create index people_auth_projects_idx on bob.people(auth_user_id, project_id)
-  where auth_user_id is not null;
+alter function bob.set_updated_at() set search_path = '';
 
 alter table bob.person_emails add column project_id text;
 update bob.person_emails e set project_id = p.project_id from bob.people p where p.id = e.person_id;

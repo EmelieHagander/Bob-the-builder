@@ -61,8 +61,25 @@ before(async () => {
   `)
   const migration = await readFile(new URL((await readdir(migrations)).find(f => f.endsWith('.sql'))!, migrations), 'utf8')
   await assert.rejects(pg.exec(migration), /reviewed member mapping/)
-  await pg.exec("rollback; delete from bob.projects where id = 'orphan'")
-  await pg.exec(migration)
+  await pg.exec('rollback')
+  const reviewed = (project_id: string, email: string) => migration.replace('begin;',
+    `begin; select set_config('bob.reviewed_member_mapping', '${JSON.stringify([{project_id,email,name:'Reviewed member'}])}', true);`)
+  for (const [project,email,error] of [
+    ['orphan','missing@example.test',/exactly one Auth account/],
+    ['orphan','stranger@example.test',/not confirmed/],
+    ['A','two@example.test',/existing crew/],
+  ] as const) {
+    await assert.rejects(pg.exec(reviewed(project,email)), error)
+    await pg.exec('rollback')
+    assert.equal((await pg.query("select to_regclass('bob.people_auth_user_idx') is not null as intact")).rows[0].intact, true, 'failed mapping restores legacy uniqueness')
+  }
+  await pg.exec(reviewed('orphan','one@example.test'))
+  assert.deepEqual((await pg.query('select project_id from bob.people where auth_user_id=$1 order by project_id',[u1])).rows,
+    [{project_id:'A'},{project_id:'orphan'}], 'reviewed bootstrap keeps the existing membership')
+  assert.equal(await access(u1,'orphan'), true, 'new reviewed member has access under the real RLS policy')
+  assert.equal(await access(u2,'orphan'), false, 'other existing member does not acquire access')
+  // Remove only this local bootstrap fixture; retain A/B for the independent tests.
+  await pg.exec("delete from bob.projects where id='orphan'")
   await pg.exec(`
     insert into bob.people(id,project_id,name,initials,auth_user_id) values
       ('bothA','A','Shared member','SM','${both}'),('bothB','B','Shared member','SM','${both}');

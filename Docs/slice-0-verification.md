@@ -76,11 +76,12 @@ branch does not claim byte identity with every sibling.
 
 ## Remaining release gates
 
-1. Review the intended authenticated member mapping for
-   `p_bygga_in_entren` (currently zero links). Preserve all real data and intended
-   collaborators. The account owner/email fields are empty, so they cannot establish
-   the intended account. Review mapping together with the legacy uniqueness
-   transition as described in the database rollout.
+1. The user identified the intended confirmed account on 2026-09-09. It is already
+   a member of Test. The migration now takes an operator-reviewed mapping and
+   preserves both memberships in the same transaction as the uniqueness/policy
+   change. Local tests pass for approved and rejected mappings. A private recovery
+   snapshot of 18 affected tables (122 rows) passed exact local read-back.
+   Applying the coordinated transaction is the remaining step.
 2. Follow the coordinated rollout in [db/README.md](../db/README.md).
    A normal main merge automatically publishes Pages but does not apply SQL or
    deploy edge functions. This implementation PR must not be merged as a
@@ -92,6 +93,15 @@ branch does not claim byte identity with every sibling.
    with real sessions, and inspect desktop/mobile source disclosure.
 5. Confirm OpenAI model settings/key availability and deploy the retirement
    response at the old endpoint. Launchpad is retired, with no re-enable gate.
+
+`Live Bob release check` runs when its workflow/script first reaches main, or on
+manual dispatch. It signs in with the existing public guest account, proves the
+real entré project is denied, creates a disposable project through the actual RPC,
+and requires a real OpenAI answer whose source evidence includes an inserted material
+outside the briefing. It prints only the fixture project id and safe result messages.
+An operator must delete that exact fixture project afterwards; no project-delete
+RPC or service key is introduced just to clean up a test. Real project memberships
+must never be granted to the public guest for this check.
 
 The original Slice 0 exit is retained. Local implementation evidence does not
 turn the remaining deployed-provider/browser checks into completed work.

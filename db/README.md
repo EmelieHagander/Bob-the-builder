@@ -159,20 +159,24 @@ deployment check on 2026-09-09 found:
 
 Review the intended accounts for each project, including guest/collaborator access.
 Do not copy a different project's user merely because it is the only linked user.
-Preserve project ids and data; add the approved member mapping in a separate,
-reviewed data migration before applying the policy migration.
+The user has now identified the intended confirmed account. It already belongs
+to Test, so both memberships must be preserved. Keep the supplied email and
+resolved Auth id out of this public repository.
 
-The current account's owner name and email are both empty, and the entré project
-has no crew rows. Neither can establish the intended account. The required input
-is the intended member's confirmed Bob sign-in email; resolve that exact Auth user
-before drafting the concrete mapping. Do not grant the public guest access by default.
+The migration accepts an operator-reviewed JSON array through the transaction-local
+setting `bob.reviewed_member_mapping`, with `project_id`, `email` and `name` per
+entry. Set it immediately after `begin` in the deployment transaction. The
+migration resolves exactly one confirmed Auth account, requires the target
+project to exist, and only adds a member when that project's crew is empty.
+Existing matching memberships are preserved; other existing crew require a
+separate explicit person-mapping decision. Without a reviewed mapping, orphaned
+projects still abort the migration. There is no mapping RPC or client-side setting.
 
-The legacy `people_auth_user_idx` allows an Auth user in only one project. If the
-approved account already belongs to Test, the mapping and change to per-project
-uniqueness must be reviewed and applied together in one transaction before the
-orphan check; the current migration ordering must be adjusted for that rollout.
-Do not unlink the Test membership to make the insert pass. This is an explicit
-remaining rollout task, not a reason to guess a different member.
+Legacy global Auth uniqueness is replaced before the reviewed insert; mapping,
+orphan preflight and policies commit together. Failure rolls back all of them.
+Tests cover missing/unconfirmed accounts, occupied crew, rollback of the index
+change, and preserving the original membership when adding the second one.
+Do not unlink Test or grant the public guest access to the real project.
 
 Preflight (read only):
 
@@ -182,7 +186,7 @@ from bob.projects p left join bob.people m on m.project_id = p.id
 group by p.id, p.name order by p.id;
 ```
 
-Rollout order: verified backup → reviewed mapping → policy migration → edge
+Rollout order: verified backup → atomic reviewed mapping/policy migration → edge
 deployment → frontend release → live acceptance checks. Use a maintenance window:
 the old client uses the retired join RPC, while the new client requires the new
 RPCs. A frontend-only merge/deploy is not compatible. Verify a real member,
@@ -200,3 +204,7 @@ Auth/PostgREST test or a live model answer.
 
 See [the verification record](../Docs/slice-0-verification.md) for exact coverage,
 limitations and the remaining live/browser gates.
+
+`node scripts/check-restore-snapshot.mjs /absolute/path/to/private-snapshot.json`
+checks the affected tables' recovery data against a fresh local Postgres fixture.
+Recovery snapshots contain private data and must never be committed to this repo.
