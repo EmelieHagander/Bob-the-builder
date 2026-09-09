@@ -75,14 +75,14 @@ There is no fallback to another project or to privileged project reads.
 Membership must be trustworthy before this tool is enabled: project creation,
 invitations and guest/volunteer joining must establish explicit project access,
 and ordinary content edits must not let a caller grant themselves membership.
-The current first-project join and globally unique person/auth link do not
-provide that multi-project contract. Implement and test membership-aware RLS
-for the exposed parent/child tables as part of Slice 0; a request filter alone
-does not close the existing public API paths. See [Supabase's RLS guide](https://supabase.com/docs/guides/database/postgres/row-level-security).
+The legacy first-project join and globally unique person/auth link did not
+provide that multi-project contract. This branch replaces them with membership-aware
+RLS for the exposed parent/child tables; deployment remains a release gate.
+A request filter alone does not close public API paths. See [Supabase's RLS guide](https://supabase.com/docs/guides/database/postgres/row-level-security).
 
 ### Initial allowlist
 
-All sources below belong to schema `bob`. The planned lookup exposes only the
+All sources below belong to schema `bob`. The lookup exposes only the
 listed projections, subject to project membership; supporting joins are not independent
 model-selectable datasets. Server-generated source ids/timestamps are described
 under result semantics.
@@ -110,8 +110,8 @@ fields, food tables, account settings/notes, other apps' schemas, Auth records,
 secrets, raw storage paths and AI configuration/usage records. Internal provider
 configuration and usage bookkeeping remain server concerns, never tool results.
 Media, measurements and selected solutions can extend this owner in their later
-slices once their data/access contracts exist. The current briefing includes
-dietary text; those fields must not implicitly enter the construction lookup.
+slices once their data/access contracts exist. The legacy briefing included
+dietary text; the construction briefing and lookup now exclude those fields.
 Any retained AI food/diet workflow needs its own purpose-specific projection and
 the same project authority checks. The existing Food surfaces keep their contract.
 

@@ -269,8 +269,9 @@ Each slice must be independently mergeable, useful and truthful. Do not hide unf
 
 ## Slice 0 — Trust foundation
 
-Implementation is in progress: membership, bounded lookup and direct OpenAI
-tool wiring have local automated proof. Deployment/provider/browser gates remain;
+Implementation is in progress: membership, bounded lookup and OpenAI tool wiring
+have automated proof, including the production frontend's project-switch flow in CI.
+Deployed Supabase/OpenAI proof and the coordinated rollout remain;
 see [the verification record](slice-0-verification.md). This is not yet a live exit.
 
 **Goal:** make project identity, authority and provenance safe enough for V1 data.

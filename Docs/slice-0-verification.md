@@ -27,7 +27,13 @@ The branch also incorporates PR #24's installation changes from main
   draft reset, reload and sign-out at 320, 390 and 1280px. HTTP services are fixtures.
   Long source ids wrap, and send/close controls have 44px touch targets.
 
-## Local evidence — 2026-09-09
+## Local and CI evidence — 2026-09-09
+
+[CI run 34394120867](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34394120867)
+passed on `84a17756e90c64aa9c2d8b3bdd12329ae5f02c7d`: nine tests, both edge
+entry points, production builds, PWA checks, both installation browser flows and
+the new Ask bob browser suite. The screenshots are retained in its
+`installation-screenshots` artifact alongside the earlier PWA screenshot.
 
 | Check | Result | Practical limit |
 | --- | --- | --- |
@@ -40,9 +46,9 @@ The branch also incorporates PR #24's installation changes from main
 | Limits/errors | Parent/join/UTF-8 byte caps, malformed args, timeout, empty vs error, lookup budget and revoked access tested | Does not benchmark large production datasets |
 | HTTP → tools → SQL → answer | Passed using the actual request/answer dispatcher and real Postgres lookup | Model transport is deterministic fixture; **no live OpenAI call claimed** |
 | Two-project reads and response generation | Separate results; A → B → A/sign-out invalidate old callbacks | Not a browser interaction test |
-| Edge type check | Local attempt blocked fetching existing shared-service `esm.sh` import | CI runs the real Deno check |
-| Ask bob browser flow | Added `verify:project`; current CI result must be checked before marking passed | Real production frontend; fixture Auth/PostgREST/AI responses, not a live provider test |
-| Interactive visual pass | Cloud browser rejected local preview with `ERR_BLOCKED_BY_CLIENT` | CI captures source disclosure at three widths; interactive inspection remains separate |
+| Edge type check | Passed in CI for `ask-bob` and the retirement endpoint | Local dependency fetch was unavailable |
+| Ask bob browser flow | Passed `verify:project` at 320, 390 and 1280px, including reachable 44px controls and no drawer overflow | Real production frontend; fixture Auth/PostgREST/AI responses, not a live provider test |
+| Interactive visual pass | Local preview rejected by the cloud browser; downloaded CI screenshot URL returned HTTP 403 | CI screenshots exist, but have not been manually inspected in this session |
 
 Reproduce the automated suite with `npm ci`, `npm test`, `npm run build` and
 `npm run check:edge`. Dependencies are pinned for PGlite, tsx, Deno and the
@@ -56,6 +62,10 @@ never production credentials. Existing installation/PWA browser gates are preser
 The local CLI initially tried a newer Supabase binary that could not start in
 this environment. CLI 2.81.3 successfully created the timestamped migration.
 No production database or Supabase function was modified.
+
+A read-only configuration check found Bob's `ask-bob`/`global` OpenAI settings
+enabled and its selected catalogue model active. This confirms routing configuration,
+not the deployed API key or the success of a real model call.
 
 The first CI run passed the nine tests and exposed five diagnostics from two
 pre-existing shared-service declarations: nullable estimated cost and an async
@@ -78,8 +88,8 @@ branch does not claim byte identity with every sibling.
 3. In an accessible preview/staging environment, verify real Supabase JWT/
    PostgREST positive and denied calls; invitation claim and new project creation;
    a real OpenAI tool call reaching an item outside the project-only briefing.
-4. Confirm the new CI browser flow passes, inspect its desktop/mobile source
-   screenshots, and repeat the project-switch smoke check after the coordinated rollout.
+4. Repeat the now-passing CI project-switch flow after the coordinated rollout
+   with real sessions, and inspect desktop/mobile source disclosure.
 5. Confirm OpenAI model settings/key availability and deploy the retirement
    response at the old endpoint. Launchpad is retired, with no re-enable gate.
 
