@@ -96,7 +96,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
     try { await action(); if (close) setDialog(null); if (refresh) reload() }
     catch (err) { setError(message(err)) } finally { setBusy(false) }
   }
-  const shown = selectImage ? items.filter(image => image.state === 'ready') : items
+  const shown = selectImage && !allowUpload ? items.filter(image => image.state === 'ready') : items
   return <section className="project-images" aria-label={title}>
     <div className="foundation-heading"><h3>{title}</h3>
       {(!selectImage || allowUpload) && <div className="foundation-actions">
@@ -119,7 +119,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
           <span className="foundation-hint">Uploaded {new Date(image.createdAt).toLocaleDateString()}</span>
         </div>
         <div className="foundation-actions">
-          {selectImage ? <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => selectImage(image))}>Use image</button> : <>
+          {selectImage && image.state === 'ready' ? <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => selectImage(image))}>Use image</button> : <>
             {image.state === 'pending' && <button className="btn" disabled={busy} onClick={() => void act(() => db.finalizeProjectImage(projectId, image.id))}>Check upload</button>}
             {image.state === 'ready' && target.kind !== 'project' && image.links.filter(l => l.kind === target.kind && l.targetId === target.id).map(link =>
               <button key={link.id} className="btn" disabled={busy} onClick={() => void act(() => db.unlinkProjectImage(projectId, image.id, link.id))}>Detach image</button>)}

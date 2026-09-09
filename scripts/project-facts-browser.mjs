@@ -11,7 +11,7 @@ export function createFactsFixture(timestamp, assets) {
     histories.set(row.id, entries)
   }
   return {
-    records, remember,
+    records, remember, assets,
     async handle(request, url, respond) {
       const path = url.pathname
       const tables = ['/rest/v1/current_measurements', '/rest/v1/current_components', '/rest/v1/measurement_revisions', '/rest/v1/component_revisions']
@@ -87,8 +87,19 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await editor.getByLabel('Unit', { exact: true }).selectOption('m')
   await editor.getByLabel('How was it obtained?', { exact: true }).fill('Rough estimate at the opening')
   await editor.getByLabel('Reason for change', { exact: true }).fill('First estimate')
+  const interruptedId = randomUUID()
+  fixture.assets.set(interruptedId, {
+    ...[...fixture.assets.values()][0], id: interruptedId, title: 'Interrupted source image',
+    object_path: 'A/' + interruptedId, state: 'pending', media_links: [],
+  })
   await editor.getByRole('button', { name: 'Choose source image', exact: true }).click()
   const chooser = page.getByRole('dialog', { name: 'Choose a source image', exact: true })
+  const interrupted = chooser.locator('.project-image-card').filter({ hasText: 'Interrupted source image' })
+  await interrupted.getByText('Upload incomplete', { exact: true }).waitFor()
+  assert.equal(await interrupted.getByRole('button', { name: 'Use image', exact: true }).count(), 0)
+  await interrupted.getByRole('button', { name: 'Remove image', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Remove image?', exact: true }).getByRole('button', { name: 'Remove from project', exact: true }).click()
+  await interrupted.waitFor({ state: 'hidden' })
   await chooser.getByRole('button', { name: 'Use image', exact: true }).click()
   await chooser.waitFor({ state: 'hidden' })
   await editor.getByRole('button', { name: 'Save new version', exact: true }).click()
