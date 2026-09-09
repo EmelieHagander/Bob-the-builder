@@ -220,3 +220,4 @@ export interface ChatMessage {
   /** A longer written-out answer from the builders, shown as its own block. */
   report?: string
 }
+export type { Measurement, ExistingComponent, ProjectFact, FactKind, FactFilter, FactPage } from './projectFacts'

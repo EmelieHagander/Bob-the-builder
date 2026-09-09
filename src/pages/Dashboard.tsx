@@ -158,6 +158,11 @@ export function Dashboard() {
         </section>
       </div>
 
+      <Link to="/facts" className="card foundation-section facts-entry">
+        <Icon name="ruler" size={24} /><div><h3>Measurements & existing parts</h3>
+          <p className="foundation-hint">Record lengths, track unknowns and keep the history of parts you may reuse.</p></div>
+        <Icon name="arrow-right" size={20} />
+      </Link>
       {project && <div className="card foundation-section"><ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" /></div>}
 
       {addingTask && (

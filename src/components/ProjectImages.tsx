@@ -12,7 +12,7 @@ export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
 const message = (err: unknown) => err instanceof Error ? err.message : String(err)
 
 /** URLs last only as long as this view; an open original performs a new authorised read. */
-function StoredImage({ projectId, image, original = false }: { projectId: string; image: MediaAsset; original?: boolean }) {
+export function StoredImage({ projectId, image, original = false }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean }) {
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -64,8 +64,8 @@ function UploadImage({ projectId, target, onClose, onSaved }: { projectId: strin
   </Modal>
 }
 
-export function ProjectImages({ projectId, target, title = 'Images', selectImage }: {
-  projectId: string; target: MediaTarget; title?: string; selectImage?: (image: MediaAsset) => Promise<void>
+export function ProjectImages({ projectId, target, title = 'Images', selectImage, allowUpload = false }: {
+  projectId: string; target: MediaTarget; title?: string; selectImage?: (image: MediaAsset) => Promise<void>; allowUpload?: boolean
 }) {
   const [items, setItems] = useState<MediaAsset[]>([])
   const [more, setMore] = useState(false)
@@ -99,8 +99,8 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
   const shown = selectImage ? items.filter(image => image.state === 'ready') : items
   return <section className="project-images" aria-label={title}>
     <div className="foundation-heading"><h3>{title}</h3>
-      {!selectImage && <div className="foundation-actions">
-        {target.kind !== 'project' && <button className="btn" disabled={!db.authEnabled() || busy} onClick={() => setDialog({ kind: 'choose' })}>Attach existing</button>}
+      {(!selectImage || allowUpload) && <div className="foundation-actions">
+        {!selectImage && target.kind !== 'project' && <button className="btn" disabled={!db.authEnabled() || busy} onClick={() => setDialog({ kind: 'choose' })}>Attach existing</button>}
         <button className="btn btn-primary" disabled={!db.authEnabled() || busy} onClick={() => setDialog({ kind: 'upload' })}><Icon name="plus" size={16} /> Add image</button>
       </div>}
     </div>
@@ -148,7 +148,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
       <p className="foundation-hint">{IMAGE_PURPOSES[dialog.image.purpose]} · {dialog.image.width} × {dialog.image.height} pixels · {dialog.image.originalName}</p>
     </Modal>}
     {dialog?.kind === 'remove' && <Modal title="Remove image?" onClose={() => { if (!busy) setDialog(null) }}>
-      <p>This removes “{dialog.image.title}” from the project and all its task, step and area attachments.</p>
+      <p>This removes “{dialog.image.title}” from the project and all its attachments. Measurements and part history keep their recorded values and the image title.</p>
       {error && <FormError>{error}</FormError>}
       <div className="foundation-actions"><button className="btn" disabled={busy} onClick={() => setDialog(null)}>Cancel</button>
         <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.removeProjectImage(projectId, dialog.image.id), true)}>{busy ? 'Removing…' : 'Remove from project'}</button></div>

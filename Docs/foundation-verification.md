@@ -1,5 +1,21 @@
 # Milestones 1A/1B — verification and rollout
 
+## Next manual foundation: 2A/2B (in progress)
+
+The [project facts contract](project-facts.md) owns measurements, provenance and
+existing components. All 22 local tests pass, including eight new checks for exact
+length input, immutable history, project/parent authority, source-image deletion,
+stale writes, component archive/restore and delayed responses after project switching.
+TypeScript and Vite pass. Production browser and deployment checks are pending;
+this section does not yet claim the new foundation is released.
+
+Source migration: `20260909221503_measurements_and_existing_components.sql`.
+The browser foundation harness now includes `scripts/project-facts-browser.mjs`;
+the live foundation harness includes `scripts/check-live-project-facts.mjs` in the
+same disposable project and cleanup process.
+
+## Delivered image and step foundation (1A/1B)
+
 **Status:** 1A and 1B implemented, merged and deployed on 2026-09-09.
 The [media/step contract](media-and-steps.md) owns behavior. This file owns the
 implementation and deployment evidence. Vision remains the later 1C gate;

@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - scripts/check-live-foundations.mjs
+      - scripts/check-live-project-facts.mjs
       - .github/workflows/live-foundations.yml
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify stored images and manual steps with disposable project data
+      - name: Verify stored images, steps and project facts with disposable data
         run: node scripts/check-live-foundations.mjs
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
