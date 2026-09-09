@@ -188,7 +188,7 @@ try {
     await page.getByLabel('Task status', { exact: true }).selectOption('done')
     await page.getByRole('alert').filter({ hasText: 'Complete required checks' }).waitFor()
     const check = page.locator('.task-step').filter({ hasText: 'Check opening' })
-    await check.getByRole('checkbox').check()
+    await check.locator('.step-completion').click()
     await check.getByText(/Completed /).waitFor()
     const work = page.locator('.task-step').filter({ hasText: 'Remove trim' })
     await work.locator('summary').click()
