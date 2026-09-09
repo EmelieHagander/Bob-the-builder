@@ -1,25 +1,7 @@
-/*
- * ask-launchpad — bob's window to whichever AI backend is configured.
- *
- * A thin per-app deployment of the shared Ask seam (_shared/launchpad.ts):
- * the Launchpad builders team when the LAUNCHPAD_* secrets are set, otherwise
- * OpenAI answering directly from bob's own data.
- *
- * Everything app-specific is the one line below, and both values are pinned
- * HERE, in source, at deploy time — never taken from the request:
- *
- *   app       bob's Launchpad workspace identity, and how AI settings and
- *             spend are attributed in the shared `ai` schema.
- *   dbSchema  the Postgres schema the briefing is read from. Pinned for the
- *             same reason as `app`: a browser must never be able to point
- *             this at a sibling app's data.
- *
- * A sibling app gets its own copy of this file under its own function slug.
- *
- * Deploy:   supabase functions deploy ask-launchpad --project-ref <ref>
- * Secrets:  see supabase/README.md
- */
-
+/** Bob's authenticated project lookup endpoint. The URL is retained for client
+ * compatibility; Slice 0 uses direct OpenAI and rejects legacy Launchpad runs.
+ * Model settings/billing remain in the unchanged shared AI service.
+ * Deploy only with the membership migration and matching frontend; see README. */
 import { serveLaunchpad } from '../_shared/launchpad.ts'
 
 Deno.serve(serveLaunchpad({ app: 'bob', dbSchema: 'bob' }))

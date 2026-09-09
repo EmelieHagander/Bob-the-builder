@@ -266,6 +266,10 @@ Each slice must be independently mergeable, useful and truthful. Do not hide unf
 
 ## Slice 0 — Trust foundation
 
+Implementation is in progress: membership, bounded lookup and direct OpenAI
+tool wiring have local automated proof. Deployment/provider/browser gates remain;
+see [the verification record](slice-0-verification.md). This is not yet a live exit.
+
 **Goal:** make project identity, authority and provenance safe enough for V1 data.
 
 Includes:
@@ -281,7 +285,7 @@ Includes:
 
 **Exit:** a project-aware backend lookup proves authorised success, cross-project
 denial and isolation after project switching, using only the allowed data. The
-lookup contract is specified; provider wiring and runtime proof are still required.
+lookup contract has a local implementation; deployed provider and browser proof are still required.
 
 ## Slice 1 — Show bob the real project
 

@@ -64,21 +64,26 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 - `db/README.md` — database mapping, auth/membership and migration guidance.
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
+- `supabase/migrations/` — new CLI-created migrations, applied after the legacy database bootstrap.
+- `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 
 ## AI / Ask bob
 
-- `supabase/README.md` — AI backend modes, runtime setup and the specified Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
-- `supabase/functions/_shared/bob-context.ts` — project briefing supplied to the AI.
+- `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
+- `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
+- `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
-- `supabase/functions/_shared/launchpad.ts` and `supabase/functions/ask-launchpad/` — Launchpad seam.
+- `supabase/functions/_shared/launchpad.ts` and `supabase/functions/ask-launchpad/` — authenticated Bob endpoint; the former Launchpad branch is disabled.
 - `src/components/AskBob.tsx` — frontend interaction contract for Ask bob.
 
 ## Quality / runtime
 
 - `.claude/skills/verify/SKILL.md` — current browser-verification procedure and known interaction gotchas.
 - `package.json` — current build/typecheck commands.
+- `tests/` — local Postgres/RLS, request/tool and project-response isolation tests.
+- `Docs/slice-0-verification.md` — Slice 0 evidence, limits and remaining release gates.
 
 ## Steward files
 

@@ -1,8 +1,8 @@
 # bob — database
 
 bob lives in a **shared Postgres database**, so it keeps strictly to its own
-schema: everything is created inside schema **`bob`** — tables, enums, views,
-functions and triggers. Nothing touches `public`, every statement is
+schemas: project data lives in **`bob`**; guarded internal membership helpers
+live in non-exposed **`bob_private`**. Nothing touches `public`, every statement is
 schema-qualified, and nothing relies on `search_path`.
 
 ## Layout
@@ -32,8 +32,9 @@ for f in db/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
 psql "$DATABASE_URL" -f db/seed.sql        # optional sample data
 ```
 
-Migrations are numbered and run once, in order. The seed is idempotent —
-re-running it is a no-op.
+These are the legacy bootstrap migrations. New installations also need the Slice 0
+migration below before using the current frontend. The optional seed creates
+unlinked demo crew: review member mappings before applying Slice 0.
 
 ### Going live for real
 
@@ -88,7 +89,7 @@ become join tables:
 | `FoodGroup` / `FoodItem` | `bob.food_groups`, `bob.food_items` |
 | `Announcement` | `bob.announcements` |
 | `TodayTask` | `bob.today_tasks` (a view over tasks + areas, not a table) |
-| `ChatMessage` (Ask bob) | *not in the DB* — chat stays client-side; live answers come from Launchpad via the `ask-launchpad` edge function (`supabase/README.md`), which touches no `bob` tables |
+| `ChatMessage` (Ask bob) | *not in the DB* — chat stays client-side; answers use the project-scoped read-only Ask seam (`supabase/README.md`) |
 
 Display strings the UI consumes verbatim (`hours: '6h'`, `spots: '12 / 20'`,
 `cost: '1 920 kr'`, `day: 'Lör 5 juli'`) are stored as authored text for now,
@@ -104,57 +105,86 @@ whenever `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set (copy
 schema** (`{ db: { schema: 'bob' } }`), so table names in queries stay bare.
 With no env config the app falls back to the in-memory mock data.
 
-## Login & membership
+## Slice 0 membership and project policies
 
-Sign-in uses Supabase Auth (magic link or email + password — enable the
-**Email** provider under Authentication → Providers, and set the site URL to
-the deployed app so magic links return there). The shared database means
-`auth.users` is project-wide; bob links accounts to his own crew via
-`bob.people.auth_user_id`, resolved by `bob.join_project()` (security
-definer) at sign-in:
+> Implemented and locally tested; not applied to the shared database yet.
+> Legacy migrations 0001–0010 describe the previous household-wide policies.
 
-- **Invited**: the account dashboard's **Invite** button registers a crew
-  member (name + email) via `bob.invite_person()` (security definer,
-  migration `0007`); their sign-in then claims that person row. Prefer SQL?
-  The manual equivalent is still:
+Apply `supabase/migrations/20260909182548_project_scope_and_bounded_lookup.sql`
+**after** the ten legacy migrations. It was created with `supabase migration new`.
+Do not replay the legacy migrations or use an unreviewed `db push` against this
+shared project's migration history.
 
-  ```sql
-  insert into bob.person_emails (person_id, email) values ('he', 'henrik@example.se');
-  ```
+The authority source remains `bob.people`: a protected `(project_id, auth_user_id)`
+link, unique per project. One Auth user can belong to several projects. Editable
+crew labels such as Organiser/Volunteer are **not permission roles**. Members
+retain collaborative content editing and may invite other people to that project.
 
-  `person_emails` is deliberately unreachable through the API (RLS deny-all,
-  no grants), so invite emails are never exposed.
-- **Anyone with the link**: an unknown email joins as a fresh Volunteer
-  profile, named from the address.
-- **Guest**: the sign-in screen's "Continue as guest" uses one shared,
-  pre-created auth user (`guest@bob.local`, credentials public by design —
-  they live in the client bundle). The guest is an ordinary authenticated
-  member named "Guest", so writes still carry an identity. Live mode shows
-  the sign-in screen INSTEAD of the app until a session exists; reads stay
-  open at the API level (household posture), the gate is UX.
+- All project tables and children require membership for both reads and writes.
+  Both ends of crew, assignment, attendance, lead, author, meal and diet relations
+  must belong to the same project, even for callers who belong to both.
+- Client grants cannot rewrite row ids, project/parent ids or `auth_user_id`.
+  Projects and crew memberships cannot be inserted directly through the API.
+- `bob.create_project(p_input)` atomically creates a project and its creator's
+  member row. A signed-in newcomer can start their own project.
+- `bob.invite_person(project, name, email)` checks membership before creating an
+  invitation. Invitation emails are private and unique **within** a project.
+- `bob.claim_project_invites()` claims only invitations matching the Auth user's
+  confirmed email. Unknown accounts do not join arbitrary existing projects.
+  `bob.join_project(project)` returns only an existing membership in that project;
+  the old no-argument automatic join is removed.
+- Definer helpers live in non-exposed `bob_private`, with empty search paths and
+  authenticated-user checks. The exposed wrappers and search RPC are invokers.
+- `today_tasks` uses `security_invoker` so it cannot bypass underlying RLS.
+- Deleting the last linked member is rejected; arrange another member first.
+- A shared guest login only sees projects explicitly linked to that guest.
+  Such a project is accessible to everyone using those public guest credentials.
 
-## Security posture
+`bob.account` and `bob.account_notes` retain the existing shared-household
+semantics. They have no project id and are excluded from Ask bob. This slice
+does **not** establish separate private accounts or organiser-only authority.
+Other apps' schemas, shared AI tables, and the separately managed `bob.asset`
+table are not altered.
 
-- **RLS is enabled on every table** from day one (shared database).
-- Reads: every table carries a public `for select` policy.
-- Writes: the account level (migration `0006`) brought the app's first write
-  features — create/schedule projects, account notes, account settings — and
-  its policies require a **signed-in member** (`authenticated`). Anyone with
-  the link can become one via the sign-in page (migration `0005`), so this is
-  still the household-tool posture, but writes are gated behind login and
-  carry an identity. The one exception is the `0004` bootstrap: creating the
-  FIRST project stays open while `bob.projects` is empty, so a fresh install
-  works before anyone can sign in. Migration `0009` extends the same posture
-  to project content — areas, tasks (and assignees), materials, events (and
-  sign-ups), announcements, reference-image labels. People rows are still
-  only created via the security-definer functions (`invite_person`,
-  `join_project`), and `person_emails` keeps its deny-all posture.
-- The grants block in the migration is Supabase-aware (`anon` /
-  `authenticated` / `service_role`) and a no-op on a plain Postgres — there,
-  grant your app's role instead:
+### Existing project mapping is a rollout gate
 
-  ```sql
-  grant usage on schema bob to bob_app;
-  grant select on all tables in schema bob to bob_app;
-  alter default privileges in schema bob grant select on tables to bob_app;
-  ```
+The migration aborts if any existing project lacks an authenticated member.
+This avoids silently removing access or guessing ownership. The read-only
+deployment check on 2026-09-09 found:
+
+| Project | Existing authenticated member links |
+| --- | --- |
+| Bygga in entrén (`p_bygga_in_entren`) | 0 — needs an explicitly reviewed mapping |
+| Test (`p_test`) | 1 — preserved by the migration |
+
+Review the intended accounts for each project, including guest/collaborator access.
+Do not copy a different project's user merely because it is the only linked user.
+Preserve project ids and data; add the approved member mapping in a separate,
+reviewed data migration before applying the policy migration.
+
+Preflight (read only):
+
+```sql
+select p.id, p.name, count(m.auth_user_id) as linked_members
+from bob.projects p left join bob.people m on m.project_id = p.id
+group by p.id, p.name order by p.id;
+```
+
+Rollout order: verified backup → reviewed mapping → policy migration → edge
+deployment → frontend release → live acceptance checks. Use a maintenance window:
+the old client uses the retired join RPC, while the new client requires the new
+RPCs. A frontend-only merge/deploy is not compatible. Verify a real member,
+non-member, multi-project member, invitation claim, project creation and project
+switching before declaring Slice 0 live. Failed preflight rolls back atomically;
+after data changes, prefer a reviewed forward fix over restoring public policies.
+
+### Verification
+
+`npm test` runs the complete legacy + new migration against PGlite (real Postgres,
+with Supabase Auth/roles represented by local fixtures). It exercises RLS as
+`anon` and `authenticated`, the static lookup RPC, and the actual edge request/tool
+dispatcher with a deterministic provider fixture. It is not a deployed Supabase
+Auth/PostgREST test or a live model answer.
+
+See [the verification record](../Docs/slice-0-verification.md) for exact coverage,
+limitations and the remaining live/browser gates.

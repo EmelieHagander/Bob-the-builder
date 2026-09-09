@@ -3,12 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "bob — build together, in the forest. Community build & renovation coordination app.",
+  "description": "bob \u2014 build together, in the forest. Community build & renovation coordination app.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "check:edge": "deno check --node-modules-dir=auto supabase/functions/ask-launchpad/index.ts",
     "verify:pwa": "node scripts/check-pwa.mjs",
     "verify:install": "node scripts/check-installation-browser.mjs"
   },
@@ -20,10 +22,14 @@
     "react-router-dom": "^6.26.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
+    "deno": "2.9.6",
     "playwright-core": "1.62.1",
+    "supabase": "2.81.3",
+    "tsx": "4.23.13",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
   }

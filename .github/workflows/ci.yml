@@ -14,6 +14,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm test
+      - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
       - run: npm run build

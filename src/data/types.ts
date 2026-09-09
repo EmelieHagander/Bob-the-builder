@@ -174,6 +174,7 @@ export interface TodayTask {
 }
 
 export interface ChatMessage {
+  evidence?: import('./provenance').AnswerEvidence
   from: 'bob' | 'user'
   text: string
   list?: { icon: string; tone: 'clay' | 'honey' | 'leaf'; text: string }[]

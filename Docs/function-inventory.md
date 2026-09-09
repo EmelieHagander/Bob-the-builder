@@ -5,6 +5,12 @@
 > **Audited against:** current `main` runtime/schema/code after the user-story contract was added  
 > **Related product intent:** `Docs/user-stories.md`
 
+> **Slice 0 branch delta (2026-09-09):** project membership/RLS, explicit-project
+> read-only lookup, direct OpenAI tools and source disclosure are implemented with
+> local tests. Launchpad's unscoped path is disabled. These changes are **not yet
+> deployed**; the audit below remains the pre-Slice-0 deployed baseline.
+> [Verification and open release gates](slice-0-verification.md) own the evidence.
+
 This inventory is deliberately stricter than a feature wishlist. A capability is only marked **BUILT** when the current runtime/data model materially supports the user goal. **PARTIAL** means useful pieces exist but an important part of the target journey is missing. **GAP** means the target capability has no meaningful current implementation.
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.

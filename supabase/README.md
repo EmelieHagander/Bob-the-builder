@@ -1,118 +1,44 @@
 # bob — edge functions (the Ask seam)
 
-When someone asks bob something his script can't answer, the question goes to
-an AI backend. There are two, and which one answers depends only on what is
-configured:
+> Slice 0 implementation: locally tested, not deployed. See
+> [verification and rollout](../Docs/slice-0-verification.md) for evidence and open gates.
 
-| Backend | Shape | What it's good at |
-| --- | --- | --- |
-| **Launchpad** | Async — send returns a task id, the client polls for minutes | A whole team of AI builders. Produces reports and artifacts, and can pause to ask a clarifying question. |
-| **OpenAI direct** | Synchronous — the answer comes back on the send itself, in seconds | One model answering from a briefing of bob's own live data. |
+Bob answers through the existing `ask-launchpad` URL using **direct OpenAI with
+bounded, read-only project tools**. The browser sends an explicit Bob project id;
+the backend authenticates the user and uses their JWT for all project reads.
 
-Launchpad wins whenever the `LAUNCHPAD_*` secrets are set, because it is the
-richer answer. Otherwise the OpenAI backend answers. With neither configured
-the handler returns `{ ok: false, error: "not_configured" }` and the app falls
-back to its scripted Ask-bob feed — honest, never fake.
+The former Launchpad path is disabled for Bob, including when `LAUNCHPAD_*`
+secrets remain configured. Its app-wide workspace and raw task/artifact handles
+do not meet project isolation, and the current partner contract does not implement
+partner-supplied lookup tools. Re-enabling it requires verified project workspace
+isolation, server-bound user/project run handles, access checks for every action,
+and actual lookup capability. Other apps' deployments are not changed.
 
-This directory is that seam: the **only server-side code bob has**.
+## Code ownership
 
-## The shape
-
-```
-supabase/functions/
-├── _shared/launchpad.ts     Launchpad protocol plumbing (JSON-RPC 2.0 /
-│                            PP×A2A, auth, error mapping) AND the router that
-│                            picks a backend. App-agnostic.
-├── _shared/ask-openai.ts    The OpenAI backend: assembles the prompt and
-│                            bob's persona, delegates the call.
-├── _shared/bob-context.ts   Builds "the briefing" — a compact snapshot of the
-│                            project read with the CALLER'S JWT, so RLS decides
-│                            what the model may see.
-├── _shared/ai-service.ts    The ONE AI service, shared by every app in this
-│                            Supabase project. Speaks the OpenAI Responses API.
-│                            The only file that ever reads OPENAI_API_KEY.
-│                            CANONICAL COPY — keep in sync across repos.
-└── ask-launchpad/index.ts   bob's deployment: one line pins app + dbSchema.
-```
-
-Why a server-side function at all: both the Launchpad partner key and the
-OpenAI key are real secrets. Neither can ship in the frontend bundle
-(everything `VITE_*` is public), so they live in Supabase **function secrets**
-and only these functions see them. The function also refuses anonymous callers
-— a request must carry a signed-in bob user's JWT (the shared guest login
-counts), otherwise the key would be an open proxy.
-
-**Per-app identity is pinned in source, not in the request.** `ask-launchpad/
-index.ts` passes `{ app: 'bob', dbSchema: 'bob' }`. `app` is bob's Launchpad
-workspace (its memory/billing boundary) and how AI spend is attributed;
-`dbSchema` is where the briefing is read from. A browser cannot ask for another
-app's workspace or another app's data. That rule is what makes the pattern safe
-to reuse.
-
-## Adding the next app (the whole recipe)
-
-1. Copy `ask-launchpad/index.ts` to `<yourapp>-launchpad/index.ts` and change
-   the one line to `serveLaunchpad({ app: 'yourapp', dbSchema: 'yourapp' })`.
-2. Copy `_shared/ai-service.ts` across unchanged, and give the app its own
-   context builder in place of `bob-context.ts`.
-3. Add an `ai.settings` row for `('yourapp', <coworker>, 'ask-bob', 'global')`.
-4. For the Launchpad backend only: set `LAUNCHPAD_TEAM_KEY_YOURAPP` and ask the
-   Launchpad side for a workspace mapping for `'yourapp'`.
-5. `supabase functions deploy yourapp-launchpad --project-ref <ref>`
-
-## Configuration (Supabase function secrets)
-
-Set these once for the whole project (Dashboard → Edge Functions → Secrets, or
-`supabase secrets set --project-ref <ref> KEY=value`):
-
-| Secret | What it is |
+| File | Responsibility |
 | --- | --- |
-| `OPENAI_API_KEY` | The OpenAI key, for the direct backend. Read only inside `ai-service.ts`. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Already set project-wide. `ai-service.ts` needs it to read AI settings and write usage rows. |
-| `LAUNCHPAD_GATEWAY_URL` | Partner-gateway base, e.g. `https://<laf-ref>.supabase.co/functions/v1/partner-gateway` |
-| `LAUNCHPAD_INTEGRATION_ID` | The partner-integration UUID (issued on the Launchpad side) |
-| `LAUNCHPAD_PARTNER_API_KEY` | The partner API key — shown once at issue time, server-only |
-| `LAUNCHPAD_TEAM_KEY_BOB` | The team bob invokes (falls back to `LAUNCHPAD_TEAM_KEY`) |
+| `ask-launchpad/index.ts`, `_shared/launchpad.ts` | Pin Bob identity; validate Supabase Auth user. Stable endpoint name. |
+| `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
+| `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
+| `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
+| `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
+| `bob.search_project_data` | Static SQL projections under caller RLS; no arbitrary SQL/columns. |
+| `_shared/openai-service.ts` | Existing canonical shared Responses service, unchanged across this slice. |
 
-The Launchpad set is all-or-nothing: until all four are present the router
-falls through to the OpenAI backend.
+No browser or model has the service-role key. The shared service uses it only
+for `shared.ai_models`, `shared.ai_settings` and `shared.ai_usage_events`.
+`OPENAI_API_KEY` is still read only there. Model choice, reasoning effort,
+usage attribution and the kill switch retain their existing configuration.
 
-### Model, cost and the kill switch
-
-None of that is configured here. The shared `ai` schema owns it — see the
-migration `20260813092414_shared_ai_schema.sql` in the hearthandlarder repo:
-
-- `ai.models` — the catalogue and price list. **The** gate on which models may
-  be called; there is deliberately no allow-list in code to drift out of sync
-  with it. Adding a model is a row, not a deploy.
-- `ai.settings` — bob's row is `app='bob', coworker_id='bob',
-  function_name='ask-bob'`. Model, token ceiling, temperature, a prompt
-  override that applies without a deploy, and `is_enabled` as a kill switch.
-- `ai.usage_events` — one row per call with the price snapshot used, so what a
-  question cost stays true after prices change.
-
-## The contract (what the UI may promise)
-
-- **Info-only, both backends.** They answer questions and produce reports; they
-  never write into bob's database. No "bob will add it to your list" copy.
-- **The briefing uses the caller's JWT.** The OpenAI backend uses the caller's
-  database permissions, never the service-role key for project reads. Current
-  policies still allow broad reads, and the briefing selects the first project;
-  this is not yet proof of project isolation. Slice 0 must establish the
-  membership and explicit-project boundary described below and in `db/README.md`.
-- **Async vs. sync is visible and honest.** Launchpad's `send` returns a task
-  id to poll and the UI shows a working state. OpenAI's `send` returns
-  `status: 'completed'` with the answer and there is nothing to poll — the UI
-  renders it immediately rather than inventing a fake task and a fake wait.
-- **Clarification (Launchpad only).** A run may pause `input-required`; the next
-  message answers it (`reply`). The OpenAI backend never pauses, so a `reply`
-  there is simply treated as the next question.
-- **Artifacts by reference (Launchpad only).** Rich outputs come back as ids
-  redeemed via `artifact`. A single model turn produces prose, not artifacts.
+Bob uses the service's existing `useHardcodedPrompt` option so a settings prompt
+cannot replace its authority/truth rules. The shared service currently sends
+non-strict function schemas; the dispatcher independently rejects extra/invalid
+arguments before a database call. No new shared service fork is introduced.
 
 ## Project lookup contract — Slice 0
 
-> **Status:** specified for implementation; not available in current runtime.
+> **Status:** implemented in this branch with local Postgres/HTTP tests; deployed provider and browser proof are still pending.
 > **Owns:** Ask bob's bounded project lookup, allowed datasets/fields and result
 > semantics. `db/README.md` owns the membership/RLS implementation; the release
 > ordering remains in `Docs/v1-plan.md`.
@@ -215,15 +141,15 @@ lookups. Keep UI access through `database.ts`; extend the existing Ask backend
 instead of giving a browser/model a separate database connection.
 
 Apply the same user/project boundary to both provider paths. Direct OpenAI
-currently builds the briefing; Launchpad currently forwards messages with an
-app workspace id, which is not a Bob project binding. Provider tool integration
+builds the briefing and executes tools in this branch. The previous Launchpad
+app-workspace path is disabled because it is not a Bob project binding. Provider tool integration
 must be verified before lookup support is claimed. Async task/status/reply and
 artifact access must be bound server-side to the originating user/project as
 well, not authorized merely because a caller supplies a remote task/artifact id.
 Project switching must isolate conversation/history, in-flight results and any
 cache by user/project; an old answer must not appear as the new project's truth.
 
-The following are required implementation tests, **not passing tests today**:
+The following remain the acceptance contract. Local evidence and outstanding live gates are recorded in [slice-0-verification.md](../Docs/slice-0-verification.md):
 
 1. A member can search the explicitly active project and retrieve a matching
    item omitted from the initial capped briefing; sources identify that project.
@@ -239,32 +165,38 @@ The following are required implementation tests, **not passing tests today**:
 6. Both configured provider paths prove their actual lookup and project-binding
    behavior before being labelled supported; no mock result counts as live proof.
 
-## Actions (what the frontend calls today)
+## Actions
 
-`POST` body → response, always `{ ok: boolean, ... }`:
+`POST` with a signed-in Bearer token:
 
-| Request | Launchpad response | OpenAI response |
-| --- | --- | --- |
-| `{ action: 'send', message }` | `{ ok, taskId, status: 'working' }` | `{ ok, status: 'completed', summary }` |
-| `{ action: 'status', taskId }` | `{ ok, status, summary?, report?, artifacts?, question?, errorCode? }` | `{ ok: false, error: 'no_task_to_poll' }` |
-| `{ action: 'reply', taskId, questionId, answer }` | `{ ok, status: 'working' }` | `{ ok, status: 'completed', summary }` |
-| `{ action: 'artifact', artifactId }` | `{ ok, artifact }` | `{ ok: false, error: 'artifacts_unavailable' }` |
+| Request | Result |
+| --- | --- |
+| `{ action: 'send', projectId, message }` | `{ ok: true, backend: 'openai', status: 'completed', projectId, summary, evidence }` |
+| Missing/invalid project id or message; supplied history/response id/schema | HTTP 400 |
+| Invalid session | HTTP 401 |
+| No membership in the requested project | HTTP 403 |
+| `status`, `reply`, `artifact` (including legacy handles) | HTTP 409; no provider request |
+| Database/model/configuration failure | HTTP 503, safe error code, no invented answer |
 
-Errors are honest strings: `not_configured`, `disabled`, `unauthorized`,
-`empty_message`, `message_too_long`, `gateway_unreachable`,
-`bad_gateway_response`, `no_task_to_poll`, `artifacts_unavailable`,
-`rate_limited`, `bad_api_key`, `timeout`, `openai_error`, `openai_unreachable`,
-or a Launchpad error code passed through.
+`evidence` marks the answer as an **AI assessment** and lists consulted record ids,
+project, retrieval time, source update time when available, and unknown legacy
+verification. The list records what Bob consulted; it is not a guarantee that
+every generated claim follows from those sources. Conversation and drafts are
+cleared when project/auth context changes. A generation guard also rejects late
+A → B → A responses. Failure messages never substitute another project's feed.
 
-## Deploying
+## Deployment
+
+First follow the reviewed membership migration and coordinated rollout in
+[db/README.md](../db/README.md). Then deploy the edge function and frontend together.
+Merging frontend code alone triggers Pages but does **not** migrate Supabase or
+deploy the edge function; this PR must stay draft until those gates are resolved.
 
 ```bash
 supabase functions deploy ask-launchpad --project-ref <ref>
 ```
 
-Apply the shared `ai` schema migration **before** deploying, or the service
-finds no model catalogue and every call returns `no_model`.
-
-The frontend calls the function through `supabase.functions.invoke` from
-`src/data/database.ts` (the app's single data module), so no frontend config
-changes when the function moves or the secrets rotate.
+Required existing server configuration: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, and Bob's enabled settings/model in
+the shared AI catalogue. Frontend configuration remains
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
