@@ -316,6 +316,7 @@ select {
   max-width: 470px;
   max-height: 90vh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   animation: fadeUp 0.2s ease both;
 }
