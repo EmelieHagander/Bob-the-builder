@@ -11,7 +11,7 @@ export function createFactsFixture(timestamp, assets) {
     histories.set(row.id, entries)
   }
   return {
-    records, remember, assets,
+    records, remember, assets, histories,
     async handle(request, url, respond) {
       const path = url.pathname
       const tables = ['/rest/v1/current_measurements', '/rest/v1/current_components', '/rest/v1/measurement_revisions', '/rest/v1/component_revisions']

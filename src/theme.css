@@ -630,6 +630,10 @@ select {
 }
 /* Manual project facts reuse the existing cards, forms and mobile-safe actions. */
 .facts-entry { display: flex; align-items: center; gap: 14px; }
+.solution-target { margin: 20px 0; border: 2px solid var(--brand); display: grid; gap: 12px; }
+.solution-target h2 { font-size: 18px; }
+.solution-attention { font-weight: 600; margin: 10px 0; }
+.solutions-page .btn { min-height: 44px; }
 .facts-entry > div { flex: 1; min-width: 0; }
 .project-facts .page-head { margin-top: 18px; }
 .fact-list, .fact-history { display: grid; gap: 14px; margin: 16px 0; padding: 0; list-style: none; }

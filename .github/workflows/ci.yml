@@ -18,6 +18,7 @@ jobs:
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-foundations.mjs
       - run: node --check scripts/check-live-project-facts.mjs
+      - run: node --check scripts/check-live-solutions.mjs
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
@@ -34,7 +35,7 @@ jobs:
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
       - name: Verify Ask bob project isolation and mobile source disclosure
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
-      - name: Verify images, steps, measurements and existing parts
+      - name: Verify images, steps, measurements, parts and solution targets
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - uses: actions/upload-artifact@v4
         if: always()

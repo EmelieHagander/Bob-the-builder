@@ -366,6 +366,12 @@ Includes:
 
 ## Slice 3 — Choose the target
 
+**Manual foundation 3A (in progress, 2026-09-10):** continue the owner's
+foundations-first order with alternatives, revisioned assumptions/evidence and
+an explicitly selected project target. [Solutions](solutions.md) owns the
+contract. Images and exact measurement revisions reuse 1A/2A/2B. AI proposal and
+mockup generation remain a later 3B gate; no owner Bob trial is required for 3A.
+
 **Goal:** move design decisions out of ephemeral chat.
 
 Includes:
