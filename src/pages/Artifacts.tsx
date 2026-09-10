@@ -160,15 +160,12 @@ function Editor({ projectId, value, areas, initialArea, target, onClose, onSaved
         </div>
         <Field label="Drawing title"><input style={inputStyle} required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} /></Field>
         {!value && <Field label="Area"><select style={inputStyle} value={area} onChange={event => setArea(event.target.value)}>
-          <option value="">Project as a whole</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></Field>}
+          <option value="">Project as a whole</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
         <div className="fact-filters">
           <Field label="Drawing type"><select style={inputStyle} value={kind} onChange={event => setKind(event.target.value as ProjectArtifact['kind'])}>
-            {Object.entries(KIND_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select></Field>
+            {Object.entries(KIND_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
           <Field label="Drawing status"><select style={inputStyle} value={status} onChange={event => setStatus(event.target.value as ProjectArtifact['status'])}>
-            {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select></Field>
+            {Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
         </div>
         <p className="foundation-hint">Concept is illustrative. Measured and Build ready are deliberate project labels, not engineering or permit approval.</p>
         <Field label="What this drawing shows"><textarea style={inputStyle} rows={3} required maxLength={6000} value={description} onChange={event => setDescription(event.target.value)} /></Field>
@@ -301,17 +298,17 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     <Link className="btn" to="/">Dashboard</Link>
     <div className="page-head"><div><h1 className="page-title">Plans & drawings</h1>
       <p className="page-sub">Keep the exact plan the crew is building from, with its measurements and target version.</p></div>
-      <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button></div>
+      <div className="foundation-actions"><button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button></div></div>
 
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && target && <>
       <section className="card fact-card" aria-label="Drawing target">
         <h2>Drawing target</h2>
         {target.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
           <p className="foundation-hint">Target decision {target.decision.revision}. New drawing versions pin this exact decision.</p>
-          <Link className="btn" to="/solutions">Review target</Link></>
+          <div className="foundation-actions"><Link className="btn" to="/solutions">Review target</Link></div></>
           : <><p>Choose a project target before creating a plan or drawing.</p>
             <p className="foundation-hint">Drawings cannot float without a decision about what the project is trying to build.</p>
-            <Link className="btn btn-primary" to="/solutions">Choose a target</Link></>}
+            <div className="foundation-actions"><Link className="btn btn-primary" to="/solutions">Choose a target</Link></div></>}
       </section>
 
       <div className="fact-filters"><Field label="Filter drawings by area"><select style={inputStyle} value={area} onChange={event => {
