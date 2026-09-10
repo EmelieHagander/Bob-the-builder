@@ -19,6 +19,7 @@ jobs:
       - run: node --check scripts/check-live-foundations.mjs
       - run: node --check scripts/check-live-project-facts.mjs
       - run: node --check scripts/check-live-solutions.mjs
+      - run: node --check scripts/check-live-artifacts.mjs
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).

@@ -140,6 +140,12 @@ their later gates.
 
 # 6. Drawings and artifacts
 
+**Manual 4A (implementation, release verification pending):** versioned image
+references pin a selected solution and its measurement evidence; target/input
+changes are visible. Task references pin exact artifact versions with explicit
+update/detach. [Project artifacts](project-artifacts.md) owns this foundation.
+Generation, measured/build-ready output and calculations remain later scope.
+
 | Function | Difficulty | Scope | Notes |
 |---|---:|---|---|
 | Define drawing/artifact record with revision + source solution | D3 | **V0-CORE** | Needed before generation. |

@@ -158,6 +158,10 @@ export function Dashboard() {
         </section>
       </div>
 
+      <Link to="/artifacts" className="card foundation-section facts-entry">
+        <Icon name="ruler" size={24} /><div><h3>Drawings & references</h3>
+          <p className="foundation-hint">Keep image versions tied to the selected solution and task references.</p></div><Icon name="arrow-right" size={20} />
+      </Link>
       <Link to="/solutions" className="card foundation-section facts-entry">
         <Icon name="path" size={24} /><div><h3>Solutions & target</h3>
           <p className="foundation-hint">Keep alternatives, their evidence and the selected project version.</p></div><Icon name="arrow-right" size={20} />

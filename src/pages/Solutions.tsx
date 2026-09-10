@@ -6,22 +6,12 @@ import { TRUTH_LABELS, describeMeasurement } from '../data/projectFacts'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { Loading, useAsync } from '../components/ui'
+import { SolutionEvidence } from '../components/SolutionEvidence'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e)
 function Retry({ error, retry }: { error: Error; retry: () => void }) {
   return <div role="alert"><FormError>{error.message}</FormError><button className="btn" onClick={retry}>Reload solutions</button></div>
-}
-function Evidence({ items }: { items: SolutionMeasurement[] }) {
-  return <div className="fact-details"><h4>Measurements used by this version</h4>
-    {!items.length && <p>No measurements linked. Dimensions remain unspecified.</p>}
-    {items.map(m => <div key={m.id} className="fact-source">
-      <strong>{m.subject} · {m.value === null ? 'Unknown' : m.value + ' ' + m.unit}</strong>
-      <span>{TRUTH_LABELS[m.truth]} · Measurement version {m.revision}</span>
-      <p>Source: {m.source || 'Not recorded'}</p>
-      {(m.latestRevision !== m.revision || m.archived) && <p className="solution-attention">Measurement changed since this version{m.archived ? ' and is now archived' : ''}. The recorded value above is retained.</p>}
-    </div>)}
-  </div>
 }
 function VersionDetails({ value }: { value: SolutionVersion }) {
   const [image, setImage] = useState(false)
@@ -29,7 +19,7 @@ function VersionDetails({ value }: { value: SolutionVersion }) {
     <p>{value.description}</p><p><strong>Assumptions:</strong> {value.assumptions || 'Not recorded'}</p>
     <p><strong>Trade-offs:</strong> {value.tradeoffs || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
-    <Evidence items={value.measurements} />
+    <SolutionEvidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View reference image</button>
       : value.imageTitle && <p>Reference image removed: {value.imageTitle}</p>}
     {image && <Modal title={value.imageTitle} wide onClose={() => setImage(false)}>
@@ -94,7 +84,7 @@ function Editor({ projectId, value, areas, initialArea, onClose, onSaved }: {
         <div className="foundation-actions"><button type="button" className="btn" onClick={() => setPicker('image')}>Choose reference image</button>
           {source.title && <button type="button" className="btn" onClick={() => setSource({ id: null, title: '' })}>Clear image</button>}</div>
       </div>
-      <Evidence items={refs} />
+      <SolutionEvidence items={refs} />
       {refs.map(m => <button key={m.id} type="button" className="btn" onClick={() => setRefs(rs => rs.filter(r => r.id !== m.id))}>Remove measurement: {m.subject}</button>)}
       <button type="button" className="btn" disabled={refs.length >= 20} onClick={() => setPicker('measurement')}>Link measurement</button>
       <p className="foundation-hint">Each link keeps the chosen measurement version. Link it again to use a newer value.</p>

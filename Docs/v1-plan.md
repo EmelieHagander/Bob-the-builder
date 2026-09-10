@@ -389,6 +389,16 @@ Includes:
 
 ## Slice 4 — Turn target into work
 
+**Manual foundation 4A (implementation, release verification pending):** continue
+with versioned drawings/references and exact task pins under the owner's
+foundations-first order. [Project artifacts](project-artifacts.md) owns the
+contract. Ready project images are saved against the selected solution version
+and its exact measurement evidence. Target/input changes stay visible; revision
+requires explicit review, and tasks deliberately adopt newer reference versions.
+These are manual references without a measured/build-ready claim. Generated
+geometry, deterministic BOM, stock, shopping and readiness remain later Slice 4
+work. No new AI consumer or owner Bob trial is required for this milestone.
+
 **Goal:** produce the first coherent build package from the selected target.
 
 Includes for the supported V1 fixture:

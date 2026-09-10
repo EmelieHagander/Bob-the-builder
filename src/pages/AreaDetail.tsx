@@ -90,6 +90,7 @@ export function AreaDetail() {
           </div>
         </div>
         <div className="cluster no-print">
+          <Link className="btn" to={'/artifacts?area=' + encodeURIComponent(area.id)}>Drawings & references</Link>
           <Link className="btn" to={'/solutions?area=' + encodeURIComponent(area.id)}>Solutions & target</Link>
           <Link className="btn" to={'/facts?area=' + encodeURIComponent(area.id)}><Icon name="ruler" size={15} /> Measurements & parts</Link>
           <button className="btn" onClick={() => setModal({ kind: 'area' })}><Icon name="pencil-simple" size={15} /> Edit</button>

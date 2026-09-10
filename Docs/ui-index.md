@@ -56,6 +56,7 @@ Use existing classes/primitives before inventing a local dialect.
 | Task detail (`/tasks/:taskId`) | follow instructions and illustrated steps | keep required checks visible; expand images on demand |
 | Project facts (`/facts`) | record lengths, unknowns and existing parts | reached from Dashboard/Area; source labels and version history stay explicit; no extra global navigation |
 | Solutions (`/solutions`) | compare alternatives and select an exact target version | reached from Dashboard/Area; project-wide target, saved evidence and decision history remain explicit |
+| Drawings & references (`/artifacts`) | save reviewed image versions and inspect their recorded basis | reached from Dashboard/Area; task detail attaches/opens/updates/detaches exact versions; changed target/evidence remain visible |
 | Areas / Area detail | manage work, materials, crew, references | task/material state must stay legible and actionable |
 | People | understand crew skills/needs | skills and safety-relevant dietary info must be easy to scan |
 | Events / Event detail | organise a build day | attendance and day plan must be obvious |

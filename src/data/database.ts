@@ -27,6 +27,7 @@ import { createRequestScope } from '../lib/projectRequest'
 import { createProjectFiles } from './projectFiles'
 import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
+import { createArtifacts } from './artifacts'
 import * as mock from './mockData'
 import type {
   Account,
@@ -202,6 +203,13 @@ export const getSelectedTarget = solutions.target
 export const getTargetHistory = solutions.decisions
 export const editSolution = solutions.edit
 export const selectTarget = solutions.choose
+const artifacts = createArtifacts(db, captureFileContext)
+export const getArtifacts = artifacts.list
+export const getArtifactVersion = artifacts.version
+export const getArtifactHistory = artifacts.history
+export const getTaskArtifacts = artifacts.tasks
+export const editArtifact = artifacts.edit
+export const linkTaskArtifact = artifacts.link
 export const getProjectFacts = projectFacts.list
 export const getProjectFact = projectFacts.get
 export const getProjectFactHistory = projectFacts.history

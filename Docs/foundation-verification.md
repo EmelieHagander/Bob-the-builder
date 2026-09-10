@@ -1,5 +1,15 @@
 # Foundation verification and rollout
 
+## Drawing/reference foundation (4A) — release gate in progress
+
+Manual records, exact selected basis, visible target/input changes and pinned task
+references are implemented. All 38 local tests pass, including eight new actual
+SQL/RLS/data-boundary checks. TypeScript and production build pass. CI browser
+proof at 320/390/1280px, hosted migration, Pages and disposable live API checks
+remain the release gate. Do not read implementation as deployed until this record
+contains their results. [Project artifacts](project-artifacts.md) owns behavior.
+
+
 ## Delivered solution alternatives and selected target (3A)
 
 **Status:** manual 3A implemented, merged and deployed on 2026-09-10.

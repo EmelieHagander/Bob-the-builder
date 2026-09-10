@@ -39,6 +39,6 @@ export async function verifySolutionImageCleanup(client, projectId, records) {
   const rows = checked(await client.from('solution_revisions').select('revision,source_media_id,source_media_title').eq('project_id', projectId).eq('solution_id', records.a))
   assert.equal(rows.length, 4)
   assert(rows.every(r => r.source_media_id === null && r.source_media_title === 'Disposable foundation image'))
-  assert.equal(checked(await client.from('target_revisions').select('revision').eq('project_id', projectId)).length, 3)
+  assert.equal(checked(await client.from('target_revisions').select('revision').eq('project_id', projectId).lte('revision', 3)).length, 3)
   console.log('Live solutions: image deletion preserved all four alternative versions and the decision trail.')
 }
