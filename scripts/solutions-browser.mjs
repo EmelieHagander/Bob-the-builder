@@ -78,6 +78,8 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
       await form.getByRole('button', { name: 'Link measurement', exact: true }).click()
       const picker = page.getByRole('dialog', { name: 'Choose a measurement', exact: true })
       // Earlier foundation checks seed enough rows to exercise the real picker paging.
+      // Inspect membership of a loaded page, not the transient empty loading state.
+      await picker.getByRole('button', { name: 'Use measurement', exact: true }).first().waitFor()
       while (await picker.getByRole('heading', { name: 'Opening width', exact: true }).count() === 0) {
         const next = picker.getByRole('button', { name: 'Next page', exact: true })
         await next.waitFor(); await next.click()
