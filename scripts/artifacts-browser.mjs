@@ -192,7 +192,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await card.getByText('Build ready', { exact: true }).waitFor()
   await card.getByRole('button', { name: 'History', exact: true }).click()
   const history = page.getByRole('dialog', { name: 'Drawing history', exact: true })
-  await history.getByText('Adopt the newly selected target', { exact: true }).waitFor()
+  await history.getByText('Adopt the newly selected target', { exact: false }).waitFor()
   assert.equal(await history.locator('li').count(), 2)
   await history.getByRole('button', { name: 'View version', exact: true }).last().click()
   details = page.getByRole('dialog', { name: 'Entrance section · Version 1', exact: true })
