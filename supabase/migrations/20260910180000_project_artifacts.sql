@@ -35,8 +35,8 @@ create table bob.artifact_revisions (
   recorded_at timestamptz not null default clock_timestamp(),
   primary key(artifact_id, revision),
   foreign key(artifact_id, project_id) references bob.artifacts(id, project_id) on delete cascade,
-  foreign key(project_id, target_revision) references bob.target_revisions(project_id, revision),
-  foreign key(solution_id, solution_revision) references bob.solution_revisions(solution_id, revision)
+  foreign key(project_id, target_revision) references bob.target_revisions(project_id, revision) on delete cascade,
+  foreign key(solution_id, solution_revision) references bob.solution_revisions(solution_id, revision) on delete cascade
 );
 create index artifact_revisions_project_idx on bob.artifact_revisions(project_id);
 create index artifact_revisions_parent_idx on bob.artifact_revisions(artifact_id, project_id);
