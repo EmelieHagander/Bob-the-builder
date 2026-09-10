@@ -221,3 +221,4 @@ export interface ChatMessage {
   report?: string
 }
 export type { Measurement, ExistingComponent, ProjectFact, FactKind, FactFilter, FactPage } from './projectFacts'
+export type { Solution, SolutionVersion, SolutionMeasurement, TargetDecision, SelectedTarget } from './solutions'

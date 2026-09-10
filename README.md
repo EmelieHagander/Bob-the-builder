@@ -22,6 +22,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/` | Dashboard — status at a glance, areas, next build day, what needs attention |
 | `/areas`, `/areas/:slug` | Areas list and area detail (tasks / materials / reference images) |
 | `/facts` | Measurements and existing parts — sources, dimensions and retained history, reached from Dashboard or an Area |
+| `/solutions` | Solution alternatives and an explicitly selected target version, with evidence and decision history |
 | `/people` | People, their skills and dietary needs |
 | `/events`, `/events/:slug` | Build events and event detail with sign-up + day plan |
 | `/food` | Meal plan and the allergy / dietary matrix |

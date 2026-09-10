@@ -148,7 +148,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
       <p className="foundation-hint">{IMAGE_PURPOSES[dialog.image.purpose]} · {dialog.image.width} × {dialog.image.height} pixels · {dialog.image.originalName}</p>
     </Modal>}
     {dialog?.kind === 'remove' && <Modal title="Remove image?" onClose={() => { if (!busy) setDialog(null) }}>
-      <p>This removes “{dialog.image.title}” from the project and all its attachments. Measurements and part history keep their recorded values and the image title.</p>
+      <p>This removes “{dialog.image.title}” from the project and all its attachments. Measurement, part and solution history keep their recorded content and the image title.</p>
       {error && <FormError>{error}</FormError>}
       <div className="foundation-actions"><button className="btn" disabled={busy} onClick={() => setDialog(null)}>Cancel</button>
         <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.removeProjectImage(projectId, dialog.image.id), true)}>{busy ? 'Removing…' : 'Remove from project'}</button></div>

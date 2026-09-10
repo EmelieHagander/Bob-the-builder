@@ -131,7 +131,18 @@ with invoker authority, then use `bob.evidence_command` for revisioned writes.
 Historical values remain append-only. A removed source image clears the file link
 while preserving its recorded title and the measurement/component history.
 
+## Solution and target foundation (3A)
+
+[`Docs/solutions.md`](../Docs/solutions.md) owns alternatives, exact evidence
+references and revisioned target decisions. Source migration
+`supabase/migrations/20260910152455_solutions_and_selected_target.sql` adds
+`solutions`, `solution_revisions`, `solution_measurements`, `project_targets`
+and `target_revisions`, with RLS and invoker views. Apply after 2A/2B and before
+its frontend; deployment evidence is pending. `bob.solution_command` is the only
+normal-client write path. Existing migrations must not be replayed or edited.
+
 ## Wiring the app to it
+
 
 Already done — all data access goes through the single module
 [`src/data/database.ts`](../src/data/database.ts), which queries these tables
