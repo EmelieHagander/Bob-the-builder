@@ -19,6 +19,7 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
+| versioned drawing images, recorded basis and pinned task references | `Docs/project-artifacts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -74,6 +75,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `Docs/project-facts.md` — owning manual measurement/component contract: truth states, exact length units, revision history, source images, authority and recovery for milestones 2A/2B.
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
+- `Docs/project-artifacts.md` — manual 4A artifact/revision, selected basis, stale-state and task-reference contract.
+- `src/data/artifacts.ts` — artifact and pinned task-reference reads/commands behind `database.ts`.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.

@@ -13,6 +13,7 @@ import { AreaDetail } from './pages/AreaDetail'
 import { TaskDetail } from './pages/TaskDetail'
 import { ProjectFacts } from './pages/ProjectFacts'
 import { Solutions } from './pages/Solutions'
+import { Artifacts } from './pages/Artifacts'
 import { People } from './pages/People'
 import { Events } from './pages/Events'
 import { EventDetail } from './pages/EventDetail'
@@ -97,6 +98,7 @@ function ProjectApp() {
         <Route path="/tasks/:taskId" element={<TaskDetail />} />
         <Route path="/facts" element={<ProjectFacts />} />
         <Route path="/solutions" element={<Solutions />} />
+        <Route path="/artifacts" element={<Artifacts />} />
         <Route path="/people" element={<People />} />
         <Route path="/events" element={<Events />} />
         <Route path="/events/:slug" element={<EventDetail />} />

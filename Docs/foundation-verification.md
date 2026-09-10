@@ -1,5 +1,50 @@
 # Foundation verification and rollout
 
+## Drawing/reference foundation (4A) — verified implementation, integration hold
+
+**Status:** implementation in [draft PR 32](https://github.com/EmelieHagander/Bob-the-builder/pull/32),
+not merged or deployed by this work. [Project artifacts](project-artifacts.md) owns
+the behavior. The independent [PR 31](https://github.com/EmelieHagander/Bob-the-builder/pull/31)
+creates the same artifact tables, command and UI with a different schema. Select
+and reconcile one baseline before applying either overlapping migration; do not
+apply both as written.
+
+### Verified implementation
+
+- All 38 tests pass locally and in
+  [CI 34502569534](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34502569534)
+  on implementation head `620d4f0389de24671e518b8755fcda1ff3162812`.
+  Eight new actual SQL/RLS/data-boundary checks cover required selected target,
+  ready same-project image and review, atomic invalid creation, exact task/basis
+  pins, changed evidence/target, same-target reselection, stale artifact/target/link
+  writes, anonymous/outsider/dual-project access, raw write/forgery denial,
+  archive/restore, file/task/area/project cleanup and delayed context responses.
+- TypeScript, production build, edge, PWA/install and Ask bob isolation pass in CI.
+- The production React/database.ts/Supabase client browser harness passes at
+  320, 390 and 1280px: create/reload, target conflict with retained form and review,
+  original image, changed target/evidence, exact task version opening, deliberate
+  update, history, archive/restore, detach, list/picker paging, retry, 44px page
+  actions, viewport fit and project switching. Screenshots are CI artifacts;
+  they have not been manually inspected and are not an authenticated phone trial.
+
+### Pending deployment gate
+
+The CLI-created source migration is
+`supabase/migrations/20260910160715_project_artifacts_and_task_references.sql`.
+It has **not been applied**. No production data or files were changed by this PR.
+The preflight recorded 2 projects, 36 tasks, 74 steps, 21 measurements and 5 existing
+parts with full-row preservation checksums; solution/artifact precursor tables
+and private media were empty. A fresh preflight is required after resolving the
+parallel implementation because other work may proceed independently.
+
+`scripts/check-live-artifacts.mjs` extends the disposable live foundation proof:
+selected basis, changed evidence/target, exact task pins, explicit update/detach,
+stale/forged denial, archive/restore and retained history after image cleanup.
+Its syntax is verified; it has not run against production. Hosted migration and
+advisors, Pages, live Auth/PostgREST/Storage proof, exact fixture cleanup and
+preservation checks remain required before describing 4A as deployed. No AI
+consumer or owner Bob trial was introduced.
+
 ## Delivered solution alternatives and selected target (3A)
 
 **Status:** manual 3A implemented, merged and deployed on 2026-09-10.

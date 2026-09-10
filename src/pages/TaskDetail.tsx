@@ -4,6 +4,7 @@ import * as db from '../data/database'
 import type { TaskDetail as Detail, TaskStatus, TaskStep } from '../data/types'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
+import { TaskArtifacts } from '../components/TaskArtifacts'
 import { ProjectImages } from '../components/ProjectImages'
 import { TaskModal } from '../components/editors'
 import { Icon, Loading, SkillPill, useAsync } from '../components/ui'
@@ -135,6 +136,7 @@ export function TaskDetail() {
         </li>)}
       </ol>
     </section>
+    <div className="card foundation-section"><TaskArtifacts projectId={projectId} taskId={task.id} areaId={task.areaId} /></div>
     <div className="card foundation-section"><ProjectImages projectId={projectId} target={{ kind: 'task', id: task.id }} title="Task images" /></div>
     {dialog?.kind === 'step' && <StepEditor projectId={projectId} taskId={task.id} step={dialog.step} onClose={() => setDialog(null)} onSaved={reload} />}
     {dialog?.kind === 'instructions' && <InstructionsEditor projectId={projectId} detail={detail} onClose={() => setDialog(null)} onSaved={reload} />}

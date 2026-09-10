@@ -86,6 +86,7 @@ become join tables:
 | `MediaAsset` and attachments | `bob.media_assets`, `bob.media_links`, private `bob-project-media` Storage bucket |
 | `Measurement` | `bob.measurements`, append-only `bob.measurement_revisions`, invoker `bob.current_measurements` |
 | `ExistingComponent` | `bob.existing_components`, append-only `bob.component_revisions`, invoker `bob.current_components` |
+| `Artifact` | `bob.artifacts`, append-only `bob.artifact_revisions`, invoker `bob.artifact_versions` / `bob.current_artifacts`; exact task pins in `bob.artifact_task_links` / invoker `bob.task_artifacts` |
 | `Solution`, `SolutionVersion` | `bob.solutions`, append-only `bob.solution_revisions`, invoker `bob.current_solutions` |
 | `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
 | `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
@@ -146,6 +147,16 @@ its frontend on 2026-09-10, it is recorded in hosted history as
 timestamp or edit the applied migration. `bob.solution_command` is the only
 normal-client write path. [Foundation verification](../Docs/foundation-verification.md)
 owns rollout evidence and its limits.
+
+## Drawing/reference and task foundation (4A)
+
+[`Docs/project-artifacts.md`](../Docs/project-artifacts.md) owns versioned manual
+image references, selected solution/evidence basis and pinned task references.
+Source migration `supabase/migrations/20260910160715_project_artifacts_and_task_references.sql`
+adds three RLS tables, three invoker views and guarded `bob.artifact_command`.
+Apply this additive migration after 3A and before its frontend; hosted rollout is
+pending and will be recorded in [foundation verification](../Docs/foundation-verification.md).
+All new client writes use the command and expected versions; no raw table writes.
 
 ## Wiring the app to it
 

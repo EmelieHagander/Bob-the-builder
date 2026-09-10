@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B, 2A/2B and 3A**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -26,7 +26,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts and manual solution/target revisions are delivered in the deltas here. Generated proposals, drawing revisions, calculations and structured progress/as-built history retain their later gates. |
+| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts and manual solution/target revisions are delivered in the deltas here. Generated proposals, measured drawing generation, calculations and structured progress/as-built history retain their later gates. Manual reference revisions are covered by 4A below. |
 
 ## Measurement and component foundation release delta — 2026-09-09
 
@@ -61,6 +61,20 @@ owns database, browser, live-service and preservation evidence.
 | Saved image and runtime consumption | **BUILT.** Authorised original images, alternative/evidence detail, paged revision/decision history, archive/restore, reload and project switching work. Removing a file retains its title and decision content. |
 | Generated visual proposals and downstream planning | **GAP.** 3B proposal/mockup generation, measured drawings, calculations and propagation into tasks/shopping remain later. Selection expresses intent, not engineering approval. |
 
+## Drawing/reference foundation delta — 2026-09-10
+
+**Status:** manual 4A implemented and CI-verified in draft PR 32; integration with the overlapping PR 31 and deployment are pending.
+[Project artifacts](project-artifacts.md) owns behavior and
+[foundation verification](foundation-verification.md) owns the release gate.
+
+| Foundation | Implementation status |
+|---|---|
+| Manual drawing/reference records | Versioned ready project images, kind, notes, source/preparation and unresolved checks; no measured/build-ready claim. |
+| Recorded basis and stale state | Exact target/solution/evidence versions remain pinned. Changed target or measurements are visible. Revision explicitly reviews and adopts the current target. |
+| Task references | Attach/open exact versions, deliberately update, or detach; newer revisions do not silently change task references. |
+| History and authority | RLS, guarded commands, revision conflicts, server attribution, archive/restore and file/parent cleanup retain the recorded truth. |
+| Generated build package | Still pending: generated geometry, deterministic BOM, stock deduction, shopping and readiness. |
+
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
 prioritises persistent foundations before new AI consumers. No owner Bob trial
 was required to deliver these milestones.
@@ -69,7 +83,7 @@ This inventory is deliberately stricter than a feature wishlist. A capability is
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B and 3A
+## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.

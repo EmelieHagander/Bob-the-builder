@@ -8,6 +8,7 @@ on:
       - scripts/check-live-foundations.mjs
       - scripts/check-live-project-facts.mjs
       - scripts/check-live-solutions.mjs
+      - scripts/check-live-artifacts.mjs
       - .github/workflows/live-foundations.yml
 
 permissions:
