@@ -303,7 +303,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
       <p className="page-sub">Keep the exact plan the crew is building from, with its measurements and target version.</p></div>
       <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button></div>
 
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && target && <>
       <section className="card fact-card" aria-label="Drawing target">
         <h2>Drawing target</h2>
         {target.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
