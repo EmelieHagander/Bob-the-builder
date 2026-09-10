@@ -389,7 +389,7 @@ Includes:
 
 ## Slice 4 — Turn target into work
 
-**Manual foundation 4A (implementation, release verification pending):** continue
+**Manual foundation 4A (implementation verified; parallel PR integration pending):** continue
 with versioned drawings/references and exact task pins under the owner's
 foundations-first order. [Project artifacts](project-artifacts.md) owns the
 contract. Ready project images are saved against the selected solution version

@@ -1,5 +1,8 @@
 # Drawings and references
 
+**Status:** implemented and CI-verified in draft PR 32; overlapping PR 31 requires
+integration before merge/deployment. No hosted migration was applied by this work.
+
 Manual milestone 4A supplies versioned image references for a selected project
 target. The [V1 plan](v1-plan.md) owns delivery order and
 [foundation verification](foundation-verification.md) owns release evidence.

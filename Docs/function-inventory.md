@@ -63,7 +63,7 @@ owns database, browser, live-service and preservation evidence.
 
 ## Drawing/reference foundation delta — 2026-09-10
 
-**Status:** manual 4A implemented; release verification pending.
+**Status:** manual 4A implemented and CI-verified in draft PR 32; integration with the overlapping PR 31 and deployment are pending.
 [Project artifacts](project-artifacts.md) owns behavior and
 [foundation verification](foundation-verification.md) owns the release gate.
 

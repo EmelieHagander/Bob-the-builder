@@ -140,7 +140,7 @@ their later gates.
 
 # 6. Drawings and artifacts
 
-**Manual 4A (implementation, release verification pending):** versioned image
+**Manual 4A (implementation verified; parallel PR integration pending):** versioned image
 references pin a selected solution and its measurement evidence; target/input
 changes are visible. Task references pin exact artifact versions with explicit
 update/detach. [Project artifacts](project-artifacts.md) owns this foundation.
