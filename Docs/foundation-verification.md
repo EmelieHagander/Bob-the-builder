@@ -1,5 +1,83 @@
 # Foundation verification and rollout
 
+## Delivered solution alternatives and selected target (3A)
+
+**Status:** manual 3A implemented, merged and deployed on 2026-09-10.
+[PR 30](https://github.com/EmelieHagander/Bob-the-builder/pull/30) merged as
+`e0562f74d45ed68705948de6f034c73ccbfbe6a5`. The
+[solutions contract](solutions.md) owns alternatives, exact measurement evidence,
+reference images and project target decisions. Generated proposals/mockups remain
+the later 3B gate; this does not close full Slice 3 or V1.
+
+### Automated evidence
+
+- All 30 tests pass locally and in
+  [CI 34497470612](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34497470612)
+  on feature head `621679ce325fa137590da916e24aa82b0042c316`.
+  Eight new checks execute the actual SQL/RLS or data boundary: coexisting
+  alternatives, pinned target/evidence, stale edits/decisions, retained selection
+  history, anonymous/outsider/dual-project authority, immutable parents/actors,
+  atomic invalid-input rejection, archive/restore, file/area/project cleanup and
+  delayed decision responses after a project switch.
+- TypeScript/Vite, edge, PWA/install and existing Ask bob isolation checks pass.
+- `scripts/solutions-browser.mjs` extends the production-frontend foundation
+  harness at 320, 390 and 1280px using HTTP fixtures. All widths pass alternative
+  creation, reference original viewing, exact measurement links, selected-version
+  retention after revision, changed-measurement disclosure, old-version viewing,
+  failed-decision input recovery, target replacement/clearing, archive/restore,
+  decision history, reload, paging, 44px actions and project switching.
+  The picker test waits for the first page to load before deciding to paginate.
+  Earlier images/steps/measurements/parts also pass at all three widths.
+  Screenshots remain automated CI artifacts, not a manual authenticated phone trial.
+
+### Deployment and live proof
+
+Source migration:
+`supabase/migrations/20260910152455_solutions_and_selected_target.sql`.
+Applied before its frontend; hosted history records it as
+`20260910154029_bob_solutions_and_selected_target`. Do not replay the authoring
+timestamp or modify the applied migration. Five new tables have RLS and three
+views use invoker authority. No new security or missing-FK-index findings were
+reported; unused fresh indexes are informational.
+
+[Pages 34497811576](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34497811576)
+and [live foundation check 34497811595](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34497811595)
+pass on the merge. `scripts/check-live-solutions.mjs` uses the existing foundation
+check's ordinary guest Auth client and single disposable project. It proves two
+alternatives, a pinned selected solution version, an earlier estimated measurement
+with its newer measured revision visible, stale/forged/raw-write denial, selected
+archive denial, archive/restore, three target decisions and denied real-project
+access. The existing live images/steps/facts checks also pass. No AI is invoked.
+
+After normal Storage API removal, all four revisions of the first alternative
+retain the image title and content with null file references. Its decision trail
+remains readable. The log confirms complete API cleanup of image bytes, metadata
+and attachments. The operator then removed only disposable project
+`p_b848cd705477450f8b9c7ee81d44af9a`, guarded by nonce
+`bbecf9fa-bd23-4868-8d20-83f02cc9807b`, exact name/description, sole guest membership
+and absence of remaining media/objects. Cascades removed its solution, target and
+evidence history. Storage object metadata was not deleted with SQL.
+
+Final checks find two real projects, 36 tasks, two membership rows, 21 measurements
+and their 21 revisions, five existing parts and their five revisions. All six
+full-row checksums below match preflight and the check immediately after migration.
+The 74 task steps now present belong to the retained real projects; no claim about
+a preflight step checksum is made. No verification project, solution, target,
+solution-evidence link or verification history remains. Project media metadata,
+links and private-bucket object counts are zero.
+
+| Preserved table | Rows | Full-row checksum |
+|---|---:|---|
+| `tasks` | 36 | `704d5cd43312a57ef70d010fb6e34b41` |
+| `people` | 2 | `dd2453a80a1391f3b9b2286d4c262454` |
+| `measurements` | 21 | `4af93fb4db14cc82cdd95b695a2ca0b7` |
+| `measurement_revisions` | 21 | `9c86061c39f79216ac1984ada3e4b6a2` |
+| `existing_components` | 5 | `888f10817d41bf2b3ed93226380d1b9b` |
+| `component_revisions` | 5 | `80f9fd8115b3bb426e2ff8f72cac8f88` |
+
+Checksum convention: `md5(string_agg(to_jsonb(row)::text, '' order by id))`.
+The following dated sections preserve the earlier release evidence.
+
 ## Delivered measurements and existing components (2A/2B)
 
 **Status:** manual milestones 2A and 2B implemented, merged and deployed on
@@ -168,6 +246,6 @@ storage server. Browser checks use HTTP fixtures and cannot prove deployed Stora
 The live API script provides that separate deployed-service proof. Do not describe
 fixture screenshots as a manual authenticated walkthrough on the owner's phone.
 No owner Bob/vision trial was required. Vision, AI consumption of the manual
-foundations, generated guidance, solution/drawing revisions, calculations and full
-progress/as-built history remain later scope. Manual 1A/1B and 2A/2B completion
-does not close full Slice 1, full Slice 2 or the V1 release.
+foundations, generated proposals/guidance, drawing revisions, calculations and full
+progress/as-built history remain later scope. Manual 1A/1B, 2A/2B and 3A completion
+does not close full Slices 1–3 or the V1 release.

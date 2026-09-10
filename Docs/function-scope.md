@@ -117,6 +117,13 @@ requests, deliverable checklists, AI consumption and stock deduction remain late
 
 # 5. Solutions, options and selected target
 
+**Manual 3A (2026-09-10):** alternatives, saved assumptions/trade-offs, exact
+measurement evidence, reference images and selected target revisions are implemented,
+merged and deployed. [Solutions](solutions.md) owns behavior and
+[foundation verification](foundation-verification.md) tracks release checks.
+Generated proposals/mockups and downstream artifact/calculation propagation retain
+their later gates.
+
 | Function | Difficulty | Scope | Notes |
 |---|---:|---|---|
 | Create a named solution/proposal | D2-D3 | **V0-CORE** | A proposal must be first-class, not buried in chat. |
@@ -401,6 +408,9 @@ open until Bob requests and consumes the authorised measurements with provenance
 `MediaAsset → missing measurement request → Measurement record with provenance → verified replacement of estimate → Bob sees the measurement.`
 
 ### Slice 3 — **Choose the target**
+
+Manual 3A supplies alternative and selection history. Generated visual proposals
+remain the later 3B gate in the V1 plan.
 
 `current evidence + measurements → proposal A/B → selected SolutionRevision → visual mockup stored as proposal media.`
 

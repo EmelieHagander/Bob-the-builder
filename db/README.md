@@ -86,6 +86,9 @@ become join tables:
 | `MediaAsset` and attachments | `bob.media_assets`, `bob.media_links`, private `bob-project-media` Storage bucket |
 | `Measurement` | `bob.measurements`, append-only `bob.measurement_revisions`, invoker `bob.current_measurements` |
 | `ExistingComponent` | `bob.existing_components`, append-only `bob.component_revisions`, invoker `bob.current_components` |
+| `Solution`, `SolutionVersion` | `bob.solutions`, append-only `bob.solution_revisions`, invoker `bob.current_solutions` |
+| `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
+| `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
@@ -137,9 +140,12 @@ while preserving its recorded title and the measurement/component history.
 references and revisioned target decisions. Source migration
 `supabase/migrations/20260910152455_solutions_and_selected_target.sql` adds
 `solutions`, `solution_revisions`, `solution_measurements`, `project_targets`
-and `target_revisions`, with RLS and invoker views. Apply after 2A/2B and before
-its frontend; deployment evidence is pending. `bob.solution_command` is the only
-normal-client write path. Existing migrations must not be replayed or edited.
+and `target_revisions`, with RLS and invoker views. Applied after 2A/2B and before
+its frontend on 2026-09-10, it is recorded in hosted history as
+`20260910154029_bob_solutions_and_selected_target`. Do not replay the authoring
+timestamp or edit the applied migration. `bob.solution_command` is the only
+normal-client write path. [Foundation verification](../Docs/foundation-verification.md)
+owns rollout evidence and its limits.
 
 ## Wiring the app to it
 

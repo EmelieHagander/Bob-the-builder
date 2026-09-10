@@ -93,7 +93,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `package.json` — current build/typecheck commands.
 - `tests/` — local Postgres/RLS, request/tool and project-response isolation tests.
 - `Docs/slice-0-verification.md` — Slice 0 evidence, limits and remaining release gates.
-- `Docs/foundation-verification.md` — image/step and measurement/component foundation evidence, deployed migrations, live Auth/PostgREST/Storage checks and limitations.
+- `Docs/foundation-verification.md` — media/steps, measurements/components and solution/target foundation evidence, deployed migrations, live Auth/PostgREST/Storage checks and limitations.
 
 ## Steward files
 

@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B and 2A/2B**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B and 3A**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -26,7 +26,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Real media and manual task guidance exist; measurements and existing parts are delivered in 2A/2B below. Solution/drawing revisions, calculations and structured progress/as-built history retain their later gates. |
+| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts and manual solution/target revisions are delivered in the deltas here. Generated proposals, drawing revisions, calculations and structured progress/as-built history retain their later gates. |
 
 ## Measurement and component foundation release delta — 2026-09-09
 
@@ -45,6 +45,22 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Runtime consumption | **BUILT manually.** Dashboard/Area lead to a focused page with current records, paging, detail/history and reload persistence. Project changes reject old responses. Bob's lookup allowlist is unchanged. |
 | Stock and calculation integration | **GAP.** Parts are separate from shopping, but stock deduction, deterministic calculations and downstream artifact/task generation remain later gates. |
 
+## Solution and target foundation release delta — 2026-09-10
+
+**Status:** manual 3A is implemented, merged and deployed in
+[PR 30](https://github.com/EmelieHagander/Bob-the-builder/pull/30).
+[Solutions](solutions.md) owns behavior; [foundation verification](foundation-verification.md)
+owns database, browser, live-service and preservation evidence.
+
+| Foundation | Current status |
+|---|---|
+| Alternative solutions | **BUILT manually.** Multiple named alternatives coexist with description/rationale, assumptions, trade-offs and reference image. Dashboard/Area lead to the focused page. |
+| Solution history | **BUILT.** Create/revise/archive/restore retains server-attributed content revisions; stale writes and changes to identity/parents/history are denied. |
+| Evidence per version | **BUILT.** Up to 20 exact measurement versions retain their units, values, truth state and sources, including dimensions of existing parts. Later measurement changes are visible without replacing the recorded evidence. |
+| Selected project target | **BUILT manually.** One explicit target points to an exact solution revision. Revisioned decisions record select/replace/clear with actor, time and reason. New alternative versions do not silently change the target. |
+| Saved image and runtime consumption | **BUILT.** Authorised original images, alternative/evidence detail, paged revision/decision history, archive/restore, reload and project switching work. Removing a file retains its title and decision content. |
+| Generated visual proposals and downstream planning | **GAP.** 3B proposal/mockup generation, measured drawings, calculations and propagation into tasks/shopping remain later. Selection expresses intent, not engineering approval. |
+
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
 prioritises persistent foundations before new AI consumers. No owner Bob trial
 was required to deliver these milestones.
@@ -53,7 +69,7 @@ This inventory is deliberately stricter than a feature wishlist. A capability is
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B and 2A/2B
+## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B and 3A
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.

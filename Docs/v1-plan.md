@@ -366,11 +366,14 @@ Includes:
 
 ## Slice 3 — Choose the target
 
-**Manual foundation 3A (in progress, 2026-09-10):** continue the owner's
-foundations-first order with alternatives, revisioned assumptions/evidence and
-an explicitly selected project target. [Solutions](solutions.md) owns the
-contract. Images and exact measurement revisions reuse 1A/2A/2B. AI proposal and
-mockup generation remain a later 3B gate; no owner Bob trial is required for 3A.
+**Manual foundation 3A (deployed, 2026-09-10):** alternatives, revisioned
+assumptions/evidence and an explicitly selected project target continue the
+owner's foundations-first order. [Solutions](solutions.md) owns the contract;
+[foundation verification](foundation-verification.md) records release evidence.
+Images and exact measurement revisions reuse 1A/2A/2B. Editing an alternative
+keeps the selected version until another explicit decision. AI proposal/mockup
+generation remains the later 3B gate, so full Slice 3 and the V1 release remain
+open. No owner Bob trial was required for 3A.
 
 **Goal:** move design decisions out of ephemeral chat.
 

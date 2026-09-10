@@ -1,7 +1,8 @@
 # Solution alternatives and the selected target
 
-**Status:** specified and being implemented as manual milestone 3A. The V1 plan
-owns delivery order; foundation-verification.md will record release evidence.
+**Status:** manual milestone 3A is implemented, merged and deployed on 2026-09-10.
+The V1 plan owns delivery order and
+[foundation verification](foundation-verification.md) owns release evidence.
 
 ## User goal
 
