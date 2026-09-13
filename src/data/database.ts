@@ -28,6 +28,7 @@ import { createProjectFiles } from './projectFiles'
 import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
+import { createMaterialPlanning } from './materialPlanning'
 import { createBuildingContext } from './buildingContext'
 import * as mock from './mockData'
 import type {
@@ -198,6 +199,7 @@ const projectFiles = createProjectFiles(db, captureFileContext, () => window.dis
 const projectFacts = createProjectFacts(db, captureFileContext)
 const solutions = createSolutions(db, captureFileContext)
 const artifacts = createArtifacts(db, captureFileContext)
+const materialPlanning = createMaterialPlanning(db, captureFileContext)
 export const buildingContext = createBuildingContext(db, captureFileContext)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
@@ -210,6 +212,16 @@ export const getProjectArtifacts = artifacts.list
 export const getProjectArtifactVersion = artifacts.version
 export const getProjectArtifactHistory = artifacts.history
 export const editProjectArtifact = artifacts.edit
+export const getMaterialStock = materialPlanning.stock
+export const getMaterialStockVersion = materialPlanning.stockVersion
+export const getMaterialStockHistory = materialPlanning.stockHistory
+export const editMaterialStock = materialPlanning.editStock
+export const getMaterialRequirements = materialPlanning.requirements
+export const getMaterialRequirementVersion = materialPlanning.requirementVersion
+export const getMaterialRequirementHistory = materialPlanning.requirementHistory
+export const editMaterialRequirement = materialPlanning.editRequirement
+export const publishMaterialRequirement = materialPlanning.publish
+export const getMaterialShoppingSources = materialPlanning.shopping
 export const getProjectFacts = projectFacts.list
 export const getProjectFact = projectFacts.get
 export const getProjectFactHistory = projectFacts.history
