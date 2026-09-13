@@ -29,24 +29,30 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 3A — alternatives + selected target;
 - Slice 4A — manual plans/drawings with exact target and measurement lineage.
 
+**Merged + CI/browser-verified, production/live verification pending:**
+
+- Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, project/Area physical-scope relations, current/proposed/accepted physical-state history and a reachable manual **Building & spaces** UI. PR #42 supplied the schema/authority/domain foundation and PR #43 supplied the `database.ts` seam and UI; both are merged. The four domain acceptance fixtures pass, and the dedicated browser proof passes at 320px, 390px and 1280px. This is committed/CI truth, not yet a claim that 2C is deployed or live-verified in production.
+
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
-- full Slice 2 AI consumption of measurements/evidence;
+- full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
+- production/live verification of the merged 2C foundation;
 - Slice 3B generated visual proposals/mockups;
 - deterministic generated geometry, BOM/calculations, stock/shopping propagation and richer executable work planning after 4A;
 - Slice 5 generated/project-specific guidance and structured progress/as-built completion.
 
-**Current next foundation:** **Slice 2C — persistent building context.** Although its number is 2C, it is the next implementation milestone from the current repository state. 4A could safely establish manual drawing truth using project/Area scope, but deterministic geometry and calculations should not expand until Bob has persistent physical targets (`Building` / `Space` / `BuildingElement`) that survive individual projects.
+**Current next implementation milestone:** **resume Slice 4 beyond manual 4A with deterministic artifact geometry for the deliberately narrow supported fixtures.** The prerequisite physical targets now exist in merged code, so generated geometry should consume explicit `Building` / `Space` / `BuildingElement` context plus pinned measurements instead of treating project `Area` as the house model. Production/live verification of 2C remains a release-evidence task and should be completed when the merged migration/UI is deployed; it does not require inventing another foundation before deterministic fixture work can start.
 
-**Active implementation ownership (2026-09-13):** PR #42 (`feat/persistent-building-context`) owns the 2C schema/authority/domain foundation. PR #43 (`feat/building-context-ui`) is reserved to the current implementation session for the app-facing `database.ts` seam, reachable manual Building/Spaces UI, navigation, browser verification and honest loading/empty/denied/error states. Do not start overlapping 2C UI/integration work in another session unless #43 is explicitly handed off or this marker is cleared. Update or remove this coordination marker when #43 merges or ownership changes.
+The previous #43 session reservation is cleared: PR #42 and PR #43 are merged. No active ownership marker remains for 2C UI/integration. Area → physical-target mapping exists and is backend-tested; a dedicated Area-side mapping editor remains a narrow follow-up rather than a reason to reopen the completed sparse Building/Space UI foundation.
 
 **Execution order from here:**
 
-1. deliver the manual 2C building-context foundation and its four acceptance fixtures;
-2. resume Slice 4 beyond manual 4A: deterministic artifact geometry for the narrow supported fixtures, then transparent quantity/BOM + stock/shopping integration, then richer task/dependency/tool/readiness relations;
-3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
-4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+1. resume Slice 4 beyond manual 4A with deterministic artifact geometry for the narrow supported fixtures, using persistent physical targets and explicit measurement provenance;
+2. add transparent quantity/BOM derivation, existing-stock deduction and Shopping propagation, then richer task/dependency/tool/readiness relations;
+3. complete production/live verification of 2C when the merged schema/UI is deployed, fixing any real environment issue without rewriting the domain model;
+4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
+5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 
@@ -425,22 +431,25 @@ Includes:
 - estimate → verified supersession;
 - persistent Building/Space context from `Docs/building-model.md`.
 
-### 2C — Persistent building context — NEXT MANUAL FOUNDATION (planned; owner decision, 2026-09-13)
+### 2C — Persistent building context — MANUAL FOUNDATION MERGED + CI/BROWSER VERIFIED (production/live verification pending; 2026-09-13)
 
-Implement the manual physical-model foundation before deterministic drawing generation expands further. This is the **current next implementation milestone** after deployed 4A, despite the 2C dependency label.
+PR #42 implements the persistent physical-domain schema, RLS/authority, command boundary, revision/proposal model and `src/data/buildingContext.ts`. PR #43 adds the canonical `database.ts` integration, reachable **Building & spaces** UI and dedicated browser proof. Both are merged to `main`; the manual foundation is no longer merely planned.
 
-Minimum delivery order:
+Implemented/verified at the current narrow fidelity:
 
-1. create persistent Site/Building/optional Level/Space identities without requiring a complete house;
-2. add a small BuildingElement vocabulary and explicit spatial relationships;
-3. let a Project scope itself to physical targets and let Areas optionally map to them without changing Area's project-work-zone meaning;
-4. reuse existing provenance/revision rules for measurements and physical claims;
-5. model proposed physical change separately from current state, with an explicit path to accepted/as-built state;
-6. only then add Bob-assisted floor-plan/image ingestion as a proposal/review flow on the same records.
+1. persistent Site/Building/optional Level/Space identities can exist without a complete house model;
+2. BuildingElement records and explicit spatial relationships exist with the shared truth/provenance vocabulary;
+3. Projects can scope to physical targets, and Area → physical-target mapping exists and is backend-tested without redefining Area as Space; a dedicated Area-side mapping editor is intentionally deferred;
+4. measurements can be pinned by exact revision into physical context, preserving provenance/history;
+5. current physical truth remains separate from proposed change, with explicit acceptance producing a new accepted revision rather than destructive overwrite;
+6. manual UI reads/writes through `database.ts`, clears stale data on building/project switches, and exposes honest loading/empty/denied/error states;
+7. Bob-assisted floor-plan/image ingestion remains deferred and must populate these same records as proposed/AI-assessed state rather than creating a separate representation.
 
-The manual foundation must work without AI. Bob-assisted plan extraction depends on the Slice 1C vision seam and must preserve `ai_assessment` / unknown states rather than claiming inferred geometry or hidden services as verified.
+The domain/RLS suite covers the four `Docs/building-model.md` acceptance fixtures: a whole structure can exist before a renovation scopes it; one room can gain pinned measurements and a later inferred neighbour without fake fact promotion; separate buildings stay isolated; and a remodel proposal does not replace current truth until explicit acceptance. The dedicated production-React browser fixture additionally proves create Building → add sparse Space → link Project → reload → add second Space/relation → switch Building → switch Project → denied-state handling at 320px, 390px and 1280px.
 
-**2C exit:** the four fixtures in `Docs/building-model.md` work at the agreed narrow fidelity: a whole-plan structure can be represented, one room can exist alone and later gain an adjacent room, separate buildings do not bleed physical knowledge, and a major remodel can preserve before/proposed/accepted history. Persisted manual data survives reload and honours backend project/building authority boundaries.
+**2C verification status:** merged and CI/browser-verified. Production migration/UI verification is still pending, so this plan does not label 2C deployed or live-verified yet.
+
+**2C exit:** the four fixtures in `Docs/building-model.md` work at the agreed narrow fidelity: a whole-plan structure can be represented, one room can exist alone and later gain an adjacent room, separate buildings do not bleed physical knowledge, and a major remodel can preserve before/proposed/accepted history. Persisted manual data survives reload and honours backend project/building authority boundaries. The merged tests/browser proof satisfy this at CI fidelity; production/live proof remains the outstanding release-evidence step.
 
 **Full Slice 2 exit:** a user can answer a concrete measurement request, return later, and Bob uses the verified value while retaining provenance and the relevant persistent physical context. Manual 2C completion does not by itself close the later AI ingestion/consumption gate.
 
@@ -480,7 +489,7 @@ generation, transparent BOM/calculation, stock deduction, Shopping propagation,
 task-material/dependency/tool/readiness relations and Bob-proposed work remain
 open, so full Slice 4 and V1 are not closed by 4A.
 
-**Before deterministic drawing generation expands beyond the existing manual 4A foundation, planned Slice 2C must establish persistent physical targets.** Generated geometry should reference the Building/Space/Element context it describes instead of hard-coding project `Area` as if Area were the building model.
+**The persistent-physical-target prerequisite is now satisfied in merged 2C code/CI.** Deterministic drawing generation may resume for the deliberately narrow supported fixtures. Generated geometry must reference the `Building` / `Space` / `BuildingElement` context it describes, preserve pinned measurement provenance and remain explicit about measured vs assumed/concept geometry instead of hard-coding project `Area` as the building model. Production/live verification of 2C is still required as release evidence.
 
 **Goal:** produce the first coherent build package from the selected target.
 
@@ -572,12 +581,14 @@ The existing Area `Reference images` concept should evolve into real media rathe
 
 ### Building context — grow with need
 
-V1 does not require a new top-level navigation item merely because persistent building records exist. The first UI should support both:
+The merged app now has a dedicated **Building & spaces** view for editing/visualising the sparse physical model without introducing a new bottom-navigation destination. It supports the bottom-up manual path where only the relevant room/space is known, and the same model is ready for later top-down plan ingestion. Production/live verification of this merged UI is still pending.
 
-- top-down capture from a whole-plan source; and
+V1 still requires both capture directions:
+
+- top-down capture from a whole-plan source, with AI/image extraction remaining a later proposal/review flow; and
 - bottom-up capture where only the currently relevant room/space is modelled.
 
-A dedicated Building view may be added when needed for editing/visualising several Spaces together, following Vera's UI contract rather than creating a parallel design system.
+The Building view must continue to follow Vera's UI contract rather than becoming a parallel design system.
 
 ### Ask bob — reason and explain
 
