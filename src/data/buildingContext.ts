@@ -40,6 +40,7 @@ export interface PhysicalSpace extends Audit {
   buildingId: string
   revision: number
   projectId: string | null
+  sourceProjectId: string | null
   levelId: string | null
   name: string
   kind: string
@@ -58,6 +59,7 @@ export interface PhysicalElement extends Audit {
   buildingId: string
   revision: number
   projectId: string | null
+  sourceProjectId: string | null
   spaceId: string | null
   kind: string
   name: string
@@ -78,6 +80,7 @@ export interface PhysicalRelationship extends Audit {
   objectSpaceId: string
   revision: number
   projectId: string | null
+  sourceProjectId: string | null
   relation: RelationshipKind
   truth: PhysicalTruth
   source: string
@@ -154,6 +157,7 @@ function level(row: Row): PhysicalLevel {
 function space(row: Row): PhysicalSpace {
   return {
     id: row.id, buildingId: row.building_id, revision: row.revision, projectId: row.project_id ?? null,
+    sourceProjectId: row.source_project_id ?? null,
     levelId: row.level_id ?? null, name: row.name, kind: row.kind, notes: row.notes, truth: row.truth,
     source: row.source, archived: row.archived, latestRevision: row.latest_revision ?? row.revision,
     hasProposal: !!row.has_proposal, ...audit(row),
@@ -167,6 +171,7 @@ function spaceProposal(row: Row): SpaceProposal {
 function element(row: Row): PhysicalElement {
   return {
     id: row.id, buildingId: row.building_id, revision: row.revision, projectId: row.project_id ?? null,
+    sourceProjectId: row.source_project_id ?? null,
     spaceId: row.space_id ?? null, kind: row.kind, name: row.name, description: row.description,
     truth: row.truth, source: row.source, archived: row.archived,
     latestRevision: row.latest_revision ?? row.revision, hasProposal: !!row.has_proposal, ...audit(row),
@@ -180,7 +185,8 @@ function elementProposal(row: Row): ElementProposal {
 function relationship(row: Row): PhysicalRelationship {
   return {
     id: row.id, buildingId: row.building_id, subjectSpaceId: row.subject_space_id, objectSpaceId: row.object_space_id,
-    revision: row.revision, projectId: row.project_id ?? null, relation: row.relation, truth: row.truth,
+    revision: row.revision, projectId: row.project_id ?? null, sourceProjectId: row.source_project_id ?? null,
+    relation: row.relation, truth: row.truth,
     source: row.source, notes: row.notes, archived: row.archived,
     latestRevision: row.latest_revision ?? row.revision, hasProposal: !!row.has_proposal, ...audit(row),
   }
