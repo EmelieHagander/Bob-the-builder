@@ -68,10 +68,10 @@ alter table bob.buildings add constraint building_current_revision_fk
   deferrable initially deferred;
 
 create table bob.building_levels (
-  id uuid primary key,
+  id uuid not null unique,
   building_id uuid not null references bob.buildings(id) on delete cascade,
   current_revision integer not null default 1 check (current_revision > 0),
-  unique(id, building_id),
+  primary key(id, building_id),
   unique(id, current_revision)
 );
 create index building_levels_building_idx on bob.building_levels(building_id);
@@ -98,11 +98,11 @@ alter table bob.building_levels add constraint level_current_revision_fk
 -- Spaces, Elements and relationships retain both the newest proposal/history and
 -- the accepted/as-is pointer. accepted_revision may be null for a proposed new object.
 create table bob.building_spaces (
-  id uuid primary key,
+  id uuid not null unique,
   building_id uuid not null references bob.buildings(id) on delete cascade,
   latest_revision integer not null default 1 check (latest_revision > 0),
   accepted_revision integer check (accepted_revision is null or accepted_revision > 0),
-  unique(id, building_id),
+  primary key(id, building_id),
   unique(id, latest_revision)
 );
 create index building_spaces_building_idx on bob.building_spaces(building_id);
@@ -160,11 +160,11 @@ create index space_measurements_building_idx on bob.space_measurements(building_
 create index space_measurements_measurement_idx on bob.space_measurements(measurement_id, measurement_revision);
 
 create table bob.building_elements (
-  id uuid primary key,
+  id uuid not null unique,
   building_id uuid not null references bob.buildings(id) on delete cascade,
   latest_revision integer not null default 1 check (latest_revision > 0),
   accepted_revision integer check (accepted_revision is null or accepted_revision > 0),
-  unique(id, building_id),
+  primary key(id, building_id),
   unique(id, latest_revision)
 );
 create index building_elements_building_idx on bob.building_elements(building_id);
@@ -202,7 +202,7 @@ create index element_revisions_space_idx on bob.element_revisions(space_id, buil
 create index element_revisions_project_idx on bob.element_revisions(project_id);
 
 create table bob.spatial_relationships (
-  id uuid primary key,
+  id uuid not null unique,
   building_id uuid not null references bob.buildings(id) on delete cascade,
   subject_space_id uuid not null,
   object_space_id uuid not null,
@@ -211,7 +211,7 @@ create table bob.spatial_relationships (
   check (subject_space_id <> object_space_id),
   foreign key(subject_space_id, building_id) references bob.building_spaces(id, building_id),
   foreign key(object_space_id, building_id) references bob.building_spaces(id, building_id),
-  unique(id, building_id),
+  primary key(id, building_id),
   unique(id, latest_revision)
 );
 create index spatial_relationships_building_idx on bob.spatial_relationships(building_id);
