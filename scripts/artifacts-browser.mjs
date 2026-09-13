@@ -337,6 +337,8 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await generatedDetails.getByText(/Opening width: Generated opening width · 1210 mm/).waitFor(); await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
   await generatedCard.getByRole('button', { name: 'History', exact: true }).click()
   const generatedHistory = page.getByRole('dialog', { name: 'Drawing history', exact: true })
+  await generatedHistory.getByText('Use remeasured opening width', { exact: false }).waitFor()
+  await generatedHistory.getByText('Initial generated drawing', { exact: false }).waitFor()
   assert.equal(await generatedHistory.locator('li').count(), 2)
   await generatedHistory.getByRole('button', { name: 'View version', exact: true }).last().click()
   generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 1', exact: true })
