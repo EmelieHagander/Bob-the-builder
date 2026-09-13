@@ -27,14 +27,11 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
-      const fail = async message => { await respond({ status: 409, json: { message } }); return true }
+      const reply = async options => { await respond(options); return true }
+      const fail = message => reply({ status: 409, json: { message } })
 
-      if (table === 'project_buildings') {
-        return respond({ json: eq('project_id') === 'A' ? physical.buildings : [] })
-      }
-      if (table === 'project_spaces') {
-        return respond({ json: eq('project_id') === 'A' ? physical.spaces : [] })
-      }
+      if (table === 'project_buildings') return reply({ json: eq('project_id') === 'A' ? physical.buildings : [] })
+      if (table === 'project_spaces') return reply({ json: eq('project_id') === 'A' ? physical.spaces : [] })
 
       const exactTarget = () => {
         const target = solutions.decisions.at(-1)
@@ -48,8 +45,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
         row.recorded_at = timestamp()
         records.set(row.id, row)
         histories.set(row.id, [...(histories.get(row.id) ?? []), structuredClone(row)])
-        await respond({ json: { id: row.id, revision: row.revision } })
-        return true
+        return reply({ json: { id: row.id, revision: row.revision } })
       }
 
       if (table === 'artifact_command') {
@@ -135,7 +131,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
 
       if (table === 'artifact_generation_details') {
         const row = generations.get(generationKey(eq('artifact_id'), Number(eq('artifact_revision')))) ?? null
-        return respond({ json: row?.project_id === eq('project_id') ? row : null })
+        return reply({ json: row?.project_id === eq('project_id') ? row : null })
       }
       if (table === 'artifact_geometry_input_details') {
         const generation = generations.get(generationKey(eq('artifact_id'), Number(eq('artifact_revision'))))
@@ -143,7 +139,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
           const current = facts.records.measurement.get(saved.measurement_id)
           return { ...saved, latest_revision: current?.revision ?? saved.latest_revision, currently_archived: current?.archived ?? saved.currently_archived }
         }) : []
-        return respond({ json: rows.sort((a, b) => a.role.localeCompare(b.role)) })
+        return reply({ json: rows.sort((a, b) => a.role.localeCompare(b.role)) })
       }
 
       let rows
@@ -171,8 +167,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       const offset = Number(url.searchParams.get('offset') ?? 0)
       const limit = Number(url.searchParams.get('limit') ?? 1000)
       const exactRevision = (table === 'artifact_revisions' || table === 'artifact_revision_details') && eq('revision')
-      await respond({ json: exactRevision ? rows[0] ?? null : rows.slice(offset, offset + limit) })
-      return true
+      return reply({ json: exactRevision ? rows[0] ?? null : rows.slice(offset, offset + limit) })
     },
   }
   return fixture
@@ -190,9 +185,6 @@ function rememberGeneratedMeasurement(facts, timestamp, subject, value) {
 }
 
 export async function verifyArtifactsBrowser(page, base, fixture, facts, solutions, width) {
-  // The solutions browser deliberately ends with no selected target. Seed one
-  // exact target decision for the drawing fixture; target behavior itself is
-  // already exercised through the production UI immediately before this flow.
   const selected = [...solutions.records.values()].find(item => item.title === 'Extend the porch')
   assert(selected, 'Expected the retained second alternative')
   solutions.decisions.push({
@@ -278,8 +270,6 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await page.getByRole('dialog', { name: 'Restore drawing', exact: true }).getByRole('button', { name: 'Restore drawing', exact: true }).click()
   await card.waitFor({ state: 'hidden' }); await page.getByLabel('Show drawings', { exact: true }).selectOption('active'); await card.waitFor(); await page.reload(); await card.waitFor()
 
-  // 4B1 deterministic fixture: seed six persisted facts, map each role explicitly,
-  // preview the production SVG, save/reload the recipe, then regenerate one input.
   const generatedFacts = {
     wall_width: { subject: 'Generated wall width', value: '4200' },
     wall_height: { subject: 'Generated wall height', value: '2400' },
@@ -289,7 +279,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
     opening_height: { subject: 'Generated opening height', value: '1200' },
   }
   const generatedIds = {}
-  for (const [role, spec] of Object.entries(generatedFacts)) generatedIds[role] = rememberGeneratedMeasurement(facts, () => new Date(Date.now()).toISOString(), spec.subject, spec.value)
+  for (const [role, spec] of Object.entries(generatedFacts)) generatedIds[role] = rememberGeneratedMeasurement(facts, () => new Date().toISOString(), spec.subject, spec.value)
 
   await page.getByRole('button', { name: 'Generate wall elevation', exact: true }).click()
   let generator = page.getByRole('dialog', { name: 'Generate wall elevation', exact: true })
