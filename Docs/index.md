@@ -11,6 +11,7 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
+| persistent site/building/space context across projects | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
@@ -21,7 +22,7 @@
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
-| Ask bob runtime project-context selection / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
+| Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -32,13 +33,24 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop.
+- `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. Status is specified/planned until runtime work is verified.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
 - `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
 - `Docs/Mockups and initial plans/bob-the-builder.html` — original visual/product mockup; use as historical composition reference, not runtime truth.
 
 ### Product-document status
 
-`Docs/user-stories.md` owns **what users should be able to achieve**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+
+### Physical place vs project organisation
+
+The original product uses `Area` as a project-scoped physical/work zone. The persistent building model is a later product decision and does not rewrite that history. For current work, keep the distinction explicit:
+
+- `Area` — project work-zone container used by current collaboration/runtime flows;
+- `Site` / `Building` / `Space` / `BuildingElement` — planned persistent physical context that may be reused across projects;
+- future Areas may map to physical targets, but the entities must not be silently conflated.
+
+See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
 
 ## UI / design
 
@@ -56,6 +68,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/v1-plan.md` — V1 release journey and integration boundary.
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
+- `Docs/building-model.md` — planned persistent physical context that project/Area flows may later target.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
 - `src/pages/People.tsx` — crew, skills and dietary context.
 - `src/pages/Events.tsx` + `src/pages/EventDetail.tsx` — build-day planning and attendance.
@@ -74,6 +87,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
 - `supabase/migrations/` — new CLI-created migrations, applied after the legacy database bootstrap.
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
+- `Docs/building-model.md` — product/domain owner for the planned persistent physical model. Exact schema/RLS does not exist merely because the product model is specified.
 - `Docs/media-and-steps.md` — owning media and manual-step contract: private files, same-project attachments, lifecycle/recovery, task checks and runtime consumption for milestones 1A/1B.
 - `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
 - `Docs/project-facts.md` — owning manual measurement/component contract: truth states, exact length units, revision history, source images, authority and recovery for milestones 2A/2B.
@@ -88,8 +102,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
-- `Docs/ask-bob-context.md` — **specified / pre-build** runtime project-context contract: hierarchical Project Catalog, cheap category/scope routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
-- `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that context contract: backend module seams, additive catalog RPC, adapters, router shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
+- `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
+- `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **specified / pre-build** conversation-continuity contract: Bob-owned transcript, server-private Responses continuation, compaction/reseed state machine, per-user/project privacy and release proof.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
 - `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
