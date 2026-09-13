@@ -21,6 +21,7 @@
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
+| Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
 
@@ -86,6 +87,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
+- `Docs/ask-bob-conversations.md` — **specified / pre-build** conversation-continuity contract: Bob-owned transcript, server-private Responses continuation, compaction/reseed state machine, per-user/project privacy and release proof.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
 - `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
