@@ -1,5 +1,78 @@
 # Foundation verification and rollout
 
+## Delivered persistent building context (2C)
+
+**Status:** manual 2C implemented, merged, migrated, deployed and live-verified on
+2026-09-13. Backend/domain [PR 42](https://github.com/EmelieHagander/Bob-the-builder/pull/42)
+merged as `d5dce52e531c271a54d0dbb28a55765d271c1e9b`; app/UI
+[PR 43](https://github.com/EmelieHagander/Bob-the-builder/pull/43) merged as
+`126a322f9ac59bc110525e2bb7ecd0575d24c3fa`. Hosted cleanup-order follow-up
+[PR 45](https://github.com/EmelieHagander/Bob-the-builder/pull/45) merged as
+`2562d15b4ffa99b53d15682c24010b87b81f2dbf`. The
+[building-model contract](building-model.md) owns Site/Building/Level/Space,
+BuildingElement/topology, physical authority, Project/Area scope, accepted/proposed
+history and exact measurement-snapshot semantics.
+
+### Automated and browser evidence
+
+- Backend [CI 34762221631](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34762221631)
+  passes on the final #42 head. The repository has 42 passing database/data-boundary
+  tests, including all four building-model fixtures plus stale/raw/forged authority,
+  Area mapping/lifecycle and physical deletion-boundary checks. TypeScript/Vite,
+  edge, PWA/install and existing foundation/browser checks also pass.
+- UI [CI 34769797360](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34769797360)
+  passes on #43 head `74a270d92f8827ebe5b69ac696601ef2f4ae42a7`. The dedicated Building-context
+  browser proof passes at 320, 390 and 1280px: create Building; start with one Space;
+  project-link; reload/read-back; add a second Space + relationship; switch Buildings
+  without stale detail; switch Project; and render explicit denied state instead of
+  misrepresenting unread physical context as an empty building.
+
+### Deployment and hosted migration history
+
+Five additive source migrations make up the released 2C database change. Hosted
+history records the same changes under deployment timestamps; do not replay the
+source timestamps or edit already-applied migrations:
+
+| Source migration | Hosted registry |
+|---|---|
+| `20260913124500_persistent_building_context.sql` | `20260913141333_bob_persistent_building_context` |
+| `20260913135500_expose_physical_proposal_state.sql` | `20260913141342_bob_expose_physical_proposal_state` |
+| `20260913140500_physical_identity_delete_boundary.sql` | `20260913141357_bob_physical_identity_delete_boundary` |
+| `20260913143000_building_context_fk_indexes.sql` | `20260913142013_bob_building_context_fk_indexes` |
+| `20260913144500_building_delete_child_order.sql` | `20260913143018_bob_building_delete_child_order` |
+
+The core migration is additive: existing Areas, measurements, components, solutions
+and artifacts are not rewritten. Normal clients read RLS-protected tables through
+security-invoker views and mutate physical truth only through guarded `bob.physical_*`
+commands. Private authority helpers stay in `bob_private` with explicit execute ACLs.
+
+Post-DDL advisor review introduced the dedicated FK-index follow-up above. The final
+security advisor reports no new 2C-specific security finding. The performance advisor
+still reports INFO-level covering-index opportunities on several accepted-revision /
+composite physical foreign keys plus expected fresh-unused-index notices; these are
+performance follow-ups, not release-authority failures. See the
+[unindexed-FK remediation guide](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys).
+
+### Live Auth/PostgREST proof and cleanup
+
+[Live foundation check 34762945539](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34762945539)
+passes on `main` after the cleanup-order fix. Through the ordinary authenticated Bob
+client it proves persistent Site/Building/Level/Spaces, project and Area scope,
+topology, an exact Measurement snapshot, accepted current vs proposal state, explicit
+acceptance/history, RLS and raw-write denial. No AI is invoked.
+
+The same run then unlinks project context and removes the disposable physical fixture
+through the normal guarded authority commands. The log explicitly confirms
+`Live building context fixture removed through guarded physical-authority commands.`
+No test Building/Site is left behind by the verifier.
+
+The current merged UI is also deployed: [Pages 34773319558](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34773319558)
+passes for current `main` commit `b1c11f194d286775c6125eac46ad894b429bfdc8`.
+Area-side physical-target editing remains a later narrow UI follow-up; backend Area
+mapping is already covered by database and hosted live checks. Whole-plan import,
+generated geometry and AI/vision consumption remain later gates and are not implied
+by this 2C release.
+
 ## Delivered manual plans and drawings (4A)
 
 **Status:** manual 4A implemented, merged, migrated and live-verified on

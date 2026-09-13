@@ -90,6 +90,10 @@ become join tables:
 | `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
 | `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
 | `ProjectArtifact`, `ArtifactVersion` | `bob.artifacts`, append-only `bob.artifact_revisions`, exact `bob.artifact_measurements`, invoker `bob.current_artifacts` / `bob.artifact_measurement_details` |
+| `PhysicalSite`, `PhysicalBuilding`, `PhysicalLevel`, `PhysicalSpace` | `bob.sites`, `bob.buildings`, `bob.building_levels`, `bob.building_spaces` + append-only revision tables and security-invoker current/project views |
+| `PhysicalElement`, `PhysicalRelationship` | `bob.building_elements`, `bob.spatial_relationships` + append-only revision tables; accepted current state remains separate from latest proposals |
+| `ProjectPhysicalScope`, `AreaPhysicalTarget` | `bob.project_physical_scope`, `bob.area_physical_targets` |
+| `SpaceMeasurementSnapshot` | `bob.space_measurements`, invoker `bob.space_measurement_details` with exact historical Measurement versions |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
@@ -167,6 +171,40 @@ the byte reference while retaining its recorded title and revision history.
 [Foundation verification](../Docs/foundation-verification.md) owns the deployed
 Auth/PostgREST/Storage, browser and cleanup evidence. 4A is manual and does not
 claim deterministic geometry, BOM/calculation, stock/shopping or task readiness.
+
+## Persistent building context foundation (2C)
+
+[`Docs/building-model.md`](../Docs/building-model.md) owns the persistent physical
+place contract. Manual 2C is deployed/live-verified: Site → Building → optional
+Level → Space persists independently of Project lifetime; BuildingElements and a
+narrow Space relationship vocabulary add topology; Project/Area scope links work
+without redefining `Area` as a physical room; accepted current truth remains separate
+from Project proposals; and Space revisions can snapshot exact Measurement revisions.
+
+Source migrations and hosted registry entries are:
+
+| Source migration | Hosted registry |
+|---|---|
+| `supabase/migrations/20260913124500_persistent_building_context.sql` | `20260913141333_bob_persistent_building_context` |
+| `supabase/migrations/20260913135500_expose_physical_proposal_state.sql` | `20260913141342_bob_expose_physical_proposal_state` |
+| `supabase/migrations/20260913140500_physical_identity_delete_boundary.sql` | `20260913141357_bob_physical_identity_delete_boundary` |
+| `supabase/migrations/20260913143000_building_context_fk_indexes.sql` | `20260913142013_bob_building_context_fk_indexes` |
+| `supabase/migrations/20260913144500_building_delete_child_order.sql` | `20260913143018_bob_building_delete_child_order` |
+
+Do not replay these source timestamps or edit applied migrations. Physical tables and
+history are RLS-protected. `bob_private` owns physical membership/authority helpers;
+normal app writes go through the guarded `bob.physical_site_command`,
+`bob.physical_building_command`, `bob.physical_node_command` and
+`bob.physical_scope_command` wrappers. `src/data/buildingContext.ts` is the app domain
+adapter behind the single `database.ts` UI seam. Guarded physical deletion requires
+direct authority, a current archived identity and no active Project/Area scope; the
+follow-up delete migration removes child identities in explicit safe order while
+preserving strong foreign keys.
+
+[Foundation verification](../Docs/foundation-verification.md) owns the exact CI,
+320/390/1280 browser, hosted Auth/PostgREST, Pages and self-cleanup evidence. This
+foundation does not claim whole-plan import, general CAD/BIM, generated geometry or
+AI promotion of uncertain evidence into fact.
 
 ## Wiring the app to it
 
