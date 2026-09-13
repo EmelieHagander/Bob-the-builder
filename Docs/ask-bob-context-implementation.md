@@ -1,140 +1,303 @@
 # Ask bob — project context implementation plan
 
-> **Status: planned / pre-build.** This file owns the technical landing sequence for the already-specified runtime context contract in [`ask-bob-context.md`](ask-bob-context.md). It does **not** redefine that contract and does not claim any Project Catalog, Context Router, new pull tools, image vision path or Project Librarian is built.
+> **Status: planned / pre-build.** This file owns the technical landing sequence for the already-specified runtime context contract in [`ask-bob-context.md`](ask-bob-context.md). It does **not** redefine that contract and does not claim any screen-context seam, Project Catalog, Context Router, Process Lens, new pull tools, image vision path or Project Librarian is built.
 >
-> **Current runtime:** `supabase/README.md` + `supabase/functions/_shared/project-lookup.ts` + `project-answer.ts` remain the deployed truth until an implementation slice below is actually migrated/deployed/verified.
+> **Current runtime:** `supabase/README.md` + `supabase/functions/_shared/project-lookup.ts` + `project-answer.ts` remain deployed truth until a slice below is migrated/deployed/verified.
 
 ## Job of this plan
 
 `ask-bob-context.md` owns **what Bob's context architecture is**. This plan owns **how to land it without replacing several safety boundaries at once**.
 
-The implementation should be incremental:
+The target sequence is deliberately incremental:
 
 ```text
 existing Slice 0
-    |
-    v
+    ↓
 context types + registry
-    |
-    v
+    ↓
 catalog + deterministic adapters
-    |
-    v
-cheap router preflight
-    |
-    v
-Main Bob list/open pull tools
-    |
-    v
+    ↓
+screen pointer + server-hydrated Current View
+    ↓
+cheap router + Process Lens in shadow mode
+    ↓
+Main Bob prefetch + list/open tools
+    ↓
 image-on-demand vision
-    |
-    v
+    ↓
 Project Librarian
-    |
-    v
+    ↓
 retire old model-facing search_project_data tool
 ```
 
-Conversation persistence / provider continuation is a sibling track owned by `ask-bob-conversations.md`. The context gateway must work correctly **with or without** cross-turn provider continuation: every user turn still reconstructs fresh project context.
+Conversation persistence/provider continuation is a sibling track owned by `ask-bob-conversations.md`. Every user turn still rebuilds fresh Current View + project context even when OpenAI carries conversational state.
 
-## Existing seams to reuse, not replace
+## Prior art to copy deliberately
 
-The current Ask bob path already has most of the security plumbing we need:
+Kvarnstrands' context-aware internal assistant has a useful split that Bob should mirror conceptually, not by importing code:
+
+```text
+client context descriptor
+  = view + opaque selected ids
+  = navigation hint only
+
+server get_context-style read
+  = real scoped read
+  = facts
+```
+
+The key lesson is not the field names. It is the trust boundary:
+
+- page/surface code says what is open;
+- the request parser validates only descriptor shape;
+- ids are opaque pointers;
+- a server-side read verifies current visibility/ownership and hydrates facts;
+- stale/forged pointers fail closed;
+- changing page clears stale selected pointers;
+- the assistant overlay itself does not destroy context for the page still underneath it.
+
+Bob should use the same pattern for project/area/task/step/solution/drawing/event focus.
+
+## Existing seams to reuse
 
 | Current seam | Keep / evolve |
 | --- | --- |
-| `_shared/bob-request.ts` | Keep the narrow authenticated HTTP boundary. Do not let the browser send provider state, category results or raw context. |
-| `_shared/ask-openai.ts` | Keep creating a `bob`-schema Supabase client with the caller JWT. Project reads stay here/under this client, never service-role. |
-| `_shared/project-answer.ts` | Evolve from one `project` briefing + `search_project_data` loop into catalog → route → prefetch → generic context-tool loop. |
-| `_shared/project-lookup.ts` | Keep as the deployed compatibility seam while the new registry lands. Reuse projections where sensible; do not big-bang rename it first. |
-| `_shared/openai-service.ts` | Reuse the shared model/settings/accounting pipe. It already supports strict structured output via `schemaName` + `schema`, tools, images and server-owned `previousResponseId`; no Bob-specific branching belongs here. |
-| `src/data/provenance.ts` | Keep the truth/source vocabulary for visible answer evidence. Extend source construction, not the meaning of `measured` / `provided_spec` / `estimated` / `unknown`. |
-| current invoker views / RLS | Reuse current project facts, solutions, targets and artifact heads. Do not duplicate domain truth into AI-only tables. |
-| private `bob-project-media` bucket | Reuse caller-authorised Storage reads for an explicitly opened image. No public/signed-URL persistence. |
-
-The first context implementation should therefore be mostly **new read orchestration around existing project truth**, not another parallel data model.
+| `_shared/bob-request.ts` | Keep narrow Auth boundary; extend strict request schema with a small `screen` pointer, never fact blobs/provider state. |
+| `_shared/ask-openai.ts` | Keep caller-JWT `bob` client for all project reads. Service role remains shared AI config/accounting only. |
+| `_shared/project-answer.ts` | Evolve into the turn orchestrator: hydrate view → catalog → route → prefetch → tool loop. It should not know table/storage details. |
+| `_shared/project-lookup.ts` | Keep deployed Slice-0 compatibility/fallback seam while new registry lands. |
+| `_shared/openai-service.ts` | Reuse shared model/settings/accounting, strict structured output, tools, images and `previousResponseId`; no Bob-specific provider body logic. |
+| `src/components/AskBob.tsx` | Read the current screen pointer at **send time** and send it with the question. |
+| project pages + `Layout` | Publish honest surface/focus pointers through one tiny app-level context module. |
+| `src/data/provenance.ts` | Keep truth/source vocabulary; extend source collection, not semantics. |
+| current invoker views / RLS | Reuse existing domain truth; no AI-only duplicate truth tables. |
+| private `bob-project-media` bucket | Reuse authorised originals only after exact image open. |
 
 ## Target module layout
 
-Keep the new context machinery under one backend-owned folder instead of growing `project-answer.ts` into a switchboard:
+Backend:
 
 ```text
 supabase/functions/_shared/project-context/
-  types.ts          # ProjectCategory, catalog, route, refs, result unions
-  registry.ts       # one server-owned category registry
+  types.ts          # categories, screen pointer, CurrentView, lens, refs, results
+  registry.ts       # one category registry + one surface hydration registry
   catalog.ts        # buildProjectCatalog
-  router.ts         # cheap structured-output model call + validator
-  dispatcher.ts     # list/open dispatch + per-turn budgets
-  tools.ts          # model-facing list_project_category/open_project_item specs
-  sources.ts        # manifest/open results -> ProjectSource evidence
+  current-view.ts   # hydrateCurrentView + viewer derivation
+  router.ts         # cheap structured-output call + validator
+  lenses.ts         # fixed server-owned ProcessLens prompt blocks
+  dispatcher.ts     # list/open dispatch + turn budgets
+  tools.ts          # list_project_category/open_project_item specs
+  sources.ts        # all current-turn project reads -> ProjectSource evidence
   adapters/
     legacy.ts       # areas/tasks/materials/people/events/announcements
     facts.ts        # measurements/components
     media.ts        # image metadata + authorised original read
-    solutions.ts    # alternatives + selected target/current revisions
+    solutions.ts    # alternatives/selected target
     artifacts.ts    # plans/drawings + pinned lineage
 ```
 
-`project-answer.ts` should orchestrate these modules; it should not know table names or storage paths.
+Frontend:
 
-## Data layer
+```text
+src/lib/bobSurfaceContext.ts
+  setBobSurface(pointer)
+  clearBobSurface()
+  getBobSurface()      # read at send time
+```
 
-### 1. One small Project Catalog read
+Page code publishes context. `AskBob.tsx` consumes it. The AI/backend never derives semantic focus by parsing arbitrary DOM text.
 
-Add one additive, read-only `bob.project_context_catalog(p_project_id)` RPC. It should be `SECURITY INVOKER`, schema-qualified, `search_path = ''`, callable by authenticated users, and depend on the same project RLS/membership rules as every other Bob read.
+## Screen pointer wire contract
 
-Its only job is navigation metadata:
+Use a compact request value:
+
+```ts
+type BobSurface =
+  | 'project'
+  | 'areas'
+  | 'area'
+  | 'task'
+  | 'facts'
+  | 'solutions'
+  | 'drawings'
+  | 'people'
+  | 'events'
+  | 'event'
+  | 'shopping'
+  | 'today'
+  | 'announcements'
+
+interface BobScreenPointer {
+  surface: BobSurface
+  areaId?: string
+  taskId?: string
+  stepId?: string
+  solutionId?: string
+  artifactId?: string
+  eventId?: string
+}
+```
+
+The browser must **not** send names/status/assignees/measurements as page truth. For example, do not send:
+
+```json
+{ "area": "Sovrum", "step": "Måla", "responsible": "Emelie" }
+```
+
+Instead send ids; the backend hydrates those values.
+
+### Parser rules
+
+`bob-request.ts` should:
+
+- keep `screen` optional;
+- reject unknown fields;
+- enumerate `surface` values;
+- bound pointer strings tightly;
+- enforce surface-compatible pointer shapes where practical;
+- never accept `viewerName`, assignees, arbitrary page text, category results or provider state.
+
+A malformed supplied descriptor is a 400. A syntactically valid id that is stale/not in this project is handled by the hydrator, not trusted by the parser.
+
+## Frontend surface lifecycle
+
+The surface module is a tiny snapshot store, not a second application state system.
+
+Example:
+
+```ts
+useEffect(() => {
+  setBobSurface({ surface: 'task', areaId: task.areaId, taskId: task.id })
+  return () => clearBobSurface()
+}, [task.areaId, task.id])
+```
+
+If a specific task step is selected/expanded and should be the conversational focus:
+
+```ts
+setBobSurface({
+  surface: 'task',
+  areaId: task.areaId,
+  taskId: task.id,
+  stepId: selectedStepId,
+})
+```
+
+Rules:
+
+- navigating to another page replaces the whole snapshot;
+- leaving a detail/selection clears its ids;
+- no stale step/product/drawing pointer survives because another surface forgot to unset it;
+- opening Ask bob does not navigate, so the underlying surface snapshot remains;
+- read the snapshot immediately before `db.askBob(...)`, not when the drawer first mounted.
+
+Page tests should pin these lifecycle rules.
+
+## Server-hydrated Current View
+
+Add `hydrateCurrentView(pointer, readContext)`.
+
+It must use the caller-JWT client and the same RLS/same-project rules as normal project reads.
+
+The server derives the viewer from the authenticated project-person mapping, never from the request body.
+
+Example task hydration:
+
+```text
+pointer:
+  surface=task
+  areaId=area_123
+  taskId=task_456
+  stepId=step_789
+
+server reads:
+  current membership -> viewer Emelie
+  area_123 in bound project -> Sovrum
+  task_456 in area_123 -> Måla sovrum / doing
+  step_789 in task_456 -> Måla
+  task assignees -> Emelie
+
+CurrentView:
+  Viewer: Emelie
+  Area: Sovrum
+  Task: Måla sovrum
+  Step: Måla
+  Responsible: Emelie
+```
+
+### Hydration registry
+
+Do not build one giant switch in `project-answer.ts`.
+
+```ts
+interface SurfaceHydrator<P extends BobScreenPointer = BobScreenPointer> {
+  surface: BobSurface
+  hydrate(ctx: ProjectReadContext, pointer: P): Promise<CurrentViewContext>
+}
+```
+
+The registry maps only supported surface types to fixed reads. Surface hydration must expose only AI-safe fields already allowed for that domain.
+
+### Failure posture
+
+- no descriptor → `CurrentView = null`;
+- malformed descriptor → request rejected;
+- foreign/stale id → no guessed facts; return a typed unresolved/not-found current-view state;
+- project membership denied → fail turn as today;
+- a child pointer that does not match its parent → fail closed/unresolved, never silently re-parent.
+
+A missing Current View must not make the whole assistant unavailable; catalog + pull tools still work.
+
+## Project Catalog
+
+Add one additive, read-only `bob.project_context_catalog(p_project_id)` RPC.
+
+Required posture:
+
+- `SECURITY INVOKER`;
+- schema-qualified / empty search path discipline;
+- authenticated caller only;
+- same membership/RLS as ordinary Bob reads;
+- counts only AI-safe/listable rows;
+- project id/name + small area id/name manifest + category counts;
+- no record bodies.
+
+Example payload:
 
 ```ts
 interface ProjectCatalogPayload {
   project: { id: string; name: string }
   areas: Array<{ id: string; name: string }>
-  counts: {
-    areas: number
-    measurements: number
-    components: number
-    images: number
-    materials: number
-    tasks: number
-    solutions: number
-    drawings: number
-    people: number
-    events: number
-    announcements: number
-  }
+  counts: Record<ProjectCategory, number>
   generatedAt: string
 }
 ```
 
-Count only rows that Bob could actually list through the matching AI-safe adapter. Examples: only current/non-archived fact heads, only `ready` project images, current solution/drawing heads, and only the existing safe people projection. A count must not reveal a private category the adapter could not expose.
+SQL owns counts. `registry.ts` owns category capabilities. A parity test must fail if one drifts from the other.
 
-The SQL RPC owns **counts**, not category capabilities. `registry.ts` owns scope/list/open/research capabilities. `catalog.ts` joins the two and fails closed if a count key and registry key drift. A parity test pins that contract.
+## Deterministic category adapters
 
-### 2. Deterministic category adapters
+Each adapter uses fixed caller-authorised projections. No adapter accepts table/column/PostgREST expressions from a model.
 
-Each adapter uses fixed projections over existing tables/views with the caller-JWT client. No adapter accepts table names, columns or PostgREST filter expressions from a model.
-
-Initial mapping:
-
-| Category | Primary read surface | Manifest posture | `open_project_item` posture |
+| Category | Primary surface | Manifest posture | Open posture |
 | --- | --- | --- | --- |
-| `areas` | `bob.areas` | id/name/description/lead id only as already AI-safe | one area + bounded related ids, not whole project |
-| `measurements` | `bob.current_measurements` | subject/value/unit/truth/current revision/area/source label | current revision + provenance + bounded history only when useful |
-| `components` | `bob.current_components` | name/kind/count/condition/action/revision/area | current component + linked dimensions/source metadata |
-| `images` | `bob.media_assets` + safe links | title/purpose/dimensions/area/task/step refs; `ready` only | metadata first; bytes go on a server-only model attachment side-channel |
-| `materials` | `bob.materials` | existing authored fields, truth remains `unknown` | one current material record |
-| `tasks` | `bob.tasks` + area/assignee safe labels | name/status/skill/hours/materials/area | task + instructions + ordered steps + safe attachments |
-| `solutions` | `bob.current_solutions` + `bob.current_target` | current alternatives + selected marker + revision/area | current version + assumptions/trade-offs + exact pinned measurement refs + target decision |
-| `drawings` | `bob.current_artifacts` | title/kind/status/revision/area/target revision | current artifact + assumptions + exact pinned target/solution/measurement refs + image ref |
-| `people` | current Slice-0 people/skills projection | name/role/skills only | same safe projection; no email/diet/auth/account fields |
-| `events` | current Slice-0 event projection | title/day/time/place/status + safe attendance labels | one event safe projection |
-| `announcements` | current Slice-0 projection | text/pinned/time/author label | one announcement safe projection |
+| `areas` | `bob.areas` | id/name/description/safe lead label | one area + bounded safe relations |
+| `measurements` | `bob.current_measurements` | value/unit/truth/revision/area/source | current revision + provenance; bounded history only when useful |
+| `components` | `bob.current_components` | name/kind/count/condition/action/revision | current component + linked dimensions/source metadata |
+| `images` | `bob.media_assets` + safe links | title/purpose/dimensions/link refs; ready only | metadata + server-only pixel attachment on explicit open |
+| `materials` | `bob.materials` | existing authored fields, truth remains unknown | one record |
+| `tasks` | tasks + safe area/assignee labels | name/status/skill/area | task + instructions + ordered steps + safe attachments |
+| `solutions` | current solutions + target | alternatives/selected marker/revision | assumptions/trade-offs + pinned evidence/decision |
+| `drawings` | current artifacts | title/kind/status/revision/target revision | assumptions + exact pinned lineage/image ref |
+| `people` | Slice-0 safe people/skills projection | name/role/skills only | same safe projection |
+| `events` | Slice-0 event projection | safe schedule/status/attendance labels | one safe event |
+| `announcements` | Slice-0 safe projection | text/pinned/time/author label | one announcement |
 
-A category manifest may contain enough data to answer a simple question. Do not auto-open every row after listing it.
+Do not auto-open every listed row.
 
-### 3. Server-owned budgets
+## Server-owned budgets
 
-The model must not choose row/byte budgets. Keep them in one constant in `types.ts`, initially close to the proven Slice-0 limits and tune from measurements:
+Keep one bounded constant, initially conservative:
 
 ```ts
 export const PROJECT_CONTEXT_LIMITS = {
@@ -145,16 +308,17 @@ export const PROJECT_CONTEXT_LIMITS = {
   toolRounds: 3,
   imagesPerTurn: 2,
   catalogTimeoutMs: 10_000,
+  currentViewTimeoutMs: 10_000,
   readTimeoutMs: 10_000,
   routerTimeoutMs: 8_000,
 } as const
 ```
 
-These are implementation defaults, not permanent product truth. Any change must preserve boundedness and tests.
+These are tuning values, not permanent product truth.
 
-## Context Router call
+## Context Router + Process Lens
 
-Use the existing shared OpenAI service as a separate Bob AI function, for example:
+Use the shared OpenAI service as a separate configured Bob AI function.
 
 ```ts
 callOpenAIResponses<ContextRoutePlan>({
@@ -170,19 +334,29 @@ callOpenAIResponses<ContextRoutePlan>({
   schema: CONTEXT_ROUTE_SCHEMA,
   messages: [{
     role: 'user',
-    content: JSON.stringify({ contextQuery, catalog, uiContext }),
+    content: JSON.stringify({ contextQuery, currentView, catalog }),
   }],
-  maxOutputTokens: 300,
+  maxOutputTokens: 320,
   timeoutMs: PROJECT_CONTEXT_LIMITS.routerTimeoutMs,
 })
 ```
 
-Do **not** hardcode a model name in Bob code. Give `ask-bob-context-router` its own `shared.ai_settings` row so the cheap model, reasoning effort, token ceiling and kill switch are configuration. Usage then lands in the existing shared usage ledger under a distinct function name.
+Do not hardcode a model. Give this function its own `shared.ai_settings` row so model/tokens/reasoning/kill switch are configuration and usage is attributable separately.
 
-The response schema should permit only:
+Structured output:
 
 ```ts
+type ProcessLens =
+  | 'general'
+  | 'survey'
+  | 'design'
+  | 'drawing'
+  | 'procurement'
+  | 'execution'
+  | 'coordination'
+
 interface ContextRoutePlan {
+  lens: ProcessLens
   requests: Array<{
     category: ProjectCategory
     areaId: string | null
@@ -192,33 +366,31 @@ interface ContextRoutePlan {
 }
 ```
 
-Server validation then additionally enforces:
+Server validation enforces category registry membership, exact catalog area ids, category scope capability, short intent, max request count and duplicates.
 
-- max three requests;
-- every category exists in the server registry;
-- category count is non-zero before automatic prefetch;
-- `areaId` is null or one of the catalog's exact area ids;
-- the category supports area scope when an area is present;
-- `intent` is short data, never instructions to the database;
-- duplicate requests collapse deterministically.
+### Lens prompt blocks
 
-`limit`, project id, table names, columns and provider ids are deliberately absent from router output.
+The cheap model chooses only the enum. It never authors Bob's instructions.
 
-### Failure posture
-
-Router failure is **fail-soft**:
+`lenses.ts` owns fixed short blocks:
 
 ```ts
-const routed = await tryRoute(...)
-// failure => no automatic category prefetch
-// Main Bob still gets the compact catalog + pull tools
+const PROCESS_LENS_BLOCKS: Record<ProcessLens, string> = {
+  general: '...',
+  survey: 'Prioritise current measurements, existing components and uncertainty ...',
+  design: 'Keep alternatives distinct and reason from current evidence ...',
+  drawing: 'Prioritise exact selected target, drawing revision and pinned measurements ...',
+  procurement: 'Prioritise required materials, stock/reuse evidence and uncertainty ...',
+  execution: 'Prioritise current task/step, build-ready/current drawing and site evidence ...',
+  coordination: 'Prioritise people, timing, task assignment and current project coordination ...',
+}
 ```
 
-Do not fall back by guessing categories in code and label that as router success.
+Router failure → `general` + no automatic prefetch. Main Bob remains usable with Current View, catalog and pull tools.
 
 ## Turn orchestration
 
-The target `runProjectAnswer` shape becomes:
+Target shape:
 
 ```ts
 async function runProjectAnswer(opts: RunProjectAnswerOptions) {
@@ -230,12 +402,13 @@ async function runProjectAnswer(opts: RunProjectAnswerOptions) {
     callerClient: opts.callerClient,
   })
 
+  const currentView = await context.hydrateCurrentView(opts.screen ?? null)
   const catalog = await context.catalog()
 
   const route = await tryContextRouter({
     contextQuery,
+    currentView,
     catalog,
-    uiContext: opts.uiContext,
   })
 
   const prefetched = await context.prefetch(route.requests)
@@ -244,6 +417,7 @@ async function runProjectAnswer(opts: RunProjectAnswerOptions) {
   let messages = [{
     role: 'user',
     content: JSON.stringify({
+      currentView,
       projectCatalog: catalog,
       projectContext: prefetched,
       question: opts.message,
@@ -254,6 +428,11 @@ async function runProjectAnswer(opts: RunProjectAnswerOptions) {
     await requireAccess()
 
     const response = await callMainBob({
+      systemMessage: assembleBobSystemPrompt({
+        truthRules: BOB_TRUTH_RULES,
+        processLens: PROCESS_LENS_BLOCKS[route.lens],
+        currentView,
+      }),
       messages,
       previousResponseId: turnCursor,
       tools: context.modelTools(),
@@ -266,96 +445,58 @@ async function runProjectAnswer(opts: RunProjectAnswerOptions) {
 
     turnCursor = requireResponseId(response)
     const dispatched = await context.dispatchToolCalls(response.toolCalls)
-
     messages = dispatched.toolMessages
-    // image opens may additionally add turn-local model attachments;
-    // no bytes/storage path appear in the textual tool result.
   }
 }
 ```
 
-The **compact catalog is also supplied to Main Bob**. It is small navigation context and is what lets Main Bob repair a router miss without loading irrelevant rows.
-
-Every deterministic read — automatic prefetch or Main Bob pull — contributes sources to the same turn evidence collector. Catalog category names/counts are navigation metadata, not evidence for a construction claim.
+Current View is supplied as fresh data and also rendered into a concise system-side block so Bob reliably understands “här”, “den här uppgiften” and “det här steget”. Avoid duplicating the same verbose page payload in several layers.
 
 ## Main Bob tools
 
 ### `list_project_category`
 
-Model input:
+Input:
 
 ```ts
-{
-  category: ProjectCategory
-  areaId: string | null
-}
+{ category: ProjectCategory; areaId: string | null }
 ```
 
-Server rules:
-
-- project id is injected from the bound turn;
-- exact category + scope validation against the registry/catalog;
-- server owns limit/order/byte cap;
-- each call consumes one pull-operation budget;
-- returns an honest `ok | empty | denied | unavailable | budget_exhausted` envelope plus `truncated`.
+Server injects project, owns limit/order/bytes and charges a turn pull budget.
 
 ### `open_project_item`
 
-Model input:
+Input:
 
 ```ts
 { ref: ProjectItemRef }
 ```
 
-Server rules:
+Server parses fixed prefixes, rechecks current project access and returns current/revision-pinned evidence as appropriate.
 
-- parse the prefix and dispatch to exactly one registered adapter;
-- reject malformed/unknown prefixes;
-- verify the id under the bound project/caller, even if that ref was seen earlier;
-- return current data plus source/revision metadata;
-- for revision-pinned structures (solution/drawing), the opened object may contain the exact historical evidence they reference rather than pretending the newest measurement rewrites old lineage.
-
-Do not add a raw `search_project_data` equivalent under a new name. The whole point is a smaller category/ref vocabulary.
+Do not recreate raw `search_project_data` under a new generic name.
 
 ## Image opening and vision
 
-An image is two different things:
-
-1. **image record / metadata** — safe to list/open as ordinary JSON context;
-2. **original pixels** — expensive multimodal context, fetched only after Main Bob explicitly opens that image.
-
-Implementation:
+Keep metadata and pixels separate:
 
 ```text
 open_project_item(image:123)
-  -> validate project + media state under caller JWT
-  -> return safe metadata as tool_result
-  -> download original from bob-project-media under caller JWT
-  -> convert to a turn-local OpenAI image attachment
-  -> attach only to the next Main Bob continuation call
+  → caller-JWT validation + metadata result
+  → authorised bob-project-media download
+  → turn-local model image attachment
+  → next Main Bob continuation call only
 ```
 
-Use a server-only attachment accumulator such as:
-
-```ts
-interface ModelAttachment {
-  kind: 'image'
-  ref: ProjectItemRef
-  mimeType: 'image/jpeg' | 'image/png' | 'image/webp'
-  base64: string
-}
-```
-
-The tool result must never expose bucket/object paths or base64 bytes. Recheck membership before Storage download and again before releasing the final answer. Enforce the existing ready-state and file-type/size contract plus the per-turn image cap.
-
-If the shared OpenAI service needs a generic tweak to combine `previousResponseId` + function outputs + image input in one continuation, make that a provider-neutral service change and sync its canonical copies; do not add Bob-specific request-body code inside the shared service.
+Never expose bucket/path/base64 to the model text result or browser. Recheck access before Storage read and final answer. Keep existing ready/MIME/size rules + per-turn cap.
 
 ## Evidence collector
 
-Replace the current lookup-only source collector with a turn-wide collector owned by `project-context/sources.ts`:
+Use one turn-wide collector:
 
 ```ts
 interface TurnEvidenceCollector {
+  addCurrentView(view: CurrentViewContext): void
   addManifest(category: ProjectCategory, rows: unknown[]): void
   addOpenedItem(item: OpenedProjectItem): void
   addResearch(result: ProjectResearchResult): void
@@ -366,213 +507,218 @@ interface TurnEvidenceCollector {
 
 Rules:
 
-- dedupe by project/category/record/revision where revision exists;
-- preserve the strongest real truth state from the domain record;
-- legacy authored text remains `unknown`;
-- `truncated`, failed or budget-exhausted reads set `partial = true`;
-- a catalog count does not become a source;
-- a Librarian summary itself is `ai_assessment`; its cited project refs remain the underlying sources.
+- browser pointer never becomes a source;
+- server-hydrated Current View fields may source current claims;
+- catalog counts are navigation only;
+- dedupe by project/category/record/revision;
+- preserve domain truth state;
+- legacy authored values remain `unknown`;
+- truncation/failure/budget exhaustion sets partial;
+- Librarian summary is assessment; its cited project refs are the underlying sources.
 
-## Project Librarian — deliberately later
+## Project Librarian — later slice
 
-Do not block the context gateway on the Librarian.
+Do not block screen/catalog/router/list/open on Librarian.
 
-First prove that catalog + router + bounded manifests + `list`/`open` gives Main Bob the right data. Then add `ask_project_librarian` as a separate slice using the same registry/adapters, never a second project-read stack.
-
-The initial worker pipeline can mirror the Launchpad shape without importing Launchpad code:
+Initial shape:
 
 ```text
-plan       cheap structured output -> 1..3 research intents
-retrieve   deterministic registry/adapters
-rerank     cheap structured output -> bounded ProjectItemRefs
-synthesize stronger configured model -> cited research summary
-gate       cheap grounding/coverage check -> ok/thin/flagged
+plan        cheap structured output
+retrieve    same deterministic adapters
+rerank      cheap structured output
+synthesize  stronger configured model
+quality gate cheap grounding/coverage check
 ```
 
-Each AI step gets its own configured function name/settings/usage attribution. The public `ProjectResearchResult` remains provider-neutral. A failure returns an honest research status to Main Bob; it must not replace direct `list`/`open` recovery.
+No second read stack. No parallel truth authority.
 
 ## Request/frontend contract
 
-The context gateway can ship initially **without changing the browser request**. Current `{ action, projectId, message }` is enough because catalog, routing and project reads are server-owned.
-
-Optional UI context is a later optimization:
+The eventual send payload becomes conceptually:
 
 ```ts
-uiContext?: {
-  areaId?: string
-  route?: string
+{
+  action: 'send',
+  projectId,
+  message,
+  clientTurnId, // when conversation-persistence slice lands
+  screen: getBobSurface(),
 }
 ```
 
-If/when added, `_shared/bob-request.ts` must strictly validate it and the backend treats it as a navigation hint, never authority. The browser never sends selected categories, ProjectItemRefs from previous turns, provider ids or assembled context.
+Coordinate `clientTurnId` with `ask-bob-conversations.md`; do not create two incompatible request migrations.
 
-`clientTurnId` belongs to the sibling conversation-persistence contract; coordinate that request-schema change instead of making two incompatible request revisions.
+The browser never sends:
 
-## Relationship to provider conversation state
-
-When `ask-bob-conversations.md` lands:
-
-- provider state carries conversational continuity;
-- the current user message remains the single `contextQuery` for preflight;
-- catalog/router/prefetch rerun every user turn;
-- old provider conversation content never satisfies current project-evidence requirements;
-- automatic/pulled project context is attached to the **current turn**, not written back as durable project truth.
-
-This means context-gateway implementation does not need to wait for server-side chat persistence.
+- provider ids/history;
+- hydrated page names/status/assignees as facts;
+- selected router categories;
+- ProjectItemRefs remembered from previous turns;
+- assembled prompt/context;
+- another project id inside screen focus.
 
 ## Implementation slices
 
-Each slice should be independently reviewable and preserve the old Ask bob path until its replacement is proven.
+Each slice preserves the old Ask bob path until replacement is proven.
 
-### C0 — context types + registry, no behavior change
+### C0 — context types + registries, no behavior change
 
-Files:
+- `project-context/types.ts`;
+- category registry;
+- surface hydration registry;
+- screen/ref/router/tool parsers;
+- fixed ProcessLens enum + blocks;
+- unit tests for unknown categories/surfaces/refs/areas and budgets.
 
-- add `project-context/types.ts`;
-- add `registry.ts` with the fixed category metadata;
-- add parsers for `ProjectItemRef`, router output and tool input;
-- unit-test unknown category/ref/area rejection and budgets.
+**Gate:** no sensitive field appears in public AI-safe types. No migration/provider/browser behavior change.
 
-No migration. No provider call. No deployed behavior change.
+### C1 — catalog + deterministic category adapters
 
-**Gate:** registry covers exactly the AI-safe resource families ratified in `ask-bob-context.md`; sensitive fields are not part of any public row type.
+- additive `bob.project_context_catalog(p_project_id)`;
+- category adapters over existing views/tables;
+- catalog/registry parity tests;
+- PGlite/RLS member/outsider/dual-project coverage;
+- image manifests metadata only.
 
-### C1 — catalog + deterministic adapters, still no model routing
+**Gate:** tests can catalog/list/open representative project data without an AI call.
 
-Migration:
+### C2 — screen pointer + Current View hydration
 
-- add `bob.project_context_catalog(p_project_id)` only;
-- no new persistence tables;
-- no service-role project reads.
+Frontend:
 
-Code:
+- add `src/lib/bobSurfaceContext.ts`;
+- have each relevant page publish/clear its own surface/focus;
+- AskBob reads snapshot at send time.
 
-- implement category adapters over existing current views/tables;
-- reuse existing Slice-0 projection logic for legacy categories where practical;
-- add catalog/adapter parity tests;
-- add PGlite/RLS tests for member, outsider and dual-project member;
-- test that image catalog/listing contains metadata only.
+Backend:
 
-**Gate:** a server test can build the full compact catalog, list every category and open representative records without calling a model.
+- strict optional `screen` parser;
+- derive viewer from Auth/project membership;
+- implement surface hydrators using caller-JWT reads;
+- reject/neutralise stale/foreign/mismatched pointers.
 
-### C2 — cheap router in shadow mode
+**Gate:** a task-detail fixture proves the server can produce “viewer Emelie / area Sovrum / task Måla / step Måla / assignee Emelie” from ids alone; browser-supplied labels cannot influence the result.
 
-Code/config:
+### C3 — cheap router + Process Lens in shadow mode
 
-- add `router.ts` with strict structured output;
-- create/configure `ask-bob-context-router` in shared AI settings;
-- invoke it from the backend **without changing Main Bob's prompt yet**;
-- record only operational telemetry: success/fallback, selected category names/count, latency and AI usage. Do not log project record bodies.
+- `router.ts` strict structured output;
+- configured `ask-bob-context-router` AI setting;
+- input = question + Current View + catalog;
+- log only operational telemetry (success/fallback, lens, selected categories/count, latency/usage), never record bodies;
+- do **not** alter Main Bob context yet.
 
-This slice proves routing quality/cost separately from answer quality.
+**Gate:** representative corpus proves page-aware routing/lens choice without harming current answers; disabled/timeout/malformed router degrades cleanly.
 
-**Gate:** test corpus of representative questions routes to expected broad categories/scopes; malformed/timeout/disabled router cleanly degrades.
+### C4 — runtime assembly + prefetch + Main Bob list/open
 
-### C3 — prefetch + Main Bob list/open tools
-
-Replace the initial full `project` briefing in `runProjectAnswer` with:
+Main Bob gets:
 
 ```text
-compact catalog
-+ router-selected bounded manifests
+base truth rules
++ fixed selected lens
++ grounded Current View
++ router-selected manifests
++ compact catalog
 + current question
 ```
 
-Offer `list_project_category` + `open_project_item`. Generalise the current single-tool dispatcher to a typed context dispatcher and turn-wide evidence collector.
+Offer list/open tools. Keep Slice-0 lookup as server fallback if new context assembly fails before useful project data reaches Main Bob.
 
-Keep `search_project_data` available as a **server fallback path**, not model-facing primary behavior, during rollout. If the new context build fails before any project data reaches Main Bob, fall back to the deployed Slice-0 flow for that turn and log the fallback reason.
+**Gate:** live proof of page deixis (“här”, “det här steget”), irrelevant-category avoidance, same-turn repair of a router miss and fresh-data-over-conversation behavior.
 
-**Gate:** live/model proof that an unrelated category is not fetched, Main Bob can repair a deliberate router miss, and changed project data overrides stale conversational claims.
+### C5 — image-on-demand vision
 
-### C4 — image-on-demand vision
+Add server-only image attachment continuation.
 
-Add the image attachment side-channel and model continuation support.
+**Gate:** metadata routes without pixels; exact image open causes one authorised Storage read/attachment; foreign/not-ready fails closed.
 
-**Gate:** image metadata can route/list without pixel transfer; a specific image open causes exactly one authorised Storage read and one model image attachment; foreign/not-ready images fail closed.
+### C6 — Project Librarian
 
-### C5 — Project Librarian
+Add research tool/pipeline over the same adapters.
 
-Add the research tool and worker pipeline on top of the same adapters.
+**Gate:** cited refs, honest thin/empty states, direct list/open remains available if research fails.
 
-**Gate:** multi-category research returns cited project refs, thin/empty states are honest, and a Librarian failure does not remove direct Main Bob pull capability.
+### C7 — retire legacy model-facing lookup
 
-### C6 — retire legacy model-facing lookup
-
-Only after live evidence shows the new path covers the old Slice-0 use cases:
+Only after live coverage matches/exceeds Slice 0:
 
 - stop offering `search_project_data` to the model;
-- keep or simplify its SQL/function internals only if adapters still reuse them;
-- update `supabase/README.md`, `function-inventory.md` and verification docs to mark the new path built;
-- do not delete a proven rollback seam in the same deployment that first enables the replacement.
+- retain internals only if adapters/fallback still need them;
+- update built/deployed docs after live proof;
+- do not delete rollback seam in the first replacement deployment.
 
 ## Deployment order
 
-For slices that add SQL + Edge behavior:
+For SQL + Edge/browser changes:
 
 ```text
-1. merge reviewed migration/code
-2. apply additive DB migration
-3. verify RLS/RPC live with member + denied caller
-4. create/verify shared AI setting for router/worker when that slice needs it
-5. deploy ask-bob Edge function
-6. run live Ask bob acceptance
-7. frontend deploy only if that slice actually changes browser request/UI
+1. merge reviewed additive code/migration
+2. apply DB migration
+3. live verify RLS/RPC with member + denied caller
+4. configure/verify router/worker AI setting for the relevant slice
+5. deploy ask-bob Edge
+6. deploy frontend only when screen/request surface changes
+7. run live Ask bob acceptance
 8. update built/deployed docs after evidence exists
 ```
 
-GitHub Pages deployment alone is not enough: current repo automation does not apply Supabase migrations or deploy the Edge function.
+GitHub Pages does not apply Supabase migrations or deploy the Edge function.
 
 Rollback posture:
 
-- additive catalog/read migration may stay applied;
-- Edge can fall back to the current Slice-0 path;
-- disable the router through its AI setting if its model path misbehaves;
-- do not roll back RLS to make context work.
+- additive catalog read may remain;
+- disable router via AI settings;
+- Edge can fall back to Slice 0;
+- never loosen RLS to rescue context routing.
 
 ## Verification matrix
 
-Minimum automated/live coverage before calling the gateway built:
-
 | Case | Required proof |
 | --- | --- |
-| bedroom measurement question | router/prefetch reads measurements/components only; people/materials/images are not fetched |
-| image question | image metadata lists first; pixels are fetched only after exact open |
-| unrelated people data | no people category read unless selected/pulled |
-| area scoping | an area id from another project is rejected even for a dual-project member |
-| selected solution + drawing | exact current target and pinned revisions remain distinguishable from later revisions |
-| legacy material/task fields | remain `unknown`, never promoted to measured facts |
-| router malformed/timeout/off | Main Bob remains usable through catalog + pull/fallback |
-| deliberate router miss | Main Bob lists another category in the same turn and completes |
-| empty category | honest empty, not “project has none” unless the catalog/count makes that exact claim valid |
-| truncation/budget | `partial=true`; Bob cannot claim exhaustiveness |
-| access revoked mid-turn | no later category/image read and no final answer release |
-| A -> B -> A | catalog/manifests/tools never cross project binding |
-| changed measurement | next turn reads the new revision; provider conversation does not win over fresh truth |
-| sensitive people fields | email, diet, auth ids and account notes never appear in catalog/manifest/open/research payloads |
-| evidence | answer sources name only records actually consulted; catalog counts are not cited as substantive evidence |
+| task/step page | browser sends ids only; backend hydrates area/task/step/assignee from live project data |
+| viewer identity | current person's name/id comes from Auth-linked membership, not request text |
+| page switch | old step/task/drawing pointers are cleared/replaced |
+| forged/foreign pointer | no cross-project fact leaks; no guessing from id |
+| stale pointer | honest unresolved current view; catalog/pulls remain usable |
+| bedroom measurement question | Current View scopes “här”; router fetches measurements/components, not people/events |
+| user asks about people from measurements page | page does not hard-filter intent; router may select coordination/people/events |
+| image question | metadata first; pixels only after exact open |
+| router malformed/timeout/off | `general` lens + grounded Current View/catalog/pull path remains usable |
+| deliberate router miss | Main Bob pulls another category in same turn |
+| process lens | changes steering only; lens text is fixed server code, not project evidence |
+| selected solution/drawing | current target and pinned revisions stay distinct from newer evidence |
+| changed measurement | next turn reads new revision; provider conversation cannot override it |
+| sensitive people fields | email/diet/auth/account notes absent from Current View/catalog/manifests/research |
+| revoked access | no later current-view/category/image read and no final answer release |
+| evidence | pointer/catalog/lens not cited as facts; only grounded current-view/project reads are sources |
 
-Also record router/main-model token usage separately via the existing shared usage ledger so the “cheap sort, expensive think” design can be evaluated with real cost/latency data rather than intuition.
+Record router and Main Bob usage separately in the existing shared usage ledger so “cheap sort, expensive think” can be evaluated with real cost/latency data.
 
 ## Decisions locked for implementation
 
-- Project Catalog is small navigation context, not the project dump.
-- Main Bob also sees the compact catalog so it can repair router misses.
-- Router is a separate cheap configured AI call with strict structured output.
-- Router never supplies SQL/table/column/project/provider state.
-- Row/byte/tool/image budgets are server-owned.
-- Project reads use caller JWT + existing RLS; service role remains AI config/accounting only.
-- Category adapters are the only route from a ProjectCategory/ProjectItemRef to database/storage reads.
+- The page tells Bob **where**, never **what is true**.
+- Screen context crosses the wire as a bounded pointer descriptor.
+- Current View is hydrated server-side under caller JWT/RLS and may contain the same compact semantic context the person sees: viewer, project, area, focused task/step/drawing/etc., status and safe relations such as assignees.
+- Screen pointer and Current View are different trust classes and different types.
+- Surface changes clear stale focus pointers; Ask bob overlay does not clear the underlying page context.
+- The user's actual message remains the one canonical routing query.
+- Project Catalog stays small navigation context.
+- Router is a separately configured cheap call; it returns only fixed ProcessLens + category/scope selection.
+- Process Lens prose is fixed server-owned steering, never cheap-model-authored prompt text.
+- Main Bob sees grounded Current View + compact catalog so it can understand page references and repair router misses.
+- Row/byte/tool/image budgets remain server-owned.
+- All project reads use caller JWT + existing RLS.
 - Images are metadata-first and pixels-on-demand.
-- Project Librarian reuses adapters and ships later.
+- Librarian reuses the same adapters and ships later.
 - Conversation continuity and project-context freshness remain separate planes.
-- The old Slice-0 path remains a rollout fallback until the replacement is proven live.
+- Slice 0 remains rollout fallback until replacement is proven live.
 
 ## Discovery still required at implementation time
 
-These are implementation checks, not open architecture questions:
-
-1. Verify the exact current column names/projections on `current_measurements`, `current_components`, `current_solutions`, `current_target` and `current_artifacts` against the migration at pickup time.
-2. Verify the shared OpenAI service's current image-input continuation shape before C4; if a generic service extension is needed, keep it provider-neutral and sync canonical copies.
-3. Choose the actual router model/settings from the live `shared.ai_models` catalogue; do not bake a model name into this plan.
-4. Tune router/prefetch/tool budgets from live latency/token evidence after the safe initial caps are proven.
-5. Rebase the implementation branch onto current `main` before writing migrations, because manual foundations are still moving independently of this planning PR.
+1. Map each current Bob route/page to the exact `BobSurface` pointer it should publish and decide which in-page selections deserve explicit focus pointers.
+2. Verify exact current columns/projections on facts/solutions/target/artifacts at pickup time.
+3. Confirm how `AskBob` can read the page snapshot without introducing stale React state across project/auth changes.
+4. Verify shared OpenAI continuation + image-input shape before C5; keep any service extension provider-neutral.
+5. Choose the actual router model/settings from live `shared.ai_models`; never bake a model name into this plan.
+6. Tune router/prefetch/tool budgets from measured latency/token evidence.
+7. Rebase implementation work onto current `main` before migrations because foundation work continues independently of this planning PR.
