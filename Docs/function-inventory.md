@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A and 4A**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -44,6 +44,26 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Source images | **BUILT.** Measurements and parts reuse authorised project images and original viewing. Removing an image clears its file link while retaining its recorded title, values and history. |
 | Runtime consumption | **BUILT manually.** Dashboard/Area lead to a focused page with current records, paging, detail/history and reload persistence. Project changes reject old responses. Bob's lookup allowlist is unchanged. |
 | Stock and calculation integration | **GAP.** Parts are separate from shopping, but stock deduction, deterministic calculations and downstream artifact/task generation remain later gates. |
+
+## Persistent building context release delta — 2026-09-13
+
+**Status:** manual Slice 2C is implemented, merged, migrated, deployed and live-verified through
+[PR 42](https://github.com/EmelieHagander/Bob-the-builder/pull/42),
+[PR 43](https://github.com/EmelieHagander/Bob-the-builder/pull/43) and the hosted cleanup follow-up
+[PR 45](https://github.com/EmelieHagander/Bob-the-builder/pull/45).
+[Persistent building model](building-model.md) owns behavior; [foundation verification](foundation-verification.md)
+owns exact migration, browser, live-service and cleanup evidence.
+
+| Foundation | Current status |
+|---|---|
+| Persistent physical identity | **BUILT.** Site → Building → optional Level → Space persists independently of Project lifetime. A sparse one-room model is valid and may grow later without requiring a complete house model. |
+| Physical authority + project context | **BUILT.** Site/Building membership is distinct from project membership. Explicit project scope grants bounded physical reads/proposals; direct Building authority controls accepted truth, proposal acceptance and guarded archive/delete. Cross-building/project leakage and raw membership/history mutation are denied. |
+| Spaces, elements and topology | **BUILT.** Stable Spaces, BuildingElements and a narrow relationship vocabulary persist with project-filtered read views. The room-first and separate-building fixtures are backend-tested and hosted-live-verified. |
+| Accepted truth vs proposals | **BUILT.** Current/as-is accepted state remains separate from the newest proposal. Explicit acceptance appends the next accepted revision; earlier accepted/proposed history remains readable. |
+| Exact measurement lineage | **BUILT.** A Space revision can pin exact existing Measurement revisions into immutable snapshots. Later fact edits do not rewrite the older physical revision. |
+| Manual Building & spaces UI | **BUILT.** Dashboard routes to a focused manual Site/Building/Level/Space/Element/relationship surface. Project linking, reload/read-back, building/project switching and explicit denied/unavailable states are browser-verified at 320/390/1280px. Demo mode does not invent saved physical truth. |
+| Area → physical target editing | **PARTIAL.** The backend relation and guarded commands are built, tested and live-verified; a dedicated Area-side mapping editor remains a narrow UI follow-up. |
+| Whole-plan ingestion, deterministic geometry and AI reasoning | **GAP / later slices.** The shipped model is the foundation those consumers must extend. It does not itself claim CAD/BIM, photo-to-plan import, generated geometry, engineering approval or AI-confirmed fact promotion. |
 
 ## Solution and target foundation release delta — 2026-09-10
 
@@ -84,7 +104,7 @@ This inventory is deliberately stricter than a feature wishlist. A capability is
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A
+## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A and 4A
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.

@@ -1,9 +1,9 @@
 # Persistent building model
 
-> **Status:** specified / planned; not implemented yet  
+> **Status:** manual Slice 2C implemented, deployed and live-verified on 2026-09-13; broader geometry/import/AI extensions remain planned  
 > **Owns:** bob's persistent physical-place model across projects: sites, buildings, levels, spaces, building elements, spatial relationships, project scope, uncertainty and physical-state history  
 > **Release order:** `Docs/v1-plan.md` owns sequencing and release gates  
-> **Implementation truth:** current runtime/schema still use project-scoped `Area`, measurements, components, solutions and artifacts; this document must not be read as evidence that the building model already exists
+> **Implementation truth:** runtime/schema now persist Site → Building → optional Level → Space, BuildingElements, spatial relationships, Project/Area physical scope, accepted/proposed history and exact measurement snapshots. Later geometry/import/AI work must extend this shipped foundation rather than create a parallel physical model. Release evidence lives in `Docs/foundation-verification.md`.
 
 ## Why this exists
 

@@ -17,7 +17,7 @@ The release described here is now called **V1**. This plan consumes the relevant
 
 ## Current execution position — 2026-09-13
 
-The numbered slices describe the product dependency chain, but implementation has intentionally followed a **foundations-first execution lane**. That means later manual foundations have been delivered while some earlier AI gates remain open.
+The numbered slices describe the product dependency chain, but implementation has intentionally followed a **foundations-first execution lane**. Later manual foundations may therefore be live while earlier AI gates remain deliberately deferred.
 
 **Deployed / live-verified foundations:**
 
@@ -26,33 +26,30 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 1B — manual illustrated task steps;
 - Slice 2A — measurements/provenance/history;
 - Slice 2B — existing components;
+- Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, Project/Area physical-scope relations, accepted/proposed physical-state history and the manual **Building & spaces** UI;
 - Slice 3A — alternatives + selected target;
 - Slice 4A — manual plans/drawings with exact target and measurement lineage.
 
-**Merged + CI/browser-verified, production/live verification pending:**
-
-- Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, project/Area physical-scope relations, current/proposed/accepted physical-state history and a reachable manual **Building & spaces** UI. PR #42 supplied the schema/authority/domain foundation and PR #43 supplied the `database.ts` seam and UI; both are merged. The four domain acceptance fixtures pass, and the dedicated browser proof passes at 320px, 390px and 1280px. This is committed/CI truth, not yet a claim that 2C is deployed or live-verified in production.
+Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the domain/schema/authority foundation, PR #43 the app-facing UI, and PR #45 the hosted cleanup-order correction. The dedicated browser proof passes at 320px, 390px and 1280px; the hosted Auth/PostgREST live check passes and self-cleans its physical fixture; the current `main` Pages deployment is green. `Docs/foundation-verification.md` owns exact migration/run evidence.
 
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
 - full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
-- production/live verification of the merged 2C foundation;
 - Slice 3B generated visual proposals/mockups;
 - deterministic generated geometry, BOM/calculations, stock/shopping propagation and richer executable work planning after 4A;
 - Slice 5 generated/project-specific guidance and structured progress/as-built completion.
 
-**Current next implementation milestone:** **resume Slice 4 beyond manual 4A with deterministic artifact geometry for the deliberately narrow supported fixtures.** The prerequisite physical targets now exist in merged code, so generated geometry should consume explicit `Building` / `Space` / `BuildingElement` context plus pinned measurements instead of treating project `Area` as the house model. Production/live verification of 2C remains a release-evidence task and should be completed when the merged migration/UI is deployed; it does not require inventing another foundation before deterministic fixture work can start.
+**Current next implementation milestone:** **Slice 4B1 deterministic artifact geometry for the deliberately narrow supported fixture.** PR #47 is the active implementation branch for the first timber stud-wall-with-opening fixture. Treat that PR as implementation in progress, not as built/deployed truth until its own schema, browser and live gates pass. Generated geometry must consume explicit `Building` / `Space` context and pinned measurements rather than treating project `Area` as the house model.
 
-The previous #43 session reservation is cleared: PR #42 and PR #43 are merged. No active ownership marker remains for 2C UI/integration. Area → physical-target mapping exists and is backend-tested; a dedicated Area-side mapping editor remains a narrow follow-up rather than a reason to reopen the completed sparse Building/Space UI foundation.
+Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
 **Execution order from here:**
 
-1. resume Slice 4 beyond manual 4A with deterministic artifact geometry for the narrow supported fixtures, using persistent physical targets and explicit measurement provenance;
+1. complete and release-gate the narrow deterministic artifact-geometry fixture (4B1), preserving physical-target and measurement provenance;
 2. add transparent quantity/BOM derivation, existing-stock deduction and Shopping propagation, then richer task/dependency/tool/readiness relations;
-3. complete production/live verification of 2C when the merged schema/UI is deployed, fixing any real environment issue without rewriting the domain model;
-4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
-5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
+4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 
@@ -489,7 +486,7 @@ generation, transparent BOM/calculation, stock deduction, Shopping propagation,
 task-material/dependency/tool/readiness relations and Bob-proposed work remain
 open, so full Slice 4 and V1 are not closed by 4A.
 
-**The persistent-physical-target prerequisite is now satisfied in merged 2C code/CI.** Deterministic drawing generation may resume for the deliberately narrow supported fixtures. Generated geometry must reference the `Building` / `Space` / `BuildingElement` context it describes, preserve pinned measurement provenance and remain explicit about measured vs assumed/concept geometry instead of hard-coding project `Area` as the building model. Production/live verification of 2C is still required as release evidence.
+**The persistent-physical-target prerequisite is now satisfied in merged 2C code/CI.** Deterministic drawing generation may resume for the deliberately narrow supported fixtures. Generated geometry must reference the `Building` / `Space` / `BuildingElement` context it describes, preserve pinned measurement provenance and remain explicit about measured vs assumed/concept geometry instead of hard-coding project `Area` as the building model. Production/live verification of 2C is complete; exact evidence is recorded in `Docs/foundation-verification.md`.
 
 **Goal:** produce the first coherent build package from the selected target.
 
