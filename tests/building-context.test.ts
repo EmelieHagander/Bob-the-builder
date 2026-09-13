@@ -124,7 +124,7 @@ test('fixture D: proposal does not replace current physical truth until explicit
   const current=(await as(one,'select revision,name,has_proposal,latest_revision from bob.current_spaces where id=$1',[u(4)])).rows[0]
   assert.equal(current.name,"Children's room"); assert.equal(current.revision,2); assert.equal(current.latest_revision,3); assert.equal(current.has_proposal,true)
   const proposed=(await as(one,'select revision,name,state from bob.latest_space_proposals where id=$1',[u(4)])).rows[0]
-  assert.equal(proposed.name,"Children's room + alcove"); assert.equal(proposed.state,undefined)
+  assert.equal(proposed.name,"Children's room + alcove"); assert.equal(proposed.state,'proposed')
 
   await node(u(2),'space','accept',u(4),3,{})
   const accepted=(await as(one,'select revision,name,has_proposal from bob.current_spaces where id=$1',[u(4)])).rows[0]
