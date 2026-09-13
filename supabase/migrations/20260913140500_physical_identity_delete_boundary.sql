@@ -99,5 +99,38 @@ begin
   return bob_private.physical_building_command(p_action,p_building,p_expected,p_data);
 end $$;
 
+-- Slice 0 revokes PUBLIC execute from new bob_private functions by default.
+-- The exposed bob.* wrappers are security invokers, so authenticated callers
+-- need explicit execute on the guarded private implementation they delegate to.
+revoke all on function
+  bob_private.has_site_access(uuid),
+  bob_private.has_building_direct_access(uuid),
+  bob_private.has_building_access(uuid),
+  bob_private.has_site_context_access(uuid),
+  bob_private.physical_actor(),
+  bob_private.physical_site_command(text,uuid,integer,jsonb),
+  bob_private.physical_building_command(text,uuid,integer,jsonb),
+  bob_private.project_scopes_building(text,uuid),
+  bob_private.physical_node_command(uuid,text,text,uuid,integer,jsonb),
+  bob_private.physical_scope_command(text,text,text,uuid,jsonb),
+  bob_private.physical_site_delete_command(uuid,integer),
+  bob_private.physical_building_delete_command(uuid,integer)
+from public,anon,authenticated;
+
+grant execute on function
+  bob_private.has_site_access(uuid),
+  bob_private.has_building_direct_access(uuid),
+  bob_private.has_building_access(uuid),
+  bob_private.has_site_context_access(uuid),
+  bob_private.physical_actor(),
+  bob_private.physical_site_command(text,uuid,integer,jsonb),
+  bob_private.physical_building_command(text,uuid,integer,jsonb),
+  bob_private.project_scopes_building(text,uuid),
+  bob_private.physical_node_command(uuid,text,text,uuid,integer,jsonb),
+  bob_private.physical_scope_command(text,text,text,uuid,jsonb),
+  bob_private.physical_site_delete_command(uuid,integer),
+  bob_private.physical_building_delete_command(uuid,integer)
+to authenticated;
+
 notify pgrst, 'reload schema';
 commit;
