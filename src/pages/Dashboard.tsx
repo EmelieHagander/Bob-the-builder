@@ -121,7 +121,7 @@ export function Dashboard() {
                     <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyrow}</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyebrow}</div>
                     <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
                     <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
                     <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>
