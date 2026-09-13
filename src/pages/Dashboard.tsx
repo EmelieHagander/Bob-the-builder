@@ -35,7 +35,12 @@ export function Dashboard() {
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
   const missingMeasurements = (planning?.missing.items ?? []).filter((item) => item.kind === 'measurement')
   const selectedTarget = planning?.target.solution ?? null
-  const hasDrawing = Boolean(planning?.artifacts.items.length)
+  const selectedDecision = planning?.target.decision ?? null
+  const hasCurrentDrawing = Boolean(selectedTarget && selectedDecision && planning?.artifacts.items.some((artifact) =>
+    artifact.targetRevision === selectedDecision.revision
+    && artifact.solutionId === selectedTarget.id
+    && artifact.solutionRevision === selectedTarget.revision,
+  ))
 
   const nextPlanningAction = missingMeasurements.length > 0
     ? {
@@ -55,7 +60,7 @@ export function Dashboard() {
           title: 'Choose the shared target',
           text: 'Your recorded measurements are clear enough to move on to comparing and selecting a solution.',
         }
-      : !hasDrawing
+      : !hasCurrentDrawing
         ? {
             to: '/artifacts',
             icon: 'blueprint',
@@ -68,7 +73,7 @@ export function Dashboard() {
             icon: 'check-circle',
             eyebrow: 'Next step',
             title: 'Review what the crew can do next',
-            text: 'The current planning foundation has measurements, a selected target and a saved drawing. Review areas and tasks for the next build action.',
+            text: 'The current planning foundation has measurements, a selected target and a drawing tied to that target. Review areas and tasks for the next build action.',
           }
 
   return (
@@ -154,8 +159,8 @@ export function Dashboard() {
                   <div style={{ display: 'grid', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No unknown or estimated measurements</div>
                     {!selectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
-                    {selectedTarget && !hasDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No saved drawing for the current planning flow</Link>}
-                    {selectedTarget && hasDrawing && <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and drawing are recorded</div>}
+                    {selectedTarget && !hasCurrentDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
+                    {selectedTarget && hasCurrentDrawing && <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
                   </div>
                 )}
               </div>
