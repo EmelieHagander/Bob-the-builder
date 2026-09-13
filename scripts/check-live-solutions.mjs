@@ -39,6 +39,10 @@ export async function verifySolutionImageCleanup(client, projectId, records) {
   const rows = checked(await client.from('solution_revisions').select('revision,source_media_id,source_media_title').eq('project_id', projectId).eq('solution_id', records.a))
   assert.equal(rows.length, 4)
   assert(rows.every(r => r.source_media_id === null && r.source_media_title === 'Disposable foundation image'))
-  assert.equal(checked(await client.from('target_revisions').select('revision').eq('project_id', projectId)).length, 3)
-  console.log('Live solutions: image deletion preserved all four alternative versions and the decision trail.')
+  const trail = checked(await client.from('target_revisions').select('revision,solution_id,solution_revision')
+    .eq('project_id', projectId).order('revision'))
+  assert(trail.length >= 3, 'The solution proof must retain its three original target decisions')
+  assert.deepEqual(trail.slice(0, 3).map(r => r.revision), [1, 2, 3])
+  assert.deepEqual(trail.slice(0, 3).map(r => r.solution_id), [records.a, records.b, null])
+  console.log('Live solutions: image deletion preserved all four alternative versions and the original decision trail alongside downstream target decisions.')
 }
