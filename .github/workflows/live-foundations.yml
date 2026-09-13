@@ -9,6 +9,10 @@ on:
       - scripts/check-live-project-facts.mjs
       - scripts/check-live-solutions.mjs
       - scripts/check-live-artifacts.mjs
+      - scripts/check-live-building-context.mjs
+      - supabase/migrations/20260913124500_persistent_building_context.sql
+      - supabase/migrations/20260913135500_expose_physical_proposal_state.sql
+      - supabase/migrations/20260913140500_physical_identity_delete_boundary.sql
       - .github/workflows/live-foundations.yml
 
 permissions:
@@ -26,7 +30,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify images, steps, facts, solutions and drawings with disposable data
+      - name: Verify images, steps, facts, solutions, drawings and building context with disposable data
         run: node scripts/check-live-foundations.mjs
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
