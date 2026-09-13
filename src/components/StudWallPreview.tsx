@@ -2,7 +2,6 @@ import type { ArtifactGeneration } from '../data/types'
 import {
   generateStudWallGeometry,
   STUD_WALL_ROLES,
-  type GeometryMeasurement,
   type StudWallGeometry,
   type StudWallInputs,
 } from '../lib/artifactGeometry'
@@ -15,6 +14,8 @@ export const STUD_WALL_ROLE_LABELS = {
   opening_width: 'Opening width',
   opening_height: 'Opening height',
 } as const
+
+const formatMm = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 
 export function generationInputs(generation: ArtifactGeneration): StudWallInputs | null {
   const byRole = new Map(generation.inputs.map(input => [input.role, input]))
@@ -62,10 +63,10 @@ export function StudWallPreview({ geometry, compact = false }: { geometry: StudW
           height={Math.max(0, openingBottom - openingTop - 5)} fill="var(--surface-2)" stroke="currentColor" strokeWidth="1.5" strokeDasharray="7 5" />
 
         <text x={canvasWidth / 2} y={22} textAnchor="middle" fontSize="13" fill="currentColor">
-          Wall {geometry.wallWidthMm:g} × {geometry.wallHeightMm:g} mm
+          Wall {formatMm(geometry.wallWidthMm)} × {formatMm(geometry.wallHeightMm)} mm
         </text>
         <text x={(openingLeft + openingRight) / 2} y={(openingTop + openingBottom) / 2} textAnchor="middle" dominantBaseline="middle"
-          fontSize="12" fill="currentColor">Opening {geometry.openingWidthMm:g} × {geometry.openingHeightMm:g} mm</text>
+          fontSize="12" fill="currentColor">Opening {formatMm(geometry.openingWidthMm)} × {formatMm(geometry.openingHeightMm)} mm</text>
         <text x={canvasWidth / 2} y={canvasHeight - 17} textAnchor="middle" fontSize="12" fill="currentColor">
           Regular stud spacing {geometry.studSpacingMm} mm · opening framing conceptual
         </text>
@@ -76,6 +77,3 @@ export function StudWallPreview({ geometry, compact = false }: { geometry: StudW
     </figcaption>
   </figure>
 }
-
-// Type-only helper for previews assembled before a generation record exists.
-export function previewInput(input: GeometryMeasurement): GeometryMeasurement { return input }
