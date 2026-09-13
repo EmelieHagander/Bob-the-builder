@@ -13,6 +13,8 @@ import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
+import { StudWallGeneratorModal } from '../components/StudWallGeneratorModal'
+import { generationGeometry, STUD_WALL_ROLE_LABELS, StudWallPreview } from '../components/StudWallPreview'
 
 const KIND_LABELS = { plan: 'Plan', elevation: 'Elevation', section: 'Section', detail: 'Detail' } as const
 const STATUS_LABELS = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' } as const
@@ -54,17 +56,43 @@ function TargetLineage({ value, current }: { value: ProjectArtifact; current: Se
   </div>
 }
 
+function GeneratedDetails({ value }: { value: ArtifactVersion }) {
+  const generation = value.generation
+  if (!generation) return null
+  const geometry = generationGeometry(generation)
+  const physicalStale = generation.spaceRevision !== generation.currentSpaceRevision || generation.spaceHasProposal
+  return <div className="fact-details">
+    <div className="fact-source">
+      <strong>Generated deterministically · {generation.buildingName} · {generation.spaceName}</strong>
+      <span>Generator {generation.generator} v{generation.generatorVersion} · accepted Space version {generation.spaceRevision} · stud spacing {generation.studSpacingMm} mm</span>
+      {physicalStale && <p className="solution-attention">
+        Physical context changed after this drawing version. The saved version keeps Space revision {generation.spaceRevision}; regenerate deliberately to use newer accepted inputs.
+      </p>}
+    </div>
+    <div className="fact-source"><strong>Geometry role mapping</strong>
+      {generation.inputs.map(input => <p key={input.role} style={{ margin: '5px 0' }}>
+        <strong>{STUD_WALL_ROLE_LABELS[input.role]}:</strong> {input.subject} · {input.value} {input.unit} · {TRUTH_LABELS[input.truth]} · v{input.revision}
+      </p>)}
+    </div>
+    {geometry ? <StudWallPreview geometry={geometry} /> : <p role="alert" className="solution-attention">
+      This saved generation recipe cannot be rendered by the current generator version. Its pinned evidence remains available below.
+    </p>}
+  </div>
+}
+
 function VersionDetails({ value, target }: { value: ArtifactVersion; target: SelectedTarget }) {
   const [image, setImage] = useState(false)
   return <div className="fact-details">
     <div className="foundation-actions">
       <span className="image-purpose">{KIND_LABELS[value.kind]}</span>
       <span className="image-purpose">{STATUS_LABELS[value.status]}</span>
+      {value.generator && <span className="image-purpose">Generated</span>}
     </div>
     <p>{value.description}</p>
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
+    <GeneratedDetails value={value} />
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View drawing image</button>
       : value.imageTitle && <p>Drawing image removed: {value.imageTitle}</p>}
@@ -216,6 +244,27 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
   </Modal>
 }
 
+function GenerationDialog({ projectId, record, areas, target, onClose, onSaved }: {
+  projectId: string
+  record: ProjectArtifact
+  areas: Area[]
+  target: SelectedTarget
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [attempt, setAttempt] = useState(0)
+  const { data, loading, error } = useAsync(
+    () => db.getProjectArtifactVersion(projectId, record.id, record.revision),
+    [projectId, record.id, record.revision, attempt],
+  )
+  if (data?.generation && !loading && !error) return <StudWallGeneratorModal projectId={projectId} target={target} areas={areas}
+    initialArea={data.areaId ?? ''} value={data} onClose={onClose} onSaved={onSaved} />
+  return <Modal title="Regenerate wall elevation" onClose={onClose}>
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} />
+      : <p role="alert">This drawing has no supported deterministic generation recipe.</p>}
+  </Modal>
+}
+
 function History({ projectId, record, target, onClose, onVersion }: {
   projectId: string
   record: ProjectArtifact
@@ -235,6 +284,7 @@ function History({ projectId, record, target, onClose, onVersion }: {
       <ol className="fact-history">{data?.items.map(item => <li key={item.revision} className="card fact-card">
         <h4>{item.title} · Version {item.revision}</h4>
         <p>{STATUS_LABELS[item.status]} · {item.reason}</p>
+        <div className="foundation-actions">{item.generator && <span className="image-purpose">Generated</span>}</div>
         <TargetLineage value={item} current={target} />
         <p className="foundation-hint">{item.actor} · {new Date(item.recordedAt).toLocaleString()}</p>
         <button className="btn" onClick={() => onVersion(item.id, item.revision)}>View version</button>
@@ -256,6 +306,7 @@ function ArchiveDialog({ projectId, record, onClose, onSaved }: {
   return <Modal title={action} onClose={() => { if (!busy) onClose() }}>
     <p>{record.title} · Version {record.revision}</p>
     <p className="foundation-hint">Previous versions, target lineage and linked measurements stay in history.</p>
+    {record.generator && <p className="foundation-hint">The deterministic generation recipe is carried forward unchanged.</p>}
     {error && <div role="alert"><FormError>{error}</FormError></div>}
     <div className="foundation-actions"><button className="btn" disabled={busy} onClick={onClose}>Cancel</button>
       <button className="btn btn-primary" disabled={busy} onClick={async () => {
@@ -269,8 +320,8 @@ function ArchiveDialog({ projectId, record, onClose, onSaved }: {
   </Modal>
 }
 
-type Dialog = { kind: 'create' }
-  | { kind: 'edit' | 'view' | 'history' | 'archive'; record: ProjectArtifact }
+type Dialog = { kind: 'create' | 'generate' }
+  | { kind: 'edit' | 'view' | 'history' | 'archive' | 'regenerate'; record: ProjectArtifact }
   | { kind: 'version'; id: string; revision: number }
 
 function ConnectedArtifacts({ projectId }: { projectId: string }) {
@@ -298,7 +349,10 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     <Link className="btn" to="/">Dashboard</Link>
     <div className="page-head"><div><h1 className="page-title">Plans & drawings</h1>
       <p className="page-sub">Keep the exact plan the crew is building from, with its measurements and target version.</p></div>
-      <div className="foundation-actions"><button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button></div></div>
+      <div className="foundation-actions">
+        <button className="btn" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'generate' })}>Generate wall elevation</button>
+        <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button>
+      </div></div>
 
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && target && <>
       <section className="card fact-card" aria-label="Drawing target">
@@ -328,13 +382,16 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
           <h3>{item.title}</h3>
           <div className="foundation-actions"><span className="image-purpose">{KIND_LABELS[item.kind]}</span>
             <span className="image-purpose">{STATUS_LABELS[item.status]}</span>
+            {item.generator && <span className="image-purpose">Generated</span>}
             <span className="image-purpose">Version {item.revision}{item.archived ? ' · Archived' : ''}</span></div>
           <p>{item.description}</p>
           <p className="foundation-hint">Based on {item.solutionTitle} · Version {item.solutionRevision} · target decision {item.targetRevision}</p>
           {!current && <p className="solution-attention">Project target changed after this drawing version. Review before building from it.</p>}
           <div className="foundation-actions">
             <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>View evidence</button>
-            {!item.archived && canCreate && <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>}
+            {!item.archived && canCreate && (item.generator
+              ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
+              : <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>)}
             <button className="btn" onClick={() => setDialog({ kind: 'history', record: item })}>History</button>
             <button className="btn" onClick={() => setDialog({ kind: 'archive', record: item })}>{item.archived ? 'Restore' : 'Archive'}</button>
           </div>
@@ -344,6 +401,10 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     </>}
 
     {dialog?.kind === 'create' && target && <Editor projectId={projectId} areas={areas} initialArea={area} target={target} onClose={close} onSaved={saved} />}
+    {dialog?.kind === 'generate' && target && <StudWallGeneratorModal projectId={projectId} target={target} areas={areas}
+      initialArea={area} onClose={close} onSaved={saved} />}
+    {dialog?.kind === 'regenerate' && target && <GenerationDialog projectId={projectId} record={dialog.record} areas={areas}
+      target={target} onClose={close} onSaved={saved} />}
     {(dialog?.kind === 'edit' || dialog?.kind === 'view' || dialog?.kind === 'version') && target && <VersionDialog
       projectId={projectId}
       id={dialog.kind === 'version' ? dialog.id : dialog.record.id}
