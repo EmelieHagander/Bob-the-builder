@@ -1,6 +1,8 @@
 // Deployed API proof in the existing disposable foundation project. No AI calls.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
+import { verifyDeterministicArtifactGeometry } from './check-live-artifact-geometry.mjs'
 
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 
@@ -167,7 +169,16 @@ export async function verifyArtifacts(client, projectId, areaId, imageId, facts,
     p_data: { title: 'Denied', description: 'Denied', kind: 'plan', status: 'concept', target_revision: 1, measurements: [] },
   })).error, 'No access is granted to the real porch project by the disposable verifier')
 
-  console.log('Live drawings: exact target/solution/measurement lineage, stale target/revision denial, server actor, archive/restore and project authority passed. No AI invoked.')
+  const configured = process.env.VITE_SUPABASE_URL?.trim() ?? ''
+  const anonymousUrl = /^[a-z0-9]{16,}$/.test(configured) ? 'https://' + configured + '.supabase.co' : configured.replace(/\/$/, '')
+  const anonymousKey = process.env.VITE_SUPABASE_ANON_KEY?.trim()
+  assert(anonymousKey, 'Publishable Supabase configuration is required for the hosted geometry proof')
+  const anonymous = createClient(anonymousUrl, anonymousKey, {
+    db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
+  })
+  await verifyDeterministicArtifactGeometry(client, anonymous, projectId, areaId)
+
+  console.log('Live drawings: exact target/solution/measurement lineage, stale target/revision denial, server actor, archive/restore, deterministic geometry and project authority passed. No AI invoked.')
   return { artifactId }
 }
 
