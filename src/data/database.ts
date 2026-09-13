@@ -28,6 +28,7 @@ import { createProjectFiles } from './projectFiles'
 import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
+import { createBuildingContext } from './buildingContext'
 import * as mock from './mockData'
 import type {
   Account,
@@ -197,6 +198,7 @@ const projectFiles = createProjectFiles(db, captureFileContext, () => window.dis
 const projectFacts = createProjectFacts(db, captureFileContext)
 const solutions = createSolutions(db, captureFileContext)
 const artifacts = createArtifacts(db, captureFileContext)
+export const buildingContext = createBuildingContext(db, captureFileContext)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
 export const getSolutionHistory = solutions.history
