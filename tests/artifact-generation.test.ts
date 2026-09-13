@@ -165,6 +165,7 @@ test('archive/restore carries generation recipe while an ordinary geometry-chang
 
 test('regeneration creates a new reproducible recipe and leaves the old recipe untouched', async () => {
   await generate('A',one,'regenerate',u(30),3,generated(u(3),u(2),{
+    area_id:undefined,
     space_revision:2,
     inputs:inputRefs({opening_width:2}),
     change_note:'Use newly measured opening and current room revision',
