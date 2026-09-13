@@ -30,7 +30,8 @@ async function scope(project: string, id: string, buildingId: string, uid = one)
   return (await as(uid, 'select bob.physical_scope_command($1,$2,$3,$4,$5) data', [project,'project','link',id,JSON.stringify({ target_kind:'building',building_id:buildingId })])).rows[0].data as any
 }
 async function fact(project: string, uid: string, action: string, id: string, expected: number, data: any) {
-  return (await as(uid, "select bob.evidence_command($1,'measurement',$2,$3,$4,$5) data", [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
+  const payload = action === 'revise' && !('change_note' in data) ? { ...data, change_note: 'Fixture measurement update' } : data
+  return (await as(uid, "select bob.evidence_command($1,'measurement',$2,$3,$4,$5) data", [project,action,id,expected,JSON.stringify(payload)])).rows[0].data as any
 }
 async function solution(project: string, uid: string, action: string, id: string | null, expected: number, data: any) {
   return (await as(uid, 'select bob.solution_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
