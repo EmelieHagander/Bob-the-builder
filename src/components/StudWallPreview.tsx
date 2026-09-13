@@ -20,7 +20,14 @@ const formatMm = (value: number) => Number.isInteger(value) ? String(value) : va
 export function generationInputs(generation: ArtifactGeneration): StudWallInputs | null {
   const byRole = new Map(generation.inputs.map(input => [input.role, input]))
   if (STUD_WALL_ROLES.some(role => !byRole.has(role))) return null
-  return Object.fromEntries(STUD_WALL_ROLES.map(role => [role, byRole.get(role)!])) as StudWallInputs
+  return {
+    wall_width: byRole.get('wall_width')!,
+    wall_height: byRole.get('wall_height')!,
+    opening_left: byRole.get('opening_left')!,
+    opening_sill_height: byRole.get('opening_sill_height')!,
+    opening_width: byRole.get('opening_width')!,
+    opening_height: byRole.get('opening_height')!,
+  }
 }
 
 export function generationGeometry(generation: ArtifactGeneration): StudWallGeometry | null {
