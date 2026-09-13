@@ -223,3 +223,23 @@ export interface ChatMessage {
 export type { Measurement, ExistingComponent, ProjectFact, FactKind, FactFilter, FactPage } from './projectFacts'
 export type { Solution, SolutionVersion, SolutionMeasurement, TargetDecision, SelectedTarget } from './solutions'
 export type { ArtifactKind, ArtifactStatus, ArtifactMeasurement, ProjectArtifact, ArtifactVersion } from './artifacts'
+export type {
+  PhysicalTruth,
+  PhysicalTargetKind,
+  RelationshipKind,
+  PhysicalNodeKind,
+  PhysicalAction,
+  PhysicalSite,
+  PhysicalBuilding,
+  PhysicalLevel,
+  PhysicalSpace,
+  SpaceProposal,
+  PhysicalElement,
+  ElementProposal,
+  PhysicalRelationship,
+  RelationshipProposal,
+  SpaceMeasurementSnapshot,
+  ProjectPhysicalScope,
+  AreaPhysicalTarget,
+  PhysicalHistoryVersion,
+} from './buildingContext'
