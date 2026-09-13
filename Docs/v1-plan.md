@@ -2,7 +2,7 @@
 
 > **Status:** current V1 release contract  
 > **Owns:** V1 product thesis, release boundary, slice sequence, release gates and golden-path acceptance  
-> **Inputs:** `Docs/user-stories.md`, `Docs/function-inventory.md`, `Docs/function-scope.md`, `Docs/ui-index.md`
+> **Inputs:** `Docs/user-stories.md`, `Docs/building-model.md`, `Docs/function-inventory.md`, `Docs/function-scope.md`, `Docs/ui-index.md`
 
 V1 is the next product release after bob's existing collaboration/coordination core. It adds the missing planning/evidence layer without rebuilding areas, tasks, people, shopping, build days, food or announcements.
 
@@ -23,6 +23,8 @@ The release described here is now called **V1**. This plan consumes the relevant
 
 Today bob is already useful once someone has manually created areas, tasks, materials, people and build days. V1 removes the hardest translation step before that point: turning photos, measurements, existing components and design decisions into the project truth that drives drawings, materials and work.
 
+V1 also starts separating **the project** from **the physical place the project happens in**. A building, room or known wall should be able to outlive one renovation and become better understood over time. `Docs/building-model.md` owns that persistent physical-context contract.
+
 ### Primary value
 
 A project owner should not need to be a construction planner before bob becomes useful.
@@ -33,9 +35,10 @@ They should be able to start with:
 - plain-language intent;
 - measurements collected over time;
 - components/materials they already have;
+- an incomplete or existing model of the relevant building/space, when useful;
 - decisions made together with bob.
 
-Bob should then help preserve that evidence and transform it into a coherent shared plan without disguising assumptions as facts.
+Bob should then help preserve that evidence and transform it into a coherent shared plan without disguising assumptions as facts. When evidence belongs to a persistent building/space rather than only one project, Bob should be able to retain it for later work instead of forcing the next project to start from zero.
 
 ### V1 north-star experience
 
@@ -45,9 +48,9 @@ A real homeowner can go from:
 
 through:
 
-> evidence → missing measurements → selected solution → measured/concept-labelled artifacts → calculated materials → ordered editable tasks → task guidance
+> evidence → physical context → missing measurements → selected solution → measured/concept-labelled artifacts → calculated materials → ordered editable tasks → task guidance
 
-and end with the same information usable by the people who are actually building.
+and end with the same information usable by the people who are actually building, while useful knowledge about the house remains available for the next project.
 
 ### Anti-goals for V1
 
@@ -77,18 +80,19 @@ A V1 user can:
 4. Get a concrete request for missing evidence, e.g. a specific dimension or a photo underneath the porch.
 5. Record verified measurements with provenance.
 6. Record existing/reusable components, e.g. two windows with known dimensions, separately from items that still need buying.
-7. Explore more than one proposed solution and keep the alternatives.
-8. Mark one solution revision as the shared current target.
-9. Preserve a target mockup as **illustrative**, not measured truth.
-10. Produce a simple measured/concept-labelled artifact for a supported assembly, with assumed values visibly distinguished from verified ones.
-11. Derive a transparent bill of materials from the same selected solution and measurements.
-12. Deduct existing stock/components from what needs to be purchased.
-13. Feed purchase requirements into the existing checkable Shopping surface rather than creating a second shopping system.
-14. Generate an ordered, editable work breakdown with dependencies, tools, material requirements and readiness reasons.
-15. Put the relevant photo/drawing/guidance image directly on the task where it is needed.
-16. Open **"How do I?"** for at least one supported task and receive project-specific guidance, checkpoints and an explicit safety/professional-check boundary.
-17. Assign the resulting tasks to people using bob's existing collaboration core.
-18. Record at least a progress note/photo and an as-built observation so the project can continue from reality rather than only from the original plan.
+7. Create or select the minimum persistent Building/Space context needed for the porch project without being forced to model the whole house.
+8. Explore more than one proposed solution and keep the alternatives.
+9. Mark one solution revision as the shared current target.
+10. Preserve a target mockup as **illustrative**, not measured truth.
+11. Produce a simple measured/concept-labelled artifact for a supported assembly, with assumed values visibly distinguished from verified ones.
+12. Derive a transparent bill of materials from the same selected solution and measurements.
+13. Deduct existing stock/components from what needs to be purchased.
+14. Feed purchase requirements into the existing checkable Shopping surface rather than creating a second shopping system.
+15. Generate an ordered, editable work breakdown with dependencies, tools, material requirements and readiness reasons.
+16. Put the relevant photo/drawing/guidance image directly on the task where it is needed.
+17. Open **"How do I?"** for at least one supported task and receive project-specific guidance, checkpoints and an explicit safety/professional-check boundary.
+18. Assign the resulting tasks to people using bob's existing collaboration core.
+19. Record at least a progress note/photo and an as-built observation so the project can continue from reality rather than only from the original plan, and accepted physical changes can later improve the persistent building context.
 
 V1 is released only when this path works end to end with persisted data and honest state boundaries.
 
@@ -167,6 +171,27 @@ A separate top-level **Media** or **Design Studio** navigation item is not requi
 
 Image-derived measurements may be suggested as estimates, but V1 does not promote them to verified geometry.
 
+## 4.3A Persistent building context — MUST SHIP, NARROW
+
+`Docs/building-model.md` owns the product/domain contract. V1 must establish enough persistent physical context that useful house/building knowledge is not trapped inside one Project, while staying well short of general CAD/BIM.
+
+Minimum V1 capability:
+
+- optional persistent Site and Building identity;
+- optional Level grouping;
+- partial Spaces that can exist before the rest of the building is modelled;
+- a small extensible BuildingElement vocabulary for walls/openings/windows/doors/structural or service elements where known;
+- explicit spatial relationships such as adjacency/shared boundary/above/below/connection;
+- Project scope to a Site/Building/one or more Spaces/Elements, while projects with no physical association remain valid;
+- optional mapping from project `Area` work zones to persistent physical targets without conflating the two concepts;
+- existing truth/provenance vocabulary reused for physical claims and inferred conditions;
+- current/as-is vs proposed vs accepted/as-built physical state retained without destructive overwrite;
+- building-specific isolation so knowledge from one structure is not silently applied to another.
+
+The physical model must support both **top-down** capture (whole floor/house drawing first) and **bottom-up** capture (one room first). Whole-plan image/PDF ingestion may arrive after the manual foundation, but it must populate the same model as a proposal for confirmation rather than creating a separate AI-only representation.
+
+The four acceptance fixtures in `Docs/building-model.md` — whole-plan top-down, one-room bottom-up, separate-building isolation and major-remodel evolution — are part of the V1 architecture test.
+
 ## 4.4 Solutions and target decision — MUST SHIP
 
 - named solution/proposal;
@@ -243,7 +268,8 @@ The default task card remains lightweight; deeper guidance is progressive disclo
 - progress photo using `MediaAsset`;
 - as-built observation with actor/date/media;
 - ability to record a real deviation from the plan without losing the prior plan;
-- old high-value revisions remain available.
+- old high-value revisions remain available;
+- accepted building/space/element changes can be reconciled into the next current physical state without erasing the previous one.
 
 Automatic propagation of every as-built change through all downstream drawings/BOM/tasks can remain post-V1 unless it is cheap for the supported fixture.
 
@@ -252,6 +278,7 @@ Automatic propagation of every as-built change through all downstream drawings/B
 V1 outputs must land in bob's existing collaboration model:
 
 - areas remain the work-zone container;
+- areas may later map to persistent physical targets but are not replaced by Spaces;
 - tasks remain assignable to existing people;
 - skill levels remain visible;
 - Shopping remains the shopping surface;
@@ -352,7 +379,7 @@ existing parts and their dimensions/source images are available from Dashboard
 and Area. Full Slice 2 still requires Bob to consume the verified values; it is
 not closed by manual storage. The 1C vision gate also remains planned.
 
-**Goal:** turn bob's missing-evidence request into durable, provenance-aware project truth.
+**Goal:** turn bob's missing-evidence request into durable, provenance-aware project truth and establish the minimum persistent physical context that can survive the project that discovered it.
 
 Includes:
 
@@ -360,9 +387,27 @@ Includes:
 - ExistingComponent / existing stock minimum;
 - manual entry;
 - Bob reads the new facts;
-- estimate → verified supersession.
+- estimate → verified supersession;
+- persistent Building/Space context from `Docs/building-model.md`.
 
-**Exit:** a user can answer a concrete measurement request, return later, and Bob uses the verified value while retaining provenance.
+### 2C — Persistent building context — planned (owner decision, 2026-09-13)
+
+Implement the manual physical-model foundation before deterministic drawing generation expands further.
+
+Minimum delivery order:
+
+1. create persistent Site/Building/optional Level/Space identities without requiring a complete house;
+2. add a small BuildingElement vocabulary and explicit spatial relationships;
+3. let a Project scope itself to physical targets and let Areas optionally map to them without changing Area's project-work-zone meaning;
+4. reuse existing provenance/revision rules for measurements and physical claims;
+5. model proposed physical change separately from current state, with an explicit path to accepted/as-built state;
+6. only then add Bob-assisted floor-plan/image ingestion as a proposal/review flow on the same records.
+
+The manual foundation must work without AI. Bob-assisted plan extraction depends on the Slice 1C vision seam and must preserve `ai_assessment` / unknown states rather than claiming inferred geometry or hidden services as verified.
+
+**2C exit:** the four fixtures in `Docs/building-model.md` work at the agreed narrow fidelity: a whole-plan structure can be represented, one room can exist alone and later gain an adjacent room, separate buildings do not bleed physical knowledge, and a major remodel can preserve before/proposed/accepted history. Persisted manual data survives reload and honours backend project/building authority boundaries.
+
+**Full Slice 2 exit:** a user can answer a concrete measurement request, return later, and Bob uses the verified value while retaining provenance and the relevant persistent physical context. Manual 2C completion does not by itself close the later AI ingestion/consumption gate.
 
 ## Slice 3 — Choose the target
 
@@ -399,6 +444,8 @@ This establishes the artifact truth boundary without AI. Deterministic drawing
 generation, transparent BOM/calculation, stock deduction, Shopping propagation,
 task-material/dependency/tool/readiness relations and Bob-proposed work remain
 open, so full Slice 4 and V1 are not closed by 4A.
+
+**Before deterministic drawing generation expands beyond the existing manual 4A foundation, planned Slice 2C must establish persistent physical targets.** Generated geometry should reference the Building/Space/Element context it describes instead of hard-coding project `Area` as if Area were the building model.
 
 **Goal:** produce the first coherent build package from the selected target.
 
@@ -458,6 +505,7 @@ May surface:
 - project target/current phase;
 - a small amount of current evidence;
 - concrete missing evidence/questions from bob;
+- relevant Building/Space scope where one exists;
 - readiness/attention that helps the owner decide the next action.
 
 It should remain scannable rather than becoming an editor.
@@ -476,7 +524,16 @@ This is where:
 
 become useful to the work.
 
-The existing Area `Reference images` concept should evolve into real media rather than being duplicated elsewhere.
+The existing Area `Reference images` concept should evolve into real media rather than being duplicated elsewhere. Area remains a project work-zone; where useful, it may point to persistent Building/Space/Element context defined in `Docs/building-model.md`.
+
+### Building context — grow with need
+
+V1 does not require a new top-level navigation item merely because persistent building records exist. The first UI should support both:
+
+- top-down capture from a whole-plan source; and
+- bottom-up capture where only the currently relevant room/space is modelled.
+
+A dedicated Building view may be added when needed for editing/visualising several Spaces together, following Vera's UI contract rather than creating a parallel design system.
 
 ### Ask bob — reason and explain
 
@@ -488,7 +545,7 @@ Ask bob remains the conversational layer for:
 - explaining calculations/plans;
 - generating proposed work/guidance.
 
-It should not become the only place project truth lives.
+It should not become the only place project truth lives. Physical inferences from neighbouring Spaces/Elements remain visibly inferred/unknown until evidence upgrades them.
 
 ### Today — stay fast
 
@@ -502,12 +559,14 @@ These are release invariants, not optional polish.
 
 1. **Unknown stays unknown.** Missing site facts are visible rather than auto-filled.
 2. **AI observation is not measurement.** Image analysis cannot silently create verified dimensions.
-3. **Human confirmation owns high-value truth.** Selected target, verified measurement and plan-changing AI proposals require explicit confirmation in V1.
-4. **Every calculated quantity has a basis.** Formula/method/inputs/allowance can be inspected.
-5. **Revision beats destructive overwrite.** High-value solution/artifact/calculation/as-built history remains explainable.
-6. **Project context is explicit.** No V1 AI/read/write path may infer project identity by `limit(1)` or equivalent.
-7. **Authorization lives at the real boundary.** UI hiding is never the only project-access protection.
-8. **Generated beauty does not upgrade authority.** Mockups/diagrams/drawings carry their actual status.
+3. **Inference is not a hidden fact.** Adjacency or a neighbouring outlet/pipe may justify a question or caution, not a verified service route.
+4. **Human confirmation owns high-value truth.** Selected target, verified measurement and plan-changing AI proposals require explicit confirmation in V1.
+5. **Every calculated quantity has a basis.** Formula/method/inputs/allowance can be inspected.
+6. **Revision beats destructive overwrite.** High-value solution/artifact/calculation/building-state/as-built history remains explainable.
+7. **Project context is explicit.** No V1 AI/read/write path may infer project identity by `limit(1)` or equivalent.
+8. **Physical context is explicit.** A Building/Space/Element relationship must not be guessed from whichever Area/project happens to be open.
+9. **Authorization lives at the real boundary.** UI hiding is never the only project-access protection.
+10. **Generated beauty does not upgrade authority.** Mockups/diagrams/drawings carry their actual status.
 
 ---
 
@@ -521,17 +580,29 @@ The golden porch journey can be completed end to end without maintaining a paral
 
 ## Persistence gate
 
-V1 evidence, measurements, selected target, artifacts, calculated requirements, richer tasks and progress/as-built records survive navigation/reload where promised.
+V1 evidence, measurements, persistent building context, selected target, artifacts, calculated requirements, richer tasks and progress/as-built records survive navigation/reload where promised.
 
 ## Security gate
 
 - active project is explicit;
 - cross-project reads/writes are denied at backend/storage boundaries;
-- new V1 records follow membership-aware authority.
+- new V1 records follow membership-aware authority;
+- building/site associations cannot be used to cross project/account authority boundaries.
 
 ## Truth gate
 
 A reviewer can tell, from the UI/data, whether a value is measured, provided, estimated, AI-assessed, calculated or unknown.
+
+## Building-context gate
+
+At the narrow V1 fidelity:
+
+- one Building may contain only one known Space while everything else stays unknown;
+- a later Space can be related to it without requiring a complete floor plan;
+- an imported/photographed full plan may propose many Spaces for confirmation;
+- a project scoped to another Building does not inherit house-specific facts;
+- a remodel/extension keeps current, proposed and accepted/as-built physical history distinct;
+- `Area` continues to work as a project work-zone rather than being silently redefined as `Space`.
 
 ## Calculation gate
 
@@ -556,6 +627,7 @@ At minimum, automated or repeatable browser verification covers:
 - upload + reload;
 - denied cross-project media access;
 - measurement persistence/supersession;
+- persistent Building/Space creation + reload and separate-building isolation;
 - selected solution persistence;
 - supported artifact/BOM generation + shopping handoff;
 - task guidance on mobile-sized viewport;
@@ -572,6 +644,9 @@ Likely first-class concepts:
 - `MediaAsset`;
 - `Measurement`;
 - `ExistingComponent` / existing stock;
+- persistent `Site` / `Building` / optional `Level` / `Space` / `BuildingElement` identities;
+- `SpatialRelationship` and project/Area-to-physical-target scope links;
+- physical-state revision/change history for current / proposed / accepted-as-built context;
 - `SolutionRevision`;
 - `ArtifactRevision`;
 - `MaterialRequirement` / `QuantityCalculation`;
@@ -579,6 +654,8 @@ Likely first-class concepts:
 - `TaskDependency` and richer task detail;
 - progress/as-built observation;
 - provenance/truth metadata.
+
+Names here are conceptual. `Docs/building-model.md` owns the physical-domain meaning; the implementation milestone owns exact schema/RLS/API names.
 
 All UI access continues through `src/data/database.ts` or an explicitly documented successor seam; V1 must not teach screens to query Supabase ad hoc.
 
@@ -597,6 +674,8 @@ For each slice:
 7. drive the real browser flow including reload/error/denial;
 8. update inventory/docs only after runtime truth changes.
 
+For persistent building context specifically, establish the manual sparse model and authority boundaries before AI plan ingestion. Reuse existing provenance/history seams instead of creating a second truth vocabulary.
+
 Avoid large "platform first" refactors. Promote repeated UI/data patterns only when the slice demonstrates the repetition.
 
 ---
@@ -609,6 +688,6 @@ V1 succeeds when bob changes from:
 
 into:
 
-> **a place where a real DIY/community build can become understandable, buildable and shareable from the evidence the people actually have.**
+> **a place where a real DIY/community build can become understandable, buildable and shareable from the evidence the people actually have — while the useful model of the place can keep improving across projects.**
 
-The release is intentionally judged against one real project first. If the porch can move from photos and uncertain existing conditions to a transparent build package and usable crew tasks without fake precision or fragmented truth, V1 has proven the product direction.
+The release is intentionally judged against one real project first. If the porch can move from photos and uncertain existing conditions to a transparent build package and usable crew tasks without fake precision or fragmented truth, and the resulting house knowledge can be reused rather than discarded with the project, V1 has proven the product direction.
