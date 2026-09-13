@@ -3,7 +3,7 @@ name: Live foundation release check
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feat/manual-project-artifacts]
     paths:
       - scripts/check-live-foundations.mjs
       - scripts/check-live-project-facts.mjs
