@@ -20,6 +20,7 @@ jobs:
       - run: node --check scripts/check-live-project-facts.mjs
       - run: node --check scripts/check-live-solutions.mjs
       - run: node --check scripts/check-live-artifacts.mjs
+      - run: node --check scripts/check-live-material-planning.mjs
       - run: node --check scripts/check-live-building-context.mjs
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
