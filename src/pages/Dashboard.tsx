@@ -121,7 +121,7 @@ export function Dashboard() {
                     <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyebrow}</div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyrow}</div>
                     <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
                     <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
                     <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>
@@ -169,7 +169,6 @@ export function Dashboard() {
         </section>
       )}
 
-      {/* Stat strip */}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 22 }}>
         {stats?.map((s) => (
           <div key={s.label} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '14px 15px' }}>
@@ -182,7 +181,6 @@ export function Dashboard() {
       </div>
 
       <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 22, marginTop: 24 }}>
-        {/* Areas */}
         <section>
           <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 600 }}>View all</Link>}>
             Areas <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areas?.length ?? 0}</span>
@@ -218,7 +216,6 @@ export function Dashboard() {
           )}
         </section>
 
-        {/* Right column */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {next && (
             <Link to={`/events/${next.slug}`} style={{ background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r)', padding: '17px 17px 16px', display: 'block' }}>
@@ -279,6 +276,10 @@ export function Dashboard() {
         </section>
       </div>
 
+      <Link to="/building" className="card foundation-section facts-entry">
+        <Icon name="house" size={24} /><div><h3>Building & spaces</h3>
+          <p className="foundation-hint">Start with the room you know and let the physical model grow across projects.</p></div><Icon name="arrow-right" size={20} />
+      </Link>
       <Link to="/solutions" className="card foundation-section facts-entry">
         <Icon name="path" size={24} /><div><h3>Solutions & target</h3>
           <p className="foundation-hint">Keep alternatives, their evidence and the selected project version.</p></div><Icon name="arrow-right" size={20} />
