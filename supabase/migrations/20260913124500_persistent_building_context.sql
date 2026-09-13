@@ -377,15 +377,15 @@ create view bob.current_levels with (security_invoker=true) as
 select l.id,l.building_id,r.revision,r.name,r.position,r.notes,r.archived,r.change_note,r.recorded_by,r.actor_label,r.recorded_at
 from bob.building_levels l join bob.level_revisions r on r.level_id=l.id and r.revision=l.current_revision;
 create view bob.current_spaces with (security_invoker=true) as
-select s.id,s.building_id,r.revision,r.project_id,r.level_id,r.name,r.kind,r.notes,r.truth,r.source,r.archived,
+select s.id,s.building_id,r.revision,r.project_id as source_project_id,r.level_id,r.name,r.kind,r.notes,r.truth,r.source,r.archived,
   s.latest_revision,(s.latest_revision<>s.accepted_revision) as has_proposal,r.change_note,r.recorded_by,r.actor_label,r.recorded_at
 from bob.building_spaces s join bob.space_revisions r on r.space_id=s.id and r.revision=s.accepted_revision;
 create view bob.current_elements with (security_invoker=true) as
-select e.id,e.building_id,r.revision,r.project_id,r.space_id,r.kind,r.name,r.description,r.truth,r.source,r.archived,
+select e.id,e.building_id,r.revision,r.project_id as source_project_id,r.space_id,r.kind,r.name,r.description,r.truth,r.source,r.archived,
   e.latest_revision,(e.latest_revision<>e.accepted_revision) as has_proposal,r.change_note,r.recorded_by,r.actor_label,r.recorded_at
 from bob.building_elements e join bob.element_revisions r on r.element_id=e.id and r.revision=e.accepted_revision;
 create view bob.current_relationships with (security_invoker=true) as
-select x.id,x.building_id,x.subject_space_id,x.object_space_id,r.revision,r.project_id,r.relation,r.truth,r.source,r.notes,r.archived,
+select x.id,x.building_id,x.subject_space_id,x.object_space_id,r.revision,r.project_id as source_project_id,r.relation,r.truth,r.source,r.notes,r.archived,
   x.latest_revision,(x.latest_revision<>x.accepted_revision) as has_proposal,r.change_note,r.recorded_by,r.actor_label,r.recorded_at
 from bob.spatial_relationships x join bob.relationship_revisions r on r.relationship_id=x.id and r.revision=x.accepted_revision;
 
