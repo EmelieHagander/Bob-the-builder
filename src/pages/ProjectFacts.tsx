@@ -11,8 +11,8 @@ import { ProjectImages, StoredImage } from '../components/ProjectImages'
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const name = (record: ProjectFact) => record.kind === 'measurement' ? record.subject : record.name
-const compactPrimary = { minHeight: 42, padding: '8px 13px', fontSize: 13.5 }
-const compactSecondary = { minHeight: 40, padding: '8px 7px', fontSize: 13, border: 0, background: 'transparent', boxShadow: 'none' }
+const compactPrimary = { minHeight: 44, padding: '8px 13px', fontSize: 13.5 }
+const compactSecondary = { minHeight: 44, padding: '8px 7px', fontSize: 13, border: 0, background: 'transparent', boxShadow: 'none' }
 
 function SourceImage({ projectId, imageId, title }: { projectId: string; imageId: string | null; title: string }) {
   const [open, setOpen] = useState(false)
@@ -133,8 +133,7 @@ function FactEditor({ projectId, kind, record, areas, initialArea, component, on
           <Field label="Observed condition"><textarea style={inputStyle} rows={2} maxLength={2000} value={condition}
             placeholder="Leave blank if not inspected" onChange={e => setCondition(e.target.value)} /></Field>
           <Field label="Intended action"><select style={inputStyle} value={intent} onChange={e => setIntent(e.target.value as ComponentIntent)}>
-            {Object.entries(INTENT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select></Field>
+            {Object.entries(INTENT_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
           <p className="foundation-hint">Reuse is an intention, not confirmation that a part is structurally suitable.</p>
           <Field label="Specification"><textarea style={inputStyle} rows={2} maxLength={4000} value={specification} onChange={e => setSpecification(e.target.value)} /></Field>
           <p className="foundation-hint">Add dimensions from the part's Measurements button after saving.</p>
@@ -252,8 +251,7 @@ export function ProjectFacts() {
     </div>
     <div className="fact-filters">
       <Field label="Filter by area"><select style={inputStyle} value={areaId} disabled={Boolean(componentId)} onChange={e => navigateFilter(kind, e.target.value, componentId, status)}>
-        <option value="">All areas</option>{areas?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-      </select></Field>
+        <option value="">All areas</option>{areas?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></Field>
       <Field label="Show records"><select style={inputStyle} value={status} onChange={e => navigateFilter(kind, areaId, componentId, e.target.value as typeof status)}>
         <option value="active">Active</option>{kind === 'measurement' && <option value="missing">To measure</option>}<option value="archived">Archived</option>
       </select></Field>
@@ -284,7 +282,7 @@ export function ProjectFacts() {
         <details><summary style={{ fontSize: 13.5, fontWeight: 700 }}>Source and notes</summary><FactDetails record={record} /></details>
         <div className="foundation-actions" style={{ marginTop: 8, gap: 4, alignItems: 'center' }}>
           {!record.archived && record.kind === 'measurement' && <button className="btn btn-primary" style={compactPrimary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
-          {record.kind === 'component' && <button className="btn btn-primary" style={compactPrimary} onClick={() => navigateFilter('measurement', record.areaId ?? '', record.id, 'active')}>Measurements</button>}
+          {record.kind === 'component' && <button className="btn btn-primary" style={compactPrimary} aria-label="Measurements for part" onClick={() => navigateFilter('measurement', record.areaId ?? '', record.id, 'active')}>Measurements</button>}
           {!record.archived && record.kind === 'component' && <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
           <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'history', record })}>History</button>
           <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'lifecycle', record })}>{record.archived ? 'Restore' : 'Archive'}</button>
