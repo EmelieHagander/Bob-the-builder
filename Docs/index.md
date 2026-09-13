@@ -21,7 +21,7 @@
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
-| Ask bob runtime project-context selection / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `supabase/README.md` |
+| Ask bob runtime project-context selection / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -81,7 +81,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
 - `Docs/artifacts.md` — owning manual plan/drawing, exact target/solution lineage and measurement-evidence contract for milestone 4A; its own status distinguishes implementation from deployment.
-- `src/data/artifacts.ts` — project-artifact reads/commands behind `database.ts`.
+- `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 
@@ -89,6 +89,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-context.md` — **specified / pre-build** runtime project-context contract: hierarchical Project Catalog, cheap category/scope routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
+- `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that context contract: backend module seams, additive catalog RPC, adapters, router shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **specified / pre-build** conversation-continuity contract: Bob-owned transcript, server-private Responses continuation, compaction/reseed state machine, per-user/project privacy and release proof.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
 - `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
