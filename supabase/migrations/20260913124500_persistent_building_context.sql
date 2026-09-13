@@ -18,7 +18,7 @@ create table bob.site_members (
 );
 create index site_members_user_idx on bob.site_members(auth_user_id, site_id);
 create table bob.site_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   site_id uuid not null references bob.sites(id) on delete cascade,
   revision integer not null check (revision > 0),
   name text not null check (char_length(btrim(name)) between 1 and 200),
@@ -28,7 +28,7 @@ create table bob.site_revisions (
   recorded_by uuid not null,
   actor_label text not null,
   recorded_at timestamptz not null default clock_timestamp(),
-  unique(site_id, revision)
+  primary key(site_id, revision)
 );
 alter table bob.sites add constraint site_current_revision_fk
   foreign key(id, current_revision) references bob.site_revisions(site_id, revision)
@@ -51,7 +51,7 @@ create table bob.building_members (
 );
 create index building_members_user_idx on bob.building_members(auth_user_id, building_id);
 create table bob.building_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   building_id uuid not null references bob.buildings(id) on delete cascade,
   revision integer not null check (revision > 0),
   name text not null check (char_length(btrim(name)) between 1 and 200),
@@ -61,7 +61,7 @@ create table bob.building_revisions (
   recorded_by uuid not null,
   actor_label text not null,
   recorded_at timestamptz not null default clock_timestamp(),
-  unique(building_id, revision)
+  primary key(building_id, revision)
 );
 alter table bob.buildings add constraint building_current_revision_fk
   foreign key(id, current_revision) references bob.building_revisions(building_id, revision)
@@ -76,7 +76,7 @@ create table bob.building_levels (
 );
 create index building_levels_building_idx on bob.building_levels(building_id);
 create table bob.level_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   level_id uuid not null,
   building_id uuid not null,
   revision integer not null check (revision > 0),
@@ -89,7 +89,7 @@ create table bob.level_revisions (
   actor_label text not null,
   recorded_at timestamptz not null default clock_timestamp(),
   foreign key(level_id, building_id) references bob.building_levels(id, building_id) on delete cascade,
-  unique(level_id, revision)
+  primary key(level_id, revision)
 );
 alter table bob.building_levels add constraint level_current_revision_fk
   foreign key(id, current_revision) references bob.level_revisions(level_id, revision)
@@ -107,7 +107,7 @@ create table bob.building_spaces (
 );
 create index building_spaces_building_idx on bob.building_spaces(building_id);
 create table bob.space_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   space_id uuid not null,
   building_id uuid not null,
   revision integer not null check (revision > 0),
@@ -127,7 +127,7 @@ create table bob.space_revisions (
   check (truth='unknown' or char_length(btrim(source)) > 0),
   foreign key(space_id, building_id) references bob.building_spaces(id, building_id) on delete cascade,
   foreign key(level_id, building_id) references bob.building_levels(id, building_id),
-  unique(space_id, revision)
+  primary key(space_id, revision)
 );
 alter table bob.building_spaces add constraint space_latest_revision_fk
   foreign key(id, latest_revision) references bob.space_revisions(space_id, revision)
@@ -169,7 +169,7 @@ create table bob.building_elements (
 );
 create index building_elements_building_idx on bob.building_elements(building_id);
 create table bob.element_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   element_id uuid not null,
   building_id uuid not null,
   revision integer not null check (revision > 0),
@@ -189,7 +189,7 @@ create table bob.element_revisions (
   check (truth='unknown' or char_length(btrim(source)) > 0),
   foreign key(element_id, building_id) references bob.building_elements(id, building_id) on delete cascade,
   foreign key(space_id, building_id) references bob.building_spaces(id, building_id),
-  unique(element_id, revision)
+  primary key(element_id, revision)
 );
 alter table bob.building_elements add constraint element_latest_revision_fk
   foreign key(id, latest_revision) references bob.element_revisions(element_id, revision)
@@ -218,7 +218,7 @@ create index spatial_relationships_building_idx on bob.spatial_relationships(bui
 create index spatial_relationships_subject_idx on bob.spatial_relationships(subject_space_id, building_id);
 create index spatial_relationships_object_idx on bob.spatial_relationships(object_space_id, building_id);
 create table bob.relationship_revisions (
-  id uuid primary key default gen_random_uuid(),
+  id uuid not null default gen_random_uuid() unique,
   relationship_id uuid not null,
   building_id uuid not null,
   revision integer not null check (revision > 0),
@@ -235,7 +235,7 @@ create table bob.relationship_revisions (
   recorded_at timestamptz not null default clock_timestamp(),
   check (truth='unknown' or char_length(btrim(source)) > 0),
   foreign key(relationship_id, building_id) references bob.spatial_relationships(id, building_id) on delete cascade,
-  unique(relationship_id, revision)
+  primary key(relationship_id, revision)
 );
 alter table bob.spatial_relationships add constraint relationship_latest_revision_fk
   foreign key(id, latest_revision) references bob.relationship_revisions(relationship_id, revision)
