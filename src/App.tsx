@@ -14,6 +14,7 @@ import { TaskDetail } from './pages/TaskDetail'
 import { ProjectFacts } from './pages/ProjectFacts'
 import { Solutions } from './pages/Solutions'
 import { Artifacts } from './pages/Artifacts'
+import { BuildingContext } from './pages/BuildingContext'
 import { People } from './pages/People'
 import { Events } from './pages/Events'
 import { EventDetail } from './pages/EventDetail'
@@ -99,6 +100,7 @@ function ProjectApp() {
         <Route path="/facts" element={<ProjectFacts />} />
         <Route path="/solutions" element={<Solutions />} />
         <Route path="/artifacts" element={<Artifacts />} />
+        <Route path="/building" element={<BuildingContext projectId={project.id} context={db.buildingContext} />} />
         <Route path="/people" element={<People />} />
         <Route path="/events" element={<Events />} />
         <Route path="/events/:slug" element={<EventDetail />} />
