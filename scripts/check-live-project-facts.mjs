@@ -59,8 +59,10 @@ export async function verifyFactImageCleanup(client, projectId, records) {
     assert.equal(row.source_media_id, null)
     assert.equal(row.source_media_title, 'Disposable foundation image')
   }
-  const revisions = checked(await client.from('measurement_revisions').select('truth,value,source_media_id').eq('project_id', projectId).eq('measurement_id', records.measurementId))
-  assert.equal(revisions.length, 3)
+  const revisions = checked(await client.from('measurement_revisions').select('revision,truth,value,source_media_id')
+    .eq('project_id', projectId).eq('measurement_id', records.measurementId).order('revision'))
+  assert(revisions.length >= 3, 'The fact history must retain its three foundation revisions')
+  assert.deepEqual(revisions.slice(0, 3).map(r => r.truth), ['unknown', 'estimated', 'measured'])
   assert(revisions.every(r => r.source_media_id === null))
   console.log('Live project facts: image deletion cleared file links and preserved recorded values and history.')
 }

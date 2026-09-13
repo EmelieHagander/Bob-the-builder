@@ -130,7 +130,12 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await picker.getByRole('button', { name: 'Use measurement', exact: true }).first().waitFor()
   while (await picker.getByRole('heading', { name: 'Opening width', exact: true }).count() === 0) {
     const next = picker.getByRole('button', { name: 'Next page', exact: true })
-    await next.waitFor(); await next.click()
+    await next.waitFor()
+    // The pager intentionally swaps to a loading state as soon as offset changes.
+    // Trigger the same click handler atomically so Playwright does not wait on
+    // a button node that React has already replaced, then prove the new page rendered.
+    await next.evaluate(button => button.click())
+    await picker.getByRole('button', { name: 'Previous page', exact: true }).waitFor()
     await picker.getByRole('button', { name: 'Use measurement', exact: true }).first().waitFor()
   }
   await picker.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Opening width', exact: true }) })
