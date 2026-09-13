@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B, 2A/2B and 3A**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -26,7 +26,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts and manual solution/target revisions are delivered in the deltas here. Generated proposals, drawing revisions, calculations and structured progress/as-built history retain their later gates. |
+| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts, manual solution/target revisions and manual plans/drawings are delivered in the deltas here. Generated proposals, deterministic geometry/calculations and structured progress/as-built history retain their later gates. |
 
 ## Measurement and component foundation release delta — 2026-09-09
 
@@ -59,17 +59,32 @@ owns database, browser, live-service and preservation evidence.
 | Evidence per version | **BUILT.** Up to 20 exact measurement versions retain their units, values, truth state and sources, including dimensions of existing parts. Later measurement changes are visible without replacing the recorded evidence. |
 | Selected project target | **BUILT manually.** One explicit target points to an exact solution revision. Revisioned decisions record select/replace/clear with actor, time and reason. New alternative versions do not silently change the target. |
 | Saved image and runtime consumption | **BUILT.** Authorised original images, alternative/evidence detail, paged revision/decision history, archive/restore, reload and project switching work. Removing a file retains its title and decision content. |
-| Generated visual proposals and downstream planning | **GAP.** 3B proposal/mockup generation, measured drawings, calculations and propagation into tasks/shopping remain later. Selection expresses intent, not engineering approval. |
+| Generated visual proposals and downstream planning | **PARTIAL.** Manual plans/drawings are now delivered by 4A. Generated proposal/mockup imagery, deterministic drawing geometry, calculations and propagation into tasks/shopping remain later. Selection expresses intent, not engineering approval. |
+
+## Plans and drawings foundation release delta — 2026-09-13
+
+**Status:** manual 4A is implemented, merged, migrated and live-verified in
+[PR 31](https://github.com/EmelieHagander/Bob-the-builder/pull/31).
+[Plans and drawings](artifacts.md) owns behavior; [foundation verification](foundation-verification.md)
+owns database, browser, live-service and cleanup evidence.
+
+| Foundation | Current status |
+|---|---|
+| Manual project drawings | **BUILT manually.** A connected project can persist plan/elevation/section/detail records for the project or an Area with concept/measured/build-ready status, explanation and explicit assumptions/limits. Dashboard/Area route to the focused surface. |
+| Exact target and measurement lineage | **BUILT.** Every drawing version pins the exact selected target decision, exact solution revision and up to 20 exact measurement revisions. Later target/measurement changes are disclosed without rewriting what the older drawing used. |
+| Drawing revisions and history | **BUILT.** Create/revise/archive/restore append server-attributed revisions with reason/time. Stale drawing revisions and target decisions are rejected instead of silently rebinding an open editor. Old versions remain inspectable. |
+| Images, areas and runtime consumption | **BUILT.** Drawings reuse authorised project images and can belong to an Area. Image removal retains the recorded title/history; area removal keeps project-level drawing history. Browser flows pass create/revise/history/archive/restore/reload/paging/project switching. |
+| Generated geometry, BOM and downstream work | **GAP.** 4A is a manual truth foundation. Deterministic drawing generation, quantity derivations/BOM, stock deduction, Shopping propagation, task-material links, dependencies/tools/readiness and Bob/vision consumption remain later gates. |
 
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
 prioritises persistent foundations before new AI consumers. No owner Bob trial
-was required to deliver these milestones.
+was required to deliver these manual milestones.
 
 This inventory is deliberately stricter than a feature wishlist. A capability is only marked **BUILT** when the current runtime/data model materially supports the user goal. **PARTIAL** means useful pieces exist but an important part of the target journey is missing. **GAP** means the target capability has no meaningful current implementation.
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B and 3A
+## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 3A and 4A
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.
@@ -233,7 +248,7 @@ The shopping screen consolidates all project materials by category, supports add
 | Crew list | **BUILT** | People page with roles/skills/diet. | — |
 | Skills per person | **BUILT** | Named skill tags with novice/intermediate/expert level. | Ask bob's AI briefing currently does not include these skill records. |
 | Edit person | **BUILT** | Role, diet, skills can be edited. | Server-side role authority not enforced. |
-| Assign task | **BUILT** | Assignees appear on task/area/day surfaces. | No AI skill match/supervision logic. |
+| Assign task | **BUILT** | Assignees appear on task/area/day surfaces. | No event-specific assignment or staffing schedule. |
 | Lead less experienced helpers | **PARTIAL concept only** | Area lead + multiple assignees can represent this informally. | No explicit supervision relationship or rule that makes a task safe/startable. |
 | Skill-based suggestions | **GAP** | — | No matching engine for “these people are coming; these tasks fit them”. |
 

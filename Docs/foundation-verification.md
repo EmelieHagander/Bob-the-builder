@@ -1,5 +1,72 @@
 # Foundation verification and rollout
 
+## Delivered manual plans and drawings (4A)
+
+**Status:** manual 4A implemented, merged, migrated and live-verified on
+2026-09-13. [PR 31](https://github.com/EmelieHagander/Bob-the-builder/pull/31)
+merged as `18994f688bccf12c6cb9a63dee66ff46ddccb21b`. The
+[artifacts contract](artifacts.md) owns manual plans/drawings, exact target and
+measurement lineage, revision history and status semantics. Deterministic drawing
+generation, BOM/stock/shopping and task-readiness work remain later Slice 4/5 gates;
+this does not close full Slice 4 or V1.
+
+### Automated evidence
+
+- All 35 database/data-boundary tests pass in
+  [CI 34504663236](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34504663236)
+  on feature head `04b2207e1d930ebe2dbc16bf74a80b93a9c2d138`. Five 4A tests execute the
+  actual artifact migration/RLS and cover exact target/measurement revisions,
+  stale-target and stale-artifact rejection, cross-project relation denial,
+  append-only lineage/actor protection, archive/restore, area/project deletion and
+  delayed project-switch results.
+- TypeScript/Vite, edge, PWA/install and existing Ask bob isolation checks pass.
+- `scripts/artifacts-browser.mjs` extends the existing production-frontend
+  foundation harness at 320, 390 and 1280px. It proves manual create, exact
+  measurement/image selection, selected-target lineage, visibly stale old drawings,
+  conflict input recovery, new revisions, old-version history, archive/restore,
+  reload, paging, 44px actions and project switching. Earlier images/steps/facts/
+  solutions remain green in the same harness.
+- Verification-only follow-ups
+  [PR 35](https://github.com/EmelieHagander/Bob-the-builder/pull/35) and
+  [PR 37](https://github.com/EmelieHagander/Bob-the-builder/pull/37) make the
+  composed browser/live cleanup proofs tolerate legitimate downstream revisions;
+  they change no product schema, UI or AI behavior. Their full CI runs
+  [34752091765](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34752091765)
+  and [34752480811](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34752480811)
+  pass the complete foundation/browser suite.
+
+### Deployment and live proof
+
+Source migration: `supabase/migrations/20260910180000_project_artifacts.sql`.
+It was applied to the Bob deployment on 2026-09-13; hosted history records the
+same applied change as `20260913101509_bob_project_artifacts`. Do not replay the
+authoring timestamp or edit the applied migration.
+
+The migration adds `artifacts`, `artifact_revisions` and `artifact_measurements`,
+plus invoker views `current_artifacts` and `artifact_measurement_details` and the
+guarded `artifact_command` seam. Post-migration inspection found no new artifact
+security findings and no missing artifact foreign-key indexes; fresh unused-index
+notices are informational before real workload. The new artifact tables were empty
+before disposable live verification. Existing Bob project/fact/solution/media rows
+remained present; this release did not claim a new full-row checksum baseline.
+
+[Pages 34752619338](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34752619338)
+and [live foundation check 34752619293](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34752619293)
+pass on final `main` commit `6a927fb60d446c1bf409a5a91ebda4442a2d6bdd`.
+The live check uses the ordinary guest Auth client and one disposable project. It
+proves the existing image/step/fact/solution chain plus 4A drawings with exact
+selected-target/solution/measurement lineage, later-measurement disclosure,
+stale target/revision denial, server attribution, archive/restore and denied access
+to the real porch project. No AI is invoked.
+
+After normal Storage API removal, measurement, solution and all four drawing
+revisions retain their recorded image titles while file references are null. The
+solution decision trail and later drawing target decisions remain readable. The log
+confirms complete API cleanup of image bytes, metadata and attachments. The operator
+then removed only disposable project `p_3a5cdd967ffe4781852410d6c36826dd`, guarded
+by nonce `6cd37239-e7aa-4baf-bc87-6ed95ad60162`, exact generated project name and
+zero remaining media rows. Storage object metadata was not deleted with SQL.
+
 ## Delivered solution alternatives and selected target (3A)
 
 **Status:** manual 3A implemented, merged and deployed on 2026-09-10.
@@ -246,6 +313,7 @@ storage server. Browser checks use HTTP fixtures and cannot prove deployed Stora
 The live API script provides that separate deployed-service proof. Do not describe
 fixture screenshots as a manual authenticated walkthrough on the owner's phone.
 No owner Bob/vision trial was required. Vision, AI consumption of the manual
-foundations, generated proposals/guidance, drawing revisions, calculations and full
-progress/as-built history remain later scope. Manual 1A/1B, 2A/2B and 3A completion
-does not close full Slices 1–3 or the V1 release.
+foundations, generated proposals/guidance, deterministic drawing generation,
+calculations, BOM/stock/shopping and full progress/as-built history remain later
+scope. Manual 1A/1B, 2A/2B, 3A and 4A completion does not close full Slices 1–4
+or the V1 release.

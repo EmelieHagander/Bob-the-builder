@@ -389,6 +389,17 @@ Includes:
 
 ## Slice 4 — Turn target into work
 
+**Manual foundation 4A (deployed and live-verified, 2026-09-13):** revisioned
+manual plans/drawings now bind the exact selected target/solution and exact
+measurement versions, with explicit concept/measured/build-ready status, optional
+authorised drawing image, append-only history and stale-target protection.
+[Plans and drawings](artifacts.md) owns the behavior and
+[foundation verification](foundation-verification.md) owns release evidence.
+This establishes the artifact truth boundary without AI. Deterministic drawing
+generation, transparent BOM/calculation, stock deduction, Shopping propagation,
+task-material/dependency/tool/readiness relations and Bob-proposed work remain
+open, so full Slice 4 and V1 are not closed by 4A.
+
 **Goal:** produce the first coherent build package from the selected target.
 
 Includes for the supported V1 fixture:

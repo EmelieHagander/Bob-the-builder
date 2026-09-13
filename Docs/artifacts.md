@@ -1,6 +1,6 @@
 # Plans and drawings — manual project artifact foundation
 
-**Status:** manual milestone 4A implementation in progress. This contract owns the persisted manual drawing/artifact foundation; `Docs/v1-plan.md` owns release order and later deterministic generation/calculation gates.
+**Status:** manual milestone 4A is implemented, merged, migrated and live-verified as of 2026-09-13. [`Docs/foundation-verification.md`](foundation-verification.md) owns release evidence; `Docs/v1-plan.md` owns release order and later deterministic generation/calculation gates.
 
 ## User goal
 
@@ -80,7 +80,7 @@ Those remain later Slice 4/5 gates. Future generated artifacts and BOM/work-plan
 
 ## Verification contract
 
-Before marking 4A deployed, prove:
+A 4A release requires proof that:
 
 - anonymous/outsider reads and all raw writes are denied;
 - project members can read and use the guarded command only in their project;
@@ -91,3 +91,5 @@ Before marking 4A deployed, prove:
 - project deletion cascades the new records;
 - production UI works at 320/390/1280 px with create/revise/history/archive/restore/reload and project-switch isolation;
 - deployed Auth/PostgREST/Storage behavior is checked separately from browser HTTP fixtures.
+
+The deployed 4A evidence is recorded once in [`Docs/foundation-verification.md`](foundation-verification.md) rather than duplicated here.
