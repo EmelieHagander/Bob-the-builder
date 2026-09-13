@@ -13,6 +13,7 @@ on:
       - supabase/migrations/20260913124500_persistent_building_context.sql
       - supabase/migrations/20260913135500_expose_physical_proposal_state.sql
       - supabase/migrations/20260913140500_physical_identity_delete_boundary.sql
+      - supabase/migrations/20260913143000_building_context_fk_indexes.sql
       - .github/workflows/live-foundations.yml
 
 permissions:
