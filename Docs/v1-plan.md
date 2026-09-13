@@ -15,6 +15,39 @@ project lookup and deployment contract are owned by [supabase/README.md](../supa
 
 The release described here is now called **V1**. This plan consumes the relevant scope buckets without rewriting their original prioritisation vocabulary.
 
+## Current execution position — 2026-09-13
+
+The numbered slices describe the product dependency chain, but implementation has intentionally followed a **foundations-first execution lane**. That means later manual foundations have been delivered while some earlier AI gates remain open.
+
+**Deployed / live-verified foundations:**
+
+- Slice 0 — trust foundation;
+- Slice 1A — real project media;
+- Slice 1B — manual illustrated task steps;
+- Slice 2A — measurements/provenance/history;
+- Slice 2B — existing components;
+- Slice 3A — alternatives + selected target;
+- Slice 4A — manual plans/drawings with exact target and measurement lineage.
+
+**Still open by deliberate deferral:**
+
+- Slice 1C — Bob vision over authorised project images;
+- full Slice 2 AI consumption of measurements/evidence;
+- Slice 3B generated visual proposals/mockups;
+- deterministic generated geometry, BOM/calculations, stock/shopping propagation and richer executable work planning after 4A;
+- Slice 5 generated/project-specific guidance and structured progress/as-built completion.
+
+**Current next foundation:** **Slice 2C — persistent building context.** Although its number is 2C, it is the next implementation milestone from the current repository state. 4A could safely establish manual drawing truth using project/Area scope, but deterministic geometry and calculations should not expand until Bob has persistent physical targets (`Building` / `Space` / `BuildingElement`) that survive individual projects.
+
+**Execution order from here:**
+
+1. deliver the manual 2C building-context foundation and its four acceptance fixtures;
+2. resume Slice 4 beyond manual 4A: deterministic artifact geometry for the narrow supported fixtures, then transparent quantity/BOM + stock/shopping integration, then richer task/dependency/tool/readiness relations;
+3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
+4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+
+This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
+
 ---
 
 # 1. V1 thesis
@@ -390,9 +423,9 @@ Includes:
 - estimate → verified supersession;
 - persistent Building/Space context from `Docs/building-model.md`.
 
-### 2C — Persistent building context — planned (owner decision, 2026-09-13)
+### 2C — Persistent building context — NEXT MANUAL FOUNDATION (planned; owner decision, 2026-09-13)
 
-Implement the manual physical-model foundation before deterministic drawing generation expands further.
+Implement the manual physical-model foundation before deterministic drawing generation expands further. This is the **current next implementation milestone** after deployed 4A, despite the 2C dependency label.
 
 Minimum delivery order:
 
