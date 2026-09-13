@@ -151,3 +151,30 @@ test('Area mapping is project-owned and deleting work zones does not delete pers
   assert.equal((await as(both,"select * from bob.area_physical_targets where project_id='A'")).rows.length,0)
   assert.equal((await as(both,'select name from bob.current_spaces where id=$1',[u(4)])).rows[0].name,"Children's room + alcove")
 })
+
+test('explicit physical deletion requires direct authority, archived state and detached project context', async () => {
+  const siteId=u(50), buildingId=u(51), scopeId=u(52)
+  await site('create',siteId,0,{ name:'Disposable delete site', notes:'Deletion boundary fixture' })
+  await building('create',buildingId,0,{ site_id:siteId, name:'Disposable delete building', notes:'Deletion boundary fixture' })
+
+  await assert.rejects(building('delete',buildingId,1,{},outsider),/building_denied/)
+  await assert.rejects(building('delete',buildingId,1,{}),/Archive building before deleting/)
+
+  await scope('A','project','link',scopeId,{ target_kind:'building', building_id:buildingId })
+  await building('archive',buildingId,1,{})
+  await assert.rejects(building('delete',buildingId,2,{},one),/building_denied/,'project context does not grant persistent delete authority')
+  await assert.rejects(building('delete',buildingId,2,{}),/still used by a project/)
+
+  await site('archive',siteId,1,{})
+  await assert.rejects(site('delete',siteId,2,{}),/still contains buildings/)
+
+  await scope('A','project','unlink',scopeId,{})
+  await assert.rejects(building('delete',buildingId,1,{}),/Building changed/,'stale physical delete is denied')
+  const removedBuilding=await building('delete',buildingId,2,{})
+  assert.equal(removedBuilding.removed,true)
+  assert.equal((await as(both,'select * from bob.buildings where id=$1',[buildingId])).rows.length,0)
+
+  const removedSite=await site('delete',siteId,2,{})
+  assert.equal(removedSite.removed,true)
+  assert.equal((await as(both,'select * from bob.sites where id=$1',[siteId])).rows.length,0)
+})
