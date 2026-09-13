@@ -302,10 +302,11 @@ export function createBuildingContext(
     },
     async canDirectEdit(projectId: string, buildingId: string): Promise<boolean> {
       const { db, guard } = connection(projectId)
-      const session = checked(await db.auth.getSession())
-      if (!session.session) return false
+      const sessionResult = await db.auth.getSession()
+      if (sessionResult.error) throw new Error(sessionResult.error.message)
+      if (!sessionResult.data.session) return false
       const row = checked(await db.from('building_members').select('building_id').eq('building_id', buildingId)
-        .eq('auth_user_id', session.session.user.id).maybeSingle()) as Row | null
+        .eq('auth_user_id', sessionResult.data.session.user.id).maybeSingle()) as Row | null
       guard(); return !!row
     },
     async editSite(projectId: string, action: 'create' | 'revise' | 'archive' | 'restore', id: string, expected: number, data: Record<string, unknown>) {
