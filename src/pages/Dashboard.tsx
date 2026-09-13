@@ -162,6 +162,10 @@ export function Dashboard() {
         <Icon name="path" size={24} /><div><h3>Solutions & target</h3>
           <p className="foundation-hint">Keep alternatives, their evidence and the selected project version.</p></div><Icon name="arrow-right" size={20} />
       </Link>
+      <Link to="/artifacts" className="card foundation-section facts-entry">
+        <Icon name="blueprint" size={24} /><div><h3>Plans & drawings</h3>
+          <p className="foundation-hint">Keep the exact drawing version, selected target and measurements the crew is building from.</p></div><Icon name="arrow-right" size={20} />
+      </Link>
       <Link to="/facts" className="card foundation-section facts-entry">
         <Icon name="ruler" size={24} /><div><h3>Measurements & existing parts</h3>
           <p className="foundation-hint">Record lengths, track unknowns and keep the history of parts you may reuse.</p></div>

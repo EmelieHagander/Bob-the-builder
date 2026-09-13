@@ -14,11 +14,12 @@
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
-| documentation placement/precedence | `.claude/agents/archie.md` |
+| documentation placement/precedence | `.claude/agents/archie.md` and `Docs/index.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
+| manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
@@ -26,7 +27,7 @@
 ## Product
 
 - `README.md` — current repository/app overview and implemented route/architecture summary.
-- `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, golden-path acceptance, slice sequence, foundations-first delivery order (media and illustrated task steps before vision) and release gates. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
+- `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
@@ -60,6 +61,8 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `src/pages/Announcements.tsx` — project-wide updates.
 - `src/pages/Food.tsx` + `src/pages/FoodShopping.tsx` — meal/allergy coordination.
 - `src/pages/AreaDetail.tsx` — tasks, materials, crew and reference-image surface.
+- `src/pages/Solutions.tsx` — manual alternatives and exact selected project target.
+- `src/pages/Artifacts.tsx` — manual plans/drawings and their exact target/measurement lineage when milestone 4A is available.
 
 When a new major journey moves toward implementation, give it one canonical success/failure path rather than encoding the contract only in component behavior.
 
@@ -75,6 +78,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
+- `Docs/artifacts.md` — owning manual plan/drawing, exact target/solution lineage and measurement-evidence contract for milestone 4A; its own status distinguishes implementation from deployment.
+- `src/data/artifacts.ts` — project-artifact reads/commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 

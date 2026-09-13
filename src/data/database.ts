@@ -27,6 +27,7 @@ import { createRequestScope } from '../lib/projectRequest'
 import { createProjectFiles } from './projectFiles'
 import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
+import { createArtifacts } from './artifacts'
 import * as mock from './mockData'
 import type {
   Account,
@@ -195,6 +196,7 @@ export const MEDIA_CHANGED_EVENT = 'bob:media-changed'
 const projectFiles = createProjectFiles(db, captureFileContext, () => window.dispatchEvent(new Event(MEDIA_CHANGED_EVENT)))
 const projectFacts = createProjectFacts(db, captureFileContext)
 const solutions = createSolutions(db, captureFileContext)
+const artifacts = createArtifacts(db, captureFileContext)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
 export const getSolutionHistory = solutions.history
@@ -202,6 +204,10 @@ export const getSelectedTarget = solutions.target
 export const getTargetHistory = solutions.decisions
 export const editSolution = solutions.edit
 export const selectTarget = solutions.choose
+export const getProjectArtifacts = artifacts.list
+export const getProjectArtifactVersion = artifacts.version
+export const getProjectArtifactHistory = artifacts.history
+export const editProjectArtifact = artifacts.edit
 export const getProjectFacts = projectFacts.list
 export const getProjectFact = projectFacts.get
 export const getProjectFactHistory = projectFacts.history

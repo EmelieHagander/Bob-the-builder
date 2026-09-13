@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { verifyProjectFacts, verifyFactImageCleanup } from './check-live-project-facts.mjs'
 import { verifySolutions, verifySolutionImageCleanup } from './check-live-solutions.mjs'
+import { verifyArtifacts, verifyArtifactImageCleanup } from './check-live-artifacts.mjs'
 
 const configured = process.env.VITE_SUPABASE_URL?.trim() ?? ''
 const url = /^[a-z0-9]{16,}$/.test(configured) ? 'https://' + configured + '.supabase.co' : configured.replace(/\/$/, '')
@@ -17,7 +18,7 @@ const client = createClient(url, key, options)
 const anonymous = createClient(url, key, options)
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNwDLT/DwADeQHRghinsQAAAABJRU5ErkJggg==', 'base64')
-let signedIn = false, project, facts, solutions
+let signedIn = false, project, facts, solutions, artifacts
 const media = (action, id, data = {}) => client.rpc('media_command', { p_project: project.id, p_action: action, p_media: id, p_data: data })
 try {
   assert(checked(await client.auth.signInWithPassword({ email: 'guest@bob.local', password: 'bob-guest-2026' })).session)
@@ -75,6 +76,7 @@ try {
   assert.equal(attached[0].object_path, image.object_path)
   facts = await verifyProjectFacts(client, project.id, areaId, imageId)
   solutions = await verifySolutions(client, project.id, areaId, imageId, facts)
+  artifacts = await verifyArtifacts(client, project.id, areaId, imageId, facts, solutions)
   const savedTask = checked(await client.from('tasks').select('instructions,status').eq('id', taskId).single())
   assert.equal(savedTask.instructions, 'Manually supplied verification instructions.')
   assert.equal(savedTask.status, 'done')
@@ -103,6 +105,7 @@ try {
       assert.deepEqual(checked(await client.from('media_assets').select('id').eq('project_id', project.id)), [])
       if (facts) await verifyFactImageCleanup(client, project.id, facts)
       if (solutions) await verifySolutionImageCleanup(client, project.id, solutions)
+      if (artifacts) await verifyArtifactImageCleanup(client, project.id, artifacts)
       console.log('All disposable image bytes, metadata and attachments removed through the normal API.')
     } catch (error) {
       console.error('Foundation fixture cleanup needs operator attention: ' + error.message)
