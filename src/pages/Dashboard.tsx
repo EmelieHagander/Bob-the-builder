@@ -18,9 +18,63 @@ export function Dashboard() {
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [])
   const tick = useAuthTick()
   const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
+  const projectId = project?.id ?? ''
+  const { data: planning, loading: planningLoading, error: planningError } = useAsync(
+    () => projectId && db.authEnabled()
+      ? Promise.all([
+          db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0),
+          db.getSelectedTarget(projectId),
+          db.getProjectArtifacts(projectId, '', false, 0),
+        ]).then(([missing, target, artifacts]) => ({ missing, target, artifacts }))
+      : Promise.resolve(null),
+    [projectId, version],
+  )
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
+  const areaById = new Map((areas ?? []).map((area) => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
+  const missingMeasurements = (planning?.missing.items ?? []).filter((item) => item.kind === 'measurement')
+  const selectedTarget = planning?.target.solution ?? null
+  const selectedDecision = planning?.target.decision ?? null
+  const hasCurrentDrawing = Boolean(selectedTarget && selectedDecision && planning?.artifacts.items.some((artifact) =>
+    artifact.targetRevision === selectedDecision.revision
+    && artifact.solutionId === selectedTarget.id
+    && artifact.solutionRevision === selectedTarget.revision,
+  ))
+
+  const nextPlanningAction = missingMeasurements.length > 0
+    ? {
+        to: '/facts?kind=measurement&status=missing',
+        icon: 'ruler',
+        eyebrow: 'Next step',
+        title: `Measure ${missingMeasurements.length} ${missingMeasurements.length === 1 ? 'missing dimension' : 'missing dimensions'}`,
+        text: missingMeasurements[0]
+          ? `Start with ${missingMeasurements[0].subject}${missingMeasurements[0].areaId ? ` in ${areaById.get(missingMeasurements[0].areaId) ?? 'its area'}` : ''}.`
+          : 'Collect the missing measurements before planning from assumptions.',
+      }
+    : !selectedTarget
+      ? {
+          to: '/solutions',
+          icon: 'path',
+          eyebrow: 'Next step',
+          title: 'Choose the shared target',
+          text: 'Your recorded measurements are clear enough to move on to comparing and selecting a solution.',
+        }
+      : !hasCurrentDrawing
+        ? {
+            to: '/artifacts',
+            icon: 'blueprint',
+            eyebrow: 'Next step',
+            title: 'Turn the target into a drawing',
+            text: `“${selectedTarget.title}” is selected. Keep the next plan tied to that exact version and its evidence.`,
+          }
+        : {
+            to: '/areas',
+            icon: 'check-circle',
+            eyebrow: 'Next step',
+            title: 'Review what the crew can do next',
+            text: 'The current planning foundation has measurements, a selected target and a drawing tied to that target. Review areas and tasks for the next build action.',
+          }
 
   return (
     <div className="page">
@@ -47,6 +101,73 @@ export function Dashboard() {
           </button>
         </div>
       </div>
+
+      {db.authEnabled() && project && (
+        <section aria-label="Planning next steps" style={{ marginTop: 20 }}>
+          {planningLoading ? (
+            <div className="card" style={{ padding: 16 }}><Loading label="Checking what the project needs next…" /></div>
+          ) : planningError ? (
+            <div className="card" role="status" style={{ padding: 16 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <Icon name="warning-circle" size={20} color="var(--honey)" />
+                <div><strong>Planning status is unavailable</strong><div className="foundation-hint">Your saved project data is unchanged. Open the planning surfaces directly while this summary is unavailable.</div></div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+              <Link to={nextPlanningAction.to} className="card" style={{ padding: 18, display: 'block', borderColor: 'var(--accent-2)' }}>
+                <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+                    <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyebrow}</div>
+                    <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
+                    <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
+                    <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>
+                      Open <Icon name="arrow-right" size={14} />
+                    </div>
+                  </div>
+                </div>
+              </Link>
+
+              <div className="card" style={{ padding: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+                  <div>
+                    <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
+                    <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>
+                      {missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'Planning gaps'}
+                    </h2>
+                  </div>
+                  {missingMeasurements.length > 0 && <Link to="/facts?kind=measurement&status=missing" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--accent-2)' }}>View all</Link>}
+                </div>
+                {missingMeasurements.length > 0 ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {missingMeasurements.slice(0, 3).map((measurement) => (
+                      <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
+                        <Icon name={measurement.required ? 'warning-circle' : 'circle-dashed'} size={17} color={measurement.required ? 'var(--clay)' : 'var(--ink-faint)'} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{measurement.subject}</div>
+                          <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div>
+                        </div>
+                        <Icon name="arrow-right" size={14} color="var(--ink-faint)" />
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No unknown or estimated measurements</div>
+                    {!selectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
+                    {selectedTarget && !hasCurrentDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
+                    {selectedTarget && hasCurrentDrawing && <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Stat strip */}
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 22 }}>

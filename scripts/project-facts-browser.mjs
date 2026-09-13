@@ -78,8 +78,24 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
   await editor.getByLabel('Required measurement', { exact: true }).check()
   await editor.getByRole('button', { name: 'Save measurement', exact: true }).click()
   await editor.waitFor({ state: 'hidden' })
-  const opening = page.getByRole('article', { name: 'Opening width', exact: true })
+  let opening = page.getByRole('article', { name: 'Opening width', exact: true })
   await opening.getByText('Not measured yet', { exact: true }).waitFor()
+
+  // The home Dashboard is the fast planning path: the saved unknown must surface
+  // as the next step and drill directly into the To measure selection.
+  await page.goto(base)
+  const nextStep = page.getByRole('link').filter({ hasText: 'Measure 1 missing dimension' })
+  await nextStep.getByText('Opening width', { exact: false }).waitFor()
+  const missingCard = page.getByRole('region', { name: 'Planning next steps' })
+  await missingCard.getByText('Still missing', { exact: true }).waitFor()
+  await missingCard.getByText('Opening width', { exact: true }).waitFor()
+  await page.screenshot({ path: 'test-results/actionable-dashboard-' + width + '.png', fullPage: true })
+  await nextStep.click()
+  await page.getByRole('heading', { name: 'Measurements & existing parts', exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Show records', { exact: true }).inputValue(), 'missing')
+  opening = page.getByRole('article', { name: 'Opening width', exact: true })
+  await opening.getByText('Not measured yet', { exact: true }).waitFor()
+
   await opening.getByRole('button', { name: 'Update', exact: true }).click()
   editor = page.getByRole('dialog', { name: 'Update measurement', exact: true })
   await editor.getByLabel('How certain is this value?', { exact: true }).selectOption('estimated')
