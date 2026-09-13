@@ -69,7 +69,7 @@ export function lengthToMm(value: string, unit: string): number {
 
 function required(input: GeometryMeasurement, role: StudWallRole): number {
   if (input.truth === 'unknown' || input.value === null) {
-    throw new Error(`${role.replaceAll('_', ' ')} is unknown. Measure or estimate it explicitly before generating geometry.`)
+    throw new Error(`${role.replace(/_/g, ' ')} is unknown. Measure or estimate it explicitly before generating geometry.`)
   }
   return lengthToThousandthsOfMm(input.value, input.unit)
 }
