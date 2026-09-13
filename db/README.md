@@ -89,6 +89,7 @@ become join tables:
 | `Solution`, `SolutionVersion` | `bob.solutions`, append-only `bob.solution_revisions`, invoker `bob.current_solutions` |
 | `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
 | `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
+| `ProjectArtifact`, `ArtifactVersion` | `bob.artifacts`, append-only `bob.artifact_revisions`, exact `bob.artifact_measurements`, invoker `bob.current_artifacts` / `bob.artifact_measurement_details` |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
@@ -147,8 +148,27 @@ timestamp or edit the applied migration. `bob.solution_command` is the only
 normal-client write path. [Foundation verification](../Docs/foundation-verification.md)
 owns rollout evidence and its limits.
 
-## Wiring the app to it
+## Plans and drawings foundation (4A)
 
+[`Docs/artifacts.md`](../Docs/artifacts.md) owns the manual project-artifact
+contract. Source migration
+`supabase/migrations/20260910180000_project_artifacts.sql` adds `artifacts`,
+append-only `artifact_revisions`, exact `artifact_measurements`, the invoker views
+`current_artifacts` / `artifact_measurement_details` and guarded
+`bob.artifact_command`. It was applied on 2026-09-13 after 3A and is recorded in
+hosted history as `20260913101509_bob_project_artifacts`. Do not replay the
+authoring timestamp or edit the applied migration.
+
+Every saved drawing version pins the exact current target decision, exact selected
+solution revision and any exact measurement revisions it uses. The server derives
+target/solution identity and actor/time; stale target or artifact revisions are
+rejected. A drawing may reuse an authorised same-project image. File removal clears
+the byte reference while retaining its recorded title and revision history.
+[Foundation verification](../Docs/foundation-verification.md) owns the deployed
+Auth/PostgREST/Storage, browser and cleanup evidence. 4A is manual and does not
+claim deterministic geometry, BOM/calculation, stock/shopping or task readiness.
+
+## Wiring the app to it
 
 Already done — all data access goes through the single module
 [`src/data/database.ts`](../src/data/database.ts), which queries these tables
