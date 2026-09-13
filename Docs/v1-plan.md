@@ -39,6 +39,8 @@ The numbered slices describe the product dependency chain, but implementation ha
 
 **Current next foundation:** **Slice 2C — persistent building context.** Although its number is 2C, it is the next implementation milestone from the current repository state. 4A could safely establish manual drawing truth using project/Area scope, but deterministic geometry and calculations should not expand until Bob has persistent physical targets (`Building` / `Space` / `BuildingElement`) that survive individual projects.
 
+**Active implementation ownership (2026-09-13):** PR #42 (`feat/persistent-building-context`) owns the 2C schema/authority/domain foundation. PR #43 (`feat/building-context-ui`) is reserved to the current implementation session for the app-facing `database.ts` seam, reachable manual Building/Spaces UI, navigation, browser verification and honest loading/empty/denied/error states. Do not start overlapping 2C UI/integration work in another session unless #43 is explicitly handed off or this marker is cleared. Update or remove this coordination marker when #43 merges or ownership changes.
+
 **Execution order from here:**
 
 1. deliver the manual 2C building-context foundation and its four acceptance fixtures;
