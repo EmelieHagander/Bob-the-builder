@@ -29,3 +29,10 @@ test('material browser proof scopes Shopping navigation to the page back link', 
   assert.match(script, /locator\('a\.back-link'\).*\^Shopping\$/, 'desktop proof should target the local Shopping back link')
   assert.doesNotMatch(script, /getByRole\('link', \{ name: 'Shopping', exact: true \}\)/, 'desktop sidebar and page back link share the same accessible name')
 })
+
+test('hosted foundation proof composes material planning into the shared disposable project', async () => {
+  const script = await readFile(new URL('../scripts/check-live-foundations.mjs', import.meta.url), 'utf8')
+  assert.match(script, /verifyMaterialPlanning/, 'shared live foundation proof must import material planning verification')
+  assert.match(script, /await verifyMaterialPlanning\(client, anonymous, project\.id, areaId, taskId, facts, artifacts\)/,
+    'material planning live proof must reuse the shared project, area, task, facts and artifact fixture')
+})
