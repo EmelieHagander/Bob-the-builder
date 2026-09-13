@@ -5,6 +5,7 @@ import type { StudWallRole } from '../lib/artifactGeometry'
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
 export type ArtifactGenerator = 'stud_wall_opening_v1'
+export type ArtifactEditAction = 'create' | 'revise' | 'archive' | 'restore' | 'generate' | 'regenerate'
 
 export interface ArtifactMeasurement {
   id: string
@@ -194,16 +195,15 @@ export function createArtifacts(
       guard()
       return { items: scoped(rows.slice(0, 12), projectId).map(artifact), hasMore: rows.length > 12 }
     },
-    async edit(projectId: string, action: 'create' | 'revise' | 'archive' | 'restore', id: string, expected: number, data: Record<string, unknown> = {}) {
+    async edit(projectId: string, action: ArtifactEditAction, id: string, expected: number, data: Record<string, unknown> = {}) {
       const { db, guard } = connection(projectId)
-      const saved = checked(await db.rpc('artifact_command', { p_project: projectId, p_action: action, p_artifact: id, p_expected: expected, p_data: data })) as Row
-      guard()
-      return version(projectId, id, saved.revision)
-    },
-    async generate(projectId: string, action: 'create' | 'regenerate', id: string, expected: number, data: Record<string, unknown>) {
-      const { db, guard } = connection(projectId)
-      const saved = checked(await db.rpc('artifact_geometry_command', {
-        p_project: projectId, p_action: action, p_artifact: id, p_expected: expected, p_data: data,
+      const generated = action === 'generate' || action === 'regenerate'
+      const saved = checked(await db.rpc(generated ? 'artifact_geometry_command' : 'artifact_command', {
+        p_project: projectId,
+        p_action: action === 'generate' ? 'create' : action,
+        p_artifact: id,
+        p_expected: expected,
+        p_data: data,
       })) as Row
       guard()
       return version(projectId, id, saved.revision)
