@@ -458,3 +458,104 @@ When this moves from specified to built:
 9. update `Docs/function-inventory.md` only when runtime support actually changes.
 
 The first implementation must optimise for **a model that can grow**, not for pretending the model is already complete.
+
+---
+
+# 11. Slice 2C implementation contract
+
+This section owns the first runtime contract for the manual building-context foundation. The product concepts above remain broader than this first schema; later geometry/import/AI work must extend these records rather than introduce a parallel representation.
+
+## 11.1 Authority boundary
+
+Persistent physical context cannot depend on `project_id`, because a Site/Building may exist before any Project. The first implementation therefore gives Site and Building their own membership boundary:
+
+- creating a Site gives the caller a direct Site membership;
+- creating a Building requires direct access to its Site when one is supplied and gives the caller direct Building membership;
+- a standalone Building remains valid without a Site;
+- direct Building members may edit accepted/current physical truth;
+- a Project may scope itself to a Site/Building/Space/Element only when the caller has both project access and the required physical access;
+- members of a scoped Project may read that Building context and may create Project-tied proposals, but Project membership alone does not grant unrestricted write authority over the persistent accepted Building;
+- accepting a proposal into persistent current/as-built truth requires direct Building membership;
+- access to one Building never implies access to another Building merely because both share a Site;
+- raw client writes to revision/history/membership/scope tables are denied; guarded commands own mutation and server actor/time.
+
+This keeps Fixture C's isolation meaningful while still allowing a project crew to use the context the project explicitly targets.
+
+## 11.2 First persisted objects
+
+The additive 2C schema uses these identities and append-only histories:
+
+- `sites` + `site_revisions` + `site_members`;
+- `buildings` + `building_revisions` + `building_members`;
+- `building_levels` + `level_revisions`;
+- `building_spaces` + `space_revisions`;
+- `building_elements` + `element_revisions`;
+- `spatial_relationships` + `relationship_revisions`;
+- `project_physical_scope` for explicit Project targets;
+- `area_physical_targets` for optional work-zone → physical-target mapping;
+- `space_measurements` for exact snapshots of existing provenance-aware measurement revisions used by a Space revision.
+
+`Area` remains unchanged. Existing `Measurement`/`ExistingComponent` history is not migrated or rewritten.
+
+## 11.3 Accepted state versus proposals
+
+`Building`, Site and Level metadata are ordinary revisioned accepted records. Spaces, Elements and Relationships need an additional boundary so Project planning cannot silently replace current reality.
+
+Their identity rows keep two revision pointers:
+
+- **latest revision** — the newest recorded accepted or proposed state;
+- **accepted revision** — the state currently treated as physical/as-is truth; nullable for a brand-new proposed object that does not exist physically yet.
+
+Manual capture of known current reality appends an accepted revision and advances both pointers. A Project proposal appends a proposed revision and advances only `latest_revision`; current read views continue to resolve `accepted_revision`. Explicit acceptance appends a new accepted/as-built revision from the proposal and advances both pointers. Earlier accepted and proposed revisions remain readable.
+
+Archive/remove follows the same rule: proposing removal must not make the accepted object disappear until that proposal is accepted.
+
+## 11.4 Truth, source and measurements
+
+Space/Element/Relationship revisions reuse the existing truth vocabulary: `measured`, `provided_spec`, `estimated`, `ai_assessment`, `unknown`. Non-unknown claims require a visible source note; AI/import proposals remain `ai_assessment` until a person deliberately records/accepts stronger evidence.
+
+Space dimensions continue to use the existing `Measurement` seam rather than a second free-form numeric system. When a Space revision links dimensions, the command validates the caller can access the exact project measurement revision and stores an immutable snapshot in `space_measurements`: measurement id + exact revision + subject/value/unit/truth/source + source project. Later measurement edits do not rewrite the older Space revision.
+
+A later Project can therefore target the same stable Space identity while the provenance of the earlier dimension remains explainable.
+
+## 11.5 Narrow topology and elements
+
+The first runtime relationship vocabulary is deliberately small: `adjacent_to`, `shares_boundary_with`, `connects_to`, `above`, `below`, `attached_to`. Slice 2C initially records topology between Spaces; BuildingElements carry a stable Building identity and optional Space location. This is enough to prove the children's-room/office shared-wall case without pretending the first migration is a general graph/BIM engine.
+
+Initial Element kinds are open text constrained to a short label rather than a giant enum. UI suggestions may include wall, opening, window, door, beam, column, radiator, outlet, switch, pipe, drain, ventilation and fixed component.
+
+## 11.6 Project/Area scope
+
+A Project can have zero or more explicit physical targets. A target row points to exactly one Site, Building, Space or Element. Space/Element targets always retain their owning Building in the row so project/building isolation can be checked without inference.
+
+An Area can optionally map to one or more of the Project's physical Building/Space/Element targets. Removing an Area removes only that mapping; it never deletes persistent physical context. Removing a Project removes its scopes/proposals, not the Building/Spaces themselves.
+
+## 11.7 First UI surface
+
+2C gets a focused **Building context** page reachable from existing project/Area surfaces, not a new top-level navigation family. It must let a connected user:
+
+1. create/select an accessible Site/Building;
+2. link the current Project to that physical context;
+3. add an optional Level and one or more Spaces without modelling the rest of the house;
+4. link exact existing measurements to a Space revision;
+5. add a small BuildingElement and a Space↔Space relationship with visible truth/source state;
+6. map a project Area to a physical target;
+7. record a Project proposal for a Space/Element/relationship and see that current/as-is remains unchanged;
+8. explicitly accept a proposal when authorised and inspect retained history.
+
+Demo mode may render an honest not-persisted state; it must not pretend the building model was saved.
+
+## 11.8 2C verification gate
+
+Before 2C may be called deployed, prove in SQL/RLS/data-boundary/browser/live checks:
+
+- Fixture A architecture: a Site/Building/Level/Spaces can exist before a renovation Project and can later be scoped by one;
+- Fixture B: one Space is valid alone, a later neighbouring Space and `shares_boundary_with` relation work without a complete plan, and `ai_assessment` remains visibly non-factual;
+- Fixture C: separate Buildings on one Site do not leak Spaces/Elements/relations across project or backend reads;
+- Fixture D: proposed change does not replace accepted current state; explicit acceptance creates the next accepted revision while prior state/history remains;
+- raw writes, actor spoofing, foreign targets and stale revisions are denied;
+- exact measurement snapshots remain pinned after later fact edits;
+- project/Area deletion only removes scopes/mappings, while explicit Building deletion/revocation follows the physical authority boundary;
+- 320/390/1280px UI covers create/read/revise/propose/accept/history/reload/project-switch recovery;
+- deployed Auth/PostgREST behavior is proven separately from browser HTTP fixtures;
+- no AI/import call is required for this manual foundation.
