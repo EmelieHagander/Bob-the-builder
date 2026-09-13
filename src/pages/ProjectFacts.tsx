@@ -11,12 +11,14 @@ import { ProjectImages, StoredImage } from '../components/ProjectImages'
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const name = (record: ProjectFact) => record.kind === 'measurement' ? record.subject : record.name
+const compactPrimary = { minHeight: 42, padding: '8px 13px', fontSize: 13.5 }
+const compactSecondary = { minHeight: 40, padding: '8px 7px', fontSize: 13, border: 0, background: 'transparent', boxShadow: 'none' }
 
 function SourceImage({ projectId, imageId, title }: { projectId: string; imageId: string | null; title: string }) {
   const [open, setOpen] = useState(false)
   if (!imageId) return title ? <p className="foundation-hint">Source image removed: {title}</p> : null
   return <>
-    <button type="button" className="btn" onClick={() => setOpen(true)}>View source image</button>
+    <button type="button" className="btn" style={compactPrimary} onClick={() => setOpen(true)}>View source image</button>
     {open && <Modal title={title} wide onClose={() => setOpen(false)}>
       <StoredImage projectId={projectId} image={{ id: imageId, title }} original />
     </Modal>}
@@ -24,7 +26,7 @@ function SourceImage({ projectId, imageId, title }: { projectId: string; imageId
 }
 
 function FactSummary({ record }: { record: ProjectFact }) {
-  return <div className="fact-summary">
+  return <div className="fact-summary" style={{ margin: '6px 0' }}>
     {record.kind === 'measurement' ? <>
       <strong>{describeMeasurement(record)}</strong>
       <span className="image-purpose">{TRUTH_LABELS[record.truth]}</span>
@@ -210,7 +212,10 @@ export function ProjectFacts() {
   const kind: FactKind = params.get('kind') === 'component' ? 'component' : 'measurement'
   const areaId = params.get('area') ?? ''
   const componentId = kind === 'measurement' ? params.get('part') ?? '' : ''
-  const [status, setStatus] = useState<'active' | 'missing' | 'archived'>('active')
+  const requestedStatus = params.get('status')
+  const status: 'active' | 'missing' | 'archived' = requestedStatus === 'archived'
+    ? 'archived'
+    : kind === 'measurement' && requestedStatus === 'missing' ? 'missing' : 'active'
   const [offset, setOffset] = useState(0)
   const [version, setVersion] = useState(0)
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit' | 'history' | 'lifecycle'; record: ProjectFact } | null>(null)
@@ -220,59 +225,74 @@ export function ProjectFacts() {
   const component = selected?.kind === 'component' ? selected : undefined
   const { data, loading, error } = useAsync(() => db.getProjectFacts(projectId, kind, { areaId, componentId, status }, offset),
     [projectId, kind, areaId, componentId, status, offset, version])
-  useEffect(() => { setOffset(0); setModal(null) }, [areaId, componentId, kind])
-  function navigateFilter(nextKind: FactKind, area: string, part = '') {
-    setOffset(0); setStatus('active')
-    setParams({ kind: nextKind, ...(area ? { area } : {}), ...(part ? { part } : {}) })
+  useEffect(() => { setOffset(0); setModal(null) }, [areaId, componentId, kind, status])
+  function navigateFilter(nextKind: FactKind, area: string, part = '', nextStatus: typeof status = status) {
+    setOffset(0)
+    const safeStatus = nextKind === 'component' && nextStatus === 'missing' ? 'active' : nextStatus
+    setParams({
+      kind: nextKind,
+      ...(area ? { area } : {}),
+      ...(part ? { part } : {}),
+      ...(safeStatus !== 'active' ? { status: safeStatus } : {}),
+    })
   }
   const saved = () => { setModal(null); setOffset(0); setVersion(n => n + 1) }
   return <div className="page project-facts">
-    <Link to="/" className="btn"><Icon name="arrow-left" size={16} /> Dashboard</Link>
-    <div className="page-head">
+    <Link to="/" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Dashboard</Link>
+    <div className="page-head" style={{ gap: 12 }}>
       <div><h1 className="page-title">Measurements & existing parts</h1>
         <p className="page-sub">Keep what you know, what needs measuring and what may be reused.</p></div>
-      <button className="btn btn-primary" disabled={!db.authEnabled() || Boolean(areasError) || !areas || Boolean(componentId && (partLoading || !component || component.archived))}
+      <button className="btn btn-primary" style={compactPrimary} disabled={!db.authEnabled() || Boolean(areasError) || !areas || Boolean(componentId && (partLoading || !component || component.archived))}
         onClick={() => setModal({ mode: 'create' })}>Add {kind === 'measurement' ? 'measurement' : 'existing part'}</button>
     </div>
     {!db.authEnabled() && <p className="card fact-card">This demo does not save measurements or existing parts. Open a connected project to use them.</p>}
-    <div className="foundation-actions fact-tabs" role="group" aria-label="Project fact type">
-      <button className={'btn' + (kind === 'measurement' ? ' btn-primary' : '')} aria-pressed={kind === 'measurement'} onClick={() => navigateFilter('measurement', areaId)}>Measurements</button>
-      <button className={'btn' + (kind === 'component' ? ' btn-primary' : '')} aria-pressed={kind === 'component'} onClick={() => navigateFilter('component', areaId)}>Existing parts</button>
+    <div className="foundation-actions fact-tabs" role="group" aria-label="Project fact type" style={{ gap: 8 }}>
+      <button className={'btn' + (kind === 'measurement' ? ' btn-primary' : '')} style={compactPrimary} aria-pressed={kind === 'measurement'} onClick={() => navigateFilter('measurement', areaId, '', status)}>Measurements</button>
+      <button className={'btn' + (kind === 'component' ? ' btn-primary' : '')} style={compactPrimary} aria-pressed={kind === 'component'} onClick={() => navigateFilter('component', areaId, '', status)}>Existing parts</button>
     </div>
     <div className="fact-filters">
-      <Field label="Filter by area"><select style={inputStyle} value={areaId} disabled={Boolean(componentId)} onChange={e => navigateFilter(kind, e.target.value)}>
+      <Field label="Filter by area"><select style={inputStyle} value={areaId} disabled={Boolean(componentId)} onChange={e => navigateFilter(kind, e.target.value, componentId, status)}>
         <option value="">All areas</option>{areas?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select></Field>
-      <Field label="Show records"><select style={inputStyle} value={status} onChange={e => { setOffset(0); setStatus(e.target.value as typeof status) }}>
+      <Field label="Show records"><select style={inputStyle} value={status} onChange={e => navigateFilter(kind, areaId, componentId, e.target.value as typeof status)}>
         <option value="active">Active</option>{kind === 'measurement' && <option value="missing">To measure</option>}<option value="archived">Archived</option>
       </select></Field>
     </div>
     {componentId && <div className="card fact-card">
       <p>{component ? 'Measurements for ' + component.name + (component.archived ? ' (archived part)' : '') : 'Loading selected part…'}</p>
       {partError && <p role="alert">This part is unavailable in the current project.</p>}
-      <button className="btn" onClick={() => navigateFilter('measurement', areaId)}>Show all measurements</button>
+      <button className="btn" style={compactPrimary} onClick={() => navigateFilter('measurement', areaId, '', status)}>Show all measurements</button>
     </div>}
     {areasError && <p role="alert">Areas could not be loaded. Reload the project before adding records.</p>}
     {loading ? <Loading /> : error ? <div role="alert"><FormError>{error.message}</FormError>
-      <button className="btn" onClick={() => setVersion(n => n + 1)}>Reload records</button></div> : <>
+      <button className="btn" style={compactPrimary} onClick={() => setVersion(n => n + 1)}>Reload records</button></div> : <>
       {!data?.items.length && <p className="card fact-card">
-        {status === 'archived' ? 'No archived records in this selection.' : kind === 'measurement' ? 'No measurements in this selection. Add a known length or an unknown one to collect later.' : 'No existing parts in this selection. Record what you already have.'}
+        {status === 'archived' ? 'No archived records in this selection.' : status === 'missing' ? 'Nothing is waiting to be measured in this selection.' : kind === 'measurement' ? 'No measurements in this selection. Add a known length or an unknown one to collect later.' : 'No existing parts in this selection. Record what you already have.'}
       </p>}
-      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)}>
-        <h3>{name(record)}</h3><FactSummary record={record} />
-        <p className="foundation-hint">{areas?.find(a => a.id === record.areaId)?.name ?? 'Project as a whole'} · Version {record.revision}
+      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)} style={{ padding: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h3 style={{ margin: 0, lineHeight: 1.18 }}>{name(record)}</h3>
+            <FactSummary record={record} />
+          </div>
+          {record.kind === 'measurement' && record.required && <Icon name="warning-circle" size={18} color="var(--clay)" />}
+        </div>
+        <p className="foundation-hint" style={{ margin: '5px 0 8px' }}>{areas?.find(a => a.id === record.areaId)?.name ?? 'Project as a whole'} · Version {record.revision}
           {record.kind === 'measurement' && record.componentId ? ' · Linked to an existing part' : ''}</p>
-        <details><summary>Source and notes</summary><FactDetails record={record} /></details>
-        <div className="foundation-actions">
-          {!record.archived && <button className="btn" onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
-          <button className="btn" onClick={() => setModal({ mode: 'history', record })}>History</button>
-          {record.kind === 'component' && <button className="btn" onClick={() => navigateFilter('measurement', record.areaId ?? '', record.id)}>Measurements for part</button>}
-          <button className="btn" onClick={() => setModal({ mode: 'lifecycle', record })}>{record.archived ? 'Restore' : 'Archive'}</button>
+        {record.kind === 'measurement' && record.source && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 8px', lineHeight: 1.35 }}><strong>Source:</strong> {record.source}</p>}
+        {record.kind === 'component' && record.condition && <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 8px', lineHeight: 1.35 }}><strong>Condition:</strong> {record.condition}</p>}
+        <details><summary style={{ fontSize: 13.5, fontWeight: 700 }}>Source and notes</summary><FactDetails record={record} /></details>
+        <div className="foundation-actions" style={{ marginTop: 8, gap: 4, alignItems: 'center' }}>
+          {!record.archived && record.kind === 'measurement' && <button className="btn btn-primary" style={compactPrimary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
+          {record.kind === 'component' && <button className="btn btn-primary" style={compactPrimary} onClick={() => navigateFilter('measurement', record.areaId ?? '', record.id, 'active')}>Measurements</button>}
+          {!record.archived && record.kind === 'component' && <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'edit', record })}>Update</button>}
+          <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'history', record })}>History</button>
+          <button className="btn" style={compactSecondary} onClick={() => setModal({ mode: 'lifecycle', record })}>{record.archived ? 'Restore' : 'Archive'}</button>
         </div>
       </article>)}</div>
       <div className="foundation-actions">
-        {offset > 0 && <button className="btn" onClick={() => setOffset(n => Math.max(0, n - 24))}>Previous records</button>}
-        {data?.hasMore && <button className="btn" onClick={() => setOffset(n => n + 24)}>Next records</button>}
+        {offset > 0 && <button className="btn" style={compactPrimary} onClick={() => setOffset(n => Math.max(0, n - 24))}>Previous records</button>}
+        {data?.hasMore && <button className="btn" style={compactPrimary} onClick={() => setOffset(n => n + 24)}>Next records</button>}
       </div>
     </>}
     {(modal?.mode === 'create' || modal?.mode === 'edit') && <FactEditor projectId={projectId} kind={kind}
