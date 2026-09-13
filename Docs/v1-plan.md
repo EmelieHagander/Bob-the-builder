@@ -521,7 +521,16 @@ Natural follow-on work includes:
 - PDF/offline work packs;
 - richer automatic change propagation;
 - more supported construction assemblies;
-- product/catalog integrations.
+- product/catalog integrations;
+- a source-backed **Building Knowledge Library** for reusable construction methods, materials, assemblies, safety guidance and manufacturer/regulatory references.
+
+#### Building Knowledge Library — planned later, not a V1 gate
+
+Project context and general construction knowledge are different truth classes. The project/context system tells Bob what is currently true about *this* project, building, area, measurement, selected solution or drawing. A future Building Knowledge Library may give Bob reusable construction knowledge, but that material must never become evidence that a concrete project fact is true.
+
+When this work starts, keep it as a separate knowledge/retrieval plane that can be combined with the screen-aware Ask bob runtime rather than seeding generic building text into project tables or the Project Catalog. Source identity, provenance, freshness/versioning and an honest distinction between general guidance and project truth are required properties.
+
+The corpus, source selection, seeding/ingestion, curation, retrieval/reranking and maintenance architecture are intentionally **discovery pending**. This plan is only the scope marker; create a dedicated owning contract and index it when that work becomes implementation-driving rather than inventing those details now.
 
 These should not expand the V1 release boundary.
 
