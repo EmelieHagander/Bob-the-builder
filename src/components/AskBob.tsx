@@ -4,7 +4,7 @@
  * remounts this drawer when project/auth context changes.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
 import type { ChatMessage } from '../data/types'
@@ -14,6 +14,173 @@ const toneColor = {
   clay: { c: 'var(--clay)', bg: 'var(--clay-bg)' },
   honey: { c: '#9A6313', bg: 'var(--honey-bg)' },
   leaf: { c: 'var(--leaf)', bg: 'var(--leaf-bg)' },
+}
+
+const inlineMarkdownPattern = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|`[^`\n]+?`|\*[^*\n]+?\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
+
+function renderInlineMarkdown(text: string, keyPrefix = 'inline'): ReactNode[] {
+  return text.split(inlineMarkdownPattern).map((part, index) => {
+    const key = `${keyPrefix}-${index}`
+    if (!part) return null
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={key}>{renderInlineMarkdown(part.slice(2, -2), `${key}-strong`)}</strong>
+    }
+    if (part.startsWith('~~') && part.endsWith('~~')) {
+      return <del key={key}>{renderInlineMarkdown(part.slice(2, -2), `${key}-del`)}</del>
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={key} style={{ background: 'var(--surface-2)', borderRadius: 5, padding: '1px 4px', fontSize: '0.92em' }}>{part.slice(1, -1)}</code>
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={key}>{renderInlineMarkdown(part.slice(1, -1), `${key}-em`)}</em>
+    }
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/)
+    if (link) {
+      return (
+        <a key={key} href={link[2]} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>
+          {link[1]}
+        </a>
+      )
+    }
+    return <Fragment key={key}>{part}</Fragment>
+  })
+}
+
+function isMarkdownBlockStart(line: string) {
+  const trimmed = line.trim()
+  return !trimmed
+    || /^```/.test(trimmed)
+    || /^#{1,3}\s+/.test(trimmed)
+    || /^[-*+]\s+/.test(trimmed)
+    || /^\d+\.\s+/.test(trimmed)
+    || /^>\s?/.test(trimmed)
+    || /^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)
+}
+
+/**
+ * Bob commonly answers in Markdown. Render the useful chat subset directly as
+ * React elements so model output stays readable without accepting raw HTML.
+ */
+function MarkdownText({ text }: { text: string }) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const blocks: ReactNode[] = []
+  let i = 0
+  let blockIndex = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    if (!trimmed) {
+      i += 1
+      continue
+    }
+
+    if (/^```/.test(trimmed)) {
+      const code: string[] = []
+      i += 1
+      while (i < lines.length && !/^```/.test(lines[i].trim())) {
+        code.push(lines[i])
+        i += 1
+      }
+      if (i < lines.length) i += 1
+      blocks.push(
+        <pre key={`code-${blockIndex++}`} style={{ margin: 0, padding: '10px 12px', overflowX: 'auto', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 8, fontSize: 12.5, lineHeight: 1.5, whiteSpace: 'pre' }}>
+          <code>{code.join('\n')}</code>
+        </pre>,
+      )
+      continue
+    }
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/)
+    if (heading) {
+      const content = renderInlineMarkdown(heading[2], `heading-${blockIndex}`)
+      const headingStyle = { margin: 0, fontSize: heading[1].length === 1 ? 17 : heading[1].length === 2 ? 16 : 15, lineHeight: 1.3 }
+      blocks.push(
+        heading[1].length === 1
+          ? <h1 key={`heading-${blockIndex++}`} style={headingStyle}>{content}</h1>
+          : heading[1].length === 2
+            ? <h2 key={`heading-${blockIndex++}`} style={headingStyle}>{content}</h2>
+            : <h3 key={`heading-${blockIndex++}`} style={headingStyle}>{content}</h3>,
+      )
+      i += 1
+      continue
+    }
+
+    const unordered = trimmed.match(/^[-*+]\s+(.+)$/)
+    if (unordered) {
+      const items: string[] = []
+      while (i < lines.length) {
+        const match = lines[i].trim().match(/^[-*+]\s+(.+)$/)
+        if (!match) break
+        items.push(match[1])
+        i += 1
+      }
+      blocks.push(
+        <ul key={`ul-${blockIndex++}`} style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, `ul-${blockIndex}-${itemIndex}`)}</li>)}
+        </ul>,
+      )
+      continue
+    }
+
+    const ordered = trimmed.match(/^\d+\.\s+(.+)$/)
+    if (ordered) {
+      const items: string[] = []
+      let start = 1
+      while (i < lines.length) {
+        const match = lines[i].trim().match(/^(\d+)\.\s+(.+)$/)
+        if (!match) break
+        if (!items.length) start = Number(match[1])
+        items.push(match[2])
+        i += 1
+      }
+      blocks.push(
+        <ol key={`ol-${blockIndex++}`} start={start} style={{ margin: 0, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {items.map((item, itemIndex) => <li key={itemIndex}>{renderInlineMarkdown(item, `ol-${blockIndex}-${itemIndex}`)}</li>)}
+        </ol>,
+      )
+      continue
+    }
+
+    if (/^>\s?/.test(trimmed)) {
+      const quote: string[] = []
+      while (i < lines.length) {
+        const match = lines[i].trim().match(/^>\s?(.*)$/)
+        if (!match) break
+        quote.push(match[1])
+        i += 1
+      }
+      blocks.push(
+        <blockquote key={`quote-${blockIndex++}`} style={{ margin: 0, paddingLeft: 10, borderLeft: '3px solid var(--line)', color: 'var(--ink-soft)' }}>
+          {renderInlineMarkdown(quote.join(' '), `quote-${blockIndex}`)}
+        </blockquote>,
+      )
+      continue
+    }
+
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      blocks.push(<hr key={`hr-${blockIndex++}`} style={{ width: '100%', border: 0, borderTop: '1px solid var(--line)' }} />)
+      i += 1
+      continue
+    }
+
+    const paragraph: string[] = []
+    while (i < lines.length && !isMarkdownBlockStart(lines[i])) {
+      paragraph.push(lines[i].trim())
+      i += 1
+    }
+    if (!paragraph.length) {
+      paragraph.push(trimmed)
+      i += 1
+    }
+    blocks.push(
+      <p key={`p-${blockIndex++}`} style={{ margin: 0 }}>
+        {renderInlineMarkdown(paragraph.join(' '), `p-${blockIndex}`)}
+      </p>,
+    )
+  }
+
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{blocks}</div>
 }
 
 function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: string) => void }) {
@@ -39,7 +206,7 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
         }}
       >
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
-        <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+        {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
           <p>Stored project information; measurements and specifications are not verified.</p>
