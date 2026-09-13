@@ -16,6 +16,26 @@ const toneColor = {
   leaf: { c: 'var(--leaf)', bg: 'var(--leaf-bg)' },
 }
 
+const CHAT_HISTORY_PREFIX = 'bob:ask-bob-history:v1'
+const MAX_SAVED_MESSAGES = 80
+
+function parseSavedChat(raw: string | null): ChatMessage[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is ChatMessage => {
+        if (!item || typeof item !== 'object') return false
+        const message = item as Partial<ChatMessage>
+        return (message.from === 'bob' || message.from === 'user') && typeof message.text === 'string'
+      })
+      .slice(-MAX_SAVED_MESSAGES)
+  } catch {
+    return []
+  }
+}
+
 const inlineMarkdownPattern = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|`[^`\n]+?`|\*[^*\n]+?\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g
 
 function renderInlineMarkdown(text: string, keyPrefix = 'inline'): ReactNode[] {
@@ -270,15 +290,49 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
   const [extra, setExtra] = useState<ChatMessage[]>([])
+  const [historyKey, setHistoryKey] = useState<string | null>(null)
+  const [historyReady, setHistoryReady] = useState(false)
   const [working, setWorking] = useState(false)
   const scope = useRef(createRequestScope())
   useEffect(() => () => scope.current.invalidate(), [project.id])
+
+  useEffect(() => {
+    let cancelled = false
+    setExtra([])
+    setHistoryKey(null)
+    setHistoryReady(false)
+    void db.getCurrentUser()
+      .then((me) => {
+        if (cancelled) return
+        const key = `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
+        let saved: ChatMessage[] = []
+        try { saved = parseSavedChat(localStorage.getItem(key)) } catch { /* storage can be unavailable */ }
+        if (cancelled) return
+        setHistoryKey(key)
+        setExtra((current) => [...saved, ...current])
+        setHistoryReady(true)
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryReady(true)
+      })
+    return () => { cancelled = true }
+  }, [project.id])
+
+  useEffect(() => {
+    if (!historyReady || !historyKey) return
+    try {
+      if (extra.length === 0) localStorage.removeItem(historyKey)
+      else localStorage.setItem(historyKey, JSON.stringify(extra.slice(-MAX_SAVED_MESSAGES)))
+    } catch {
+      // Private browsing/storage quota must not break the assistant.
+    }
+  }, [extra, historyKey, historyReady])
 
   const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
   const send = async () => {
     const text = draft.trim()
-    if (!text || working) return
+    if (!text || working || !historyReady) return
     const isCurrent = scope.current.capture()
     setDraft('')
     push({ from: 'user', text })
@@ -370,7 +424,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             placeholder="Ask bob about this project…"
             style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }}
           />
-          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working} style={{ minWidth: 44, minHeight: 44, ...(working ? { opacity: 0.55 } : {}) }}>
+          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || !historyReady} style={{ minWidth: 44, minHeight: 44, ...(working || !historyReady ? { opacity: 0.55 } : {}) }}>
             <Icon name="paper-plane-right" weight="fill" size={16} />
           </button>
         </form>

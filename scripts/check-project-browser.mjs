@@ -95,9 +95,7 @@ try {
     }
     await page.goto(`${base}#/signin`)
     await page.getByRole('heading', { name: 'Sign in', exact: true }).waitFor()
-    await page.getByPlaceholder('you@example.se').fill(user.email)
-    await page.locator('input[type="password"]').fill('fixture-password')
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+    await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
     let drawer = await openBob('A')
     await send('Which boards?')
@@ -138,17 +136,21 @@ try {
     assert.equal(requests.at(-1).projectId, 'B')
     await drawer.getByRole('textbox', { name: 'Question for bob' }).fill('Unsent draft from B')
     drawer = await switchProject('A')
+    await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
+    assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
+    assert.equal(await drawer.locator('summary').count(), 1, 'Project A restores its own saved source disclosure')
+    assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Project B history must not leak into project A')
     const lateResponse = page.waitForResponse(response => response.url() === `${api}/functions/v1/ask-bob` && response.request().postDataJSON().message === 'Slow question')
     slow.resolve()
     await (await lateResponse).finished()
     // Let the fetch continuation and React render complete before asserting absence.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-    assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
-    assert.equal(await drawer.locator('summary').count(), 0)
-    assert.equal(await drawer.getByText(/OLD DELAYED ANSWER|Answer for Porch [AB]/).count(), 0)
+    assert.equal(await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).count(), 0)
     await page.reload()
     drawer = await openBob('A')
-    assert.equal(await drawer.locator('summary').count(), 0, 'Reload keeps project selection without reviving chat')
+    await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
+    assert.equal(await drawer.locator('summary').count(), 1, 'Reload restores saved project chat with evidence')
+    assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Reload keeps project histories isolated')
 
     if (viewport.width === 1280) {
       slow = deferred()
@@ -164,7 +166,7 @@ try {
     }
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Ask bob ${viewport.width}px: explicit project, sources, failures, A → B → A late response, draft reset and reload: OK`)
+    console.log(`Ask bob ${viewport.width}px: explicit project, saved per-project chat, sources, failures, A → B → A late response, draft reset and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()
