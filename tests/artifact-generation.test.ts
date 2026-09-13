@@ -35,8 +35,8 @@ async function fact(project: string, uid: string, action: string, id: string, ex
 async function solution(project: string, uid: string, action: string, id: string | null, expected: number, data: any) {
   return (await as(uid, 'select bob.solution_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
 }
-async function generate(project: string, uid: string, action: string, artifact: string, expected: number, data: any) {
-  return (await as(uid, 'select bob.artifact_geometry_command($1,$2,$3,$4,$5) data', [project,action,artifact,expected,JSON.stringify(data)])).rows[0].data as any
+async function generate(project: string, uid: string, action: string, artifactId: string, expected: number, data: any) {
+  return (await as(uid, 'select bob.artifact_geometry_command($1,$2,$3,$4,$5) data', [project,action,artifactId,expected,JSON.stringify(data)])).rows[0].data as any
 }
 async function artifact(project: string, uid: string, action: string, id: string, expected: number, data: any = {}) {
   return (await as(uid, 'select bob.artifact_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
@@ -138,7 +138,7 @@ test('unknown geometry fails and estimates stay concept-only', async () => {
 })
 
 test('old generation stays pinned after measurements and accepted physical state change', async () => {
-  await fact('A',one,'revise',measureIds.opening_width,1,m('opening width','1210',{toString(){return 'measured'}} as any))
+  await fact('A',one,'revise',measureIds.opening_width,1,m('opening width','1210','measured'))
   await node(u(2),'revise',u(3),1,{name:'Children room revised',kind:'bedroom',truth:'unknown',measurements:[],change_note:'Rename room'})
   const old=(await as(one,'select space_revision,current_space_revision from bob.artifact_generation_details where artifact_id=$1 and artifact_revision=1',[u(30)])).rows[0] as any
   assert.equal(old.space_revision,1); assert.equal(old.current_space_revision,2)
