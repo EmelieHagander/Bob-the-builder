@@ -222,7 +222,16 @@ export interface ChatMessage {
 }
 export type { Measurement, ExistingComponent, ProjectFact, FactKind, FactFilter, FactPage } from './projectFacts'
 export type { Solution, SolutionVersion, SolutionMeasurement, TargetDecision, SelectedTarget } from './solutions'
-export type { ArtifactKind, ArtifactStatus, ArtifactMeasurement, ProjectArtifact, ArtifactVersion } from './artifacts'
+export type {
+  ArtifactKind,
+  ArtifactStatus,
+  ArtifactMeasurement,
+  ArtifactGenerator,
+  ArtifactGeometryInput,
+  ArtifactGeneration,
+  ProjectArtifact,
+  ArtifactVersion,
+} from './artifacts'
 export type {
   PhysicalTruth,
   PhysicalTargetKind,
