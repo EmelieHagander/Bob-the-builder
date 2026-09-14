@@ -653,7 +653,7 @@ Exact phase controls, transition affordances and page mapping remain UI-discover
 
 ### Building context — grow with need
 
-The merged app now has a dedicated **Building & spaces** view for editing/visualising the sparse physical model without introducing a new bottom-navigation destination. It supports the bottom-up manual path where only the relevant room/space is known, and the same model is ready for later top-down plan ingestion. Production/live verification of this merged UI is still pending.
+The merged app now has a dedicated **Building & spaces** view for editing/visualising the sparse physical model without introducing a new bottom-navigation destination. It supports the bottom-up manual path where only the relevant room/space is known, and the same model is ready for later top-down plan ingestion. The dedicated browser proof and hosted Auth/PostgREST live check pass; `Docs/foundation-verification.md` owns the exact evidence.
 
 V1 still requires both capture directions:
 
