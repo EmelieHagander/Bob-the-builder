@@ -2,7 +2,7 @@
 
 > **Status:** specified product direction / pre-implementation.  
 > **Owns:** the lifecycle vocabulary for a Project and its Areas/workstreams: which phase they are in, what happens in each phase, what Bob should help with, what the human owns, and the readiness criteria for moving forward.  
-> **Does not own:** physical Building truth (`Docs/building-model.md`), detailed Bob context architecture, or the UI composition for each phase. UI alignment is the explicit next discovery step.
+> **Does not own:** physical Building truth (`Docs/building-model.md`), detailed Bob context architecture, or rendered UI composition. Phase-aware UI composition is owned by `Docs/project-phase-ui.md`.
 
 ## Why phases matter
 
@@ -59,7 +59,7 @@ This is not three Projects merely because the rooms are in different phases.
 
 A large Project can remain useful as one shared container for team, events, access, Shopping and overall goal while Areas progress independently.
 
-The exact rule for how the Project phase is chosen or rolled up from Area phases is still implementation/UI discovery. Do not silently infer it from whichever Area is most advanced or least advanced.
+Project phase is **not** silently rolled up from the most advanced, least advanced or majority Area. The user owns the overall Project phase; Bob/UI may recommend a transition from Area/readiness signals but do not auto-change it.
 
 ## Why Area is the workstream seam — current-code audit
 
@@ -86,6 +86,8 @@ That is insufficient for independently maturing Areas.
 Example: Bedroom can be Build-ready against one selected design while Guestroom is still comparing alternatives. Selecting a Guestroom solution must not make Bedroom drawings/material requirements appear stale merely because a global project target changed.
 
 **Implementation implication:** selected target needs an Area-safe scope model (for example Project-level or Area-level target ownership, or an equivalent invariant) before independent Area phases can be considered complete. The exact schema/API is not decided here.
+
+`Docs/project-phase-ui.md` owns how this prerequisite must appear in the UI and which existing surfaces/scripts are affected.
 
 ## Four context axes — keep them separate
 
@@ -396,7 +398,7 @@ Product intent:
 - never destroy completed/as-built evidence merely to reorganise scheduling;
 - show the user what moves versus what stays before confirmation.
 
-Exact migration/command behavior is later implementation work.
+Exact migration/command behavior is later implementation work. UI requirements for this future command live in `Docs/project-phase-ui.md`.
 
 # Phase transitions
 
@@ -412,7 +414,9 @@ Target direction:
 - an Area may move backwards when new evidence invalidates assumptions without automatically moving every other Area;
 - Task operational state remains task status/readiness rather than another phase layer.
 
-The exact persistence/API/transition/roll-up model is implementation work and is not claimed here.
+Legacy records may remain unclassified until a human chooses a phase; current tasks/dates/data volume must not silently classify them.
+
+The exact persistence/API/transition model is implementation work and is not claimed here.
 
 # What phases should drive
 
@@ -428,20 +432,21 @@ Once implemented, Project/Area phase should be available to:
 
 It should **guide relevance**, not hide valid information or prevent cross-phase questions.
 
-# Explicit next discovery — UI alignment
+# Phase-aware UI — specified
 
-The next session should map the existing UI to this lifecycle **before restructuring screens**.
+The UI discovery is now captured in [`project-phase-ui.md`](project-phase-ui.md).
 
-Questions to resolve there:
+The accepted direction is:
 
-- what is the phase-aware Project home/dashboard?
-- how are Area phases shown without turning the UI into project-management software?
-- how does a user see `Project = Build` while Bedroom = Complete, Office = Build and Guestroom = Design?
-- which current pages belong to which phase versus remaining cross-phase utilities?
-- what should become the primary next action for each Project/Area phase?
-- when should actions such as **Create mockup**, **Create drawing**, **Create material plan** and **How do I?** appear?
-- how do Building/Space context and Project/Area phase stay visible without clutter?
-- how should **defer / create new Project from this Area** work in the UI?
-- how do we preserve field-first Build/Today UX while making Concept/Design/Planning understandable?
+- Project Home shows overall ProjectPhase + mixed Area-phase summary + project focus;
+- Areas show their own phase and local next action rather than universal Build-oriented progress;
+- Area Detail becomes the phase-aware workstream home while keeping existing facts/solutions/drawings/material/tasks reachable;
+- phases do not become routes or sidebar navigation;
+- Task/Today remain field-first and lightweight;
+- Account distinguishes lifecycle phase from calendar/schedule status;
+- legacy phases are explicitly classified rather than guessed;
+- phase transitions are human-controlled with readiness context;
+- UI must not claim Area-scoped Design/Planning until selected-target/artifact/material lineage is scope-safe underneath;
+- defer/split is a later explicit lineage-preserving operation, not destructive reparenting.
 
-This document intentionally does **not** answer those UI questions yet. UI alignment should consume this phase model together with `Docs/ui-index.md` and Vera before implementation.
+That document also owns the current affected-script map, implementation order and 320/390/1280px browser-proof expectations.
