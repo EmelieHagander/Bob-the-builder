@@ -14,9 +14,19 @@ test('material planning migrations stay additive after the deployed building-con
   assert(materialTail > materialStart, 'material planning hardening must remain additive after the 4B2a base migration')
 })
 
-test('manual material planning persists the explicit 4B2a method version', async () => {
-  const sql = await readFile(new URL('20260913210000_material_planning.sql', migrations), 'utf8')
+test('manual material planning persists one shared method identity across server and release proofs', async () => {
+  const [sql, browser, live] = await Promise.all([
+    readFile(new URL('20260913210000_material_planning.sql', migrations), 'utf8'),
+    readFile(new URL('../scripts/material-planning-browser.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/check-live-material-planning.mjs', import.meta.url), 'utf8'),
+  ])
+  assert.match(sql, /method_key := 'manual'/, 'server truth must identify the 4B2a manual calculation method')
   assert.match(sql, /method_version := '4B2a-v1'/, 'manual requirements must retain the 4B2a calculation contract version')
+  assert.match(browser, /source_kind: 'manual', method_key: 'manual', method_version: '4B2a-v1'/,
+    'browser HTTP fixture must mirror the deployed server method identity')
+  assert.match(live, /assert\.equal\(requirement\.method_key, 'manual'\)/,
+    'hosted release proof must assert the deployed server method identity')
+  assert.doesNotMatch(browser + live, /manual_base/, 'release proofs must not invent a different manual method key')
 })
 
 test('stock and reusable-component capacity checks serialize concurrent reservations', async () => {
