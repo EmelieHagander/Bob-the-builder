@@ -199,7 +199,10 @@ begin
     if p_action='select' then
       select * into h from bob.solutions where id=p_solution and project_id=p_project;
       if not found then raise exception 'Solution unavailable'; end if;
-      if (area is null and h.area_id is not null) or (area is not null and h.area_id is distinct from area) then
+      -- Preserve the shipped Project-wide behavior: a Project target may select
+      -- an Area-authored alternative. The stricter same-Area rule applies only
+      -- when creating/replacing an Area-specific target pointer.
+      if area is not null and h.area_id is distinct from area then
         raise exception 'Choose a solution from the same Project/Area scope.';
       end if;
       if h.current_revision is distinct from (p_data->>'solution_revision')::integer then raise exception 'Solution changed. Reload before selecting.'; end if;
