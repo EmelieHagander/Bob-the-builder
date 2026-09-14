@@ -13,10 +13,17 @@ export interface SolutionMeasurement {
 }
 export interface SolutionVersion extends Solution { measurements: SolutionMeasurement[] }
 export interface TargetDecision {
-  projectId: string; revision: number; solutionId: string | null; solutionRevision: number | null
+  projectId: string; areaId: string | null; revision: number; solutionId: string | null; solutionRevision: number | null
   reason: string; actor: string; recordedAt: string
 }
-export interface SelectedTarget { decision: TargetDecision; solution: SolutionVersion | null }
+export interface SelectedTarget {
+  decision: TargetDecision
+  solution: SolutionVersion | null
+  /** Scope the caller asked for. Null means Project target. */
+  requestedAreaId: string | null
+  /** True when an Area has no own pointer and is currently using the Project target. */
+  inherited: boolean
+}
 type Row = Record<string, any>
 function checked<T>(result: { data: T; error: { message: string } | null }): T {
   if (result.error) throw new Error(result.error.message)
@@ -29,8 +36,11 @@ function solution(r: Row): Solution {
     reason: r.change_note, actor: r.actor_label, recordedAt: r.recorded_at }
 }
 function decision(r: Row): TargetDecision {
-  return { projectId: r.project_id, revision: r.revision, solutionId: r.solution_id,
+  return { projectId: r.project_id, areaId: r.area_id ?? null, revision: r.revision, solutionId: r.solution_id,
     solutionRevision: r.solution_revision, reason: r.reason, actor: r.actor_label, recordedAt: r.recorded_at }
+}
+function emptyDecision(projectId: string, areaId: string | null): TargetDecision {
+  return { projectId, areaId, revision: 0, solutionId: null, solutionRevision: null, reason: '', actor: '', recordedAt: '' }
 }
 
 export function createSolutions(client: SupabaseClient<any, any, any> | null, capture: (id: string) => () => void) {
@@ -57,14 +67,27 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
       revision: m.measurement_revision, subject: m.subject, value: m.value, unit: m.unit, truth: m.truth,
       source: m.source, latestRevision: m.latest_revision, archived: m.currently_archived })) }
   }
-  async function target(projectId: string): Promise<SelectedTarget> {
+  async function target(projectId: string, areaId = ''): Promise<SelectedTarget> {
     const { db, guard } = connection(projectId)
-    const r = checked(await db.from('current_target').select('*').eq('project_id', projectId).maybeSingle()) as Row | null
-    guard()
-    const d = r ? decision(scoped([r], projectId)[0]) : { projectId, revision: 0, solutionId: null, solutionRevision: null, reason: '', actor: '', recordedAt: '' }
+    const requestedAreaId = areaId || null
+    let r: Row | null = null
+    let inherited = false
+    if (requestedAreaId) {
+      r = checked(await db.from('current_target').select('*').eq('project_id', projectId).eq('area_id', requestedAreaId).maybeSingle()) as Row | null
+      guard()
+      if (!r) {
+        r = checked(await db.from('current_target').select('*').eq('project_id', projectId).is('area_id', null).maybeSingle()) as Row | null
+        guard()
+        inherited = Boolean(r)
+      }
+    } else {
+      r = checked(await db.from('current_target').select('*').eq('project_id', projectId).is('area_id', null).maybeSingle()) as Row | null
+      guard()
+    }
+    const d = r ? decision(scoped([r], projectId)[0]) : emptyDecision(projectId, requestedAreaId)
     const s = d.solutionId && d.solutionRevision ? await version(projectId, d.solutionId, d.solutionRevision) : null
     guard()
-    return { decision: d, solution: s }
+    return { decision: d, solution: s, requestedAreaId, inherited }
   }
   return {
     version, target,
@@ -83,10 +106,11 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
       guard()
       return { items: scoped(rows.slice(0, 12), projectId).map(solution), hasMore: rows.length > 12 }
     },
-    async decisions(projectId: string, offset = 0) {
+    async decisions(projectId: string, offset = 0, areaId = '') {
       const { db, guard } = connection(projectId)
-      const rows = checked(await db.from('target_revisions').select('*').eq('project_id', projectId)
-        .order('revision', { ascending: false }).range(offset, offset + 12)) as Row[]
+      let q = db.from('target_revisions').select('*').eq('project_id', projectId)
+      q = areaId ? q.eq('area_id', areaId) : q.is('area_id', null)
+      const rows = checked(await q.order('revision', { ascending: false }).range(offset, offset + 12)) as Row[]
       guard()
       return { items: scoped(rows.slice(0, 12), projectId).map(decision), hasMore: rows.length > 12 }
     },
@@ -96,13 +120,13 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
       guard()
       return version(projectId, id, saved.revision)
     },
-    async choose(projectId: string, selected: Solution | null, expected: number, reason: string) {
+    async choose(projectId: string, selected: Solution | null, expected: number, reason: string, areaId = '') {
       const { db, guard } = connection(projectId)
       checked(await db.rpc('solution_command', { p_project: projectId, p_action: selected ? 'select' : 'clear',
         p_solution: selected?.id ?? null, p_expected: expected,
-        p_data: { reason, ...(selected ? { solution_revision: selected.revision } : {}) } }))
+        p_data: { reason, area_id: areaId || null, ...(selected ? { solution_revision: selected.revision } : {}) } }))
       guard()
-      return target(projectId)
+      return target(projectId, areaId)
     },
   }
 }
