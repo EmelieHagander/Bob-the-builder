@@ -21,7 +21,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: python scripts/apply-today-phase-context-patch.py
+      - name: Apply patch
+        run: |
+          python scripts/apply-today-phase-context-patch.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/data/databaseCore.ts')
+          s = p.read_text()
+          old = "areaPhase: row.area_phase as Area['phase'],"
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected one Today area phase cast, found {s.count(old)}')
+          p.write_text(s.replace(old, "areaPhase: (row.area_phase ?? null) as NonNullable<Area['phase']> | null,", 1))
+          PY
       - run: npm ci
       - run: npm test
       - run: npm run check:edge
