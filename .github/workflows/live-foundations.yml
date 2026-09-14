@@ -10,6 +10,7 @@ on:
       - scripts/check-live-solutions.mjs
       - scripts/check-live-artifacts.mjs
       - scripts/check-live-artifact-geometry.mjs
+      - scripts/check-live-material-planning.mjs
       - scripts/check-live-building-context.mjs
       - supabase/migrations/20260913124500_persistent_building_context.sql
       - supabase/migrations/20260913135500_expose_physical_proposal_state.sql
@@ -20,6 +21,10 @@ on:
       - supabase/migrations/20260913193100_artifact_geometry_command_grant.sql
       - supabase/migrations/20260913193200_artifact_geometry_invariants.sql
       - supabase/migrations/20260913194000_artifact_generation_space_revision_index.sql
+      - supabase/migrations/20260913210000_material_planning.sql
+      - supabase/migrations/20260913210100_material_planning_hardening.sql
+      - supabase/migrations/20260913210200_material_planning_publish.sql
+      - supabase/migrations/20260913210300_material_planning_reservation_serialization.sql
       - .github/workflows/live-foundations.yml
 
 permissions:
@@ -37,7 +42,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify images, steps, facts, solutions, manual/generated drawings and building context with disposable data
+      - name: Verify images, steps, facts, solutions, drawings, material planning and building context with disposable data
         run: node scripts/check-live-foundations.mjs
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}

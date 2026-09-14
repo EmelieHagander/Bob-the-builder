@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyProjectFacts, verifyFactImageCleanup } from './check-live-project-facts.mjs'
 import { verifySolutions, verifySolutionImageCleanup } from './check-live-solutions.mjs'
 import { verifyArtifacts, verifyArtifactImageCleanup } from './check-live-artifacts.mjs'
+import { verifyMaterialPlanning } from './check-live-material-planning.mjs'
 import { verifyBuildingContext } from './check-live-building-context.mjs'
 
 const configured = process.env.VITE_SUPABASE_URL?.trim() ?? ''
@@ -78,6 +79,7 @@ try {
   facts = await verifyProjectFacts(client, project.id, areaId, imageId)
   solutions = await verifySolutions(client, project.id, areaId, imageId, facts)
   artifacts = await verifyArtifacts(client, project.id, areaId, imageId, facts, solutions)
+  await verifyMaterialPlanning(client, anonymous, project.id, areaId, taskId, facts, artifacts)
   await verifyBuildingContext(client, anonymous, project.id, areaId, facts)
   const savedTask = checked(await client.from('tasks').select('instructions,status').eq('id', taskId).single())
   assert.equal(savedTask.instructions, 'Manually supplied verification instructions.')

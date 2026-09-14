@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
 import { MaterialModal } from '../components/editors'
@@ -12,9 +13,11 @@ function parseCost(cost: string): number {
 
 export function Shopping() {
   const [version, setVersion] = useState(0)
+  const projectId = db.getActiveProjectId() ?? ''
   const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [version])
   const { data: materials } = useAsync(() => db.getMaterials(), [version])
   const { data: areas } = useAsync(() => db.getAreas(), [])
+  const { data: planSources } = useAsync(() => db.getMaterialShoppingSources(projectId), [projectId, version])
   const [adding, setAdding] = useState(false)
   const [bought, setBought] = useState<Record<string, boolean>>({})
 
@@ -39,9 +42,12 @@ export function Shopping() {
   const total = materials?.length ?? 0
   const picked = Object.values(bought).filter(Boolean).length
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
+  const sourceByMaterial = new Map((planSources ?? []).filter(item => item.materialId).map(item => [item.materialId!, item]))
 
   const row = (m: Material, last: boolean) => {
     const on = bought[m.id]
+    const source = sourceByMaterial.get(m.id)
+    const displayStatus = on ? 'delivered' : m.status === 'delivered' ? 'needed' : m.status
     return (
       <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 2px', borderBottom: last ? 'none' : '1px solid var(--line)', cursor: 'pointer' }}>
         <input type="checkbox" checked={!!on} onChange={() => toggle(m)} style={{ display: 'none' }} />
@@ -49,8 +55,11 @@ export function Shopping() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{m.name}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{m.qty} · {m.area} · {m.supplier}</div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: source?.sourceOutdated || source?.sourceStale || source?.shoppingEdited ? 'var(--clay)' : 'var(--ink-faint)' }}>
+            {source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : 'Manual shopping item'}
+          </div>
         </div>
-        <span className="no-print"><MaterialPill status={m.status} /></span>
+        <span className="no-print"><MaterialPill status={displayStatus} /></span>
         <span style={{ fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600, width: 78, textAlign: 'right' }}>{m.cost}</span>
       </label>
     )
@@ -63,7 +72,8 @@ export function Shopping() {
           <h1 className="page-title">Shopping list</h1>
           <p className="page-sub">Every material across the build, grouped by category.</p>
         </div>
-        <div className="cluster no-print">
+        <div className="cluster no-print foundation-actions">
+          <Link className="btn" to="/material-plan"><Icon name="calculator" size={15} /> Material plan</Link>
           <button className="btn" onClick={() => window.print()}><Icon name="printer" size={15} /> Print</button>
           <button className="btn btn-primary" onClick={() => setAdding(true)}>
             <Icon name="plus" weight="bold" size={15} /> Add material
@@ -90,7 +100,7 @@ export function Shopping() {
           <EmptyState icon="package" title="Nothing on the list yet" hint="Add the first material — it lands here grouped by category." />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', marginTop: 18, alignItems: 'start' }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', marginTop: 18, alignItems: 'start' }}>
           {groups.map((g) => (
             <div key={g.category} className="card" style={{ padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>

@@ -21,6 +21,7 @@
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
+| material requirements, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
@@ -33,6 +34,7 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop.
+- `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
 - `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
