@@ -20,7 +20,11 @@ text = text.replace('  artifact_id uuid;\n  artifact_revision integer;\n', '  v_
 text = text.replace("  artifact_id := nullif(p_data->>'artifact_id','')::uuid;\n  artifact_revision := nullif(p_data->>'artifact_revision','')::integer;\n  if artifact_id is null or artifact_revision is null then", "  v_artifact_id := nullif(p_data->>'artifact_id','')::uuid;\n  v_artifact_revision := nullif(p_data->>'artifact_revision','')::integer;\n  if v_artifact_id is null or v_artifact_revision is null then")
 text = text.replace('  where ah.id=artifact_id and ah.project_id=p_project and ah.current_revision=artifact_revision\n', '  where ah.id=v_artifact_id and ah.project_id=p_project and ah.current_revision=v_artifact_revision\n')
 text = text.replace('  where i.project_id=p_project and i.artifact_id=artifact_id and i.artifact_revision=artifact_revision;\n', '  where i.project_id=p_project and i.artifact_id=v_artifact_id and i.artifact_revision=v_artifact_revision;\n')
-if 'artifact bob.artifact_revisions' in text or 'into artifact,generation' in text or '  artifact_id uuid;' in text:
+text = text.replace('  basis text;\n', '  v_basis text;\n')
+text = text.replace('  basis := format(\n', '  v_basis := format(\n')
+text = text.replace("    'basis',basis,\n", "    'basis',v_basis,\n")
+text = text.replace('      basis=basis\n', '      basis=v_basis\n')
+if 'artifact bob.artifact_revisions' in text or 'into artifact,generation' in text or '  artifact_id uuid;' in text or '  basis text;' in text or 'basis=basis' in text:
     raise SystemExit('4B2b SQL variable fixes did not apply')
 migration.write_text(text)
 
