@@ -11,6 +11,7 @@ import type {
 import { TRUTH_LABELS, describeMeasurement } from '../data/projectFacts'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
+import { PhasePill } from '../components/PhaseUI'
 import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 import { StudWallGeneratorModal } from '../components/StudWallGeneratorModal'
@@ -46,13 +47,15 @@ function Evidence({ items }: { items: ArtifactMeasurement[] }) {
 }
 
 function TargetLineage({ value, current }: { value: ProjectArtifact; current: SelectedTarget }) {
-  const stillCurrent = current.decision.revision === value.targetRevision
+  const comparable = (value.areaId ?? null) === current.requestedAreaId
+  const stillCurrent = comparable && current.decision.revision === value.targetRevision
     && current.solution?.id === value.solutionId
     && current.solution?.revision === value.solutionRevision
   return <div className="fact-source">
     <strong>Based on {value.solutionTitle} · Version {value.solutionRevision}</strong>
     <span>Target decision {value.targetRevision}</span>
-    {!stillCurrent && <p className="solution-attention">The project target has changed since this drawing version. This version keeps its original target lineage.</p>}
+    {!comparable && <p className="foundation-hint">Open this drawing in its Area scope to compare it with that Area's current target.</p>}
+    {comparable && !stillCurrent && <p className="solution-attention">The selected target for this scope changed after this drawing version. This version keeps its original target lineage.</p>}
   </div>
 }
 
@@ -151,7 +154,6 @@ function Editor({ projectId, value, areas, initialArea, target, onClose, onSaved
   const [kind, setKind] = useState<ProjectArtifact['kind']>(value?.kind ?? 'plan')
   const [status, setStatus] = useState<ProjectArtifact['status']>(value?.status ?? 'concept')
   const [assumptions, setAssumptions] = useState(value?.assumptions ?? '')
-  const [area, setArea] = useState(initialArea)
   const [reason, setReason] = useState('')
   const [refs, setRefs] = useState(value?.measurements ?? [])
   const [source, setSource] = useState({ id: value?.imageId ?? null, title: value?.imageTitle ?? '' })
@@ -159,6 +161,7 @@ function Editor({ projectId, value, areas, initialArea, target, onClose, onSaved
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const selected = target.solution
+  const scopeArea = areas.find(item => item.id === initialArea)
 
   return <Modal title={value ? 'Revise drawing' : 'Add drawing'} onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={async event => {
@@ -175,20 +178,19 @@ function Editor({ projectId, value, areas, initialArea, target, onClose, onSaved
           source_media_id: source.id,
           target_revision: target.decision.revision,
           measurements: refs.map(item => ({ id: item.id, revision: item.revision })),
-          ...(value ? { change_note: reason } : { area_id: area || null }),
+          ...(value ? { change_note: reason } : { area_id: initialArea || null }),
         })
         onSaved()
       } catch (err) { setError(message(err)) } finally { setBusy(false) }
     }}>
       <fieldset className="foundation-form fact-fieldset" disabled={busy}>
         <div className="fact-source">
-          <strong>Selected project target</strong>
+          <strong>{scopeArea ? `Selected target for ${scopeArea.name}` : 'Selected Project target'}</strong>
           <p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p>
-          <span>Target decision {target.decision.revision}. If this decision changes before save, the save is rejected.</span>
+          <span>Target decision {target.decision.revision}{target.inherited && scopeArea ? ' · inherited from Project' : ''}. If this scope decision changes before save, the save is rejected.</span>
         </div>
+        <p className="foundation-hint">Scope: {scopeArea ? scopeArea.name : 'Project as a whole'}. Change scope by returning to the drawing list and choosing another Area filter.</p>
         <Field label="Drawing title"><input style={inputStyle} required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} /></Field>
-        {!value && <Field label="Area"><select style={inputStyle} value={area} onChange={event => setArea(event.target.value)}>
-          <option value="">Project as a whole</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>}
         <div className="fact-filters">
           <Field label="Drawing type"><select style={inputStyle} value={kind} onChange={event => setKind(event.target.value as ProjectArtifact['kind'])}>
             {Object.entries(KIND_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
@@ -238,7 +240,7 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
     () => db.getProjectArtifactVersion(projectId, id, revision),
     [projectId, id, revision, attempt],
   )
-  if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea="" target={target} onClose={onClose} onSaved={onSaved} />
+  if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <VersionDetails value={data} target={target} />}
   </Modal>
@@ -334,7 +336,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
   const { data, loading, error } = useAsync(async () => {
     const [drawings, target, areas] = await Promise.all([
       db.getProjectArtifacts(projectId, area, archived, offset),
-      db.getSelectedTarget(projectId),
+      db.getSelectedTarget(projectId, area),
       db.getAreas(),
     ])
     return { drawings, target, areas }
@@ -343,31 +345,39 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
   const saved = () => { close(); setAttempt(value => value + 1) }
   const target = data?.target
   const areas = data?.areas ?? []
+  const selectedArea = areas.find(item => item.id === area)
   const canCreate = Boolean(target?.solution)
+  const canGenerate = Boolean(area && target?.solution)
+  const scopeLabel = selectedArea?.name ?? 'Project'
+  const targetQuery = area ? `/solutions?area=${encodeURIComponent(area)}` : '/solutions'
 
   return <div className="page project-artifacts">
-    <Link className="btn" to="/">Dashboard</Link>
-    <div className="page-head"><div><h1 className="page-title">Plans & drawings</h1>
-      <p className="page-sub">Keep the exact plan the crew is building from, with its measurements and target version.</p></div>
+    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/'}>{selectedArea ? `← ${selectedArea.name}` : '← Project'}</Link>
+    <div className="page-head"><div>
+      {selectedArea && <div style={{ marginBottom: 6 }}><PhasePill phase={selectedArea.phase} prefix="Area" /></div>}
+      <h1 className="page-title">Plans & drawings</h1>
+      <p className="page-sub">Keep the exact plan for {selectedArea ? selectedArea.name : 'the Project'}, with its measurements and target version.</p></div>
       <div className="foundation-actions">
-        <button className="btn" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'generate' })}>Generate wall elevation</button>
+        <button className="btn" title={!area ? 'Choose an Area first so deterministic geometry uses the correct Area target and physical scope.' : undefined}
+          disabled={loading || Boolean(error) || !canGenerate} onClick={() => setDialog({ kind: 'generate' })}>Generate wall elevation</button>
         <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button>
       </div></div>
 
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && target && <>
       <section className="card fact-card" aria-label="Drawing target">
-        <h2>Drawing target</h2>
+        <h2>{selectedArea ? `Drawing target · ${selectedArea.name}` : 'Project drawing target'}</h2>
         {target.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
-          <p className="foundation-hint">Target decision {target.decision.revision}. New drawing versions pin this exact decision.</p>
-          <div className="foundation-actions"><Link className="btn" to="/solutions">Review target</Link></div></>
-          : <><p>Choose a project target before creating a plan or drawing.</p>
-            <p className="foundation-hint">Drawings cannot float without a decision about what the project is trying to build.</p>
-            <div className="foundation-actions"><Link className="btn btn-primary" to="/solutions">Choose a target</Link></div></>}
+          {target.inherited && selectedArea && <p className="solution-attention">This Area currently inherits the Project target. Drawings may use it, but a later Area-specific target will make older Area drawings visibly historical.</p>}
+          <p className="foundation-hint">Target decision {target.decision.revision}. New drawing versions pin this exact {target.inherited ? 'inherited ' : ''}decision.</p>
+          <div className="foundation-actions"><Link className="btn" to={targetQuery}>Review target</Link></div></>
+          : <><p>Choose a target for {scopeLabel} before creating a plan or drawing.</p>
+            <p className="foundation-hint">Drawings cannot float without a decision about what this scope is trying to build.</p>
+            <div className="foundation-actions"><Link className="btn btn-primary" to={targetQuery}>Choose a target</Link></div></>}
       </section>
 
-      <div className="fact-filters"><Field label="Filter drawings by area"><select style={inputStyle} value={area} onChange={event => {
+      <div className="fact-filters"><Field label="Drawing scope"><select style={inputStyle} value={area} onChange={event => {
         setOffset(0); setParams(event.target.value ? { area: event.target.value } : {})
-      }}><option value="">All areas</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+      }}><option value="">Project / all Areas</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="Show drawings"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={event => {
         setOffset(0); setArchived(event.target.value === 'archived')
       }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
@@ -375,23 +385,29 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
       <h2>Drawings</h2>
       {!data.drawings.items.length && <p className="card fact-card">No {archived ? 'archived' : 'active'} drawings in this selection.</p>}
       <div className="fact-list artifact-list">{data.drawings.items.map(item => {
-        const current = target.decision.revision === item.targetRevision
+        const comparable = (item.areaId ?? null) === target.requestedAreaId
+        const current = comparable && target.decision.revision === item.targetRevision
           && target.solution?.id === item.solutionId
           && target.solution?.revision === item.solutionRevision
+        const editableInScope = area ? item.areaId === area : item.areaId === null
+        const itemArea = areas.find(candidate => candidate.id === item.areaId)
         return <article className="card fact-card" aria-label={item.title} key={item.id}>
           <h3>{item.title}</h3>
           <div className="foundation-actions"><span className="image-purpose">{KIND_LABELS[item.kind]}</span>
             <span className="image-purpose">{STATUS_LABELS[item.status]}</span>
+            {itemArea && <span className="image-purpose">{itemArea.name}</span>}
             {item.generator && <span className="image-purpose">Generated</span>}
             <span className="image-purpose">Version {item.revision}{item.archived ? ' · Archived' : ''}</span></div>
           <p>{item.description}</p>
           <p className="foundation-hint">Based on {item.solutionTitle} · Version {item.solutionRevision} · target decision {item.targetRevision}</p>
-          {!current && <p className="solution-attention">Project target changed after this drawing version. Review before building from it.</p>}
+          {comparable && !current && <p className="solution-attention">The selected target for this scope changed after this drawing version. Review before building from it.</p>}
+          {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}
           <div className="foundation-actions">
             <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>View evidence</button>
-            {!item.archived && canCreate && (item.generator
+            {!item.archived && canCreate && editableInScope && (item.generator
               ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
               : <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>)}
+            {!editableInScope && itemArea && <Link className="btn" to={`/artifacts?area=${encodeURIComponent(itemArea.id)}`}>Open {itemArea.name}</Link>}
             <button className="btn" onClick={() => setDialog({ kind: 'history', record: item })}>History</button>
             <button className="btn" onClick={() => setDialog({ kind: 'archive', record: item })}>{item.archived ? 'Restore' : 'Archive'}</button>
           </div>
@@ -401,7 +417,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     </>}
 
     {dialog?.kind === 'create' && target && <Editor projectId={projectId} areas={areas} initialArea={area} target={target} onClose={close} onSaved={saved} />}
-    {dialog?.kind === 'generate' && target && <StudWallGeneratorModal projectId={projectId} target={target} areas={areas}
+    {dialog?.kind === 'generate' && target && area && <StudWallGeneratorModal projectId={projectId} target={target} areas={areas.filter(item => item.id === area)}
       initialArea={area} onClose={close} onSaved={saved} />}
     {dialog?.kind === 'regenerate' && target && <GenerationDialog projectId={projectId} record={dialog.record} areas={areas}
       target={target} onClose={close} onSaved={saved} />}
@@ -424,6 +440,6 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
 export function Artifacts() {
   const id = db.getActiveProjectId()
   if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Plans & drawings</h1>
-    <p>This demo does not save plans and drawings. Open a connected project to use them.</p><Link className="btn" to="/">Dashboard</Link></div>
+    <p>This demo does not save plans and drawings. Open a connected project to use them.</p><Link className="btn" to="/">Project</Link></div>
   return <ConnectedArtifacts key={id} projectId={id} />
 }
