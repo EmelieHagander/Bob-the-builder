@@ -95,5 +95,10 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
   assert.equal(areaPointerAfterProject.solution_id, areaSolution.id)
   assert.equal(projectPointerAfter.solution_id, projectSolution.id)
 
+  const today = checked(await client.from('today_tasks').select('area_id,area_phase').eq('project_id', projectId).eq('area_id', areaId))
+  assert(today.length > 0, 'The disposable Area should retain at least one open Today task')
+  assert(today.every(row => row.area_id === areaId && row.area_phase === 'complete'),
+    'Today task projection must expose the exact current Area lifecycle phase')
+
   console.log('Live Project/Area phases: Concept default, explicit reversible transitions/history, completion guard, raw/anonymous denial and scope-safe Project/Area targets passed. No AI invoked.')
 }

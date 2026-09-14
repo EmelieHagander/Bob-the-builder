@@ -209,7 +209,9 @@ export interface FoodGroup {
 
 export interface TodayTask {
   id: string
+  areaId: string | null
   areaName: string
+  areaPhase: AreaPhase | null
   name: string
   skill: SkillLevel
   status: TaskStatus

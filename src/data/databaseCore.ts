@@ -172,7 +172,7 @@ type AnnouncementRow = {
 }
 type TodayTaskRow = {
   id: string; area_name: string; name: string; skill: string; status: string
-  assignee_ids: string[]
+  assignee_ids: string[]; area_id: string; area_phase: string | null
 }
 
 /* ─────────────────────────── ACTIVE PROJECT ───────────────────────────
@@ -1857,13 +1857,15 @@ export async function getTodayTasks(): Promise<TodayTask[]> {
   const rows = unwrap<TodayTaskRow[]>(
     await db
       .from('today_tasks')
-      .select('id, area_name, name, skill, status, assignee_ids')
+      .select('id, area_name, name, skill, status, assignee_ids, area_id, area_phase')
       .eq('project_id', pid) // column added to the view in db/migrations/0006
       .order('id'),
   )
   return rows.map((row) => ({
     id: row.id,
+    areaId: row.area_id,
     areaName: row.area_name,
+    areaPhase: (row.area_phase ?? null) as NonNullable<Area['phase']> | null,
     name: row.name,
     skill: row.skill as SkillLevel,
     status: row.status as TaskStatus,
