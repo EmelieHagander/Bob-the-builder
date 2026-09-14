@@ -7,11 +7,12 @@
 1. `CLAUDE.md` — product/session invariants.
 2. `.claude/agents/vera.md` — Vera's review contract.
 3. The relevant product behavior source (`README.md`, PRD, or current journey contract).
-4. `src/theme.css` — current canonical visual tokens and global responsive rules.
-5. `src/components/Layout.tsx` — shell/navigation/Ask bob anatomy.
-6. `src/components/ui.tsx`, `src/components/form.tsx`, `src/components/Modal.tsx` — shared UI machinery.
-7. The page/component being changed.
-8. `.claude/skills/verify/SKILL.md` — runtime verification.
+4. For Project/Area lifecycle UI, `Docs/project-phases.md` + `Docs/project-phase-ui.md`.
+5. `src/theme.css` — current canonical visual tokens and global responsive rules.
+6. `src/components/Layout.tsx` — shell/navigation/Ask bob anatomy.
+7. `src/components/ui.tsx`, `src/components/form.tsx`, `src/components/Modal.tsx` — shared UI machinery.
+8. The page/component being changed.
+9. `.claude/skills/verify/SKILL.md` — runtime verification.
 
 ## Current visual language
 
@@ -24,6 +25,7 @@ Current implementation anchors:
 - Baloo 2 is used for display character; Hanken Grotesk/system sans is used for working text.
 - Semantic status color remains meaningful: green/leaf = ready/done, honey/amber = pending/in progress, clay/red = blocked/warning.
 - Cards and pills are compact, practical information containers; they should not become ornamental chrome.
+- Phase UI should use text/icon + mostly neutral/brand treatment so lifecycle phase does not compete with readiness/blocker colors.
 - The original `Docs/Mockups and initial plans/bob-the-builder.html` is a historical style/composition anchor, not a pixel or behavior specification.
 
 ## Surface anatomy
@@ -40,6 +42,8 @@ Owned by `src/components/Layout.tsx`:
 
 Do not create another shell/navigation system inside feature pages.
 
+Project phases are **state**, not routes: do not add Concept / Design / Planning / Build / Complete as shell navigation.
+
 ### Page frame
 
 Current pages generally compose:
@@ -52,35 +56,43 @@ Use existing classes/primitives before inventing a local dialect.
 
 | Surface | Primary user job | Important UI constraint |
 |---|---|---|
-| Dashboard | see project status/attention | scan quickly; drill down rather than overload |
-| Task detail (`/tasks/:taskId`) | follow instructions and illustrated steps | keep required checks visible; expand images on demand |
-| Project facts (`/facts`) | record lengths, unknowns and existing parts | reached from Dashboard/Area; source labels and version history stay explicit; no extra global navigation |
-| Solutions (`/solutions`) | compare alternatives and select an exact target version | reached from Dashboard/Area; project-wide target, saved evidence and decision history remain explicit |
-| Areas / Area detail | manage work, materials, crew, references | task/material state must stay legible and actionable |
+| Project Home / Dashboard (`/`) | understand overall Project phase, mixed Area phases and what deserves attention next | scan quickly; Project focus must not pretend one global planning step applies to every Area |
+| Areas / Area detail | understand each workstream's phase and act locally | Area phase + one primary next action first; Build-oriented progress only dominates when useful |
+| Task detail (`/tasks/:taskId`) | follow instructions and illustrated steps | keep required checks visible; lightweight Area context only; do not turn into a phase dashboard |
+| Project facts (`/facts`) | record lengths, unknowns and existing parts | reached from Project/Area; source labels and version history stay explicit; phase provides context, not truth promotion |
+| Solutions (`/solutions`) | compare alternatives and select an exact target version for the relevant scope | Area-scoped decisions must not overwrite another Area's selected target; decision history remains explicit |
+| Plans/drawings (`/artifacts`) | inspect/create target-linked build artifacts | selected target + stale lineage must be evaluated at the same Project/Area scope |
+| Material plan (`/material-plan`) | understand requirements, stock/reuse and purchase need | Area/task scope stays visible; target/drawing lineage must not bleed across Areas |
+| Building context (`/building`, `/account/buildings`) | maintain persistent physical truth | Building state stays separate from Project/Area lifecycle phase |
 | People | understand crew skills/needs | skills and safety-relevant dietary info must be easy to scan |
 | Events / Event detail | organise a build day | attendance and day plan must be obvious |
-| Today | know what to do now | volunteer-facing, minimal, phone-first |
+| Today | know what to do now | volunteer-facing, minimal, phone-first; no phase rail/setup controls |
 | Shopping | buy what the build needs | checkbox interaction and print cleanliness matter |
 | Food | feed the crew safely | allergy/dietary information must never be buried |
 | Announcements | share changes with the whole crew | pinned/current updates should dominate old noise |
-| Ask bob | ask about the current build | honest working/failure states; must not block unrelated UI accidentally |
-| Account | choose/manage projects | project context must remain clear when switching |
+| Ask bob | ask about the current build | honest working/failure states; phase/current view may guide prompts but must not become hidden authority |
+| Account | choose/manage projects | Project phase and schedule are distinct; mixed Area phase summary may appear on project cards |
 | Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; Swedish phone steps |
+
+`Docs/project-phase-ui.md` owns the detailed page-by-page lifecycle composition and implementation impact map.
 
 ## Frontend invariants
 
 - **Phone and field use are first-class.** Controls must remain usable one-handed and in outdoor conditions.
-- **Today is a fast path, not another dashboard.** Do not bury a volunteer's immediate assignment under project-management detail.
+- **Today is a fast path, not another dashboard.** Do not bury a volunteer's immediate assignment under project-management detail. Phase-aware redesign should also make Today reachable in one tap on mobile.
 - **Reuse before invention.** Shared buttons/cards/pills/form/modal machinery should be extended intentionally rather than cloned per page.
 - **Tokens before repeated raw values.** If a visual value becomes reusable, add/use a token in `src/theme.css` rather than scattering copies.
-- **State must be honest.** Loading, empty, error, permission-denied, not-configured and saved states should be visibly distinct where relevant.
+- **State must be honest.** Loading, empty, error, permission-denied, not-configured, unclassified phase and saved states should be visibly distinct where relevant.
 - **UI is not authorization.** Disabled/hidden controls are UX; backend/RLS/domain commands own permission truth.
 - **AI output must show uncertainty when it matters.** A polished card or drawing must not turn an estimate/assessment into a verified fact.
+- **Phase is not readiness.** `Design`, `Planning` or `Build` must not be styled as proof that required evidence/materials/checks are ready.
 - **Responsive shell must survive feature work.** In particular, do not introduce fixed elements that collide with mobile nav or the Ask bob affordance.
 - **Print surfaces stay print-clean.** Shopping/other printable views should not require background colors or interactive chrome to make sense.
 
 ## Stable shared ownership
 
+- Phase-aware Project/Area composition: `Docs/project-phase-ui.md`
+- Lifecycle/product meaning: `Docs/project-phases.md`
 - Theme/tokens/global layout: `src/theme.css`
 - App shell/navigation: `src/components/Layout.tsx`
 - Shared UI primitives/hooks: `src/components/ui.tsx`
@@ -111,5 +123,11 @@ For any material frontend change, review in this order:
 A UI change is not done because the screenshot looks good. For the promised user goal, trace:
 
 `reachable UI → correct state/authority → real read/action → visible success/error/unknown → navigation/reload behavior → browser verification`
+
+For phase-aware work, also prove the mixed-phase case:
+
+`Project = Build + Area A = Complete + Area B = Build + Area C = Design`
+
+without target/readiness/history bleeding between Areas.
 
 If the change is docs-only or purely stylistic, state which parts of that chain do not apply rather than pretending they were tested.
