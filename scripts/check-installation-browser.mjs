@@ -111,7 +111,9 @@ try {
   await page.getByRole('heading', { name: 'Bob behöver internet', exact: true }).waitFor()
   await context.setOffline(false)
   await page.getByRole('link', { name: 'Försök igen', exact: true }).click()
-  await page.getByRole('heading', { name: live ? /^Sign in$/ : /^God morgon/ }).waitFor()
+  // Project Home replaced the old greeting Dashboard; retry still proves the
+  // real app shell is reachable after restoring network.
+  await page.getByRole('heading', { name: live ? /^Sign in$/ : /^Skogsstuga$/ }).waitFor()
   assert.deepEqual(errors, [], 'No runtime exceptions in the installation flow')
   console.log('Real service worker: offline help, retry online and isolated cache: OK')
 } finally {
