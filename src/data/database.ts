@@ -220,6 +220,7 @@ export const getMaterialRequirements = materialPlanning.requirements
 export const getMaterialRequirementVersion = materialPlanning.requirementVersion
 export const getMaterialRequirementHistory = materialPlanning.requirementHistory
 export const editMaterialRequirement = materialPlanning.editRequirement
+export const editDeterministicMaterialRequirement = materialPlanning.editDeterministicRequirement
 export const publishMaterialRequirement = materialPlanning.publish
 export const getMaterialShoppingSources = materialPlanning.shopping
 export const getProjectFacts = projectFacts.list

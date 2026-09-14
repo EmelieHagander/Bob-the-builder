@@ -176,10 +176,10 @@ export async function verifyArtifacts(client, projectId, areaId, imageId, facts,
   const anonymous = createClient(anonymousUrl, anonymousKey, {
     db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
   })
-  await verifyDeterministicArtifactGeometry(client, anonymous, projectId, areaId)
+  const geometry = await verifyDeterministicArtifactGeometry(client, anonymous, projectId, areaId)
 
   console.log('Live drawings: exact target/solution/measurement lineage, stale target/revision denial, server actor, archive/restore, deterministic geometry and project authority passed. No AI invoked.')
-  return { artifactId }
+  return { artifactId, geometryArtifactId: geometry.artifactId }
 }
 
 export async function verifyArtifactImageCleanup(client, projectId, records) {

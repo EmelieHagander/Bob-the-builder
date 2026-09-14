@@ -17,10 +17,10 @@ returns jsonb language plpgsql security definer set search_path='' as $$
 declare
   uid uuid := auth.uid();
   allowed text[];
-  artifact_id uuid;
-  artifact_revision integer;
-  artifact bob.artifact_revisions;
-  generation bob.artifact_generations;
+  v_artifact_id uuid;
+  v_artifact_revision integer;
+  artifact_title text;
+  artifact_status text;
   wall_width_mm numeric;
   wall_height_mm numeric;
   opening_width_mm numeric;
@@ -28,7 +28,7 @@ declare
   has_estimate boolean;
   net_area_m2 numeric;
   normalized_area_m2 numeric;
-  basis text;
+  v_basis text;
   payload jsonb;
   saved jsonb;
   saved_revision integer;
@@ -52,19 +52,19 @@ begin
     raise exception 'Unsupported deterministic material fields. Quantity, unit, basis, source and method are derived by the server.';
   end if;
 
-  artifact_id := nullif(p_data->>'artifact_id','')::uuid;
-  artifact_revision := nullif(p_data->>'artifact_revision','')::integer;
-  if artifact_id is null or artifact_revision is null then
+  v_artifact_id := nullif(p_data->>'artifact_id','')::uuid;
+  v_artifact_revision := nullif(p_data->>'artifact_revision','')::integer;
+  if v_artifact_id is null or v_artifact_revision is null then
     raise exception 'Choose a current generated drawing before calculating material quantity';
   end if;
 
-  select ar.*,g.* into artifact,generation
+  select ar.title,ar.status into artifact_title,artifact_status
   from bob.artifacts ah
   join bob.artifact_revisions ar
     on ar.artifact_id=ah.id and ar.revision=ah.current_revision
   join bob.artifact_generations g
     on g.artifact_id=ar.artifact_id and g.artifact_revision=ar.revision and g.project_id=ar.project_id
-  where ah.id=artifact_id and ah.project_id=p_project and ah.current_revision=artifact_revision
+  where ah.id=v_artifact_id and ah.project_id=p_project and ah.current_revision=v_artifact_revision
     and not ar.archived and g.generator='stud_wall_opening_v1' and g.generator_version=1;
   if not found then
     raise exception 'A current stud_wall_opening_v1 drawing version is required for this calculation';
@@ -80,7 +80,7 @@ begin
   from bob.artifact_geometry_inputs i
   join bob.measurement_revisions r
     on r.measurement_id=i.measurement_id and r.revision=i.measurement_revision and r.project_id=i.project_id
-  where i.project_id=p_project and i.artifact_id=artifact_id and i.artifact_revision=artifact_revision;
+  where i.project_id=p_project and i.artifact_id=v_artifact_id and i.artifact_revision=v_artifact_revision;
 
   if wall_width_mm is null or wall_height_mm is null or opening_width_mm is null or opening_height_mm is null then
     raise exception 'The generated drawing is missing required wall/opening geometry inputs';
@@ -91,18 +91,18 @@ begin
   -- Material quantities are stored to four decimal places. Rounding upward by at
   -- most 0.0001 m2 avoids silently understating the geometry-derived base need.
   normalized_area_m2 := ceil(net_area_m2 * 10000) / 10000;
-  basis := format(
+  v_basis := format(
     'Calculated from %s v%s using stud_wall_net_area 4B2b-v1: (%s mm × %s mm − %s mm × %s mm) ÷ 1,000,000 = %s m²; persisted base quantity %s m² after upward normalization to 0.0001 m². Drawing status: %s. Input certainty: %s.',
-    artifact.title, artifact_revision,
+    artifact_title, v_artifact_revision,
     wall_width_mm, wall_height_mm, opening_width_mm, opening_height_mm,
-    net_area_m2, normalized_area_m2, artifact.status,
+    net_area_m2, normalized_area_m2, artifact_status,
     case when has_estimate then 'contains explicit estimate' else 'measured/provided inputs only' end
   );
 
   payload := p_data || jsonb_build_object(
     'unit','m2',
     'required_quantity',normalized_area_m2::text,
-    'basis',basis,
+    'basis',v_basis,
     'component_allocations','[]'::jsonb
   );
   saved := bob_private.material_requirement_command(p_project,p_action,p_requirement,p_expected,payload);
@@ -112,7 +112,7 @@ begin
   set source_kind='deterministic',
       method_key='stud_wall_net_area',
       method_version='4B2b-v1',
-      basis=basis
+      basis=v_basis
   where project_id=p_project and requirement_id=p_requirement and revision=saved_revision;
   if not found then raise exception 'Calculated material requirement was not persisted'; end if;
 

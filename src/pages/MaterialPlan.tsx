@@ -48,7 +48,7 @@ function StaleNotice({ value }: { value: MaterialRequirement }) {
 function Calculation({ value }: { value: MaterialRequirement }) {
   const available = Number(value.stockQuantity) + Number(value.componentQuantity)
   return <div className="fact-details">
-    <div className="fact-source"><strong>Manual base requirement</strong><span>{formatQuantity(value.requiredQuantity, value.unit)}</span><p>{value.basis}</p></div>
+    <div className="fact-source"><strong>{value.sourceKind === 'deterministic' ? 'Calculated base requirement' : 'Manual base requirement'}</strong><span>{formatQuantity(value.requiredQuantity, value.unit)}</span><p>{value.basis}</p>{value.sourceKind === 'deterministic' && <small>Method {value.methodKey} · {value.methodVersion}</small>}</div>
     <div className="fact-source"><strong>Allowance</strong><span>{numberText(value.wastePercent)}%</span><p>Requirement with allowance: {formatQuantity(value.requiredWithWaste, value.unit)}</p></div>
     <div className="fact-source"><strong>Confirmed available</strong><span>{formatQuantity(String(available), value.unit)}</span><p>Material stock {formatQuantity(value.stockQuantity, value.unit)} · reusable components {formatQuantity(value.componentQuantity, value.unit)}</p></div>
     <div className="fact-source"><strong>Purchase need</strong><span>{formatQuantity(value.purchaseQuantity, value.unit)}</span><p>Rounded up in increments of {formatQuantity(value.purchaseIncrement, value.unit)}.</p></div>
@@ -187,7 +187,7 @@ function RequirementEditor({ projectId, target, value, areas, tasks, artifacts, 
     }}>
       <fieldset className="foundation-form fact-fieldset" disabled={busy}>
         <div className="fact-source"><strong>Selected project target</strong><p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p><span>Target decision {target.decision.revision}. A changed target rejects this save.</span></div>
-        <p className="foundation-hint">The base quantity below is a human-entered project value in 4B2a. Bob is not deriving geometry yet.</p>
+        <p className="foundation-hint">This path records a human-entered base quantity. Use Calculate from drawing when a supported generated wall should own the base quantity instead.</p>
         <Field label="Material / requirement"><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>
         <Field label="Category"><input style={inputStyle} required maxLength={120} value={category} onChange={event => setCategory(event.target.value)} /></Field>
         <div className="fact-filters">
@@ -218,12 +218,91 @@ function RequirementEditor({ projectId, target, value, areas, tasks, artifacts, 
   </Modal>
 }
 
+function DeterministicRequirementEditor({ projectId, target, value, areas, tasks, artifacts, stock, onClose, onSaved }: {
+  projectId: string
+  target: SelectedTarget
+  value?: MaterialRequirementVersion
+  areas: Area[]
+  tasks: Task[]
+  artifacts: ProjectArtifact[]
+  stock: StockItem[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const currentArtifact = value?.artifactId ? artifacts.find(item => item.id === value.artifactId) : undefined
+  const defaultArtifact = currentArtifact ?? artifacts[0]
+  const [id] = useState(() => value?.id ?? crypto.randomUUID())
+  const [name, setName] = useState(value?.name ?? '')
+  const [category, setCategory] = useState(value?.category ?? 'Sheet material')
+  const [area, setArea] = useState(value?.areaId ?? '')
+  const [task, setTask] = useState(value?.taskId ?? '')
+  const [waste, setWaste] = useState(value?.wastePercent ?? '0')
+  const [increment, setIncrement] = useState(value?.purchaseIncrement ?? '1')
+  const [assumptions, setAssumptions] = useState(value?.assumptions ?? '')
+  const [artifactRef, setArtifactRef] = useState(defaultArtifact ? `${defaultArtifact.id}:${defaultArtifact.revision}` : '')
+  const [stockQty, setStockQty] = useState<Record<string, string>>(() => Object.fromEntries((value?.stock ?? []).map(item => [item.id, item.quantity])))
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const selected = target.solution
+  const taskOptions = tasks.filter(item => !area || item.areaId === area)
+  const stockOptions = stock.filter(item => !item.archived && item.status === 'available' && item.unit === 'm2')
+
+  return <Modal title={value ? 'Revise calculated requirement' : 'Calculate material from drawing'} wide onClose={() => { if (!busy) onClose() }}>
+    <form onSubmit={async event => {
+      event.preventDefault(); if (busy || !selected || !artifactRef) return
+      setBusy(true); setError('')
+      try {
+        const [artifactId, artifactRevision] = artifactRef.split(':')
+        await db.editDeterministicMaterialRequirement(projectId, value ? 'revise' : 'create', id, value?.revision ?? 0, {
+          name, category, area_id: area || null, task_id: task || null,
+          waste_percent: waste.trim().replace(',', '.'), purchase_increment: increment.trim().replace(',', '.'),
+          assumptions, artifact_id: artifactId, artifact_revision: Number(artifactRevision), target_revision: target.decision.revision,
+          stock_allocations: stockOptions.flatMap(item => {
+            const quantity = stockQty[item.id]?.trim().replace(',', '.')
+            return quantity && Number(quantity) > 0 ? [{ id: item.id, revision: item.revision, quantity }] : []
+          }),
+          ...(value ? { change_note: reason } : {}),
+        })
+        onSaved()
+      } catch (err) { setError(message(err)) } finally { setBusy(false) }
+    }}>
+      <fieldset className="foundation-form fact-fieldset" disabled={busy}>
+        <div className="fact-source"><strong>Selected project target</strong><p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p><span>Target decision {target.decision.revision}. A changed target rejects this save.</span></div>
+        <p className="foundation-hint">Bob calculates net wall surface from the exact saved stud-wall recipe: wall area minus opening area. The server owns the base quantity, unit, formula and method identity; this form only adds the material meaning, allowance and confirmed stock.</p>
+        <Field label="Material / requirement"><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>
+        <Field label="Category"><input style={inputStyle} required maxLength={120} value={category} onChange={event => setCategory(event.target.value)} /></Field>
+        <div className="fact-filters">
+          <Field label="Area"><select style={inputStyle} value={area} onChange={event => { setArea(event.target.value); setTask('') }}><option value="">Project as a whole</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+          <Field label="Task"><select style={inputStyle} value={task} onChange={event => setTask(event.target.value)}><option value="">No task yet</option>{taskOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
+        </div>
+        <Field label="Generated drawing"><select style={inputStyle} required value={artifactRef} onChange={event => setArtifactRef(event.target.value)}>{artifacts.map(item => <option key={item.id} value={`${item.id}:${item.revision}`}>{item.title} · Version {item.revision} · {item.status === 'concept' ? 'Concept' : item.status === 'build_ready' ? 'Build ready' : 'Measured'}</option>)}</select></Field>
+        <div className="fact-source"><strong>Calculated base</strong><span>m²</span><p>The exact value is calculated and read back on save. Estimated drawing inputs stay visibly Concept; calculation does not upgrade their certainty.</p></div>
+        <div className="fact-filters">
+          <Field label="Waste / allowance %"><input style={inputStyle} inputMode="decimal" required value={waste} onChange={event => setWaste(event.target.value)} /></Field>
+          <Field label="Purchase increment"><input style={inputStyle} inputMode="decimal" required value={increment} onChange={event => setIncrement(event.target.value)} /></Field>
+        </div>
+        <Field label="Assumptions and limits"><textarea style={inputStyle} rows={2} maxLength={4000} value={assumptions} onChange={event => setAssumptions(event.target.value)} /></Field>
+        <div className="fact-details"><h4>Use confirmed material stock</h4>{!stockOptions.length && <p>No Available stock uses m². Add stock outside this form first.</p>}{stockOptions.map(item => <AllocationInput key={item.id} label={item.name} max={item.quantity} value={stockQty[item.id] ?? ''} unit="m2" onChange={next => setStockQty(values => ({ ...values, [item.id]: next }))} />)}</div>
+        {value && <Field label="Reason for change"><input style={inputStyle} required maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></Field>}
+        {error && <div role="alert"><FormError>{error}</FormError></div>}
+        <div className="foundation-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn btn-primary">{busy ? 'Calculating and reading back…' : value ? 'Recalculate and save new version' : 'Save calculated requirement'}</button></div>
+      </fieldset>
+    </form>
+  </Modal>
+}
+
 function RequirementVersionDialog({ projectId, id, revision, target, edit, areas, tasks, artifacts, stock, components, onClose, onSaved }: {
   projectId: string; id: string; revision: number; target: SelectedTarget; edit?: boolean; areas: Area[]; tasks: Task[]; artifacts: ProjectArtifact[]; stock: StockItem[]; components: ExistingComponent[]; onClose: () => void; onSaved: () => void
 }) {
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(() => db.getMaterialRequirementVersion(projectId, id, revision), [projectId, id, revision, attempt])
-  if (data && !loading && !error && edit) return <RequirementEditor projectId={projectId} target={target} value={data} areas={areas} tasks={tasks} artifacts={artifacts} stock={stock} components={components} onClose={onClose} onSaved={onSaved} />
+  if (data && !loading && !error && edit) {
+    const generated = artifacts.filter(item => item.generator === 'stud_wall_opening_v1' && item.targetRevision === target.decision.revision)
+    return data.sourceKind === 'deterministic'
+      ? <DeterministicRequirementEditor projectId={projectId} target={target} value={data} areas={areas} tasks={tasks} artifacts={generated} stock={stock} onClose={onClose} onSaved={onSaved} />
+      : <RequirementEditor projectId={projectId} target={target} value={data} areas={areas} tasks={tasks} artifacts={artifacts} stock={stock} components={components} onClose={onClose} onSaved={onSaved} />
+  }
   return <Modal title={data ? `${data.name} · Version ${data.revision}` : 'Material requirement version'} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
       <Calculation value={data} />
@@ -288,6 +367,7 @@ export function MaterialPlan() {
   const [archived, setArchived] = useState(false)
   const [areaFilter, setAreaFilter] = useState(initialArea)
   const [editor, setEditor] = useState<'new' | { id: string; revision: number } | null>(null)
+  const [calculator, setCalculator] = useState(false)
   const [detail, setDetail] = useState<{ id: string; revision: number; edit?: boolean } | null>(null)
   const [history, setHistory] = useState<MaterialRequirement | null>(null)
   const [archive, setArchive] = useState<MaterialRequirement | null>(null)
@@ -308,25 +388,27 @@ export function MaterialPlan() {
 
   const shoppingByRequirement = new Map((data?.shopping ?? []).map(item => [item.requirementId, item]))
   const selected = data?.target.solution
+  const generatedArtifacts = (data?.artifacts ?? []).filter(item => item.generator === 'stud_wall_opening_v1' && item.targetRevision === data?.target.decision.revision)
 
   return <div className="page material-plan foundation-actions">
-    <div className="page-head"><div><Link to="/shopping" className="back-link">Shopping</Link><h1 className="page-title">Material plan</h1><p className="page-sub">Keep required, already available and still-to-buy quantities connected to the exact project target.</p></div><button className="btn btn-primary" disabled={!selected} onClick={() => setEditor('new')}>Add requirement</button></div>
+    <div className="page-head"><div><Link to="/shopping" className="back-link">Shopping</Link><h1 className="page-title">Material plan</h1><p className="page-sub">Keep required, already available and still-to-buy quantities connected to the exact project target.</p></div><div className="foundation-actions"><button className="btn btn-primary" disabled={!selected} onClick={() => setEditor('new')}>Add requirement</button><button className="btn" disabled={!selected || !generatedArtifacts.length} onClick={() => setCalculator(true)}>Calculate from drawing</button></div></div>
     {loading && !data ? <Loading /> : error && !data ? <Retry error={error} retry={() => setAttempt(value => value + 1)} label="Reload material plan" /> : data && <>
       <div className="card" style={{ padding: 18, marginTop: 16 }}><h2 style={{ marginTop: 0 }}>Material target</h2>{selected ? <><p><strong>{selected.title} · Version {selected.revision}</strong></p><p>Target decision {data.target.decision.revision}. New material versions pin this exact decision.</p><Link className="btn" to="/solutions">Review target</Link></> : <><p>Choose a project target before recording material requirements.</p><Link className="btn btn-primary" to="/solutions">Choose target</Link></>}</div>
 
       <StockSection projectId={projectId} areas={data.areas} version={version} bump={bump} />
 
-      <section style={{ marginTop: 20 }}><div className="page-head"><div><h2 style={{ margin: 0 }}>Material requirements</h2><p className="foundation-hint">Base quantity is manual in 4B; allowance, allocation and purchase rounding are deterministic.</p></div></div>
+      <section style={{ marginTop: 20 }}><div className="page-head"><div><h2 style={{ margin: 0 }}>Material requirements</h2><p className="foundation-hint">Base quantity can be manual or calculated from a supported saved drawing. Allowance, allocation and purchase rounding remain deterministic.</p>{selected && !generatedArtifacts.length && <p className="foundation-hint">Need a supported wall calculation? <Link to="/artifacts">Generate a wall elevation in Plans & drawings</Link> first.</p>}</div></div>
         <div className="fact-filters"><Field label="Filter by area"><select style={inputStyle} value={areaFilter} onChange={event => { setAreaFilter(event.target.value); setOffset(0) }}><option value="">All areas</option>{data.areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field><Field label="Show requirements"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={event => { setArchived(event.target.value === 'archived'); setOffset(0) }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
         {!data.requirements.items.length ? <div className="card" style={{ padding: 18 }}><p>No {archived ? 'archived' : 'active'} material requirements in this selection.</p></div> : <div className="fact-list">{data.requirements.items.map(item => {
           const sync = shoppingByRequirement.get(item.id)
           const stale = item.targetChanged || item.artifactChanged || item.stockChanged || item.componentChanged
-          return <article key={item.id} className="card fact-card" aria-label={item.name}><div className="foundation-actions"><span className="image-purpose">Manual base</span>{sync && <span className="image-purpose">Shopping linked</span>}{stale && <span className="image-purpose">Review needed</span>}</div><h3>{item.name}</h3><p>{item.areaTitle || 'Project'}{item.taskTitle ? ` · ${item.taskTitle}` : ''}</p><p><strong>{formatQuantity(item.purchaseQuantity, item.unit)} to buy</strong> · Version {item.revision}</p><Calculation value={item} /><StaleNotice value={item} />{sync?.sourceOutdated && <p className="solution-attention">Shopping still reflects material requirement version {sync.syncedRevision}. Update it when this version is reviewed.</p>}{sync?.shoppingEdited && <p className="solution-attention">The linked Shopping row was edited independently after the last sync.</p>}<p className="foundation-hint">Based on {item.solutionTitle} · solution version {item.solutionRevision} · target decision {item.targetRevision}{item.artifactTitle ? ` · ${item.artifactTitle} v${item.artifactRevision}` : ''}</p><div className="foundation-actions"><button className="btn" onClick={() => setDetail({ id: item.id, revision: item.revision })}>View basis</button><button className="btn" onClick={() => setHistory(item)}>History</button>{!item.archived && <button className="btn" onClick={() => setDetail({ id: item.id, revision: item.revision, edit: true })}>Revise</button>}<button className="btn" onClick={() => setArchive(item)}>{item.archived ? 'Restore' : 'Archive'}</button>{!item.archived && <button className="btn btn-primary" disabled={stale} onClick={() => setPublish(item)}>{sync?.materialId && !sync.materialMissing ? 'Update Shopping' : 'Send to Shopping'}</button>}</div></article>
+          return <article key={item.id} className="card fact-card" aria-label={item.name}><div className="foundation-actions"><span className="image-purpose">{item.sourceKind === 'deterministic' ? 'Calculated from drawing' : 'Manual base'}</span>{sync && <span className="image-purpose">Shopping linked</span>}{stale && <span className="image-purpose">Review needed</span>}</div><h3>{item.name}</h3><p>{item.areaTitle || 'Project'}{item.taskTitle ? ` · ${item.taskTitle}` : ''}</p><p><strong>{formatQuantity(item.purchaseQuantity, item.unit)} to buy</strong> · Version {item.revision}</p><Calculation value={item} /><StaleNotice value={item} />{sync?.sourceOutdated && <p className="solution-attention">Shopping still reflects material requirement version {sync.syncedRevision}. Update it when this version is reviewed.</p>}{sync?.shoppingEdited && <p className="solution-attention">The linked Shopping row was edited independently after the last sync.</p>}<p className="foundation-hint">Based on {item.solutionTitle} · solution version {item.solutionRevision} · target decision {item.targetRevision}{item.artifactTitle ? ` · ${item.artifactTitle} v${item.artifactRevision}` : ''}</p><div className="foundation-actions"><button className="btn" onClick={() => setDetail({ id: item.id, revision: item.revision })}>View basis</button><button className="btn" onClick={() => setHistory(item)}>History</button>{!item.archived && <button className="btn" onClick={() => setDetail({ id: item.id, revision: item.revision, edit: true })}>Revise</button>}<button className="btn" onClick={() => setArchive(item)}>{item.archived ? 'Restore' : 'Archive'}</button>{!item.archived && <button className="btn btn-primary" disabled={stale} onClick={() => setPublish(item)}>{sync?.materialId && !sync.materialMissing ? 'Update Shopping' : 'Send to Shopping'}</button>}</div></article>
         })}</div>}
         <Pager offset={offset} more={data.requirements.hasMore} move={setOffset} />
       </section>
     </>}
     {data && editor === 'new' && selected && <RequirementEditor projectId={projectId} target={data.target} areas={data.areas} tasks={data.tasks} artifacts={data.artifacts} stock={data.stock} components={data.components} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); bump() }} />}
+    {data && calculator && selected && generatedArtifacts.length > 0 && <DeterministicRequirementEditor projectId={projectId} target={data.target} areas={data.areas} tasks={data.tasks} artifacts={generatedArtifacts} stock={data.stock} onClose={() => setCalculator(false)} onSaved={() => { setCalculator(false); bump() }} />}
     {data && detail && <RequirementVersionDialog projectId={projectId} id={detail.id} revision={detail.revision} edit={detail.edit} target={data.target} areas={data.areas} tasks={data.tasks} artifacts={data.artifacts} stock={data.stock} components={data.components} onClose={() => setDetail(null)} onSaved={() => { setDetail(null); bump() }} />}
     {data && history && <History projectId={projectId} record={history} onClose={() => setHistory(null)} onVersion={revision => { setHistory(null); setDetail({ id: history.id, revision }) }} />}
     {archive && <ArchiveDialog projectId={projectId} record={archive} onClose={() => setArchive(null)} onSaved={() => { setArchive(null); bump() }} />}
