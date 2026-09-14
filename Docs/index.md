@@ -12,6 +12,7 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | Project + Area lifecycle / Concept → Design → Planning → Build → Complete | `Docs/project-phases.md` |
+| how Project/Area phases should reshape the UI / affected pages and scripts | `Docs/project-phase-ui.md` + `.claude/agents/vera.md` |
 | what Project / Area / Task / Volunteer / Space / Target / BOM etc. mean in bob | `Docs/domain-dictionary.md` |
 | persistent site/building/space context across projects | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
@@ -39,7 +40,8 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
-- `Docs/project-phases.md` — **specified / pre-implementation lifecycle contract**: Explore before a Project, then Concept → Design → Planning → Build → Complete/As-built; Project is the overall container/phase while Areas are workstreams that may carry the same phase vocabulary independently. Owns phase purpose, Bob/human responsibilities, exit criteria, defer/split semantics and the current project-global-target limitation exposed by the workstream model. UI alignment is the explicit next discovery step.
+- `Docs/project-phases.md` — **specified / pre-implementation lifecycle contract**: Explore before a Project, then Concept → Design → Planning → Build → Complete/As-built; Project is the overall container/phase while Areas are workstreams that may carry the same phase vocabulary independently. Owns phase purpose, Bob/human responsibilities, exit criteria, defer/split semantics and the current project-global-target limitation exposed by the workstream model.
+- `Docs/project-phase-ui.md` — **specified / pre-implementation UI blueprint** for that lifecycle: Project Home, mixed Area phases, phase-aware primary actions/progressive disclosure, target-scope truth, field-first Task/Today behavior, account/shell changes, affected frontend/data scripts, rollout order and browser proof. It does not claim phase persistence/UI is built.
 - `Docs/domain-dictionary.md` — **specified semantic vocabulary contract**: canonical short meanings of Project, Area, Task, Volunteer, Building/Space/Element, Solution/Target, Artifact, material requirement/BOM, readiness and Bob-context nouns. It is product semantics, not schema documentation. A runtime machine-readable Bob dictionary is planned; a mutable database dictionary is intentionally not introduced yet.
 - `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
@@ -49,7 +51,7 @@
 
 ### Product-document status
 
-`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/project-phases.md` owns **where a Project and its Area workstreams are in the lifecycle and the phase exit/defer rules**. `Docs/domain-dictionary.md` owns **the short semantic meaning of Bob's first-class product nouns**. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/project-phases.md` owns **where a Project and its Area workstreams are in the lifecycle and the phase exit/defer rules**. `Docs/project-phase-ui.md` owns **how that lifecycle should appear in the current UI and which runtime seams implementation must touch**. `Docs/domain-dictionary.md` owns **the short semantic meaning of Bob's first-class product nouns**. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
 
 ### Physical place vs project organisation
 
@@ -61,11 +63,12 @@ The original product uses `Area` as a project-scoped work zone. The persistent b
 - `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across Projects;
 - Areas may map to physical targets through the shipped backend relation; the entities must not be silently conflated.
 
-See `Docs/project-phases.md` for lifecycle/workstream semantics, `Docs/domain-dictionary.md` for short definitions and `Docs/building-model.md` for physical truth.
+See `Docs/project-phases.md` for lifecycle/workstream semantics, `Docs/project-phase-ui.md` for UI composition, `Docs/domain-dictionary.md` for short definitions and `Docs/building-model.md` for physical truth.
 
 ## UI / design
 
 - `Docs/ui-index.md` — frontend navigation, ownership and review contract.
+- `Docs/project-phase-ui.md` — phase-aware Project/Area page blueprint, affected scripts, rollout and verification contract.
 - `src/theme.css` — canonical current design tokens, global layout primitives and responsive rules.
 - `src/components/Layout.tsx` — app shell, desktop sidebar, mobile navigation and Ask bob entry point.
 - `src/components/ui.tsx` — shared visual primitives.
@@ -80,6 +83,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
 - `Docs/project-phases.md` — specified Project/Area lifecycle and defer/split direction; no phase persistence/UI runtime is claimed yet.
+- `Docs/project-phase-ui.md` — specified phase-aware UI behavior; Project Home/Area/Today changes are planned, not built.
 - `db/README.md` → Household and friend sharing — specified/in-progress shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; no deployed sharing claim until its release evidence is recorded.
 - `Docs/building-model.md` — deployed persistent physical context that Project/Area flows may target, with broader geometry/import/AI fidelity still planned.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
@@ -89,7 +93,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `src/pages/Announcements.tsx` — project-wide updates.
 - `src/pages/Food.tsx` + `src/pages/FoodShopping.tsx` — meal/allergy coordination.
 - `src/pages/AreaDetail.tsx` — tasks, materials, crew and reference-image surface.
-- `src/pages/Solutions.tsx` — manual alternatives and exact selected project target.
+- `src/pages/Solutions.tsx` — manual alternatives and exact selected project target in current runtime; scope-safe target behavior is a prerequisite for the planned Area-phase UI.
 - `src/pages/Artifacts.tsx` — manual plans/drawings and their exact target/measurement lineage when milestone 4A is available.
 
 When a new major journey moves toward implementation, give it one canonical success/failure path rather than encoding the contract only in component behavior.
@@ -105,7 +109,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
 - `Docs/project-facts.md` — owning manual measurement/component contract: truth states, exact length units, revision history, source images, authority and recovery for milestones 2A/2B.
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
-- `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A. Current target behavior is project-global; `Docs/project-phases.md` records why independent Area phases require that scoping to be revisited.
+- `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A. Current target behavior is project-global; `Docs/project-phases.md` and `Docs/project-phase-ui.md` record why independent Area phases require scope-safe target semantics.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
 - `Docs/artifacts.md` — owning manual plan/drawing, exact target/solution lineage and measurement-evidence contract for milestone 4A; its own status distinguishes implementation from deployment.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
