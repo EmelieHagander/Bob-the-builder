@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: python scripts/apply-account-phase-summary-patch.py
+      - run: python scripts/run-account-phase-summary-patch.py
       - run: npm ci
       - run: npm test
       - run: npm run check:edge
@@ -37,7 +37,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/patch-account-phase-summary.yml scripts/apply-account-phase-summary-patch.py
+          git rm .github/workflows/patch-account-phase-summary.yml scripts/apply-account-phase-summary-patch.py scripts/run-account-phase-summary-patch.py
           git add src/data/database.ts src/pages/account/AccountDashboard.tsx src/pages/account/ProjectModal.tsx scripts/check-project-phases-browser.mjs
           git commit -m "Add account phase summary"
           git push origin HEAD:feat/account-phase-summary
