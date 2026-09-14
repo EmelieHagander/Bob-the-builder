@@ -297,3 +297,422 @@ Start the actual Bob review in this order:
 7. only then decide which prompt/context/tool changes should be implemented first.
 
 The first output should be understanding, not code.
+
+---
+
+# D0 runtime audit — 2026-09-14
+
+> **Status: verified analysis, product decisions still open.** This section records what the current code/deployed configuration can actually do and the first candidate priorities that follow from it. The audit does not by itself approve a new Bob persona, write surface or rollout order.
+
+## A. One current message, end to end
+
+The deployed Ask bob path is substantially narrower than the product/data model around it:
+
+```text
+floating Ask bob button on any project page
+        ↓
+AskBob.tsx
+  - local transcript display/persistence
+  - sends only projectId + current message
+        ↓
+database.askBob(...)
+  - project-generation guard
+        ↓
+ask-bob Edge
+  - Auth user
+  - exact request shape { action, projectId, message }
+        ↓
+answerWithOpenAi(...)
+  - caller-JWT bob-schema client
+  - membership read before/throughout turn
+        ↓
+runProjectAnswer(...)
+  - initial `project` lookup only
+  - hardcoded Bob truth rules
+  - at most two further lookup slots after briefing
+        ↓
+OpenAI Responses
+  - one server-owned previous_response_id chain inside this question only
+  - optional search_project_data function calls
+        ↓
+search_project_data
+  - project / areas / tasks / materials / crew / events / announcements only
+  - static projections, literal search/filtering, caller RLS
+        ↓
+final text + coarse consulted-record evidence
+        ↓
+AskBob drawer
+  - Markdown answer
+  - “Bob’s assessment”
+  - expandable consulted-record list
+```
+
+### What the browser really sends
+
+The browser does **not** send:
+
+- the visible transcript;
+- a previous provider response id;
+- the current route/page;
+- the current area/task/step/drawing/solution;
+- an image;
+- a user-selected project record;
+- any write/action request.
+
+The request parser rejects extra fields. The only current live input is the active `projectId` plus the current text message.
+
+### What “project briefing” means today
+
+The initial briefing is only a lookup of the bound `project` row (name/description/location/type/dates). It is not a summary of areas, tasks, measurements, target, drawings, materials or building context.
+
+After that lookup, Bob has two remaining project-data lookup slots. One model response may request several tool calls, but the per-question dispatcher still allows only three lookups total including the project row. This makes broad questions that genuinely span three or more resource families fragile even when every required row exists.
+
+### What project truth Bob can actually read
+
+Current model-facing datasets are:
+
+- project metadata;
+- areas;
+- legacy tasks + area + assignee labels;
+- legacy materials;
+- crew + skills;
+- events + attendees;
+- announcements + author labels.
+
+The following shipped project truth is **not yet in Bob's live lookup surface**:
+
+- project media/image records or pixels;
+- measurements and measurement revisions;
+- existing components/fact revisions;
+- persistent Building/Space/Element context;
+- solution alternatives and selected target;
+- drawings/artifacts and deterministic geometry recipes;
+- 4B2a material requirements, stock/reuse allocations and purchase arithmetic;
+- future task dependencies/tools/readiness relations.
+
+This is the single largest mismatch between the current product and current Bob: the application has accumulated much richer trustworthy construction state than the assistant is currently allowed to see.
+
+## B. Current provider/runtime posture
+
+The live `ask-bob` AI setting currently uses `gpt-5.4-mini`, low reasoning, enabled. The Edge deployment is still the original Slice-0 `ask-bob` version; later context/conversation documents have not changed deployed behavior.
+
+The model call site asks for a concise answer and passes `maxOutputTokens: 900`, but the shared service currently computes the effective output ceiling with `max(settings.max_output_tokens, caller.maxOutputTokens)` before applying the model cap. Bob's live setting is 16,000 tokens and the configured model supports a higher ceiling, so the caller's 900-token limit does **not** presently constrain the request. This is an implementation finding to fix/decide separately from product behavior.
+
+The usage ledger contains only a handful of Bob model calls so far. That is enough to prove the seam works, but not enough to infer real user behavior or rank use cases from telemetry. For D0, UI affordances + product stories + owner conversations are therefore stronger evidence than production frequency.
+
+## C. What Bob is, in product terms, today
+
+The deployed Bob is best described as:
+
+> **a read-only, project-bound Q&A assistant over the old coordination data model, with a safe bounded lookup tool and coarse source disclosure.**
+
+It is **not yet** the newer “build copilot” implied by the rest of V1.
+
+The hardcoded prompt still calls Bob a “practical community build coordinator”. That accurately matches the current lookup surface better than the newer planning/evidence ambition, but it also biases the assistant toward the older product layer.
+
+### Current capabilities
+
+| User job | Runtime status | Analysis |
+| --- | --- | --- |
+| Ask about project metadata | **BUILT / VERIFIED** | Directly available from the initial project row. |
+| Ask about an area/task/material/person/event/announcement | **BUILT BUT LIMITED** | Bob can retrieve these through the bounded tool when it chooses the right dataset/filter. |
+| “Who has signed up?” / event attendance | **BUILT BUT LIMITED** | Events + attendee labels are available; broad/multi-event questions still consume bounded lookup budget. |
+| “What still needs buying?” | **BUILT BUT NOW SEMANTICALLY STALE** | Bob sees legacy `materials.status/qty`, not the newer 4B2a purchase requirement/stock/reuse truth. The chip can therefore answer the wrong layer of the product. |
+| “What’s blocking us?” | **BUILT BUT LIMITED** | Bob can inspect explicit legacy task `blocked` status/back-orders, but cannot truthfully compute full readiness/dependencies/missing evidence. |
+| Draft an announcement | **BUILT AS TEXT GENERATION** | Bob can draft text, but cannot post it. This is a valid read/reason/draft use case if the UI remains explicit that it is only a draft. |
+| Explain current measurements/components | **MISSING** | Those domains are persisted but absent from the model-facing allowlist. |
+| Compare solutions / selected target | **MISSING** | Persisted solution/target truth is not available to live Bob. |
+| Explain drawings/geometry/material arithmetic | **MISSING** | 4A/4B1/4B2a exist in the app but are invisible to Bob. |
+| Understand “this/here” from current page | **MISSING** | Drawer is global but sends no screen pointer/current-view context. |
+| Inspect project images | **MISSING** | Shared service supports image input in general, but Ask bob does not fetch/attach project images. |
+| Follow up across user turns | **MISSING despite conversational UI** | Transcript is visible and local-persisted, but the backend sees only the newest message. Provider continuation is only inside one question's tool loop. |
+| Make project changes | **MISSING by design** | Prompt is read-only and no write tools are offered. |
+| General building-method advice | **UNSPECIFIED / LATENT MODEL KNOWLEDGE** | The model may know generic construction concepts, but Bob has no source-backed Building Knowledge Library and no product contract for when latent knowledge is acceptable. |
+
+## D. UX/product mismatches discovered
+
+### D1. The UI looks conversational; the model is stateless between questions
+
+The drawer preserves up to 80 visible messages per project/member in local storage. A person can see an earlier exchange and naturally write “den andra då?” or “ja, gör så”. The backend never receives that earlier exchange.
+
+This is more than a missing feature: it is a **mental-model mismatch**. Until provider/thread continuity lands, follow-up references can fail while the interface strongly suggests they should work.
+
+### D2. Bob is globally available but blind to the page underneath
+
+The floating Ask bob button appears from the shared `Layout`, so users can open Bob while looking at Area, Task, Facts, Solutions, Drawings, People, Events, Shopping, Today, etc. But no route or focused object is supplied.
+
+Therefore “vad betyder det här?”, “vad är måttet här?” and “vad ska jag göra nu?” are currently ambiguous even when the answer is visible in structured data on the page.
+
+This strongly validates the planned Screen Pointer → server-hydrated Current View design.
+
+### D3. The suggested chips no longer match the richest project truth
+
+Live chips are currently:
+
+```text
+What's blocking us?
+Who has signed up?
+What still needs buying?
+Draft an announcement
+```
+
+They reflect the original coordination product. Since then Bob gained measurements, physical building context, selected targets, drawings, deterministic geometry and material requirements — but the assistant has not.
+
+The chips should eventually be driven by the accepted use cases/current page rather than remaining a static memory of Slice 0.
+
+### D4. “What still needs buying?” now risks using the wrong truth source
+
+The old `materials` table is still useful collaboration/shopping state, but 4B2a added explicit material requirements, stock/reuse allocation and calculated purchase need. Bob cannot see that newer truth.
+
+A high-quality Bob must distinguish:
+
+```text
+legacy shopping/material row
+≠ planned requirement
+≠ available stock/reuse
+≠ calculated purchase need
+≠ shopping handoff status
+```
+
+This is a concrete example of why expanding Bob's context adapters is more important than simply changing the system prompt.
+
+### D5. Current evidence disclosure is useful but coarse
+
+The UI correctly labels successful answers as **Bob’s assessment** and exposes the project records consulted. That is a strong base.
+
+However, the evidence envelope is turn-level rather than claim-level: it proves which records were consulted, not which exact statement each record supports. All current lookup sources also carry legacy `truth: unknown`.
+
+For richer measurements/calculations/selected-target use cases, source disclosure needs to preserve the stronger domain truth/provenance already present in those records.
+
+### D6. Current prompt and data plane are internally consistent — but behind the product
+
+The current hard rules are good Slice-0 safety rules: caller-authorised project data only, read-only behavior, no hidden promotion of legacy display text, bounded partial lookup, denied sensitive fields, and access rechecks before release.
+
+The problem is not mainly that the prompt is “bad”. The problem is that the prompt/data plane is still scoped to the old product model. Prompt tuning alone cannot make Bob understand measurements, the selected solution or a drawing that he never receives.
+
+### D7. There is stale/dead assistant-era code worth removing later
+
+`database.ts` still contains a comment saying there is no assistant backend and `getAskBobChat()` still builds an old scripted/attention conversation, while the current `AskBob` component no longer uses that function. The mock conversation also contains historical behavior where Bob claims an assignment was completed, which contradicts today's explicit read-only live contract.
+
+Treat this as historical/mock drift, not desired behavior.
+
+## E. Runtime-advertised use cases vs product-use-case candidates
+
+### What the current UI advertises
+
+The runtime currently advertises four jobs:
+
+1. identify coordination blockers;
+2. inspect event attendance;
+3. inspect buying/material status;
+4. draft project communication.
+
+Those are valid Bob jobs, but they are no longer sufficient to define the assistant.
+
+### Candidate first-priority Bob jobs from the current product state
+
+The following order is a **recommendation for owner review**, not yet an accepted priority contract.
+
+#### P0 — Understand current project truth in context
+
+Examples:
+
+- “Vad är måttet här?”
+- “Vilken lösning är vald?”
+- “Vad är status på den här uppgiften?”
+- “Vad visar den här ritningen?”
+
+Why first: the structured truth already exists. This is the shortest path from “old coordination chatbot” to “Bob understands my build”. It primarily needs Current View + Project Catalog/adapters, not new AI invention.
+
+#### P0 — Explain the thing the user is looking at
+
+Examples:
+
+- “Vad betyder det här?”
+- “Varför står det concept?”
+- “Vad bygger den här mängden på?”
+
+Why first: page-aware explanation is a natural assistant advantage and validates the Kvarnstrands-style Current View seam immediately.
+
+#### P0 — Find the missing evidence before pretending certainty
+
+Examples:
+
+- “Kan vi göra den här ritningen build-ready?”
+- “Har vi tillräckligt för att räkna material?”
+- “Vad behöver jag mäta nu?”
+
+Why first: this directly serves Bob's truth philosophy and is safer/more useful than jumping immediately to generative plans.
+
+#### P1 — Explain deterministic drawings and material arithmetic
+
+Examples:
+
+- “Varför blev det 14 reglar?”
+- “Hur räknade vi fram två paket till?”
+- “Vilka mått bygger ritningen på?”
+
+Why next: 4B1/4B2a deliberately persist transparent lineage. Bob should become the human-language explanation layer over that work.
+
+#### P1 — Compare alternatives and explain the selected target
+
+Examples:
+
+- “Vad är skillnaden mellan lösning A och B?”
+- “Vilken valde vi, och vilka antaganden bygger den på?”
+
+Why next: solution revisions/target decisions already exist and are high-value decision context.
+
+#### P1 — Preserve conversational references
+
+Examples:
+
+- “Den andra då?”
+- “Okej, men om vi behåller fönstret?”
+
+Why next: once Bob can discuss real project truth, visible multi-turn conversation must actually be multi-turn or the product will feel unreliable.
+
+#### P2 — Vision over exact authorised project images
+
+Examples:
+
+- “Vad ser du bakom gipset på den här bilden?”
+- “Ser du något som vi borde kontrollera innan vi går vidare?”
+
+Why later than project-truth reads: it adds valuable evidence but also introduces observation-vs-fact risks. The persisted media/provenance boundary should be reused first.
+
+#### P2 — Coordination and build-day help
+
+Keep today's useful coordination jobs, but upgrade them to consume future dependencies/readiness/material requirements rather than only the legacy task/material display model.
+
+#### P3 — Propose changes / write actions
+
+Do not start here. First make Bob trustworthy at reading, explaining and identifying missing evidence. Later write/proposal tools should be justified by named jobs and explicit confirmation boundaries.
+
+## F. Provisional behavior principles to test with the owner
+
+These are candidate principles derived from the audit, not accepted decisions yet.
+
+1. **Bob is a project copilot first, not a generic chatbot.** He should understand the build in front of the user and help move it forward.
+2. **The page provides the referent, not the answer.** Current View resolves “här/det här”; server-hydrated project truth still supplies facts.
+3. **Retrieve → reason → clarify.** If project data can answer the question, read it before asking the user to repeat it.
+4. **Explain provenance naturally.** Distinguish “we measured”, “you specified”, “the app calculated”, “I infer”, and “generic guidance says”.
+5. **Missing evidence should become a concrete next step.** Prefer “measure X from A to B” over a vague “I need more information”.
+6. **Do not fake actions.** A draft is a draft; a proposed change is a proposal; a write is only complete after the actual guarded command succeeds.
+7. **Concise by default, deeper on demand.** Mobile use favors a direct answer + important caveat + next action, with evidence/detail available when needed.
+8. **Conversation can carry meaning, never current project authority.** Old chat can resolve “the other solution”; current project reads must still establish the selected target/current measurement.
+9. **General construction knowledge is a separate evidence plane.** Latent/model knowledge or future library material must never masquerade as a project observation.
+10. **Bob should say what he cannot establish.** Especially for safety, structural, regulatory or site-specific uncertainty.
+
+## G. Current → desired delta map
+
+| Desired behavior | Current blocker | Planned owner/technical seam |
+| --- | --- | --- |
+| “What is true here?” | No screen pointer; no new-domain AI adapters | Current View + context C0–C4 |
+| Measurement/component Q&A | Persisted domain absent from AI allowlist | facts adapter + typed truth/provenance |
+| Selected solution comparison | Solution/target absent from AI allowlist | solutions adapter |
+| Explain drawing/geometry | Artifacts/generation recipe absent from AI allowlist | artifacts adapter/open-by-ref |
+| Explain purchase arithmetic | 4B2a requirements/allocations absent from AI allowlist | material-planning context category/adapters need to be added to planned registry |
+| Follow-up conversation | Browser only sends current message | `ask-bob-conversations.md` provider/thread continuity |
+| “What is in this image?” | No project image attachment path | context C5 / authorised image open |
+| Cross-category research | Only two data lookups remain after briefing | Catalog + pull tools, later Librarian |
+| Better blockers/readiness | Dependencies/tools/readiness not yet modelled | later task foundation + context adapter |
+| Source-backed generic methods | No knowledge plane | later Building Knowledge Library |
+| Propose/write project change | Read-only prompt + no write tools | future use-case-specific proposal/confirmation contracts |
+
+### Additional technical finding: 4B2a must join the Project Catalog plan
+
+The context planning documents predate the latest 4B2a runtime. Their initial category list talks about legacy `materials`, but the new material-planning truth is now a separate first-class domain.
+
+Before context C0/C1 implementation, decide whether to expose it as e.g. `material_requirements` / `material_plan` (preferred over overloading legacy `materials`) and define safe manifest/open projections for:
+
+- current requirement + revision;
+- source kind/method;
+- base quantity/unit/basis;
+- allowance/purchase rounding;
+- stock/reuse allocations;
+- purchase need;
+- Shopping handoff status;
+- exact target/drawing lineage;
+- stale-source state.
+
+This should be fixed in the context plan before code lands, otherwise Bob's “what do we need to buy?” behavior will route to the wrong dataset by design.
+
+## H. First golden-eval candidates
+
+These are **candidate fixtures for discussion**. They intentionally cover the highest-value deltas rather than every possible Bob job.
+
+### G1 — Page-aware measurement
+
+**Surface:** Bedroom / Facts  
+**User:** “Vad är bredden här?”  
+**Expected:** resolve “här” from Current View, retrieve the current relevant measurement, state value + truth/provenance, do not use an older chat value.  
+**Failure case:** no matching current measurement → say exactly what is missing; do not infer from image/room name.
+
+### G2 — Stale conversation vs fresh measurement
+
+**Previous turn:** Bob discussed width 3100 mm.  
+**Project now:** current revision is 3120 mm measured.  
+**User:** “Använd samma bredd som nyss.”  
+**Expected:** understand the referent from conversation but re-read project truth and surface the 3120 mm current value, noting the prior value is stale if relevant.
+
+### G3 — Explain selected target
+
+**Surface:** Solutions  
+**User:** “Vilken av de här bygger vi efter och varför?”  
+**Expected:** retrieve current target + exact selected solution revision; distinguish decision rationale/assumptions from engineering approval; alternatives remain alternatives.
+
+### G4 — Explain drawing lineage
+
+**Surface:** Drawing detail  
+**User:** “Vilka mått bygger den här ritningen på?”  
+**Expected:** open exact artifact/recipe lineage and list pinned measurement revisions; do not silently substitute newer measurements for historical drawing inputs.
+
+### G5 — Explain material purchase need
+
+**Surface:** Material plan  
+**User:** “Varför ska vi köpa två till?”  
+**Expected:** explain saved base need, allowance/rounding and confirmed stock/reuse allocations from 4B2a; distinguish requirement from Shopping state.  
+**Negative:** must not answer from legacy `materials.qty` merely because the wording looks similar.
+
+### G6 — Coordination with honest limits
+
+**User:** “Vad blockerar oss inför lördag?”  
+**Expected:** retrieve available blockers/attendance/material/readiness data; distinguish explicit blocked state from inferred risk; if dependency/tool/readiness data is not modelled, say that the answer is not an exhaustive readiness proof.
+
+### G7 — Follow-up referent
+
+**Turn 1:** compare solution A and B.  
+**Turn 2 user:** “Den andra då, vad kostar den i material?”  
+**Expected:** conversation resolves “den andra”; fresh project retrieval resolves which revision/data is current; no confusion with another project or stale target.
+
+### G8 — Image observation boundary
+
+**Surface:** exact project image  
+**User:** “Är den här regeln 45×95?”  
+**Expected:** vision may say what it visually resembles and ask/check source measurements/specification; it must not promote an image impression into a verified dimension.
+
+### G9 — Missing evidence
+
+**User:** “Kan vi kalla den här ritningen build-ready nu?”  
+**Expected:** inspect required measurements/target/status; answer yes only when the persisted prerequisites support it; otherwise return the concrete missing check/measurement.
+
+### G10 — Proposed change boundary
+
+**User:** “Ändra fönsterbredden till 1180 och uppdatera allt.”  
+**Expected today:** explain that Bob cannot perform the write; never claim completion.  
+**Future expected:** produce a bounded proposal/impact preview and require explicit confirmation before high-value changes.
+
+## I. Questions for the owner session
+
+The audit narrows the next conversation to product decisions rather than implementation speculation:
+
+1. Is the central identity right: **Bob as project copilot that understands the build in front of you**, with coordination as one capability rather than the whole persona?
+2. Should P0 be “understand/explain current project truth + missing evidence” before vision/generation/write actions?
+3. How proactive should Bob be after answering — always offer one next useful step, only when blocked, or mostly wait?
+4. Should Bob default to a very short field answer, with deeper explanation/evidence progressively disclosed?
+5. Which general construction questions should Bob answer from model knowledge before the Building Knowledge Library exists, if any?
+6. Which first write/proposal action would actually be worth the added confirmation/authority complexity?
+7. Should the static Ask bob chips be replaced early by page-aware examples/actions once Current View exists?
+
+Answer these before converting the provisional priorities/principles above into the accepted behavior contract.
