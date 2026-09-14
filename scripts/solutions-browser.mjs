@@ -18,7 +18,8 @@ export function createSolutionsFixture(timestamp, assets, facts) {
           if (expected !== decisions.length) return fail('Target changed. Reload before deciding again.')
           if (action === 'select' && old.revision !== data.solution_revision) return fail('Solution changed. Reload before selecting.')
           decisions.push({ project_id: p_project, revision: decisions.length + 1, solution_id: id,
-            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp() })
+            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp(),
+            area_id: data.area_id ?? null, scope_key: data.area_id ? `area:${data.area_id}` : 'project' })
           await respond({ json: { revision: decisions.length } }); return true
         }
         if (action !== 'create' && old.revision !== expected) return fail('Solution changed. Reload before saving again.')
@@ -49,11 +50,14 @@ export function createSolutionsFixture(timestamp, assets, facts) {
       }
       rows = rows.filter(r => r.project_id === eq('project_id'))
       if (eq('revision')) rows = rows.filter(r => r.revision === Number(eq('revision')))
-      if (eq('area_id')) rows = rows.filter(r => r.area_id === eq('area_id'))
+      const areaFilter = url.searchParams.get('area_id')
+      if (areaFilter === 'is.null') rows = rows.filter(r => r.area_id == null)
+      else if (eq('area_id')) rows = rows.filter(r => r.area_id === eq('area_id'))
       if (eq('archived')) rows = rows.filter(r => r.archived === (eq('archived') === 'true'))
       if (table === 'current_solutions') rows.sort((a,b) => b.recorded_at.localeCompare(a.recorded_at) || a.id.localeCompare(b.id))
       const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 1000)
-      await respond({ json: table === 'solution_revisions' && eq('revision') ? rows[0] ?? null : rows.slice(offset, offset + limit) })
+      const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+      await respond({ json: single || (table === 'solution_revisions' && eq('revision')) ? rows[0] ?? null : rows.slice(offset, offset + limit) })
       return true
     },
   }
@@ -63,7 +67,7 @@ export function createSolutionsFixture(timestamp, assets, facts) {
 export async function verifySolutionsBrowser(page, base, fixture, facts, width) {
   await page.goto(base)
   await page.getByRole('link', { name: /Solutions & target/ }).click()
-  await page.getByText('No target selected. Add alternatives, then choose one version for the project.', { exact: true }).waitFor()
+  await page.getByText('No target selected for the Project. Add alternatives, then choose one version for this scope.', { exact: true }).waitFor()
   async function add(title, evidence = false) {
     await page.getByRole('button', { name: 'Add alternative', exact: true }).click()
     const form = page.getByRole('dialog', { name: 'Add alternative', exact: true })
@@ -92,9 +96,9 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   }
   await add('Keep the porch', true); await add('Extend the porch')
   const a = page.getByRole('article', { name: 'Keep the porch', exact: true }), b = page.getByRole('article', { name: 'Extend the porch', exact: true })
-  const target = page.getByRole('region', { name: 'Selected project target', exact: true })
+  const target = page.getByRole('region', { name: 'Selected Project target', exact: true })
   async function choose(card, reason) {
-    await card.getByRole('button', { name: 'Select target', exact: true }).click()
+    await card.getByRole('button', { name: 'Select Project target', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Select target', exact: true })
     await dialog.getByLabel('Reason for decision', { exact: true }).fill(reason)
     await dialog.getByRole('button', { name: 'Select target', exact: true }).click()
@@ -144,8 +148,8 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   const clear = page.getByRole('dialog', { name: 'Clear target', exact: true })
   await clear.getByLabel('Reason for decision', { exact: true }).fill('Wait for the site check')
   await clear.getByRole('button', { name: 'Clear target', exact: true }).click(); await clear.waitFor({ state: 'hidden' })
-  await target.getByRole('button', { name: 'Decision history', exact: true }).click()
-  const decisions = page.getByRole('dialog', { name: 'Target decisions', exact: true })
+  await target.getByRole('button', { name: 'Project target history', exact: true }).click()
+  const decisions = page.getByRole('dialog', { name: 'Project target decisions', exact: true })
   await decisions.getByText('Wait for the site check', { exact: true }).waitFor()
   assert.equal(await decisions.locator('li').count(), 3)
   await decisions.getByRole('button', { name: 'Close', exact: true }).click()

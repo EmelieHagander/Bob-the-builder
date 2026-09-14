@@ -5,6 +5,7 @@ import type { Area, Solution, SolutionVersion, SolutionMeasurement, TargetDecisi
 import { TRUTH_LABELS, describeMeasurement } from '../data/projectFacts'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
+import { PhasePill } from '../components/PhaseUI'
 import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 
@@ -99,7 +100,7 @@ function Editor({ projectId, value, areas, initialArea, onClose, onSaved }: {
       <button type="button" className="btn" disabled={refs.length >= 20} onClick={() => setPicker('measurement')}>Link measurement</button>
       <p className="foundation-hint">Each link keeps the chosen measurement version. Link it again to use a newer value.</p>
       {value && <><Field label="Reason for change"><input style={inputStyle} required maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></Field>
-        <p className="foundation-hint">A new version does not change the selected project target. Select it separately when ready.</p></>}
+        <p className="foundation-hint">A new version does not change the selected target. Select it separately when ready.</p></>}
       {error && <div role="alert"><FormError>{error}</FormError></div>}
       <div className="foundation-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button>
         <button className="btn btn-primary">{busy ? 'Saving and reading back…' : value ? 'Save new version' : 'Save alternative'}</button></div>
@@ -123,15 +124,15 @@ function VersionDialog({ projectId, id, revision, edit, areas, onClose, onSaved 
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <VersionDetails value={data} />}
   </Modal>
 }
-function History({ projectId, record, onClose, onVersion }: {
-  projectId: string; record?: Solution; onClose: () => void; onVersion: (id: string, revision: number) => void
+function History({ projectId, record, areaId, onClose, onVersion }: {
+  projectId: string; record?: Solution; areaId: string; onClose: () => void; onVersion: (id: string, revision: number) => void
 }) {
   const [offset, setOffset] = useState(0), [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(async () => record
-    ? db.getSolutionHistory(projectId, record.id, offset) : db.getTargetHistory(projectId, offset), [projectId, record?.id, offset, attempt])
-  return <Modal title={record ? 'Alternative history' : 'Target decisions'} onClose={onClose}>
+    ? db.getSolutionHistory(projectId, record.id, offset) : db.getTargetHistory(projectId, offset, areaId), [projectId, record?.id, areaId, offset, attempt])
+  return <Modal title={record ? 'Alternative history' : areaId ? 'Area target decisions' : 'Project target decisions'} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : <>
-      {!data?.items.length && <p>No recorded history.</p>}
+      {!data?.items.length && <p>No recorded history for this target scope.</p>}
       <ol className="fact-history">{data?.items.map((r: Solution | TargetDecision) => <li key={r.revision} className="card fact-card">
         <h4>{'title' in r ? r.title + ' · Version ' + r.revision : 'Decision ' + r.revision + (r.solutionId ? ' · Selected version ' + r.solutionRevision : ' · Target cleared')}</h4>
         <p>{r.reason}</p><p className="foundation-hint">{r.actor} · {new Date(r.recordedAt).toLocaleString()}</p>
@@ -141,22 +142,22 @@ function History({ projectId, record, onClose, onVersion }: {
     </>}
   </Modal>
 }
-function DecisionDialog({ projectId, record, expected, archive, onClose, onSaved }: {
-  projectId: string; record?: Solution; expected: number; archive?: boolean; onClose: () => void; onSaved: () => void
+function DecisionDialog({ projectId, record, expected, areaId, areaName, archive, onClose, onSaved }: {
+  projectId: string; record?: Solution; expected: number; areaId: string; areaName: string; archive?: boolean; onClose: () => void; onSaved: () => void
 }) {
   const [reason, setReason] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const action = archive ? record?.archived ? 'Restore alternative' : 'Archive alternative' : record ? 'Select target' : 'Clear target'
+  const action = archive ? record?.archived ? 'Restore alternative' : 'Archive alternative' : record ? `Select ${areaId ? 'Area ' : ''}target` : 'Clear target'
   return <Modal title={action} onClose={() => { if (!busy) onClose() }}><form className="foundation-form" onSubmit={async e => {
     e.preventDefault(); if (busy) return
     setBusy(true); setError('')
     try {
       if (archive && record) await db.editSolution(projectId, record.archived ? 'restore' : 'archive', record.id, record.revision)
-      else await db.selectTarget(projectId, record ?? null, expected, reason)
+      else await db.selectTarget(projectId, record ?? null, expected, reason, areaId)
       onSaved()
     } catch (err) { setError(message(err)) } finally { setBusy(false) }
   }}>
-    <p>{record ? record.title + ' · Version ' + record.revision : 'The project will have no selected target.'}</p>
-    <p className="foundation-hint">{archive ? 'Previous versions and decisions stay in history.' : 'This records project intent. It does not certify construction safety or update tasks and shopping.'}</p>
+    <p>{record ? `${record.title} · Version ${record.revision}` : `Clear the selected target for ${areaId ? areaName : 'the Project'}.`}</p>
+    <p className="foundation-hint">{archive ? 'Previous versions and decisions stay in history.' : `This records intent for ${areaId ? areaName : 'the whole Project'}. It does not certify construction safety or update tasks and shopping.`}</p>
     {!archive && <Field label="Reason for decision"><textarea style={inputStyle} rows={2} required disabled={busy} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></Field>}
     {error && <div role="alert"><FormError>{error}</FormError></div>}
     <div className="foundation-actions"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button>
@@ -170,28 +171,39 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
   const [archived, setArchived] = useState(false), [offset, setOffset] = useState(0), [attempt, setAttempt] = useState(0)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const { data, loading, error } = useAsync(async () => {
-    const [alternatives, target, areas] = await Promise.all([db.getSolutions(projectId, area, archived, offset), db.getSelectedTarget(projectId), db.getAreas()])
+    const [alternatives, target, areas] = await Promise.all([
+      db.getSolutions(projectId, area, archived, offset), db.getSelectedTarget(projectId, area), db.getAreas(),
+    ])
     return { alternatives, target, areas }
   }, [projectId, area, archived, offset, attempt])
   const close = () => setDialog(null), saved = () => { close(); setAttempt(n => n + 1) }
   const target = data?.target, areas = data?.areas ?? []
+  const selectedArea = areas.find(item => item.id === area)
+  const areaName = selectedArea?.name ?? 'this Area'
+  const exactExpected = area && target?.inherited ? 0 : target?.decision.revision ?? 0
+  const targetTitle = area ? `Selected for ${areaName}` : 'Selected Project target'
   return <div className="page solutions-page">
-    <Link className="btn" to="/">Dashboard</Link>
-    <div className="page-head"><div><h1 className="page-title">Solutions & target</h1><p className="page-sub">Keep alternatives and choose the version everyone builds toward.</p></div>
+    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/'}>{selectedArea ? `← ${areaName}` : '← Project'}</Link>
+    <div className="page-head"><div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{selectedArea && <PhasePill phase={selectedArea.phase} prefix="Area" />}</div>
+      <h1 className="page-title">Solutions & target</h1>
+      <p className="page-sub">{area ? `Compare alternatives and choose the target for ${areaName}.` : 'Keep Project-wide alternatives and the shared Project target explicit.'}</p>
+    </div>
       <button className="btn btn-primary" disabled={loading || Boolean(error)} onClick={() => setDialog({ kind: 'create' })}>Add alternative</button></div>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <>
-      <section className="card fact-card solution-target" aria-label="Selected project target">
-        <h2>Selected project target</h2>
+      <section className="card fact-card solution-target" aria-label={targetTitle}>
+        <h2>{targetTitle}</h2>
         {target?.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
-          <p>{target.decision.reason}</p><p className="foundation-hint">Selected by {target.decision.actor} · {new Date(target.decision.recordedAt).toLocaleString()}</p>
+          {area && target.inherited && <p className="solution-attention">This Area currently inherits the Project target. Selecting an Area target here will create an independent decision for {areaName} without changing sibling Areas.</p>}
+          <p>{target.decision.reason}</p><p className="foundation-hint">Selected by {target.decision.actor} · {target.decision.recordedAt ? new Date(target.decision.recordedAt).toLocaleString() : 'time not recorded'}</p>
           <VersionDetails value={target.solution} />
-          <button className="btn" onClick={() => setDialog({ kind: 'clear' })}>Clear target</button>
-        </> : <p>No target selected. Add alternatives, then choose one version for the project.</p>}
-        <p className="foundation-hint">One target for the whole project. Later edits remain alternatives until explicitly selected.</p>
-        <button className="btn" onClick={() => setDialog({ kind: 'decisions' })}>Decision history</button>
+          {(!area || !target.inherited) && <button className="btn" onClick={() => setDialog({ kind: 'clear' })}>Clear {area ? 'Area ' : ''}target</button>}
+        </> : <p>No target selected for {area ? areaName : 'the Project'}. Add alternatives, then choose one version for this scope.</p>}
+        <p className="foundation-hint">{area ? 'Changing this Area target does not replace another Area target.' : 'The Project target is the fallback for Areas that have not made an independent target decision.'}</p>
+        <button className="btn" onClick={() => setDialog({ kind: 'decisions' })}>{area ? 'Area target history' : 'Project target history'}</button>
       </section>
       <div className="fact-filters"><Field label="Filter alternatives by area"><select style={inputStyle} value={area} onChange={e => { setOffset(0); setParams(e.target.value ? { area: e.target.value } : {}) }}>
-        <option value="">All areas</option>{areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        <option value="">Project / all areas</option>{areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select></Field><Field label="Show alternatives"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={e => { setOffset(0); setArchived(e.target.value === 'archived') }}>
         <option value="active">Active</option><option value="archived">Archived</option>
       </select></Field></div>
@@ -199,12 +211,12 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
       {!data.alternatives.items.length && <p className="card fact-card">No {archived ? 'archived' : 'active'} alternatives in this selection.</p>}
       <div className="fact-list solution-list">{data.alternatives.items.map(s => <article className="card fact-card" aria-label={s.title} key={s.id}>
         <h3>{s.title}</h3><span className="image-purpose">Version {s.revision}{s.archived ? ' · Archived' : ''}</span>
-        {target?.solution?.id === s.id && <p className="solution-attention">{target.solution.revision === s.revision ? 'Selected target version' : 'Newer alternative version. Target still uses version ' + target.solution.revision + '.'}</p>}
+        {target?.solution?.id === s.id && <p className="solution-attention">{target.solution.revision === s.revision ? target.inherited && area ? 'Inherited Project target version' : 'Selected target version' : 'Newer alternative version. Target still uses version ' + target.solution.revision + '.'}</p>}
         <div className="fact-details"><p>{s.description}</p><p><strong>Assumptions:</strong> {s.assumptions || 'Not recorded'}</p><p><strong>Trade-offs:</strong> {s.tradeoffs || 'Not recorded'}</p></div>
         <div className="foundation-actions">
           <button className="btn" onClick={() => setDialog({ kind: 'view', record: s })}>View evidence</button>
           {!s.archived && <><button className="btn" onClick={() => setDialog({ kind: 'edit', record: s })}>Revise</button>
-            <button className="btn btn-primary" onClick={() => setDialog({ kind: 'select', record: s })}>Select target</button></>}
+            <button className="btn btn-primary" onClick={() => setDialog({ kind: 'select', record: s })}>Select {area ? 'for Area' : 'Project target'}</button></>}
           <button className="btn" onClick={() => setDialog({ kind: 'history', record: s })}>History</button>
           <button className="btn" onClick={() => setDialog({ kind: 'archive', record: s })}>{s.archived ? 'Restore' : 'Archive'}</button>
         </div>
@@ -214,14 +226,15 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
     {(dialog?.kind === 'edit' || dialog?.kind === 'view' || dialog?.kind === 'version') && <VersionDialog projectId={projectId}
       id={dialog.kind === 'version' ? dialog.id : dialog.record.id} revision={dialog.kind === 'version' ? dialog.revision : dialog.record.revision}
       edit={dialog.kind === 'edit'} areas={areas} onClose={close} onSaved={saved} />}
-    {(dialog?.kind === 'history' || dialog?.kind === 'decisions') && <History projectId={projectId}
+    {(dialog?.kind === 'history' || dialog?.kind === 'decisions') && <History projectId={projectId} areaId={area}
       record={dialog.kind === 'history' ? dialog.record : undefined} onClose={close} onVersion={(id, revision) => setDialog({ kind: 'version', id, revision })} />}
     {(dialog?.kind === 'select' || dialog?.kind === 'clear' || dialog?.kind === 'archive') && <DecisionDialog projectId={projectId}
-      record={dialog.kind === 'clear' ? undefined : dialog.record} expected={target?.decision.revision ?? 0} archive={dialog.kind === 'archive'} onClose={close} onSaved={saved} />}
+      record={dialog.kind === 'clear' ? undefined : dialog.record} expected={dialog.kind === 'archive' ? target?.decision.revision ?? 0 : exactExpected}
+      areaId={area} areaName={areaName} archive={dialog.kind === 'archive'} onClose={close} onSaved={saved} />}
   </div>
 }
 export function Solutions() {
   const id = db.getActiveProjectId()
-  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Solutions & target</h1><p>This demo does not save solutions. Open a connected project to use them.</p><Link className="btn" to="/">Dashboard</Link></div>
+  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Solutions & target</h1><p>This demo does not save solutions. Open a connected project to use them.</p><Link className="btn" to="/">Project</Link></div>
   return <ConnectedSolutions key={id} projectId={id} />
 }
