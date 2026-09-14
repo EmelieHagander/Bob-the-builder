@@ -262,7 +262,7 @@ try {
     assert.equal(await page.getByRole('article', { name: 'Keep the porch', exact: true }).count(), 0)
     await page.goto(base + '#/artifacts')
     await page.getByText('No active drawings in this selection.', { exact: true }).waitFor()
-    await page.getByText('Choose a project target before creating a plan or drawing.', { exact: true }).waitFor()
+    await page.getByText('Choose a target for Project before creating a plan or drawing.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('article', { name: 'Entrance section', exact: true }).count(), 0)
     assert.deepEqual(errors, [])
     console.log('Foundation UI upload/attach/original/steps/checks/reload/recovery/project-switch passed at ' + viewport.width + 'px; HTTP fixtures, no AI.')
