@@ -13,6 +13,7 @@ import { Icon } from '../../components/ui'
 import { Field, FormError, inputStyle } from '../../components/form'
 import { scheduleStatus, type ScheduleStatus } from '../../lib/calendarGrid'
 import { formatDateRange } from '../../lib/format'
+import { PhasePill } from '../../components/PhaseUI'
 
 const THEMES: { name: ThemeName; label: string }[] = [
   { name: 'birch', label: 'Birch' },
@@ -22,11 +23,11 @@ const THEMES: { name: ThemeName; label: string }[] = [
 
 export const SCHEDULE_META: Record<ScheduleStatus, { label: string; color: string; bg: string }> = {
   upcoming: { label: 'Upcoming', color: '#9A6313', bg: 'var(--honey-bg)' },
-  ongoing: { label: 'Building now', color: '#3d7247', bg: 'var(--leaf-bg)' },
+  ongoing: { label: 'Happening now', color: '#3d7247', bg: 'var(--leaf-bg)' },
   finished: { label: 'Finished', color: 'var(--ink-soft)', bg: 'var(--surface-2)' },
 }
 
-/** "Upcoming / Building now / Finished" pill — or "Not scheduled" when dateless. */
+/** Schedule-only status pill — lifecycle phase is shown separately. */
 export function SchedulePill({ project }: { project: Project }) {
   const meta =
     project.startDate && project.endDate
@@ -125,6 +126,7 @@ export function ProjectModal({
   return (
     <Modal title={project.name} onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <PhasePill phase={project.phase} prefix="Project" />
         <SchedulePill project={project} />
         <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
           {[project.type, project.location].filter(Boolean).join(' · ')}

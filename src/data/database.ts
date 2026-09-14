@@ -47,6 +47,21 @@ async function areaPhases(projectId: string): Promise<Map<string, ProjectPhase |
   return new Map(rows.map(row => [row.id, row.phase ?? null]))
 }
 
+export interface AccountAreaPhase { projectId: string; phase: ProjectPhase | null }
+
+export async function getAccountAreaPhases(projectIds: string[]): Promise<AccountAreaPhase[]> {
+  const ids = [...new Set(projectIds.filter(Boolean))]
+  if (!ids.length) return []
+  if (!phaseDb) {
+    const activeProjectId = core.getActiveProjectId()
+    return activeProjectId && ids.includes(activeProjectId)
+      ? mock.areas.map(area => ({ projectId: activeProjectId, phase: area.phase ?? null }))
+      : []
+  }
+  const rows = checked(await phaseDb.from('areas').select('project_id, phase').in('project_id', ids)) as { project_id: string; phase: ProjectPhase | null }[]
+  return rows.map(row => ({ projectId: row.project_id, phase: row.phase ?? null }))
+}
+
 export async function getProjects(): Promise<Project[]> {
   const projects = await core.getProjects()
   if (!phaseDb) return projects.map(project => ({ ...project, phase: mock.projects.find(item => item.id === project.id)?.phase ?? null }))
