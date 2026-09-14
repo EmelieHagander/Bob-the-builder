@@ -1,5 +1,50 @@
 # Foundation verification and rollout
 
+## Delivered manual material planning (4B2a)
+
+**Status:** manual 4B2a implemented, merged, migrated, deployed and live-verified on 2026-09-14. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) merged as `1093fafbdbc5fc4ef0e477f0f6741c03bc3860b7`; verification-only [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) merged as `fd737d45f1804245c31420037f8f12471302a7c5`. [Material planning](material-planning.md) owns behavior and limits.
+
+### Automated, browser and hosted migration evidence
+
+- Pre-merge [CI 34810364646](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34810364646) passes the full schema/domain, TypeScript/Vite, edge, PWA/install, Ask bob, foundation browser and Building-context suite. The Material plan proof runs inside the existing foundation harness at 320/390/1280px and covers stock/reuse, transparent arithmetic, explicit Shopping handoff, persisted delivered status, Update Shopping, reload and project isolation.
+- Follow-up #50 [CI 34811122576](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34811122576) is fully green and regression-locks browser/live `method_key = manual` to the server SQL; it changes no schema, arithmetic, Shopping or UI behavior.
+- Five additive source migrations were applied in order:
+
+| Source migration | Hosted registry |
+|---|---|
+| `20260913210000_material_planning.sql` | `20260914053521_bob_material_planning_4b2a` |
+| `20260913210100_material_planning_hardening.sql` | `20260914053538_bob_material_planning_4b2a_hardening` |
+| `20260913210200_material_planning_publish.sql` | `20260914053605_bob_material_planning_4b2a_publish` |
+| `20260913210300_material_planning_reservation_serialization.sql` | `20260914053620_bob_material_planning_4b2a_reservation_serialization` |
+| `20260913210400_material_planning_fk_index.sql` | `20260914054215_bob_material_planning_4b2a_fk_index` |
+
+Post-DDL security review reports no new 4B2a-specific security finding. Performance review found one new composite-parent FK covering-index opportunity; the fifth migration adds `material_requirement_revisions_parent_idx(requirement_id, project_id)` and the finding disappears on re-check. Expected fresh-unused-index notices and unrelated shared-database findings remain informational. See the [unindexed-FK remediation guide](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys).
+
+### Live Auth/PostgREST proof, deploy and cleanup
+
+The first post-merge live run [34810721689](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34810721689) reached the hosted material path and exposed verification drift only: runtime persisted `method_key = manual` while the proof expected `manual_base`. PR #50 aligned the fixtures with the already-deployed server truth and added a regression guard; no production schema/data behavior changed.
+
+Final [Pages 34811372007](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34811372007) and [live foundation check 34811372088](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34811372088) pass on `main` commit `fd737d45f1804245c31420037f8f12471302a7c5`. Through the ordinary authenticated Bob client, the live material proof verifies exact target/drawing/stock/reuse lineage, `4 pcs → 1 stock → 2 reusable → 1 to buy`, a revised `2 to buy`, explicit Shopping publish/update with delivered status/supplier/cost preserved, independent Shopping-edit disclosure, stale-source publish rejection, raw-write denial and project isolation. No AI is invoked.
+
+The shared foundation run also passes facts, solutions, deterministic geometry, drawings and Building context, removes image bytes/metadata/attachments through normal APIs and removes the temporary physical fixture through guarded physical-authority commands. Operator cleanup then deleted the two exact disposable verification projects from the initial proof-drift run and the final green run after checking exact nonce names/descriptions and zero media. A final query reports zero projects, material requirements, stock items, artifacts and media for those two fixture ids.
+
+## Delivered deterministic artifact geometry (4B1)
+
+**Status:** narrow 4B1 implemented, merged, migrated, deployed and live-verified on 2026-09-13. [PR 47](https://github.com/EmelieHagander/Bob-the-builder/pull/47) delivered the generator and persistence; [PR 49](https://github.com/EmelieHagander/Bob-the-builder/pull/49) closed the hosted release proof. [Plans and drawings](artifacts.md) owns geometry behavior and limits.
+
+The release stores deterministic `stud_wall_opening_v1` recipes in `artifact_generations` plus six exact role-mapped `artifact_geometry_inputs`. It pins Building, accepted Space revision, exact Measurement revisions and explicit stud spacing; unknown dimensions fail, estimated inputs remain concept-only, and regeneration creates a new Artifact revision rather than rewriting history. SVG/vector output is recomputed from the versioned recipe; raster output is not truth. It does not claim general CAD/BIM, structural header/load-path sizing or material quantities.
+
+Source migrations map to hosted history as follows:
+
+| Source migration | Hosted registry |
+|---|---|
+| `20260913193000_artifact_deterministic_geometry.sql` | `20260913212211_bob_artifact_deterministic_geometry` |
+| `20260913193100_artifact_geometry_command_grant.sql` | `20260913212218_bob_artifact_geometry_command_grant` |
+| `20260913193200_artifact_geometry_invariants.sql` | `20260913212229_bob_artifact_geometry_invariants` |
+| `20260913194000_artifact_generation_space_revision_index.sql` | `20260913213315_bob_artifact_generation_space_revision_index` |
+
+The implementation branch's full CI/browser gate [34775629980](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34775629980) is green. Final [Pages 34784328229](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34784328229) and [live foundation check 34784328249](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34784328249) pass on the 4B1 live-proof `main`. The ordinary Auth/PostgREST run verifies persistent Space target, six exact measurements, recipe read-back, raw-write/RLS denial, unknown/out-of-bounds rejection, regeneration history and archive/restore carry-forward, then detaches its stable physical verification fixture. No AI is invoked.
+
 ## Delivered persistent building context (2C)
 
 **Status:** manual 2C implemented, merged, migrated, deployed and live-verified on

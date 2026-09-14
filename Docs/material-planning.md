@@ -1,6 +1,6 @@
 # Material planning — manual requirement, stock and shopping foundation
 
-**Status:** manual Slice 4B2a implementation in progress; not deployed. This contract owns the persisted material-requirement, stock-allocation and Shopping handoff foundation. `Docs/v1-plan.md` owns release order and the later supported geometry calculators / executable-work-plan gates.
+**Status:** manual Slice 4B2a implemented, merged, migrated, deployed and live-verified on 2026-09-14. This contract owns the persisted material-requirement, stock-allocation and Shopping handoff foundation. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) delivered the foundation and [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) aligned the release proof with persisted server truth. `Docs/v1-plan.md` owns release order and the later supported geometry calculators / executable-work-plan gates; `Docs/foundation-verification.md` owns release evidence.
 
 ## User goal
 
@@ -23,7 +23,7 @@ A requirement version has a `source_kind`:
 - **manual** — a human supplied the base required quantity and wrote its basis;
 - **deterministic** — reserved for a later supported calculation method that can reproduce the base quantity from saved inputs.
 
-4B2a creates manual versions only. The deterministic value exists in the model so later supported calculators can add new requirement revisions rather than replacing the foundation.
+4B2a creates manual versions only. Persisted manual versions use `method_key = manual` and `method_version = 4B2a-v1`; browser and hosted release proofs are regression-locked to that server identity. The deterministic value exists in the model so later supported calculators can add new requirement revisions rather than replacing the foundation.
 
 The UI must never label a manually supplied base quantity as geometry-derived. Waste, stock deduction and purchase rounding *are* deterministic derived values and expose their arithmetic.
 
