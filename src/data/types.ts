@@ -39,8 +39,8 @@ export interface Project {
   location: string
   type: string
   theme: ThemeName
-  /** Existing projects are intentionally null until a human classifies them. */
-  phase: ProjectPhase | null
+  /** Existing projects are intentionally null/unset until a human classifies them. */
+  phase?: ProjectPhase | null
   startLabel: string
   /** ISO date (YYYY-MM-DD) the build window starts — null while unscheduled */
   startDate: string | null
@@ -72,8 +72,8 @@ export interface Area {
   description: string
   icon: string
   leadId: string | null
-  /** Existing areas are intentionally null until a human classifies them. */
-  phase: AreaPhase | null
+  /** Existing areas are intentionally null/unset until a human classifies them. */
+  phase?: AreaPhase | null
   /** 0-100 progress figures used across dashboard + area detail */
   assignedPct: number
   materialsPct: number
