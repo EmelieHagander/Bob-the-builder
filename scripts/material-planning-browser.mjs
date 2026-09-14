@@ -190,7 +190,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
           task_id: data.task_id ?? null, task_title: data.task_id === 'taskA' ? 'Prepare opening' : '', unit: data.unit,
           required_quantity: String(required), waste_percent: String(waste), purchase_increment: String(increment),
           required_with_waste: String(requiredWithWaste), stock_quantity: String(stockQuantity), component_quantity: String(componentQuantity), purchase_quantity: String(purchase),
-          source_kind: 'manual', method_key: 'manual_base', method_version: '4B2a-v1', basis: data.basis, assumptions: data.assumptions ?? '',
+          source_kind: 'manual', method_key: 'manual', method_version: '4B2a-v1', basis: data.basis, assumptions: data.assumptions ?? '',
           artifact_id: artifact?.id ?? null, artifact_revision: artifact?.revision ?? null, artifact_title: artifact?.title ?? '',
           target_revision: target.decision.revision, solution_id: target.decision.solution_id, solution_revision: target.decision.solution_revision,
           solution_title: target.solution.title, archived: false, change_note: action === 'create' ? 'Initial material requirement' : data.change_note,
