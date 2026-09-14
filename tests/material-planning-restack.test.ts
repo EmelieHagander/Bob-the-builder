@@ -43,10 +43,17 @@ test('material requirement history covers its composite parent foreign key', asy
     'the requirement/project parent FK should have an index with the same leading columns')
 })
 
-test('material browser proof scopes Shopping navigation to the page back link', async () => {
-  const script = await readFile(new URL('../scripts/material-planning-browser.mjs', import.meta.url), 'utf8')
-  assert.match(script, /locator\('a\.back-link'\).*\^Shopping\$/, 'desktop proof should target the local Shopping back link')
-  assert.doesNotMatch(script, /getByRole\('link', \{ name: 'Shopping', exact: true \}\)/, 'desktop sidebar and page back link share the same accessible name')
+test('material plan preserves Area context while Project scope retains Shopping navigation', async () => {
+  const [pageSource, script] = await Promise.all([
+    readFile(new URL('../src/pages/MaterialPlan.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/material-planning-browser.mjs', import.meta.url), 'utf8'),
+  ])
+  assert.ok(pageSource.includes('activeArea ? <Link to={`/areas/${activeArea.slug}`} className="back-link">'),
+    'Area-scoped material planning should return to its workstream')
+  assert.ok(pageSource.includes('<Link to="/shopping" className="back-link">Shopping</Link>'),
+    'Project-scoped material planning should retain the Shopping back link')
+  assert.match(script, /page\.goto\(base \+ '#\/shopping'\)/,
+    'browser proof should navigate explicitly when it leaves Area scope for Shopping')
 })
 
 test('hosted foundation proof composes material planning into the shared disposable project', async () => {

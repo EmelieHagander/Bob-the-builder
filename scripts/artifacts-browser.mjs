@@ -190,6 +190,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   solutions.decisions.push({
     project_id: 'A', revision: solutions.decisions.length + 1, solution_id: selected.id, solution_revision: selected.revision,
     reason: 'Use the extension for the drawing fixture', actor_label: 'Fixture member', recorded_at: selected.recorded_at,
+    area_id: null, scope_key: 'project',
   })
 
   await page.goto(base + '#/artifacts')
@@ -235,6 +236,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   solutions.decisions.push({
     project_id: 'A', revision: solutions.decisions.length + 1, solution_id: other.id, solution_revision: other.revision,
     reason: 'Change target after drawing', actor_label: 'Fixture member', recorded_at: other.recorded_at,
+    area_id: null, scope_key: 'project',
   })
   await page.reload(); await card.getByText('The selected target for this scope changed after this drawing version. Review before building from it.', { exact: true }).waitFor()
 

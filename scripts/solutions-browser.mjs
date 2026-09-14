@@ -15,11 +15,13 @@ export function createSolutionsFixture(timestamp, assets, facts) {
         const old = records.get(id)
         if (action === 'select' || action === 'clear') {
           if (fixture.rejectNext) { fixture.rejectNext = false; return fail('Target changed. Reload before deciding again.') }
-          if (expected !== decisions.length) return fail('Target changed. Reload before deciding again.')
+          const scopeKey = data.area_id ? `area:${data.area_id}` : 'project'
+          const current = [...decisions].reverse().find(item => item.project_id === p_project && item.scope_key === scopeKey)
+          if (expected !== (current?.revision ?? 0)) return fail('Target changed. Reload before deciding again.')
           if (action === 'select' && old.revision !== data.solution_revision) return fail('Solution changed. Reload before selecting.')
           decisions.push({ project_id: p_project, revision: decisions.length + 1, solution_id: id,
             solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp(),
-            area_id: data.area_id ?? null, scope_key: data.area_id ? `area:${data.area_id}` : 'project' })
+            area_id: data.area_id ?? null, scope_key: scopeKey })
           await respond({ json: { revision: decisions.length } }); return true
         }
         if (action !== 'create' && old.revision !== expected) return fail('Solution changed. Reload before saving again.')
@@ -34,7 +36,11 @@ export function createSolutionsFixture(timestamp, assets, facts) {
         await respond({ json: { id, revision: row.revision } }); return true
       }
       let rows
-      if (table === 'current_target') rows = decisions.length ? [decisions.at(-1)] : []
+      if (table === 'current_target') {
+        const latest = new Map()
+        for (const item of decisions) latest.set(item.scope_key ?? (item.area_id ? `area:${item.area_id}` : 'project'), item)
+        rows = [...latest.values()]
+      }
       else if (table === 'target_revisions') rows = [...decisions].reverse()
       else if (table === 'current_solutions') rows = [...records.values()]
       else if (table === 'solution_revisions') rows = [...(histories.get(eq('solution_id')) ?? [])].reverse()

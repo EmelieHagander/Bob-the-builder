@@ -14,8 +14,10 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
   const shoppingLinks = new Map()
   const materials = new Map()
 
-  const currentTarget = projectId => {
-    const decision = [...solutions.decisions].reverse().find(item => item.project_id === projectId)
+  const currentTarget = (projectId, areaId = null) => {
+    const decisions = [...solutions.decisions].reverse().filter(item => item.project_id === projectId)
+    const scoped = decisions.find(item => (item.area_id ?? null) === areaId)
+    const decision = scoped ?? (areaId ? decisions.find(item => item.area_id == null) : null)
     if (!decision?.solution_id) return null
     const solution = solutions.histories.get(decision.solution_id)?.find(item => item.revision === decision.solution_revision)
     return solution ? { decision, solution } : null
@@ -32,7 +34,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
   }
 
   const stale = row => {
-    const target = currentTarget(row.project_id)
+    const target = currentTarget(row.project_id, row.area_id ?? null)
     const artifact = row.artifact_id ? currentArtifact(row.project_id, row.artifact_id) : null
     const saved = allocations.get(key(row.id, row.revision)) ?? { stock: [], components: [] }
     return {
@@ -133,7 +135,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
         const wallWidth = mm(byRole.wall_width), wallHeight = mm(byRole.wall_height)
         const openingWidth = mm(byRole.opening_width), openingHeight = mm(byRole.opening_height)
         const required = round4Up((wallWidth * wallHeight - openingWidth * openingHeight) / 1_000_000)
-        const target = currentTarget(p_project)
+        const target = currentTarget(p_project, data.area_id ?? null)
         if (!target || target.decision.revision !== data.target_revision) return fail('Project target changed. Reload before saving the material requirement.')
         const stockRefs = []
         let stockQuantity = 0
@@ -204,7 +206,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
           return reply({ json: { id, revision: row.revision } })
         }
 
-        const target = currentTarget(p_project)
+        const target = currentTarget(p_project, data.area_id ?? null)
         if (!target || target.decision.revision !== data.target_revision) return fail('Project target changed. Reload before saving the material requirement.')
         const artifact = data.artifact_id ? currentArtifact(p_project, data.artifact_id) : null
         if (data.artifact_id && (!artifact || artifact.revision !== data.artifact_revision)) return fail('Drawing version unavailable in this project')
@@ -355,11 +357,14 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   const stockCard = page.getByRole('article', { name: 'Spare matching window', exact: true })
   await stockCard.getByText(/1 pcs/).waitFor()
 
+  await page.getByLabel('Filter by area', { exact: true }).selectOption('areaA')
+  await page.getByRole('heading', { name: 'Entry target', exact: true }).waitFor()
+  await page.getByText(/Inherited from Project/).waitFor()
   await page.getByRole('button', { name: 'Add requirement', exact: true }).click()
   modal = page.getByRole('dialog', { name: 'Add material requirement', exact: true })
   await modal.getByLabel('Material / requirement', { exact: true }).fill('Windows 1180×1700')
   await modal.getByLabel('Category', { exact: true }).fill('Openings')
-  await modal.getByLabel('Area', { exact: true }).selectOption('areaA')
+  assert.equal(await modal.getByLabel('Scope', { exact: true }).inputValue(), 'Entry')
   await modal.getByLabel('Task', { exact: true }).selectOption('taskA')
   const drawing = modal.getByLabel('Drawing basis', { exact: true })
   const drawingOptions = await drawing.locator('option').count()
@@ -391,7 +396,7 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await modal.getByText(/deliberately writes the saved purchase need/).waitFor()
   await modal.getByRole('button', { name: 'Send to Shopping', exact: true }).click()
   await modal.waitFor({ state: 'hidden' })
-  await page.locator('a.back-link').filter({ hasText: /^Shopping$/ }).click()
+  await page.goto(base + '#/shopping')
   let shoppingRow = page.getByText('Windows 1180×1700', { exact: true }).locator('..')
   await shoppingRow.getByText('1 pcs', { exact: false }).waitFor()
   await shoppingRow.getByText('From material plan', { exact: true }).waitFor()
@@ -420,7 +425,7 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await modal.getByRole('button', { name: 'Update Shopping', exact: true }).click()
   await modal.waitFor({ state: 'hidden' })
 
-  await page.locator('a.back-link').filter({ hasText: /^Shopping$/ }).click()
+  await page.goto(base + '#/shopping')
   shoppingRow = page.getByText('Windows 1180×1700', { exact: true }).locator('..')
   await shoppingRow.getByText('2 pcs', { exact: false }).waitFor()
   await page.getByText('Got it', { exact: true }).waitFor()
@@ -440,11 +445,12 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await modal.getByLabel('Area', { exact: true }).selectOption('areaA')
   await modal.getByRole('button', { name: 'Save stock', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
 
+  await page.getByLabel('Filter by area', { exact: true }).selectOption('areaA')
   await page.getByRole('button', { name: 'Calculate from drawing', exact: true }).click()
   modal = page.getByRole('dialog', { name: 'Calculate material from drawing', exact: true })
   await modal.getByLabel('Material / requirement', { exact: true }).fill('Wall board coverage')
   await modal.getByLabel('Category', { exact: true }).fill('Sheet material')
-  await modal.getByLabel('Area', { exact: true }).selectOption('areaA')
+  assert.equal(await modal.getByLabel('Scope', { exact: true }).inputValue(), 'Entry')
   await modal.getByLabel('Task', { exact: true }).selectOption('taskA')
   await modal.getByLabel('Generated drawing', { exact: true }).selectOption({ index: 0 })
   assert.equal(await modal.getByLabel('Base required quantity', { exact: true }).count(), 0, 'Calculated flow must not accept a client base quantity')
@@ -481,12 +487,12 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.getByRole('link', { name: 'Account', exact: true }).click()
   await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
   await page.goto(base + '#/material-plan')
-  await page.getByText('Choose a project target before recording material requirements.', { exact: true }).waitFor()
+  await page.getByText('Choose a target for the Project before recording material requirements.', { exact: true }).waitFor()
   assert.equal(await page.getByRole('article', { name: 'Spare matching window', exact: true }).count(), 0)
   assert.equal(await page.getByRole('article', { name: 'Windows 1180×1700', exact: true }).count(), 0)
   await page.getByRole('link', { name: 'Account', exact: true }).click()
   await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
 
   assert.equal(fixture.materials.size, 2)
-  console.log(`Material plan manual + deterministic drawing quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
+  console.log(`Material plan Project/Area target scope + manual/deterministic quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
 }
