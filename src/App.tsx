@@ -9,7 +9,7 @@ import { AccountCalendar } from './pages/account/AccountCalendar'
 import { AccountSettings } from './pages/account/AccountSettings'
 import { ProjectHome } from './pages/ProjectHome'
 import { Areas } from './pages/Areas'
-import { AreaDetail } from './pages/AreaDetail'
+import { AreaWorkstream } from './pages/AreaWorkstream'
 import { TaskDetail } from './pages/TaskDetail'
 import { ProjectFacts } from './pages/ProjectFacts'
 import { Solutions } from './pages/Solutions'
@@ -30,7 +30,6 @@ import { Install } from './pages/Install'
 import { VolunteerProject } from './pages/VolunteerProject'
 
 export function App() {
-  // Installation help is public, even while project/session loading is slow.
   return (
     <Routes>
       <Route path="/install" element={<Install />} />
@@ -44,9 +43,6 @@ export function App() {
 function ProjectApp() {
   const navigate = useNavigate()
   const location = useLocation()
-  // The active project decides the colour theme (forest / dusk / birch).
-  // Refetches when the active project changes (switch from the account
-  // level) and after the first project is created.
   const projectVersion = useProjectVersion()
   const authTick = useAuthTick()
   const [bootVersion, setBootVersion] = useState(0)
@@ -57,8 +53,6 @@ function ProjectApp() {
     if (project) document.documentElement.setAttribute('data-theme', project.theme)
   }, [project])
 
-  // After signing in, land on the account dashboard — regardless of whether
-  // the session arrived from the form, the guest button, or a magic link.
   const wasSignedOut = useRef(false)
   useEffect(() => {
     if (signedIn === false) wasSignedOut.current = true
@@ -69,21 +63,9 @@ function ProjectApp() {
   }, [signedIn, navigate])
 
   if (loading || sessionLoading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Loading />
-      </div>
-    )
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loading /></div>
   }
-
-  // Live mode requires a signed-in member (or the guest) before anything else.
-  // The sign-in screen stands alone — no sidebar, no menus. Demo mode has no
-  // auth and skips straight in.
-  if (db.authEnabled() && !signedIn) {
-    return <SignIn />
-  }
-  // Persistent buildings can be shared before anyone creates a project.
-  // This account surface must remain reachable with zero project memberships.
+  if (db.authEnabled() && !signedIn) return <SignIn />
   if (location.pathname === '/account/buildings') {
     return <BuildingContext key={`account:${authTick}`} projectId="" context={db.buildingContext} />
   }
@@ -91,11 +73,7 @@ function ProjectApp() {
     <p>Could not load your project. Your access may have changed.</p>
     <button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
   </div>
-
-  // Fresh install (or demo data just removed): no project in the database yet.
-  if (!project) {
-    return <StartProject onCreated={() => setBootVersion((v) => v + 1)} />
-  }
+  if (!project) return <StartProject onCreated={() => setBootVersion(v => v + 1)} />
 
   return (
     <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project}>
@@ -105,7 +83,7 @@ function ProjectApp() {
         <Route path="/account/calendar" element={<AccountCalendar />} />
         <Route path="/account/settings" element={<AccountSettings />} />
         <Route path="/areas" element={<Areas />} />
-        <Route path="/areas/:slug" element={<AreaDetail />} />
+        <Route path="/areas/:slug" element={<AreaWorkstream />} />
         <Route path="/tasks/:taskId" element={<TaskDetail />} />
         <Route path="/facts" element={<ProjectFacts />} />
         <Route path="/solutions" element={<Solutions />} />
@@ -120,7 +98,6 @@ function ProjectApp() {
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/announcements" element={<Announcements />} />
         <Route path="/today" element={<Today />} />
-        {/* Signed-in users don't need the form — the gate above owns sign-in. */}
         <Route path="/signin" element={<Navigate to="/account" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
