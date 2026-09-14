@@ -30,22 +30,23 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 3A — alternatives + selected target;
 - Slice 4A — manual plans/drawings with exact target and measurement lineage;
 - Slice 4B1 — deterministic `stud_wall_opening_v1` artifact geometry with exact Building/Space and six-measurement recipe lineage;
-- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff.
+- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff;
+- Slice 4B2b — deterministic `stud_wall_net_area` material base quantity from an exact current `stud_wall_opening_v1` drawing, persisted into the existing material-requirement/Shopping path.
 
 Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the domain/schema/authority foundation, PR #43 the app-facing UI, and PR #45 the hosted cleanup-order correction. The dedicated browser proof passes at 320px, 390px and 1280px; the hosted Auth/PostgREST live check passes and self-cleans its physical fixture; the current `main` Pages deployment is green. `Docs/foundation-verification.md` owns exact migration/run evidence.
 
-4B1 and 4B2a are also runtime truth. PR #47 delivered the narrow deterministic stud-wall-with-opening generator, PR #49 closed its hosted/live release gate, PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. The final 4B2a Pages deployment and ordinary hosted Auth/PostgREST foundation check are green; `Docs/foundation-verification.md` owns the exact migration, advisor, browser, live and cleanup evidence.
+4B1, 4B2a and the first narrow 4B2b calculator are runtime truth. PR #47 delivered the deterministic stud-wall-with-opening generator and PR #49 closed its hosted/live release gate; PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. PR #54 then added server-owned `stud_wall_net_area` derivation into the same requirement model. Its source migration `20260914084207_deterministic_material_quantities.sql` is applied on hosted Supabase as `20260914090502_bob_deterministic_material_quantities_4b2b`; Pages run `34826249816` and ordinary hosted Auth/PostgREST foundation run `34826249907` are green on merge commit `098ea2b16c04ebbb279130860eceb97d7ea05cd3`. `Docs/foundation-verification.md` owns the exact migration, advisor, browser and live evidence.
 
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
 - full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
 - Slice 3B generated visual proposals/mockups;
-- Slice 4B2b — deterministic geometry-derived material base quantities for supported fixtures, including later fastener/consumable rules where explicitly modelled;
+- broader deterministic material rules beyond the shipped `stud_wall_net_area` calculator, including fasteners/consumables only where an explicit rule or coverage basis is modelled;
 - richer task/material/dependency/tool/readiness relations that turn the persisted plan into executable work;
 - Slice 5 generated/project-specific guidance and structured progress/as-built completion.
 
-**Current next implementation milestone:** **Slice 4B2b deterministic material quantities for the supported 4B1 geometry fixture.** New quantity revisions must feed the existing 4B2a `material_requirements` foundation with `source_kind = deterministic`, pinned recipe/input lineage and transparent arithmetic rather than creating a parallel BOM system. Start with quantities that are reproducible from the saved stud-wall recipe; generic fasteners, consumables, catalogue pricing and engineering assumptions remain out until explicitly specified.
+**Current next release milestone:** complete the hosted rollout and live gates for the already-merged household/friend sharing and name-only volunteer source. After that, the next foundations implementation milestone is **richer task/material/dependency/tool/readiness relations** on top of the persisted target, drawings and material plan. The shipped 4B2b path remains deliberately narrow: broader fastener/consumable/catalogue/engineering rules stay unknown/manual until an explicit deterministic rule is specified.
 
 **Active owner-requested extension:** **household Building sharing and per-project household/friend collaboration**, requested on 2026-09-13 and extended with name-only volunteers on 2026-09-14. The household may edit the shared Building and collaborate on explicitly shared projects. Source is implemented; deployment, account isolation and runtime sharing gates are still pending. The [data/auth contract](../db/README.md#household-and-friend-sharing) owns precise access sources and commands; [building §11.1A](building-model.md#111a-household-sharing-extension) owns the physical authority extension.
 
@@ -54,8 +55,8 @@ Area → physical-target mapping is backend-built and live-verified. A dedicated
 **Execution order from here:**
 
 1. complete and release-gate explicit household/friend sharing and name-only volunteers, including legacy account isolation, dynamic revocation and project/Building authority boundaries;
-2. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
-3. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
+2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
+3. extend deterministic material rules beyond the shipped net-wall-area calculator only where explicit formulas/coverage rules and provenance are defined;
 4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
 5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 
