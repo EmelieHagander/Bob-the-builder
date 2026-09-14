@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
+import { ProjectImages } from '../components/ProjectImages'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
 
@@ -53,6 +54,10 @@ export function ProjectHome() {
         icon={focus.icon}
         action={!project.phase ? <button className="btn btn-primary" onClick={() => setPhaseOpen(true)}>Classify this project</button> : undefined}
       />
+    </section>
+
+    <section className="card" style={{ marginTop: 20, padding: 16 }}>
+      <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
     </section>
 
     <section style={{ marginTop: 24 }}>
