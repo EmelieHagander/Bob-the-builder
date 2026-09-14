@@ -46,6 +46,11 @@ jobs:
       - run: node --check scripts/solutions-browser.mjs
       - run: node --check scripts/artifacts-browser.mjs
       - run: node --check scripts/material-planning-browser.mjs
+      - name: Build with dummy live configuration
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+        run: npm run build
       - name: Browser foundation regression
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Commit verified patch
