@@ -1,0 +1,43 @@
+name: Patch Today phase context
+
+on:
+  push:
+    branches:
+      - feat/today-phase-context
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Add Today phase context'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/today-phase-context
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: python scripts/apply-today-phase-context-patch.py
+      - run: npm ci
+      - run: npm test
+      - run: npm run check:edge
+      - run: npm run build
+      - name: Build with dummy live configuration
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+        run: npm run build
+      - name: Verify phase field context
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
+      - name: Commit verified slice
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-today-phase-context.yml scripts/apply-today-phase-context-patch.py
+          git add src/data/types.ts src/data/mockData.ts src/data/databaseCore.ts src/pages/TaskDetail.tsx src/pages/Today.tsx scripts/check-live-project-phases.mjs scripts/check-project-phases-browser.mjs supabase/migrations/20260914205500_today_area_phase_context.sql
+          git commit -m "Add Today phase context"
+          git push origin HEAD:feat/today-phase-context
