@@ -2,14 +2,14 @@ name: Patch material plan area scope
 
 on:
   push:
-    branches: [feat/material-plan-area-scope]
+    branches:
+      - feat/material-plan-area-scope
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'Bootstrap material plan area-scope patch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -20,193 +20,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Apply scoped material-plan patch
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace(path, old, new, count=1):
-              p = Path(path)
-              s = p.read_text()
-              actual = s.count(old)
-              if actual != count:
-                  raise SystemExit(f'{path}: expected {count} matches, found {actual}: {old[:100]!r}')
-              p.write_text(s.replace(old, new, count))
-
-          path = 'src/pages/MaterialPlan.tsx'
-          replace(path,
-            "  const [params] = useSearchParams()",
-            "  const [params, setParams] = useSearchParams()")
-          replace(path,
-            "    value.targetChanged && 'project target',",
-            "    value.targetChanged && 'selected target',")
-
-          replace(path,
-            "function RequirementEditor({ projectId, target, value, areas, tasks, artifacts, stock, components, onClose, onSaved }: {\n  projectId: string\n  target: SelectedTarget\n  value?: MaterialRequirementVersion",
-            "function RequirementEditor({ projectId, target, scopeArea, value, areas, tasks, artifacts, stock, components, onClose, onSaved }: {\n  projectId: string\n  target: SelectedTarget\n  scopeArea: string\n  value?: MaterialRequirementVersion")
-          replace(path,
-            "  const [area, setArea] = useState(value?.areaId ?? '')",
-            "  const area = scopeArea",
-            count=2)
-          replace(path,
-            "  const selected = target.solution\n  const taskOptions = tasks.filter(item => !area || item.areaId === area)",
-            "  const selected = target.solution\n  const scopeName = area ? areas.find(item => item.id === area)?.name ?? 'Area' : 'Project'\n  const taskOptions = tasks.filter(item => !area || item.areaId === area)",
-            count=2)
-          replace(path,
-            "        <div className=\"fact-source\"><strong>Selected project target</strong><p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p><span>Target decision {target.decision.revision}. A changed target rejects this save.</span></div>",
-            "        <div className=\"fact-source\"><strong>{area ? `Selected target for ${scopeName}` : 'Selected Project target'}</strong><p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p><span>{target.inherited ? 'Inherited from Project · ' : ''}Target decision {target.decision.revision}. A changed target rejects this save.</span></div>",
-            count=2)
-          replace(path,
-            "          <Field label=\"Area\"><select style={inputStyle} value={area} onChange={event => { setArea(event.target.value); setTask('') }}><option value=\"\">Project as a whole</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>\n          <Field label=\"Task\"><select style={inputStyle} value={task} onChange={event => setTask(event.target.value)}><option value=\"\">No task yet</option>{taskOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>",
-            "          <Field label=\"Scope\"><input style={inputStyle} value={area ? scopeName : 'Project as a whole'} disabled /></Field>\n          <Field label=\"Task\"><select style={inputStyle} value={task} onChange={event => setTask(event.target.value)}><option value=\"\">No task yet</option>{taskOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>",
-            count=2)
-
-          replace(path,
-            "function DeterministicRequirementEditor({ projectId, target, value, areas, tasks, artifacts, stock, onClose, onSaved }: {\n  projectId: string\n  target: SelectedTarget\n  value?: MaterialRequirementVersion",
-            "function DeterministicRequirementEditor({ projectId, target, scopeArea, value, areas, tasks, artifacts, stock, onClose, onSaved }: {\n  projectId: string\n  target: SelectedTarget\n  scopeArea: string\n  value?: MaterialRequirementVersion")
-
-          old_dialog = """function RequirementVersionDialog({ projectId, id, revision, target, edit, areas, tasks, artifacts, stock, components, onClose, onSaved }: {
-  projectId: string; id: string; revision: number; target: SelectedTarget; edit?: boolean; areas: Area[]; tasks: Task[]; artifacts: ProjectArtifact[]; stock: StockItem[]; components: ExistingComponent[]; onClose: () => void; onSaved: () => void
-}) {
-  const [attempt, setAttempt] = useState(0)
-  const { data, loading, error } = useAsync(() => db.getMaterialRequirementVersion(projectId, id, revision), [projectId, id, revision, attempt])
-  if (data && !loading && !error && edit) {
-    const generated = artifacts.filter(item => item.generator === 'stud_wall_opening_v1' && item.targetRevision === target.decision.revision)
-    return data.sourceKind === 'deterministic'
-      ? <DeterministicRequirementEditor projectId={projectId} target={target} value={data} areas={areas} tasks={tasks} artifacts={generated} stock={stock} onClose={onClose} onSaved={onSaved} />
-      : <RequirementEditor projectId={projectId} target={target} value={data} areas={areas} tasks={tasks} artifacts={artifacts} stock={stock} components={components} onClose={onClose} onSaved={onSaved} />
-  }
-  return <Modal title={data ? `${data.name} · Version ${data.revision}` : 'Material requirement version'} onClose={onClose}>
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
-      <Calculation value={data} />
-      <div className=\"fact-source\"><strong>Lineage</strong><p>{data.solutionTitle} · solution version {data.solutionRevision} · target decision {data.targetRevision}</p>{data.artifactTitle && <p>Drawing: {data.artifactTitle} · Version {data.artifactRevision}</p>}<span>{data.actor} · {new Date(data.recordedAt).toLocaleString()} · {data.reason}</span></div>
-      {data.assumptions && <p><strong>Assumptions:</strong> {data.assumptions}</p>}
-      <StaleNotice value={data} />
-      <div className=\"fact-details\"><h4>Saved allocations</h4>{!data.stock.length && !data.components.length && <p>No stock or reusable component allocated.</p>}{data.stock.map(item => <p key={item.id}>{item.name}: {formatQuantity(item.quantity, item.unit)} from stock version {item.revision}{item.latestRevision !== item.revision ? ' · newer stock version exists' : ''}</p>)}{data.components.map(item => <p key={item.id}>{item.name}: {item.quantity} pcs from component version {item.revision}{item.latestRevision !== item.revision ? ' · newer component version exists' : ''}</p>)}</div>
-    </>}
-  </Modal>
-}"""
-          new_dialog = """function RequirementVersionDialog({ projectId, id, revision, scopeArea, edit, areas, tasks, artifacts, stock, components, onClose, onSaved }: {
-  projectId: string; id: string; revision: number; scopeArea: string; edit?: boolean; areas: Area[]; tasks: Task[]; artifacts: ProjectArtifact[]; stock: StockItem[]; components: ExistingComponent[]; onClose: () => void; onSaved: () => void
-}) {
-  const [attempt, setAttempt] = useState(0)
-  const { data, loading, error } = useAsync(async () => {
-    const [record, target] = await Promise.all([
-      db.getMaterialRequirementVersion(projectId, id, revision),
-      db.getSelectedTarget(projectId, scopeArea),
-    ])
-    return { record, target }
-  }, [projectId, id, revision, scopeArea, attempt])
-  const record = data?.record
-  const target = data?.target
-  if (record && target && !loading && !error && edit) {
-    const scopedArtifacts = artifacts.filter(item => (item.areaId ?? '') === scopeArea && item.targetRevision === target.decision.revision)
-    const generated = scopedArtifacts.filter(item => item.generator === 'stud_wall_opening_v1')
-    return record.sourceKind === 'deterministic'
-      ? <DeterministicRequirementEditor projectId={projectId} target={target} scopeArea={scopeArea} value={record} areas={areas} tasks={tasks} artifacts={generated} stock={stock} onClose={onClose} onSaved={onSaved} />
-      : <RequirementEditor projectId={projectId} target={target} scopeArea={scopeArea} value={record} areas={areas} tasks={tasks} artifacts={scopedArtifacts} stock={stock} components={components} onClose={onClose} onSaved={onSaved} />
-  }
-  return <Modal title={record ? `${record.name} · Version ${record.revision}` : 'Material requirement version'} onClose={onClose}>
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : record && <>
-      <Calculation value={record} />
-      <div className=\"fact-source\"><strong>Lineage</strong><p>{record.solutionTitle} · solution version {record.solutionRevision} · target decision {record.targetRevision}</p>{record.artifactTitle && <p>Drawing: {record.artifactTitle} · Version {record.artifactRevision}</p>}<span>{record.actor} · {new Date(record.recordedAt).toLocaleString()} · {record.reason}</span></div>
-      {record.assumptions && <p><strong>Assumptions:</strong> {record.assumptions}</p>}
-      <StaleNotice value={record} />
-      <div className=\"fact-details\"><h4>Saved allocations</h4>{!record.stock.length && !record.components.length && <p>No stock or reusable component allocated.</p>}{record.stock.map(item => <p key={item.id}>{item.name}: {formatQuantity(item.quantity, item.unit)} from stock version {item.revision}{item.latestRevision !== item.revision ? ' · newer stock version exists' : ''}</p>)}{record.components.map(item => <p key={item.id}>{item.name}: {item.quantity} pcs from component version {item.revision}{item.latestRevision !== item.revision ? ' · newer component version exists' : ''}</p>)}</div>
-    </>}
-  </Modal>
-}"""
-          replace(path, old_dialog, new_dialog)
-
-          replace(path,
-            "  const [detail, setDetail] = useState<{ id: string; revision: number; edit?: boolean } | null>(null)",
-            "  const [detail, setDetail] = useState<{ id: string; revision: number; areaId: string; edit?: boolean } | null>(null)")
-          replace(path,
-            "      db.getSelectedTarget(projectId), db.getAreas(), db.getTasks(), db.getProjectArtifacts(projectId, '', false, 0),",
-            "      db.getSelectedTarget(projectId, areaFilter), db.getAreas(), db.getTasks(), db.getProjectArtifacts(projectId, '', false, 0),")
-          replace(path,
-            "  const shoppingByRequirement = new Map((data?.shopping ?? []).map(item => [item.requirementId, item]))\n  const selected = data?.target.solution\n  const generatedArtifacts = (data?.artifacts ?? []).filter(item => item.generator === 'stud_wall_opening_v1' && item.targetRevision === data?.target.decision.revision)",
-            "  const shoppingByRequirement = new Map((data?.shopping ?? []).map(item => [item.requirementId, item]))\n  const selected = data?.target.solution\n  const activeArea = data?.areas.find(item => item.id === areaFilter)\n  const scopeArtifacts = (data?.artifacts ?? []).filter(item => (item.areaId ?? '') === areaFilter && item.targetRevision === data?.target.decision.revision)\n  const generatedArtifacts = scopeArtifacts.filter(item => item.generator === 'stud_wall_opening_v1')\n  const scopeLabel = activeArea?.name ?? 'Project'\n  const scopeQuery = areaFilter ? `?area=${encodeURIComponent(areaFilter)}` : ''")
-
-          replace(path,
-            "    <div className=\"page-head\"><div><Link to=\"/shopping\" className=\"back-link\">Shopping</Link><h1 className=\"page-title\">Material plan</h1><p className=\"page-sub\">Keep required, already available and still-to-buy quantities connected to the exact project target.</p></div><div className=\"foundation-actions\"><button className=\"btn btn-primary\" disabled={!selected} onClick={() => setEditor('new')}>Add requirement</button><button className=\"btn\" disabled={!selected || !generatedArtifacts.length} onClick={() => setCalculator(true)}>Calculate from drawing</button></div></div>",
-            "    <div className=\"page-head\"><div>{activeArea ? <Link to={`/areas/${activeArea.slug}`} className=\"back-link\">{activeArea.name}</Link> : <Link to=\"/shopping\" className=\"back-link\">Shopping</Link>}<h1 className=\"page-title\">Material plan</h1><p className=\"page-sub\">Keep required, already available and still-to-buy quantities connected to the exact selected target for {scopeLabel}.</p></div><div className=\"foundation-actions\"><button className=\"btn btn-primary\" disabled={!selected} onClick={() => setEditor('new')}>Add requirement</button><button className=\"btn\" disabled={!selected || !generatedArtifacts.length} onClick={() => setCalculator(true)}>Calculate from drawing</button></div></div>")
-          replace(path,
-            "      <div className=\"card\" style={{ padding: 18, marginTop: 16 }}><h2 style={{ marginTop: 0 }}>Material target</h2>{selected ? <><p><strong>{selected.title} · Version {selected.revision}</strong></p><p>Target decision {data.target.decision.revision}. New material versions pin this exact decision.</p><Link className=\"btn\" to=\"/solutions\">Review target</Link></> : <><p>Choose a project target before recording material requirements.</p><Link className=\"btn btn-primary\" to=\"/solutions\">Choose target</Link></>}</div>",
-            "      <div className=\"card\" style={{ padding: 18, marginTop: 16 }}><h2 style={{ marginTop: 0 }}>{activeArea ? `${activeArea.name} target` : 'Project target'}</h2>{selected ? <><p><strong>{selected.title} · Version {selected.revision}</strong></p><p>{data.target.inherited ? 'Inherited from Project. ' : ''}Target decision {data.target.decision.revision}. New material versions pin this exact decision for this scope.</p><Link className=\"btn\" to={`/solutions${scopeQuery}`}>Review target</Link></> : <><p>Choose a target for {activeArea?.name ?? 'the Project'} before recording material requirements.</p><Link className=\"btn btn-primary\" to={`/solutions${scopeQuery}`}>Choose target</Link></>}</div>")
-          replace(path,
-            "{selected && !generatedArtifacts.length && <p className=\"foundation-hint\">Need a supported wall calculation? <Link to=\"/artifacts\">Generate a wall elevation in Plans & drawings</Link> first.</p>}",
-            "{selected && !generatedArtifacts.length && <p className=\"foundation-hint\">Need a supported wall calculation? <Link to={`/artifacts${scopeQuery}`}>Generate a wall elevation in Plans & drawings</Link> first.</p>}")
-          replace(path,
-            "<Field label=\"Filter by area\"><select style={inputStyle} value={areaFilter} onChange={event => { setAreaFilter(event.target.value); setOffset(0) }}><option value=\"\">All areas</option>{data.areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>",
-            "<Field label=\"Filter by area\"><select style={inputStyle} value={areaFilter} onChange={event => { const next = event.target.value; setAreaFilter(next); setOffset(0); setParams(next ? { area: next } : {}, { replace: true }) }}><option value=\"\">All areas</option>{data.areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>")
-          replace(path,
-            "setDetail({ id: item.id, revision: item.revision })",
-            "setDetail({ id: item.id, revision: item.revision, areaId: item.areaId ?? '' })",
-            count=1)
-          replace(path,
-            "setDetail({ id: item.id, revision: item.revision, edit: true })",
-            "setDetail({ id: item.id, revision: item.revision, areaId: item.areaId ?? '', edit: true })")
-          replace(path,
-            "{data && editor === 'new' && selected && <RequirementEditor projectId={projectId} target={data.target} areas={data.areas} tasks={data.tasks} artifacts={data.artifacts}",
-            "{data && editor === 'new' && selected && <RequirementEditor projectId={projectId} target={data.target} scopeArea={areaFilter} areas={data.areas} tasks={data.tasks} artifacts={scopeArtifacts}")
-          replace(path,
-            "{data && calculator && selected && generatedArtifacts.length > 0 && <DeterministicRequirementEditor projectId={projectId} target={data.target} areas={data.areas}",
-            "{data && calculator && selected && generatedArtifacts.length > 0 && <DeterministicRequirementEditor projectId={projectId} target={data.target} scopeArea={areaFilter} areas={data.areas}")
-          replace(path,
-            "{data && detail && <RequirementVersionDialog projectId={projectId} id={detail.id} revision={detail.revision} edit={detail.edit} target={data.target}",
-            "{data && detail && <RequirementVersionDialog projectId={projectId} id={detail.id} revision={detail.revision} scopeArea={detail.areaId} edit={detail.edit}")
-          replace(path,
-            "setDetail({ id: history.id, revision })",
-            "setDetail({ id: history.id, revision, areaId: history.areaId ?? '' })")
-
-          # Make the shared solution fixture actually model one current pointer per scope.
-          path = 'scripts/solutions-browser.mjs'
-          replace(path,
-            "          if (expected !== decisions.length) return fail('Target changed. Reload before deciding again.')\n          if (action === 'select' && old.revision !== data.solution_revision) return fail('Solution changed. Reload before selecting.')\n          decisions.push({ project_id: p_project, revision: decisions.length + 1, solution_id: id,\n            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp(),\n            area_id: data.area_id ?? null, scope_key: data.area_id ? `area:${data.area_id}` : 'project' })",
-            "          const scopeKey = data.area_id ? `area:${data.area_id}` : 'project'\n          const current = [...decisions].reverse().find(item => item.project_id === p_project && item.scope_key === scopeKey)\n          if (expected !== (current?.revision ?? 0)) return fail('Target changed. Reload before deciding again.')\n          if (action === 'select' && old.revision !== data.solution_revision) return fail('Solution changed. Reload before selecting.')\n          decisions.push({ project_id: p_project, revision: decisions.length + 1, solution_id: id,\n            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp(),\n            area_id: data.area_id ?? null, scope_key: scopeKey })")
-          replace(path,
-            "      if (table === 'current_target') rows = decisions.length ? [decisions.at(-1)] : []",
-            "      if (table === 'current_target') {\n        const latest = new Map()\n        for (const item of decisions) latest.set(item.scope_key ?? (item.area_id ? `area:${item.area_id}` : 'project'), item)\n        rows = [...latest.values()]\n      }")
-
-          # Explicitly mark direct fixture target decisions as Project scope.
-          path = 'scripts/artifacts-browser.mjs'
-          replace(path,
-            "    reason: 'Use the extension for the drawing fixture', actor_label: 'Fixture member', recorded_at: selected.recorded_at,\n  })",
-            "    reason: 'Use the extension for the drawing fixture', actor_label: 'Fixture member', recorded_at: selected.recorded_at,\n    area_id: null, scope_key: 'project',\n  })")
-          replace(path,
-            "    reason: 'Change target after drawing', actor_label: 'Fixture member', recorded_at: other.recorded_at,\n  })",
-            "    reason: 'Change target after drawing', actor_label: 'Fixture member', recorded_at: other.recorded_at,\n    area_id: null, scope_key: 'project',\n  })")
-
-          # Material fixture uses the effective target for each requirement Area.
-          path = 'scripts/material-planning-browser.mjs'
-          replace(path,
-            "  const currentTarget = projectId => {\n    const decision = [...solutions.decisions].reverse().find(item => item.project_id === projectId)\n    if (!decision?.solution_id) return null",
-            "  const currentTarget = (projectId, areaId = null) => {\n    const decisions = [...solutions.decisions].reverse().filter(item => item.project_id === projectId)\n    const scoped = decisions.find(item => (item.area_id ?? null) === areaId)\n    const decision = scoped ?? (areaId ? decisions.find(item => item.area_id == null) : null)\n    if (!decision?.solution_id) return null")
-          replace(path,
-            "    const target = currentTarget(row.project_id)",
-            "    const target = currentTarget(row.project_id, row.area_id ?? null)")
-          replace(path,
-            "        const target = currentTarget(p_project)",
-            "        const target = currentTarget(p_project, data.area_id ?? null)",
-            count=2)
-          replace(path,
-            "  await stockCard.getByText(/1 pcs/).waitFor()\n\n  await page.getByRole('button', { name: 'Add requirement', exact: true }).click()",
-            "  await stockCard.getByText(/1 pcs/).waitFor()\n\n  await page.getByLabel('Filter by area', { exact: true }).selectOption('areaA')\n  await page.getByRole('heading', { name: 'Entry target', exact: true }).waitFor()\n  await page.getByText(/Inherited from Project/).waitFor()\n  await page.getByRole('button', { name: 'Add requirement', exact: true }).click()")
-          replace(path,
-            "  await modal.getByLabel('Area', { exact: true }).selectOption('areaA')\n  await modal.getByLabel('Task', { exact: true }).selectOption('taskA')",
-            "  assert.equal(await modal.getByLabel('Scope', { exact: true }).inputValue(), 'Entry')\n  await modal.getByLabel('Task', { exact: true }).selectOption('taskA')",
-            count=2)
-          replace(path,
-            "  await page.getByRole('button', { name: 'Calculate from drawing', exact: true }).click()",
-            "  await page.getByLabel('Filter by area', { exact: true }).selectOption('areaA')\n  await page.getByRole('button', { name: 'Calculate from drawing', exact: true }).click()")
-          replace(path,
-            "  await page.getByText('Choose a project target before recording material requirements.', { exact: true }).waitFor()",
-            "  await page.getByText('Choose a target for the Project before recording material requirements.', { exact: true }).waitFor()")
-          replace(path,
-            "  console.log(`Material plan manual + deterministic drawing quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)",
-            "  console.log(`Material plan Project/Area target scope + manual/deterministic quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)")
-          PY
+      - name: Apply patch
+        run: python scripts/apply-material-plan-area-scope-patch.py
       - run: npm ci
       - run: npm test
       - run: npm run check:edge
@@ -220,7 +35,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/patch-material-plan-area-scope.yml
+          git rm .github/workflows/patch-material-plan-area-scope.yml scripts/apply-material-plan-area-scope-patch.py
           git add src/pages/MaterialPlan.tsx scripts/solutions-browser.mjs scripts/artifacts-browser.mjs scripts/material-planning-browser.mjs
           git commit -m "Scope material planning to Project or Area targets"
           git push origin HEAD:feat/material-plan-area-scope
