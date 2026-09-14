@@ -8,8 +8,10 @@ test('material planning migrations stay additive after the deployed building-con
   const files = (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()
   const buildingTail = files.indexOf('20260913144500_building_delete_child_order.sql')
   const materialStart = files.indexOf('20260913210000_material_planning.sql')
+  const materialTail = files.indexOf('20260913210400_material_planning_fk_index.sql')
   assert(buildingTail >= 0, 'expected deployed building-context tail migration in source history')
   assert(materialStart > buildingTail, 'material planning must remain after already-deployed building-context migrations')
+  assert(materialTail > materialStart, 'material planning hardening must remain additive after the 4B2a base migration')
 })
 
 test('manual material planning persists the explicit 4B2a method version', async () => {
@@ -22,6 +24,13 @@ test('stock and reusable-component capacity checks serialize concurrent reservat
   assert.match(sql, /for update of s;/i, 'stock identity must be locked exclusively while capacity is rechecked')
   assert.match(sql, /for update of c;/i, 'component identity must be locked exclusively while capacity is rechecked')
   assert.doesNotMatch(sql, /for share of (s|c);/i, 'shared locks permit concurrent over-reservation races')
+})
+
+test('material requirement history covers its composite parent foreign key', async () => {
+  const sql = await readFile(new URL('20260913210400_material_planning_fk_index.sql', migrations), 'utf8')
+  assert.match(sql, /material_requirement_revisions_parent_idx/i)
+  assert.match(sql, /material_requirement_revisions\s*\(requirement_id,\s*project_id\)/i,
+    'the requirement/project parent FK should have an index with the same leading columns')
 })
 
 test('material browser proof scopes Shopping navigation to the page back link', async () => {
