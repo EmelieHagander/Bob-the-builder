@@ -63,13 +63,13 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
   }
 
   const fixture = {
-    stocks, stockHistory, requirements, requirementHistory, allocations, shoppingLinks, materials,
+    stocks, stockHistory, requirements, requirementHistory, allocations, shoppingLinks, materials, artifacts,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = new Set([
         'current_stock_items', 'stock_revisions', 'current_material_requirements', 'material_requirement_revisions',
         'material_requirement_stock_details', 'material_requirement_component_details', 'material_requirement_shopping_state',
-        'stock_command', 'material_requirement_command', 'materials',
+        'stock_command', 'material_requirement_command', 'material_requirement_geometry_command', 'materials',
       ])
       if (!handled.has(table)) return false
       const eq = field => url.searchParams.get(field)?.replace(/^eq\./, '')
@@ -111,6 +111,60 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
         row = { ...row, revision: old.revision + 1, actor_label: 'Fixture member', recorded_at: timestamp() }
         saveStock(row)
         return reply({ json: { id, revision: row.revision } })
+      }
+
+
+      if (table === 'material_requirement_geometry_command') {
+        const { p_project, p_action: action, p_requirement: id, p_expected: expected, p_data: data } = request.postDataJSON()
+        assert.equal(p_project, 'A')
+        const old = requirements.get(id)
+        if (!['create', 'revise'].includes(action)) return fail('Invalid deterministic material requirement command')
+        if (action !== 'create' && old?.revision !== expected) return fail('Material requirement changed. Reload before saving again.')
+        for (const forbidden of ['required_quantity', 'unit', 'basis', 'source_kind', 'method_key', 'method_version', 'component_allocations']) {
+          if (forbidden in data) return fail('Unsupported deterministic material fields. Quantity, unit, basis, source and method are derived by the server.')
+        }
+        const artifact = currentArtifact(p_project, data.artifact_id)
+        const generation = artifacts.generations.get(key(data.artifact_id, Number(data.artifact_revision)))
+        if (!artifact || artifact.revision !== Number(data.artifact_revision) || generation?.generator !== 'stud_wall_opening_v1' || generation.generator_version !== 1) {
+          return fail('A current stud_wall_opening_v1 drawing version is required for this calculation')
+        }
+        const byRole = Object.fromEntries(generation.inputs.map(item => [item.role, item]))
+        const mm = item => number(item.value) * (item.unit === 'm' ? 1000 : item.unit === 'cm' ? 10 : 1)
+        const wallWidth = mm(byRole.wall_width), wallHeight = mm(byRole.wall_height)
+        const openingWidth = mm(byRole.opening_width), openingHeight = mm(byRole.opening_height)
+        const required = round4Up((wallWidth * wallHeight - openingWidth * openingHeight) / 1_000_000)
+        const target = currentTarget(p_project)
+        if (!target || target.decision.revision !== data.target_revision) return fail('Project target changed. Reload before saving the material requirement.')
+        const stockRefs = []
+        let stockQuantity = 0
+        for (const ref of data.stock_allocations ?? []) {
+          const savedStock = stocks.get(ref.id)
+          if (!savedStock || savedStock.project_id !== p_project || savedStock.revision !== ref.revision || savedStock.archived || savedStock.status !== 'available' || savedStock.unit !== 'm2') return fail('Stock changed. Review the material requirement before reserving it.')
+          const quantity = number(ref.quantity)
+          if (quantity <= 0 || quantity > number(savedStock.quantity)) return fail('Stock quantity is already reserved by another active material requirement')
+          stockQuantity += quantity
+          stockRefs.push({ id: ref.id, revision: ref.revision, quantity: String(ref.quantity) })
+        }
+        const waste = number(data.waste_percent), increment = number(data.purchase_increment)
+        const requiredWithWaste = round4Up(required * (1 + waste / 100))
+        const purchase = increment > 0 ? Math.ceil(Math.max(requiredWithWaste - stockQuantity, 0) / increment) * increment : 0
+        const revision = (old?.revision ?? 0) + 1
+        const hasEstimate = generation.inputs.some(item => item.truth === 'estimated')
+        const row = {
+          ...old, id, requirement_id: id, project_id: p_project, revision,
+          name: data.name, category: data.category, area_id: data.area_id ?? null, area_title: data.area_id === 'areaA' ? 'Entry' : '',
+          task_id: data.task_id ?? null, task_title: data.task_id === 'taskA' ? 'Prepare opening' : '', unit: 'm2',
+          required_quantity: String(required), waste_percent: String(waste), purchase_increment: String(increment),
+          required_with_waste: String(requiredWithWaste), stock_quantity: String(stockQuantity), component_quantity: '0', purchase_quantity: String(purchase),
+          source_kind: 'deterministic', method_key: 'stud_wall_net_area', method_version: '4B2b-v1',
+          basis: `Calculated from ${artifact.title} v${artifact.revision} using stud_wall_net_area 4B2b-v1: (${wallWidth} mm × ${wallHeight} mm − ${openingWidth} mm × ${openingHeight} mm) ÷ 1,000,000 = ${required} m². Input certainty: ${hasEstimate ? 'contains explicit estimate' : 'measured/provided inputs only'}.`,
+          assumptions: data.assumptions ?? '', artifact_id: artifact.id, artifact_revision: artifact.revision, artifact_title: artifact.title,
+          target_revision: target.decision.revision, solution_id: target.decision.solution_id, solution_revision: target.decision.solution_revision,
+          solution_title: target.solution.title, archived: false, change_note: action === 'create' ? 'Initial material requirement' : data.change_note,
+          actor_label: 'Fixture member', recorded_at: timestamp(),
+        }
+        saveRequirement(row, { stock: stockRefs, components: [] })
+        return reply({ json: { id, revision } })
       }
 
       if (table === 'material_requirement_command') {
@@ -375,6 +429,52 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.getByText('From material plan', { exact: true }).waitFor()
   await page.getByText('Got it', { exact: true }).waitFor()
 
+
+  await page.getByRole('link', { name: /Material plan/ }).click()
+  await page.getByRole('button', { name: 'Add stock', exact: true }).click()
+  modal = page.getByRole('dialog', { name: 'Add material stock', exact: true })
+  await modal.getByLabel('Stock item', { exact: true }).fill('Saved wall board')
+  await modal.getByLabel('Specification', { exact: true }).fill('Area stock for deterministic wall proof')
+  await modal.getByLabel('Quantity', { exact: true }).fill('2')
+  await modal.getByLabel('Unit', { exact: true }).selectOption('m2')
+  await modal.getByLabel('Area', { exact: true }).selectOption('areaA')
+  await modal.getByRole('button', { name: 'Save stock', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
+
+  await page.getByRole('button', { name: 'Calculate from drawing', exact: true }).click()
+  modal = page.getByRole('dialog', { name: 'Calculate material from drawing', exact: true })
+  await modal.getByLabel('Material / requirement', { exact: true }).fill('Wall board coverage')
+  await modal.getByLabel('Category', { exact: true }).fill('Sheet material')
+  await modal.getByLabel('Area', { exact: true }).selectOption('areaA')
+  await modal.getByLabel('Task', { exact: true }).selectOption('taskA')
+  await modal.getByLabel('Generated drawing', { exact: true }).selectOption({ index: 0 })
+  assert.equal(await modal.getByLabel('Base required quantity', { exact: true }).count(), 0, 'Calculated flow must not accept a client base quantity')
+  await modal.getByLabel('Waste / allowance %', { exact: true }).fill('10')
+  await modal.getByLabel('Purchase increment', { exact: true }).fill('1')
+  await modal.getByLabel('Assumptions and limits', { exact: true }).fill('Coverage only; sheet layout and fastening are not inferred.')
+  await modal.getByLabel('Allocate Saved wall board', { exact: true }).fill('2')
+  await modal.getByRole('button', { name: 'Save calculated requirement', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
+
+  const calculated = page.getByRole('article', { name: 'Wall board coverage', exact: true })
+  await calculated.getByText('Calculated from drawing', { exact: true }).waitFor()
+  await calculated.getByText(/8 m² to buy/).waitFor()
+  await calculated.getByText(/8,628 m²/).waitFor()
+  await calculated.getByRole('button', { name: 'View basis', exact: true }).click()
+  detail = page.getByRole('dialog', { name: /Wall board coverage · Version 1/ })
+  await detail.getByText(/stud_wall_net_area · 4B2b-v1/).waitFor()
+  await detail.getByText(/Stud wall elevation · Version 2/).waitFor()
+  await detail.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.reload(); await calculated.getByText('Calculated from drawing', { exact: true }).waitFor()
+
+  await calculated.getByRole('button', { name: 'Revise', exact: true }).click()
+  modal = page.getByRole('dialog', { name: 'Revise calculated requirement', exact: true })
+  assert.equal(await modal.getByLabel('Base required quantity', { exact: true }).count(), 0)
+  await modal.getByLabel('Waste / allowance %', { exact: true }).fill('0')
+  await modal.getByLabel('Reason for change', { exact: true }).fill('Use exact coverage before sheet-layout allowance')
+  await modal.getByRole('button', { name: 'Recalculate and save new version', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
+  await calculated.getByText(/7 m² to buy/).waitFor()
+  await calculated.getByRole('button', { name: 'Send to Shopping', exact: true }).click()
+  modal = page.getByRole('dialog', { name: 'Send to Shopping', exact: true })
+  await modal.getByRole('button', { name: 'Send to Shopping', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Material plan / Shopping must fit the viewport')
   await page.screenshot({ path: `test-results/material-plan-${width}.png`, fullPage: true })
 
@@ -387,6 +487,6 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.getByRole('link', { name: 'Account', exact: true }).click()
   await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
 
-  assert.equal(fixture.materials.size, 1)
-  console.log(`Material plan stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
+  assert.equal(fixture.materials.size, 2)
+  console.log(`Material plan manual + deterministic drawing quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
 }

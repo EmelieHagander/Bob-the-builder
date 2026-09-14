@@ -42,6 +42,15 @@ async function generate(project: string, uid: string, action: string, artifactId
 async function artifact(project: string, uid: string, action: string, id: string, expected: number, data: any = {}) {
   return (await as(uid, 'select bob.artifact_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
 }
+async function stock(project: string, uid: string, action: string, id: string, expected: number, data: any = {}) {
+  return (await as(uid, 'select bob.stock_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
+}
+async function calculatedRequirement(project: string, uid: string, action: string, id: string, expected: number, data: any = {}) {
+  return (await as(uid, 'select bob.material_requirement_geometry_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
+}
+async function materialRequirement(project: string, uid: string, action: string, id: string, expected: number, data: any = {}) {
+  return (await as(uid, 'select bob.material_requirement_command($1,$2,$3,$4,$5) data', [project,action,id,expected,JSON.stringify(data)])).rows[0].data as any
+}
 
 const m = (subject: string, value: string | null, truth = 'measured') => ({
   subject, value, unit: 'mm', truth, source: truth === 'unknown' ? '' : truth === 'estimated' ? 'Rough estimate' : 'Tape measured', required: true,
@@ -184,4 +193,66 @@ test('generation tables deny raw mutation and outsiders cannot read recipes', as
     await assert.rejects(as(null,'select * from bob.'+table,[],'anon'),/permission denied/)
   }
   await assert.rejects(as(one,"delete from bob.artifact_generations where artifact_id='"+u(30)+"'"),/permission denied/)
+})
+
+
+test('4B2b derives net wall area into the existing material requirement and Shopping path', async () => {
+  const stockId=u(60), requirementId=u(61)
+  await stock('A',one,'create',stockId,0,{name:'Saved wall board',specification:'Area stock',quantity:'2',unit:'m2',status:'available',area_id:'areaA',notes:''})
+  const data=(artifactRevision:number,waste='10',extra:Record<string,unknown>={})=>({
+    name:'Wall board coverage',category:'Sheet material',area_id:'areaA',task_id:null,waste_percent:waste,purchase_increment:'1',
+    assumptions:'Coverage only; sheet layout, fastening and structure are outside this calculation.',
+    artifact_id:u(30),artifact_revision:artifactRevision,target_revision:1,
+    stock_allocations:[{id:stockId,revision:1,quantity:'2'}],...extra,
+  })
+  await calculatedRequirement('A',one,'create',requirementId,0,data(4))
+  let row=(await as(one,'select * from bob.current_material_requirements where id=$1',[requirementId])).rows[0] as any
+  assert.equal(Number(row.required_quantity),8.628)
+  assert.equal(Number(row.required_with_waste),9.4908)
+  assert.equal(Number(row.stock_quantity),2)
+  assert.equal(Number(row.purchase_quantity),8)
+  assert.equal(row.unit,'m2')
+  assert.equal(row.source_kind,'deterministic')
+  assert.equal(row.method_key,'stud_wall_net_area')
+  assert.equal(row.method_version,'4B2b-v1')
+  assert.equal(row.artifact_revision,4)
+  assert.match(row.basis,/4200 mm.*2400 mm.*1210 mm.*1200 mm/)
+  await assert.rejects(calculatedRequirement('A',one,'create',u(62),0,data(4,'0',{required_quantity:'999'})),/Unsupported deterministic material fields/)
+  await assert.rejects(calculatedRequirement('A',outsider,'create',u(62),0,data(4)),/project_denied/)
+
+  const published=await materialRequirement('A',one,'publish',requirementId,1)
+  let shopping=(await as(one,'select * from bob.materials where id=$1',[published.material_id])).rows[0] as any
+  assert.equal(shopping.qty,'8 m²')
+  await as(one,"update bob.materials set status='delivered',supplier='Fixture sheets',cost='42 kr' where id=$1",[published.material_id])
+
+  await artifact('A',one,'archive',u(30),4)
+  await artifact('A',one,'restore',u(30),5)
+  row=(await as(one,'select * from bob.current_material_requirements where id=$1',[requirementId])).rows[0] as any
+  assert.equal(row.artifact_changed,true)
+  await assert.rejects(materialRequirement('A',one,'publish',requirementId,1),/Drawing changed/)
+
+  await calculatedRequirement('A',one,'revise',requirementId,1,data(6,'0',{change_note:'Recalculate from current drawing'}))
+  row=(await as(one,'select * from bob.current_material_requirements where id=$1',[requirementId])).rows[0] as any
+  assert.equal(row.revision,2)
+  assert.equal(row.artifact_revision,6)
+  assert.equal(Number(row.required_quantity),8.628)
+  assert.equal(Number(row.purchase_quantity),7)
+  assert.equal(row.source_kind,'deterministic')
+  const old=(await as(one,'select source_kind,method_key,artifact_revision,required_quantity from bob.material_requirement_revisions where requirement_id=$1 and revision=1',[requirementId])).rows[0] as any
+  assert.equal(old.source_kind,'deterministic'); assert.equal(old.method_key,'stud_wall_net_area'); assert.equal(old.artifact_revision,4); assert.equal(Number(old.required_quantity),8.628)
+  await materialRequirement('A',one,'publish',requirementId,2)
+  shopping=(await as(one,'select * from bob.materials where id=$1',[published.material_id])).rows[0] as any
+  assert.equal(shopping.qty,'7 m²'); assert.equal(shopping.status,'delivered'); assert.equal(shopping.supplier,'Fixture sheets'); assert.equal(shopping.cost,'42 kr')
+})
+
+test('4B2b keeps explicit estimated geometry visibly concept-level in its persisted basis', async () => {
+  const requirementId=u(63)
+  await calculatedRequirement('A',one,'create',requirementId,0,{
+    name:'Estimated wall coverage',category:'Sheet material',area_id:'areaA',task_id:null,waste_percent:'0',purchase_increment:'1',
+    assumptions:'Estimate remains an estimate.',artifact_id:u(32),artifact_revision:1,target_revision:1,stock_allocations:[],
+  })
+  const row=(await as(one,'select * from bob.current_material_requirements where id=$1',[requirementId])).rows[0] as any
+  assert.equal(row.source_kind,'deterministic')
+  assert.match(row.basis,/Drawing status: concept/)
+  assert.match(row.basis,/contains explicit estimate/)
 })

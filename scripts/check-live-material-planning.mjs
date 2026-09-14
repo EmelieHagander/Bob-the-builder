@@ -151,6 +151,99 @@ export async function verifyMaterialPlanning(client, anonymous, projectId, areaI
   assert((await requirementCommand('publish', 2)).error,
     'A stale material requirement must be reviewed before Shopping can be updated again')
 
-  console.log('Live material plan: exact target/drawing/stock/reuse lineage, transparent arithmetic, Shopping handoff/preservation, edit disclosure, stale-source guard, raw-write denial and project authority passed. No AI invoked.')
+
+
+  const deterministicStockId = randomUUID()
+  const deterministicRequirementId = randomUUID()
+  const deterministicStock = (action, expected, data = {}) => client.rpc('stock_command', {
+    p_project: projectId, p_action: action, p_stock: deterministicStockId, p_expected: expected, p_data: data,
+  })
+  const deterministicRequirement = (action, expected, data = {}) => client.rpc('material_requirement_geometry_command', {
+    p_project: projectId, p_action: action, p_requirement: deterministicRequirementId, p_expected: expected, p_data: data,
+  })
+  checked(await deterministicStock('create', 0, {
+    name: 'Disposable saved wall board', specification: 'Hosted 4B2b verification stock only',
+    quantity: '2', unit: 'm2', status: 'available', area_id: areaId, notes: 'Disposable live fixture',
+  }))
+  let generated = checked(await client.from('current_artifacts').select('*')
+    .eq('project_id', projectId).eq('id', artifacts.geometryArtifactId).single())
+  assert.equal(generated.generator, 'stud_wall_opening_v1')
+  assert.equal(generated.revision, 4)
+  const deterministicData = (artifactRevision, wastePercent, changeNote = undefined) => ({
+    name: 'Disposable wall board coverage', category: 'Sheet material', area_id: areaId, task_id: taskId,
+    waste_percent: String(wastePercent), purchase_increment: '1',
+    assumptions: 'Coverage only; sheet layout, fastening and structural design are outside this calculation.',
+    artifact_id: artifacts.geometryArtifactId, artifact_revision: artifactRevision, target_revision: target.revision,
+    stock_allocations: [{ id: deterministicStockId, revision: 1, quantity: '2' }],
+    ...(changeNote ? { change_note: changeNote } : {}),
+  })
+  checked(await deterministicRequirement('create', 0, deterministicData(generated.revision, 10)))
+  let calculated = checked(await client.from('current_material_requirements').select('*')
+    .eq('project_id', projectId).eq('id', deterministicRequirementId).single())
+  assert.equal(Number(calculated.required_quantity), 8.628)
+  assert.equal(Number(calculated.required_with_waste), 9.4908)
+  assert.equal(Number(calculated.stock_quantity), 2)
+  assert.equal(Number(calculated.purchase_quantity), 8)
+  assert.equal(calculated.unit, 'm2')
+  assert.equal(calculated.source_kind, 'deterministic')
+  assert.equal(calculated.method_key, 'stud_wall_net_area')
+  assert.equal(calculated.method_version, '4B2b-v1')
+  assert.match(calculated.basis, /4200 mm.*2400 mm.*1210 mm.*1200 mm/)
+  assert.equal(calculated.artifact_revision, 4)
+  assert((await client.rpc('material_requirement_geometry_command', {
+    p_project: projectId, p_action: 'create', p_requirement: randomUUID(), p_expected: 0,
+    p_data: { ...deterministicData(4, 0), required_quantity: '999' },
+  })).error, 'Clients must not forge a deterministic base quantity')
+  assert((await anonymous.rpc('material_requirement_geometry_command', {
+    p_project: projectId, p_action: 'create', p_requirement: randomUUID(), p_expected: 0, p_data: deterministicData(4, 0),
+  })).error, 'Unsigned users must not calculate project material requirements')
+  assert((await client.rpc('material_requirement_geometry_command', {
+    p_project: 'p_bygga_in_entren', p_action: 'create', p_requirement: randomUUID(), p_expected: 0, p_data: {},
+  })).error, 'Disposable membership must not grant deterministic material access to a real project')
+
+  const deterministicPublish = checked(await client.rpc('material_requirement_command', {
+    p_project: projectId, p_action: 'publish', p_requirement: deterministicRequirementId, p_expected: 1, p_data: {},
+  }))
+  let deterministicShopping = checked(await client.from('materials').select('*')
+    .eq('project_id', projectId).eq('id', deterministicPublish.material_id).single())
+  assert.equal(deterministicShopping.qty, '8 m²')
+  checked(await client.from('materials').update({ status: 'delivered', supplier: 'Disposable sheet supplier', cost: '456 kr' })
+    .eq('project_id', projectId).eq('id', deterministicPublish.material_id))
+
+  const artifactCommand = (action, expected) => client.rpc('artifact_command', {
+    p_project: projectId, p_action: action, p_artifact: artifacts.geometryArtifactId, p_expected: expected, p_data: {},
+  })
+  checked(await artifactCommand('archive', 4))
+  checked(await artifactCommand('restore', 5))
+  generated = checked(await client.from('current_artifacts').select('*')
+    .eq('project_id', projectId).eq('id', artifacts.geometryArtifactId).single())
+  assert.equal(generated.revision, 6)
+  calculated = checked(await client.from('current_material_requirements').select('*')
+    .eq('project_id', projectId).eq('id', deterministicRequirementId).single())
+  assert.equal(calculated.artifact_changed, true)
+  assert((await client.rpc('material_requirement_command', {
+    p_project: projectId, p_action: 'publish', p_requirement: deterministicRequirementId, p_expected: 1, p_data: {},
+  })).error, 'A newer generated drawing version must stale the calculated material source')
+
+  checked(await deterministicRequirement('revise', 1, deterministicData(6, 0, 'Recalculate from the current persisted drawing version')))
+  calculated = checked(await client.from('current_material_requirements').select('*')
+    .eq('project_id', projectId).eq('id', deterministicRequirementId).single())
+  assert.equal(calculated.revision, 2)
+  assert.equal(calculated.artifact_revision, 6)
+  assert.equal(Number(calculated.required_quantity), 8.628)
+  assert.equal(Number(calculated.purchase_quantity), 7)
+  const deterministicSync = checked(await client.from('material_requirement_shopping_state').select('*')
+    .eq('project_id', projectId).eq('requirement_id', deterministicRequirementId).single())
+  assert.equal(deterministicSync.source_outdated, true)
+  checked(await client.rpc('material_requirement_command', {
+    p_project: projectId, p_action: 'publish', p_requirement: deterministicRequirementId, p_expected: 2, p_data: {},
+  }))
+  deterministicShopping = checked(await client.from('materials').select('*')
+    .eq('project_id', projectId).eq('id', deterministicPublish.material_id).single())
+  assert.equal(deterministicShopping.qty, '7 m²')
+  assert.equal(deterministicShopping.status, 'delivered')
+  assert.equal(deterministicShopping.supplier, 'Disposable sheet supplier')
+  assert.equal(deterministicShopping.cost, '456 kr')
+  console.log('Live material plan: manual + deterministic drawing-derived quantities, exact target/drawing/stock/reuse lineage, transparent arithmetic, Shopping handoff/preservation, stale-source guard, raw-write denial and project authority passed. No AI invoked.')
   return { stockId, requirementId, materialId }
 }

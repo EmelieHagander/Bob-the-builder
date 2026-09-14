@@ -329,6 +329,20 @@ export function createMaterialPlanning(
       guard()
       return requirementVersion(projectId, id, saved.revision)
     },
+    async editDeterministicRequirement(
+      projectId: string,
+      action: 'create' | 'revise',
+      id: string,
+      expected: number,
+      data: Record<string, unknown> = {},
+    ) {
+      const { db, guard } = connection(projectId)
+      const saved = checked(await db.rpc('material_requirement_geometry_command', {
+        p_project: projectId, p_action: action, p_requirement: id, p_expected: expected, p_data: data,
+      })) as Row
+      guard()
+      return requirementVersion(projectId, id, saved.revision)
+    },
     async publish(projectId: string, id: string, expected: number) {
       const { db, guard } = connection(projectId)
       const saved = checked(await db.rpc('material_requirement_command', {
