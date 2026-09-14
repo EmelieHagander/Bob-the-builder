@@ -66,7 +66,7 @@ export async function verifyMaterialPlanning(client, anonymous, projectId, areaI
   assert.equal(Number(requirement.component_quantity), 2)
   assert.equal(Number(requirement.purchase_quantity), 1)
   assert.equal(requirement.source_kind, 'manual')
-  assert.equal(requirement.method_key, 'manual_base')
+  assert.equal(requirement.method_key, 'manual')
   assert.equal(requirement.method_version, '4B2a-v1')
   assert.equal(requirement.target_revision, target.revision)
   assert.equal(requirement.artifact_id, artifact.id)
