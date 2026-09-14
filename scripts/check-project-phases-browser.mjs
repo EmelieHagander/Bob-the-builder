@@ -57,13 +57,14 @@ try {
       }
       if (url.pathname === '/rest/v1/projects') {
         const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: '2026-09-15', end_date: '2026-10-04' }
-        return respond({ json: [project] })
+        const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+        return respond({ json: single ? project : [project] })
       }
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Phase fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/account_notes') return respond({ json: [] })
       if (url.pathname === '/rest/v1/people') return respond({ json: [{ id: 'member', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (url.pathname === '/rest/v1/areas') {
-        const phaseOnly = (url.searchParams.get('select') ?? '').replaceAll('%2C', ',') === 'id,phase'
+        const phaseOnly = (url.searchParams.get('select') ?? '') === 'id,phase'
         const rows = [
           { id: 'bedroom', slug: 'bedroom', name: 'Bedroom', description: 'Finished room', icon: 'bed', lead_id: 'member', assigned_pct: 100, materials_pct: 100, done_pct: 100, task_summary: '2 tasks · 2 done', phase: areaPhase.get('bedroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'office', slug: 'office', name: 'Office', description: 'Work underway', icon: 'hammer', lead_id: 'member', assigned_pct: 100, materials_pct: 75, done_pct: 50, task_summary: '4 tasks · 2 done', phase: areaPhase.get('office'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
@@ -98,9 +99,7 @@ try {
     assert.equal(await page.getByText('50% done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
     assert.equal(await page.getByText('0% done', { exact: true }).count(), 0, 'Design Area must not show build completion as primary meaning')
 
-    if (viewport.width < 860) {
-      await page.getByRole('link', { name: 'Today', exact: true }).waitFor()
-    }
+    if (viewport.width < 860) await page.getByRole('link', { name: 'Today', exact: true }).waitFor()
 
     await page.getByRole('button', { name: 'Review phase', exact: true }).first().click()
     await page.getByLabel('Move to phase').selectOption('planning')
