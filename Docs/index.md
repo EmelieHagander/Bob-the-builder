@@ -23,6 +23,7 @@
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
 | material requirements, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
+| Ask bob behavior, current/desired use cases and evaluation cases | `Docs/ask-bob-behavior.md` + `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
@@ -104,6 +105,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
+- `Docs/ask-bob-behavior.md` — **discovery active / pre-implementation** product owner for Ask bob behavior: current-state audit, current/desired use cases, initiative/clarification/action boundaries and the golden evaluation conversations that should drive later prompt/context/tool work.
 - `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
 - `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **specified / pre-build** conversation-continuity contract: Bob-owned transcript, server-private Responses continuation, compaction/reseed state machine, per-user/project privacy and release proof.

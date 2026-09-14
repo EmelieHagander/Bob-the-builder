@@ -47,14 +47,19 @@ Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the
 
 **Current next implementation milestone:** **Slice 4B2b deterministic material quantities for the supported 4B1 geometry fixture.** New quantity revisions must feed the existing 4B2a `material_requirements` foundation with `source_kind = deterministic`, pinned recipe/input lineage and transparent arithmetic rather than creating a parallel BOM system. Start with quantities that are reproducible from the saved stud-wall recipe; generic fasteners, consumables, catalogue pricing and engineering assumptions remain out until explicitly specified.
 
+**Parallel AI design lane — ACTIVE (2026-09-14):** before implementing the deferred Bob AI consumers, the owner and implementer are now reviewing **how Bob should behave, which use cases Bob serves today, which use cases matter next, and how those jobs should be evaluated**. This is deliberately product/use-case-first rather than model/prompt/tool-first. `Docs/ask-bob-behavior.md` owns this D0 discovery: current-state audit, current/desired use-case matrix, interaction/initiative/truth/action boundaries and golden evaluation conversations. The already-specified context/conversation architecture remains the intended technical direction, but a behavior-changing AI slice is not considered ready merely because its infrastructure design exists.
+
+This AI design lane does **not** replace 4B2b as the current deterministic implementation milestone. It runs in parallel so that when Bob implementation resumes, prompt/context/tool/provider decisions can be pulled by accepted user jobs rather than by architecture for its own sake.
+
 Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
 **Execution order from here:**
 
 1. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
 2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
-3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
-4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+3. in parallel, complete Ask bob D0 behavior/use-case discovery and turn the accepted cases into golden evals plus a current → desired delta map;
+4. use that accepted behavior contract to choose and sequence the deferred AI consumers/context implementation rather than enabling router/prompt/vision/Librarian behavior without a named user job;
+5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 
@@ -602,6 +607,8 @@ Ask bob remains the conversational layer for:
 - explaining calculations/plans;
 - generating proposed work/guidance.
 
+The active behavior/use-case review in `Docs/ask-bob-behavior.md` decides how these jobs should feel, which ones are first-priority, when Bob should retrieve/research/clarify, and how they become golden evaluation conversations before the deferred AI consumers are enabled.
+
 It should not become the only place project truth lives. Physical inferences from neighbouring Spaces/Elements remain visibly inferred/unknown until evidence upgrades them.
 
 ### Today — stay fast
@@ -732,6 +739,8 @@ For each slice:
 8. update inventory/docs only after runtime truth changes.
 
 For persistent building context specifically, establish the manual sparse model and authority boundaries before AI plan ingestion. Reuse existing provenance/history seams instead of creating a second truth vocabulary.
+
+For behavior-changing Ask bob work specifically, complete the D0 behavior/use-case review in `Docs/ask-bob-behavior.md` first: name the user job, desired outcome, context/tool needs, truth/action boundaries and golden eval before promoting a new AI path to production.
 
 Avoid large "platform first" refactors. Promote repeated UI/data patterns only when the slice demonstrates the repetition.
 
