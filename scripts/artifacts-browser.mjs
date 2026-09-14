@@ -195,10 +195,11 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await page.goto(base + '#/artifacts')
   await page.getByRole('heading', { name: 'Plans & drawings', exact: true }).waitFor()
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
+  await page.getByLabel('Drawing scope', { exact: true }).selectOption('areaA')
+  await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
   await page.getByRole('button', { name: 'Add drawing', exact: true }).click()
   const form = page.getByRole('dialog', { name: 'Add drawing', exact: true })
   await form.getByLabel('Drawing title', { exact: true }).fill('Entrance section')
-  await form.getByLabel('Area', { exact: true }).selectOption('areaA')
   await form.getByLabel('Drawing type', { exact: true }).selectOption('section')
   await form.getByLabel('Drawing status', { exact: true }).selectOption('measured')
   await form.getByLabel('What this drawing shows', { exact: true }).fill('Section through the insulated entrance floor and opening.')
@@ -235,7 +236,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
     project_id: 'A', revision: solutions.decisions.length + 1, solution_id: other.id, solution_revision: other.revision,
     reason: 'Change target after drawing', actor_label: 'Fixture member', recorded_at: other.recorded_at,
   })
-  await page.reload(); await card.getByText('Project target changed after this drawing version. Review before building from it.', { exact: true }).waitFor()
+  await page.reload(); await card.getByText('The selected target for this scope changed after this drawing version. Review before building from it.', { exact: true }).waitFor()
 
   await card.getByRole('button', { name: 'Revise', exact: true }).click()
   let editor = page.getByRole('dialog', { name: 'Revise drawing', exact: true })
@@ -260,7 +261,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await history.getByRole('button', { name: 'View version', exact: true }).last().click()
   details = page.getByRole('dialog', { name: 'Entrance section · Version 1', exact: true })
   await details.getByText(/Based on Extend the porch/).waitFor()
-  await details.getByText('The project target has changed since this drawing version. This version keeps its original target lineage.', { exact: true }).waitFor()
+  await details.getByText('The selected target for this scope changed after this drawing version. This version keeps its original target lineage.', { exact: true }).waitFor()
   await details.getByRole('button', { name: 'Close', exact: true }).click()
 
   await card.getByRole('button', { name: 'Archive', exact: true }).click()
