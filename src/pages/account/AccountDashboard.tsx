@@ -17,6 +17,8 @@ import { ProjectInvitations } from '../../components/SharingCards'
 import { scheduleStatus } from '../../lib/calendarGrid'
 import { formatDate, formatDateRange } from '../../lib/format'
 import { ProjectModal, SchedulePill } from './ProjectModal'
+import { PhasePill } from '../../components/PhaseUI'
+import { areaPhaseSummary } from '../../lib/projectPhase'
 
 export function AccountDashboard() {
   const navigate = useNavigate()
@@ -27,6 +29,9 @@ export function AccountDashboard() {
   const { data: projects, loading } = useAsync(() => db.getProjects(), [version, projectVersion])
   const { data: active } = useAsync(() => db.getProject(), [version, projectVersion])
   const { data: notes } = useAsync(() => db.getNotes(), [notesVersion])
+  const projectIds = (projects ?? []).map(project => project.id)
+  const projectIdsKey = projectIds.join('|')
+  const { data: accountAreaPhases } = useAsync(() => db.getAccountAreaPhases(projectIds), [projectIdsKey, version, projectVersion])
   const [modal, setModal] = useState<
     { kind: 'new' } | { kind: 'invite' } | { kind: 'project'; project: Project; editing: boolean } | null
   >(null)
@@ -38,14 +43,14 @@ export function AccountDashboard() {
   }
 
   const scheduled = (projects ?? []).filter((p) => p.startDate && p.endDate)
-  const buildingNow = scheduled.filter((p) => scheduleStatus(p.startDate!, p.endDate!) === 'ongoing')
+  const happeningNow = scheduled.filter((p) => scheduleStatus(p.startDate!, p.endDate!) === 'ongoing')
   const nextUp = scheduled
     .filter((p) => scheduleStatus(p.startDate!, p.endDate!) === 'upcoming')
     .sort((a, b) => a.startDate!.localeCompare(b.startDate!))
 
   const stats = [
     { icon: 'squares-four', value: String(projects?.length ?? 0), label: 'Projects', color: 'var(--accent)' },
-    { icon: 'hammer', value: String(buildingNow.length), label: 'Building now', color: 'var(--leaf)' },
+    { icon: 'calendar-check', value: String(happeningNow.length), label: 'Happening now', color: 'var(--leaf)' },
     { icon: 'calendar-dots', value: nextUp[0] ? formatDate(nextUp[0].startDate) : '—', label: 'Next build starts', color: 'var(--honey)' },
     { icon: 'note-pencil', value: String(notes?.length ?? 0), label: 'Notes', color: 'var(--clay)' },
   ]
@@ -99,29 +104,36 @@ export function AccountDashboard() {
             <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />
           ) : (
             <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-              {projects!.map((p) => (
-                <div
+              {projects!.map((p) => {
+                const areaPhases = (accountAreaPhases ?? []).filter(item => item.projectId === p.id)
+                return <div
                   key={p.id}
                   className="card"
                   style={{ padding: 15, cursor: 'pointer' }}
                   onClick={() => setModal({ kind: 'project', project: p, editing: false })}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
                       <Icon name="hammer" size={20} color="var(--brand)" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 15, fontWeight: 700 }}>{p.name}</span>
                         {active?.id === p.id && (
                           <span className="pill" style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>Active</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{[p.type, p.location.split(',')[0]].filter(Boolean).join(' · ')}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{[p.type, p.location.split(',')[0]].filter(Boolean).join(' · ')}</div>
                     </div>
+                  </div>
+                  <div className="cluster" style={{ marginTop: 11, alignItems: 'center' }}>
+                    <PhasePill phase={p.phase} />
                     <SchedulePill project={p} />
                   </div>
-                  <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>
+                  {areaPhases.length > 0 && <div style={{ marginTop: 9, fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 650 }}>
+                    {areaPhases.length} {areaPhases.length === 1 ? 'Area' : 'Areas'} · {areaPhaseSummary(areaPhases)}
+                  </div>}
+                  <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>
                     <Icon name="calendar-dots" size={15} color="var(--accent-2)" />
                     {p.startDate && p.endDate ? formatDateRange(p.startDate, p.endDate) : 'Not scheduled yet'}
                   </div>
@@ -148,7 +160,7 @@ export function AccountDashboard() {
                     </button>
                   </div>
                 </div>
-              ))}
+              })}
             </div>
           )}
         </section>
@@ -163,11 +175,11 @@ export function AccountDashboard() {
             >
               Coming up
             </SectionTitle>
-            {[...buildingNow, ...nextUp].length === 0 ? (
+            {[...happeningNow, ...nextUp].length === 0 ? (
               <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Nothing scheduled — put a project on the calendar.</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {[...buildingNow, ...nextUp].slice(0, 3).map((p) => (
+                {[...happeningNow, ...nextUp].slice(0, 3).map((p) => (
                   <button
                     key={p.id}
                     type="button"

@@ -64,12 +64,15 @@ try {
       if (url.pathname === '/rest/v1/account_notes') return respond({ json: [] })
       if (url.pathname === '/rest/v1/people') return respond({ json: [{ id: 'member', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (url.pathname === '/rest/v1/areas') {
-        const phaseOnly = (url.searchParams.get('select') ?? '') === 'id,phase'
+        const select = url.searchParams.get('select') ?? ''
+        const phaseOnly = select === 'id,phase'
+        const accountPhaseOnly = select === 'project_id,phase'
         const rows = [
           { id: 'bedroom', slug: 'bedroom', name: 'Bedroom', description: 'Finished room', icon: 'bed', lead_id: 'member', assigned_pct: 100, materials_pct: 100, done_pct: 100, task_summary: '2 tasks · 2 done', phase: areaPhase.get('bedroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'office', slug: 'office', name: 'Office', description: 'Work underway', icon: 'hammer', lead_id: 'member', assigned_pct: 100, materials_pct: 75, done_pct: 50, task_summary: '2 tasks · 1 done', phase: areaPhase.get('office'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'guestroom', slug: 'guestroom', name: 'Guestroom', description: 'Still comparing solutions', icon: 'lamp', lead_id: 'member', assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: 'No tasks yet', phase: areaPhase.get('guestroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
         ]
+        if (accountPhaseOnly) return respond({ json: rows.map(({ phase }) => ({ project_id: 'P', phase })) })
         return respond({ json: phaseOnly ? rows.map(({ id, phase }) => ({ id, phase })) : rows })
       }
       if (url.pathname === '/rest/v1/tasks') return respond({ json: [
@@ -91,6 +94,10 @@ try {
     await page.goto(`${base}#/signin`)
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Phase fixture', exact: true }).waitFor()
+    const projectCard = page.locator('.card').filter({ hasText: 'Renovate upstairs' }).first()
+    await projectCard.getByLabel('phase: Build').waitFor()
+    await projectCard.getByText('3 Areas · 1 Design · 1 Build · 1 Complete', { exact: true }).waitFor()
+    await page.getByText('Happening now', { exact: true }).first().waitFor()
     await page.getByRole('button', { name: 'Open', exact: true }).click()
 
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
@@ -124,7 +131,7 @@ try {
     await page.screenshot({ path: `test-results/project-phases-${viewport.width}.png`, fullPage: true })
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Project phases ${viewport.width}px: mixed workstreams, explicit transitions, reload and mobile Today: OK`)
+    console.log(`Project phases ${viewport.width}px: account summary, mixed workstreams, explicit transitions, reload and mobile Today: OK`)
   }
 } finally {
   if (browser) await browser.close()
