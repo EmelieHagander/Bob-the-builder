@@ -7,7 +7,7 @@ import { StartProject } from './pages/StartProject'
 import { AccountDashboard } from './pages/account/AccountDashboard'
 import { AccountCalendar } from './pages/account/AccountCalendar'
 import { AccountSettings } from './pages/account/AccountSettings'
-import { Dashboard } from './pages/Dashboard'
+import { ProjectHome } from './pages/ProjectHome'
 import { Areas } from './pages/Areas'
 import { AreaDetail } from './pages/AreaDetail'
 import { TaskDetail } from './pages/TaskDetail'
@@ -100,7 +100,7 @@ function ProjectApp() {
   return (
     <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project}>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<ProjectHome />} />
         <Route path="/account" element={<AccountDashboard />} />
         <Route path="/account/calendar" element={<AccountCalendar />} />
         <Route path="/account/settings" element={<AccountSettings />} />
