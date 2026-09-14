@@ -92,6 +92,17 @@ export function ProjectHome() {
         </div>}
     </section>
 
+    <section style={{ marginTop: 24 }} aria-label="Project tools">
+      <SectionTitle>Project tools</SectionTitle>
+      <div className="cluster" style={{ gap: 8 }}>
+        <Link className="btn" to="/facts"><Icon name="ruler" size={15} /> Measurements &amp; existing parts</Link>
+        <Link className="btn" to="/solutions"><Icon name="path" size={15} /> Solutions &amp; target</Link>
+        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Plans &amp; drawings</Link>
+        <Link className="btn" to="/material-plan"><Icon name="package" size={15} /> Material plan</Link>
+      </div>
+      <p className="foundation-hint" style={{ marginBottom: 0 }}>These stay available across phases. The current phase changes emphasis, not access to project truth.</p>
+    </section>
+
     <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 20, marginTop: 26 }}>
       <section>
         <SectionTitle icon="megaphone" color="var(--accent-2)" action={<Link to="/announcements" style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-2)' }}>Announcements</Link>}>Project updates</SectionTitle>
