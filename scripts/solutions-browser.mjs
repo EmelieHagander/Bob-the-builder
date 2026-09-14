@@ -18,7 +18,8 @@ export function createSolutionsFixture(timestamp, assets, facts) {
           if (expected !== decisions.length) return fail('Target changed. Reload before deciding again.')
           if (action === 'select' && old.revision !== data.solution_revision) return fail('Solution changed. Reload before selecting.')
           decisions.push({ project_id: p_project, revision: decisions.length + 1, solution_id: id,
-            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp() })
+            solution_revision: id ? old.revision : null, reason: data.reason, actor_label: 'Fixture member', recorded_at: timestamp(),
+            area_id: data.area_id ?? null, scope_key: data.area_id ? `area:${data.area_id}` : 'project' })
           await respond({ json: { revision: decisions.length } }); return true
         }
         if (action !== 'create' && old.revision !== expected) return fail('Solution changed. Reload before saving again.')
@@ -49,11 +50,14 @@ export function createSolutionsFixture(timestamp, assets, facts) {
       }
       rows = rows.filter(r => r.project_id === eq('project_id'))
       if (eq('revision')) rows = rows.filter(r => r.revision === Number(eq('revision')))
-      if (eq('area_id')) rows = rows.filter(r => r.area_id === eq('area_id'))
+      const areaFilter = url.searchParams.get('area_id')
+      if (areaFilter === 'is.null') rows = rows.filter(r => r.area_id == null)
+      else if (eq('area_id')) rows = rows.filter(r => r.area_id === eq('area_id'))
       if (eq('archived')) rows = rows.filter(r => r.archived === (eq('archived') === 'true'))
       if (table === 'current_solutions') rows.sort((a,b) => b.recorded_at.localeCompare(a.recorded_at) || a.id.localeCompare(b.id))
       const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 1000)
-      await respond({ json: table === 'solution_revisions' && eq('revision') ? rows[0] ?? null : rows.slice(offset, offset + limit) })
+      const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+      await respond({ json: single || (table === 'solution_revisions' && eq('revision')) ? rows[0] ?? null : rows.slice(offset, offset + limit) })
       return true
     },
   }
