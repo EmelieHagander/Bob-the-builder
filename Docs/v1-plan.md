@@ -15,7 +15,7 @@ project lookup and deployment contract are owned by [supabase/README.md](../supa
 
 The release described here is now called **V1**. This plan consumes the relevant scope buckets without rewriting their original prioritisation vocabulary.
 
-## Current execution position — 2026-09-13
+## Current execution position — 2026-09-14
 
 The numbered slices describe the product dependency chain, but implementation has intentionally followed a **foundations-first execution lane**. Later manual foundations may therefore be live while earlier AI gates remain deliberately deferred.
 
@@ -28,26 +28,31 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 2B — existing components;
 - Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, Project/Area physical-scope relations, accepted/proposed physical-state history and the manual **Building & spaces** UI;
 - Slice 3A — alternatives + selected target;
-- Slice 4A — manual plans/drawings with exact target and measurement lineage.
+- Slice 4A — manual plans/drawings with exact target and measurement lineage;
+- Slice 4B1 — deterministic `stud_wall_opening_v1` artifact geometry with exact Building/Space and six-measurement recipe lineage;
+- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff.
 
 Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the domain/schema/authority foundation, PR #43 the app-facing UI, and PR #45 the hosted cleanup-order correction. The dedicated browser proof passes at 320px, 390px and 1280px; the hosted Auth/PostgREST live check passes and self-cleans its physical fixture; the current `main` Pages deployment is green. `Docs/foundation-verification.md` owns exact migration/run evidence.
+
+4B1 and 4B2a are also runtime truth. PR #47 delivered the narrow deterministic stud-wall-with-opening generator, PR #49 closed its hosted/live release gate, PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. The final 4B2a Pages deployment and ordinary hosted Auth/PostgREST foundation check are green; `Docs/foundation-verification.md` owns the exact migration, advisor, browser, live and cleanup evidence.
 
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
 - full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
 - Slice 3B generated visual proposals/mockups;
-- deterministic generated geometry, BOM/calculations, stock/shopping propagation and richer executable work planning after 4A;
+- Slice 4B2b — deterministic geometry-derived material base quantities for supported fixtures, including later fastener/consumable rules where explicitly modelled;
+- richer task/material/dependency/tool/readiness relations that turn the persisted plan into executable work;
 - Slice 5 generated/project-specific guidance and structured progress/as-built completion.
 
-**Current next implementation milestone:** **Slice 4B1 deterministic artifact geometry for the deliberately narrow supported fixture.** PR #47 is the active implementation branch for the first timber stud-wall-with-opening fixture. Treat that PR as implementation in progress, not as built/deployed truth until its own schema, browser and live gates pass. Generated geometry must consume explicit `Building` / `Space` context and pinned measurements rather than treating project `Area` as the house model.
+**Current next implementation milestone:** **Slice 4B2b deterministic material quantities for the supported 4B1 geometry fixture.** New quantity revisions must feed the existing 4B2a `material_requirements` foundation with `source_kind = deterministic`, pinned recipe/input lineage and transparent arithmetic rather than creating a parallel BOM system. Start with quantities that are reproducible from the saved stud-wall recipe; generic fasteners, consumables, catalogue pricing and engineering assumptions remain out until explicitly specified.
 
 Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
 **Execution order from here:**
 
-1. complete and release-gate the narrow deterministic artifact-geometry fixture (4B1), preserving physical-target and measurement provenance;
-2. add transparent quantity/BOM derivation, existing-stock deduction and Shopping propagation, then richer task/dependency/tool/readiness relations;
+1. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
+2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
 3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
 4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 

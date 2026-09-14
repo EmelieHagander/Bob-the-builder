@@ -90,11 +90,13 @@ become join tables:
 | `SolutionMeasurement` | `bob.solution_measurements`, invoker `bob.solution_measurement_details` with exact historical measurement versions |
 | `TargetDecision` | `bob.project_targets`, append-only `bob.target_revisions`, invoker `bob.current_target` |
 | `ProjectArtifact`, `ArtifactVersion` | `bob.artifacts`, append-only `bob.artifact_revisions`, exact `bob.artifact_measurements`, invoker `bob.current_artifacts` / `bob.artifact_measurement_details` |
+| deterministic Artifact generation recipe | `bob.artifact_generations`, `bob.artifact_geometry_inputs`, invoker Artifact views + guarded `bob.artifact_geometry_command` |
 | `PhysicalSite`, `PhysicalBuilding`, `PhysicalLevel`, `PhysicalSpace` | `bob.sites`, `bob.buildings`, `bob.building_levels`, `bob.building_spaces` + append-only revision tables and security-invoker current/project views |
 | `PhysicalElement`, `PhysicalRelationship` | `bob.building_elements`, `bob.spatial_relationships` + append-only revision tables; accepted current state remains separate from latest proposals |
 | `ProjectPhysicalScope`, `AreaPhysicalTarget` | `bob.project_physical_scope`, `bob.area_physical_targets` |
 | `SpaceMeasurementSnapshot` | `bob.space_measurements`, invoker `bob.space_measurement_details` with exact historical Measurement versions |
 | `Material` | `bob.materials` (`area` → `area_label`) |
+| material stock / requirement revisions | `bob.stock_items`, `bob.stock_revisions`, `bob.material_requirements`, `bob.material_requirement_revisions` + allocation/shopping-link tables and invoker views |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
 | `DietMatrixRow` + `getDietColumns()` | `bob.diet_flags` + `bob.diet_columns` (a flag row = `true`) |
@@ -170,7 +172,29 @@ rejected. A drawing may reuse an authorised same-project image. File removal cle
 the byte reference while retaining its recorded title and revision history.
 [Foundation verification](../Docs/foundation-verification.md) owns the deployed
 Auth/PostgREST/Storage, browser and cleanup evidence. 4A is manual and does not
-claim deterministic geometry, BOM/calculation, stock/shopping or task readiness.
+claim deterministic geometry, BOM/calculation, stock/shopping or task readiness. Those capabilities extend this foundation in the later sections below.
+
+## Deterministic artifact geometry foundation (4B1)
+
+[`Docs/artifacts.md`](../Docs/artifacts.md) also owns the narrow deterministic geometry extension. Source migrations `20260913193000_artifact_deterministic_geometry.sql`, `20260913193100_artifact_geometry_command_grant.sql`, `20260913193200_artifact_geometry_invariants.sql` and `20260913194000_artifact_generation_space_revision_index.sql` are hosted as `20260913212211_bob_artifact_deterministic_geometry`, `20260913212218_bob_artifact_geometry_command_grant`, `20260913212229_bob_artifact_geometry_invariants` and `20260913213315_bob_artifact_generation_space_revision_index`.
+
+`artifact_generations` owns the versioned generator/physical target/design parameters and `artifact_geometry_inputs` owns the six exact measurement roles. Normal clients read under project RLS and generate/regenerate through guarded `bob.artifact_geometry_command`; ordinary Artifact archive/restore carries complete recipes forward. This foundation is deterministic geometry only, not a material BOM or engineering approval.
+
+## Manual material planning foundation (4B2a)
+
+[`Docs/material-planning.md`](../Docs/material-planning.md) owns revisioned manual requirements, material stock/reuse allocations, deterministic allowance/shortfall/purchase rounding and explicit Shopping handoff. Source migrations and hosted registry entries are:
+
+| Source migration | Hosted registry |
+|---|---|
+| `supabase/migrations/20260913210000_material_planning.sql` | `20260914053521_bob_material_planning_4b2a` |
+| `supabase/migrations/20260913210100_material_planning_hardening.sql` | `20260914053538_bob_material_planning_4b2a_hardening` |
+| `supabase/migrations/20260913210200_material_planning_publish.sql` | `20260914053605_bob_material_planning_4b2a_publish` |
+| `supabase/migrations/20260913210300_material_planning_reservation_serialization.sql` | `20260914053620_bob_material_planning_4b2a_reservation_serialization` |
+| `supabase/migrations/20260913210400_material_planning_fk_index.sql` | `20260914054215_bob_material_planning_4b2a_fk_index` |
+
+Normal clients select RLS-protected tables/security-invoker views and write only through `bob.stock_command` and `bob.material_requirement_command`; private helpers remain in `bob_private`. Manual requirement versions persist `source_kind = manual`, `method_key = manual`, `method_version = 4B2a-v1`. Reservation triggers lock stock/component identities while rechecking capacity so concurrent requirements cannot overbook current confirmed availability. Shopping publish is explicit and preserves existing supplier/cost/status on update. `src/data/materialPlanning.ts` is the domain adapter behind the single `database.ts` UI seam.
+
+[Foundation verification](../Docs/foundation-verification.md) owns CI/browser, hosted migration/advisor, Pages, ordinary Auth/PostgREST and cleanup evidence. 4B2a intentionally does not derive base quantities from geometry; the next 4B2b calculator must create normal deterministic-source requirement revisions in this same model.
 
 ## Persistent building context foundation (2C)
 

@@ -9,7 +9,7 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A and 4A**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A, 4A, 4B1 and 4B2a**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
@@ -26,7 +26,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts, manual solution/target revisions and manual plans/drawings are delivered in the deltas here. Generated proposals, deterministic geometry/calculations and structured progress/as-built history retain their later gates. |
+| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts, manual solution/target revisions, manual plans/drawings, one deterministic drawing fixture and the manual material/stock/Shopping receiver are delivered in the deltas here. Generated proposals, geometry-derived material quantities, executable-work planning and structured progress/as-built history retain later gates. |
 
 ## Measurement and component foundation release delta — 2026-09-09
 
@@ -43,7 +43,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Existing parts | **BUILT.** Name, kind, nullable known count, condition, specification and inspect/reuse/remove/replace intent persist. Linked measurements hold dimensions in the same project/area. Reuse intent is not a suitability approval. |
 | Source images | **BUILT.** Measurements and parts reuse authorised project images and original viewing. Removing an image clears its file link while retaining its recorded title, values and history. |
 | Runtime consumption | **BUILT manually.** Dashboard/Area lead to a focused page with current records, paging, detail/history and reload persistence. Project changes reject old responses. Bob's lookup allowlist is unchanged. |
-| Stock and calculation integration | **GAP.** Parts are separate from shopping, but stock deduction, deterministic calculations and downstream artifact/task generation remain later gates. |
+| Stock and calculation integration | **PARTIAL.** 4B2a now stores revisioned material stock and deliberate reusable-component allocations, derives allowance/shortfall/purchase rounding server-side and explicitly propagates the saved purchase need to Shopping. Geometry-derived base quantities remain 4B2b; downstream task readiness remains later. |
 
 ## Persistent building context release delta — 2026-09-13
 
@@ -63,7 +63,7 @@ owns exact migration, browser, live-service and cleanup evidence.
 | Exact measurement lineage | **BUILT.** A Space revision can pin exact existing Measurement revisions into immutable snapshots. Later fact edits do not rewrite the older physical revision. |
 | Manual Building & spaces UI | **BUILT.** Dashboard routes to a focused manual Site/Building/Level/Space/Element/relationship surface. Project linking, reload/read-back, building/project switching and explicit denied/unavailable states are browser-verified at 320/390/1280px. Demo mode does not invent saved physical truth. |
 | Area → physical target editing | **PARTIAL.** The backend relation and guarded commands are built, tested and live-verified; a dedicated Area-side mapping editor remains a narrow UI follow-up. |
-| Whole-plan ingestion, deterministic geometry and AI reasoning | **GAP / later slices.** The shipped model is the foundation those consumers must extend. It does not itself claim CAD/BIM, photo-to-plan import, generated geometry, engineering approval or AI-confirmed fact promotion. |
+| Whole-plan ingestion, deterministic geometry and AI reasoning | **PARTIAL / later slices.** 4B1 now consumes the shipped physical model for one deterministic stud-wall-with-opening fixture with exact Space/measurement lineage. General CAD/BIM, photo-to-plan import, broader geometry, engineering approval and AI-confirmed fact promotion remain later. |
 
 ## Solution and target foundation release delta — 2026-09-10
 
@@ -79,7 +79,7 @@ owns database, browser, live-service and preservation evidence.
 | Evidence per version | **BUILT.** Up to 20 exact measurement versions retain their units, values, truth state and sources, including dimensions of existing parts. Later measurement changes are visible without replacing the recorded evidence. |
 | Selected project target | **BUILT manually.** One explicit target points to an exact solution revision. Revisioned decisions record select/replace/clear with actor, time and reason. New alternative versions do not silently change the target. |
 | Saved image and runtime consumption | **BUILT.** Authorised original images, alternative/evidence detail, paged revision/decision history, archive/restore, reload and project switching work. Removing a file retains its title and decision content. |
-| Generated visual proposals and downstream planning | **PARTIAL.** Manual plans/drawings are now delivered by 4A. Generated proposal/mockup imagery, deterministic drawing geometry, calculations and propagation into tasks/shopping remain later. Selection expresses intent, not engineering approval. |
+| Generated visual proposals and downstream planning | **PARTIAL.** 4A manual drawings, 4B1 deterministic stud-wall geometry and 4B2a manual material/stock/Shopping propagation are delivered. Generated proposal/mockup imagery, geometry-derived material quantities and executable task planning remain later. Selection expresses intent, not engineering approval. |
 
 ## Plans and drawings foundation release delta — 2026-09-13
 
@@ -94,7 +94,21 @@ owns database, browser, live-service and cleanup evidence.
 | Exact target and measurement lineage | **BUILT.** Every drawing version pins the exact selected target decision, exact solution revision and up to 20 exact measurement revisions. Later target/measurement changes are disclosed without rewriting what the older drawing used. |
 | Drawing revisions and history | **BUILT.** Create/revise/archive/restore append server-attributed revisions with reason/time. Stale drawing revisions and target decisions are rejected instead of silently rebinding an open editor. Old versions remain inspectable. |
 | Images, areas and runtime consumption | **BUILT.** Drawings reuse authorised project images and can belong to an Area. Image removal retains the recorded title/history; area removal keeps project-level drawing history. Browser flows pass create/revise/history/archive/restore/reload/paging/project switching. |
-| Generated geometry, BOM and downstream work | **GAP.** 4A is a manual truth foundation. Deterministic drawing generation, quantity derivations/BOM, stock deduction, Shopping propagation, task-material links, dependencies/tools/readiness and Bob/vision consumption remain later gates. |
+| Generated geometry, BOM and downstream work | **PARTIAL.** 4B1 adds one deterministic stud-wall-with-opening drawing recipe and 4B2a adds the manual material receiver, stock/reuse deduction and explicit Shopping propagation. Geometry-derived base quantities/BOM rules (4B2b), fasteners/consumables, task-material links, dependencies/tools/readiness and Bob/vision consumption remain later gates. |
+
+## Deterministic geometry and material-planning release delta — 2026-09-14
+
+**Status:** 4B1 and manual 4B2a are implemented, merged, migrated, deployed and live-verified. [Plans and drawings](artifacts.md) owns the deterministic geometry contract; [material planning](material-planning.md) owns requirements/stock/Shopping behavior; [foundation verification](foundation-verification.md) owns exact release evidence.
+
+| Foundation | Current status |
+|---|---|
+| Deterministic stud-wall geometry (4B1) | **BUILT narrowly.** `stud_wall_opening_v1` recomputes responsive SVG/vector geometry from one accepted project-scoped Space revision, six exact measurement revisions and explicit stud spacing. Regeneration creates a new Artifact revision; older recipes remain reproducible. It is not general CAD/BIM or structural header/load-path sizing. |
+| Versioned generation recipe | **BUILT.** `artifact_generations` and `artifact_geometry_inputs` pin generator/version, Building, Space revision, role-mapped measurements and explicit design parameters under project RLS. Unknown inputs cannot generate; estimated inputs remain concept-only. |
+| Manual material requirements (4B2a) | **BUILT.** A human enters base quantity/basis; the server versions exact target and optional drawing lineage and deterministically derives allowance, confirmed available quantity and rounded purchase need. Persisted manual method identity is `manual` / `4B2a-v1`. |
+| Stock and reuse reservation | **BUILT.** Revisioned material stock is separate from Shopping. Exact stock/component revisions are allocated with serialized capacity checks so concurrent current requirements cannot over-reserve known availability. Later source changes make requirements stale without rewriting history. |
+| Shopping handoff | **BUILT.** Send/Update Shopping is explicit, publishes the saved purchase need and preserves existing supplier, cost and status. Requirement changes, source staleness and independent Shopping edits remain visibly distinct; requirement saves never silently mutate Shopping. |
+| Geometry-derived BOM quantities (4B2b) | **GAP / next.** The receiver already reserves `source_kind = deterministic`, but no supported calculator yet turns the 4B1 recipe into material base quantities. That work must create normal material-requirement revisions rather than a second BOM store. |
+| Executable work planning | **GAP / later.** Task-material links, dependency graph, tool lists and readiness reasons remain after the quantity layer. |
 
 The [V1 delivery order](v1-plan.md#delivery-order--foundations-first-owner-decision-2026-09-09)
 prioritises persistent foundations before new AI consumers. No owner Bob trial
@@ -104,7 +118,7 @@ This inventory is deliberately stricter than a feature wishlist. A capability is
 
 The current product has a strong collaboration/coordination core. The biggest missing layer is the new **understand the real build → measure → choose solution → drawings → calculated materials → executable guidance → as-built memory** loop.
 
-## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A and 4A
+## Historical audit — before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A, 4A, 4B1 and 4B2a
 
 The executive summary and numbered sections below preserve the original audit.
 They are not current claims where the release deltas above supersede them.
