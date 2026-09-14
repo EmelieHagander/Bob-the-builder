@@ -45,29 +45,6 @@ jobs:
           if s.count(old) != 2:
               raise SystemExit(f'Expected two Shopping back-link checks, found {s.count(old)}')
           p.write_text(s.replace(old, "  await page.goto(base + '#/shopping')", 2))
-
-          p = Path('tests/material-planning-restack.test.ts')
-          s = p.read_text()
-          old = '''test('material browser proof scopes Shopping navigation to the page back link', async () => {
-  const script = await readFile(new URL('../scripts/material-planning-browser.mjs', import.meta.url), 'utf8')
-  assert.match(script, /locator\\('a\\.back-link'\\).*\\^Shopping\\$/, 'desktop proof should target the local Shopping back link')
-  assert.doesNotMatch(script, /getByRole\\('link', \\{ name: 'Shopping', exact: true \\}\\)/, 'desktop sidebar and page back link share the same accessible name')
-})'''
-          new = '''test('material plan preserves Area context while Project scope retains Shopping navigation', async () => {
-  const [pageSource, script] = await Promise.all([
-    readFile(new URL('../src/pages/MaterialPlan.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../scripts/material-planning-browser.mjs', import.meta.url), 'utf8'),
-  ])
-  assert.ok(pageSource.includes('activeArea ? <Link to={`/areas/${activeArea.slug}`} className="back-link">'),
-    'Area-scoped material planning should return to its workstream')
-  assert.ok(pageSource.includes('<Link to="/shopping" className="back-link">Shopping</Link>'),
-    'Project-scoped material planning should retain the Shopping back link')
-  assert.match(script, /page\\.goto\\(base \\+ '#\\/shopping'\\)/,
-    'browser proof should navigate explicitly when it leaves Area scope for Shopping')
-})'''
-          if s.count(old) != 1:
-              raise SystemExit('Expected material navigation regression block once')
-          p.write_text(s.replace(old, new, 1))
           PY
       - run: npm ci
       - run: npm test
