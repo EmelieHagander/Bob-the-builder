@@ -67,7 +67,7 @@ try {
         const phaseOnly = (url.searchParams.get('select') ?? '') === 'id,phase'
         const rows = [
           { id: 'bedroom', slug: 'bedroom', name: 'Bedroom', description: 'Finished room', icon: 'bed', lead_id: 'member', assigned_pct: 100, materials_pct: 100, done_pct: 100, task_summary: '2 tasks · 2 done', phase: areaPhase.get('bedroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
-          { id: 'office', slug: 'office', name: 'Office', description: 'Work underway', icon: 'hammer', lead_id: 'member', assigned_pct: 100, materials_pct: 75, done_pct: 50, task_summary: '4 tasks · 2 done', phase: areaPhase.get('office'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
+          { id: 'office', slug: 'office', name: 'Office', description: 'Work underway', icon: 'hammer', lead_id: 'member', assigned_pct: 100, materials_pct: 75, done_pct: 50, task_summary: '2 tasks · 1 done', phase: areaPhase.get('office'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'guestroom', slug: 'guestroom', name: 'Guestroom', description: 'Still comparing solutions', icon: 'lamp', lead_id: 'member', assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: 'No tasks yet', phase: areaPhase.get('guestroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
         ]
         return respond({ json: phaseOnly ? rows.map(({ id, phase }) => ({ id, phase })) : rows })
@@ -75,6 +75,7 @@ try {
       if (url.pathname === '/rest/v1/tasks') return respond({ json: [
         { id: 't1', area_id: 'bedroom', name: 'Finish trim', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
         { id: 't2', area_id: 'office', name: 'Frame wall', skill: 'intermediate', hours: '4h', status: 'doing', materials: '1 / 2', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+        { id: 't3', area_id: 'office', name: 'Protect floor', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
       ] })
       if (url.pathname === '/rest/v1/materials') return respond({ json: [] })
       if (url.pathname === '/rest/v1/events') return respond({ json: [] })
