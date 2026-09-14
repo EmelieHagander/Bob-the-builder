@@ -12,6 +12,8 @@ on:
       - scripts/check-live-artifact-geometry.mjs
       - scripts/check-live-material-planning.mjs
       - scripts/check-live-building-context.mjs
+      - scripts/check-live-project-phases.mjs
+      - scripts/check-live-volunteers.mjs
       - supabase/migrations/20260913124500_persistent_building_context.sql
       - supabase/migrations/20260913135500_expose_physical_proposal_state.sql
       - supabase/migrations/20260913140500_physical_identity_delete_boundary.sql
@@ -25,6 +27,14 @@ on:
       - supabase/migrations/20260913210100_material_planning_hardening.sql
       - supabase/migrations/20260913210200_material_planning_publish.sql
       - supabase/migrations/20260913210300_material_planning_reservation_serialization.sql
+      - supabase/migrations/20260913210400_material_planning_fk_index.sql
+      - supabase/migrations/20260914084207_deterministic_material_quantities.sql
+      - supabase/migrations/20260913213712_household_project_sharing.sql
+      - supabase/migrations/20260913214355_household_account_sharing.sql
+      - supabase/migrations/20260914052752_volunteer_project_links.sql
+      - supabase/migrations/20260914173410_sharing_rollout_hardening.sql
+      - supabase/migrations/20260914164000_project_area_phases_and_scoped_targets.sql
+      - supabase/migrations/20260914184600_project_targets_current_revision_fk_index.sql
       - .github/workflows/live-foundations.yml
 
 permissions:
@@ -42,7 +52,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify images, steps, facts, solutions, drawings, material planning and building context with disposable data
+      - name: Verify project foundations, sharing, phases and physical context with disposable data
         run: node scripts/check-live-foundations.mjs
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
