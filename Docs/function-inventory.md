@@ -54,8 +54,9 @@ outside the volunteer capability.
 
 All 98 local tests pass, including seven database volunteer groups, two isolated
 request-boundary groups and two media-proxy groups. Production build and the new
-media Edge-function typecheck pass. The dedicated 320/390/1280px browser harness
-is prepared but not yet executed. The legacy shared Guest entry below is a
+media Edge-function typecheck pass. [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52)
+owns the current CI/browser evidence. The dedicated 320/390/1280px browser harness
+runs in CI against synthetic HTTP fixtures. The legacy shared Guest entry below is a
 historical/different mechanism, not the name-only volunteer journey.
 [Foundation verification](foundation-verification.md) owns evidence and limits.
 

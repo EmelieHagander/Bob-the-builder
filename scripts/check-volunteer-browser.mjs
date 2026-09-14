@@ -134,7 +134,10 @@ try {
     await page.getByRole('button', { name: 'My details', exact: true }).click()
     assert.equal(await page.getByLabel('Allergies (optional)').inputValue(), 'Peanuts')
     state.food = false
+    const refreshedProfile = page.waitForResponse(response => response.url().endsWith('/rpc/volunteer_state'))
     await page.getByRole('button', { name: 'Refresh project', exact: true }).click()
+    assert.equal((await (await refreshedProfile).json()).hasFood, false)
+    await page.getByLabel('Allergies (optional)').waitFor({ state: 'detached' })
     await page.getByRole('button', { name: 'My details', exact: true }).waitFor()
     assert.equal(await page.getByLabel('Allergies (optional)').count(), 0)
     assert.equal(await page.getByRole('button', { name: 'Food', exact: true }).count(), 0)

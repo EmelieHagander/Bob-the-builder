@@ -35,14 +35,18 @@ and [database contract](../db/README.md) own the sharing behavior.
 - The production TypeScript/Vite build and PWA checks pass. The browser verifier
   scripts pass syntax checks. The new `volunteer-media` function also passes Deno
   typechecking using installed dependencies (`--no-config --cached-only
-  --node-modules-dir=manual`). The full existing Edge check remains blocked locally
-  by a pre-existing `esm.sh` import in `openai-service.ts`; its CI gate remains open.
+  --node-modules-dir=manual`). The full Edge check passes in
+  [CI 34823288170](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34823288170).
+  Its local equivalent is blocked by a pre-existing `esm.sh` import in
+  `openai-service.ts`.
 - Local manual browser preview is blocked by this environment. The new
   `scripts/check-sharing-browser.mjs` and `scripts/check-volunteer-browser.mjs` are included in CI for production React and
-  Supabase-client flows at 320, 390 and 1280px against HTTP fixtures. Its run result
-  must be checked before treating the browser behavior as verified. The owner
-  authorised GitHub branch and PR publication on 2026-09-14; its CI browser result
-  is still pending.
+  Supabase-client flows at 320, 390 and 1280px against HTTP fixtures.
+  [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52) owns the current
+  CI/browser evidence for this source. Its latest full CI run must pass before
+  merge. Household/friend browser checks pass in the run linked above; the
+  volunteer check also waits for the refreshed server profile before asserting
+  that removed food hides allergies. Screenshots accompany the workflow runs.
 
 ### Rollout boundary
 
