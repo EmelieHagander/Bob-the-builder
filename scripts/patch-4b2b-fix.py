@@ -14,10 +14,14 @@ text = text.replace(
     "  select ar,g into artifact,generation\n",
     "  select ar.title,ar.status into artifact_title,artifact_status\n",
 )
-text = text.replace('    artifact.title, artifact_revision,', '    artifact_title, artifact_revision,')
+text = text.replace('    artifact.title, artifact_revision,', '    artifact_title, v_artifact_revision,')
 text = text.replace('    net_area_m2, normalized_area_m2, artifact.status,', '    net_area_m2, normalized_area_m2, artifact_status,')
-if 'artifact bob.artifact_revisions' in text or 'into artifact,generation' in text:
-    raise SystemExit('composite record fix did not apply')
+text = text.replace('  artifact_id uuid;\n  artifact_revision integer;\n', '  v_artifact_id uuid;\n  v_artifact_revision integer;\n')
+text = text.replace("  artifact_id := nullif(p_data->>'artifact_id','')::uuid;\n  artifact_revision := nullif(p_data->>'artifact_revision','')::integer;\n  if artifact_id is null or artifact_revision is null then", "  v_artifact_id := nullif(p_data->>'artifact_id','')::uuid;\n  v_artifact_revision := nullif(p_data->>'artifact_revision','')::integer;\n  if v_artifact_id is null or v_artifact_revision is null then")
+text = text.replace('  where ah.id=artifact_id and ah.project_id=p_project and ah.current_revision=artifact_revision\n', '  where ah.id=v_artifact_id and ah.project_id=p_project and ah.current_revision=v_artifact_revision\n')
+text = text.replace('  where i.project_id=p_project and i.artifact_id=artifact_id and i.artifact_revision=artifact_revision;\n', '  where i.project_id=p_project and i.artifact_id=v_artifact_id and i.artifact_revision=v_artifact_revision;\n')
+if 'artifact bob.artifact_revisions' in text or 'into artifact,generation' in text or '  artifact_id uuid;' in text:
+    raise SystemExit('4B2b SQL variable fixes did not apply')
 migration.write_text(text)
 
 browser = Path('scripts/material-planning-browser.mjs')
