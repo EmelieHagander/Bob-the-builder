@@ -479,8 +479,11 @@ function mapAccount(row: AccountRow): Account {
 /** The legacy shared account is visible only to its selected household. */
 export async function getAccount(): Promise<Account | null> {
   if (!db) return read(mock.account)
-  const row = unwrap<AccountRow | null>(await db.from('account').select('id, name, owner_name, email').maybeSingle())
-  return row ? mapAccount(row) : null
+  const { data, error } = await db.from('account').select('id, name, owner_name, email').maybeSingle()
+  if (error) throw new Error(`database: ${error.message}`)
+  // No visible account is a successful result before household setup or when
+  // this login only has project access. Keep actual query failures distinct.
+  return data ? mapAccount(data as AccountRow) : null
 }
 
 export async function bindAccountHousehold(householdId: string): Promise<Account> {

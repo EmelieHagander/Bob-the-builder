@@ -60,7 +60,7 @@ async function fixture(viewport, fresh = false) {
     if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
     if (path === '/rest/v1/projects') return state.failProjectList ? respond({ status: 503, json: { message: 'Project list temporarily unavailable' } }) : respond({ json: projects.filter(project => state.accessible.includes(project.id)) })
     // An invited collaborator must not see or edit another household's notes.
-    if (path === '/rest/v1/account') return respond({ json: state.account })
+    if (path === '/rest/v1/account') return respond({ json: state.account ? [state.account] : [] })
     if (path === '/rest/v1/rpc/bind_account_household') {
       const body = request.postDataJSON()
       if (state.failAccountBind) return respond({ status: 403, json: { message: 'Household account setup denied.' } })

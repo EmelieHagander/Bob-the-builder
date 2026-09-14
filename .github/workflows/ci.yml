@@ -30,10 +30,17 @@ jobs:
       - name: Verify settings, phone guide and offline retry
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install
       - name: Build with a dummy live configuration
+        id: live_build
         run: npm run build
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify household sharing and friend invitation UI
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-sharing-browser.mjs
+      - name: Verify registration-free volunteer participation
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-volunteer-browser.mjs
       - name: Verify public installation before login
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
       - name: Verify Ask bob project isolation and mobile source disclosure
@@ -42,10 +49,6 @@ jobs:
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify persistent building context UI
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
-      - name: Verify household sharing and friend invitation UI
-        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-sharing-browser.mjs
-      - name: Verify registration-free volunteer participation
-        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-volunteer-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
