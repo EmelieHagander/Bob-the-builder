@@ -75,10 +75,22 @@ try {
         if (accountPhaseOnly) return respond({ json: rows.map(({ phase }) => ({ project_id: 'P', phase })) })
         return respond({ json: phaseOnly ? rows.map(({ id, phase }) => ({ id, phase })) : rows })
       }
-      if (url.pathname === '/rest/v1/tasks') return respond({ json: [
-        { id: 't1', area_id: 'bedroom', name: 'Finish trim', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
-        { id: 't2', area_id: 'office', name: 'Frame wall', skill: 'intermediate', hours: '4h', status: 'doing', materials: '1 / 2', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
-        { id: 't3', area_id: 'office', name: 'Protect floor', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+      if (url.pathname === '/rest/v1/tasks') {
+        const rows = [
+          { id: 't1', area_id: 'bedroom', name: 'Finish trim', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', instructions: '', updated_at: '2026-09-14T18:00:00Z', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+          { id: 't2', area_id: 'office', name: 'Frame wall', skill: 'intermediate', hours: '4h', status: 'doing', materials: '1 / 2', instructions: 'Frame the selected wall layout.', updated_at: '2026-09-14T18:00:00Z', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+          { id: 't3', area_id: 'office', name: 'Protect floor', skill: 'novice', hours: '1h', status: 'done', materials: '0 / 0', instructions: '', updated_at: '2026-09-14T18:00:00Z', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+          { id: 't4', area_id: 'guestroom', name: 'Mark proposed opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: 'Do not cut until the design is approved.', updated_at: '2026-09-14T18:00:00Z', task_assignees: [{ person_id: 'member' }], areas: { project_id: 'P' } },
+        ]
+        const id = url.searchParams.get('id')?.replace(/^eq\./, '')
+        const selected = id ? rows.filter(row => row.id === id) : rows
+        const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+        return respond({ json: single ? selected[0] ?? null : selected })
+      }
+      if (url.pathname === '/rest/v1/task_steps') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/today_tasks') return respond({ json: [
+        { id: 't4', area_id: 'guestroom', area_name: 'Guestroom', area_phase: areaPhase.get('guestroom'), name: 'Mark proposed opening', skill: 'novice', status: 'todo', assignee_ids: ['member'], project_id: 'P' },
+        { id: 't2', area_id: 'office', area_name: 'Office', area_phase: areaPhase.get('office'), name: 'Frame wall', skill: 'intermediate', status: 'doing', assignee_ids: ['member'], project_id: 'P' },
       ] })
       if (url.pathname === '/rest/v1/materials') return respond({ json: [] })
       if (url.pathname === '/rest/v1/events') return respond({ json: [] })
@@ -109,6 +121,17 @@ try {
 
     if (viewport.width < 860) await page.getByRole('link', { name: 'Today', exact: true }).waitFor()
 
+    await page.goto(`${base}#/today`)
+    await page.getByRole('heading', { name: 'What needs doing today', exact: true }).waitFor()
+    assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Frame wall', 'Mark proposed opening'],
+      'Build-phase Today work should be foregrounded without hiding other scheduled work')
+    await page.getByText('Check readiness before starting — this Area is in Design, not Build.', { exact: true }).waitFor()
+    await page.getByRole('link', { name: 'Frame wall', exact: true }).click()
+    await page.getByRole('heading', { name: 'Frame wall', exact: true }).waitFor()
+    await page.getByLabel('Area phase: Build').waitFor()
+    await page.goto(`${base}#/`)
+    await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
+
     await page.getByRole('button', { name: 'Review phase', exact: true }).first().click()
     await page.getByLabel('Move to phase').selectOption('planning')
     await page.getByLabel('Reason for this change').fill('New evidence means we need to revisit planning')
@@ -131,7 +154,7 @@ try {
     await page.screenshot({ path: `test-results/project-phases-${viewport.width}.png`, fullPage: true })
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Project phases ${viewport.width}px: account summary, mixed workstreams, explicit transitions, reload and mobile Today: OK`)
+    console.log(`Project phases ${viewport.width}px: account summary, mixed workstreams, Today/Task field context, explicit transitions and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()

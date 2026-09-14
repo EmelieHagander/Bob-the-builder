@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, SkillPill, StatusPill, statusCheck, useAsync } from '../components/ui'
+import { PhasePill } from '../components/PhaseUI'
+import { phaseLabel } from '../lib/projectPhase'
 
 export function Today() {
   const { data: tasks } = useAsync(() => db.getTodayTasks(), [])
@@ -8,6 +10,7 @@ export function Today() {
   const { data: people } = useAsync(() => db.getPeople(), [])
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
+  const orderedTasks = tasks ? [...tasks].sort((a, b) => Number(b.areaPhase === 'build') - Number(a.areaPhase === 'build')) : null
 
   return (
     <div className="page" style={{ maxWidth: 720 }}>
@@ -21,12 +24,13 @@ export function Today() {
         </div>
       )}
 
-      {!tasks ? (
+      {!orderedTasks ? (
         <Loading />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
-          {tasks.map((t) => {
+          {orderedTasks.map((t) => {
             const chk = statusCheck(t.status)
+            const phaseNeedsReview = Boolean(t.areaPhase && t.areaPhase !== 'build')
             return (
               <div key={t.id} className="card" style={{ padding: 15 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
@@ -37,8 +41,10 @@ export function Today() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
                       <SkillPill level={t.skill} />
                       <StatusPill status={t.status} />
+                      {t.areaPhase && <PhasePill phase={t.areaPhase} prefix="Area" />}
                       <AvatarStack people={resolve(t.assigneeIds)} max={4} size={24} />
                     </div>
+                    {phaseNeedsReview && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Check readiness before starting — this Area is in {phaseLabel(t.areaPhase)}, not Build.</p>}
                   </div>
                 </div>
               </div>

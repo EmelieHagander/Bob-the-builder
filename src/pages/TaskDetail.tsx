@@ -5,6 +5,7 @@ import type { TaskDetail as Detail, TaskStatus, TaskStep } from '../data/types'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { ProjectImages } from '../components/ProjectImages'
+import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
 import { Icon, Loading, SkillPill, useAsync } from '../components/ui'
 
@@ -95,7 +96,7 @@ export function TaskDetail() {
   return <div className="page task-detail">
     <Link to={area ? '/areas/' + area.slug : '/areas'} className="task-back"><Icon name="arrow-left" size={16} /> {area?.name ?? 'Areas'}</Link>
     <div className="page-head"><div><h1 className="page-title">{task.name}</h1>
-      <div className="foundation-actions"><SkillPill level={task.skill} /><span>{task.hours}</span></div></div>
+      <div className="foundation-actions"><SkillPill level={task.skill} /><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div></div>
       <button className="btn" onClick={() => setDialog({ kind: 'task' })}>Edit task</button>
     </div>
     {!editable && <p className="foundation-hint">This demo shows the task layout. Saved instructions, steps and images are available in connected projects.</p>}
