@@ -13,6 +13,7 @@ import { EmptyState, Icon, Loading, SectionTitle, useAsync, useProjectVersion } 
 import { Modal } from '../../components/Modal'
 import { Field, FormError, inputStyle } from '../../components/form'
 import { InviteModal } from '../../components/InviteModal'
+import { ProjectInvitations } from '../../components/SharingCards'
 import { scheduleStatus } from '../../lib/calendarGrid'
 import { formatDate, formatDateRange } from '../../lib/format'
 import { ProjectModal, SchedulePill } from './ProjectModal'
@@ -57,6 +58,7 @@ export function AccountDashboard() {
           <p className="page-sub">Every build in one place — projects, shared notes and settings.</p>
         </div>
         <div className="cluster no-print">
+          <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings &amp; family</Link>
           <Link to="/account/calendar" className="btn">
             <Icon name="calendar-dots" size={16} /> Calendar
           </Link>
@@ -71,6 +73,8 @@ export function AccountDashboard() {
           </button>
         </div>
       </div>
+
+      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 22 }}>
         {stats.map((s) => (
@@ -178,7 +182,7 @@ export function AccountDashboard() {
             )}
           </div>
 
-          <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} />
+          {account ? <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} /> : <div className="card" style={{ padding: 16 }}><SectionTitle icon="note-pencil">Household notes</SectionTitle><p className="foundation-hint">Household notes need access to the household account.</p><Link className="btn" to="/account/settings">Account settings</Link></div>}
         </section>
       </div>
 

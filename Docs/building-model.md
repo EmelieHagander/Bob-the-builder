@@ -4,6 +4,7 @@
 > **Owns:** bob's persistent physical-place model across projects: sites, buildings, levels, spaces, building elements, spatial relationships, project scope, uncertainty and physical-state history  
 > **Release order:** `Docs/v1-plan.md` owns sequencing and release gates  
 > **Implementation truth:** runtime/schema now persist Site → Building → optional Level → Space, BuildingElements, spatial relationships, Project/Area physical scope, accepted/proposed history and exact measurement snapshots. Later geometry/import/AI work must extend this shipped foundation rather than create a parallel physical model. Release evidence lives in `Docs/foundation-verification.md`.
+> **Sharing extension:** the household authority decision in §11.1A is specified and being implemented; it is not yet a deployed/live-verified claim.
 
 ## Why this exists
 
@@ -481,6 +482,27 @@ Persistent physical context cannot depend on `project_id`, because a Site/Buildi
 
 This keeps Fixture C's isolation meaningful while still allowing a project crew to use the context the project explicitly targets.
 
+### 11.1A Household sharing extension
+
+**Status:** specified / implementation in progress, 2026-09-13. The direct-only
+accepted-edit rules above describe the deployed 2C baseline. This extension adds
+the household editing authority confirmed by the product owner.
+
+- A direct Building member may opt in to sharing that Building with one existing household to which they have active access.
+- Effective Building editors are direct members plus active members of its explicitly selected household. They may maintain ordinary accepted/current physical records and accept proposals through the same revisioned commands.
+- Managing the Building's household share and actual physical deletion still require direct Building membership. Existing archive/revision/history safeguards remain in force.
+- Sharing a Building does not create Site membership or share sibling Buildings merely because they have the same Site.
+- Project household sharing is a separate explicit choice: no household audience, one household directly, or following one Building that the project actually targets. A physical reference alone does not share project content. When a project targets several Buildings, only the one selected as its sharing source supplies household access.
+- The Building sharing flow may add explicitly checked, accessible linked projects only when their sharing is unconfigured or already follows this same Building. Every other existing choice, including an explicitly private project, must be changed in that project's own sharing card using its current revision. This preserves a concurrent unshare instead of treating an empty audience as permission to overwrite the choice. Future projects require an explicit choice too.
+- Household-derived rights are resolved from current active household access and the current share/physical association. Removing one route preserves any independent direct membership or accepted project invitation.
+- An invited project friend retains the project's existing physical read/proposal context, including Building-wide reads currently allowed by backend scope. The invitation itself grants no accepted Building editing, physical administration or access to other projects.
+
+[BOB-US-059](user-stories.md#bob-us-059--share-a-building-and-selected-projects-with-my-household)
+owns the user goal. [The data/auth contract](../db/README.md#household-and-friend-sharing)
+owns shared data dependencies, effective access checks, commands and revocation.
+`Docs/foundation-verification.md` owns delivery evidence; this decision alone does
+not prove the new rights are deployed.
+
 ## 11.2 First persisted objects
 
 The additive 2C schema uses these identities and append-only histories:
@@ -529,6 +551,11 @@ Initial Element kinds are open text constrained to a short label rather than a g
 A Project can have zero or more explicit physical targets. A target row points to exactly one Site, Building, Space or Element. Space/Element targets always retain their owning Building in the row so project/building isolation can be checked without inference.
 
 An Area can optionally map to one or more of the Project's physical Building/Space/Element targets. Removing an Area removes only that mapping; it never deletes persistent physical context. Removing a Project removes its scopes/proposals, not the Building/Spaces themselves.
+
+The sharing extension in §11.1A deliberately keeps this physical scope separate
+from household audience. A project that follows a Building for sharing must retain
+an exact Building/Space/Element scope to that Building. A Site-only scope is not
+an implicit household-sharing selection.
 
 ## 11.7 First UI surface
 

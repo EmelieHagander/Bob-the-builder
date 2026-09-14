@@ -8,6 +8,7 @@ import type {
   PhysicalSpace,
 } from '../data/buildingContext'
 import { BuildingContextEditor } from './BuildingContextEditor'
+import { BuildingSharingCard } from './SharingCards'
 import { inputStyle } from './form'
 import { Loading } from './ui'
 
@@ -66,7 +67,7 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
     let alive = true
     setLoading(true)
     setRootError('')
-    Promise.all([context.sites(projectId), context.buildings(projectId), context.projectBuildings(projectId)])
+    Promise.all([context.sites(projectId), context.buildings(projectId), projectId ? context.projectBuildings(projectId) : Promise.resolve([])])
       .then(([nextSites, nextBuildings, scoped]) => {
         if (!alive) return
         setSites(nextSites)
@@ -155,6 +156,8 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
       sites={sites}
       buildings={buildings}
       projectBuildingIds={projectBuildings.map(building => building.id)}
+      showProjectScope={Boolean(projectId)}
+      sharing={selectedBuilding && detail.canDirectEdit && <BuildingSharingCard key={selectedBuilding.id} buildingId={selectedBuilding.id} buildingName={selectedBuilding.name} />}
       selectedBuildingId={selectedBuildingId}
       levels={detail.levels}
       spaces={detail.spaces}

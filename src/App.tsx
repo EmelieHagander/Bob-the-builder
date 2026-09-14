@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import * as db from './data/database'
 import { Loading, useAsync, useProjectVersion } from './components/ui'
 import { Layout, useAuthTick } from './components/Layout'
@@ -27,12 +27,15 @@ import { Today } from './pages/Today'
 import { SignIn } from './pages/SignIn'
 import { NotFound } from './pages/NotFound'
 import { Install } from './pages/Install'
+import { VolunteerProject } from './pages/VolunteerProject'
 
 export function App() {
   // Installation help is public, even while project/session loading is slow.
   return (
     <Routes>
       <Route path="/install" element={<Install />} />
+      <Route path="/volunteer" element={<VolunteerProject />} />
+      <Route path="/volunteer/:token" element={<VolunteerProject />} />
       <Route path="*" element={<ProjectApp />} />
     </Routes>
   )
@@ -40,6 +43,7 @@ export function App() {
 
 function ProjectApp() {
   const navigate = useNavigate()
+  const location = useLocation()
   // The active project decides the colour theme (forest / dusk / birch).
   // Refetches when the active project changes (switch from the account
   // level) and after the first project is created.
@@ -77,6 +81,11 @@ function ProjectApp() {
   // auth and skips straight in.
   if (db.authEnabled() && !signedIn) {
     return <SignIn />
+  }
+  // Persistent buildings can be shared before anyone creates a project.
+  // This account surface must remain reachable with zero project memberships.
+  if (location.pathname === '/account/buildings') {
+    return <BuildingContext key={`account:${authTick}`} projectId="" context={db.buildingContext} />
   }
   if (error) return <div className="card" role="alert" style={{ margin: 32, padding: 24 }}>
     <p>Could not load your project. Your access may have changed.</p>

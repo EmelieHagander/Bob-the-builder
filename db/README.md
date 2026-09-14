@@ -1,9 +1,11 @@
 # bob — database
 
-bob lives in a **shared Postgres database**, so it keeps strictly to its own
-schemas: project data lives in **`bob`**; guarded internal membership helpers
-live in non-exposed **`bob_private`**. Nothing touches `public`, every statement is
-schema-qualified, and nothing relies on `search_path`.
+bob lives in a **shared Postgres database**. Bob-owned project data and sharing
+records live in **`bob`**; guarded internal authority helpers live in non-exposed
+**`bob_private`**. The household/friend sharing extension reads the existing
+`shared` family records and `hearth` friendship/profile records through guarded
+Bob commands. It does not create another family graph or mutate those apps' data.
+Every statement is schema-qualified and nothing relies on `search_path`.
 
 ## Layout
 
@@ -230,6 +232,206 @@ preserving strong foreign keys.
 foundation does not claim whole-plan import, general CAD/BIM, generated geometry or
 AI promotion of uncertain evidence into fact.
 
+## Household and friend sharing
+
+> **Status:** specified / implementation in progress, 2026-09-13. The working
+> source is `supabase/migrations/20260913213712_household_project_sharing.sql`
+> plus `supabase/migrations/20260913214355_household_account_sharing.sql`, with
+> `src/data/sharing.ts` behind `database.ts`. Local validation, hosted
+> application and runtime delivery must be recorded separately in
+> `Docs/foundation-verification.md`; no hosted migration is claimed here yet.
+
+[`Docs/user-stories.md`](../Docs/user-stories.md) owns BOB-US-038 and BOB-US-059.
+[`Docs/building-model.md` §11.1A](../Docs/building-model.md#111a-household-sharing-extension)
+owns the physical authority decision. This section owns its data/command mapping
+and the effective project-access contract, extending the deployed Slice 0 baseline
+below when the new migration is applied.
+
+### Shared inputs and Bob-owned records
+
+| Source | Use in Bob |
+|---|---|
+| `shared.households` + `shared.household_access` | Existing household identity and current audience: the Auth user must have access with `status = 'active'`. |
+| `shared.members` | Display names for authorised household crew identity; a family member record alone is not a login entitlement. |
+| `hearth.friendships` + `hearth.profiles` | Accepted friendships in either direction and minimal friend display names. Friendship alone never grants a Bob project. |
+| `bob.building_household_shares` | Opt-in household audience for one Building, with a conflict revision. |
+| `bob.project_household_shares` | One explicit project choice: no household, one direct household, or one exactly linked Building as the household source. |
+| `bob.project_friend_invitations` | Bob-local pending/accepted/declined/revoked project invitation state. |
+| `bob.people.access_origin` | Distinguishes existing direct membership from a derived crew projection. The client cannot create or change the grant origin. |
+| `bob.account.household_id` | Explicit household boundary for the existing account/notes singleton; an unbound account is inaccessible. |
+
+The browser uses Bob's guarded directory and sharing RPCs. It never directly
+queries another app's household tables, profiles or friendship graph.
+
+### Effective authority and revocation
+
+`bob_private.has_project_access` accepts the union of these independent routes:
+
+| Route | Current authority check |
+|---|---|
+| Direct project membership | A protected `bob.people` row links this user/project with `access_origin = 'direct'`. Existing memberships keep this origin. |
+| Direct household share | This project explicitly selects a household and the user currently has active access to it. |
+| Follow one Building | This project explicitly selects that Building, retains an exact Building/Space/Element scope to it, and the user has active access to the Building's currently shared household. Site-only association does not qualify. |
+| Accepted friend invitation | This user has an accepted Bob invitation for this exact project. |
+
+`bob.join_project(project)` may project an already entitled caller into a stable
+crew row. `access_origin = 'derived'` never grants access by itself, so later
+revocation does not leave a permanent grant hidden in the crew list. Retained
+crew identity supports existing assignments/history. The last direct linked
+project member remains protected against deletion.
+
+Project members retain the existing collaborative editing and invitation model;
+Organiser/Volunteer labels do not confer separate permission roles. Project
+household choice is guarded by current project access plus active access to the
+selected household. "No household sharing" preserves independent project members
+and invitations; it does not remove everyone else from the project.
+
+`bob.can_edit_building` resolves direct Building membership or current active
+access to the Building's chosen household for ordinary physical editing and
+proposal acceptance. Building household administration and actual physical deletion
+still require direct Building membership. Friend invitation alone only provides
+the project's existing physical-context read/proposal access, whose Building-wide
+backend scope is described in the building contract.
+
+Household departure/inactivation, disabling or changing a share, and removing the
+selected Building association revoke the affected inherited route on subsequent
+authorisation checks. Independent direct membership, another valid household
+route or an accepted project invitation continues to work. No household members
+are copied into permanent direct Bob grants.
+
+### Guarded commands and invitation lifecycle
+
+| Bob RPC | Contract |
+|---|---|
+| `sharing_directory` | Returns only the caller's active households and accepted friends with minimal display data. |
+| `project_sharing_state`, `building_sharing_state` | Return the exact requested context, current sharing revision and permitted choices. |
+| `set_project_household` | Selects the project's household source using its expected revision. A stale choice is rejected. |
+| `set_building_household` | Requires direct Building authority and the Building's expected sharing revision. The optional explicit linked-project checklist is additive and atomic: only untouched project sharing or an existing follow of this same Building is accepted. Other existing choices, including explicit private sharing, require the project card and its current revision. |
+| `invite_project_friend` | Creates a pending in-app invitation only for a current accepted friend; no email or message is sent. |
+| `project_invitations`, `respond_project_invitation` | Show the recipient's pending invitations and accept/decline them. Acceptance rechecks friendship and the inviter's current project authority. Pending/declined invitations grant no project-content access. |
+| `revoke_project_invitation` | Lets a current project member revoke this Bob invitation or lets its recipient leave that invitation's grant. Other independent access routes remain intact. |
+
+The bulk Building checklist accepts an unconfigured project (`revision = 0`) or
+one already following that same Building. A stored explicit private choice
+(`revision > 0` with both source IDs null) is an existing user decision, even
+though its current audience is empty. Bulk opt-in must reject it just like a
+different household/Building source; changing it requires that project's own
+revision-checked command. This also prevents an older Building form from silently
+undoing a concurrent project unshare.
+
+An accepted Bob grant survives later friendship deletion; friendship is checked at
+invitation and acceptance, while subsequent removal is an explicit Bob revoke/leave
+action. Existing confirmed-email `invite_person` / `claim_project_invites` remains
+a separate flow and is not converted into a social friendship or an email-delivery
+service. New projects require an explicit household choice; physical links alone
+never enrol their household audiences.
+
+Raw client mutation of sharing, invitation state, authority origin and actor/time
+is denied. `database.ts` guards requests against stale auth/project responses;
+missing server RPCs must produce an unavailable state rather than a fake saved
+share. Media and Ask bob continue through the same backend project-access boundary.
+
+### Legacy account boundary — release gate
+
+The deployed `bob.account` / `bob.account_notes` singleton predates private project
+authority and has broad legacy access. The sharing rollout must replace that
+posture before exposing new friend access to the account shell. Source is prepared
+in `supabase/migrations/20260913214355_household_account_sharing.sql`; it is not yet
+applied or live-verified.
+
+The migration removes the broad legacy policies and limits account/settings/notes
+reads and allowed writes to active access in the account's explicitly bound
+`shared.households` record. Project membership and friend invitations grant no
+account access. The existing pristine singleton remains unbound and inaccessible
+until an authenticated user explicitly calls `bob.bind_account_household(p_household)`
+for a household they can actively access. This command binds only an untouched,
+empty account and cannot reassign one that already belongs to another household.
+
+`src/pages/account/AccountSettings.tsx` offers this explicit choice through
+`database.ts::bindAccountHousehold`, then reads the account back. A missing,
+denied or unreadable result must remain an honest failure/unavailable state. This
+setup does not share Buildings or projects.
+
+If legacy settings are configured or any notes exist, migration requires the
+transaction-local reviewed mapping `bob.reviewed_account_household`; without it,
+the migration aborts. The read-only rollout baseline found no configured legacy
+account content and no notes. That baseline never chooses a household: there is
+no first-user, first-project or first-household fallback. Hosted application,
+denied-access checks and normal-user binding/read-back proof remain release gates;
+prepared source does not establish that deployed account records are private.
+
+## Name-only volunteer access
+
+**Prepared source, not deployed (2026-09-14).** The owner explicitly requires a
+project link and a name, with optional allergies only when the project has food.
+There is no email, password, manual registration, anonymous Auth signup or shared
+Guest-account login in this journey. `BOB-US-038` owns the user goal;
+`Docs/foundation-verification.md` owns the tests and rollout status.
+
+`20260914052752_volunteer_project_links.sql` follows the two sharing migrations.
+`bob.volunteer_links` owns expiring, revocable multi-use project invitations;
+`bob.volunteer_sessions` binds a separate browser capability to exactly one link,
+one project and one `bob.people` row. The person has `auth_user_id = null`, a
+Volunteer display label and derived origin. No Auth/shared-family/friend record
+is created. Ordinary project RLS and `has_project_access` never treat this row as
+an authenticated project grant.
+
+Both the shared invitation and individual session use distinct 256-bit random
+secrets. Only SHA-256 hashes are stored in the database. The invitation is in the
+URL fragment; request bodies carry session credentials, never a selectable actor
+or project. The browser remembers only its random credential, not names or
+allergy data. A retry with the same credential reuses the person; the same name
+with another credential creates a distinct person. Neither names nor knowledge
+of a project ID can restore another person's session.
+
+The new `bob_volunteer_private` schema confines capability-checked definers. Bob
+exposes exact invoker wrappers; anonymous callers receive no new access to
+`bob_private`, base tables, Auth or shared-app tables. New tables have RLS and no
+normal-client raw read/write grants, including no read access to secret hashes.
+
+| Command | Authority and result |
+|---|---|
+| `volunteer_links_state`, `create_volunteer_link`, `revoke_volunteer_access` | Current signed-in project access required. Manage link/participant metadata without exposing credentials. |
+| `volunteer_preview` | Valid active invitation reveals only project name/ID, food availability and expiry before joining. |
+| `volunteer_join` | Active invitation plus separate new browser secret creates/reuses a project person by name. No identity matching by name or email. |
+| `volunteer_state`, `volunteer_profile` | Active session reads or changes only its own name/allergies. Profile saves compare the current person timestamp. |
+| `volunteer_feed`, `volunteer_task` | Paged tasks, build days, updates and meals; task instructions/checks and ready linked image metadata. No other participants' allergy notes, account settings, private physical inventory or other project feeds. |
+| `volunteer_rsvp`, `volunteer_task_action` | Own attendance and task assignment only. Task status/check writes require current own assignment, preserve required-check rules and reject stale changes. No task/instruction creation or editing. |
+| `volunteer_media` | Exact active session + same-project task + ready task/step/area-linked image resolve the sole permitted Storage object for the media proxy. |
+
+Food availability is derived from an existing meal or nonempty build-event food
+description. Merely having a Food navigation item does not count. Allergy input
+is optional and limited to 1000 characters; nonempty allergy writes without food
+are rejected server-side. Notes live only in that person's project-local `diet`
+field, are shown to the signed-in crew in People/Food, and are never included in
+other volunteer feeds. Removing food hides the field and its own-profile response;
+it does not silently erase an earlier crew record. Empty values are not labelled
+"No restrictions".
+
+Step completion uses `task_steps.completed_by_volunteer` for the Bob person ID,
+mutually exclusive with the existing Auth `completed_by`. Authenticated reopens
+or completions clear the volunteer actor field. Historical IDs are retained; an
+Auth UUID is never manufactured for a name-only participant.
+
+Links belong to the project independently of the creator's later membership.
+Default expiry is 30 days, selectable from 1–90 days server-side (7/30/90 in UI).
+A project can have at most 10 active links and each link at most 200 registrations.
+Every guest request checks expiry and link/session revocation; row locks serialize
+revocation with writes. Revoking a link ends all its sessions. Revoking one session
+does not identify or ban that human: anyone retaining a still-active shared link
+can register again. Revoke that link to stop new registrations. Deleting the
+project person cascades its session; the crew controls retained task/attendance
+records. Forgetting access on a browser clears its stored credential, not saved
+project work or the server-side participant record.
+
+`/#/volunteer/:token` renders before the regular sign-in gate and uses an isolated,
+nonpersisting Supabase client. `volunteer-media` is an explicitly public Edge
+entrypoint (`verify_jwt = false`) whose session capability is checked before and
+after a private Storage download. It streams original bytes with `no-store`,
+without public URLs, bucket-policy changes or exposing the service key. Deploy
+this function after the migration and before the frontend; global anonymous Auth
+does not need enabling. Loaded bytes already received cannot be recalled.
+
 ## Wiring the app to it
 
 Already done — all data access goes through the single module
@@ -243,6 +445,7 @@ With no env config the app falls back to the in-memory mock data.
 
 > Applied to the shared database on 2026-09-09; see the verification record for release evidence.
 > Legacy migrations 0001–0010 describe the previous household-wide policies.
+> This section records the deployed Slice 0 baseline. The household/friend extension above specifies the newer authority model; its source is not yet a deployment claim.
 
 Apply `supabase/migrations/20260909182548_project_scope_and_bounded_lookup.sql`
 **after** the ten legacy migrations. It was created with `supabase migration new`.
@@ -255,7 +458,7 @@ keeps its original authoring timestamp; these are the same applied change, not
 two migrations to replay. The deployment supplied the reviewed mapping only in
 its transaction-local setting.
 
-The authority source remains `bob.people`: a protected `(project_id, auth_user_id)`
+Slice 0 established `bob.people` as the authority source: a protected `(project_id, auth_user_id)`
 link, unique per project. One Auth user can belong to several projects. Editable
 crew labels such as Organiser/Volunteer are **not permission roles**. Members
 retain collaborative content editing and may invite other people to that project.
@@ -280,11 +483,12 @@ retain collaborative content editing and may invite other people to that project
 - A shared guest login only sees projects explicitly linked to that guest.
   Such a project is accessible to everyone using those public guest credentials.
 
-`bob.account` and `bob.account_notes` retain the existing shared-household
-semantics. They have no project id and are excluded from Ask bob. This slice
+At Slice 0, `bob.account` and `bob.account_notes` retained the legacy broad
+singleton semantics. They have no project id and are excluded from Ask bob. This slice
 does **not** establish separate private accounts or organiser-only authority.
 Other apps' schemas, shared AI tables, and the separately managed `bob.asset`
-table are not altered.
+table are not altered. The household/friend sharing release has an explicit
+[account-isolation gate](#legacy-account-boundary--release-gate) above.
 
 ### Existing project mapping is a rollout gate
 

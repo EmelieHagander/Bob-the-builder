@@ -86,6 +86,7 @@ export function SignIn() {
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
             Invited? Sign in with your confirmed invitation email to find your project. New? You can start your own project or ask the organiser for an invitation.
           </p>
+          <p className="foundation-hint">Volunteering? Open the project link from your organiser to join with just your name. You do not need to sign in here.</p>
 
           <form onSubmit={magicLink} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
             <Field label="Email">

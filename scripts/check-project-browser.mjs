@@ -61,6 +61,7 @@ try {
         return respond({ json: success(body.projectId, `Answer for Porch ${body.projectId}`) })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
+      if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {

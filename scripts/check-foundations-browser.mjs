@@ -59,6 +59,7 @@ try {
       if (await artifacts.handle(request, url, respond)) return
       if (await materialPlanning.handle(request, url, respond)) return
       if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
+      if (path === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (path === '/rest/v1/projects') return respond({ json: projects })
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
       if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })

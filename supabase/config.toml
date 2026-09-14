@@ -10,3 +10,8 @@ verify_jwt = true
 # Retired endpoint: returns 410 without calling a provider or reading project data.
 [functions.ask-launchpad]
 verify_jwt = true
+
+# Named volunteers have no Auth JWT. A separate Bob capability authorizes every
+# task image request, including a second check before bytes leave the server.
+[functions.volunteer-media]
+verify_jwt = false

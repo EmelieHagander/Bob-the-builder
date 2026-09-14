@@ -3,6 +3,8 @@ import * as db from '../data/database'
 import { Avatar, Icon, Loading, skillDotColor, useAsync } from '../components/ui'
 import { InviteModal } from '../components/InviteModal'
 import { PersonModal } from '../components/editors'
+import { ProjectSharingCard } from '../components/SharingCards'
+import { FormError } from '../components/form'
 import type { Person, SkillLevel } from '../data/types'
 
 const dietWarn = /allerg|gluten|vegan|dairy/i
@@ -11,7 +13,7 @@ const SKILL_LABEL: Record<SkillLevel, string> = { novice: 'novice', intermediate
 
 export function People() {
   const [version, setVersion] = useState(0)
-  const { data: people } = useAsync(() => db.getPeople(), [version])
+  const { data: people, loading, error } = useAsync(() => db.getPeople(), [version])
   const { data: projects } = useAsync(() => db.getProjects(), [])
   const { data: project } = useAsync(() => db.getProject(), [])
   const [inviting, setInviting] = useState(false)
@@ -32,10 +34,15 @@ export function People() {
           <h1 className="page-title">People</h1>
           <p className="page-sub">Everyone on the build, their skills and what they can't eat.</p>
         </div>
-        <button className="btn btn-primary no-print" onClick={() => setInviting(true)}>
+        <button className="btn btn-primary no-print" onClick={() => setInviting(true)} disabled={!project}>
           <Icon name="paper-plane-tilt" size={15} /> Invite people
         </button>
       </div>
+
+      {project && <details className="sharing-disclosure no-print">
+        <summary>Household sharing &amp; friend invitations</summary>
+        <ProjectSharingCard key={project.id} projectId={project.id} version={version} onChanged={() => setVersion(value => value + 1)} />
+      </details>}
 
       <div className="no-print" style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', maxWidth: 420 }}>
         <Icon name="magnifying-glass" size={16} color="var(--ink-faint)" />
@@ -43,14 +50,15 @@ export function People() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name, role or skill…"
-          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }}
+          aria-label="Search people"
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }}
         />
       </div>
 
-      {!people ? (
+      {error ? <div role="alert" style={{ marginTop: 18 }}><FormError>{error.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : loading || !people ? (
         <Loading />
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', marginTop: 18 }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', marginTop: 18 }}>
           {filtered.map((p) => {
             const warn = dietWarn.test(p.diet)
             return (

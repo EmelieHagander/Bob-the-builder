@@ -7,7 +7,7 @@ type SurfaceProps = ComponentProps<typeof BuildingContextSurface>
 
 export function BuildingContext(props: SurfaceProps) {
   return <div className="page building-context-page">
-    <Link className="btn" to="/"><Icon name="arrow-left" size={15} /> Dashboard</Link>
+    <Link className="btn" to={props.projectId ? '/' : '/account'}><Icon name="arrow-left" size={15} /> {props.projectId ? 'Dashboard' : 'Account & projects'}</Link>
     <div className="page-head" style={{ marginTop: 18 }}>
       <div>
         <p className="foundation-hint" style={{ marginBottom: 4 }}>Persistent physical context</p>
