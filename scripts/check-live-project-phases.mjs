@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 
-export async function verifyProjectPhases(client, anonymous, projectId, areaId, solutions) {
+export async function verifyProjectPhases(client, anonymous, projectId, areaId) {
   const phase = (scope, area, next, reason) => client.rpc('phase_command', {
     p_project: projectId,
     p_scope: scope,
@@ -54,12 +54,19 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId, 
   assert((await client.from('areas').update({ phase: 'build' }).eq('id', areaId)).error,
     'Area phase changes must go through the guarded command')
 
+  const solutionRows = checked(await client.from('current_solutions').select('id,current_revision,area_id,archived')
+    .eq('project_id', projectId))
+  const areaSolution = solutionRows.find(row => row.area_id === areaId && !row.archived)
+  const projectSolution = solutionRows.find(row => row.area_id === null && !row.archived)
+  assert(areaSolution, 'The earlier solution proof must leave one active Area-scoped alternative')
+  assert(projectSolution, 'The earlier solution proof must leave one active Project-scoped alternative')
+
   const projectPointerBefore = checked(await client.from('current_target').select('*')
     .eq('project_id', projectId).is('area_id', null).single())
   assert(projectPointerBefore.revision > 0, 'Earlier foundation steps must leave an exact Project target')
 
-  checked(await target('select', solutions.a, 0, {
-    solution_revision: 4,
+  checked(await target('select', areaSolution.id, 0, {
+    solution_revision: areaSolution.current_revision,
     reason: 'Hosted phase verification: independent Area target',
     area_id: areaId,
   }))
@@ -72,8 +79,8 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId, 
   assert.notEqual(areaPointer.revision, projectPointerBefore.revision,
     'Area and Project targets keep distinct exact target revisions')
 
-  checked(await target('select', solutions.b, projectPointerBefore.revision, {
-    solution_revision: 1,
+  checked(await target('select', projectSolution.id, projectPointerBefore.revision, {
+    solution_revision: projectSolution.current_revision,
     reason: 'Hosted phase verification: change only the Project target',
     area_id: null,
   }))
@@ -82,11 +89,11 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId, 
   const projectPointerAfter = checked(await client.from('current_target').select('*')
     .eq('project_id', projectId).is('area_id', null).single())
   assert.equal(areaPointerAfterProject.revision, areaPointer.revision,
-    'A Project target change must not stale/replace an independent Area target pointer')
+    'A Project target change must not replace an independent Area target pointer')
   assert.notEqual(projectPointerAfter.revision, projectPointerBefore.revision,
     'The Project target receives its own new exact decision revision')
-  assert.equal(areaPointerAfterProject.solution_id, solutions.a)
-  assert.equal(projectPointerAfter.solution_id, solutions.b)
+  assert.equal(areaPointerAfterProject.solution_id, areaSolution.id)
+  assert.equal(projectPointerAfter.solution_id, projectSolution.id)
 
   console.log('Live Project/Area phases: Concept default, explicit reversible transitions/history, completion guard, raw/anonymous denial and scope-safe Project/Area targets passed. No AI invoked.')
 }
