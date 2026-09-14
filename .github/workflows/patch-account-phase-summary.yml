@@ -1,0 +1,43 @@
+name: Patch account phase summary
+
+on:
+  push:
+    branches:
+      - feat/account-phase-summary
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Add account phase summary'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/account-phase-summary
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: python scripts/apply-account-phase-summary-patch.py
+      - run: npm ci
+      - run: npm test
+      - run: npm run check:edge
+      - run: npm run build
+      - name: Build with dummy live configuration
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+        run: npm run build
+      - name: Verify phase UI including Account
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
+      - name: Commit verified slice
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-account-phase-summary.yml scripts/apply-account-phase-summary-patch.py
+          git add src/data/database.ts src/pages/account/AccountDashboard.tsx src/pages/account/ProjectModal.tsx scripts/check-project-phases-browser.mjs
+          git commit -m "Add account phase summary"
+          git push origin HEAD:feat/account-phase-summary
