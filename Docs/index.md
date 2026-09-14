@@ -24,7 +24,7 @@
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
-| material requirements, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
+| material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
@@ -37,7 +37,7 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
-- `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
+- `Docs/material-planning.md` — **deployed 4B2a + first 4B2b material-planning contract** for manual requirements, the narrow `stud_wall_net_area` deterministic quantity, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Broader BOM/fastener/consumable rules remain later scope until explicitly modelled.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
 - `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
@@ -100,8 +100,9 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
-- `Docs/artifacts.md` — owning manual plan/drawing, exact target/solution lineage and measurement-evidence contract for milestone 4A; its own status distinguishes implementation from deployment.
+- `Docs/artifacts.md` — owning manual 4A plan/drawing and deployed narrow 4B1 deterministic-geometry contract, including exact target/solution/physical/measurement lineage.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
+- `Docs/material-planning.md` + `src/data/materialPlanning.ts` — deployed manual 4B2a receiver and first narrow 4B2b deterministic material quantity, using the existing stock/reuse/Shopping path behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 - `src/data/sharing.ts` — guarded household/project/friend-sharing adapter behind `database.ts`; its presence does not establish hosted RPC availability.
@@ -125,7 +126,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `package.json` — current build/typecheck commands.
 - `tests/` — local Postgres/RLS, request/tool and project-response isolation tests.
 - `Docs/slice-0-verification.md` — Slice 0 evidence, limits and remaining release gates.
-- `Docs/foundation-verification.md` — media/steps, measurements/components, solution/target, plans/drawings and persistent building-context release evidence, deployed migrations, live Auth/PostgREST/Storage checks and limitations.
+- `Docs/foundation-verification.md` — media/steps, measurements/components, solution/target, plans/drawings, deterministic material planning and persistent building-context release evidence, deployed migrations, live Auth/PostgREST/Storage checks and limitations.
 
 ## Steward files
 
