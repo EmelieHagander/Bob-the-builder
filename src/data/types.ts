@@ -7,6 +7,8 @@
  */
 
 export type ThemeName = 'forest' | 'dusk' | 'birch'
+export type ProjectPhase = 'concept' | 'design' | 'planning' | 'build' | 'complete'
+export type AreaPhase = ProjectPhase
 
 export type SkillLevel = 'novice' | 'intermediate' | 'expert'
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'blocked'
@@ -37,6 +39,8 @@ export interface Project {
   location: string
   type: string
   theme: ThemeName
+  /** Existing projects are intentionally null until a human classifies them. */
+  phase: ProjectPhase | null
   startLabel: string
   /** ISO date (YYYY-MM-DD) the build window starts — null while unscheduled */
   startDate: string | null
@@ -68,6 +72,8 @@ export interface Area {
   description: string
   icon: string
   leadId: string | null
+  /** Existing areas are intentionally null until a human classifies them. */
+  phase: AreaPhase | null
   /** 0-100 progress figures used across dashboard + area detail */
   assignedPct: number
   materialsPct: number
