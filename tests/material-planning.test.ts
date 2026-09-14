@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { createMaterialPlanning } from '../src/data/materialPlanning'
+import { setupSharedSocial } from './support/shared-social'
 
 const pg = new PGlite()
 const one = '00000000-0000-0000-0000-000000000001'
@@ -86,6 +87,7 @@ before(async () => {
   await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Porch A'),('B','b','Private B')")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('twoB','B','Two','TB',$2)", [one, two])
   const dir = new URL('../supabase/migrations/', import.meta.url)
+  await setupSharedSocial(pg)
   for (const file of (await readdir(dir)).filter(file => file.endsWith('.sql')).sort()) {
     await pg.exec(await readFile(new URL(file, dir), 'utf8'))
   }

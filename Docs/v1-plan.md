@@ -47,14 +47,17 @@ Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the
 
 **Current next implementation milestone:** **Slice 4B2b deterministic material quantities for the supported 4B1 geometry fixture.** New quantity revisions must feed the existing 4B2a `material_requirements` foundation with `source_kind = deterministic`, pinned recipe/input lineage and transparent arithmetic rather than creating a parallel BOM system. Start with quantities that are reproducible from the saved stud-wall recipe; generic fasteners, consumables, catalogue pricing and engineering assumptions remain out until explicitly specified.
 
+**Active owner-requested extension:** **household Building sharing and per-project household/friend collaboration**, requested on 2026-09-13 and extended with name-only volunteers on 2026-09-14. The household may edit the shared Building and collaborate on explicitly shared projects. Source is implemented; deployment, account isolation and runtime sharing gates are still pending. The [data/auth contract](../db/README.md#household-and-friend-sharing) owns precise access sources and commands; [building §11.1A](building-model.md#111a-household-sharing-extension) owns the physical authority extension.
+
 Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
 **Execution order from here:**
 
-1. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
-2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
-3. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
-4. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+1. complete and release-gate explicit household/friend sharing and name-only volunteers, including legacy account isolation, dynamic revocation and project/Building authority boundaries;
+2. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
+3. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
+4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
+5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 
@@ -331,6 +334,11 @@ V1 outputs must land in bob's existing collaboration model:
 
 V1 does **not** require smart attendee/task matching, event-specific scheduling or a rebuilt Today view to ship.
 
+The owner-confirmed sharing extension adds opt-in household Building editing and
+explicit household/project friend collaboration to this core. It reuses existing
+shared households and friendships; the [sharing milestone below](#collaboration-foundation--household-and-friend-sharing)
+owns its release gates without changing the later AI dependency chain.
+
 ---
 
 # 5. V1 slice sequence
@@ -361,6 +369,45 @@ Includes:
 denial and isolation after project switching, using only the allowed data. The
 lookup contract is implemented and its deployed lookup/denial checks pass; browser
 project-switch proof uses fixture HTTP services, as recorded in the verification owner.
+
+## Collaboration foundation — Household and friend sharing
+
+**Status:** specified / implementation in progress, owner decision 2026-09-13.
+
+**Goal:** let a household maintain one shared Building model and collaborate on
+chosen projects, while friends join only the projects to which they are invited.
+BOB-US-038 and BOB-US-059 in `Docs/user-stories.md` own the user goals;
+`Docs/building-model.md` §11.1A and `db/README.md` own physical and data authority.
+
+Includes opt-in Building sharing with household editing, an explicit per-project
+choice of no household/direct household/follow one linked Building, an additive
+linked-project checklist, and accepted-friend in-app invitations. Household access
+is evaluated dynamically; independent project memberships and accepted Bob grants
+remain distinct. Existing confirmed-email invitations continue separately.
+
+**Owner clarification, 2026-09-14:** volunteers must also be able to open a
+project-specific invitation link and enter only their name, without email,
+password or an Auth account. Allergies are optional and requested only when the
+project has food planned. The separate, limited volunteer capability supports
+project instructions, build days, own participation/progress and revocation;
+it never supplies household or project-administration authority. Source is
+prepared; [the data owner](../db/README.md#name-only-volunteer-access) owns the
+exact rules and the verification owner records pending browser/hosted proof.
+
+**Exit gates:**
+
+- household users can edit shared accepted Building truth and work on explicitly shared projects; Building share management and actual deletion remain direct-member actions;
+- physical association alone, a second Building, an unselected project and a pending friend invitation do not create project access;
+- household inactivation, unsharing, relevant unlinking and Bob invitation revoke/leave remove the affected route without destroying independent grants;
+- invitation and acceptance recheck accepted friendship, and acceptance rechecks the inviter's project access;
+- private media, project lookup, crew/assignment identity and existing collaboration flows obey the effective backend authority;
+- legacy `bob.account` / `bob.account_notes` receive a reviewed household boundary before new friends can access the shell; empty/default data must not justify guessing household ownership;
+- browser proof covers household selection, explicit linked-project choices, friend acceptance/decline, reload, project/auth switching, denial and stale saves at 320/390/1280px;
+- name-only volunteer proof shows no Auth signup, project-only participation, allergy collection only with food, own-actor writes, retained required checks, resume, expiry and revocation;
+- hosted migration and normal Auth/PostgREST/Storage checks prove the new behavior separately from local tests/browser fixtures, with source/apply/deploy status recorded in `Docs/foundation-verification.md`.
+
+This manual collaboration milestone requires no Bob AI trial and sends no email
+or other external message.
 
 ## Slice 1 — Show bob the real project
 
@@ -433,7 +480,7 @@ Includes:
 - estimate → verified supersession;
 - persistent Building/Space context from `Docs/building-model.md`.
 
-### 2C — Persistent building context — MANUAL FOUNDATION MERGED + CI/BROWSER VERIFIED (production/live verification pending; 2026-09-13)
+### 2C — Persistent building context — MANUAL FOUNDATION DEPLOYED + LIVE-VERIFIED (2026-09-13)
 
 PR #42 implements the persistent physical-domain schema, RLS/authority, command boundary, revision/proposal model and `src/data/buildingContext.ts`. PR #43 adds the canonical `database.ts` integration, reachable **Building & spaces** UI and dedicated browser proof. Both are merged to `main`; the manual foundation is no longer merely planned.
 
@@ -449,9 +496,9 @@ Implemented/verified at the current narrow fidelity:
 
 The domain/RLS suite covers the four `Docs/building-model.md` acceptance fixtures: a whole structure can exist before a renovation scopes it; one room can gain pinned measurements and a later inferred neighbour without fake fact promotion; separate buildings stay isolated; and a remodel proposal does not replace current truth until explicit acceptance. The dedicated production-React browser fixture additionally proves create Building → add sparse Space → link Project → reload → add second Space/relation → switch Building → switch Project → denied-state handling at 320px, 390px and 1280px.
 
-**2C verification status:** merged and CI/browser-verified. Production migration/UI verification is still pending, so this plan does not label 2C deployed or live-verified yet.
+**2C verification status:** merged, deployed and live-verified. The hosted cleanup-order correction in PR #45 and the Auth/PostgREST/browser/Pages evidence are recorded in `Docs/foundation-verification.md`. The later household-sharing extension has its own unclosed gates.
 
-**2C exit:** the four fixtures in `Docs/building-model.md` work at the agreed narrow fidelity: a whole-plan structure can be represented, one room can exist alone and later gain an adjacent room, separate buildings do not bleed physical knowledge, and a major remodel can preserve before/proposed/accepted history. Persisted manual data survives reload and honours backend project/building authority boundaries. The merged tests/browser proof satisfy this at CI fidelity; production/live proof remains the outstanding release-evidence step.
+**2C exit:** the four fixtures in `Docs/building-model.md` work at the agreed narrow fidelity: a whole-plan structure can be represented, one room can exist alone and later gain an adjacent room, separate buildings do not bleed physical knowledge, and a major remodel can preserve before/proposed/accepted history. Persisted manual data survives reload and honours backend project/building authority boundaries. The foundation verification owner records both CI/browser fidelity and the completed hosted-live proof.
 
 **Full Slice 2 exit:** a user can answer a concrete measurement request, return later, and Bob uses the verified value while retaining provenance and the relevant persistent physical context. Manual 2C completion does not by itself close the later AI ingestion/consumption gate.
 
@@ -645,6 +692,8 @@ V1 evidence, measurements, persistent building context, selected target, artifac
 - cross-project reads/writes are denied at backend/storage boundaries;
 - new V1 records follow membership-aware authority;
 - building/site associations cannot be used to cross project/account authority boundaries.
+- household sharing, friend acceptance and revocation obey the distinct effective-access routes; inherited crew rows do not become permanent grants;
+- new friends cannot read legacy household account settings or notes through the account shell or normal API.
 
 ## Truth gate
 

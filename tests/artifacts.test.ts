@@ -1,3 +1,4 @@
+import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
@@ -68,6 +69,7 @@ before(async () => {
   }
   await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Porch A'),('B','b','Private B')")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('twoB','B','Two','TB',$2)", [one, two])
+  await setupSharedSocial(pg)
   const dir = new URL('../supabase/migrations/', import.meta.url)
   for (const file of (await readdir(dir)).filter(file => file.endsWith('.sql')).sort()) {
     await pg.exec(await readFile(new URL(file, dir), 'utf8'))

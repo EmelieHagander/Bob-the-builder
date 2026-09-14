@@ -17,6 +17,9 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` and `Docs/index.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
+| share a Building or selected projects with a household / invite an existing friend | `Docs/user-stories.md` → BOB-US-038 / BOB-US-059 + `db/README.md` → Household and friend sharing |
+| volunteers joining with only a name / optional allergies when food is planned | `Docs/user-stories.md` → BOB-US-038 + `db/README.md` → Name-only volunteer access |
+| household physical-edit authority versus project collaboration | `Docs/building-model.md` → §11.1A + `db/README.md` → Effective authority and revocation |
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
@@ -33,7 +36,7 @@
 - `README.md` — current repository/app overview and implemented route/architecture summary.
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
-- `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the existing build-together collaboration loop.
+- `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
 - `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
@@ -70,6 +73,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/v1-plan.md` — V1 release journey and integration boundary.
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
+- `db/README.md` → Household and friend sharing — specified/in-progress shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; no deployed sharing claim until its release evidence is recorded.
 - `Docs/building-model.md` — deployed persistent physical context that project/Area flows may target, with broader geometry/import/AI fidelity still planned.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
 - `src/pages/People.tsx` — crew, skills and dietary context.
@@ -85,7 +89,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Data / auth
 
-- `db/README.md` — database mapping, auth/membership and migration guidance.
+- `db/README.md` — database mapping, auth/membership and migration guidance; owns the household/friend-sharing authority extension and its account-isolation gate, with deployment status stated explicitly.
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
 - `supabase/migrations/` — new CLI-created migrations, applied after the legacy database bootstrap.
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
@@ -100,6 +104,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
+- `src/data/sharing.ts` — guarded household/project/friend-sharing adapter behind `database.ts`; its presence does not establish hosted RPC availability.
+- `src/data/volunteers.ts` + `src/pages/VolunteerProject.tsx` — prepared project-only guest capability adapter and name-only participant view; no Auth account registration.
 
 ## AI / Ask bob
 

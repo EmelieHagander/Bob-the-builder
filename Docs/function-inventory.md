@@ -13,6 +13,61 @@
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
+## Household and friend sharing work — 2026-09-13
+
+**Status:** specified / implementation in progress. The user confirmed household
+editing of shared Buildings and collaboration on explicitly shared projects.
+`supabase/migrations/20260913213712_household_project_sharing.sql`,
+`supabase/migrations/20260913214355_household_account_sharing.sql` and
+`src/data/sharing.ts` are working implementation sources. Local sharing tests pass;
+this audit does not claim applied schema, deployment or live behavior.
+[The data/auth owner](../db/README.md#household-and-friend-sharing) owns the contract;
+[the building owner](building-model.md#111a-household-sharing-extension) owns physical
+authority; [foundation verification](foundation-verification.md) owns release proof.
+
+| Capability | Current status |
+|---|---|
+| Reuse existing households/friends | **IN PROGRESS.** Guarded Bob directory reads existing active shared household access and accepted Hearth friendships; no parallel family or friend system. |
+| Household Building editing | **SPECIFIED / IN PROGRESS.** Opt-in household members may edit accepted physical truth and accept proposals. Direct Building members retain sharing administration and actual deletion. |
+| Explicit project household audience | **SPECIFIED / IN PROGRESS.** No household, one direct household, or follow one exactly linked Building; physical links alone grant no household project access. The Building checklist adds only explicitly selected linked projects. |
+| Friend project invitations | **SPECIFIED / IN PROGRESS.** In-app pending/accept/decline/revoke/leave lifecycle, with friendship checked at send and acceptance. No email/message delivery; the existing confirmed-email flow remains separate. |
+| Revocation and crew identity | **SPECIFIED / IN PROGRESS.** Effective household/grant checks remain dynamic; derived crew rows do not become permanent grants. Independent direct memberships and accepted Bob invitations remain distinct. |
+| Legacy account isolation | **SOURCE PREPARED / LIVE GATE OPEN.** The account-sharing migration replaces broad account/notes policies with active-household RLS. A pristine singleton stays inaccessible until explicit one-time household binding; configured legacy content requires a reviewed migration mapping. Settings UI and guarded read-back are implemented in source. Migration application and hosted denial/binding proof remain pending. |
+| Sharing browser and hosted proof | **PENDING.** Reload/switching/stale/denied behavior, cross-project/media isolation and normal hosted API proof must be recorded before this capability is labelled delivered. |
+
+## Name-only volunteer source status — 2026-09-14
+
+**Prepared source; browser and hosted delivery pending.** The owner's clarified
+journey is a project invitation link plus a name, with optional allergies only
+when food is planned. `VolunteerProject`, `VolunteerLinks` and the guarded
+`database.ts` volunteer adapter implement this journey without an Auth account,
+email or password. The [data owner](../db/README.md#name-only-volunteer-access)
+owns precise authority and lifecycle rules.
+
+The source includes persistent browser participation, project tasks/instructions
+and private linked images, build days, updates/meals, own attendance, own task
+assignment/progress/checks, profile edits and organiser revocation. Allergy notes
+are project-local, optional, hidden without food and absent from other volunteer
+feeds; the signed-in crew can read them in People/Food. Family access, other
+projects, sharing administration and other participants' profile edits remain
+outside the volunteer capability.
+
+All 98 local tests pass, including seven database volunteer groups, two isolated
+request-boundary groups and two media-proxy groups. Production build and the new
+media Edge-function typecheck pass. The dedicated 320/390/1280px browser harness
+is prepared but not yet executed. The legacy shared Guest entry below is a
+historical/different mechanism, not the name-only volunteer journey.
+[Foundation verification](foundation-verification.md) owns evidence and limits.
+
+## Deterministic artifact geometry source status — 2026-09-13
+
+PR #47 merged source for the narrow 4B1 timber stud-wall-with-opening fixture.
+Earlier 4A delta rows below describe the manual foundation and should not be read
+as a claim that no geometry source exists. This sharing work does not establish
+4B1's applied-schema, deployed UI or live-service status; those need their own
+release evidence. Broader geometry, BOM, stock/shopping and AI gates remain open
+under `Docs/v1-plan.md`.
+
 ## Media and task foundation release delta — 2026-09-09
 
 **Status:** 1A and 1B are implemented, merged and deployed. The

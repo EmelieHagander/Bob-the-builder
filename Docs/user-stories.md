@@ -566,7 +566,8 @@ As a user, I want bob to call out the most important failure modes or "stop and 
 
 ## BOB-US-038 — Invite people into the project
 
-**Status:** BUILT  
+**Status:** BUILT for confirmed-email invitations; household/friend and name-only volunteer flows prepared in source, with browser/hosted release proof pending
+
 **Persona:** Project owner / organiser
 
 **Story**  
@@ -575,7 +576,17 @@ As an organiser, I want to invite family, friends and skilled helpers into the p
 **Acceptance criteria**
 - An organiser can invite a person to a project.
 - A participant becomes visible in the project crew.
-- Project access remains scoped to authorised membership rather than merely knowing a URL.
+- Ordinary project URLs grant no access. A separately issued volunteer invitation is an explicit, revocable grant for a limited project participant view.
+- A volunteer opens that invitation link and enters only their name. They need no email address, password, registration or Auth account. Their name is recorded as a person in this project, not as a shared household/app identity.
+- If and only if the project has food planned, the volunteer may optionally enter allergies. Blank means not supplied, not a claim of no allergies. The signed-in project crew can see these notes for food planning; other name-only volunteer sessions cannot.
+- The volunteer can see project tasks/instructions, linked task/area images, build days, updates and meal plans. They can manage their own attendance and task participation/progress. They cannot administer project sharing, create household access or edit other participants' profiles.
+- The same browser can return to the same participant. Names are not verified and a matching name does not recover an old session. The organiser can revoke a link and all its sessions, or one participant's browser access.
+- A project member can choose an existing accepted friend from the shared friend directory and create an in-app invitation to this project.
+- The recipient can accept or decline. A pending invitation does not grant project content access, and creating it does not send an email or message.
+- Friendship and the inviter's project authority are checked again on acceptance. Once accepted, the Bob project grant lasts until revoked or left in Bob, independently of a later friendship change.
+- The friend can collaborate on the project and use its existing physical-context reads/proposals. The invitation does not grant accepted Building editing, household access or access to other projects.
+- Existing confirmed-email invitations remain a separate flow. The [data/auth contract](../db/README.md#household-and-friend-sharing) owns effective access and revocation rules.
+- [Name-only volunteer access](../db/README.md#name-only-volunteer-access) owns the invitation/session contract, limited actions and allergy boundary (owner clarification, 2026-09-14).
 
 ## BOB-US-039 — Record skills and experience per person
 
@@ -711,6 +722,30 @@ As the food coordinator, I want the meal plan and shopping needs to use the conf
 - Meal plans can be associated with build events.
 - Dietary/allergy information remains prominent.
 - Food shopping can scale from real attendance when that calculation is implemented, while allowing manual correction.
+
+---
+
+## BOB-US-059 — Share a building and selected projects with my household
+
+**Status:** NEW — specified / implementation in progress
+
+**Persona:** Building member / project owner / household member
+
+**Story**
+
+As a person looking after our home, I want to share a Building with my existing household and choose which projects we collaborate on, so that the family can maintain the same house knowledge and build plans together.
+
+**Acceptance criteria**
+
+- I can select an existing household already available to me in the shared family system used by Maidin and Hearth & Larder; Bob does not create a second family or friendship system.
+- Sharing is opt-in. Active members of the chosen household can edit the Building's accepted/current physical model and accept proposals while retaining its evidence and revision history.
+- Building sharing management and actual Building deletion remain with direct Building members.
+- Each project has an explicit household-sharing choice: no household sharing, share directly with one household, or follow one Building that the project actually targets. Physical association alone never shares a project.
+- When sharing a Building, I can explicitly select accessible linked projects to follow it. This adds sharing to the selected projects without overwriting a competing project choice. Future projects require their own explicit choice.
+- Household access changes, disabling the share or removing the relevant Building association revoke the affected inherited access. Independent project membership and accepted invitations remain intact.
+- The choice and resulting project access survive reload. A denied or stale save remains visible and never claims that sharing succeeded.
+
+The [building contract](building-model.md#111a-household-sharing-extension) owns physical authority; the [data/auth contract](../db/README.md#household-and-friend-sharing) owns precise entitlement sources and revocation.
 
 ---
 

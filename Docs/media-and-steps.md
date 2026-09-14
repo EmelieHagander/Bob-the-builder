@@ -77,6 +77,21 @@ API. Reopen a completed task before adding or reopening a required check. Comple
 steps does not automatically complete a task or certify a professional inspection.
 Images on steps reuse the same upload, existing-image attachment and read-back path.
 
+### Name-only volunteer extension (prepared source)
+
+The project-only volunteer journey can read existing task/area-linked images and
+instructions, and update steps on tasks the participant has joined. Required
+checks still gate task completion. `completed_by_volunteer` records the Bob person
+ID separately from the authenticated actor field; it never invents an Auth user.
+Authenticated completion/reopen clears the volunteer actor field.
+
+Images are downloaded through the capability-checked `volunteer-media` Edge
+function. It checks current access and the exact task/image relation before and
+after fetching original bytes; it returns `no-store` responses and never makes
+Storage public. [The data contract](../db/README.md#name-only-volunteer-access)
+owns this prepared extension. Hosted migration, proxy deployment and browser/live
+proof remain separate gates in the verification owner.
+
 ## Reachable UI and verification
 
 Use the existing Dashboard project images, Area images and expanded task detail;

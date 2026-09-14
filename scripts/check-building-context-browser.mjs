@@ -45,6 +45,11 @@ try {
       if (path.startsWith('/rest/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
 
       if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
+      if (path === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
+      if (path === '/rest/v1/rpc/sharing_directory') return respond({ json: { households: [], friends: [] } })
+      if (path === '/rest/v1/rpc/building_sharing_state') return respond({ json: {
+        buildingId: request.postDataJSON().p_building, householdId: null, revision: 0, canManage: true, projects: [],
+      } })
       if (path === '/rest/v1/projects') return respond({ json: projects })
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
       if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
@@ -64,6 +69,7 @@ try {
       }
       if (path === '/rest/v1/current_relationships') return respond({ json: state.relationships.filter(row => row.building_id === eq(url, 'building_id')) })
       if (path === '/rest/v1/building_members') return respond({ json: { building_id: eq(url, 'building_id') } })
+      if (path === '/rest/v1/rpc/can_edit_building') return respond({ json: true })
 
       if (path === '/rest/v1/rpc/physical_building_command') {
         const { p_action, p_building, p_data: data } = request.postDataJSON()

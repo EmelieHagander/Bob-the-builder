@@ -223,6 +223,7 @@ export function createBuildingContext(
       guard(); return rows.map(building)
     },
     async projectBuildings(projectId: string): Promise<PhysicalBuilding[]> {
+      if (!projectId) return []
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('project_buildings').select('*').eq('project_id', projectId).eq('archived', false).order('name')) as Row[]
       guard(); return scoped(rows, projectId).map(building)
@@ -302,12 +303,8 @@ export function createBuildingContext(
     },
     async canDirectEdit(projectId: string, buildingId: string): Promise<boolean> {
       const { db, guard } = connection(projectId)
-      const sessionResult = await db.auth.getSession()
-      if (sessionResult.error) throw new Error(sessionResult.error.message)
-      if (!sessionResult.data.session) return false
-      const row = checked(await db.from('building_members').select('building_id').eq('building_id', buildingId)
-        .eq('auth_user_id', sessionResult.data.session.user.id).maybeSingle()) as Row | null
-      guard(); return !!row
+      const result = checked(await db.rpc('can_edit_building', { p_building: buildingId })) as boolean
+      guard(); return result === true
     },
     async editSite(projectId: string, action: 'create' | 'revise' | 'archive' | 'restore', id: string, expected: number, data: Record<string, unknown>) {
       const { db, guard } = connection(projectId)

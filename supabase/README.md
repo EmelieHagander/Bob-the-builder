@@ -192,6 +192,24 @@ A → B → A responses. Failure messages never substitute another project's fee
 
 ## Deployment
 
+### Name-only volunteer image access (prepared source)
+
+`volunteer-media` is separate from Bob AI. It accepts only a volunteer session
+capability, task ID and image ID, resolves the allowed object through the guarded
+Bob RPC and checks access again before streaming private original bytes. It does
+not create an Auth user or invoke AI. `verify_jwt = false` is intentional because
+these participants have no Auth JWT; the capability is mandatory. No service key
+or public/signed Storage URL is returned to the browser.
+
+Its required server configuration is the existing `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY`. Deploy after
+`20260914052752_volunteer_project_links.sql` and before the volunteer frontend.
+No global anonymous-Auth setting needs changing. The
+[volunteer contract](../db/README.md#name-only-volunteer-access) and
+[verification record](../Docs/foundation-verification.md) own rollout status.
+
+### Existing Bob AI endpoints
+
 First follow the reviewed membership migration and coordinated rollout in
 [db/README.md](../db/README.md). Then deploy the edge function and frontend together.
 Merging frontend code alone triggers Pages but does **not** migrate Supabase or

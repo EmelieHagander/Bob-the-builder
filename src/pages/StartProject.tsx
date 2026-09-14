@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { ThemeName } from '../data/types'
 import { Icon, useAsync } from '../components/ui'
 import { Field, FormError, inputStyle } from '../components/form'
+import { ProjectInvitations } from '../components/SharingCards'
 
 const THEMES: { name: ThemeName; label: string }[] = [
   { name: 'birch', label: 'Birch' },
@@ -48,8 +50,8 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="card" style={{ width: '100%', maxWidth: 480, padding: 26 }}>
+    <div className="start-project">
+      <div className="card start-project-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Icon name="tree-evergreen" weight="fill" size={26} color="var(--accent)" />
           <div>
@@ -59,6 +61,11 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
             </p>
           </div>
         </div>
+
+        <Link className="btn" to="/account/buildings" style={{ marginTop: 16 }}><Icon name="house" size={16} /> Buildings &amp; family</Link>
+        <p className="foundation-hint">Record a building or share it with your household before starting a project.</p>
+
+        <ProjectInvitations onChanged={projectId => { if (projectId) onCreated() }} />
 
         {projects && projects.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
           {projects.map(project => <button key={project.id} className="btn" onClick={() => {
@@ -74,7 +81,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
           <Field label="What are you building?">
             <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A one-sentence description" />
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="start-project-fields">
             <Field label="Location">
               <input style={inputStyle} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Town, Country" />
             </Field>
@@ -82,7 +89,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
               <input style={inputStyle} value={type} onChange={(e) => setType(e.target.value)} placeholder="House extension" />
             </Field>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="start-project-fields">
             <Field label="First build day">
               <input style={inputStyle} value={startLabel} onChange={(e) => setStartLabel(e.target.value)} placeholder="Sat 1 Aug" />
             </Field>

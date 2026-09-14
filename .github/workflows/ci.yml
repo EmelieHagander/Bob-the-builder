@@ -42,6 +42,10 @@ jobs:
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify persistent building context UI
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
+      - name: Verify household sharing and friend invitation UI
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-sharing-browser.mjs
+      - name: Verify registration-free volunteer participation
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-volunteer-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -30,6 +30,8 @@ import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
 import { createMaterialPlanning } from './materialPlanning'
 import { createBuildingContext } from './buildingContext'
+import { createSharing } from './sharing'
+import { createVolunteers } from './volunteers'
 import * as mock from './mockData'
 import type {
   Account,
@@ -200,7 +202,23 @@ const projectFacts = createProjectFacts(db, captureFileContext)
 const solutions = createSolutions(db, captureFileContext)
 const artifacts = createArtifacts(db, captureFileContext)
 const materialPlanning = createMaterialPlanning(db, captureFileContext)
-export const buildingContext = createBuildingContext(db, captureFileContext)
+function captureAccountContext() {
+  const capturedVersion = contextVersion
+  return () => {
+    if (capturedVersion !== contextVersion) throw new Error('Project or sign-in changed. Reopen this view before continuing.')
+  }
+}
+export const buildingContext = createBuildingContext(db, projectId =>
+  projectId ? captureFileContext(projectId) : captureAccountContext())
+export const sharing = createSharing(db, captureAccountContext, () => {
+  window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
+})
+// Volunteer credentials never share or change the household/account Auth session.
+const volunteerClient = db && SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  db: { schema: 'bob' },
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'bob-volunteer-rpc' },
+}) : null
+export const volunteers = createVolunteers(db, volunteerClient, captureAccountContext)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
 export const getSolutionHistory = solutions.history
@@ -458,11 +476,20 @@ function mapAccount(row: AccountRow): Account {
   return { id: row.id, name: row.name, ownerName: row.owner_name, email: row.email }
 }
 
-/** The single account row (seeded by db/migrations/0006). */
-export async function getAccount(): Promise<Account> {
+/** The legacy shared account is visible only to its selected household. */
+export async function getAccount(): Promise<Account | null> {
   if (!db) return read(mock.account)
-  const row = unwrap<AccountRow>(await db.from('account').select('id, name, owner_name, email').single())
-  return mapAccount(row)
+  const row = unwrap<AccountRow | null>(await db.from('account').select('id, name, owner_name, email').maybeSingle())
+  return row ? mapAccount(row) : null
+}
+
+export async function bindAccountHousehold(householdId: string): Promise<Account> {
+  const guard = captureAccountContext()
+  await sharing.bindAccount(householdId)
+  const account = await getAccount()
+  guard()
+  if (!account) throw new Error('The household account could not be read back. Reload before trying again.')
+  return account
 }
 
 export interface AccountUpdate {
@@ -657,9 +684,20 @@ export async function getCurrentUser(): Promise<Person | null> {
   const version = contextVersion
   const projectId = await activeProjectId()
   if (!projectId || version !== contextVersion) return null
-  const { data: row, error } = await client.from('people')
+  const readMember = () => client.from('people')
     .select('id, name, initials, color, role, diet, person_skills(name, level)')
     .eq('project_id', projectId).eq('auth_user_id', data.session.user.id).maybeSingle()
+  let result = await readMember()
+  if (version !== contextVersion) return null
+  if (!result.error && !result.data) {
+    // A family grant may exist before a crew projection. This guarded command
+    // creates that projection only while the caller already has effective access.
+    const membership = await client.rpc('join_project', { p_project_id: projectId })
+    if (version !== contextVersion) return null
+    if (membership.error) throw new Error('Could not confirm your current project access.')
+    result = await readMember()
+  }
+  const { data: row, error } = result
   if (error) throw new Error('Could not load your project membership.')
   if (!row || version !== contextVersion) return null
   return { id: row.id, name: row.name, initials: row.initials, color: row.color,

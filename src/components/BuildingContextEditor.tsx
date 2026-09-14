@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type {
   PhysicalBuilding,
   PhysicalElement,
@@ -22,6 +22,8 @@ export interface BuildingContextEditorProps {
   sites: PhysicalSite[]
   buildings: PhysicalBuilding[]
   projectBuildingIds: string[]
+  showProjectScope?: boolean
+  sharing?: ReactNode
   selectedBuildingId: string | null
   levels: PhysicalLevel[]
   spaces: PhysicalSpace[]
@@ -60,6 +62,8 @@ export function BuildingContextEditor({
   sites,
   buildings,
   projectBuildingIds,
+  showProjectScope = true,
+  sharing,
   selectedBuildingId,
   levels,
   spaces,
@@ -105,15 +109,17 @@ export function BuildingContextEditor({
             <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
             {selected.notes && <p style={{ margin: 0 }}>{selected.notes}</p>}
           </div>
-          <div className="cluster" style={{ flexWrap: 'wrap' }}>
+          {showProjectScope && <div className="cluster" style={{ flexWrap: 'wrap' }}>
             <span className="image-purpose">{scoped ? 'Used by this project' : 'Not linked to this project'}</span>
             {!scoped && <button className="btn btn-primary" type="button" onClick={() => setMode('link')}>Use in this project</button>}
-          </div>
+          </div>}
         </div>
-        {!canDirectEdit && scoped && <p className="foundation-hint" style={{ marginBottom: 0 }}>
+        {!canDirectEdit && scoped && showProjectScope && <p className="foundation-hint" style={{ marginBottom: 0 }}>
           You can use this building as project context. Direct edits to accepted physical truth require building authority; project proposals stay separate.
         </p>}
       </div>
+
+      {sharing}
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>

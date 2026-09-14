@@ -11,12 +11,15 @@ export function Food() {
   const { data: columns } = useAsync(() => db.getDietColumns(), [version])
   const { data: matrix } = useAsync(() => db.getDietMatrix(), [version])
   const { data: people } = useAsync(() => db.getPeople(), [])
+  const { data: events } = useAsync(() => db.getEvents(), [version])
   const { data: summary } = useAsync(() => db.getFoodSummary(), [version])
   const [mealModal, setMealModal] = useState<{ meal?: Meal } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [flagBusy, setFlagBusy] = useState<string | null>(null)
 
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
+  const hasFood = Boolean(meals?.length || events?.some(event => event.food.trim()))
+  const notes = people?.filter(person => person.diet.trim() && person.diet !== 'No restrictions') ?? []
 
   // Click a cell to flip a dietary flag. Creates the default columns on
   // first use for projects that never had any.
@@ -109,6 +112,11 @@ export function Food() {
           </div>
         )}
       </div>
+
+      {hasFood && notes.length > 0 && <section style={{ marginTop: 24 }} aria-label="Allergy and dietary notes">
+        <SectionTitle icon="warning" color="var(--clay)">Allergy &amp; dietary notes</SectionTitle>
+        <div className="grid">{notes.map(person => <article className="card" key={person.id} style={{ padding: 16 }}><strong>{person.name}</strong><p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginBottom: 0 }}>{person.diet}</p></article>)}</div>
+      </section>}
 
       {/* Allergy matrix */}
       <div style={{ marginTop: 28 }}>

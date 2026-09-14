@@ -133,10 +133,41 @@ That's it — restart `npm run dev` and every screen reads from the database.
 ### Signing in
 
 Live mode has real login (magic link or email + password, `/#/signin`).
-Reading is open to everyone; signing in identifies you: an email the
-organiser has invited (see [`db/README.md`](./db/README.md#login--membership))
-claims that person on the crew list, any other email joins as a fresh
-volunteer. Demo mode skips auth entirely — the first organiser plays "you".
+Project reads and writes require backend-enforced project access. Signing in with
+a confirmed email matching a registered invitation claims that project crew
+identity. An unknown account can create its own project; it does not automatically
+join an existing one. The shared guest login only sees projects explicitly linked
+to that guest. See [membership and project policies](./db/README.md#slice-0-membership-and-project-policies).
+Demo mode skips auth entirely — the first organiser plays "you".
+
+### Volunteers without an account
+
+**Prepared source; not yet deployed.** An organiser can choose **Volunteer link**
+under **Invite people**. The recipient opens `/#/volunteer/:token` and enters
+their name, without email, password or an Auth account. They can read project
+tasks/instructions, task and area images, build days, updates and food plans, and
+manage their own attendance and task progress.
+
+Allergies are optional and appear only when the project has food planned. They
+belong to that project participant and are available to the signed-in crew for
+food planning. The organiser can revoke a link or a participant's current access.
+The browser remembers its participant; names alone do not restore access.
+See [the volunteer contract](./db/README.md#name-only-volunteer-access) for the
+exact boundary and [release evidence](./Docs/foundation-verification.md) for status.
+
+### Household and project sharing
+
+**Implementation in progress; deployment and runtime verification are pending.**
+The sharing extension reuses the existing households from Maidin / Hearth & Larder
+and the accepted Hearth friend graph. A Building can be shared with its household
+for collaborative editing. Each project explicitly chooses its household audience
+or follows one linked Building; selecting a Building does not automatically share
+all projects. Friends receive a Bob in-app invitation to one project and choose
+whether to accept. No email or message is sent by this flow.
+
+The [sharing contract](./db/README.md#household-and-friend-sharing) owns access,
+revocation, account isolation and source/deployment status. The
+[V1 plan](./Docs/v1-plan.md) owns the current delivery milestone.
 
 ## Project layout
 
