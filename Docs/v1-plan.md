@@ -2,7 +2,7 @@
 
 > **Status:** current V1 release contract  
 > **Owns:** V1 product thesis, release boundary, slice sequence, release gates and golden-path acceptance  
-> **Inputs:** `Docs/user-stories.md`, `Docs/project-phases.md`, `Docs/domain-dictionary.md`, `Docs/building-model.md`, `Docs/function-inventory.md`, `Docs/function-scope.md`, `Docs/ui-index.md`
+> **Inputs:** `Docs/user-stories.md`, `Docs/building-model.md`, `Docs/function-inventory.md`, `Docs/function-scope.md`, `Docs/ui-index.md`
 
 V1 is the next product release after bob's existing collaboration/coordination core. It adds the missing planning/evidence layer without rebuilding areas, tasks, people, shopping, build days, food or announcements.
 
@@ -30,42 +30,35 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 3A — alternatives + selected target;
 - Slice 4A — manual plans/drawings with exact target and measurement lineage;
 - Slice 4B1 — deterministic `stud_wall_opening_v1` artifact geometry with exact Building/Space and six-measurement recipe lineage;
-- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff.
+- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff;
+- Slice 4B2b — deterministic `stud_wall_net_area` material base quantity from an exact current `stud_wall_opening_v1` drawing, persisted into the existing material-requirement/Shopping path.
 
 Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the domain/schema/authority foundation, PR #43 the app-facing UI, and PR #45 the hosted cleanup-order correction. The dedicated browser proof passes at 320px, 390px and 1280px; the hosted Auth/PostgREST live check passes and self-cleans its physical fixture; the current `main` Pages deployment is green. `Docs/foundation-verification.md` owns exact migration/run evidence.
 
-4B1 and 4B2a are also runtime truth. PR #47 delivered the narrow deterministic stud-wall-with-opening generator, PR #49 closed its hosted/live release gate, PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. The final 4B2a Pages deployment and ordinary hosted Auth/PostgREST foundation check are green; `Docs/foundation-verification.md` owns the exact migration, advisor, browser, live and cleanup evidence.
+4B1, 4B2a and the first narrow 4B2b calculator are runtime truth. PR #47 delivered the deterministic stud-wall-with-opening generator and PR #49 closed its hosted/live release gate; PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. PR #54 then added server-owned `stud_wall_net_area` derivation into the same requirement model. Its source migration `20260914084207_deterministic_material_quantities.sql` is applied on hosted Supabase as `20260914090502_bob_deterministic_material_quantities_4b2b`; Pages run `34826249816` and ordinary hosted Auth/PostgREST foundation run `34826249907` are green on merge commit `098ea2b16c04ebbb279130860eceb97d7ea05cd3`. `Docs/foundation-verification.md` owns the exact migration, advisor, browser and live evidence.
 
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
 - full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
 - Slice 3B generated visual proposals/mockups;
-- Slice 4B2b — deterministic geometry-derived material base quantities for supported fixtures, including later fastener/consumable rules where explicitly modelled;
+- broader deterministic material rules beyond the shipped `stud_wall_net_area` calculator, including fasteners/consumables only where an explicit rule or coverage basis is modelled;
 - richer task/material/dependency/tool/readiness relations that turn the persisted plan into executable work;
 - Slice 5 generated/project-specific guidance and structured progress/as-built completion.
 
-**Current next implementation milestone:** **Slice 4B2b deterministic material quantities for the supported 4B1 geometry fixture.** New quantity revisions must feed the existing 4B2a `material_requirements` foundation with `source_kind = deterministic`, pinned recipe/input lineage and transparent arithmetic rather than creating a parallel BOM system. Start with quantities that are reproducible from the saved stud-wall recipe; generic fasteners, consumables, catalogue pricing and engineering assumptions remain out until explicitly specified.
+**Current next release milestone:** complete the hosted rollout and live gates for the already-merged household/friend sharing and name-only volunteer source. After that, the next foundations implementation milestone is **richer task/material/dependency/tool/readiness relations** on top of the persisted target, drawings and material plan. The shipped 4B2b path remains deliberately narrow: broader fastener/consumable/catalogue/engineering rules stay unknown/manual until an explicit deterministic rule is specified.
 
 **Active owner-requested extension:** **household Building sharing and per-project household/friend collaboration**, requested on 2026-09-13 and extended with name-only volunteers on 2026-09-14. The household may edit the shared Building and collaborate on explicitly shared projects. Source is implemented; deployment, account isolation and runtime sharing gates are still pending. The [data/auth contract](../db/README.md#household-and-friend-sharing) owns precise access sources and commands; [building §11.1A](building-model.md#111a-household-sharing-extension) owns the physical authority extension.
 
 Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
-**Active product-model alignment — Project/Area phases + Bob vocabulary:** `Docs/project-phases.md` now owns the specified lifecycle model and `Docs/domain-dictionary.md` owns the canonical short meaning of Bob's core nouns. A Project remains the shared collaboration/goal/schedule container with one overall `ProjectPhase`; an existing Area is the preferred project-scoped workstream seam and may progress through the same lifecycle independently as an `AreaPhase`; Tasks keep operational status/readiness rather than gaining another phase layer. A delayed Area does not automatically become a new Project. A future split is an explicit lineage-preserving operation into a new Project while keeping persistent Building/Space identity, never a casual reparent/delete.
-
-The code audit also exposed one architectural prerequisite: the deployed selected target is currently project-global even though Solutions, Artifacts, facts and material planning already have Area seams. Independent Area phases therefore require **scope-safe selected-target semantics** before the model is complete; changing one Area's design must not stale another Area's drawings/BOM merely because a project-global target revision changed. Exact schema/API remains implementation work.
-
-Bob's product vocabulary should first ship as a small **server-owned typed/core dictionary bundle** plus on-demand definitions from the canonical domain dictionary. Do not create a mutable database dictionary unless later runtime curation/versioning without deploys creates a real requirement.
-
 **Execution order from here:**
 
 1. complete and release-gate explicit household/friend sharing and name-only volunteers, including legacy account isolation, dynamic revocation and project/Building authority boundaries;
-2. add 4B2b deterministic quantity derivation from the supported 4B1 recipe into new 4B2a material-requirement revisions, preserving exact recipe/input provenance;
-3. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
+2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
+3. extend deterministic material rules beyond the shipped net-wall-area calculator only where explicit formulas/coverage rules and provenance are defined;
 4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
 5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
-
-**Parallel discovery lane:** phase-aware UI alignment is the next product/UI discovery before restructuring navigation/screens or implementing phase persistence. Map Project phase, Area phase, primary next actions and progressive disclosure with Vera first. This discovery does not need to block deterministic 4B2b work that stays compatible with future scope-safe targets, but new work must not deepen the assumption that one project-global target is sufficient for independently maturing Areas.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 
@@ -78,8 +71,6 @@ This section is the current execution marker. Detailed built/partial/gap truth s
 Today bob is already useful once someone has manually created areas, tasks, materials, people and build days. V1 removes the hardest translation step before that point: turning photos, measurements, existing components and design decisions into the project truth that drives drawings, materials and work.
 
 V1 also starts separating **the project** from **the physical place the project happens in**. A building, room or known wall should be able to outlive one renovation and become better understood over time. `Docs/building-model.md` owns that persistent physical-context contract.
-
-V1 also makes the lifecycle explicit without turning a large project into a collection of artificial mini-projects. `Docs/project-phases.md` owns the lifecycle vocabulary: a Project has one overall phase, while Areas may be at different phases as coherent workstreams inside the same shared project. Project phase, Area phase, Task status and Building state are separate concepts.
 
 ### Primary value
 
@@ -107,8 +98,6 @@ through:
 > evidence → physical context → missing measurements → selected solution → measured/concept-labelled artifacts → calculated materials → ordered editable tasks → task guidance
 
 and end with the same information usable by the people who are actually building, while useful knowledge about the house remains available for the next project.
-
-The same lifecycle can occur at different speeds inside one larger Project. One Area may already be in Build while another is still in Design; that alone is not a reason to split them into separate Projects. Split only when the work genuinely becomes independently owned/scheduled/scoped, and preserve the shared physical Building/Space history when it does.
 
 ### Anti-goals for V1
 
@@ -140,7 +129,7 @@ A V1 user can:
 6. Record existing/reusable components, e.g. two windows with known dimensions, separately from items that still need buying.
 7. Create or select the minimum persistent Building/Space context needed for the porch project without being forced to model the whole house.
 8. Explore more than one proposed solution and keep the alternatives.
-9. Mark one solution revision as the shared current target for the relevant work scope.
+9. Mark one solution revision as the shared current target.
 10. Preserve a target mockup as **illustrative**, not measured truth.
 11. Produce a simple measured/concept-labelled artifact for a supported assembly, with assumed values visibly distinguished from verified ones.
 12. Derive a transparent bill of materials from the same selected solution and measurements.
@@ -255,13 +244,11 @@ The four acceptance fixtures in `Docs/building-model.md` — whole-plan top-down
 - named solution/proposal;
 - multiple alternatives coexist;
 - assumptions/evidence references on solution revision;
-- one explicit selected target revision at the relevant work scope (Project-wide or Area-scoped where Areas mature independently);
+- one selected current target;
 - selection/revision history;
 - visual proposal/mockup based on real project evidence where available;
 - known component proportions passed into visualisation context;
 - visual result remains explicitly illustrative unless generated from measured geometry by a deterministic artifact path.
-
-Current runtime stores one project-global target. Before independent Area phases are considered complete, target semantics must become scope-safe so selecting/revising one Area cannot invalidate another Area's drawings/material plan merely because an unrelated project target revision changed. `Docs/project-phases.md` owns the product requirement; the exact schema/API remains implementation work.
 
 ## 4.5 Drawings / project artifacts — MUST SHIP, NARROW
 
@@ -337,10 +324,8 @@ Automatic propagation of every as-built change through all downstream drawings/B
 
 V1 outputs must land in bob's existing collaboration model:
 
-- Project remains the shared collaboration/goal/schedule container with one overall lifecycle phase;
-- Areas remain project-scoped work-zone/workstream containers and may use the same lifecycle vocabulary independently as Area phase;
-- Tasks remain executable units with task status/readiness rather than becoming another project-phase layer;
-- Areas may later map to persistent physical targets but are not replaced by Spaces;
+- areas remain the work-zone container;
+- areas may later map to persistent physical targets but are not replaced by Spaces;
 - tasks remain assignable to existing people;
 - skill levels remain visible;
 - Shopping remains the shopping surface;
@@ -373,6 +358,7 @@ frontend's project-switch flow passes in CI at three widths. See
 Includes:
 
 - explicit active project id through Ask bob;
+- project access validation;
 - V1 membership/RLS pattern;
 - bounded read-only project lookup for Ask bob, with a fixed dataset/field
   allowlist; the [project lookup contract](../supabase/README.md#project-lookup-contract--slice-0)
@@ -526,9 +512,7 @@ owner's foundations-first order. [Solutions](solutions.md) owns the contract;
 Images and exact measurement revisions reuse 1A/2A/2B. Editing an alternative
 keeps the selected version until another explicit decision. AI proposal/mockup
 generation remains the later 3B gate, so full Slice 3 and the V1 release remain
-open. No owner Bob trial was required for 3A. The deployed target is currently
-project-global; the phase/workstream model adds a future scope-safe target
-requirement before independent Area phases are complete.
+open. No owner Bob trial was required for 3A.
 
 **Goal:** move design decisions out of ephemeral chat.
 
@@ -537,10 +521,10 @@ Includes:
 - SolutionRevision;
 - alternatives;
 - assumptions/evidence links;
-- selected target at the relevant Project/Area work scope;
+- selected target;
 - illustrative mockup stored as proposal media.
 
-**Exit:** A/B alternatives coexist, one is selected for the relevant work scope, and downstream work pins the explicit target revision without unrelated Area decisions invalidating it.
+**Exit:** A/B alternatives coexist, one is selected, and downstream work has one explicit target revision.
 
 ## Slice 4 — Turn target into work
 
@@ -617,14 +601,11 @@ These should not expand the V1 release boundary.
 
 V1 must extend bob's current UI instead of creating a parallel planning application.
 
-**Phase-aware UI alignment is discovery-active and must be resolved with Vera before structural screen/navigation changes.** This plan owns the requirement, while `Docs/project-phases.md` owns lifecycle meaning and the later UI mapping must decide how Project phase, Area phase, next actions and progressive disclosure appear without clutter. Do not implement a decorative phase badge while leaving the product workflow unchanged.
-
 ### Dashboard — understand the project
 
 May surface:
 
-- overall Project phase and a compact summary of Area/workstream phases;
-- project target/current decision context;
+- project target/current phase;
 - a small amount of current evidence;
 - concrete missing evidence/questions from bob;
 - relevant Building/Space scope where one exists;
@@ -636,7 +617,6 @@ It should remain scannable rather than becoming an editor.
 
 This is where:
 
-- Area phase/workstream maturity;
 - media;
 - measurements/context;
 - materials;
@@ -647,13 +627,11 @@ This is where:
 
 become useful to the work.
 
-The existing Area `Reference images` concept should evolve into real media rather than being duplicated elsewhere. Area remains a project work-zone/workstream; where useful, it may point to persistent Building/Space/Element context defined in `Docs/building-model.md`.
-
-Exact phase controls, transition affordances and page mapping remain UI-discovery work. A Task keeps its operational status/readiness; it does not inherit a lifecycle phase merely because it sits inside an Area.
+The existing Area `Reference images` concept should evolve into real media rather than being duplicated elsewhere. Area remains a project work-zone; where useful, it may point to persistent Building/Space/Element context defined in `Docs/building-model.md`.
 
 ### Building context — grow with need
 
-The merged app now has a dedicated **Building & spaces** view for editing/visualising the sparse physical model without introducing a new bottom-navigation destination. It supports the bottom-up manual path where only the relevant room/space is known, and the same model is ready for later top-down plan ingestion. The dedicated browser proof and hosted Auth/PostgREST live check pass; `Docs/foundation-verification.md` owns the exact evidence.
+The merged app now has a dedicated **Building & spaces** view for editing/visualising the sparse physical model without introducing a new bottom-navigation destination. It supports the bottom-up manual path where only the relevant room/space is known, and the same model is ready for later top-down plan ingestion. Production/live verification of this merged UI is still pending.
 
 V1 still requires both capture directions:
 
@@ -674,8 +652,6 @@ Ask bob remains the conversational layer for:
 
 It should not become the only place project truth lives. Physical inferences from neighbouring Spaces/Elements remain visibly inferred/unknown until evidence upgrades them.
 
-Bob should also receive the canonical product vocabulary from `Docs/domain-dictionary.md` through a compact server-owned runtime representation, so terms such as Project, Area, Task, Volunteer, Space, Selected Target and As-built retain Bob-specific meaning. This semantic dictionary is not project evidence and should not be duplicated into ordinary project tables.
-
 ### Today — stay fast
 
 Today remains field-first and minimal. V1 may expose a relevant task image/artifact link, but project-management detail should stay behind the task.
@@ -693,11 +669,9 @@ These are release invariants, not optional polish.
 5. **Every calculated quantity has a basis.** Formula/method/inputs/allowance can be inspected.
 6. **Revision beats destructive overwrite.** High-value solution/artifact/calculation/building-state/as-built history remains explainable.
 7. **Project context is explicit.** No V1 AI/read/write path may infer project identity by `limit(1)` or equivalent.
-8. **Workstream/lifecycle context is explicit.** Project phase, Area phase, Task status/readiness and Current View are different concepts; Bob/UI must not infer one from another.
-9. **Physical context is explicit.** A Building/Space/Element relationship must not be guessed from whichever Area/project happens to be open.
-10. **Authorization lives at the real boundary.** UI hiding is never the only project-access protection.
-11. **Generated beauty does not upgrade authority.** Mockups/diagrams/drawings carry their actual status.
-12. **Product vocabulary has one semantic owner.** Bob's core noun definitions come from `Docs/domain-dictionary.md` / its server-owned runtime representation, not ad hoc prompt wording or mutable project data.
+8. **Physical context is explicit.** A Building/Space/Element relationship must not be guessed from whichever Area/project happens to be open.
+9. **Authorization lives at the real boundary.** UI hiding is never the only project-access protection.
+10. **Generated beauty does not upgrade authority.** Mockups/diagrams/drawings carry their actual status.
 
 ---
 
@@ -709,11 +683,9 @@ V1 is not "done" because all screens exist.
 
 The golden porch journey can be completed end to end without maintaining a parallel spreadsheet/chat as the source of truth.
 
-A larger mixed-scope Project can also keep Areas at different lifecycle phases without forcing artificial Project splits or cross-Area target invalidation.
-
 ## Persistence gate
 
-V1 evidence, measurements, persistent building context, Project/Area phase state, selected target, artifacts, calculated requirements, richer tasks and progress/as-built records survive navigation/reload where promised.
+V1 evidence, measurements, persistent building context, selected target, artifacts, calculated requirements, richer tasks and progress/as-built records survive navigation/reload where promised.
 
 ## Security gate
 
@@ -739,15 +711,6 @@ At the narrow V1 fidelity:
 - a remodel/extension keeps current, proposed and accepted/as-built physical history distinct;
 - `Area` continues to work as a project work-zone rather than being silently redefined as `Space`.
 
-## Phase/workstream gate
-
-- Project has one explicit overall lifecycle phase at a time;
-- Areas may use the same lifecycle vocabulary independently inside the Project;
-- Task status/readiness remains operational and is not silently promoted into Area/Project phase;
-- changing one Area's selected design does not stale unrelated Area artifacts/material planning because of project-global target coupling;
-- deferring an Area does not automatically create a new Project;
-- any future split into another Project preserves physical Building/Space identity and explicit lineage rather than deleting/reparenting the existing work in place.
-
 ## Calculation gate
 
 Supported BOM/consumable calculations have deterministic tests and exposed derivation/allowance.
@@ -755,7 +718,6 @@ Supported BOM/consumable calculations have deterministic tests and exposed deriv
 ## UI gate
 
 - follows Vera's review order;
-- phase-aware page/action mapping has been explicitly reviewed before structural UI changes;
 - phone/one-hand usage works for upload, task, guidance and progress flows;
 - no new top-level navigation is introduced without a demonstrated need;
 - loading/error/denied/unknown states are honest;
@@ -773,8 +735,7 @@ At minimum, automated or repeatable browser verification covers:
 - denied cross-project media access;
 - measurement persistence/supersession;
 - persistent Building/Space creation + reload and separate-building isolation;
-- Project + mixed Area phase persistence once that model lands;
-- selected solution persistence, including independent Area-safe target behavior where applicable;
+- selected solution persistence;
 - supported artifact/BOM generation + shopping handoff;
 - task guidance on mobile-sized viewport;
 - progress/as-built read-back.
@@ -787,8 +748,6 @@ This is a product/data-shape expectation, **not a migration specification**. Exa
 
 Likely first-class concepts:
 
-- `ProjectPhase` plus Area/workstream phase semantics using the same lifecycle vocabulary;
-- scope-safe selected-target ownership for Project-wide versus independently maturing Area work;
 - `MediaAsset`;
 - `Measurement`;
 - `ExistingComponent` / existing stock;
@@ -803,9 +762,7 @@ Likely first-class concepts:
 - progress/as-built observation;
 - provenance/truth metadata.
 
-Names here are conceptual. `Docs/project-phases.md` owns lifecycle meaning, `Docs/domain-dictionary.md` owns Bob/product noun semantics, `Docs/building-model.md` owns the physical-domain meaning, and the implementation milestone owns exact schema/RLS/API names.
-
-The canonical dictionary is a product/AI semantic contract, not a request for a new mutable application table. Runtime should begin with a small server-owned typed representation and on-demand lookup; database-backed vocabulary is deferred until live curation/versioning creates a demonstrated need.
+Names here are conceptual. `Docs/building-model.md` owns the physical-domain meaning; the implementation milestone owns exact schema/RLS/API names.
 
 All UI access continues through `src/data/database.ts` or an explicitly documented successor seam; V1 must not teach screens to query Supabase ad hoc.
 
@@ -816,18 +773,15 @@ All UI access continues through `src/data/database.ts` or an explicitly document
 For each slice:
 
 1. write/confirm the narrow domain/authority contract;
-2. confirm which Project/Area lifecycle scope the capability belongs to and use canonical terms from `Docs/domain-dictionary.md`;
-3. add the schema/storage boundary if required;
-4. expose the capability through `database.ts`;
-5. build the smallest UI using existing bob patterns;
-6. wire Ask bob only to persisted authorised truth plus the server-owned semantic vocabulary bundle;
-7. add deterministic tests for high-consequence rules;
-8. drive the real browser flow including reload/error/denial;
-9. update inventory/docs only after runtime truth changes.
+2. add the schema/storage boundary if required;
+3. expose the capability through `database.ts`;
+4. build the smallest UI using existing bob patterns;
+5. wire Ask bob only to persisted authorised truth;
+6. add deterministic tests for high-consequence rules;
+7. drive the real browser flow including reload/error/denial;
+8. update inventory/docs only after runtime truth changes.
 
 For persistent building context specifically, establish the manual sparse model and authority boundaries before AI plan ingestion. Reuse existing provenance/history seams instead of creating a second truth vocabulary.
-
-For lifecycle work specifically, do not add a second Workstream domain object unless Area demonstrably cannot serve that job. Resolve phase-aware UI mapping and scope-safe selected-target semantics before implementing a large phase-driven screen rewrite.
 
 Avoid large "platform first" refactors. Promote repeated UI/data patterns only when the slice demonstrates the repetition.
 
@@ -844,5 +798,3 @@ into:
 > **a place where a real DIY/community build can become understandable, buildable and shareable from the evidence the people actually have — while the useful model of the place can keep improving across projects.**
 
 The release is intentionally judged against one real project first. If the porch can move from photos and uncertain existing conditions to a transparent build package and usable crew tasks without fake precision or fragmented truth, and the resulting house knowledge can be reused rather than discarded with the project, V1 has proven the product direction.
-
-For larger work, success also means one shared Project can contain several coherent Areas progressing at different lifecycle phases without losing a clear overall Project phase, without forcing premature Project splits, and without Bob confusing Project, Area, Task or physical Building state.

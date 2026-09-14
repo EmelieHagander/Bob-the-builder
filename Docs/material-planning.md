@@ -1,6 +1,6 @@
-# Material planning — manual requirement, stock and shopping foundation
+# Material planning — requirements, stock, deterministic quantities and Shopping
 
-**Status:** manual Slice 4B2a implemented, merged, migrated, deployed and live-verified on 2026-09-14. This contract owns the persisted material-requirement, stock-allocation and Shopping handoff foundation. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) delivered the foundation and [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) aligned the release proof with persisted server truth. `Docs/v1-plan.md` owns release order and the later supported geometry calculators / executable-work-plan gates; `Docs/foundation-verification.md` owns release evidence.
+**Status:** manual Slice 4B2a and the first narrow deterministic Slice 4B2b calculator are implemented, merged, migrated, deployed and live-verified on 2026-09-14. This contract owns the persisted material-requirement, stock-allocation, deterministic quantity and Shopping-handoff foundation. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) delivered 4B2a, [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) aligned its release proof with persisted server truth, and [PR 54](https://github.com/EmelieHagander/Bob-the-builder/pull/54) delivered `stud_wall_net_area` 4B2b. `Docs/v1-plan.md` owns release order and later executable-work-plan/broader-calculator gates; `Docs/foundation-verification.md` owns release evidence.
 
 ## User goal
 
@@ -14,16 +14,16 @@ After choosing a project target and recording the drawing the crew intends to us
 - which exact project target and optional drawing version this material decision belongs to;
 - whether the existing Shopping item is current, out of date or has been edited independently.
 
-This 4B2a milestone is intentionally manual-first. A person enters the base required quantity. Bob / AI does not derive geometry, choose materials, or mutate Shopping. The server performs only transparent deterministic arithmetic from the entered quantity, allowance, confirmed allocations and purchase increment.
+4B2a is intentionally manual-first: a person enters the base required quantity and its basis. 4B2b adds one deliberately narrow server-owned calculation from an already-persisted 4B1 drawing. Bob / AI still does not choose materials, infer structural member sizes, or mutate Shopping. The server derives the supported base quantity and then reuses the same transparent allowance, confirmed-allocation and purchase-increment arithmetic.
 
 ## Truth classes in 4B2a
 
 A requirement version has a `source_kind`:
 
 - **manual** — a human supplied the base required quantity and wrote its basis;
-- **deterministic** — reserved for a later supported calculation method that can reproduce the base quantity from saved inputs.
+- **deterministic** — a supported server-owned calculation method reproduced the base quantity from exact saved inputs.
 
-4B2a creates manual versions only. Persisted manual versions use `method_key = manual` and `method_version = 4B2a-v1`; browser and hosted release proofs are regression-locked to that server identity. The deterministic value exists in the model so later supported calculators can add new requirement revisions rather than replacing the foundation.
+Persisted manual versions use `method_key = manual` and `method_version = 4B2a-v1`; browser and hosted release proofs are regression-locked to that server identity. The first deterministic path uses `method_key = stud_wall_net_area` and `method_version = 4B2b-v1`. Both are normal revisions in the same requirement model; deterministic calculation does not create a second BOM store.
 
 The UI must never label a manually supplied base quantity as geometry-derived. Waste, stock deduction and purchase rounding *are* deterministic derived values and expose their arithmetic.
 
@@ -40,7 +40,7 @@ Supported quantity units for this foundation are:
 
 A requirement records:
 
-- `required_quantity` — manual base need before allowance or stock;
+- `required_quantity` — base need before allowance or stock: human-entered for `manual`, server-derived from pinned inputs for supported `deterministic` methods;
 - `waste_percent` — explicit percentage, including zero;
 - `required_with_waste` — deterministic `required × (1 + waste/100)`;
 - `stock_allocated` — sum of exact saved stock/component allocations;
@@ -118,11 +118,29 @@ Normal clients:
 
 - SELECT protected tables/views under RLS / `security_invoker` views;
 - write stock only through `bob.stock_command`;
-- write requirements / Shopping handoff only through `bob.material_requirement_command`.
+- write manual requirements / Shopping handoff only through `bob.material_requirement_command`;
+- create/revise the supported geometry-derived requirement only through `bob.material_requirement_geometry_command`, which derives quantity/unit/basis/source/method server-side before delegating the shared arithmetic and reservation work.
 
 Private definer functions must check `auth.uid()`, project membership and project person identity; validate same-project target/artifact/area/task/stock/component relations; derive actor, solution lineage and derived arithmetic server-side; and reject unsupported identity/history/derived fields.
 
 Expected revision numbers prevent lost updates. A project-row lock serializes target changes with requirement saves so an open editor cannot silently move to a new target.
+
+## 4B2b deterministic wall-area calculation
+
+The first supported deterministic quantity method is intentionally narrow:
+
+- source drawing: the exact **current**, active `stud_wall_opening_v1` Artifact revision in the same project and selected-target lineage;
+- method identity: `stud_wall_net_area` / `4B2b-v1`;
+- output unit: `m2`;
+- formula: `(wall_width × wall_height − opening_width × opening_height) / 1,000,000`;
+- persistence: round upward only as needed to the requirement model's four-decimal precision so the saved base quantity never understates the exact calculated area;
+- provenance: the server-authored basis records Artifact title/revision, exact dimensions, formula/result, drawing status and whether any pinned geometry input is an explicit estimate;
+- authority: the client cannot provide `required_quantity`, `unit`, `basis`, `source_kind`, `method_key` or `method_version`; forged deterministic identity/quantity is rejected;
+- downstream arithmetic: explicit waste, matching `m2` material stock, purchase increment, staleness and deliberate Shopping publish/update reuse the existing 4B2a model. Reusable `ExistingComponent` pieces remain a `pcs` concept and are therefore not silently converted into square metres.
+
+This method calculates **coverage area only**. The user still names the material/requirement and supplies any explicit allowance, purchase increment and assumptions. It does not choose sheet products, infer sheet layout, count studs, size headers, calculate fasteners/consumables or make structural/engineering claims. Estimated geometry remains visibly Concept-level evidence; deterministic arithmetic does not upgrade its certainty.
+
+From **Material plan**, **Calculate from drawing** exposes only current generated drawings supported by this method. Save/read-back creates a normal material-requirement revision; when the generated Artifact gets a newer revision the requirement becomes stale until the user recalculates from the current persisted drawing. Shopping remains an explicit separate action.
 
 ## Reachable manual workflow
 
@@ -143,11 +161,11 @@ From the existing **Shopping** page a connected project member can open **Materi
 
 If there is no selected target, new requirement creation is blocked with a route to **Solutions & target**. Demo mode does not pretend to persist material planning.
 
-## Not in 4B2a
+## Not in 4B2a / first 4B2b calculator
 
-This foundation does not yet provide:
+This foundation still does not provide:
 
-- geometry-derived base quantities for wall/floor fixtures;
+- geometry-derived quantities beyond the shipped `stud_wall_net_area` coverage method, such as stud/member counts, sheet-layout optimization or floor-assembly calculators;
 - automatic nails/screws/paint/consumable rules;
 - supplier catalogue / prices / pack discovery;
 - unit conversion between unlike saved units;
@@ -156,11 +174,11 @@ This foundation does not yet provide:
 - autonomous Shopping mutation;
 - deletion of ordered/delivered Shopping items when a plan changes.
 
-Those remain later Slice 4 gates. The next deterministic calculator can reuse these exact requirement revisions, lineage, allocations and Shopping handoff rather than inventing a second BOM system.
+Those remain later Slice 4/work-plan gates. Any future deterministic calculator must reuse these exact requirement revisions, lineage, allocations and Shopping handoff rather than inventing a second BOM system.
 
 ## Verification contract
 
-Before marking 4B2a deployed, prove:
+Before marking the material-planning foundation delivered, prove the 4B2a requirements below and, for 4B2b, also prove that the supported calculator is reproducible from exact saved geometry and cannot be forged by the client:
 
 - anonymous/outsider reads and all raw writes are denied;
 - members can use commands only inside their project;
@@ -175,4 +193,5 @@ Before marking 4B2a deployed, prove:
 - task/area deletion retains honest requirement history; project deletion cascades new records;
 - production UI works at 320/390/1280 px with add/revise/history/archive/restore, stock management, arithmetic inspection, Shopping handoff, reload and project-switch isolation;
 - deployed Auth/PostgREST behavior is checked separately from browser HTTP fixtures;
+- 4B2b derives the same net area from the same pinned 4B1 inputs after reload, persists `deterministic` / `stud_wall_net_area` / `4B2b-v1`, rejects client-supplied derived identity/quantity, becomes stale after a newer generated Artifact revision, recalculates into a new requirement revision, and uses the unchanged explicit Shopping handoff;
 - no AI call is required for any 4B acceptance path.

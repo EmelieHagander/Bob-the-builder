@@ -1,12 +1,12 @@
 # Plans and drawings — project artifact foundation
 
-**Status:** manual milestone 4A is implemented, merged, migrated and live-verified as of 2026-09-13. The first deterministic-geometry follow-up (4B1, stud wall with opening) is specified below and is under implementation on `feat/deterministic-artifact-geometry`. [`Docs/foundation-verification.md`](foundation-verification.md) owns release evidence; `Docs/v1-plan.md` owns release order and later calculation/work-plan gates.
+**Status:** manual milestone 4A and narrow deterministic geometry milestone 4B1 are implemented, merged, migrated, deployed and live-verified. The downstream first 4B2b net-wall-area material calculator is also shipped, but its requirement/calculation behavior is owned by [`Docs/material-planning.md`](material-planning.md), not by the Artifact model. [`Docs/foundation-verification.md`](foundation-verification.md) owns release evidence; `Docs/v1-plan.md` owns later calculation/work-plan gates.
 
 ## User goal
 
 After choosing an exact project target, keep the drawing or plan the crew is using as durable project truth rather than as a loose image. A drawing version must say which target decision, solution version, physical target and measurement versions it was based on, and later changes must not rewrite that history.
 
-4A established the manual record and lineage boundary. 4B begins adding deterministic geometry for deliberately narrow supported fixtures. It does not turn bob into general CAD and it does not let generated geometry upgrade an estimate into a measured fact.
+4A established the manual record and lineage boundary. 4B1 adds deterministic geometry for a deliberately narrow supported fixture. It does not turn bob into general CAD and it does not let generated geometry upgrade an estimate into a measured fact.
 
 ## Records and lineage
 
@@ -68,7 +68,7 @@ If there is no selected target, creation is blocked with a route back to **Solut
 
 ## 4B1 deterministic geometry — stud wall with opening
 
-**Status:** specified / implementation active. This is the first deterministic geometry fixture, not a general drawing engine.
+**Status:** implemented, deployed and live-verified. This is the first deterministic geometry fixture, not a general drawing engine.
 
 ### Product promise
 
@@ -153,8 +153,8 @@ The foundation still does not yet provide:
 - general CAD or arbitrary freeform geometry;
 - the ventilated porch/floor build-up generator (the second narrow fixture);
 - automatic structural member/header sizing;
-- calculations or bill of materials;
-- stock deduction or Shopping updates;
+- general bill-of-materials calculation inside the Artifact model; the separate material-planning foundation now consumes this exact recipe for one narrow `stud_wall_net_area` coverage calculation;
+- stock deduction or Shopping mutation inside the Artifact model; those remain owned by material planning and stay explicit;
 - task-material relations, dependencies, tools or readiness;
 - Bob/vision consumption;
 - engineering/permit certification.
@@ -186,4 +186,4 @@ A 4B1 CI/browser gate additionally requires:
 - project/building switching cannot leak another structure's generation inputs;
 - the generator/preview flow fits 320/390/1280 px and important touch targets remain usable.
 
-Deployed 4A evidence remains recorded in [`Docs/foundation-verification.md`](foundation-verification.md). 4B1 should be added there only after production/live verification; until then its PR/CI evidence is committed-state proof, not deployed proof.
+Deployed 4A and 4B1 evidence is recorded in [`Docs/foundation-verification.md`](foundation-verification.md), including hosted migrations, browser proof and ordinary Auth/PostgREST live verification. The downstream 4B2b net-wall-area release is recorded there separately and owned behaviorally by [`Docs/material-planning.md`](material-planning.md).

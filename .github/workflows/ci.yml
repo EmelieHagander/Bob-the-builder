@@ -22,7 +22,7 @@ jobs:
       - run: node --check scripts/check-live-artifacts.mjs
       - run: node --check scripts/check-live-material-planning.mjs
       - run: node --check scripts/check-live-building-context.mjs
-      - run: node --check scripts/check-project-phases-browser.mjs
+      - run: node --check scripts/check-live-volunteers.mjs
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
@@ -50,9 +50,6 @@ jobs:
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify persistent building context UI
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
-      - name: Verify Project and Area phase UI
-        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
-        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
