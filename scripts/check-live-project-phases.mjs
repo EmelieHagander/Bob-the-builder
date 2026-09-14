@@ -54,7 +54,7 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
   assert((await client.from('areas').update({ phase: 'build' }).eq('id', areaId)).error,
     'Area phase changes must go through the guarded command')
 
-  const solutionRows = checked(await client.from('current_solutions').select('id,current_revision,area_id,archived')
+  const solutionRows = checked(await client.from('current_solutions').select('id,revision,area_id,archived')
     .eq('project_id', projectId))
   const areaSolution = solutionRows.find(row => row.area_id === areaId && !row.archived)
   const projectSolution = solutionRows.find(row => row.area_id === null && !row.archived)
@@ -66,7 +66,7 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
   assert(projectPointerBefore.revision > 0, 'Earlier foundation steps must leave an exact Project target')
 
   checked(await target('select', areaSolution.id, 0, {
-    solution_revision: areaSolution.current_revision,
+    solution_revision: areaSolution.revision,
     reason: 'Hosted phase verification: independent Area target',
     area_id: areaId,
   }))
@@ -80,7 +80,7 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
     'Area and Project targets keep distinct exact target revisions')
 
   checked(await target('select', projectSolution.id, projectPointerBefore.revision, {
-    solution_revision: projectSolution.current_revision,
+    solution_revision: projectSolution.revision,
     reason: 'Hosted phase verification: change only the Project target',
     area_id: null,
   }))
