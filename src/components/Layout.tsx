@@ -6,6 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import * as db from '../data/database'
+import { phaseLabel } from '../lib/projectPhase'
 import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
 import { AskBob } from './AskBob'
 
@@ -24,7 +25,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', icon: 'house', label: 'Dashboard', end: true },
+  { to: '/', icon: 'house', label: 'Project', end: true },
   { to: '/areas', icon: 'squares-four', label: 'Areas' },
   { to: '/people', icon: 'users-three', label: 'People' },
   { to: '/events', icon: 'calendar-dots', label: 'Events' },
@@ -88,9 +89,9 @@ function Sidebar() {
         <div style={{ width: 26, height: 26, borderRadius: 8, background: '#ffffff26', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="mountains" size={15} />
         </div>
-        <div style={{ flex: 1, lineHeight: 1.2 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{project?.name ?? '…'}</div>
-          <div style={{ fontSize: 11, color: '#ffffff85' }}>{project ? `${project.type} · ${project.location.split(',')[0]}` : ''}</div>
+        <div style={{ flex: 1, lineHeight: 1.2, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project?.name ?? '…'}</div>
+          <div style={{ fontSize: 11, color: '#ffffff85', marginTop: 2 }}>{project ? `${phaseLabel(project.phase)} · ${project.location.split(',')[0] || project.type}` : ''}</div>
         </div>
         <Icon name="caret-up-down" size={14} color="#ffffffaa" />
       </Link>
@@ -162,8 +163,10 @@ function Sidebar() {
 }
 
 function MobileNav() {
-  // The first project tabs, plus the account level — it must stay reachable on mobile.
-  const items = [...NAV.slice(0, 4), NAV[NAV.length - 1]]
+  // Field work stays one tap away. Stable tabs are easier to learn than
+  // phase-dependent navigation, so Today replaces People here; People remains
+  // available from the full project navigation.
+  const items = [NAV[0], NAV[1], NAV[7], NAV[3], NAV[NAV.length - 1]]
   return (
     <nav
       className="no-print mobile-nav"
