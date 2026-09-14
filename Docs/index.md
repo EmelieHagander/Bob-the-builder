@@ -11,7 +11,8 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
-| project lifecycle / Concept → Design → Planning → Build → Complete | `Docs/project-phases.md` |
+| Project + Area lifecycle / Concept → Design → Planning → Build → Complete | `Docs/project-phases.md` |
+| what Project / Area / Task / Volunteer / Space / Target / BOM etc. mean in bob | `Docs/domain-dictionary.md` |
 | persistent site/building/space context across projects | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
@@ -38,7 +39,8 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
-- `Docs/project-phases.md` — **specified / pre-implementation project-lifecycle contract**: Explore before a project, then Concept → Design → Planning → Build → Complete/As-built; owns phase purpose, Bob/human responsibilities and exit criteria. UI alignment is the explicit next discovery step.
+- `Docs/project-phases.md` — **specified / pre-implementation lifecycle contract**: Explore before a Project, then Concept → Design → Planning → Build → Complete/As-built; Project is the overall container/phase while Areas are workstreams that may carry the same phase vocabulary independently. Owns phase purpose, Bob/human responsibilities, exit criteria, defer/split semantics and the current project-global-target limitation exposed by the workstream model. UI alignment is the explicit next discovery step.
+- `Docs/domain-dictionary.md` — **specified semantic vocabulary contract**: canonical short meanings of Project, Area, Task, Volunteer, Building/Space/Element, Solution/Target, Artifact, material requirement/BOM, readiness and Bob-context nouns. It is product semantics, not schema documentation. A runtime machine-readable Bob dictionary is planned; a mutable database dictionary is intentionally not introduced yet.
 - `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
@@ -47,17 +49,19 @@
 
 ### Product-document status
 
-`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/project-phases.md` owns **where the whole project is in its lifecycle and the phase exit criteria**. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/project-phases.md` owns **where a Project and its Area workstreams are in the lifecycle and the phase exit/defer rules**. `Docs/domain-dictionary.md` owns **the short semantic meaning of Bob's first-class product nouns**. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
 
 ### Physical place vs project organisation
 
-The original product uses `Area` as a project-scoped physical/work zone. The persistent building model is a later product decision and does not rewrite that history. For current work, keep the distinction explicit:
+The original product uses `Area` as a project-scoped work zone. The persistent building model is a later product decision and does not rewrite that history. For current work, keep the distinction explicit:
 
-- `Area` — project work-zone container used by current collaboration/runtime flows;
-- `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across projects;
-- Areas may map to physical targets through the shipped backend relation; the dedicated Area-side mapping editor remains a narrow UI follow-up, and the entities must not be silently conflated.
+- `Project` — shared collaboration/goal container with one overall lifecycle phase;
+- `Area` — Project-scoped workstream/work-zone; planned to carry its own lifecycle phase when different parts of a larger Project progress independently;
+- `Task` — executable work inside an Area; uses task status/readiness rather than Project phase;
+- `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across Projects;
+- Areas may map to physical targets through the shipped backend relation; the entities must not be silently conflated.
 
-See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
+See `Docs/project-phases.md` for lifecycle/workstream semantics, `Docs/domain-dictionary.md` for short definitions and `Docs/building-model.md` for physical truth.
 
 ## UI / design
 
@@ -75,8 +79,9 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/v1-plan.md` — V1 release journey and integration boundary.
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
+- `Docs/project-phases.md` — specified Project/Area lifecycle and defer/split direction; no phase persistence/UI runtime is claimed yet.
 - `db/README.md` → Household and friend sharing — specified/in-progress shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; no deployed sharing claim until its release evidence is recorded.
-- `Docs/building-model.md` — deployed persistent physical context that project/Area flows may target, with broader geometry/import/AI fidelity still planned.
+- `Docs/building-model.md` — deployed persistent physical context that Project/Area flows may target, with broader geometry/import/AI fidelity still planned.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
 - `src/pages/People.tsx` — crew, skills and dietary context.
 - `src/pages/Events.tsx` + `src/pages/EventDetail.tsx` — build-day planning and attendance.
@@ -100,7 +105,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
 - `Docs/project-facts.md` — owning manual measurement/component contract: truth states, exact length units, revision history, source images, authority and recovery for milestones 2A/2B.
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
-- `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
+- `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A. Current target behavior is project-global; `Docs/project-phases.md` records why independent Area phases require that scoping to be revisited.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
 - `Docs/artifacts.md` — owning manual plan/drawing, exact target/solution lineage and measurement-evidence contract for milestone 4A; its own status distinguishes implementation from deployment.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
@@ -111,6 +116,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
+- `Docs/domain-dictionary.md` — canonical semantic vocabulary Bob must use for Bob-specific nouns. Runtime injection/lookup is **planned**, not built; start with a small server-owned typed/core bundle rather than a mutable database table unless runtime curation later justifies one.
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
 - `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
