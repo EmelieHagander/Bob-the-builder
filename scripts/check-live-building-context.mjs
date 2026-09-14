@@ -3,6 +3,7 @@
 // same guarded commands once project/Area scope has been detached.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { verifyProjectPhases } from './check-live-project-phases.mjs'
 
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 
@@ -175,4 +176,6 @@ export async function verifyBuildingContext(client, anonymous, projectId, areaId
     assert.deepEqual(checked(await client.from('current_sites').select('id').eq('id', siteId)), [])
     console.log('Live building context fixture removed through guarded physical-authority commands.')
   }
+
+  await verifyProjectPhases(client, anonymous, projectId, areaId)
 }
