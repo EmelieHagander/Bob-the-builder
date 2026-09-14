@@ -33,3 +33,4 @@ jobs:
           git add supabase/migrations src scripts tests
           git commit -m "Implement deterministic material quantities"
           git push origin HEAD:feat/deterministic-material-quantities
+# rerun after disambiguating artifact variables
