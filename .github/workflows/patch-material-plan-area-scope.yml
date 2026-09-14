@@ -21,7 +21,24 @@ jobs:
           node-version: 24
           cache: npm
       - name: Apply patch
-        run: python scripts/apply-material-plan-area-scope-patch.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/MaterialPlan.tsx')
+          s = p.read_text()
+          old = "  const [area, setArea] = useState(value?.areaId ?? '')"
+          if s.count(old) != 3:
+              raise SystemExit(f'Expected three Area state declarations, found {s.count(old)}')
+          p.write_text(s.replace(old, "  const [stockArea, setStockArea] = useState(value?.areaId ?? '')", 1))
+          PY
+          python scripts/apply-material-plan-area-scope-patch.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/MaterialPlan.tsx')
+          s = p.read_text()
+          s = s.replace("  const [stockArea, setStockArea] = useState(value?.areaId ?? '')", "  const [area, setArea] = useState(value?.areaId ?? '')", 1)
+          p.write_text(s)
+          PY
       - run: npm ci
       - run: npm test
       - run: npm run check:edge
