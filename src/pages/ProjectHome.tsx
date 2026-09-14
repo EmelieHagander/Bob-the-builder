@@ -15,6 +15,13 @@ export function ProjectHome() {
   const { data: people } = useAsync(() => db.getPeople(), [projectVersion])
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
+  const projectId = project?.id ?? ''
+  const { data: evidenceAttention } = useAsync(
+    () => projectId && db.authEnabled()
+      ? db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0)
+      : Promise.resolve(null),
+    [projectId, version, projectVersion],
+  )
 
   if (projectLoading && !project) return <div className="page"><Loading label="Loading project…" /></div>
   if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError?.message ?? 'This project may no longer be available.'}</p></div>
@@ -23,6 +30,7 @@ export function ProjectHome() {
   const focus = projectFocus(project.phase, areaItems)
   const byId = new Map((people ?? []).map(person => [person.id, person]))
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
+  const missingMeasurements = (evidenceAttention?.items ?? []).filter(item => item.kind === 'measurement')
 
   return <div className="page">
     <div className="page-head">
@@ -91,6 +99,22 @@ export function ProjectHome() {
           })}
         </div>}
     </section>
+
+    {missingMeasurements.length > 0 && <section aria-label="Planning next steps" style={{ marginTop: 24 }}>
+      <SectionTitle>Project attention</SectionTitle>
+      <Link to="/facts?kind=measurement&status=missing" className="card" style={{ padding: 16, display: 'block', borderColor: 'var(--clay)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+          <Icon name="ruler" size={20} color="var(--clay)" />
+          <div>
+            <strong>{`Measure ${missingMeasurements.length} missing ${missingMeasurements.length === 1 ? 'dimension' : 'dimensions'}`}</strong>
+            <p className="foundation-hint" style={{ margin: '4px 0 0' }}>
+              Still missing · {missingMeasurements.slice(0, 3).map(item => item.subject).join(' · ')}
+            </p>
+          </div>
+        </div>
+      </Link>
+      <p className="foundation-hint">This is project-wide evidence attention, not a single global phase or next step. Each Area still owns its local priority.</p>
+    </section>}
 
     <section style={{ marginTop: 24 }} aria-label="Project tools">
       <SectionTitle>Project tools</SectionTitle>
