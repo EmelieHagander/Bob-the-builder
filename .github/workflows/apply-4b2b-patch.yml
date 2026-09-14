@@ -23,6 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: python scripts/patch-4b2b.py
+      - run: python scripts/patch-4b2b-fix.py
       - run: npm test
       - run: npm run build
       - name: Commit implementation
