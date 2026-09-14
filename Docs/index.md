@@ -11,6 +11,7 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
+| project lifecycle / Concept → Design → Planning → Build → Complete | `Docs/project-phases.md` |
 | persistent site/building/space context across projects | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
@@ -37,6 +38,7 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
+- `Docs/project-phases.md` — **specified / pre-implementation project-lifecycle contract**: Explore before a project, then Concept → Design → Planning → Build → Complete/As-built; owns phase purpose, Bob/human responsibilities and exit criteria. UI alignment is the explicit next discovery step.
 - `Docs/material-planning.md` — **implementation-active 4B2a material-planning contract** for manual requirements, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Geometry-derived base quantities remain 4B2b.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
@@ -45,7 +47,7 @@
 
 ### Product-document status
 
-`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/project-phases.md` owns **where the whole project is in its lifecycle and the phase exit criteria**. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
 
 ### Physical place vs project organisation
 
