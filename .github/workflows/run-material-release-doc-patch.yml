@@ -1,0 +1,40 @@
+name: Run material release doc patch safely
+
+on:
+  push:
+    branches: [docs/record-material-planning-release]
+    paths:
+      - .github/workflows/run-material-release-doc-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/record-material-planning-release
+      - name: Extract and run patch script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('.github/workflows/patch-material-release-docs.yml').read_text().splitlines()
+          start = next(i for i, line in enumerate(src) if "python - <<'PY'" in line) + 1
+          end = next(i for i in range(start, len(src)) if src[i].strip() == 'PY')
+          out = []
+          for line in src[start:end]:
+              out.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/patch_release_docs.py').write_text('\n'.join(out) + '\n')
+          PY
+          python /tmp/patch_release_docs.py
+          rm .github/workflows/patch-material-release-docs.yml
+          rm .github/workflows/run-material-release-doc-patch.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Docs/material-planning.md Docs/v1-plan.md Docs/function-inventory.md Docs/foundation-verification.md db/README.md .github/workflows/patch-material-release-docs.yml .github/workflows/run-material-release-doc-patch.yml
+          git commit -m "Record live 4B1 and 4B2a release truth"
+          git push origin HEAD:docs/record-material-planning-release
