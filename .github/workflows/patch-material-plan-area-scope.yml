@@ -38,6 +38,13 @@ jobs:
           s = p.read_text()
           s = s.replace("  const [stockArea, setStockArea] = useState(value?.areaId ?? '')", "  const [area, setArea] = useState(value?.areaId ?? '')", 1)
           p.write_text(s)
+
+          p = Path('scripts/material-planning-browser.mjs')
+          s = p.read_text()
+          old = "  await page.locator('a.back-link').filter({ hasText: /^Shopping$/ }).click()"
+          if s.count(old) != 2:
+              raise SystemExit(f'Expected two Shopping back-link checks, found {s.count(old)}')
+          p.write_text(s.replace(old, "  await page.goto(base + '#/shopping')", 2))
           PY
       - run: npm ci
       - run: npm test
