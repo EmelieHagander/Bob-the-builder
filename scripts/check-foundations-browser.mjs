@@ -258,7 +258,7 @@ try {
     assert.equal(await page.getByRole('article', { name: 'Window width', exact: true }).count(), 0)
     await page.goto(base + '#/solutions')
     await page.getByText('No active alternatives in this selection.', { exact: true }).waitFor()
-    await page.getByText('No target selected. Add alternatives, then choose one version for the project.', { exact: true }).waitFor()
+    await page.getByText('No target selected for the Project. Add alternatives, then choose one version for this scope.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('article', { name: 'Keep the porch', exact: true }).count(), 0)
     await page.goto(base + '#/artifacts')
     await page.getByText('No active drawings in this selection.', { exact: true }).waitFor()
