@@ -16,11 +16,15 @@ export function ProjectHome() {
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
   const projectId = project?.id ?? ''
-  const { data: evidenceAttention } = useAsync(
+  const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
-      ? db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0)
+      ? Promise.all([
+          db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0),
+          db.getSelectedTarget(projectId),
+          db.getProjectArtifacts(projectId, '', false, 0),
+        ]).then(([missing, target, artifacts]) => ({ missing, target, artifacts }))
       : Promise.resolve(null),
-    [projectId, version, projectVersion],
+    [projectId, projectVersion, version],
   )
 
   if (projectLoading && !project) return <div className="page"><Loading label="Loading project…" /></div>
@@ -29,8 +33,31 @@ export function ProjectHome() {
   const areaItems = areas ?? []
   const focus = projectFocus(project.phase, areaItems)
   const byId = new Map((people ?? []).map(person => [person.id, person]))
+  const areaById = new Map(areaItems.map(area => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
-  const missingMeasurements = (evidenceAttention?.items ?? []).filter(item => item.kind === 'measurement')
+  const missingMeasurements = (planning?.missing.items ?? []).filter(item => item.kind === 'measurement')
+  const selectedTarget = planning?.target.solution ?? null
+  const selectedDecision = planning?.target.decision ?? null
+  const hasCurrentDrawing = Boolean(selectedTarget && selectedDecision && planning?.artifacts.items.some(artifact =>
+    !artifact.areaId
+    && artifact.targetRevision === selectedDecision.revision
+    && artifact.solutionId === selectedTarget.id
+    && artifact.solutionRevision === selectedTarget.revision,
+  ))
+  const nextPlanningAction = missingMeasurements.length > 0
+    ? {
+        to: '/facts?kind=measurement&status=missing',
+        icon: 'ruler',
+        title: `Measure ${missingMeasurements.length} ${missingMeasurements.length === 1 ? 'missing dimension' : 'missing dimensions'}`,
+        text: missingMeasurements[0]
+          ? `Start with ${missingMeasurements[0].subject}${missingMeasurements[0].areaId ? ` in ${areaById.get(missingMeasurements[0].areaId) ?? 'its Area'}` : ''}.`
+          : 'Collect the missing measurements before planning from assumptions.',
+      }
+    : !selectedTarget
+      ? { to: '/solutions', icon: 'path', title: 'Choose the Project target', text: 'Compare alternatives and explicitly choose the Project-level target when the shared direction is clear.' }
+      : !hasCurrentDrawing
+        ? { to: '/artifacts', icon: 'blueprint', title: 'Turn the Project target into a drawing', text: `“${selectedTarget.title}” is selected. Keep the next Project-level plan tied to that exact version and its evidence.` }
+        : { to: '/areas', icon: 'check-circle', title: 'Review the workstreams', text: 'The Project-level planning foundation is recorded. Review each Area for its local phase, target and next action.' }
 
   return <div className="page">
     <div className="page-head">
@@ -63,6 +90,41 @@ export function ProjectHome() {
         action={!project.phase ? <button className="btn btn-primary" onClick={() => setPhaseOpen(true)}>Classify this project</button> : undefined}
       />
     </section>
+
+    {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 18 }}>
+      {planningLoading ? <div className="card" style={{ padding: 16 }}><Loading label="Checking project evidence…" /></div>
+        : planningError ? <div className="card" role="status" style={{ padding: 16 }}>
+          <strong>Planning status is unavailable</strong><div className="foundation-hint">Your saved project data is unchanged. Open the project tools directly while this summary is unavailable.</div>
+        </div>
+          : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+            <Link to={nextPlanningAction.to} className="card" style={{ padding: 18, display: 'block', borderColor: 'var(--accent-2)' }}>
+              <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+                  <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>Evidence next</div>
+                  <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
+                  <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
+                  <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>Open <Icon name="arrow-right" size={14} /></div>
+                </div>
+              </div>
+            </Link>
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
+              <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>{missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'No measurement blockers'}</h2>
+              {missingMeasurements.length ? <div style={{ display: 'grid', gap: 8 }}>
+                {missingMeasurements.slice(0, 3).map(measurement => <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
+                  <Icon name={measurement.required ? 'warning-circle' : 'circle-dashed'} size={17} color={measurement.required ? 'var(--clay)' : 'var(--ink-faint)'} />
+                  <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{measurement.subject}</div>
+                    <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div></div>
+                  <Icon name="arrow-right" size={14} color="var(--ink-faint)" />
+                </Link>)}
+              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>Required unknown or estimated measurements are clear at Project scope. Individual Areas can still have their own readiness gaps.</p>}
+            </div>
+          </div>}
+    </section>}
 
     <section className="card" style={{ marginTop: 20, padding: 16 }}>
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
@@ -99,22 +161,6 @@ export function ProjectHome() {
           })}
         </div>}
     </section>
-
-    {missingMeasurements.length > 0 && <section aria-label="Planning next steps" style={{ marginTop: 24 }}>
-      <SectionTitle>Project attention</SectionTitle>
-      <Link to="/facts?kind=measurement&status=missing" className="card" style={{ padding: 16, display: 'block', borderColor: 'var(--clay)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-          <Icon name="ruler" size={20} color="var(--clay)" />
-          <div>
-            <strong>{`Measure ${missingMeasurements.length} missing ${missingMeasurements.length === 1 ? 'dimension' : 'dimensions'}`}</strong>
-            <p className="foundation-hint" style={{ margin: '4px 0 0' }}>
-              Still missing · {missingMeasurements.slice(0, 3).map(item => item.subject).join(' · ')}
-            </p>
-          </div>
-        </div>
-      </Link>
-      <p className="foundation-hint">This is project-wide evidence attention, not a single global phase or next step. Each Area still owns its local priority.</p>
-    </section>}
 
     <section style={{ marginTop: 24 }} aria-label="Project tools">
       <SectionTitle>Project tools</SectionTitle>
