@@ -29,12 +29,10 @@ jobs:
       - run: npm ci
       - name: Capture full dependency audit
         shell: bash
-        run: |
-          npm audit --json > audit-full.json || true
+        run: npm audit --json > audit-full.json || true
       - name: Capture runtime-only dependency audit
         shell: bash
-        run: |
-          npm audit --omit=dev --json > audit-runtime.json || true
+        run: npm audit --omit=dev --json > audit-runtime.json || true
       - name: Summarize findings
         shell: bash
         run: |
@@ -46,18 +44,14 @@ jobs:
             console.log(`\n${label.toUpperCase()} AUDIT`, meta)
             for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
               const via = (vuln.via ?? []).map((entry) => typeof entry === 'string' ? entry : `${entry.name}: ${entry.title} (${entry.severity})`).join(' | ')
-              console.log(JSON.stringify({
-                name,
-                severity: vuln.severity,
-                direct: vuln.isDirect,
-                range: vuln.range,
-                via,
-                effects: vuln.effects,
-                fixAvailable: vuln.fixAvailable,
-              }))
+              console.log(JSON.stringify({ name, severity: vuln.severity, direct: vuln.isDirect, range: vuln.range, via, effects: vuln.effects, fixAvailable: vuln.fixAvailable }))
             }
           }
           NODE
+      - name: Block runtime vulnerabilities at moderate or higher
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Block high or critical vulnerabilities anywhere
+        run: npm audit --audit-level=high
       - uses: actions/upload-artifact@v4
         if: always()
         with:
