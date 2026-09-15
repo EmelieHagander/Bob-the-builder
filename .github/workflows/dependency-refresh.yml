@@ -27,6 +27,7 @@ jobs:
           npm install --save-exact react-router-dom@7.18.4
           npm install --save-dev --save-exact vite@6.4.3 supabase@2.117.0
           npm audit fix
+          npm pkg set 'scripts.check:edge=deno check --node-modules-dir=manual supabase/functions/ask-bob/index.ts supabase/functions/ask-launchpad/index.ts supabase/functions/volunteer-media/index.ts'
       - name: Classify post-update findings
         shell: bash
         run: |
