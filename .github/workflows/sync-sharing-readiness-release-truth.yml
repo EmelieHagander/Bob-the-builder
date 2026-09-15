@@ -1,0 +1,30 @@
+name: Sync sharing and readiness release truth
+
+on:
+  push:
+    branches:
+      - docs/sync-sharing-readiness-release-truth
+    paths:
+      - .github/workflows/sync-sharing-readiness-release-truth.yml
+      - scripts/patch-release-truth-20260915.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/sync-sharing-readiness-release-truth
+      - name: Patch canonical release owners
+        run: python scripts/patch-release-truth-20260915.py
+      - name: Commit docs and remove temporary helpers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/sync-sharing-readiness-release-truth.yml scripts/patch-release-truth-20260915.py
+          git add Docs db/README.md
+          git commit -m "Record live sharing and readiness release truth"
+          git push origin HEAD:docs/sync-sharing-readiness-release-truth
