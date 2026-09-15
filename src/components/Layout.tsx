@@ -236,7 +236,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
       </button>
 
       <MobileNav />
-      <AskBob project={project} open={bobOpen} onClose={() => setBobOpen(false)} />
+      {bobOpen && <AskBob project={project} open onClose={() => setBobOpen(false)} />}
     </div>
   )
 }
