@@ -12,6 +12,9 @@ import * as mock from './mockData'
 import type { Area, Project, ProjectPhase } from './types'
 
 export * from './databaseCore'
+// Explicit exports win over the legacy star export above. Ask Bob now resolves
+// server-owned conversation state while the rest of databaseCore stays stable.
+export { askBob, getAskBobConversation } from './bobConversation'
 
 function resolveSupabaseUrl(raw: string | undefined): string | null {
   const value = raw?.trim()
