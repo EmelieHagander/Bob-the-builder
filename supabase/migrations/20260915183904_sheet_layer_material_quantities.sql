@@ -249,6 +249,9 @@ declare
   label text;
   quantity_text text;
 begin
+  -- The existing FK sets material_id to null when a Shopping item is deleted.
+  -- Preserve that missing-item state and let a later explicit publish recreate it.
+  if new.material_id is null then return new; end if;
   select * into requirement from bob.material_requirement_revisions
     where project_id=new.project_id and requirement_id=new.requirement_id and revision=new.synced_requirement_revision;
   if not found or requirement.method_key<>'stud_wall_sheet_layer' then return new; end if;
