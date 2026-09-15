@@ -1,0 +1,62 @@
+name: Dependency security
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-security.yml
+  push:
+    branches:
+      - security/dependency-audit-2026-09-15
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/dependency-security.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Capture full dependency audit
+        shell: bash
+        run: npm audit --json > audit-full.json || true
+      - name: Capture runtime-only dependency audit
+        shell: bash
+        run: npm audit --omit=dev --json > audit-runtime.json || true
+      - name: Summarize findings
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          for (const [label, file] of [['full', 'audit-full.json'], ['runtime', 'audit-runtime.json']]) {
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'))
+            const meta = report.metadata?.vulnerabilities ?? {}
+            console.log(`\n${label.toUpperCase()} AUDIT`, meta)
+            for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
+              const via = (vuln.via ?? []).map((entry) => typeof entry === 'string' ? entry : `${entry.name}: ${entry.title} (${entry.severity})`).join(' | ')
+              console.log(JSON.stringify({ name, severity: vuln.severity, direct: vuln.isDirect, range: vuln.range, via, effects: vuln.effects, fixAvailable: vuln.fixAvailable }))
+            }
+          }
+          NODE
+      - name: Block runtime vulnerabilities at moderate or higher
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Block high or critical vulnerabilities anywhere
+        run: npm audit --audit-level=high
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-audit
+          path: |
+            audit-full.json
+            audit-runtime.json
+          if-no-files-found: error

@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check:edge": "deno check --node-modules-dir=auto supabase/functions/ask-bob/index.ts supabase/functions/ask-launchpad/index.ts supabase/functions/volunteer-media/index.ts",
+    "check:edge": "deno check --node-modules-dir=manual supabase/functions/ask-bob/index.ts supabase/functions/ask-launchpad/index.ts supabase/functions/volunteer-media/index.ts",
     "verify:pwa": "node scripts/check-pwa.mjs",
     "verify:install": "node scripts/check-installation-browser.mjs",
     "verify:project": "node scripts/check-project-browser.mjs",
@@ -22,7 +22,7 @@
     "@supabase/supabase-js": "2.110.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2"
+    "react-router-dom": "7.18.4"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
@@ -31,9 +31,9 @@
     "@vitejs/plugin-react": "^4.3.2",
     "deno": "2.9.6",
     "playwright-core": "1.62.1",
-    "supabase": "2.81.3",
+    "supabase": "2.117.0",
     "tsx": "4.23.13",
     "typescript": "^5.6.2",
-    "vite": "^5.4.8"
+    "vite": "6.4.3"
   }
 }
