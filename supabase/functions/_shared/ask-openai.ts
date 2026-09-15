@@ -51,9 +51,9 @@ export async function answerWithOpenAi(opts: {
     return { ok: false, error: 'turn_in_flight' }
   }
 
-  const persisted = claim.mode === 'server' && claim.status === 'claimed'
-  const previousResponseId = persisted ? claim.previous_response_id ?? undefined : undefined
-  const threadId = persisted ? claim.thread_id : null
+  const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
+  const previousResponseId = claimedServer?.previous_response_id ?? undefined
+  const threadId = claimedServer?.thread_id ?? null
 
   const failClaim = async () => {
     if (!threadId) return
