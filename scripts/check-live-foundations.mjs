@@ -10,6 +10,7 @@ import { verifyArtifacts, verifyArtifactImageCleanup } from './check-live-artifa
 import { verifyMaterialPlanning } from './check-live-material-planning.mjs'
 import { verifyBuildingContext } from './check-live-building-context.mjs'
 import { verifyVolunteerAccess } from './check-live-volunteers.mjs'
+import { verifyWorkPlanReadiness } from './check-live-work-plan.mjs'
 
 const configured = process.env.VITE_SUPABASE_URL?.trim() ?? ''
 const url = /^[a-z0-9]{16,}$/.test(configured) ? 'https://' + configured + '.supabase.co' : configured.replace(/\/$/, '')
@@ -83,6 +84,7 @@ try {
   await verifyMaterialPlanning(client, anonymous, project.id, areaId, taskId, facts, artifacts)
   await verifyBuildingContext(client, anonymous, project.id, areaId, facts)
   await verifyVolunteerAccess(client, anonymous, url, key, project.id, areaId, taskId, imageId, png)
+  await verifyWorkPlanReadiness(client, anonymous, project.id, areaId)
   const savedTask = checked(await client.from('tasks').select('instructions,status').eq('id', taskId).single())
   assert.equal(savedTask.instructions, 'Manually supplied verification instructions.')
   assert.equal(savedTask.status, 'done')
@@ -94,7 +96,7 @@ try {
   assert.equal(remaining.media_links[0].task_id, taskId)
   checked(await media('begin_delete', imageId))
   assert((await media('finish_delete', imageId)).error, 'Existing bytes prevent premature metadata removal')
-  console.log('Live foundation Auth/PostgREST/Storage: original bytes, private access, attachments, steps, stale edits and required checks passed. No AI invoked.')
+  console.log('Live foundation Auth/PostgREST/Storage: original bytes, private access, attachments, steps, stale edits, required checks and executable readiness passed. No AI invoked.')
 } catch (error) {
   // No sessions, tokens, request objects or personal project records in logs.
   console.error('Live foundation verification failed: ' + error.message)
