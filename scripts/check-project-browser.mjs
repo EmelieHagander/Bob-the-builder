@@ -17,6 +17,7 @@ const expiresAt = Math.floor(Date.now() / 1000) + 3600
 const token = [JSON.stringify({ alg: 'HS256', typ: 'JWT' }), JSON.stringify({ sub: user.id, exp: expiresAt, role: 'authenticated' }), 'fixture-signature'].map(part => Buffer.from(part).toString('base64url')).join('.')
 const success = (projectId, summary) => ({ ok: true, backend: 'openai', status: 'completed', projectId, summary, evidence: { kind: 'ai_assessment', partial: true, sources: [{ projectId, dataset: 'materials', recordId: `${projectId}_${'long-record-id-'.repeat(8)}`, label: `Boards for Porch ${projectId}`, retrievedAt: '2026-09-09T18:00:00Z', updatedAt: null, truth: 'unknown' }] } })
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 let browser
 try {
   for (let attempt = 0; ; attempt++) {
@@ -30,8 +31,16 @@ try {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = []
     const requests = []
+    const histories = new Map(['A', 'B'].map(id => [id, { thread: null, nextSeq: 1, messages: [] }]))
     let slow = deferred()
     let responseMode = 'success'
+    const storeCompletedTurn = (body, response) => {
+      const history = histories.get(body.projectId)
+      assert(history)
+      history.thread ??= `thread-${body.projectId}`
+      history.messages.push({ role: 'user', text: body.message, evidence: null, delivery_state: 'completed', seq: history.nextSeq++ })
+      history.messages.push({ role: 'assistant', text: response.summary, evidence: response.evidence, delivery_state: 'completed', seq: history.nextSeq++ })
+    }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
       const respond = options => route.fulfill({ ...options, headers: {
@@ -48,17 +57,37 @@ try {
       if (url.pathname === '/functions/v1/ask-bob') {
         assert.equal(request.headers().authorization, `Bearer ${token}`)
         const body = request.postDataJSON()
-        assert.deepEqual(Object.keys(body).sort(), ['action', 'message', 'projectId'])
+        assert.deepEqual(Object.keys(body).sort(), ['action', 'clientTurnId', 'message', 'projectId'])
         assert.equal(body.action, 'send')
+        assert.match(body.clientTurnId, UUID, 'Bob turn id is a client UUID idempotency key')
         requests.push(body)
+        const history = histories.get(body.projectId)
+        if (history) history.thread ??= `thread-${body.projectId}`
         if (body.message === 'Slow question') {
           await slow.promise
-          return respond({ json: success(body.projectId, 'OLD DELAYED ANSWER') })
+          const response = success(body.projectId, 'OLD DELAYED ANSWER')
+          storeCompletedTurn(body, response)
+          return respond({ json: response })
         }
         if (responseMode === 'denied') return respond({ status: 403, json: { ok: false, error: 'project_denied' } })
         if (responseMode === 'unavailable') return respond({ status: 503, json: { ok: false, error: 'service_unavailable' } })
         if (responseMode === 'wrong-project') return respond({ json: success('B', 'WRONG PROJECT ANSWER') })
-        return respond({ json: success(body.projectId, `Answer for Porch ${body.projectId}`) })
+        const response = success(body.projectId, `Answer for Porch ${body.projectId}`)
+        storeCompletedTurn(body, response)
+        return respond({ json: response })
+      }
+      if (url.pathname === '/rest/v1/bob_threads') {
+        const projectId = url.searchParams.get('project_id')?.replace(/^eq\./, '') ?? ''
+        const owner = url.searchParams.get('owner_user_id')?.replace(/^eq\./, '') ?? ''
+        const history = histories.get(projectId)
+        const row = owner === user.id && history?.thread ? { id: history.thread } : null
+        const single = (request.headers().accept ?? '').includes('application/vnd.pgrst.object+json')
+        return respond({ json: single ? row : row ? [row] : [] })
+      }
+      if (url.pathname === '/rest/v1/bob_messages') {
+        const threadId = url.searchParams.get('thread_id')?.replace(/^eq\./, '') ?? ''
+        const history = [...histories.values()].find(item => item.thread === threadId)
+        return respond({ json: history ? history.messages.filter(row => row.delivery_state === 'completed') : [] })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -80,6 +109,7 @@ try {
       await page.getByRole('button', { name: 'Ask bob', exact: true }).click()
       const drawer = page.getByRole('complementary', { name: `Ask bob for Porch ${id}` })
       await drawer.waitFor()
+      await drawer.getByRole('button', { name: 'Send', exact: true }).waitFor({ state: 'visible' })
       return drawer
     }
     const send = async text => {
@@ -139,18 +169,19 @@ try {
     drawer = await switchProject('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
-    assert.equal(await drawer.locator('summary').count(), 1, 'Project A restores its own saved source disclosure')
+    assert.equal(await drawer.locator('summary').count(), 1, 'Project A restores its own server-synchronised source disclosure')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Project B history must not leak into project A')
     const lateResponse = page.waitForResponse(response => response.url() === `${api}/functions/v1/ask-bob` && response.request().postDataJSON().message === 'Slow question')
     slow.resolve()
     await (await lateResponse).finished()
     // Let the fetch continuation and React render complete before asserting absence.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-    assert.equal(await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).count(), 0)
+    assert.equal(await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).count(), 0, 'A late A answer cannot render into a newly mounted drawer generation')
     await page.reload()
     drawer = await openBob('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
-    assert.equal(await drawer.locator('summary').count(), 1, 'Reload restores saved project chat with evidence')
+    await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).waitFor()
+    assert.equal(await drawer.locator('summary').count(), 2, 'Reload restores the completed server transcript with evidence')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Reload keeps project histories isolated')
 
     if (viewport.width === 1280) {
@@ -167,7 +198,7 @@ try {
     }
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Ask bob ${viewport.width}px: explicit project, saved per-project chat, sources, failures, A → B → A late response, draft reset and reload: OK`)
+    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()
