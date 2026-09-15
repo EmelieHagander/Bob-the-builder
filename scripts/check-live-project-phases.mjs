@@ -1,6 +1,7 @@
 // Hosted Project/Area phase + scoped-target proof inside the disposable foundation project.
 // Uses the already-authenticated ordinary Bob client. No AI calls.
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 
@@ -95,9 +96,20 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
   assert.equal(areaPointerAfterProject.solution_id, areaSolution.id)
   assert.equal(projectPointerAfter.solution_id, projectSolution.id)
 
-  const today = checked(await client.from('today_tasks').select('area_id,area_phase').eq('project_id', projectId).eq('area_id', areaId))
-  assert(today.length > 0, 'The disposable Area should retain at least one open Today task')
-  assert(today.every(row => row.area_id === areaId && row.area_phase === 'complete'),
+  // Earlier foundation proofs deliberately complete their own task. Phase is
+  // explicit project truth rather than inferred from task state, so this verifier
+  // owns one disposable open task for the Today projection it promises to test.
+  const todayTaskId = 't_phase_today_' + randomUUID()
+  checked(await client.from('tasks').insert({
+    id: todayTaskId,
+    area_id: areaId,
+    name: 'Hosted phase Today projection',
+    status: 'todo',
+  }))
+  const today = checked(await client.from('today_tasks').select('id,area_id,area_phase')
+    .eq('project_id', projectId).eq('id', todayTaskId).single())
+  assert.equal(today.area_id, areaId)
+  assert.equal(today.area_phase, 'complete',
     'Today task projection must expose the exact current Area lifecycle phase')
 
   console.log('Live Project/Area phases: Concept default, explicit reversible transitions/history, completion guard, raw/anonymous denial and scope-safe Project/Area targets passed. No AI invoked.')
