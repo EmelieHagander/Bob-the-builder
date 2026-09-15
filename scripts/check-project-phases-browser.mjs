@@ -27,6 +27,9 @@ try {
 
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     let projectPhase = 'build'
+    let toolReady = false
+    let toolRevision = 1
+    const readinessReviewed = new Set()
     const areaPhase = new Map([['bedroom', 'complete'], ['office', 'build'], ['guestroom', 'design']])
     const errors = []
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
@@ -46,6 +49,23 @@ try {
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (url.pathname === '/rest/v1/rpc/join_project') return respond({ json: {} })
+      if (url.pathname === '/rest/v1/rpc/work_plan_command') {
+        const body = request.postDataJSON()
+        assert.equal(body.p_project, 'P')
+        assert.equal(body.p_task, 't2')
+        if (body.p_action === 'set_need_ready') {
+          assert.equal(body.p_item, '96000000-0000-0000-0000-000000000100')
+          assert.equal(body.p_expected, toolRevision)
+          toolReady = Boolean(body.p_data.ready); toolRevision += 1; readinessReviewed.delete('t2')
+          return respond({ json: { id: body.p_item, revision: toolRevision, ready: toolReady } })
+        }
+        if (body.p_action === 'confirm_readiness') {
+          assert(toolReady, 'Tool blocker must be resolved before readiness confirmation')
+          readinessReviewed.add('t2')
+          return respond({ json: { id: 't2', readiness: 'ready' } })
+        }
+        throw new Error('Unexpected work-plan command: ' + body.p_action)
+      }
       if (url.pathname === '/rest/v1/rpc/phase_command') {
         const body = request.postDataJSON()
         assert.equal(body.p_project, 'P')
@@ -88,6 +108,24 @@ try {
         return respond({ json: single ? selected[0] ?? null : selected })
       }
       if (url.pathname === '/rest/v1/task_steps') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/current_task_readiness') {
+        const rows = [
+          { task_id: 't1', project_id: 'P', area_id: 'bedroom', area_phase: areaPhase.get('bedroom'), task_status: 'done', readiness_state: 'complete', blocker_count: 0, blockers: [], reviewed_at: null, reviewed_by: '', review_note: '' },
+          { task_id: 't2', project_id: 'P', area_id: 'office', area_phase: areaPhase.get('office'), task_status: 'doing', readiness_state: !toolReady ? 'blocked' : readinessReviewed.has('t2') ? 'ready' : 'unreviewed', blocker_count: toolReady ? 0 : 1, blockers: toolReady ? [] : [{ kind: 'tool', id: '96000000-0000-0000-0000-000000000100', label: 'Tool needed: Circular saw' }], reviewed_at: readinessReviewed.has('t2') ? '2026-09-15T05:00:00Z' : null, reviewed_by: readinessReviewed.has('t2') ? 'Fixture member' : '', review_note: '' },
+          { task_id: 't3', project_id: 'P', area_id: 'office', area_phase: areaPhase.get('office'), task_status: 'done', readiness_state: 'complete', blocker_count: 0, blockers: [], reviewed_at: null, reviewed_by: '', review_note: '' },
+          { task_id: 't4', project_id: 'P', area_id: 'guestroom', area_phase: areaPhase.get('guestroom'), task_status: 'todo', readiness_state: 'blocked', blocker_count: 1, blockers: [{ kind: 'phase', id: 'guestroom', label: 'Area is in Design; move to Build when work is actually ready' }], reviewed_at: null, reviewed_by: '', review_note: '' },
+        ]
+        const taskId = url.searchParams.get('task_id')?.replace(/^eq\./, '')
+        const selected = taskId ? rows.filter(row => row.task_id === taskId) : rows
+        const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+        return respond({ json: single ? selected[0] ?? null : selected })
+      }
+      if (url.pathname === '/rest/v1/task_dependency_status') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/task_material_readiness') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/task_needs') {
+        const taskId = url.searchParams.get('task_id')?.replace(/^eq\./, '')
+        return respond({ json: taskId === 't2' ? [{ id: '96000000-0000-0000-0000-000000000100', project_id: 'P', task_id: 't2', kind: 'tool', label: 'Circular saw', notes: 'Charged battery', ready: toolReady, revision: toolRevision, actor_label: 'Fixture member', created_at: '2026-09-15T04:00:00Z', updated_at: '2026-09-15T04:00:00Z' }] : [] })
+      }
       if (url.pathname === '/rest/v1/today_tasks') return respond({ json: [
         { id: 't4', area_id: 'guestroom', area_name: 'Guestroom', area_phase: areaPhase.get('guestroom'), name: 'Mark proposed opening', skill: 'novice', status: 'todo', assignee_ids: ['member'], project_id: 'P' },
         { id: 't2', area_id: 'office', area_name: 'Office', area_phase: areaPhase.get('office'), name: 'Frame wall', skill: 'intermediate', status: 'doing', assignee_ids: ['member'], project_id: 'P' },
@@ -125,10 +163,16 @@ try {
     await page.getByRole('heading', { name: 'What needs doing today', exact: true }).waitFor()
     assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Frame wall', 'Mark proposed opening'],
       'Build-phase Today work should be foregrounded without hiding other scheduled work')
-    await page.getByText('Check readiness before starting — this Area is in Design, not Build.', { exact: true }).waitFor()
+    await page.getByText('Tool needed: Circular saw', { exact: true }).waitFor()
+    await page.getByText('Area is in Design; move to Build when work is actually ready', { exact: true }).waitFor()
     await page.getByRole('link', { name: 'Frame wall', exact: true }).click()
     await page.getByRole('heading', { name: 'Frame wall', exact: true }).waitFor()
     await page.getByLabel('Area phase: Build').waitFor()
+    await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Blocked', { exact: true }).waitFor()
+    await page.getByLabel('Available: Circular saw', { exact: true }).click()
+    await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Readiness not reviewed', { exact: true }).waitFor()
+    await page.getByRole('region', { name: 'Task readiness', exact: true }).getByRole('button', { name: 'Confirm ready', exact: true }).click()
+    await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Ready to start', { exact: true }).waitFor()
     await page.goto(`${base}#/`)
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
 

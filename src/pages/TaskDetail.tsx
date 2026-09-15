@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal'
 import { ProjectImages } from '../components/ProjectImages'
 import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
+import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
 import { Icon, Loading, SkillPill, useAsync } from '../components/ui'
 
 const errorText = (err: unknown) => err instanceof Error ? err.message : String(err)
@@ -106,6 +107,7 @@ export function TaskDetail() {
       onChange={e => void act(() => db.setTaskStatus(task.id, e.target.value as TaskStatus))}>
       <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
     </select></Field></div>
+    <TaskReadinessPanel projectId={projectId} taskId={task.id} areaId={task.areaId} refreshKey={version} />
     <section className="card foundation-section" aria-label="Task instructions">
       <div className="foundation-heading"><h2>Instructions</h2><button className="btn" disabled={!editable} onClick={() => setDialog({ kind: 'instructions' })}>Edit instructions</button></div>
       {detail.instructions ? <p className="instruction-text">{detail.instructions}</p> : <p className="foundation-hint">Describe the scope and the result this task should achieve.</p>}

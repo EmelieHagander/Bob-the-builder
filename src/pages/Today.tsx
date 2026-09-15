@@ -5,12 +5,16 @@ import { PhasePill } from '../components/PhaseUI'
 import { phaseLabel } from '../lib/projectPhase'
 
 export function Today() {
+  const projectId = db.getActiveProjectId() ?? ''
   const { data: tasks } = useAsync(() => db.getTodayTasks(), [])
+  const { data: readiness } = useAsync(() => projectId ? db.getTaskReadiness(projectId) : Promise.resolve([]), [projectId])
   const { data: next } = useAsync(() => db.getNextEvent(), [])
   const { data: people } = useAsync(() => db.getPeople(), [])
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
-  const orderedTasks = tasks ? [...tasks].sort((a, b) => Number(b.areaPhase === 'build') - Number(a.areaPhase === 'build')) : null
+  const readinessById = new Map((readiness ?? []).map(item => [item.taskId, item]))
+  const rank = (id: string) => ({ ready: 0, unreviewed: 1, blocked: 2, complete: 3 }[readinessById.get(id)?.state ?? 'blocked'])
+  const orderedTasks = tasks ? [...tasks].sort((a, b) => rank(a.id) - rank(b.id) || Number(b.areaPhase === 'build') - Number(a.areaPhase === 'build')) : null
 
   return (
     <div className="page" style={{ maxWidth: 720 }}>
@@ -30,7 +34,8 @@ export function Today() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
           {orderedTasks.map((t) => {
             const chk = statusCheck(t.status)
-            const phaseNeedsReview = Boolean(t.areaPhase && t.areaPhase !== 'build')
+            const taskPlan = readinessById.get(t.id)
+            const phaseNeedsReview = !taskPlan && Boolean(t.areaPhase && t.areaPhase !== 'build')
             return (
               <div key={t.id} className="card" style={{ padding: 15 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
@@ -42,8 +47,11 @@ export function Today() {
                       <SkillPill level={t.skill} />
                       <StatusPill status={t.status} />
                       {t.areaPhase && <PhasePill phase={t.areaPhase} prefix="Area" />}
+                      {taskPlan && <span className="image-purpose">{taskPlan.state === 'ready' ? 'Ready' : taskPlan.state === 'unreviewed' ? 'Review readiness' : `${taskPlan.blockerCount} blocker${taskPlan.blockerCount === 1 ? '' : 's'}`}</span>}
                       <AvatarStack people={resolve(t.assigneeIds)} max={4} size={24} />
                     </div>
+                    {taskPlan?.state === 'blocked' && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>{taskPlan.blockers[0]?.label}</p>}
+                    {taskPlan?.state === 'unreviewed' && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Readiness has not been confirmed yet.</p>}
                     {phaseNeedsReview && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Check readiness before starting — this Area is in {phaseLabel(t.areaPhase)}, not Build.</p>}
                   </div>
                 </div>

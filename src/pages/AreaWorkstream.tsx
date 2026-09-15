@@ -33,6 +33,7 @@ export function AreaWorkstream() {
   const { data: people } = useAsync(() => db.getPeople(), [version])
   const { data: allTasks } = useAsync(() => db.getTasks(), [version])
   const { data: allMaterials } = useAsync(() => db.getMaterials(), [version])
+  const { data: taskReadiness } = useAsync(() => db.getTaskReadiness(projectId), [projectId, version])
   const requestedTab = params.get('tab')
   const tab: Tab = requestedTab === 'materials' || requestedTab === 'images' ? requestedTab : 'tasks'
   const setTab = (next: Tab) => {
@@ -67,10 +68,16 @@ export function AreaWorkstream() {
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
   const lead = byId.get(area.leadId ?? '')
   const next = areaNextAction(area)
-  const firstReadyTask = tasks.find(task => task.status === 'doing') ?? tasks.find(task => task.status === 'todo')
+  const readinessByTask = new Map((taskReadiness ?? []).map(item => [item.taskId, item]))
+  const readyTasks = tasks.filter(task => readinessByTask.get(task.id)?.state === 'ready')
+  const firstReadyTask = readyTasks.find(task => task.status === 'doing') ?? readyTasks.find(task => task.status === 'todo')
+  const firstBlockedTask = tasks.find(task => task.status !== 'done' && ['blocked', 'unreviewed'].includes(readinessByTask.get(task.id)?.state ?? ''))
+  const blockedState = firstBlockedTask ? readinessByTask.get(firstBlockedTask.id) : undefined
   const primary = area.phase === 'build' && firstReadyTask
-    ? { ...next, title: `Continue: ${firstReadyTask.name}`, to: `/tasks/${firstReadyTask.id}` }
-    : next
+    ? { ...next, title: `Continue: ${firstReadyTask.name}`, text: 'This task has a confirmed blocker-free work plan.', to: `/tasks/${firstReadyTask.id}` }
+    : area.phase === 'build' && firstBlockedTask
+      ? { ...next, title: `${blockedState?.state === 'unreviewed' ? 'Review' : 'Unblock'}: ${firstBlockedTask.name}`, text: blockedState?.blockers[0]?.label ?? 'Readiness has not been reviewed yet.', to: `/tasks/${firstBlockedTask.id}` }
+      : next
 
   const tabs: { key: Tab; label: string; count: number | null }[] = [
     { key: 'tasks', label: 'Tasks', count: tasks.length },
@@ -141,6 +148,7 @@ export function AreaWorkstream() {
               const check = statusCheck(task.status)
               const [got, total] = task.materials.split('/').map(value => value.trim())
               const materialReady = got === total
+              const taskPlan = readinessByTask.get(task.id)
               return <div key={task.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
                 <button className="no-print" title={`Mark as ${NEXT_TASK_STATUS[task.status]}`} onClick={() => act(() => db.setTaskStatus(task.id, NEXT_TASK_STATUS[task.status]))} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}>
                   <Icon name={check.icon} size={22} color={check.color} />
@@ -151,7 +159,10 @@ export function AreaWorkstream() {
                     <SkillPill level={task.skill} />
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}><Icon name="clock" size={13} />{task.hours}</span>
                     {total !== '0' && total !== '' && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: materialReady ? 'var(--leaf)' : 'var(--clay)' }}><Icon name="package" size={13} />{task.materials} materials</span>}
+                    {taskPlan && task.status !== 'done' && <span className="image-purpose">{taskPlan.state === 'ready' ? 'Ready' : taskPlan.state === 'unreviewed' ? 'Review readiness' : `${taskPlan.blockerCount} blocker${taskPlan.blockerCount === 1 ? '' : 's'}`}</span>}
                   </div>
+                  {taskPlan?.state === 'blocked' && <p className="foundation-hint" style={{ margin: '7px 0 0' }}>{taskPlan.blockers[0]?.label}</p>}
+                  {taskPlan?.state === 'unreviewed' && <p className="foundation-hint" style={{ margin: '7px 0 0' }}>Readiness has not been confirmed yet.</p>}
                 </div>
                 <div className="task-right" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <button title="Choose who's on this task" onClick={() => setModal({ kind: 'assign', task })} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>

@@ -29,6 +29,7 @@ import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
 import { createMaterialPlanning } from './materialPlanning'
+import { createWorkPlan } from './workPlan'
 import { createBuildingContext } from './buildingContext'
 import { createSharing } from './sharing'
 import { createVolunteers } from './volunteers'
@@ -202,6 +203,7 @@ const projectFacts = createProjectFacts(db, captureFileContext)
 const solutions = createSolutions(db, captureFileContext)
 const artifacts = createArtifacts(db, captureFileContext)
 const materialPlanning = createMaterialPlanning(db, captureFileContext)
+const workPlan = createWorkPlan(db, captureFileContext)
 function captureAccountContext() {
   const capturedVersion = contextVersion
   return () => {
@@ -241,6 +243,9 @@ export const editMaterialRequirement = materialPlanning.editRequirement
 export const editDeterministicMaterialRequirement = materialPlanning.editDeterministicRequirement
 export const publishMaterialRequirement = materialPlanning.publish
 export const getMaterialShoppingSources = materialPlanning.shopping
+export const getTaskReadiness = workPlan.readiness
+export const getTaskWorkPlan = workPlan.detail
+export const editTaskWorkPlan = workPlan.command
 export const getProjectFacts = projectFacts.list
 export const getProjectFact = projectFacts.get
 export const getProjectFactHistory = projectFacts.history
