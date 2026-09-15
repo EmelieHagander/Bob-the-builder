@@ -15,7 +15,7 @@ project lookup and deployment contract are owned by [supabase/README.md](../supa
 
 The release described here is now called **V1**. This plan consumes the relevant scope buckets without rewriting their original prioritisation vocabulary.
 
-## Current execution position — 2026-09-14
+## Current execution position — 2026-09-15
 
 The numbered slices describe the product dependency chain, but implementation has intentionally followed a **foundations-first execution lane**. Later manual foundations may therefore be live while earlier AI gates remain deliberately deferred.
 
@@ -26,39 +26,46 @@ The numbered slices describe the product dependency chain, but implementation ha
 - Slice 1B — manual illustrated task steps;
 - Slice 2A — measurements/provenance/history;
 - Slice 2B — existing components;
-- Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, Project/Area physical-scope relations, accepted/proposed physical-state history and the manual **Building & spaces** UI;
-- Slice 3A — alternatives + selected target;
+- Slice 2C — persistent Site/Building/Level/Space/BuildingElement context, spatial relationships, Project/Area physical scope and accepted/proposed history;
+- Slice 3A — alternatives + scope-safe selected target;
 - Slice 4A — manual plans/drawings with exact target and measurement lineage;
-- Slice 4B1 — deterministic `stud_wall_opening_v1` artifact geometry with exact Building/Space and six-measurement recipe lineage;
-- Slice 4B2a — manual material requirements, revisioned stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff;
-- Slice 4B2b — deterministic `stud_wall_net_area` material base quantity from an exact current `stud_wall_opening_v1` drawing, persisted into the existing material-requirement/Shopping path.
+- Slice 4B1 — deterministic `stud_wall_opening_v1` artifact geometry;
+- Slice 4B2a — manual material requirements, stock/reuse allocation, purchase arithmetic and explicit Shopping handoff;
+- Slice 4B2b — deterministic `stud_wall_net_area` material base quantity in the same requirement/Shopping path;
+- collaboration foundation — opt-in household Building editing, explicit household project sharing and registration-free name-only volunteers, with hosted authority/media/revocation proof;
+- Project/Area lifecycle foundation — explicit `ProjectPhase` / `AreaPhase`, scope-safe Project/Area targets and phase-aware Project/Area/Account/Today/Task surfaces;
+- executable-work readiness foundation — Task→Task/checkpoint dependencies, required tools/information, canonical material readiness, named blockers and explicit human-confirmed `ready` state.
 
-Slice 2C is now runtime truth, not merely committed design: PR #42 delivered the domain/schema/authority foundation, PR #43 the app-facing UI, and PR #45 the hosted cleanup-order correction. The dedicated browser proof passes at 320px, 390px and 1280px; the hosted Auth/PostgREST live check passes and self-cleans its physical fixture; the current `main` Pages deployment is green. `Docs/foundation-verification.md` owns exact migration/run evidence.
+4B1/4B2a/4B2b are runtime truth. The first deterministic material calculator remains deliberately narrow; broader fastener/consumable/catalogue/engineering rules stay unknown/manual until an explicit deterministic rule is modelled. `Docs/foundation-verification.md` owns exact migration, advisor, browser and hosted evidence.
 
-4B1, 4B2a and the first narrow 4B2b calculator are runtime truth. PR #47 delivered the deterministic stud-wall-with-opening generator and PR #49 closed its hosted/live release gate; PR #39 delivered the manual material receiver and PR #50 corrected verification-only method-key drift without changing runtime behavior. PR #54 then added server-owned `stud_wall_net_area` derivation into the same requirement model. Its source migration `20260914084207_deterministic_material_quantities.sql` is applied on hosted Supabase as `20260914090502_bob_deterministic_material_quantities_4b2b`; Pages run `34826249816` and ordinary hosted Auth/PostgREST foundation run `34826249907` are green on merge commit `098ea2b16c04ebbb279130860eceb97d7ea05cd3`. `Docs/foundation-verification.md` owns the exact migration, advisor, browser and live evidence.
+Household/friend sharing and name-only volunteers are also runtime truth at the currently available hosted fidelity. PR #61 closed the rollout with the sharing migrations, hardening migration, deployed `volunteer-media`, rollback-safe household authority proof and ordinary hosted volunteer/media/revocation proof. The one explicit external-fixture limitation is the accepted-Hearth-friend **positive** production path: production currently has no accepted friendship to exercise without fabricating another app's data. Denial when friendship is absent is live-verified; the product contract still requires the positive path once a real accepted friendship exists.
+
+Project/Area phases and scope-safe target ownership are runtime truth. PR #60 delivered the lifecycle/scoped-target stack, PR #62/#63 closed its hosted proof, and #64–#67 carried Area scope and lifecycle context through Material Plan, Account, Today and Task Detail.
+
+Executable readiness is now runtime truth too. PR #68 delivered the domain/UI foundation; source migration `20260915073000_executable_work_readiness.sql` is hosted as `20260915091153_bob_executable_work_readiness`. PR #70 added the ordinary hosted verifier. PR #73 made the phase fixture self-contained and source-synced the checkpoint-FK covering index, hosted as `20260915143912_bob_executable_work_readiness_fk_index`; the specific advisor finding is gone. Pages run `34984705428` and live foundation run `34984705122` are green on release tree `59929f997741e41555d1faef0a95769df9eb86d9`. The live run proves phase/tool/information/dependency/checkpoint/material blockers, stale-write denial, explicit Ready confirmation, re-review after newer material truth, Today visibility, completion and raw/anonymous/project isolation. Its exact disposable project was nonce-checked, had zero media and was operator-deleted with zero project/material/stock/artifact/media rows remaining.
 
 **Still open by deliberate deferral:**
 
 - Slice 1C — Bob vision over authorised project images;
 - full Slice 2 AI consumption of measurements/evidence and Bob-assisted whole-plan ingestion;
 - Slice 3B generated visual proposals/mockups;
-- broader deterministic material rules beyond the shipped `stud_wall_net_area` calculator, including fasteners/consumables only where an explicit rule or coverage basis is modelled;
-- richer task/material/dependency/tool/readiness relations that turn the persisted plan into executable work;
-- Slice 5 generated/project-specific guidance and structured progress/as-built completion.
+- broader deterministic material rules beyond `stud_wall_net_area` where explicit formulas/coverage rules exist;
+- the remaining executable-work contract beyond readiness: richer task scope/expected result, explicit work ordering/sequence semantics and Bob-proposed **human-confirmed** work breakdowns;
+- Slice 5 generated/project-specific guidance plus structured progress/as-built completion.
 
-**Current next release milestone:** complete the hosted rollout and live gates for the already-merged household/friend sharing and name-only volunteer source. After that, the next foundations implementation milestone is **richer task/material/dependency/tool/readiness relations** on top of the persisted target, drawings and material plan. The shipped 4B2b path remains deliberately narrow: broader fastener/consumable/catalogue/engineering rules stay unknown/manual until an explicit deterministic rule is specified.
+**Current next implementation milestone:** finish the remaining **manual executable-work contract** on top of the now-live readiness foundation: richer task scope / expected result plus explicit ordered-work semantics that humans can edit and confirm. Do not make AI-generated work breakdowns project truth until that manual persistence/authority boundary exists.
 
-**Active owner-requested extension:** **household Building sharing and per-project household/friend collaboration**, requested on 2026-09-13 and extended with name-only volunteers on 2026-09-14. The household may edit the shared Building and collaborate on explicitly shared projects. Source is implemented; deployment, account isolation and runtime sharing gates are still pending. The [data/auth contract](../db/README.md#household-and-friend-sharing) owns precise access sources and commands; [building §11.1A](building-model.md#111a-household-sharing-extension) owns the physical authority extension.
+The separate Ask Bob behavior discovery in PR #53 remains a parallel design lane. It should consume the persisted project/phase/building/solution/artifact/material/readiness truth rather than becoming a competing source of truth.
 
 Area → physical-target mapping is backend-built and live-verified. A dedicated Area-side mapping editor remains a narrow follow-up; it is not a reason to reopen the sparse Building/Space foundation.
 
 **Execution order from here:**
 
-1. complete and release-gate explicit household/friend sharing and name-only volunteers, including legacy account isolation, dynamic revocation and project/Building authority boundaries;
-2. add richer task/material/dependency/tool/readiness relations on top of the persisted target, drawings and material plan;
-3. extend deterministic material rules beyond the shipped net-wall-area calculator only where explicit formulas/coverage rules and provenance are defined;
-4. add the deferred AI consumers on top of the persisted foundations rather than making AI output the only place those concepts exist;
-5. complete Slice 5 guidance and progress/as-built loops against the same persisted project + physical context.
+1. finish richer task scope/expected-result and explicit ordered-work/work-breakdown persistence with human confirmation;
+2. add the minimum Slice 5 progress/as-built memory and one supported project-specific **How do I?** loop;
+3. extend deterministic material rules only where explicit formulas/coverage rules and provenance are defined;
+4. let the separate AI lane consume the persisted foundations with the same proposal/confirmation boundaries;
+5. exercise the accepted-friend positive hosted path when production Hearth naturally has an accepted friendship — never fabricate Hearth data solely for Bob verification.
 
 This section is the current execution marker. Detailed built/partial/gap truth still belongs to `Docs/function-inventory.md`; release scope and gates remain in this plan.
 

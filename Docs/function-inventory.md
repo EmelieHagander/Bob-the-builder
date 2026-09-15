@@ -9,56 +9,38 @@
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The
 > backend and frontend are deployed; the numbered audit below is the **historical
-> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A, 4A, 4B1, 4B2a and the first narrow 4B2b calculator**. Read the release deltas and their
+> baseline before Slice 0 and milestones 1A/1B, 2A/2B, 2C, 3A, 4A, 4B1, 4B2a, the first narrow 4B2b calculator, household/name-only collaboration, Project/Area lifecycle and executable readiness**. Read the release deltas and their
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
-## Household and friend sharing work — 2026-09-13
+## Household/friend/name-only volunteer release delta — 2026-09-14
 
-**Status:** specified / implementation in progress. The user confirmed household
-editing of shared Buildings and collaboration on explicitly shared projects.
-`supabase/migrations/20260913213712_household_project_sharing.sql`,
-`supabase/migrations/20260913214355_household_account_sharing.sql` and
-`src/data/sharing.ts` are working implementation sources. Local sharing tests pass;
-this audit does not claim applied schema, deployment or live behavior.
-[The data/auth owner](../db/README.md#household-and-friend-sharing) owns the contract;
-[the building owner](building-model.md#111a-household-sharing-extension) owns physical
-authority; [foundation verification](foundation-verification.md) owns release proof.
+**Status:** household Building/project sharing and name-only volunteer participation are deployed/live-verified at current hosted fidelity. `db/README.md` owns authority and command semantics; `Docs/foundation-verification.md` owns exact release evidence.
 
 | Capability | Current status |
 |---|---|
-| Reuse existing households/friends | **IN PROGRESS.** Guarded Bob directory reads existing active shared household access and accepted Hearth friendships; no parallel family or friend system. |
-| Household Building editing | **SPECIFIED / IN PROGRESS.** Opt-in household members may edit accepted physical truth and accept proposals. Direct Building members retain sharing administration and actual deletion. |
-| Explicit project household audience | **SPECIFIED / IN PROGRESS.** No household, one direct household, or follow one exactly linked Building; physical links alone grant no household project access. The Building checklist adds only explicitly selected linked projects. |
-| Friend project invitations | **SPECIFIED / IN PROGRESS.** In-app pending/accept/decline/revoke/leave lifecycle, with friendship checked at send and acceptance. No email/message delivery; the existing confirmed-email flow remains separate. |
-| Revocation and crew identity | **SPECIFIED / IN PROGRESS.** Effective household/grant checks remain dynamic; derived crew rows do not become permanent grants. Independent direct memberships and accepted Bob invitations remain distinct. |
-| Legacy account isolation | **SOURCE PREPARED / LIVE GATE OPEN.** The account-sharing migration replaces broad account/notes policies with active-household RLS. A pristine singleton stays inaccessible until explicit one-time household binding; configured legacy content requires a reviewed migration mapping. Settings UI and guarded read-back are implemented in source. Migration application and hosted denial/binding proof remain pending. |
-| Sharing browser and hosted proof | **PENDING.** Reload/switching/stale/denied behavior, cross-project/media isolation and normal hosted API proof must be recorded before this capability is labelled delivered. |
+| Existing household/friend authorities | **BUILT.** Bob reads active `shared` household access and accepted Hearth friendships only through guarded backend commands; it creates no parallel family/friend graph. |
+| Household Building editing | **BUILT / LIVE.** Opted-in household members can edit ordinary accepted Building truth and accept proposals; direct Building members retain sharing administration and physical deletion. |
+| Explicit project household audience | **BUILT / LIVE.** Project audience is explicit: private household choice, one household, or one exactly linked Building as source. Physical scope alone does not share project content. |
+| Friend project invitations | **BUILT; positive live fixture externally pending.** Pending/accept/decline/revoke/leave lifecycle and missing-friend denial are deployed. Production has no accepted Hearth friendship, so the positive accepted-friend hosted case remains intentionally unexercised rather than fabricated. |
+| Revocation / crew identity | **BUILT / LIVE.** Effective access is dynamic; derived crew rows are not permanent grants and independent access routes remain independent. |
+| Legacy account isolation | **BUILT / LIVE boundary.** Account/notes use the explicit household boundary; the pristine legacy singleton remains unbound/inaccessible rather than being guessed. |
+| Name-only volunteer | **BUILT / LIVE.** Link + name creates no Auth account; optional allergies are accepted only when food exists; own task/check/RSVP/profile actions, exact private media and immediate revocation are hosted-proven. |
 
-## Name-only volunteer source status — 2026-09-14
+## Project/Area lifecycle and executable-readiness release delta — 2026-09-15
 
-**Prepared source; browser and hosted delivery pending.** The owner's clarified
-journey is a project invitation link plus a name, with optional allergies only
-when food is planned. `VolunteerProject`, `VolunteerLinks` and the guarded
-`database.ts` volunteer adapter implement this journey without an Auth account,
-email or password. The [data owner](../db/README.md#name-only-volunteer-access)
-owns precise authority and lifecycle rules.
+**Status:** Project/Area lifecycle/scoped targets and the first executable-readiness foundation are merged, migrated, deployed and live-verified. Phase behavior is owned by `Docs/project-phases.md`; release evidence lives in `Docs/foundation-verification.md`.
 
-The source includes persistent browser participation, project tasks/instructions
-and private linked images, build days, updates/meals, own attendance, own task
-assignment/progress/checks, profile edits and organiser revocation. Allergy notes
-are project-local, optional, hidden without food and absent from other volunteer
-feeds; the signed-in crew can read them in People/Food. Family access, other
-projects, sharing administration and other participants' profile edits remain
-outside the volunteer capability.
-
-All 98 local tests pass, including seven database volunteer groups, two isolated
-request-boundary groups and two media-proxy groups. Production build and the new
-media Edge-function typecheck pass. [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52)
-owns the current CI/browser evidence. The dedicated 320/390/1280px browser harness
-runs in CI against synthetic HTTP fixtures. The legacy shared Guest entry below is a
-historical/different mechanism, not the name-only volunteer journey.
-[Foundation verification](foundation-verification.md) owns evidence and limits.
+| Capability | Current status |
+|---|---|
+| Project / Area lifecycle | **BUILT / LIVE.** Concept → Design → Planning → Build → Complete is explicit human-controlled state with audited reversible transitions and a Project completion guard. Legacy Areas remain unclassified until chosen. |
+| Scope-safe selected targets | **BUILT / LIVE.** Project and Area pointers coexist; Area planning/drawings/material requirements bind to their relevant target scope without staling siblings. |
+| Dependencies / checkpoints | **BUILT / LIVE.** Tasks can depend on another same-project task or checkpoint; cycles and stale/foreign writes are rejected. |
+| Required tools / information | **BUILT / LIVE.** Revisioned task needs persist under guarded commands and appear as named readiness blockers until explicitly satisfied. |
+| Canonical material readiness | **BUILT / LIVE.** Readiness consumes current MaterialRequirement→Shopping truth rather than duplicating material state; newer requirement truth invalidates prior review. |
+| Explicit readiness | **BUILT / LIVE.** States are blocked / unreviewed / ready / complete. Clearing blockers never silently means Ready; a human confirms the current blocker-free plan. |
+| Field surfaces | **BUILT / LIVE.** Task Detail exposes readiness, Area/Today prioritize ready work and retain explicitly Blocked work with named reasons. |
+| Remaining executable-work scope | **PARTIAL.** Rich task scope/expected result, explicit work ordering/sequence and Bob-proposed human-confirmed work-breakdown generation remain next-slice work. |
 
 ## Deterministic geometry/material source status — 2026-09-14
 
@@ -77,7 +59,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Task details and ordered steps | **BUILT.** Task instructions, editable ordered steps, completion state and required checks persist. Revision checks reject stale edits; required checks also guard normal API completion. |
 | Images on tasks or steps | **BUILT.** Upload or attach an existing project image to a task/step. Same-project relations are enforced. Removing an attachment or step keeps the original in the project gallery. |
 | Generated guidance and image analysis | **GAP.** Manual illustrated steps work without AI. Images/steps are not yet supplied to OpenAI; the existing lookup allowlist is unchanged. Vision remains 1C. |
-| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts, manual solution/target revisions, manual plans/drawings, one deterministic drawing fixture, the manual material/stock/Shopping receiver and one geometry-derived net-wall-area requirement are delivered in the deltas here. Generated proposals, broader material/BOM rules, executable-work planning and structured progress/as-built history retain later gates. |
+| Full evidence/planning loop | **PARTIAL.** Media/manual steps, measurements/parts, manual solution/target revisions, manual plans/drawings, one deterministic drawing fixture, the manual material/stock/Shopping receiver and one geometry-derived net-wall-area requirement are delivered in the deltas here. Generated proposals, broader material/BOM rules, remaining work-breakdown generation and structured progress/as-built history retain later gates; explicit readiness is delivered. |
 
 ## Measurement and component foundation release delta — 2026-09-09
 
@@ -94,7 +76,7 @@ checks at three widths, live Auth/PostgREST/Storage evidence and its limits.
 | Existing parts | **BUILT.** Name, kind, nullable known count, condition, specification and inspect/reuse/remove/replace intent persist. Linked measurements hold dimensions in the same project/area. Reuse intent is not a suitability approval. |
 | Source images | **BUILT.** Measurements and parts reuse authorised project images and original viewing. Removing an image clears its file link while retaining its recorded title, values and history. |
 | Runtime consumption | **BUILT manually.** Dashboard/Area lead to a focused page with current records, paging, detail/history and reload persistence. Project changes reject old responses. Bob's lookup allowlist is unchanged. |
-| Stock and calculation integration | **PARTIAL / first deterministic calculator BUILT.** 4B2a stores revisioned material stock and deliberate reusable-component allocations, derives allowance/shortfall/purchase rounding server-side and explicitly propagates the saved purchase need to Shopping. 4B2b now derives one supported `m2` net-wall-area base quantity from exact 4B1 geometry into the same requirement model. Broader calculators and downstream task readiness remain later. |
+| Stock and calculation integration | **PARTIAL / first deterministic calculator BUILT.** 4B2a stores revisioned material stock and deliberate reusable-component allocations, derives allowance/shortfall/purchase rounding server-side and explicitly propagates the saved purchase need to Shopping. 4B2b now derives one supported `m2` net-wall-area base quantity from exact 4B1 geometry into the same requirement model. Broader calculators remain later; executable readiness now consumes the canonical material state downstream. |
 
 ## Persistent building context release delta — 2026-09-13
 
@@ -130,7 +112,7 @@ owns database, browser, live-service and preservation evidence.
 | Evidence per version | **BUILT.** Up to 20 exact measurement versions retain their units, values, truth state and sources, including dimensions of existing parts. Later measurement changes are visible without replacing the recorded evidence. |
 | Selected project target | **BUILT manually.** One explicit target points to an exact solution revision. Revisioned decisions record select/replace/clear with actor, time and reason. New alternative versions do not silently change the target. |
 | Saved image and runtime consumption | **BUILT.** Authorised original images, alternative/evidence detail, paged revision/decision history, archive/restore, reload and project switching work. Removing a file retains its title and decision content. |
-| Generated visual proposals and downstream planning | **PARTIAL.** 4A manual drawings, 4B1 deterministic stud-wall geometry, 4B2a manual material/stock/Shopping propagation and the first 4B2b net-wall-area quantity are delivered. Generated proposal/mockup imagery, broader material rules and executable task planning remain later. Selection expresses intent, not engineering approval. |
+| Generated visual proposals and downstream planning | **PARTIAL.** 4A manual drawings, 4B1 deterministic stud-wall geometry, 4B2a manual material/stock/Shopping propagation and the first 4B2b net-wall-area quantity are delivered. Generated proposal/mockup imagery, broader material rules and remaining task-scope/work-breakdown generation remain later; explicit readiness is delivered. Selection expresses intent, not engineering approval. |
 
 ## Plans and drawings foundation release delta — 2026-09-13
 
@@ -145,7 +127,7 @@ owns database, browser, live-service and cleanup evidence.
 | Exact target and measurement lineage | **BUILT.** Every drawing version pins the exact selected target decision, exact solution revision and up to 20 exact measurement revisions. Later target/measurement changes are disclosed without rewriting what the older drawing used. |
 | Drawing revisions and history | **BUILT.** Create/revise/archive/restore append server-attributed revisions with reason/time. Stale drawing revisions and target decisions are rejected instead of silently rebinding an open editor. Old versions remain inspectable. |
 | Images, areas and runtime consumption | **BUILT.** Drawings reuse authorised project images and can belong to an Area. Image removal retains the recorded title/history; area removal keeps project-level drawing history. Browser flows pass create/revise/history/archive/restore/reload/paging/project switching. |
-| Generated geometry, BOM and downstream work | **PARTIAL.** 4B1 adds one deterministic stud-wall-with-opening drawing recipe; 4B2a adds the manual material receiver, stock/reuse deduction and explicit Shopping propagation; 4B2b now derives one reproducible net-wall-area requirement from that recipe. Broader BOM rules, fasteners/consumables, task-material links, dependencies/tools/readiness and Bob/vision consumption remain later gates. |
+| Generated geometry, BOM and downstream work | **PARTIAL.** 4B1 adds one deterministic stud-wall-with-opening drawing recipe; 4B2a adds the manual material receiver, stock/reuse deduction and explicit Shopping propagation; 4B2b now derives one reproducible net-wall-area requirement from that recipe. Broader BOM rules, fasteners/consumables, remaining work-breakdown/guidance and Bob/vision consumption remain later gates; dependency/tool/material readiness is delivered downstream. |
 
 ## Deterministic geometry and material-planning release delta — 2026-09-14
 

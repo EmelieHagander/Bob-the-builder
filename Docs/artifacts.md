@@ -155,7 +155,7 @@ The foundation still does not yet provide:
 - automatic structural member/header sizing;
 - general bill-of-materials calculation inside the Artifact model; the separate material-planning foundation now consumes this exact recipe for one narrow `stud_wall_net_area` coverage calculation;
 - stock deduction or Shopping mutation inside the Artifact model; those remain owned by material planning and stay explicit;
-- task-material relations, dependencies, tools or readiness;
+- task-material/dependency/tool/readiness ownership inside the Artifact model; the deployed executable-work foundation consumes Artifact/material truth downstream;
 - Bob/vision consumption;
 - engineering/permit certification.
 

@@ -1,6 +1,6 @@
 # Material planning — requirements, stock, deterministic quantities and Shopping
 
-**Status:** manual Slice 4B2a and the first narrow deterministic Slice 4B2b calculator are implemented, merged, migrated, deployed and live-verified on 2026-09-14. This contract owns the persisted material-requirement, stock-allocation, deterministic quantity and Shopping-handoff foundation. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) delivered 4B2a, [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) aligned its release proof with persisted server truth, and [PR 54](https://github.com/EmelieHagander/Bob-the-builder/pull/54) delivered `stud_wall_net_area` 4B2b. `Docs/v1-plan.md` owns release order and later executable-work-plan/broader-calculator gates; `Docs/foundation-verification.md` owns release evidence.
+**Status:** manual Slice 4B2a and the first narrow deterministic Slice 4B2b calculator are implemented, merged, migrated, deployed and live-verified on 2026-09-14. This contract owns the persisted material-requirement, stock-allocation, deterministic quantity and Shopping-handoff foundation. [PR 39](https://github.com/EmelieHagander/Bob-the-builder/pull/39) delivered 4B2a, [PR 50](https://github.com/EmelieHagander/Bob-the-builder/pull/50) aligned its release proof with persisted server truth, and [PR 54](https://github.com/EmelieHagander/Bob-the-builder/pull/54) delivered `stud_wall_net_area` 4B2b. `Docs/v1-plan.md` owns release order, the remaining executable-work contract and broader-calculator gates; `Docs/foundation-verification.md` owns release evidence.
 
 ## User goal
 
@@ -170,7 +170,7 @@ This foundation still does not provide:
 - supplier catalogue / prices / pack discovery;
 - unit conversion between unlike saved units;
 - AI material choices or AI-authored quantities;
-- automatic task readiness;
+- task-readiness rules inside material planning; the deployed executable-work foundation consumes saved requirement/Shopping truth downstream;
 - autonomous Shopping mutation;
 - deletion of ordered/delivered Shopping items when a plan changes.
 

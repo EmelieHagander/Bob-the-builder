@@ -174,6 +174,8 @@ their later gates.
 
 # 8. Executable task plan
 
+> **Implementation delta — 2026-09-15:** explicit Task→Task/checkpoint dependencies, required tool/information needs, canonical material readiness, named blockers and human-confirmed Ready are implemented and hosted-live-verified. The scope table below still owns prioritisation; richer task scope/expected result, explicit sequence/order and Bob-proposed human-confirmed work-breakdown generation remain open.
+
 | Function | Difficulty | Scope | Notes |
 |---|---:|---|---|
 | Rich task description / expected result | D2 | **V0-AUTO** | Current task name is too thin. |

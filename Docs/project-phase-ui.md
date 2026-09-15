@@ -459,11 +459,13 @@ Task status stays `todo / doing / done / blocked`; phase does not replace it.
 
 Keep the page extremely small.
 
-Future readiness behavior:
+Current readiness behavior (delivered by the executable-work readiness foundation):
 
 - prioritize tasks belonging to Build-phase Areas and ready work;
 - do not silently show a Design/Planning task as executable merely because it exists;
 - if an explicitly scheduled task is not ready, label the reason rather than hiding it mysteriously.
+
+`current_task_readiness` now supplies this state: blocker-free work remains **unreviewed** until a human confirms Ready, and newer dependency/need/material truth invalidates that review. Today keeps manually Blocked work visible with named reasons.
 
 No phase rail. No project setup controls.
 

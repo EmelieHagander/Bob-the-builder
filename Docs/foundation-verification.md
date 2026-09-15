@@ -1,79 +1,44 @@
 # Foundation verification and rollout
 
-## Household and project sharing — prepared source
+## Delivered household/project sharing and name-only volunteers
 
-**Status:** implemented on the sharing feature branch on 2026-09-13, extended with
-name-only volunteer participation on 2026-09-14. The three
-new migrations have not been applied to the shared database, and this frontend
-has not been deployed. The [building model](building-model.md#111a-household-sharing-extension)
-and [database contract](../db/README.md) own the sharing behavior.
+**Status:** household/project sharing and registration-free name-only volunteer participation are implemented, merged, migrated, deployed and live-verified at the currently available hosted fidelity. PR #52 delivered source; [PR #61](https://github.com/EmelieHagander/Bob-the-builder/pull/61) closed hosted rollout hardening and volunteer/media proof. The data/auth contract remains in `db/README.md`; Building authority remains owned by `Docs/building-model.md`.
 
-### Local evidence
+Hosted migrations are:
 
-- All 98 local tests pass after integrating the current material-planning main.
-  Eleven new sharing/account groups
-  replay the actual migrations in PGlite/Postgres with the shared household and
-  Hearth friendship schema represented by fixtures. They cover opt-in building
-  and project access, family editing, independent direct membership, exact-scope
-  inheritance, revocation, pending/accepted/declined invitations, raw-write and
-  internal-helper denial, stale choices, email/derived-crew transitions, last
-  direct-member protection and guarded account binding.
-- Four request-boundary tests cover auth/project changes before an RPC, delayed
-  replies after switching away and back, mismatched resource read-back, missing
-  authentication and an unavailable backend without false success.
-- Seven volunteer database groups prove name-only joining creates no Auth or
-  shared-family record, idempotent retry/resume, distinct same-name participants,
-  optional allergy collection only with food, private self-only allergy responses,
-  paged project-only reads, own task/attendance changes, required checks and
-  separate volunteer completion provenance, stale-write rejection, exact media
-  linkage, expiry, revocation and denied raw/management/internal-helper access.
-  Two volunteer adapter groups prove no Auth/registration call and reject wrong
-  project replies; two media HTTP groups prove denied bytes, bounded inputs,
-  revocation during download, exact original bytes and no-cache responses.
-  A browser-storage contract test proves that persistence contains only the
-  separate access credential and confirmation flag, never names or allergies.
-- The production TypeScript/Vite build and PWA checks pass. The browser verifier
-  scripts pass syntax checks. The new `volunteer-media` function also passes Deno
-  typechecking using installed dependencies (`--no-config --cached-only
-  --node-modules-dir=manual`). The full Edge check passes in
-  [CI 34823288170](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34823288170).
-  Its local equivalent is blocked by a pre-existing `esm.sh` import in
-  `openai-service.ts`.
-- Local manual browser preview is blocked by this environment. The new
-  `scripts/check-sharing-browser.mjs` and `scripts/check-volunteer-browser.mjs` are included in CI for production React and
-  Supabase-client flows at 320, 390 and 1280px against HTTP fixtures.
-  [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52) owns the current
-  CI/browser evidence for this source. Its latest full CI run must pass before
-  merge. Household/friend browser checks pass in the run linked above; the
-  volunteer check also waits for the refreshed server profile before asserting
-  that removed food hides allergies. Screenshots accompany the workflow runs.
+| Source migration | Hosted registry |
+|---|---|
+| `20260913213712_household_project_sharing.sql` | `20260914172539_bob_household_project_sharing` |
+| `20260913214355_household_account_sharing.sql` | `20260914172603_bob_household_account_sharing` |
+| `20260914052752_volunteer_project_links.sql` | `20260914172820_bob_volunteer_project_links` |
+| `20260914173410_sharing_rollout_hardening.sql` | `20260914174434_bob_sharing_rollout_hardening` |
 
-### Rollout boundary
+`volunteer-media` is deployed ACTIVE v1 with `verify_jwt = false` intentionally; the function performs its own exact volunteer session/project capability checks before and after downloading private bytes.
 
-Apply the new source migrations in order only as part of an approved rollout:
-`20260913213712_household_project_sharing.sql`, then
-`20260913214355_household_account_sharing.sql`, then
-`20260914052752_volunteer_project_links.sql`. Do not rewrite any after it has
-been applied. Read-only preflight found a pristine legacy account with no notes;
-the migration rechecks this under a lock and never guesses its household. If
-content appears before rollout, the account migration stops until an explicit
-reviewed mapping is supplied. Normal Settings setup can bind only a pristine,
-unbound account to a household the caller already actively belongs to.
+A rollback-only hosted household authority proof confirms household Building editing and explicit project access, direct-only sharing administration, dynamic revocation, derived-crew non-authority and legacy-account isolation without persisting fixture grants. The ordinary post-merge [live foundation run 34876857240](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34876857240) proves organiser-created volunteer links, anonymous preview/join without an Auth identity, no-food allergy rejection, own task/check provenance, food-gated allergy + RSVP, exact private image bytes through `volunteer-media`, and immediate session/link revocation. [Pages 34876857611](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34876857611) is green on PR #61's merge.
 
-Deploy the separate `volunteer-media` Edge function after its migration and before
-the frontend. Its intentional `verify_jwt = false` route requires a valid,
-unexpired volunteer capability for each request; no anonymous-Auth enablement or
-new user registration is required. A hosted disposable volunteer check must show
-unchanged Auth user counts, correct person/optional allergy persistence, original
-image read-back, task/attendance/check behavior and denied access after revocation.
-Such live fixture mutations have not been performed in this session.
+**Explicit remaining external fixture:** production currently has no accepted Hearth friendship. Bob live-verifies denial when friendship is absent and rechecks friendship at invitation/acceptance, but the positive accepted-friend production path remains unexercised until a real accepted friendship exists. Do not fabricate or mutate Hearth friendship data merely to close this gate.
 
-This session has not created household grants, sent real project invitations,
-or changed hosted records. Fixture proof does not establish live cross-app Auth,
-PostgREST, Storage or realtime behavior. After migration and frontend deployment,
-verify with separately authorized household and friend identities that one
-accepted project is visible, unrelated projects/account notes stay hidden, family
-building edits persist and revoked access is denied on the next server request.
+## Delivered executable-work readiness
+
+**Status:** the first executable-work readiness foundation is implemented, merged, migrated, deployed and live-verified on 2026-09-15. PR #68 delivered product/runtime behavior; PR #70 added hosted proof; PR #73 closed release-fixture drift and recorded the checkpoint-FK index source.
+
+Hosted migrations are:
+
+| Source migration | Hosted registry |
+|---|---|
+| `20260915073000_executable_work_readiness.sql` | `20260915091153_bob_executable_work_readiness` |
+| `20260915142646_executable_work_readiness_fk_index.sql` | `20260915143912_bob_executable_work_readiness_fk_index` |
+
+The base release persists Task→Task/checkpoint dependencies, revisioned required tool/information needs and server-attributed readiness reviews. `current_task_readiness` derives named blockers from Area phase, manual task status, dependency/checkpoint state, canonical MaterialRequirement→Shopping state and required tool/information checks. Absence of blockers is only **unreviewed**; a human explicitly confirms `ready`, and newer readiness-source truth invalidates that confirmation.
+
+PR #68's isolated suite passes 109+ domain/RLS tests and 320/390/1280 phase/readiness browser proof. Release hardening CI `34984048217` is green. The hosted performance advisor identified one checkpoint-FK covering-index gap; the follow-up index above clears that specific finding. Post-DDL security review reports no new readiness-specific finding.
+
+The first post-#70 live run `34983414730` reached the new chain after facts/solutions/geometry/drawings/material/building had passed, then exposed **verification-fixture drift only**: the phase verifier assumed an earlier disposable task was still open even though another foundation proof had legitimately completed it. PR #73 made the phase projection proof self-contained; product phase/readiness semantics did not change.
+
+Final [Pages 34984705428](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34984705428) and [live foundation run 34984705122](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/34984705122) pass on release tree `59929f997741e41555d1faef0a95769df9eb86d9`. The ordinary authenticated hosted client proves explicit confirmation, phase/tool/information/dependency blockers, stale writes, task/checkpoint dependencies, canonical Shopping delivery, material-revision re-review, Today visibility, completion and project/raw/anonymous denial. The same run also passes sharing/name-only volunteer, Project/Area phase, material, drawing and Building-context proofs. No AI is invoked.
+
+The final disposable project was `p_13c7166bfda04647ba1445e68f140438`, nonce `539e038f-853f-47a6-b7df-49b74dff53fb`. After normal image cleanup it was read-only checked for the exact verification name/description/type and zero media, then operator-deleted. Final counts are zero projects, material requirements, stock items, artifacts and media for that id.
 
 ## Delivered deterministic material quantity (4B2b)
 

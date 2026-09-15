@@ -99,6 +99,7 @@ become join tables:
 | `SpaceMeasurementSnapshot` | `bob.space_measurements`, invoker `bob.space_measurement_details` with exact historical Measurement versions |
 | `Material` | `bob.materials` (`area` → `area_label`) |
 | material stock / requirement revisions | `bob.stock_items`, `bob.stock_revisions`, `bob.material_requirements`, `bob.material_requirement_revisions` + allocation/shopping-link tables and invoker views; manual `bob.material_requirement_command` plus deterministic `bob.material_requirement_geometry_command` share the same revision model |
+| executable work readiness | `bob.task_dependencies`, `bob.task_needs`, `bob.task_readiness_reviews`; invoker `bob.task_dependency_status`, `bob.task_material_readiness`, `bob.current_task_readiness`; guarded `bob.work_plan_command` |
 | `BuildEvent`, `.attendeeIds` | `bob.events`, `bob.event_attendees` |
 | `Meal` | `bob.meals` (linked to its build day via `event_id`) |
 | `DietMatrixRow` + `getDietColumns()` | `bob.diet_flags` + `bob.diet_columns` (a flag row = `true`) |
@@ -240,18 +241,12 @@ AI promotion of uncertain evidence into fact.
 
 ## Household and friend sharing
 
-> **Status:** specified / implementation in progress, 2026-09-13. The working
-> source is `supabase/migrations/20260913213712_household_project_sharing.sql`
-> plus `supabase/migrations/20260913214355_household_account_sharing.sql`, with
-> `src/data/sharing.ts` behind `database.ts`. Local validation, hosted
-> application and runtime delivery must be recorded separately in
-> `Docs/foundation-verification.md`; no hosted migration is claimed here yet.
+> **Status:** implemented, merged, migrated and live-verified at current hosted fidelity. Source migrations `20260913213712_household_project_sharing.sql`, `20260913214355_household_account_sharing.sql`, `20260914052752_volunteer_project_links.sql` and `20260914173410_sharing_rollout_hardening.sql` are hosted as `20260914172539_bob_household_project_sharing`, `20260914172603_bob_household_account_sharing`, `20260914172820_bob_volunteer_project_links` and `20260914174434_bob_sharing_rollout_hardening`. PR #61 owns rollout hardening/hosted proof; `Docs/foundation-verification.md` owns exact evidence. The only explicit external-fixture limitation is the positive accepted-Hearth-friend production path because production currently has no accepted friendship; Bob does not fabricate Hearth data for verification.
 
 [`Docs/user-stories.md`](../Docs/user-stories.md) owns BOB-US-038 and BOB-US-059.
 [`Docs/building-model.md` §11.1A](../Docs/building-model.md#111a-household-sharing-extension)
 owns the physical authority decision. This section owns its data/command mapping
-and the effective project-access contract, extending the deployed Slice 0 baseline
-below when the new migration is applied.
+and the effective project-access contract, extending and superseding the relevant deployed Slice 0 authority baseline below.
 
 ### Shared inputs and Bob-owned records
 
@@ -337,13 +332,10 @@ is denied. `database.ts` guards requests against stale auth/project responses;
 missing server RPCs must produce an unavailable state rather than a fake saved
 share. Media and Ask bob continue through the same backend project-access boundary.
 
-### Legacy account boundary — release gate
+### Legacy account boundary — deployed
 
 The deployed `bob.account` / `bob.account_notes` singleton predates private project
-authority and has broad legacy access. The sharing rollout must replace that
-posture before exposing new friend access to the account shell. Source is prepared
-in `supabase/migrations/20260913214355_household_account_sharing.sql`; it is not yet
-applied or live-verified.
+authority and has broad legacy access. The sharing rollout replaces that posture before exposing new friend access to the account shell. `supabase/migrations/20260913214355_household_account_sharing.sql` is applied on hosted Supabase and the unbound/inaccessible legacy boundary is live-verified.
 
 The migration removes the broad legacy policies and limits account/settings/notes
 reads and allowed writes to active access in the account's explicitly bound
@@ -362,13 +354,11 @@ If legacy settings are configured or any notes exist, migration requires the
 transaction-local reviewed mapping `bob.reviewed_account_household`; without it,
 the migration aborts. The read-only rollout baseline found no configured legacy
 account content and no notes. That baseline never chooses a household: there is
-no first-user, first-project or first-household fallback. Hosted application,
-denied-access checks and normal-user binding/read-back proof remain release gates;
-prepared source does not establish that deployed account records are private.
+no first-user, first-project or first-household fallback. Hosted denial and isolation checks are release-verified. A positive household binding remains a deliberate normal-user action for an eligible active household; no first-user/project/household fallback exists.
 
 ## Name-only volunteer access
 
-**Prepared source, not deployed (2026-09-14).** The owner explicitly requires a
+**Deployed / live-verified at current hosted fidelity (2026-09-14).** The owner explicitly requires a
 project link and a name, with optional allergies only when the project has food.
 There is no email, password, manual registration, anonymous Auth signup or shared
 Guest-account login in this journey. `BOB-US-038` owns the user goal;
@@ -434,24 +424,25 @@ project work or the server-side participant record.
 nonpersisting Supabase client. `volunteer-media` is an explicitly public Edge
 entrypoint (`verify_jwt = false`) whose session capability is checked before and
 after a private Storage download. It streams original bytes with `no-store`,
-without public URLs, bucket-policy changes or exposing the service key. Deploy
-this function after the migration and before the frontend; global anonymous Auth
-does not need enabling. Loaded bytes already received cannot be recalled.
+without public URLs, bucket-policy changes or exposing the service key. `volunteer-media` is deployed ACTIVE v1 after the migration with this capability boundary; global anonymous Auth does not need enabling. Loaded bytes already received cannot be recalled.
+
+## Executable work readiness foundation
+
+The first executable-work readiness foundation is deployed/live-verified. Source migration `supabase/migrations/20260915073000_executable_work_readiness.sql` is hosted as `20260915091153_bob_executable_work_readiness`; covering-index follow-up `supabase/migrations/20260915142646_executable_work_readiness_fk_index.sql` is hosted as `20260915143912_bob_executable_work_readiness_fk_index`.
+
+`bob.task_dependencies` stores same-project Task→Task or Task→checkpoint prerequisites with cycle protection. `bob.task_needs` stores revisioned required `tool` / `information` checks. `bob.task_readiness_reviews` records explicit server-attributed human Ready confirmation. Security-invoker views expose dependency status, canonical material/Shopping readiness and one current readiness projection without duplicating MaterialRequirement truth.
+
+Normal clients read these views under project RLS and mutate readiness only through guarded `bob.work_plan_command`. Clearing blockers yields `unreviewed`, never implicit `ready`; explicit confirmation is valid only for the current source fingerprint and is invalidated by newer dependency/need/material truth. Manual task `blocked` state remains separate and is itself a named blocker. `src/data/workPlan.ts` is the app adapter behind `database.ts`.
+
+`Docs/v1-plan.md` owns the remaining executable-work release scope (richer task scope/expected result, explicit ordering and human-confirmed work-breakdown semantics). `Docs/foundation-verification.md` owns CI/browser/Pages/hosted proof and cleanup evidence.
 
 ## Wiring the app to it
-
-Already done — all data access goes through the single module
-[`src/data/database.ts`](../src/data/database.ts), which queries these tables
-whenever `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` are set (copy
-`.env.example` to `.env.local`). The client is created **scoped to the `bob`
-schema** (`{ db: { schema: 'bob' } }`), so table names in queries stay bare.
-With no env config the app falls back to the in-memory mock data.
 
 ## Slice 0 membership and project policies
 
 > Applied to the shared database on 2026-09-09; see the verification record for release evidence.
 > Legacy migrations 0001–0010 describe the previous household-wide policies.
-> This section records the deployed Slice 0 baseline. The household/friend extension above specifies the newer authority model; its source is not yet a deployment claim.
+> This section records the deployed Slice 0 baseline. The deployed household/friend extension above supersedes the relevant authority parts of this older baseline.
 
 Apply `supabase/migrations/20260909182548_project_scope_and_bounded_lookup.sql`
 **after** the ten legacy migrations. It was created with `supabase migration new`.
