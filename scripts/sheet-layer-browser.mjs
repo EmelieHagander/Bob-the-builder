@@ -131,9 +131,10 @@ export async function verifySheetLayersBrowser(page, base, fixture, width) {
   await modal.getByRole('button', { name: 'Send to Shopping', exact: true }).click(); await modal.waitFor({ state: 'hidden' })
   await page.goto(base + '#/shopping')
   const shoppingName = page.getByText('Chosen board layer', { exact: true })
-  await shoppingName.locator('..').getByText('6 sheets (17.28 m²)', { exact: true }).waitFor()
+  await shoppingName.locator('..').getByText('6 sheets (17.28 m²)', { exact: false }).waitFor()
   const row = [...fixture.requirements.values()].find(item => item.name === 'Chosen board layer')
   const material = fixture.materials.get(fixture.shoppingLinks.get(row.id).material_id)
+  assert.equal(material.qty, '6 sheets (17.28 m²)', 'The complete quantity must match while the UI also displays its Area')
   // Seed an existing delivery record; the next publish must preserve it.
   Object.assign(material, { status: 'delivered', supplier: 'Existing supplier', cost: '456 kr' })
   await page.goto(base + '#/material-plan?area=areaA')
