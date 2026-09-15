@@ -7,7 +7,9 @@ export function installSheetLayerFixture(fixture, timestamp, solutions) {
   fixture.sheetProof = { conflictOnce: false, missingRecipe: false }
   fixture.handle = async (request, url, respond) => {
     const table = url.pathname.split('/').at(-1)
-    const body = request.method() === 'POST' ? request.postDataJSON() : null
+    const isMaterialCommand = url.pathname === '/rest/v1/rpc/material_requirement_geometry_command'
+      || url.pathname === '/rest/v1/rpc/material_requirement_command'
+    const body = isMaterialCommand && request.method() === 'POST' ? request.postDataJSON() : null
     if (table === 'material_requirement_geometry_command' && body?.p_data?.sheet_layer) {
       const { p_project, p_action, p_requirement: id, p_expected, p_data: data } = body
       const fail = async message => { await respond({ status: 409, json: { message } }); return true }
