@@ -21,6 +21,6 @@ replace(panel,
 browser = 'scripts/check-project-phases-browser.mjs'
 replace(browser,
     "await page.getByLabel('Circular saw', { exact: true }).check()",
-    "await page.getByLabel('Available: Circular saw', { exact: true }).check()")
+    "await page.getByLabel('Available: Circular saw', { exact: true }).click()")
 
 print('Readiness browser/a11y fix applied.')
