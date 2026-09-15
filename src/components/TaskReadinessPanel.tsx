@@ -103,6 +103,7 @@ export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }
   if (!data || error) return <section className="card foundation-section" aria-label="Task readiness"><h2>Readiness</h2><p role="alert">{error?.message ?? 'Readiness is unavailable.'}</p><button className="btn" onClick={reload}>Reload readiness</button></section>
 
   const copy = STATE_COPY[data.readiness.state]
+  if (!copy) return <section className="card foundation-section" aria-label="Task readiness"><h2>Readiness</h2><p role="alert">Readiness data is unavailable or out of date.</p><button className="btn" onClick={reload}>Reload readiness</button></section>
   const tools = data.needs.filter(item => item.kind === 'tool')
   const information = data.needs.filter(item => item.kind === 'information')
   const materialHref = areaId ? `/material-plan?area=${encodeURIComponent(areaId)}` : '/material-plan'
