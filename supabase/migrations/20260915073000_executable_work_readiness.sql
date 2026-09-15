@@ -255,7 +255,7 @@ declare
   prerequisite text;
   checkpoint uuid;
   need bob.task_needs;
-  current_readiness bob.current_task_readiness;
+  current_readiness bob.current_task_readiness%rowtype;
   next_revision integer;
 begin
   if uid is null or not bob_private.has_project_access(p_project) then
