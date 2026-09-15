@@ -1,6 +1,7 @@
 // Hosted Project/Area phase + scoped-target proof inside the disposable foundation project.
 // Uses the already-authenticated ordinary Bob client. No AI calls.
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 
@@ -95,10 +96,22 @@ export async function verifyProjectPhases(client, anonymous, projectId, areaId) 
   assert.equal(areaPointerAfterProject.solution_id, areaSolution.id)
   assert.equal(projectPointerAfter.solution_id, projectSolution.id)
 
-  const today = checked(await client.from('today_tasks').select('area_id,area_phase').eq('project_id', projectId).eq('area_id', areaId))
-  assert(today.length > 0, 'The disposable Area should retain at least one open Today task')
-  assert(today.every(row => row.area_id === areaId && row.area_phase === 'complete'),
-    'Today task projection must expose the exact current Area lifecycle phase')
+  await verifyTodayPhaseProjection(client, projectId, areaId)
 
   console.log('Live Project/Area phases: Concept default, explicit reversible transitions/history, completion guard, raw/anonymous denial and scope-safe Project/Area targets passed. No AI invoked.')
+}
+
+export async function verifyTodayPhaseProjection(client, projectId, areaId) {
+  // Earlier foundation proofs finish their tasks. Own this open fixture instead
+  // of relying on unrelated tasks leaking into Today; keep the completed proof intact.
+  const id = 't_phase_verification_' + randomUUID()
+  checked(await client.from('tasks').insert({ id, area_id: areaId, name: 'Verify Today phase projection', status: 'todo' }))
+  const today = checked(await client.from('today_tasks').select('id,project_id,area_id,area_phase,status')
+    .eq('project_id', projectId).eq('area_id', areaId).eq('id', id).single())
+  assert.equal(today.id, id)
+  assert.equal(today.project_id, projectId)
+  assert.equal(today.area_id, areaId)
+  assert.equal(today.status, 'todo', 'The explicitly created open task must be visible in Today')
+  assert.equal(today.area_phase, 'complete', 'Today must expose the exact Area phase independently of task status')
+  // This project-owned row is removed by the existing exact-project fixture cleanup.
 }
