@@ -1,11 +1,17 @@
 -- Keep the field-first Today surface aware of the workstream it comes from.
 -- Adds identifiers/context only; task status remains independent from lifecycle phase.
--- Preserve the deployed view's existing column prefix so CREATE OR REPLACE can append safely.
+--
+-- Legacy migration replay and the deployed database reached different historical
+-- column orders for this view. CREATE OR REPLACE cannot reorder existing view
+-- columns, so recreate the derived view here and converge every installation on
+-- one canonical shape before appending Area context.
 begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 
-create or replace view bob.today_tasks with (security_invoker=true) as
+drop view if exists bob.today_tasks;
+
+create view bob.today_tasks with (security_invoker=true) as
 select
   t.id,
   a.project_id,
