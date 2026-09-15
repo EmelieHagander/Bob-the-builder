@@ -24,8 +24,21 @@ jobs:
           cache: npm
       - name: Apply targeted dependency updates
         run: |
-          npm install --save-exact react-router-dom@7.18.0
+          npm install --save-exact react-router-dom@7.18.4
           npm install --save-dev --save-exact vite@6.4.3 supabase@2.117.0
+      - name: Classify post-update findings
+        shell: bash
+        run: |
+          npm audit --json > audit-after.json || true
+          node <<'NODE'
+          const fs = require('node:fs')
+          const report = JSON.parse(fs.readFileSync('audit-after.json', 'utf8'))
+          console.log('POST-UPDATE AUDIT', report.metadata?.vulnerabilities ?? {})
+          for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
+            const via = (vuln.via ?? []).map((entry) => typeof entry === 'string' ? entry : `${entry.name}: ${entry.title} (${entry.severity})`).join(' | ')
+            console.log(JSON.stringify({ name, severity: vuln.severity, direct: vuln.isDirect, range: vuln.range, via, effects: vuln.effects, fixAvailable: vuln.fixAvailable }))
+          }
+          NODE
       - name: Verify runtime audit
         run: npm audit --omit=dev --audit-level=moderate
       - name: Verify full audit has no high or critical findings
