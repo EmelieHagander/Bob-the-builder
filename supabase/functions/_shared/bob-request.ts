@@ -9,11 +9,12 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status, headers: { ...CORS, 'Content-Type': 'application/json' },
 })
 const fail = (error: string, status: number) => json({ ok: false, error }, status)
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /** Same injectable HTTP boundary in deployment and integration tests. */
 export function createBobHandler(deps: {
   authenticate: (header: string) => Promise<string | null>
-  answer: (opts: { authHeader: string; userId: string; projectId: string; message: string }) => Promise<ProjectAnswer>
+  answer: (opts: { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string }) => Promise<ProjectAnswer>
 }) {
   return async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
@@ -28,13 +29,21 @@ export function createBobHandler(deps: {
       let body: Record<string, unknown>
       try { body = JSON.parse(text) } catch { return fail('bad_request', 400) }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('bad_request', 400)
-      // Bob accepts one project-bound OpenAI question, not asynchronous run handles.
       if (body.action !== 'send') return fail('unsupported_action', 409)
-      if (Object.keys(body).some(k => !['action', 'projectId', 'message'].includes(k))) return fail('bad_request', 400)
+      // clientTurnId is an idempotency key only. Provider ids, transcripts and
+      // model history remain server-owned and are still rejected here.
+      if (Object.keys(body).some(k => !['action', 'projectId', 'message', 'clientTurnId'].includes(k))) return fail('bad_request', 400)
       if (typeof body.projectId !== 'string' || !body.projectId.trim() || body.projectId.length > 200) return fail('project_required', 400)
       if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > 4096) return fail('invalid_message', 400)
-      const result = await deps.answer({ authHeader, userId, projectId: body.projectId, message: body.message.trim() })
-      if (!result.ok) return fail(result.error, result.error === 'project_denied' ? 403 : 503)
+      if (body.clientTurnId !== undefined && (typeof body.clientTurnId !== 'string' || !UUID.test(body.clientTurnId))) return fail('invalid_turn_id', 400)
+      // Accept old clients during the coordinated rollout; new clients supply
+      // the UUID so a network retry can resolve to the same logical turn.
+      const clientTurnId = typeof body.clientTurnId === 'string' ? body.clientTurnId : crypto.randomUUID()
+      const result = await deps.answer({ authHeader, userId, projectId: body.projectId, message: body.message.trim(), clientTurnId })
+      if (!result.ok) {
+        const status = result.error === 'project_denied' ? 403 : result.error === 'turn_in_flight' ? 409 : 503
+        return fail(result.error, status)
+      }
       return json({ ok: true, backend: 'openai', status: 'completed', projectId: result.projectId, summary: result.answer, evidence: result.evidence })
     } catch {
       return fail('service_unavailable', 503)
