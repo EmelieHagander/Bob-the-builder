@@ -7,12 +7,12 @@ function resolveSupabaseUrl(raw: string | undefined): string | null {
   const value = raw?.trim()
   if (!value) return null
   const url = /^[a-z0-9]{16,}$/.test(value) ? `https://${value}.supabase.co` : value
-  try { new URL(url); return url } catch { return null }
+  try { new globalThis.URL(url); return url } catch { return null }
 }
 
-const URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-const bobDb = URL && KEY ? createClient(URL, KEY, {
+const SUPABASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+const bobDb = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY, {
   db: { schema: 'bob' },
   auth: { flowType: 'pkce', detectSessionInUrl: true, autoRefreshToken: true, persistSession: true },
 }) : null
@@ -61,13 +61,15 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
     .eq('delivery_state', 'completed')
     .order('seq')
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
-  const messages: ChatMessage[] = (rows.data ?? []).flatMap(row => {
-    if (row.role === 'user' && typeof row.text === 'string') return [{ from: 'user' as const, text: row.text }]
-    if (row.role === 'assistant' && typeof row.text === 'string') {
-      return [{ from: 'bob' as const, text: row.text, ...(validEvidence(row.evidence) ? { evidence: row.evidence } : {}) }]
+
+  const messages: ChatMessage[] = []
+  for (const row of rows.data ?? []) {
+    if (row.role === 'user' && typeof row.text === 'string') {
+      messages.push({ from: 'user', text: row.text })
+    } else if (row.role === 'assistant' && typeof row.text === 'string') {
+      messages.push({ from: 'bob', text: row.text, ...(validEvidence(row.evidence) ? { evidence: row.evidence } : {}) })
     }
-    return []
-  })
+  }
   return { mode: 'server', messages }
 }
 
