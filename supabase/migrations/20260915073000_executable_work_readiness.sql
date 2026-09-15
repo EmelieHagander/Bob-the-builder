@@ -41,6 +41,20 @@ create index task_needs_project_idx on bob.task_needs(project_id);
 create index task_needs_task_idx on bob.task_needs(task_id);
 create unique index task_needs_unique_label_idx on bob.task_needs(task_id, kind, lower(label));
 
+-- A task is never called Ready merely because no blocker rows happen to exist.
+-- The organiser explicitly confirms the current blocker-free work plan. Changes
+-- to dependencies/needs invalidate this row; newer material-plan revisions make
+-- the derived state unreviewed until it is confirmed again.
+create table bob.task_readiness_reviews (
+  task_id text primary key references bob.tasks(id) on delete cascade,
+  project_id text not null references bob.projects(id) on delete cascade,
+  note text not null default '' check(char_length(note) <= 1000),
+  confirmed_by uuid not null,
+  actor_label text not null,
+  confirmed_at timestamptz not null default clock_timestamp()
+);
+create index task_readiness_reviews_project_idx on bob.task_readiness_reviews(project_id);
+
 create function bob_private.validate_task_dependency_row() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare
@@ -88,7 +102,7 @@ revoke all on function bob_private.validate_task_dependency_row() from public,an
 create trigger task_dependency_guard before insert or update on bob.task_dependencies
   for each row execute function bob_private.validate_task_dependency_row();
 
-create function bob_private.validate_task_need_row() returns trigger
+create function bob_private.validate_task_parent_row() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare task_project text;
 begin
@@ -96,25 +110,30 @@ begin
   from bob.tasks t join bob.areas a on a.id=t.area_id
   where t.id=new.task_id;
   if task_project is null or task_project is distinct from new.project_id then
-    raise exception 'Task need must stay inside its Project.';
+    raise exception 'Task planning record must stay inside its Project.';
   end if;
   return new;
 end $$;
-revoke all on function bob_private.validate_task_need_row() from public,anon,authenticated;
+revoke all on function bob_private.validate_task_parent_row() from public,anon,authenticated;
 create trigger task_need_guard before insert or update on bob.task_needs
-  for each row execute function bob_private.validate_task_need_row();
+  for each row execute function bob_private.validate_task_parent_row();
+create trigger task_readiness_review_guard before insert or update on bob.task_readiness_reviews
+  for each row execute function bob_private.validate_task_parent_row();
 
 alter table bob.task_dependencies enable row level security;
 alter table bob.task_needs enable row level security;
-revoke all on bob.task_dependencies,bob.task_needs from public,anon,authenticated;
-grant select on bob.task_dependencies,bob.task_needs to authenticated;
+alter table bob.task_readiness_reviews enable row level security;
+revoke all on bob.task_dependencies,bob.task_needs,bob.task_readiness_reviews from public,anon,authenticated;
+grant select on bob.task_dependencies,bob.task_needs,bob.task_readiness_reviews to authenticated;
 create policy project_read on bob.task_dependencies for select to authenticated
   using(bob_private.has_project_access(project_id));
 create policy project_read on bob.task_needs for select to authenticated
   using(bob_private.has_project_access(project_id));
+create policy project_read on bob.task_readiness_reviews for select to authenticated
+  using(bob_private.has_project_access(project_id));
 
 create view bob.task_dependency_status with(security_invoker=true) as
-select d.id,d.project_id,d.task_id,d.prerequisite_task_id,d.prerequisite_step_id,d.note,
+select d.id,d.project_id,d.task_id,d.prerequisite_task_id,d.prerequisite_step_id,d.note,d.created_at,
   prerequisite.name as prerequisite_task_name,
   coalesce(step.title,'') as prerequisite_step_title,
   case when d.prerequisite_step_id is null
@@ -126,7 +145,7 @@ left join bob.task_steps step on step.id=d.prerequisite_step_id;
 
 create view bob.task_material_readiness with(security_invoker=true) as
 select cm.project_id,cm.task_id,cm.area_id,cm.id as requirement_id,cm.name,
-  cm.purchase_quantity,cm.unit,
+  cm.purchase_quantity,cm.unit,cm.recorded_at,
   case
     when cm.target_changed or cm.artifact_changed or cm.stock_changed or cm.component_changed then false
     when cm.purchase_quantity <= 0 then true
@@ -161,13 +180,28 @@ create view bob.current_task_readiness with(security_invoker=true) as
 select t.id as task_id,a.project_id,t.area_id,a.phase as area_phase,t.status as task_status,
   case
     when t.status='done'::bob.task_status then 'complete'
-    when coalesce(jsonb_array_length(blockers.items),0)=0 then 'ready'
-    else 'blocked'
+    when coalesce(jsonb_array_length(blockers.items),0)>0 then 'blocked'
+    when review.confirmed_at is null then 'unreviewed'
+    when source_change.latest_change is not null and source_change.latest_change>review.confirmed_at then 'unreviewed'
+    else 'ready'
   end as readiness_state,
   case when t.status='done'::bob.task_status then 0 else coalesce(jsonb_array_length(blockers.items),0) end as blocker_count,
-  case when t.status='done'::bob.task_status then '[]'::jsonb else coalesce(blockers.items,'[]'::jsonb) end as blockers
+  case when t.status='done'::bob.task_status then '[]'::jsonb else coalesce(blockers.items,'[]'::jsonb) end as blockers,
+  review.confirmed_at as reviewed_at,
+  review.actor_label as reviewed_by,
+  review.note as review_note
 from bob.tasks t
 join bob.areas a on a.id=t.area_id
+left join bob.task_readiness_reviews review on review.project_id=a.project_id and review.task_id=t.id
+left join lateral (
+  select max(changed_at) as latest_change from (
+    select dependency.created_at as changed_at from bob.task_dependencies dependency where dependency.task_id=t.id
+    union all
+    select need.updated_at from bob.task_needs need where need.task_id=t.id
+    union all
+    select material.recorded_at from bob.current_material_requirements material where material.task_id=t.id
+  ) changes
+) source_change on true
 left join lateral (
   select jsonb_agg(
     jsonb_build_object('kind',reasons.kind,'id',reasons.id,'label',reasons.label)
@@ -221,13 +255,14 @@ declare
   prerequisite text;
   checkpoint uuid;
   need bob.task_needs;
+  current_readiness bob.current_task_readiness;
   next_revision integer;
 begin
   if uid is null or not bob_private.has_project_access(p_project) then
     raise exception 'project_denied' using errcode='42501';
   end if;
   if p_task is null or p_action is null
-    or p_action not in ('add_dependency','remove_dependency','add_need','revise_need','set_need_ready','remove_need')
+    or p_action not in ('add_dependency','remove_dependency','add_need','revise_need','set_need_ready','remove_need','confirm_readiness')
     or p_data is null or jsonb_typeof(p_data)<>'object' or octet_length(p_data::text)>12000 then
     raise exception 'Invalid work-plan command';
   end if;
@@ -237,6 +272,22 @@ begin
   if not found then raise exception 'project_denied' using errcode='42501'; end if;
   select name into actor from bob.people where project_id=p_project and auth_user_id=uid;
   if actor is null then raise exception 'project_denied' using errcode='42501'; end if;
+
+  if p_action='confirm_readiness' then
+    allowed := array['note'];
+    if p_item is not null or p_data-allowed<>'{}'::jsonb then raise exception 'Invalid readiness confirmation'; end if;
+    select * into current_readiness from bob.current_task_readiness
+      where project_id=p_project and task_id=p_task;
+    if not found or current_readiness.task_status='done'::bob.task_status then
+      raise exception 'Only active tasks can be confirmed ready.';
+    end if;
+    if current_readiness.blocker_count>0 then raise exception 'Resolve named blockers before confirming readiness.'; end if;
+    insert into bob.task_readiness_reviews(task_id,project_id,note,confirmed_by,actor_label)
+      values(p_task,p_project,btrim(coalesce(p_data->>'note','')),uid,actor)
+      on conflict(task_id) do update set project_id=excluded.project_id,note=excluded.note,
+        confirmed_by=excluded.confirmed_by,actor_label=excluded.actor_label,confirmed_at=clock_timestamp();
+    return jsonb_build_object('id',p_task,'readiness','ready');
+  end if;
 
   if p_action='add_dependency' then
     allowed := array['prerequisite_task_id','prerequisite_step_id','note'];
@@ -248,6 +299,7 @@ begin
     if prerequisite is null then raise exception 'Choose a prerequisite task'; end if;
     insert into bob.task_dependencies(id,project_id,task_id,prerequisite_task_id,prerequisite_step_id,note,created_by,actor_label)
       values(p_item,p_project,p_task,prerequisite,checkpoint,btrim(coalesce(p_data->>'note','')),uid,actor);
+    delete from bob.task_readiness_reviews where task_id=p_task and project_id=p_project;
     return jsonb_build_object('id',p_item,'action',p_action);
   end if;
 
@@ -255,6 +307,7 @@ begin
     if p_item is null or p_data<>'{}'::jsonb then raise exception 'Invalid dependency command'; end if;
     delete from bob.task_dependencies where id=p_item and project_id=p_project and task_id=p_task;
     if not found then raise exception 'Dependency changed. Reload first.'; end if;
+    delete from bob.task_readiness_reviews where task_id=p_task and project_id=p_project;
     return jsonb_build_object('id',p_item,'removed',true);
   end if;
 
@@ -267,6 +320,7 @@ begin
     insert into bob.task_needs(id,project_id,task_id,kind,label,notes,created_by,updated_by,actor_label)
       values(p_item,p_project,p_task,p_data->>'kind',btrim(p_data->>'label'),btrim(coalesce(p_data->>'notes','')),uid,uid,actor)
       returning * into need;
+    delete from bob.task_readiness_reviews where task_id=p_task and project_id=p_project;
     return jsonb_build_object('id',need.id,'revision',need.revision);
   end if;
 
@@ -278,6 +332,7 @@ begin
   if p_action='remove_need' then
     if p_data<>'{}'::jsonb then raise exception 'Invalid task need'; end if;
     delete from bob.task_needs where id=need.id;
+    delete from bob.task_readiness_reviews where task_id=p_task and project_id=p_project;
     return jsonb_build_object('id',need.id,'removed',true);
   end if;
 
@@ -297,6 +352,7 @@ begin
       updated_by=uid,actor_label=actor,updated_at=clock_timestamp()
       where id=need.id returning * into need;
   end if;
+  delete from bob.task_readiness_reviews where task_id=p_task and project_id=p_project;
   return jsonb_build_object('id',need.id,'revision',need.revision,'ready',need.ready);
 end $$;
 revoke all on function bob_private.work_plan_command(text,text,text,uuid,integer,jsonb) from public,anon,authenticated;
