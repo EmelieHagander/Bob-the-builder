@@ -22,7 +22,9 @@ jobs:
           node-version: 24
           cache: npm
       - name: Apply isolated integration patch
-        run: python scripts/apply-work-readiness-integration.py
+        run: |
+          python scripts/apply-work-readiness-integration.py
+          python scripts/fix-work-readiness-browser-a11y.py
       - run: npm ci
       - run: npm test
       - run: npm run check:edge
@@ -39,7 +41,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/executable-readiness-bootstrap.yml scripts/apply-work-readiness-integration.py
-          git add src/data/databaseCore.ts src/pages/TaskDetail.tsx src/pages/AreaWorkstream.tsx src/pages/Today.tsx scripts/check-project-phases-browser.mjs supabase/migrations/20260915073000_executable_work_readiness.sql
+          git rm .github/workflows/executable-readiness-bootstrap.yml scripts/apply-work-readiness-integration.py scripts/fix-work-readiness-browser-a11y.py
+          git add src/data/databaseCore.ts src/components/TaskReadinessPanel.tsx src/pages/TaskDetail.tsx src/pages/AreaWorkstream.tsx src/pages/Today.tsx scripts/check-project-phases-browser.mjs supabase/migrations/20260915073000_executable_work_readiness.sql
           git commit -m "Integrate executable work readiness"
           git push origin HEAD:feat/executable-work-readiness
