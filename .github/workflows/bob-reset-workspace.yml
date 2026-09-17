@@ -1,0 +1,36 @@
+name: Bob reset workspace
+on:
+  push:
+    branches: [work/bob-reset-verification-20260917]
+    paths: [.github/workflows/bob-reset-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Generate additive migration filename with the installed CLI
+        run: |
+          npx supabase --version
+          npx supabase migration --help
+          npx supabase migration new ask_bob_conversation_reset
+      - name: Package source and locked dependencies for isolated verification
+        shell: bash
+        run: |
+          mkdir -p /tmp/bob-reset-workspace
+          git archive HEAD | tar -x -C /tmp/bob-reset-workspace
+          cp supabase/migrations/*_ask_bob_conversation_reset.sql /tmp/bob-reset-workspace/supabase/migrations/
+          cp -a node_modules /tmp/bob-reset-workspace/
+          tar -czf bob-reset-workspace.tar.gz -C /tmp/bob-reset-workspace .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bob-reset-workspace
+          path: bob-reset-workspace.tar.gz
+          retention-days: 1
