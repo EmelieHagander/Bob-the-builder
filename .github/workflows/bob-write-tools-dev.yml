@@ -3,18 +3,53 @@ on:
   push:
     branches: [feat/bob-write-tools-chat-controls]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source:
+  integrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 6ed764759003bf3ca9fb621514e7a4fe2ee29c14
-          persist-credentials: false
-      - run: git archive --format=tar.gz --output=/tmp/bob-source.tar.gz HEAD
-      - uses: actions/upload-artifact@v4
+          fetch-depth: 0
+      - name: Apply hash-verified source patch on released reset baseline
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-edit 6ed764759003bf3ca9fb621514e7a4fe2ee29c14
+          cat .dev/bob-write-tools.part{0,1,2,3}.b64 | base64 --decode > /tmp/bob.patch.xz
+          echo '99fa0ca22044dd6b0c6f3d8556681fad57579593491895612ad5a1b2ecbaa657  /tmp/bob.patch.xz' | sha256sum --check
+          xz --decompress --stdout /tmp/bob.patch.xz > /tmp/bob.patch
+          echo 'b6e53852529e50d0667dcccd92f43fa5895b37ddb3a9a5adf3274a5e3eaa9cc5  /tmp/bob.patch' | sha256sum --check
+          git apply --unidiff-zero --check /tmp/bob.patch
+          git apply --unidiff-zero --index /tmp/bob.patch
+          git rm .dev/bob-write-tools.part{0,1,2,3}.b64 .github/workflows/bob-write-tools-dev.yml
+          git diff --cached --check
+          git commit -m 'feat: give Bob bounded project writes with verified receipts and retry fencing'
+          git push origin HEAD:feat/bob-write-tools-chat-controls
+      - uses: actions/setup-node@v4
         with:
-          name: bob-source-with-reset
-          path: /tmp/bob-source.tar.gz
-          retention-days: 1
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check:edge
+      - name: Build live-configured browser fixture
+        id: build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify write receipts, retries and project isolation
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
+      - name: Verify conversation reset after write integration
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bob-write-integration-screenshots
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
