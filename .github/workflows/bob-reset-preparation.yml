@@ -1,0 +1,38 @@
+name: Bob reset preparation
+
+on:
+  push:
+    branches: [feat/ask-bob-new-chat-20260917]
+    paths: [.github/workflows/bob-reset-preparation.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Generate migration through the installed CLI
+        run: |
+          npx --no-install supabase --version
+          npx --no-install supabase migration --help
+          npx --no-install supabase migration new --help
+          npx --no-install supabase migration new ask_bob_conversation_reset
+      - name: Package source and SQL test dependency for offline review
+        run: |
+          tar --exclude=.git --exclude=node_modules --exclude=test-results -czf /tmp/bob-reset-source.tgz .
+          tar -czf /tmp/bob-reset-sql-test-deps.tgz node_modules/@electric-sql/pglite
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bob-reset-preparation
+          path: |
+            /tmp/bob-reset-source.tgz
+            /tmp/bob-reset-sql-test-deps.tgz
+          retention-days: 2
