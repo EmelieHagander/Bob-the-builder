@@ -1,0 +1,35 @@
+name: Reset implementation workspace
+on:
+  push:
+    branches: [feat/bob-conversation-reset-20260917]
+    paths: [.github/workflows/reset-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Scaffold additive migration with the installed CLI
+        run: |
+          npx supabase --version
+          npx supabase migration new --help
+          npx supabase migration new ask_bob_conversation_reset
+      - name: Export tracked public sources and migration scaffold
+        run: |
+          git archive HEAD -o /tmp/bob-source.tar
+          tar -rf /tmp/bob-source.tar supabase/migrations/*_ask_bob_conversation_reset.sql
+          gzip /tmp/bob-source.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bob-reset-workspace
+          path: /tmp/bob-source.tar.gz
+          retention-days: 1
