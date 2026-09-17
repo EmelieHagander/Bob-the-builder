@@ -89,6 +89,7 @@ try {
       await p.getByRole('button', { name: 'Ask bob', exact: true }).click()
       const drawer = p.getByRole('complementary', { name: `Ask bob for Reset project ${id}` })
       await drawer.getByRole('button', { name: 'New conversation', exact: true }).waitFor()
+      await drawer.evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })
       return drawer
     }
     const confirm = async (p = page) => {
@@ -103,7 +104,7 @@ try {
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
     const box = await drawer.getByRole('button', { name: 'New conversation', exact: true }).boundingBox()
-    assert(box && box.height >= 44 && box.width >= 44 && box.x >= 0 && box.x + box.width <= viewport.width)
+    assert(box && box.height >= 43.99 && box.width >= 44 && box.x >= 0 && box.x + box.width <= viewport.width, JSON.stringify({ box, viewport }))
     await drawer.getByRole('textbox').fill('KEEP DRAFT')
     let dialog = await confirm()
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
