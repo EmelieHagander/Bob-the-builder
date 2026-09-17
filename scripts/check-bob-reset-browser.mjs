@@ -2,7 +2,7 @@
 // deletion and authority are independently covered by bob-reset.test.ts.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 
 const base = 'http://127.0.0.1:4181/Bob-the-builder/'
@@ -121,7 +121,8 @@ try {
     await page.evaluate(({ a, b }) => { localStorage.setItem(a, JSON.stringify([{ from: 'user', text: 'STALE LOCAL A' }])); localStorage.setItem(b, 'KEEP B CACHE') }, { a: cache('A'), b: cache('B') })
     resetMode = 'delayed'
     dialog = await confirm()
-    await page.screenshot({ path: `test-results/bob-reset-confirm-${viewport.width}.png`, fullPage: true })
+    await dialog.evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })
+    await page.screenshot({ path: `test-results/bob-reset-confirm-${viewport.width}.png` })
     const arrived = page.waitForRequest(r => r.url().endsWith('/rpc/bob_reset_conversation') && r.method() === 'POST')
     await dialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
     await arrived
@@ -143,10 +144,29 @@ try {
     resetMode = 'success'
     // Actual second-tab reset broadcasts to the already-open first drawer.
     const other = await context.newPage()
-    await other.goto(base); await open(other)
+    other.setDefaultTimeout(12000)
+    other.on('pageerror', e => errors.push(e.message))
+    await other.goto(base); const otherDrawer = await open(other)
+    await otherDrawer.getByText('FRESH ANSWER', { exact: true }).waitFor()
+    console.log('Cross-tab preflight', { firstDrawerVisible: await drawer.isVisible(), resetCalls })
     const otherDialog = await confirm(other)
     await otherDialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
-    await drawer.getByText('This conversation was cleared in another tab. Saved project data is unchanged.', { exact: true }).waitFor()
+    try {
+      await otherDrawer.getByText('New conversation started. Saved project data is unchanged.', { exact: true }).waitFor()
+      await drawer.getByText('This conversation was cleared in another tab. Saved project data is unchanged.', { exact: true }).waitFor()
+    } catch (error) {
+      // Fixture-only diagnostics: never capture real users or authentication tokens.
+      for (const [label, p] of [['first', page], ['second', other]]) {
+        const state = await p.evaluate(() => ({
+          text: document.body.innerText,
+          chatStorage: Object.fromEntries(Object.keys(localStorage).filter(key => key.startsWith('bob:ask-bob-history:')).map(key => [key, localStorage.getItem(key)])),
+        }))
+        console.log(`Cross-tab ${label}`, JSON.stringify(state))
+        await writeFile(`test-results/bob-reset-${label}-${viewport.width}.json`, JSON.stringify(state, null, 2))
+        await p.screenshot({ path: `test-results/bob-reset-${label}-${viewport.width}.png` })
+      }
+      throw error
+    }
     assert.equal(await drawer.getByText('FRESH ANSWER', { exact: true }).count(), 0)
     await other.close()
     // Shared guest must clear only this device; an auth failure is never guest mode.
