@@ -1,0 +1,20 @@
+name: Bob write tools development
+on:
+  push:
+    branches: [feat/bob-write-tools-chat-controls]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Snapshot tracked source for local verification
+        run: git archive --format=tar.gz --output=/tmp/bob-source.tar.gz HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bob-source
+          path: /tmp/bob-source.tar.gz
+          retention-days: 1
