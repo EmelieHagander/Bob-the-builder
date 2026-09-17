@@ -105,3 +105,37 @@ export async function askBob(
   }
   return { unavailable: res.error ?? 'unsupported_response' }
 }
+
+/** Clear only the caller's active conversation; never fall back to a fake local
+ * success when a signed-in member's server reset fails. */
+export async function resetAskBobConversation(projectId: string): Promise<'server' | 'local'> {
+  const checkProject = () => {
+    if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Reopen Bob in the project you want to clear.')
+  }
+  checkProject()
+  if (!bobDb) return 'local'
+  const { data: auth, error: authError } = await bobDb.auth.getUser()
+  checkProject()
+  if (authError || !auth.user) throw new Error('Please sign in again before clearing your conversation.')
+  if (auth.user.email?.toLowerCase() === GUEST_EMAIL) return 'local'
+  const thread = await bobDb.from('bob_threads').select('id,next_seq')
+    .eq('project_id', projectId).eq('owner_user_id', auth.user.id).eq('status', 'active').maybeSingle()
+  checkProject()
+  if (thread.error) throw new Error('Could not check your conversation. Nothing has been cleared. Try again.')
+  const { data, error } = await bobDb.rpc('bob_reset_conversation', {
+    p_project: projectId,
+    p_expected_thread: thread.data?.id ?? null,
+    p_expected_next_seq: thread.data?.next_seq ?? null,
+  })
+  checkProject()
+  if (error) {
+    if (error.message.includes('turn_in_flight')) throw new Error('Bob is still answering in this conversation. Try again when the answer finishes.')
+    if (error.message.includes('conversation_changed')) throw new Error('The conversation changed on another tab or device. Reopen Bob and try again.')
+    if (error.code === '42501') throw new Error('Your access to this project could not be confirmed. Nothing has been cleared.')
+    throw new Error('Could not confirm the reset. Your chat is still shown; check your connection and try again.')
+  }
+  if (data?.status !== 'cleared' || data.projectId !== projectId || data.mode !== 'server') {
+    throw new Error('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
+  }
+  return 'server'
+}

@@ -38,6 +38,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify Bob conversation reset and recovery
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
       - name: Verify household sharing and friend invitation UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-sharing-browser.mjs
