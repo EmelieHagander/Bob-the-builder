@@ -161,10 +161,12 @@ try {
 
     await page.goto(`${base}#/today`)
     await page.getByRole('heading', { name: 'What needs doing today', exact: true }).waitFor()
-    assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Frame wall', 'Mark proposed opening'],
-      'Build-phase Today work should be foregrounded without hiding other scheduled work')
+    // The heading is synchronous; wait for both task and readiness data before
+    // allTextContents(), which snapshots immediately rather than waiting.
     await page.getByText('Tool needed: Circular saw', { exact: true }).waitFor()
     await page.getByText('Area is in Design; move to Build when work is actually ready', { exact: true }).waitFor()
+    assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Frame wall', 'Mark proposed opening'],
+      'Build-phase Today work should be foregrounded without hiding other scheduled work')
     await page.getByRole('link', { name: 'Frame wall', exact: true }).click()
     await page.getByRole('heading', { name: 'Frame wall', exact: true }).waitFor()
     await page.getByLabel('Area phase: Build').waitFor()
