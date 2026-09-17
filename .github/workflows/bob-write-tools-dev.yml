@@ -10,20 +10,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 6ed764759003bf3ca9fb621514e7a4fe2ee29c14
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Snapshot tracked source and locked test dependencies
-        run: |
-          git archive --format=tar.gz --output=/tmp/bob-source.tar.gz HEAD
-          tar -czf /tmp/bob-deps.tar.gz node_modules
+      - run: git archive --format=tar.gz --output=/tmp/bob-source.tar.gz HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: bob-workspace
-          path: |
-            /tmp/bob-source.tar.gz
-            /tmp/bob-deps.tar.gz
+          name: bob-source-with-reset
+          path: /tmp/bob-source.tar.gz
           retention-days: 1
