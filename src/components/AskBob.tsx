@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
+import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
 import { createRequestScope } from '../lib/projectRequest'
 
@@ -218,6 +219,11 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [draft, setDraft] = useState('')
   const [extra, setExtra] = useState<ChatMessage[]>([])
   const [historyKey, setHistoryKey] = useState<string | null>(null)
+  const [localHistory, setLocalHistory] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const resetPending = useRef(false)
   const [historyReady, setHistoryReady] = useState(false)
   const [historyNotice, setHistoryNotice] = useState('')
   const [working, setWorking] = useState(false)
@@ -226,48 +232,87 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   useEffect(() => {
     let cancelled = false
+    const isCurrent = scope.current.capture()
+    const current = () => !cancelled && isCurrent()
     setExtra([]); setHistoryKey(null); setHistoryReady(false); setHistoryNotice('')
-
-    const loadLocal = async (notice = '') => {
+    void (async () => {
       const me = await db.getCurrentUser()
-      if (cancelled) return
+      if (!current()) return
       const key = `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
-      let saved: ChatMessage[] = []
-      try { saved = parseSavedChat(localStorage.getItem(key)) } catch { /* storage can be unavailable */ }
-      if (cancelled) return
       setHistoryKey(key)
-      setExtra(saved)
-      setHistoryNotice(notice)
-      setHistoryReady(true)
-    }
-
-    void db.getAskBobConversation(project.id)
-      .then(history => {
-        if (cancelled) return
+      try {
+        const history = await db.getAskBobConversation(project.id)
+        if (!current()) return
         if (history.mode === 'server') {
-          setExtra(history.messages)
-          setHistoryReady(true)
+          setLocalHistory(false); setExtra(history.messages); setHistoryReady(true)
           return
         }
-        return loadLocal()
-      })
-      .catch(() => loadLocal('Conversation sync is unavailable right now. This device will keep a temporary copy.'))
+      } catch {
+        if (!current()) return
+        setHistoryNotice('Conversation sync is unavailable right now. This device will keep a temporary copy.')
+      }
+      if (!current()) return
+      let saved: ChatMessage[] = []
+      try { saved = parseSavedChat(localStorage.getItem(key)) } catch { /* storage can be unavailable */ }
+      setLocalHistory(true); setExtra(saved); setHistoryReady(true)
+    })().catch(() => {
+      if (current()) setHistoryNotice('Could not load your conversation. Close Bob and try again.')
+    })
     return () => { cancelled = true }
   }, [project.id])
 
   useEffect(() => {
-    if (!historyReady || !historyKey) return
+    if (!historyReady || !historyKey || !localHistory) return
     try {
       if (extra.length === 0) localStorage.removeItem(historyKey)
       else localStorage.setItem(historyKey, JSON.stringify(extra.slice(-MAX_SAVED_MESSAGES)))
     } catch { /* Private browsing/storage quota must not break the assistant. */ }
-  }, [extra, historyKey, historyReady])
+  }, [extra, historyKey, historyReady, localHistory])
+
+  // An already-open tab must not resurrect an old local transcript or late reply.
+  useEffect(() => {
+    const onReset = (event: StorageEvent) => {
+      if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
+      scope.current.invalidate()
+      setExtra([]); setDraft(''); setWorking(false); setConfirmReset(false)
+      setHistoryReady(true)
+      setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
+    }
+    window.addEventListener('storage', onReset)
+    return () => window.removeEventListener('storage', onReset)
+  }, [historyKey])
+
+  const resetConversation = async () => {
+    if (resetPending.current || working || !historyReady || !historyKey) return
+    resetPending.current = true
+    const isCurrent = scope.current.capture()
+    setResetting(true); setResetError('')
+    try {
+      const mode = await db.resetAskBobConversation(project.id)
+      if (!isCurrent()) return
+      let cacheCleared = true
+      try { localStorage.removeItem(historyKey) } catch { cacheCleared = false }
+      if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
+      try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
+      scope.current.invalidate()
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setWorking(false)
+      setConfirmReset(false)
+      setHistoryNotice(cacheCleared
+        ? 'New conversation started. Saved project data is unchanged.'
+        : 'Server conversation cleared. This browser’s old local copy could not be removed; check browser storage access.')
+    } catch (error) {
+      if (isCurrent()) setResetError(error instanceof Error ? error.message : 'Could not confirm the reset. Please try again.')
+    } finally {
+      resetPending.current = false
+      setResetting(false)
+    }
+  }
 
   const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
   const send = async () => {
     const text = draft.trim()
-    if (!text || working || !historyReady) return
+    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
     const isCurrent = scope.current.capture()
     const clientTurnId = crypto.randomUUID()
     setDraft('')
@@ -306,6 +351,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
         </header>
 
+        <div style={{ padding: '8px 18px', borderBottom: '1px solid var(--line)' }}>
+          <button type="button" className="btn" disabled={!historyReady || working || resetting} style={{ minHeight: 44 }} onClick={() => { setResetError(''); setConfirmReset(true) }}>
+            <Icon name="arrow-counter-clockwise" size={16} /> New conversation
+          </button>
+        </div>
+
         <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}. I can read project records and suggest next steps.` }} />
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
@@ -313,13 +364,22 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {working && <WorkingBubble />}
         </div>
 
-        <div style={{ padding: '0 18px 8px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>{chips?.map(c => <button key={c} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>
+        <div style={{ padding: '0 18px 8px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>
 
         <form onSubmit={e => { e.preventDefault(); void send() }} style={{ display: 'flex', gap: 8, padding: 18, borderTop: '1px solid var(--line)' }}>
-          <input value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }} />
-          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || !historyReady} style={{ minWidth: 44, minHeight: 44, ...(working || !historyReady ? { opacity: 0.55 } : {}) }}><Icon name="paper-plane-right" weight="fill" size={16} /></button>
+          <input disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }} />
+          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady} style={{ minWidth: 44, minHeight: 44, ...(working || resetting || !historyReady ? { opacity: 0.55 } : {}) }}><Icon name="paper-plane-right" weight="fill" size={16} /></button>
         </form>
       </aside>
+      {confirmReset && <Modal title="Start a new conversation?" onClose={() => { if (!resetPending.current) setConfirmReset(false) }}>
+        <p style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>Clear your chat and Bob’s conversation context for <strong>{project.name}</strong>. This cannot be undone.</p>
+        <p style={{ lineHeight: 1.5, color: 'var(--ink-soft)' }}>Saved project data and other people’s chats stay unchanged.</p>
+        {resetError && <p role="alert" style={{ color: 'var(--clay)', lineHeight: 1.5 }}>{resetError}</p>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+          <button type="button" className="btn" style={{ minHeight: 44 }} disabled={resetting} onClick={() => setConfirmReset(false)}>Cancel</button>
+          <button type="button" className="btn btn-primary" style={{ minHeight: 44 }} disabled={resetting} onClick={() => { void resetConversation() }}>{resetting ? 'Clearing…' : 'Clear chat and context'}</button>
+        </div>
+      </Modal>}
     </div>
   )
 }

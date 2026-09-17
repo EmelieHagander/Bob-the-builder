@@ -27,7 +27,7 @@
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
-| Ask bob conversation continuity, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
+| Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
 | how to verify a change | `.claude/skills/verify/SKILL.md` |
 | session-wide invariants | `CLAUDE.md` |
 
@@ -113,7 +113,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
 - `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
-- `Docs/ask-bob-conversations.md` — **specified / pre-build** conversation-continuity contract: Bob-owned transcript, server-private Responses continuation, compaction/reseed state machine, per-user/project privacy and release proof.
+- `Docs/ask-bob-conversations.md` — **conversation state owner**: implemented private transcript/Responses continuity and explicit reset, with compaction/reseed and provider erasure still planned; per-user/project privacy and release gates.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
 - `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.

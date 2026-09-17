@@ -1,8 +1,8 @@
 # Ask bob — conversation state and context contract
 
-> **Status: specified / pre-build.** This is the owning contract for Ask bob conversation continuity, provider-side model context, transcript persistence, compaction and recovery. It does **not** claim that server-side threads or cross-device context are built yet.
+> **Status: continuity implemented; reset implementation added in September 2026.** The runtime now stores private per-user/project transcripts and a server-private Responses cursor. Shared guest conversations remain device-local. Provider compaction/reseed and broader retention policy below remain planned, not shipped.
 >
-> **Current runtime (2026-09-13):** the visible Ask bob history is kept on the current device in `localStorage`, scoped by project + current project member. The model does not yet carry that conversation across separate user questions; `previous_response_id` is used only inside one server-side read-only tool loop. `supabase/README.md` owns the already-deployed project lookup/authority contract.
+> The earlier 2026-09-13 local-only runtime summary is superseded by `20260915190000_ask_bob_conversation_continuity.sql`, its cleanup migration, and the current server/data modules. The reset's release gate is applying `20260917201626_ask_bob_conversation_reset.sql` before publishing its frontend. A committed migration is not proof of hosted deployment.
 
 ## Decision
 
@@ -310,16 +310,15 @@ The service-role client may manage this internal provider metadata, but it must 
 
 ## Clear / new conversation
 
-The state model should support a future **New conversation** action cleanly:
+The drawer offers **New conversation**, followed by an explicit **Clear chat and context** confirmation. Cancel preserves messages and draft. The confirmed action deletes only the caller's active Bob thread for the current project, its messages and its server-private provider cursor; the next question creates a new thread with no inherited conversation state. This is a hard delete of Bob-owned active chat data, not an archive. Project records, selected decisions, measurements, the approved persona, other users' chats and the caller's other projects are unchanged.
 
-1. archive/close the current Bob thread;
-2. invalidate its provider cursor;
-3. create a new active thread for the same user/project;
-4. start with no inherited provider conversation state.
+The UI uses `database.ts` → `resetAskBobConversation` → caller-JWT `bob.bob_reset_conversation`. The privileged implementation is in `bob_private`, binds identity to `auth.uid()`, checks project access, takes the same advisory/thread/provider locks as turn claiming, and checks the expected thread id and sequence before deleting. There are no raw table write grants, user-id parameters or browser-readable provider identifiers. An active provider turn blocks reset; a lock older than the existing five-minute recovery boundary can be cleared, and an old commit cannot attach to a new thread.
 
-A **Clear/delete** action is stronger: remove Bob-owned transcript state and perform best-effort deletion of the provider response objects Bob has recorded for that thread, subject to provider retention semantics. The UI must not claim provider deletion succeeded unless it was actually confirmed.
+The UI clears its transcript/draft/cache only after confirmed success. Errors, offline/unavailable Auth, denied access, active answers and stale revisions preserve the displayed chat with an actionable error. Shared guest/demo mode clears only this device's project/member cache and never resets a shared server identity. A project/member-scoped storage notification invalidates stale loads/replies in already-open same-browser tabs. Other devices read the empty/new active thread when Bob is reopened; this is not a real-time cross-device transcript subscription.
 
-These controls do not need to block the first continuity slice, but the storage model must not make them impossible.
+**Retention boundary:** disconnecting the stored cursor prevents reuse of the old provider conversation; this release does not call provider deletion APIs or claim erasure of provider-retained response objects. Provider retention/erasure remains a separate policy and implementation task. The reset does not erase facts deliberately saved into the project.
+
+Verification: `tests/bob-reset.test.ts` exercises actual migration functions, authority, private-state deletion, revision guards, retries, busy/expired locks and fresh claims. `scripts/check-bob-reset-browser.mjs` drives the production build at 320/390/1280 px with HTTP fixtures for confirmation/cancel, failures, cache removal, reload, next question and cross-tab clearing. Hosted migration and release evidence belongs in the release PR; browser fixtures do not prove hosted provider deletion.
 
 ## Security invariants
 
@@ -390,7 +389,7 @@ The architecture above is specified; these deployment/product details are intent
 
 1. **Exact compaction threshold** for Bob's configured production model.
 2. **Existing local history migration:** upload current device history into the new server transcript, leave it local/read-only, or start server history from deployment onward. Do not silently change this privacy boundary.
-3. **Conversation retention / clear policy:** how long Bob-owned transcripts live, and whether Clear is soft archive or hard delete.
+3. **Conversation retention / provider erasure:** active-chat reset is a hard delete in Bob; automatic retention and provider-object erasure remain undecided.
 4. **Provider cleanup promise:** best-effort deletion only vs a stronger user-facing deletion guarantee (which determines how many provider response ids must be retained internally).
 5. **Multiple conversations UI:** V1 starts with one active thread per user/project; named/archived threads can be added later without changing the authority model.
 
