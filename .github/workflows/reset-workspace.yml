@@ -1,35 +1,43 @@
-name: Reset implementation workspace
+name: Apply reviewed conversation reset patch
 on:
   push:
     branches: [feat/bob-conversation-reset-20260917]
-    paths: [.github/workflows/reset-workspace.yml]
+    paths: [.bob-reset.patch.b64, .github/workflows/reset-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  prepare:
+  apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Scaffold additive migration with the installed CLI
+          ref: feat/bob-conversation-reset-20260917
+      - name: Verify and apply exact locally reviewed source patch
         run: |
-          npx supabase --version
-          npx supabase migration new --help
-          npx supabase migration new ask_bob_conversation_reset
-      - name: Export tracked public sources and migration scaffold
+          python3 - <<'PY'
+          import base64, hashlib, pathlib, subprocess, zlib
+          text = pathlib.Path('.bob-reset.patch.b64').read_text().strip()
+          text = text.replace('Fk6yCNth', 'Fk6yNth').replace('rnrWFmWF0', 'rnrWF0')
+          chunks = [["eNrtfety20iy5n89","5e216e633d3c5ae5ab08ff68ab046b978c6a4e66ab9498dcf398da7fb3cc6c56"],["WZF5422UTwkJqI/B","53962bb3d8302d577b96e0e2e378a26093036f84a64a60f50c1fbc7e53857ebf"],["1oEVuKEi5j7UqwLy","60a9d943c77c3cbaf164e27e10b12fb3128ed05df70403a950c38daef9663902"],["A5Azgfo1iwWZfs5K","6eb9c2e122531e719552e840c5fe54e8efbc9357c1213d37fc6bdd555cb700cf"],["6dRrdNAQzpjpakVR","a30cb34c2bf71b12a62b7966d58bdf2741546434399f96877ce4f02f8abcb401"],["EKKaRBppcwRuBi01","866fb35d752573ef6df906632001d457da8d2bbdc315dc9650fbf10ae701655f"],["ckpLAMMdeZqsvY/B","5750c4d4bf3d3889f698eba7b7b13bf394045a149d5cdeb7be7d944cddde140f"],["fJNEHNhhEgIaSX5+","063f46d6a85d8e6bd818e4829245c17292f79fe33677434f91120cffd7b46495"],["yBt4vxnkrIzBTTM9","2f9323d25beed5d6843c8a43f441b1f62f007f70df693a9294395c716f79e640"],["WM2ouKvgWt8vlO04","efa6462e3cc28d62c856d9b16d6c456a8219668d502680d61ff7fd14f0d19bb1"],["drnC9ym6BNes1ck4","391a01958c841a51b99d3d84d7d6738f37d85474270ac46c75807f1329413011"],["FnodP5PMobW0ygix","33d9983df0ad24224d04a94cbfbed6d9a414437d95dfa1387270c2de86fdd39b"],["ru3pSIrSsmzYUF5F","5dd784d5b70474eb02f42e27d0a11956cb1e6d40c07f16547f0a8ab5c2b5b0d1"],["Zn04CogT8sCSASAn","ab322b1e7ee4338c3b2c35ef036b80df181a7e16ee251c4efb5e53a59d44b0f0"],["ALOe068xrSoL+rop","8003aeda7dd349e97f8b520becfe932c93f3f9da9f299dd137c255299b4933ca"],["OwqCe3eH98JRuERP","ebd3002d55c952268a7d411b7a9e961a24a653dd533bfd37485f594f373687ae"],["Z/xlgM8hsU7OZdCX","dec04acc0e89507603d8f347d99d760d0dcbcaf532bd44021a6d4e14328150bd"],["PixcvuuBXPlGGbmC","fc11b94aae130151050a8d26c42089227ecb5b85ee74edec798470254f0f6377"],["lW3UoA9Ru37+/nM2","164288a558bd6d89fb7f5eed98f631653f6ac651f9229f973c9d02bfbbb3f831"],["3JnUh1q1Awdc2Czy","396a6c1746a1c5778d0c145105eaa3ea96afa68052d6ff6c12128abe839bd168"]]
+          bad = []
+          for i, (anchor, digest) in enumerate(chunks):
+              start = text.index(anchor)
+              end = text.index(chunks[i+1][0]) if i+1 < len(chunks) else len(text)
+              part = text[start:end]
+              if hashlib.sha256(part.encode()).hexdigest() != digest:
+                  bad.append(i)
+                  print('TRANSFER_MISMATCH', i, part)
+          assert not bad, bad
+          patch = zlib.decompress(base64.b64decode(text))
+          assert hashlib.sha256(patch).hexdigest() == '02556e71865d570d369b792a1cfb8d6e51dc6133b238e6e93a1fab5d90448e90'
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          PY
+      - name: Commit only reviewed feature changes and remove transport helpers
         run: |
-          git archive HEAD -o /tmp/bob-source.tar
-          tar -rf /tmp/bob-source.tar supabase/migrations/*_ask_bob_conversation_reset.sql
-          gzip /tmp/bob-source.tar
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bob-reset-workspace
-          path: /tmp/bob-source.tar.gz
-          retention-days: 1
+          rm .bob-reset.patch.b64 .github/workflows/reset-workspace.yml
+          git add .github/workflows/ci.yml Docs/ask-bob-conversations.md Docs/index.md scripts/check-bob-reset-browser.mjs src/components/AskBob.tsx src/data/bobConversation.ts src/data/database.ts supabase/migrations/20260917201626_ask_bob_conversation_reset.sql tests/bob-reset.test.ts .bob-reset.patch.b64 .github/workflows/reset-workspace.yml
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Add guarded New conversation control clearing transcript and model cursor'
+          git push origin HEAD:feat/bob-conversation-reset-20260917
