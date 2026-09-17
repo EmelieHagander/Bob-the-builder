@@ -149,7 +149,11 @@ try {
     other.on('pageerror', e => errors.push(e.message))
     await other.goto(base); const otherDrawer = await open(other)
     await otherDrawer.getByText('FRESH ANSWER', { exact: true }).waitFor()
-    console.log('Cross-tab preflight', { firstDrawerVisible: await drawer.isVisible(), resetCalls })
+    // Session restoration in a new tab legitimately closes existing auth-scoped
+    // drawers. Reopen after that event, then exercise two genuinely open drawers.
+    if (!await drawer.isVisible()) drawer = await open(page)
+    await drawer.getByText('FRESH ANSWER', { exact: true }).waitFor()
+    assert(await otherDrawer.isVisible(), 'Both drawers must be open before the reset')
     const otherDialog = await confirm(other)
     await otherDialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
     try {
