@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
 
 const pg = new PGlite()
@@ -140,10 +140,10 @@ test('prompt assembly keeps durable persona separate from fresh turn context and
   assert.equal(result.providerResponseId, 'resp_final')
   assert.equal(calls[0].previousResponseId, 'resp_previous')
   assert.equal(calls[1].previousResponseId, 'resp_tool')
-  assert.equal(calls[0].systemMessage, BOB_TRUTH_RULES)
-  assert.equal(calls[1].systemMessage, BOB_TRUTH_RULES, 'truth/persona rules are sent fresh on every provider call')
+  assert.equal(calls[0].systemMessage, buildBobSystemMessage(calls[0].tools))
+  assert.equal(calls[1].systemMessage, buildBobSystemMessage(calls[1].tools), 'persona, tools and safety rules are sent fresh on every provider call')
   for (const value of Object.values(BOB_SYSTEM_SECTIONS)) assert(BOB_TRUTH_RULES.includes(value))
-  assert.match(calls[0].messages[0].content, /Current turn frame/)
+  assert.match(calls[0].messages[0].content, /Current turn/)
   assert.match(calls[0].messages[0].content, /fetched for THIS turn/)
   assert.equal(calls[0].messages[1].content, 'What did we decide?')
 })
