@@ -8,11 +8,13 @@ on:
       - .github/workflows/dependency-security.yml
   push:
     branches:
+      - main
       - security/dependency-audit-2026-09-15
     paths:
       - package.json
       - package-lock.json
       - .github/workflows/dependency-security.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,30 +22,35 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # Auditing does not need dependency lifecycle scripts. The regular CI
+      # installation still runs them and verifies the resulting application.
+      - run: npm ci --ignore-scripts
       - name: Capture full dependency audit
         shell: bash
         run: npm audit --json > audit-full.json || true
       - name: Capture runtime-only dependency audit
         shell: bash
         run: npm audit --omit=dev --json > audit-runtime.json || true
-      - name: Summarize findings
+      - name: Validate reports and summarize findings
         shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs')
           for (const [label, file] of [['full', 'audit-full.json'], ['runtime', 'audit-runtime.json']]) {
             const report = JSON.parse(fs.readFileSync(file, 'utf8'))
-            const meta = report.metadata?.vulnerabilities ?? {}
-            console.log(`\n${label.toUpperCase()} AUDIT`, meta)
-            for (const [name, vuln] of Object.entries(report.vulnerabilities ?? {})) {
-              const via = (vuln.via ?? []).map((entry) => typeof entry === 'string' ? entry : `${entry.name}: ${entry.title} (${entry.severity})`).join(' | ')
+            if (report.error || !report.metadata?.vulnerabilities || !report.vulnerabilities) {
+              throw new Error(`${label} audit failed or returned an incomplete report: ${JSON.stringify(report.error ?? report)}`)
+            }
+            console.log(`\n${label.toUpperCase()} AUDIT`, report.metadata.vulnerabilities)
+            for (const [name, vuln] of Object.entries(report.vulnerabilities)) {
+              const via = (vuln.via ?? []).map((entry) => typeof entry === 'string' ? entry : `${entry.name}: ${entry.title} (${entry.severity}; ${entry.url})`).join(' | ')
               console.log(JSON.stringify({ name, severity: vuln.severity, direct: vuln.isDirect, range: vuln.range, via, effects: vuln.effects, fixAvailable: vuln.fixAvailable }))
             }
           }

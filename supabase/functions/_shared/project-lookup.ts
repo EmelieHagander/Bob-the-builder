@@ -49,7 +49,7 @@ export const SEARCH_TOOL = {
     // The canonical shared service uses non-strict provider tools. parseLookup
     // independently enforces this exact argument shape before database access.
     name: 'search_project_data',
-    description: 'Read a bounded page of stored data in the already authorised active project. No writes. Text is literal, not SQL. A partial/empty page never proves a project-wide absence.',
+    description: 'inspect authorised project records relevant to the question.',
     parameters: {
       type: 'object', additionalProperties: false,
       properties: {

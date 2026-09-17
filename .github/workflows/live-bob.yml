@@ -6,6 +6,14 @@ on:
     branches: [main]
     paths:
       - scripts/check-live-bob.mjs
+      - supabase/functions/ask-bob/**
+      - supabase/functions/_shared/serve-bob.ts
+      - supabase/functions/_shared/bob-request.ts
+      - supabase/functions/_shared/ask-openai.ts
+      - supabase/functions/_shared/bob-conversation.ts
+      - supabase/functions/_shared/project-answer.ts
+      - supabase/migrations/20260915190000_ask_bob_conversation_continuity.sql
+      - supabase/migrations/20260915190100_ask_bob_conversation_failure_cleanup.sql
       - .github/workflows/live-bob.yml
 
 permissions:
