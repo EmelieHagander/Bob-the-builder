@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import type { ChatMessage } from './types'
 import type { AnswerEvidence } from './provenance'
-import { getActiveProjectId } from './databaseCore'
+import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
+import { isBobAnswerEvidence } from './bobEvidence'
 
 function resolveSupabaseUrl(raw: string | undefined): string | null {
   const value = raw?.trim()
@@ -31,12 +32,7 @@ type AskBobResponse = {
 export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
-}
-
-function validEvidence(value: unknown): value is AnswerEvidence {
-  if (!value || typeof value !== 'object') return false
-  const evidence = value as Partial<AnswerEvidence>
-  return evidence.kind === 'ai_assessment' && Array.isArray(evidence.sources)
+  retry?: { text: string; turnId: string }
 }
 
 /**
@@ -56,21 +52,26 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (!threadResult.data) return { mode: 'server', messages: [] }
 
   const rows = await bobDb.from('bob_messages')
-    .select('role,text,evidence,delivery_state,seq')
+    .select('role,text,evidence,delivery_state,seq,turn_id')
     .eq('thread_id', threadResult.data.id)
-    .eq('delivery_state', 'completed')
     .order('seq')
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
 
   const messages: ChatMessage[] = []
+  let retry: BobConversationHistory['retry']
   for (const row of rows.data ?? []) {
+    if (row.delivery_state !== 'completed') {
+      if (row.role === 'user' && typeof row.text === 'string' && typeof row.turn_id === 'string') retry = { text: row.text, turnId: row.turn_id }
+      continue
+    }
+    retry = undefined
     if (row.role === 'user' && typeof row.text === 'string') {
       messages.push({ from: 'user', text: row.text })
     } else if (row.role === 'assistant' && typeof row.text === 'string') {
-      messages.push({ from: 'bob', text: row.text, ...(validEvidence(row.evidence) ? { evidence: row.evidence } : {}) })
+      messages.push({ from: 'bob', text: row.text, ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
     }
   }
-  return { mode: 'server', messages }
+  return { mode: 'server', messages, ...(retry ? { retry } : {}) }
 }
 
 async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {
@@ -99,7 +100,7 @@ export async function askBob(
   const res = await callAskBob({ action: 'send', projectId, message, clientTurnId })
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
-  if (res.ok && res.status === 'completed' && res.summary && validEvidence(res.evidence)
+  if (res.ok && res.status === 'completed' && res.summary && isBobAnswerEvidence(res.evidence, projectId)
     && res.evidence.sources.every(source => source.projectId === projectId)) {
     return { answer: res.summary, evidence: res.evidence }
   }
@@ -138,4 +139,10 @@ export async function resetAskBobConversation(projectId: string): Promise<'serve
     throw new Error('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
   }
   return 'server'
+}
+
+/** Refresh mounted project screens after closing Bob, not in the middle of a
+ * reply: the existing project-version event deliberately remounts the shell. */
+export function refreshAskBobProject(projectId: string): void {
+  if (projectId === getActiveProjectId()) window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
 }

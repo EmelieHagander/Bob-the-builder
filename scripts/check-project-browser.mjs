@@ -34,12 +34,14 @@ try {
     const histories = new Map(['A', 'B'].map(id => [id, { thread: null, nextSeq: 1, messages: [] }]))
     let slow = deferred()
     let responseMode = 'success'
+    const completedTurns = new Map()
+    let writeCommits = 0
     const storeCompletedTurn = (body, response) => {
       const history = histories.get(body.projectId)
       assert(history)
       history.thread ??= `thread-${body.projectId}`
-      history.messages.push({ role: 'user', text: body.message, evidence: null, delivery_state: 'completed', seq: history.nextSeq++ })
-      history.messages.push({ role: 'assistant', text: response.summary, evidence: response.evidence, delivery_state: 'completed', seq: history.nextSeq++ })
+      history.messages.push({ role: 'user', text: body.message, turn_id: body.clientTurnId, evidence: null, delivery_state: 'completed', seq: history.nextSeq++ })
+      history.messages.push({ role: 'assistant', text: response.summary, turn_id: body.clientTurnId, evidence: response.evidence, delivery_state: 'completed', seq: history.nextSeq++ })
     }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
@@ -63,6 +65,20 @@ try {
         requests.push(body)
         const history = histories.get(body.projectId)
         if (history) history.thread ??= `thread-${body.projectId}`
+        if (completedTurns.has(body.clientTurnId)) return respond({ json: completedTurns.get(body.clientTurnId) })
+        if (body.message === 'Wrong receipt') {
+          const response = success(body.projectId, 'FORGED SAVED ANSWER')
+          response.evidence.writes = [{ projectId: 'B', dataset: 'tasks', recordId: 'foreign', label: 'FORGED SAVE', operation: 'created', savedAt: '2026-09-17T12:00:00Z' }]
+          return respond({ json: response })
+        }
+        if (body.message === 'Save chosen plan') {
+          const response = success(body.projectId, 'Saved chosen plan once.')
+          response.evidence.writes = [{ projectId: body.projectId, dataset: 'tasks', recordId: 'new-task', label: 'Build 70 × 160 frame', operation: 'created', savedAt: '2026-09-17T12:00:00Z' }]
+          writeCommits++
+          completedTurns.set(body.clientTurnId, response)
+          storeCompletedTurn(body, response)
+          return route.abort('failed') // committed write; the first HTTP answer is lost
+        }
         if (body.message === 'Slow question') {
           await slow.promise
           const response = success(body.projectId, 'OLD DELAYED ANSWER')
@@ -147,7 +163,7 @@ try {
     for (const mode of ['unavailable', 'denied', 'wrong-project']) {
       responseMode = mode
       await send(`Check ${mode}`)
-      await drawer.getByText('Bob is checking the project…', { exact: true }).waitFor({ state: 'hidden' })
+      await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
       const message = mode === 'denied' ? 'I could not access this project. Your membership may have changed.' : 'I could not retrieve an answer for this project. Please try again.'
       await drawer.getByText(message, { exact: true }).last().waitFor()
       assert.equal(await drawer.getByText('WRONG PROJECT ANSWER', { exact: true }).count(), 0)
@@ -155,13 +171,13 @@ try {
     }
     responseMode = 'success'
     await send('Slow question')
-    await drawer.getByText('Bob is checking the project…', { exact: true }).waitFor()
+    await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
     await drawer.getByRole('textbox', { name: 'Question for bob' }).fill('Unsent draft from A')
     drawer = await switchProject('B')
     assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
     assert.equal(await drawer.locator('summary').count(), 0)
     assert.equal(await drawer.getByText('Answer for Porch A', { exact: true }).count(), 0)
-    assert.equal(await drawer.getByText('Bob is checking the project…', { exact: true }).count(), 0)
+    assert.equal(await drawer.getByText('Bob is working on the project…', { exact: true }).count(), 0)
     await send('Which boards?')
     await drawer.getByText('Answer for Porch B', { exact: true }).waitFor()
     assert.equal(requests.at(-1).projectId, 'B')
@@ -184,6 +200,33 @@ try {
     assert.equal(await drawer.locator('summary').count(), 2, 'Reload restores the completed server transcript with evidence')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Reload keeps project histories isolated')
 
+    await send('Wrong receipt')
+    await drawer.getByText('I could not retrieve an answer for this project. Please try again.', { exact: true }).last().waitFor()
+    assert.equal(await drawer.getByText('FORGED SAVED ANSWER', { exact: true }).count(), 0)
+    assert.equal(await drawer.getByLabel('Saved project changes').count(), 0)
+
+    await send('Save chosen plan')
+    const writeTurnId = requests.at(-1).clientTurnId
+    await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
+    const replay = page.waitForRequest(request => request.url() === `${api}/functions/v1/ask-bob` && request.method() === 'POST')
+    await drawer.getByRole('button', { name: 'Retry request', exact: true }).click()
+    await replay
+    await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
+    assert.equal(requests.at(-1).clientTurnId, writeTurnId, 'Retry must reuse the original mutation turn id')
+    assert.equal(writeCommits, 1, 'Lost response must not lead to a second write')
+    const saved = drawer.getByLabel('Saved project changes')
+    await saved.getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Save receipts must fit a phone drawer')
+    await saved.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: `test-results/ask-bob-writes-${viewport.width}.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Close Ask bob' }).click()
+    await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()
+    drawer = await openBob('A')
+    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    await page.reload()
+    drawer = await openBob('A')
+    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+
     if (viewport.width === 1280) {
       slow = deferred()
       await send('Slow question')
@@ -198,7 +241,7 @@ try {
     }
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset and reload: OK`)
+    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset, write receipts, same-turn lost-response retry and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()

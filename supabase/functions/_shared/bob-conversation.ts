@@ -38,25 +38,28 @@ export function createBobConversationStore(client: SupabaseClient<any, 'bob', an
       turnId: string
       answer: string
       evidence: AnswerEvidence
-      providerResponseId: string
+      providerResponseId: string | null
+      generation: number
     }): Promise<void> {
-      checked(await client.rpc('bob_commit_turn', {
+      checked(await client.rpc('bob_commit_turn_v2', {
         p_project: input.projectId,
         p_user: input.userId,
         p_thread: input.threadId,
         p_turn: input.turnId,
+        p_generation: input.generation,
         p_answer: input.answer,
         p_evidence: input.evidence,
         p_provider_response_id: input.providerResponseId,
       }) as RpcResult<unknown>, 'conversation commit')
     },
 
-    async fail(projectId: string, userId: string, threadId: string, turnId: string): Promise<void> {
-      checked(await client.rpc('bob_fail_turn', {
+    async fail(projectId: string, userId: string, threadId: string, turnId: string, generation: number): Promise<void> {
+      checked(await client.rpc('bob_fail_turn_v2', {
         p_project: projectId,
         p_user: userId,
         p_thread: threadId,
         p_turn: turnId,
+        p_generation: generation,
       }) as RpcResult<unknown>, 'conversation fail')
     },
   }

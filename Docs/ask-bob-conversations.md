@@ -4,6 +4,8 @@
 >
 > The earlier 2026-09-13 local-only runtime summary is superseded by `20260915190000_ask_bob_conversation_continuity.sql`, its cleanup migration, and the current server/data modules. The reset's release gate is applying `20260917201626_ask_bob_conversation_reset.sql` before publishing its frontend. A committed migration is not proof of hosted deployment.
 
+The bounded-write extension, generation-fenced settlement and receipt-only recovery are owned by `Docs/ask-bob-writes.md`. Saved project edits and their audit history are independent of transcript reset. This document’s original read-only loop/state diagram describes the continuity foundation; the extension adds guarded writes before final settlement/commit.
+
 ## Decision
 
 Bob will deliberately separate three kinds of state:

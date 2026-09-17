@@ -1,6 +1,6 @@
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
-export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements'] as const
+export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements', 'measurements'] as const
 export const LIMITS = { lookups: 3, rows: 25, joinedRows: 25, bytes: 16 * 1024, queryChars: 200, timeoutMs: 10_000 } as const
 export interface LookupInput {
   dataset: typeof DATASETS[number]
@@ -34,7 +34,7 @@ export function parseLookup(value: unknown): LookupInput | null {
   for (const key of ['query', 'status', 'area_id', 'record_id']) {
     if (v[key] !== null && (typeof v[key] !== 'string' || (v[key] as string).length > LIMITS.queryChars)) return null
   }
-  if (v.area_id !== null && v.dataset !== 'tasks') return null
+  if (v.area_id !== null && !['tasks', 'measurements'].includes(String(v.dataset))) return null
   const statuses: Record<string, string[]> = {
     tasks: ['todo', 'doing', 'done', 'blocked'],
     materials: ['needed', 'ordered', 'delivered', 'backorder'], events: ['going', 'open'],
@@ -56,7 +56,7 @@ export const SEARCH_TOOL = {
         dataset: { type: 'string', enum: [...DATASETS] },
         query: { type: ['string', 'null'], description: 'Literal search text, max 200 characters.' },
         status: { type: ['string', 'null'], description: 'Task, material or event status only; otherwise null.' },
-        area_id: { type: ['string', 'null'], description: 'Exact area id for tasks only; otherwise null.' },
+        area_id: { type: ['string', 'null'], description: 'Exact area id for tasks or measurements; otherwise null.' },
         record_id: { type: ['string', 'null'], description: 'Exact record id, or null.' },
       },
       required: ['dataset', 'query', 'status', 'area_id', 'record_id'],
@@ -65,18 +65,18 @@ export const SEARCH_TOOL = {
 }
 
 /** One instance per question; the model cannot change its project or budget. */
-export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs) {
+export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups) {
   let used = 0
   const sources: ProjectSource[] = []
   let incomplete = false
   return {
     sources,
-    get remaining() { return Math.max(0, LIMITS.lookups - used) },
+    get remaining() { return Math.max(0, budget - used) },
     get partial() { return incomplete },
     async search(value: unknown): Promise<LookupResult> {
       const base: LookupResult = { status: 'invalid', projectId, retrievedAt: new Date().toISOString(), records: [], related: [], truncated: false, partial: true, truth: 'unknown' }
       // Invalid attempts count too, so malformed/hostile calls cannot loop forever.
-      if (++used > LIMITS.lookups) { incomplete = true; return { ...base, status: 'budget_exhausted' } }
+      if (++used > budget) { incomplete = true; return { ...base, status: 'budget_exhausted' } }
       const input = parseLookup(value)
       if (!input) { incomplete = true; return base }
       base.dataset = input.dataset
@@ -102,7 +102,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         result.status = result.records.length || result.truncated ? 'ok' : 'empty'
         incomplete ||= result.truncated
         for (const row of [...result.records, ...result.related]) {
-          const label = String(row.name ?? row.title ?? row.text ?? row.id).slice(0, 120)
+          const label = String(row.name ?? row.subject ?? row.title ?? row.text ?? row.id).slice(0, 120)
           sources.push({ projectId, dataset: typeof row.kind === 'string' ? row.kind : input.dataset, recordId: row.id, label, retrievedAt: result.retrievedAt, updatedAt: row.updated_at ?? null, truth: 'unknown' })
         }
         return result

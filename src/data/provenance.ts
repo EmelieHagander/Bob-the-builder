@@ -12,8 +12,18 @@ export interface ProjectSource {
   truth: TruthState
 }
 
+export interface ProjectWriteReceipt {
+  projectId: string
+  dataset: 'project' | 'tasks' | 'measurements'
+  recordId: string
+  label: string
+  operation: 'created' | 'updated'
+  savedAt: string
+}
+
 export interface AnswerEvidence {
   kind: 'ai_assessment'
   sources: ProjectSource[]
   partial: boolean
+  writes?: ProjectWriteReceipt[]
 }
