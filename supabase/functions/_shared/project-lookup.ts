@@ -37,7 +37,7 @@ export function parseLookup(value: unknown): LookupInput | null {
     if (v[key] !== null && (typeof v[key] !== 'string' || (v[key] as string).length > LIMITS.queryChars)) return null
   }
   if (v.after_id !== undefined && v.after_id !== null && (typeof v.after_id !== 'string' || v.after_id.length > LIMITS.queryChars)) return null
-  if (v.area_id !== null && !['tasks', 'measurements', 'components', 'solutions', 'artifacts', 'requirements'].includes(String(v.dataset))) return null
+  if (v.area_id !== null && !['tasks', 'measurements', 'components', 'solutions', 'target', 'artifacts', 'requirements'].includes(String(v.dataset))) return null
   const statuses: Record<string, string[]> = {
     tasks: ['todo', 'doing', 'done', 'blocked'],
     materials: ['needed', 'ordered', 'delivered', 'backorder'], events: ['going', 'open'],
@@ -59,7 +59,7 @@ export const SEARCH_TOOL = {
         dataset: { type: 'string', enum: [...DATASETS], description: 'Measurements, components, selected target, solutions, artifacts (drawing text, not pixels), requirements and collaboration data. Follow next_cursor with after_id using identical filters.' },
         query: { type: ['string', 'null'], description: 'Literal search text, max 200 characters.' },
         status: { type: ['string', 'null'], description: 'Task, material or event status only; otherwise null.' },
-        area_id: { type: ['string', 'null'], description: 'Exact area id for tasks, measurements, components, solutions, artifacts or requirements; otherwise null.' },
+        area_id: { type: ['string', 'null'], description: 'Exact area id for task/design datasets; otherwise null. For target: an empty area result inherits record_id=project; an explicit row with null solution_id means cleared, not inherited.' },
         after_id: { type: ['string', 'null'], description: 'Pagination: copy next_cursor from the previous result, keep filters unchanged. Start with null.' },
         record_id: { type: ['string', 'null'], description: 'Exact record id, or null.' },
       },

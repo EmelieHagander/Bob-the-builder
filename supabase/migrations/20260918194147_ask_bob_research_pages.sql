@@ -15,7 +15,7 @@ begin
   if p_dataset is null or p_dataset <> all(array['project','areas','tasks','materials','crew','events','announcements','measurements','components','solutions','target','artifacts','requirements'])
     or length(coalesce(p_query,'')) > 200 or length(coalesce(p_record_id,'')) > 200
     or length(coalesce(p_area_id,'')) > 200 or length(coalesce(p_after_id,'')) > 200
-    or (p_area_id is not null and p_dataset <> all(array['tasks','measurements','components','solutions','artifacts','requirements']))
+    or (p_area_id is not null and p_dataset <> all(array['tasks','measurements','components','solutions','target','artifacts','requirements']))
     or (p_status is not null and not (
       (p_dataset = 'tasks' and p_status = any(array['todo','doing','done','blocked'])) or
       (p_dataset = 'materials' and p_status = any(array['needed','ordered','delivered','backorder'])) or
@@ -114,13 +114,14 @@ begin
       ) bounded;
     when 'target' then
       select coalesce(jsonb_agg(item order by id),'[]'::jsonb) into v_rows from (
-        select r.project_id id,jsonb_build_object('id',r.project_id,'revision',r.revision,'reason',r.reason,'updated_at',r.recorded_at,
+        select r.scope_key id,jsonb_build_object('id',r.scope_key,'area_id',r.area_id,'scope_key',r.scope_key,'revision',r.revision,'reason',r.reason,'updated_at',r.recorded_at,
           'solution_id',r.solution_id,'solution_revision',r.solution_revision,'title',chosen.title,
           'description',chosen.description,'assumptions',chosen.assumptions,'tradeoffs',chosen.tradeoffs,'archived',chosen.archived) item
         from bob.current_target r left join bob.solution_revisions chosen on chosen.solution_id=r.solution_id and chosen.revision=r.solution_revision and chosen.project_id=r.project_id
-        where r.project_id=p_project_id and (p_record_id is null or r.project_id=p_record_id)
-          and (p_after_id is null or r.project_id>p_after_id)
+        where r.project_id=p_project_id and (p_record_id is null or r.scope_key=p_record_id)
+          and (p_after_id is null or r.scope_key>p_after_id) and (p_area_id is null or r.area_id=p_area_id)
           and (p_query is null or position(lower(p_query) in lower(concat_ws(' ',r.reason,chosen.title,chosen.description)))>0)
+        order by r.scope_key limit 26
       ) bounded;
     when 'artifacts' then
       select coalesce(jsonb_agg(item order by id),'[]'::jsonb) into v_rows from (
@@ -129,7 +130,7 @@ begin
       ) bounded;
     when 'requirements' then
       select coalesce(jsonb_agg(item order by id),'[]'::jsonb) into v_rows from (
-        select r.id::text id,jsonb_build_object('id', r.id::text,'name', r.name,'area_id', r.area_id,'task_id', r.task_id,'unit', r.unit,'required_quantity', r.required_quantity,'waste_percent', r.waste_percent,'required_with_waste', r.required_with_waste,'stock_quantity', r.stock_quantity,'component_quantity', r.component_quantity,'purchase_quantity', r.purchase_quantity,'source_kind', r.source_kind,'method_key', r.method_key,'basis', r.basis,'assumptions', r.assumptions,'revision', r.revision,'archived', r.archived,'target_revision', r.target_revision,'solution_id', r.solution_id,'solution_revision', r.solution_revision,'artifact_id', r.artifact_id,'artifact_revision', r.artifact_revision,'target_changed', r.target_changed,'artifact_changed', r.artifact_changed,'updated_at', r.recorded_at) item
+        select r.id::text id,jsonb_build_object('id', r.id::text,'name', r.name,'area_id', r.area_id,'task_id', r.task_id,'unit', r.unit,'required_quantity', r.required_quantity,'waste_percent', r.waste_percent,'required_with_waste', r.required_with_waste,'stock_quantity', r.stock_quantity,'component_quantity', r.component_quantity,'purchase_quantity', r.purchase_quantity,'source_kind', r.source_kind,'method_key', r.method_key,'basis', r.basis,'assumptions', r.assumptions,'revision', r.revision,'archived', r.archived,'target_revision', r.target_revision,'solution_id', r.solution_id,'solution_revision', r.solution_revision,'artifact_id', r.artifact_id,'artifact_revision', r.artifact_revision,'target_changed', r.target_changed,'artifact_changed', r.artifact_changed,'stock_changed', r.stock_changed,'component_changed', r.component_changed,'updated_at', r.recorded_at) item
         from bob.current_material_requirements r where r.project_id=p_project_id and (p_record_id is null or r.id::text=p_record_id) and (p_after_id is null or r.id::text>p_after_id) and (p_query is null or position(lower(p_query) in lower(concat_ws(' ',r.name,r.basis,r.assumptions)))>0) and (p_area_id is null or r.area_id=p_area_id) and not r.archived order by r.id::text limit 26
       ) bounded;
   end case;
@@ -151,11 +152,12 @@ begin
       order by t.id, p.id limit 26
     ) bounded;
   elsif p_dataset = 'target' then
-    select coalesce(jsonb_agg(item order by id),'[]'::jsonb) into v_links from (
-      select d.measurement_id::text id,jsonb_build_object('kind','selected_measurement','id',d.measurement_id::text,'subject',d.subject,'value',d.value,'unit',d.unit,'truth',d.truth,'source',d.source,
+    select coalesce(jsonb_agg(item order by parent_id,id),'[]'::jsonb) into v_links from (
+      select t.scope_key parent_id,d.measurement_id::text id,jsonb_build_object('kind','selected_measurement','parent_id',t.scope_key,'area_id',t.area_id,'id',d.measurement_id::text,'subject',d.subject,'value',d.value,'unit',d.unit,'truth',d.truth,'source',d.source,
         'revision',d.measurement_revision,'latest_revision',d.latest_revision,'currently_archived',d.currently_archived) item
       from bob.solution_measurement_details d join bob.current_target t on t.project_id=d.project_id and t.solution_id=d.solution_id and t.solution_revision=d.solution_revision
-      where d.project_id=p_project_id and jsonb_array_length(v_rows)>0 order by d.measurement_id::text limit 26
+      where d.project_id=p_project_id and t.scope_key in (select value->>'id' from jsonb_array_elements(v_rows))
+      order by t.scope_key,d.measurement_id::text limit 26
     ) bounded;
   elsif p_dataset = 'artifacts' then
     select coalesce(jsonb_agg(item order by parent_id,id),'[]'::jsonb) into v_links from (
