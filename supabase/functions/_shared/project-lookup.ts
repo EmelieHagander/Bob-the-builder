@@ -1,16 +1,17 @@
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
-export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements', 'measurements'] as const
-export const LIMITS = { lookups: 3, rows: 25, joinedRows: 25, bytes: 16 * 1024, queryChars: 200, timeoutMs: 10_000 } as const
+export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements', 'measurements', 'components', 'solutions', 'target', 'artifacts', 'requirements'] as const
+export const LIMITS = { lookups: 3, rows: 25, joinedRows: 25, bytes: 32 * 1024, queryChars: 200, timeoutMs: 10_000 } as const
 export interface LookupInput {
   dataset: typeof DATASETS[number]
   query: string | null
   status: string | null
   area_id: string | null
   record_id: string | null
+  after_id?: string | null
 }
 type Row = Record<string, unknown> & { id: string; updated_at?: string | null }
-export interface LookupPayload { records: Row[]; related: Row[]; truncated: boolean }
+export interface LookupPayload { records: Row[]; related: Row[]; truncated: boolean; next_cursor?: string | null }
 export interface LookupResult {
   status: 'ok' | 'empty' | 'denied' | 'invalid' | 'unavailable' | 'budget_exhausted'
   projectId: string
@@ -19,6 +20,7 @@ export interface LookupResult {
   records: Row[]
   related: Row[]
   truncated: boolean
+  next_cursor?: string | null
   /** True even for a complete filtered page: this is not a whole-project census. */
   partial: boolean
   truth: 'unknown'
@@ -29,12 +31,13 @@ export type LookupTransport = (projectId: string, input: LookupInput, signal: Ab
 export function parseLookup(value: unknown): LookupInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
-  if (Object.keys(v).some(k => !['dataset', 'query', 'status', 'area_id', 'record_id'].includes(k))) return null
+  if (Object.keys(v).some(k => !['dataset', 'query', 'status', 'area_id', 'record_id', 'after_id'].includes(k))) return null
   if (!DATASETS.includes(v.dataset as LookupInput['dataset'])) return null
   for (const key of ['query', 'status', 'area_id', 'record_id']) {
     if (v[key] !== null && (typeof v[key] !== 'string' || (v[key] as string).length > LIMITS.queryChars)) return null
   }
-  if (v.area_id !== null && !['tasks', 'measurements'].includes(String(v.dataset))) return null
+  if (v.after_id !== undefined && v.after_id !== null && (typeof v.after_id !== 'string' || v.after_id.length > LIMITS.queryChars)) return null
+  if (v.area_id !== null && !['tasks', 'measurements', 'components', 'solutions', 'target', 'artifacts', 'requirements'].includes(String(v.dataset))) return null
   const statuses: Record<string, string[]> = {
     tasks: ['todo', 'doing', 'done', 'blocked'],
     materials: ['needed', 'ordered', 'delivered', 'backorder'], events: ['going', 'open'],
@@ -53,13 +56,14 @@ export const SEARCH_TOOL = {
     parameters: {
       type: 'object', additionalProperties: false,
       properties: {
-        dataset: { type: 'string', enum: [...DATASETS] },
+        dataset: { type: 'string', enum: [...DATASETS], description: 'Measurements, components, selected target, solutions, artifacts (drawing text, not pixels), requirements and collaboration data. Follow next_cursor with after_id using identical filters.' },
         query: { type: ['string', 'null'], description: 'Literal search text, max 200 characters.' },
         status: { type: ['string', 'null'], description: 'Task, material or event status only; otherwise null.' },
-        area_id: { type: ['string', 'null'], description: 'Exact area id for tasks or measurements; otherwise null.' },
+        area_id: { type: ['string', 'null'], description: 'Exact area id for task/design datasets; otherwise null. For target: an empty area result inherits record_id=project; an explicit row with null solution_id means cleared, not inherited.' },
+        after_id: { type: ['string', 'null'], description: 'Pagination: copy next_cursor from the previous result, keep filters unchanged. Start with null.' },
         record_id: { type: ['string', 'null'], description: 'Exact record id, or null.' },
       },
-      required: ['dataset', 'query', 'status', 'area_id', 'record_id'],
+      required: ['dataset', 'query', 'status', 'area_id', 'record_id', 'after_id'],
     },
   },
 }
@@ -93,17 +97,20 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         }
         const payload = data as LookupPayload
         if (!payload || !Array.isArray(payload.records) || !Array.isArray(payload.related) || typeof payload.truncated !== 'boolean') throw new Error('invalid_payload')
-        const result: LookupResult = { ...base, status: 'ok', records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
+        const result: LookupResult = { ...base, status: 'ok', next_cursor: typeof payload.next_cursor === 'string' ? payload.next_cursor : null, records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
         while (new TextEncoder().encode(JSON.stringify(result)).length > LIMITS.bytes) {
           result.truncated = true
           if (result.related.length) result.related.pop()
-          else result.records.pop()
+          else {
+            result.records.pop()
+            result.next_cursor = result.records.at(-1)?.id ?? null
+          }
         }
         result.status = result.records.length || result.truncated ? 'ok' : 'empty'
         incomplete ||= result.truncated
-        for (const row of [...result.records, ...result.related]) {
+        for (const [row, dataset] of [...result.records.map(row => [row, input.dataset] as const), ...result.related.map(row => [row, typeof row.kind === 'string' ? row.kind : input.dataset] as const)]) {
           const label = String(row.name ?? row.subject ?? row.title ?? row.text ?? row.id).slice(0, 120)
-          sources.push({ projectId, dataset: typeof row.kind === 'string' ? row.kind : input.dataset, recordId: row.id, label, retrievedAt: result.retrievedAt, updatedAt: row.updated_at ?? null, truth: 'unknown' })
+          sources.push({ projectId, dataset, recordId: row.id, label, retrievedAt: result.retrievedAt, updatedAt: row.updated_at ?? null, truth: 'unknown' })
         }
         return result
       } catch {

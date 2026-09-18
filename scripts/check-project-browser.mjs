@@ -145,6 +145,30 @@ try {
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
     let drawer = await openBob('A')
+    const editor = drawer.getByRole('textbox', { name: 'Question for bob' })
+    assert.equal(await editor.evaluate(node => node.tagName), 'TEXTAREA')
+    const shortHeight = (await editor.boundingBox()).height
+    const longDraft = Array.from({ length: 14 }, (_, i) => `Rad ${i}: 70 × 160 cm, antaganden och mått.`).join('\n')
+    await editor.fill(longDraft)
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+    assert((await editor.boundingBox()).height > shortHeight, 'Composer grows with multiline text')
+    const beforeEnter = requests.length
+    await editor.press('End'); await editor.press('Enter')
+    assert.equal(requests.length, beforeEnter, 'Enter inserts a newline, never sends')
+    assert((await editor.inputValue()).includes('\n'))
+    const draftBeforeExpansion = await editor.inputValue()
+    await drawer.getByRole('button', { name: 'Expand message editor', exact: true }).click()
+    assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Expansion preserves exact draft')
+    assert((await editor.boundingBox()).height >= 200, 'Expanded editor has a real writing surface')
+    await page.screenshot({ path: `test-results/ask-bob-editor-${viewport.width}.png`, fullPage: true })
+    await drawer.getByRole('button', { name: 'Collapse message editor', exact: true }).click()
+    assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Collapse preserves exact draft')
+    const density = drawer.getByRole('button', { name: 'Comfortable text spacing', exact: true })
+    assert.equal(await density.getAttribute('aria-pressed'), 'false')
+    await density.click()
+    assert.equal(await density.getAttribute('aria-pressed'), 'true')
+    assert.equal(await page.evaluate(() => localStorage.getItem('bob:chat-density')), 'comfortable')
+    await density.click()
     await send('Which boards?')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(requests.at(-1).projectId, 'A')
@@ -159,6 +183,13 @@ try {
       assert(box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height, `${name} must be reachable with a 44px target`)
     }
     await page.screenshot({ path: `test-results/ask-bob-${viewport.width}.png`, fullPage: true })
+    assert.equal(await drawer.getByText("What's blocking us?", { exact: true }).count(), 0, 'Suggestion chips do not crowd an active conversation')
+    await page.setViewportSize({ width: viewport.width, height: 480 })
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+    const sendBox = await drawer.getByRole('button', { name: 'Send', exact: true }).boundingBox()
+    assert(sendBox && sendBox.y >= 0 && sendBox.y + sendBox.height <= 480, 'Send remains reachable with a contracted mobile viewport')
+    await page.setViewportSize(viewport)
+
 
     for (const mode of ['unavailable', 'denied', 'wrong-project']) {
       responseMode = mode
@@ -218,6 +249,16 @@ try {
     await saved.getByText('Build 70 × 160 frame', { exact: true }).waitFor()
     assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Save receipts must fit a phone drawer')
     await saved.scrollIntoViewIfNeeded()
+    // Open real evidence disclosures so even a tall desktop has scrollable history.
+    // Compact mode can legitimately fit this short transcript without a jump button.
+    while (await drawer.locator('details:not([open]) > summary').count()) await drawer.locator('details:not([open]) > summary').first().click()
+    const history = drawer.locator('.bob-history')
+    assert(await history.evaluate(node => node.scrollHeight - node.clientHeight > 100), 'Scroll fixture must exceed the jump threshold')
+    await history.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')) })
+    await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).waitFor()
+    assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Reading older messages preserves position')
+    await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).click()
+    assert(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 100))
     await page.screenshot({ path: `test-results/ask-bob-writes-${viewport.width}.png`, fullPage: true })
     await page.getByRole('button', { name: 'Close Ask bob' }).click()
     await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()

@@ -169,13 +169,13 @@ test('the round limit removes tools even if a lookup implementation reports spar
   const lookup = { ...fixtureLookup(), get remaining() { return 10 } }
   const result = await runProjectAnswer({
     projectId: 'A', userId, message: 'Find tasks', lookup, hasAccess: async () => true,
-    callModel: async call => { calls.push(call); return calls.length < 3 ? toolResponse() : finalResponse() },
+    callModel: async call => { calls.push(call); return calls.length < 8 ? toolResponse() : finalResponse() },
   })
   assert.equal(result.ok, true)
-  assert.equal(calls.length, 3)
+  assert.equal(calls.length, 8)
   calls.forEach(assertCallContract)
-  assert.equal(calls[2].tools, undefined)
-  assert(calls[2].systemMessage!.includes(buildBobHands([])))
+  assert.equal(calls[7].tools, undefined)
+  assert(calls[7].systemMessage!.includes(buildBobHands([])))
 })
 
 test('a disabled tool response is rejected rather than dispatched', async () => {

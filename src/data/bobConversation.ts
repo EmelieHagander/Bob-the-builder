@@ -84,6 +84,10 @@ async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse
         if (response.status === 401) return { ok: false, error: 'unauthorized' }
         if (response.status === 403) return { ok: false, error: 'project_denied' }
         if (response.status === 409) return { ok: false, error: 'turn_in_flight' }
+        if (response.status === 503) {
+          const detail = await response.clone().json().catch(() => null)
+          if (['context_preparing', 'context_unavailable'].includes(detail?.error)) return { ok: false, error: detail.error }
+        }
       }
       return { ok: false, error: 'seam_unreachable' }
     }

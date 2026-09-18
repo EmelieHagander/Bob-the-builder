@@ -4,6 +4,7 @@ import { createBobConversationStore, type BobTurnClaim } from './bob-conversatio
 import { createProjectLookup } from './project-lookup.ts'
 import type { ProjectAnswer } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
+import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
@@ -25,10 +26,10 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const lookup = createProjectLookup(opts.projectId, (projectId, input, signal) =>
-    client.rpc('search_bob_project_data', {
+    client.rpc('search_bob_project_data_v2', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
-      p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id,
-    }).abortSignal(signal), 10_000, 6)
+      p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
+    }).abortSignal(signal), 10_000, 12)
   const hasAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -54,7 +55,7 @@ export async function answerWithOpenAi(opts: {
   }
 
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
-  const previousResponseId = claimedServer?.previous_response_id ?? undefined
+  const deadline = Date.now() + 215000
   const threadId = claimedServer?.thread_id ?? null
 
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
@@ -65,7 +66,12 @@ export async function answerWithOpenAi(opts: {
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
   return runClaimedProjectTurn({
-    ...opts, lookup, hasAccess, previousResponseId, writer, generation: claimedServer?.generation,
+    ...opts, lookup, hasAccess, writer, generation: claimedServer?.generation, deadline,
+    ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
+      projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
+      store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),
+      callModel: options => callOpenAIResponses<string>(options), hasAccess, deadline: Math.min(deadline - 60000, Date.now() + 105000),
+    }) } : {}),
     callModel: options => callOpenAIResponses<string>(options),
     fail: async generation => {
       if (threadId) await conversations.fail(opts.projectId, opts.userId, threadId, opts.clientTurnId, generation)
