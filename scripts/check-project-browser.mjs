@@ -251,7 +251,7 @@ try {
     await saved.scrollIntoViewIfNeeded()
     // Open real evidence disclosures so even a tall desktop has scrollable history.
     // Compact mode can legitimately fit this short transcript without a jump button.
-    for (const summary of await drawer.locator('details:not([open]) > summary').all()) await summary.click()
+    while (await drawer.locator('details:not([open]) > summary').count()) await drawer.locator('details:not([open]) > summary').first().click()
     const history = drawer.locator('.bob-history')
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight > 100), 'Scroll fixture must exceed the jump threshold')
     await history.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')) })
