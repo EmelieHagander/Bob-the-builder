@@ -24,8 +24,10 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
     await detail.getByRole('button', { name, exact: true }).click()
     await detail.locator('svg').getByText(text, { exact: true }).waitFor()
   }
+  assert(await detail.locator('.box-drawing-viewport').evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'Default view must show the whole drawing, not crop it on phones')
   await detail.getByRole('button', { name: 'Zoom drawing in', exact: true }).click()
   await detail.getByText('150%', { exact: true }).waitFor()
+  assert(await detail.locator('.box-drawing-viewport').evaluate(el => el.scrollWidth > el.clientWidth), 'Zoomed details remain scrollable inside the drawing')
   await detail.getByRole('button', { name: 'Reset zoom', exact: true }).click()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Drawing preview must not overflow the page')
   for (const button of await detail.locator('.box-drawing').getByRole('button').all()) {
@@ -82,6 +84,9 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   detail = page.getByRole('dialog', { name: 'Test storage box · Version 1', exact: true })
   await detail.locator('.box-dimensions').getByText('764 × 332 × 564 mm', { exact: true }).waitFor()
   await detail.getByRole('button', { name: 'Plan · open top', exact: true }).click()
+  await detail.getByRole('button', { name: 'Plan · open top', exact: true }).evaluate(async el => {
+    await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))
+  })
   await page.screenshot({ path: `test-results/storage-box-${width}.png` })
   await page.reload()
   await detail.locator('.box-dimensions').getByText('764 × 332 × 564 mm', { exact: true }).waitFor()
