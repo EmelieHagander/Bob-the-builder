@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core'
 import { createFactsFixture, verifyFactsBrowser } from './project-facts-browser.mjs'
 import { createSolutionsFixture, verifySolutionsBrowser } from './solutions-browser.mjs'
 import { createArtifactsFixture, verifyArtifactsBrowser } from './artifacts-browser.mjs'
+import { verifyStorageBoxBrowser } from './storage-box-browser.mjs'
 import { createMaterialPlanningFixture, verifyMaterialPlanningBrowser } from './material-planning-browser.mjs'
 
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
@@ -230,6 +231,7 @@ try {
     await verifySolutionsBrowser(page, base, solutions, facts, viewport.width)
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
     await verifyMaterialPlanningBrowser(page, base, materialPlanning, facts, viewport.width)
+    await verifyStorageBoxBrowser(page, base, artifacts, viewport.width)
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
