@@ -1,0 +1,25 @@
+.box-drawing { min-width: 0; max-width: 100%; }
+.box-drawing .btn { min-height: 44px; min-width: 44px; }
+.box-drawing-controls { margin: 12px 0; align-items: center; }
+.box-drawing-viewport { width: 100%; max-width: 100%; max-height: 72vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); overscroll-behavior: contain; }
+.box-drawing-sheet { line-height: 0; }
+.box-drawing-sheet svg { display: block; width: 100%; height: auto; }
+.box-dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.box-dimensions dt { font-size: 13px; color: var(--ink-soft); }
+.box-dimensions dd { margin: 4px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.box-parts { max-width: 100%; overflow-x: auto; }
+.box-parts table { border-collapse: collapse; width: 100%; text-align: left; font-variant-numeric: tabular-nums; }
+.box-parts caption { text-align: left; font-weight: 700; margin: 12px 0; }
+.box-parts th, .box-parts td { border-bottom: 1px solid var(--line); padding: 10px 8px; white-space: nowrap; }
+.box-print-pack { display: none; }
+@media print {
+  body.printing-box-drawing > :not(.box-print-pack) { display: none !important; }
+  body.printing-box-drawing { display: block !important; background: white !important; color: black !important; overflow: visible !important; }
+  .box-print-pack { display: block; color: black; font: 11pt Arial, sans-serif; }
+  .box-print-page { break-after: page; }
+  .box-print-page:last-child { break-after: auto; }
+  .box-print-page svg { display: block; width: 100%; height: auto; }
+  .box-print-page p { font-size: 9pt; }
+  .box-print-pack .box-parts { overflow: visible; }
+  .box-print-pack th, .box-print-pack td { border-color: black; }
+}
