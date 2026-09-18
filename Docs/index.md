@@ -23,7 +23,7 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
+| plans/drawings, parametric 2D storage boxes, exact target lineage and evidence | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
@@ -84,7 +84,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `src/pages/Food.tsx` + `src/pages/FoodShopping.tsx` — meal/allergy coordination.
 - `src/pages/AreaDetail.tsx` — tasks, materials, crew and reference-image surface.
 - `src/pages/Solutions.tsx` — manual alternatives and exact selected project target.
-- `src/pages/Artifacts.tsx` — manual plans/drawings and their exact target/measurement lineage when milestone 4A is available.
+- `src/pages/Artifacts.tsx` — plans/drawings, the parametric 2D editor and exact target/measurement lineage; implementation vs hosted state is recorded in `Docs/artifacts.md`.
 
 When a new major journey moves toward implementation, give it one canonical success/failure path rather than encoding the contract only in component behavior.
 
@@ -101,7 +101,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
-- `Docs/artifacts.md` — owning manual 4A plan/drawing and deployed narrow 4B1 deterministic-geometry contract, including exact target/solution/physical/measurement lineage.
+- `Docs/artifacts.md` — owning manual 4A, deployed narrow 4B1 geometry and implementation-branch parametric 2D storage-box contracts, including exact target/solution/physical/measurement lineage.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
 - `Docs/material-planning.md` + `src/data/materialPlanning.ts` — deployed manual 4B2a receiver and first narrow 4B2b deterministic material quantity, using the existing stock/reuse/Shopping path behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
