@@ -1,6 +1,6 @@
 /*
  * Project-bound assistant drawer. The direct backend can read allowed project
- * records and suggest next steps; responses remain AI assessments. Layout
+ * records and save requested changes; generated prose remains an AI assessment. Layout
  * remounts this drawer when project/auth context changes.
  */
 
@@ -9,6 +9,7 @@ import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
 import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
+import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
 
 const toneColor = {
@@ -201,6 +202,7 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
           {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
           <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {source.dataset}<br />Record {source.recordId}<br />Retrieved {new Date(source.retrievedAt).toLocaleString()}{source.updatedAt ? ` · updated ${new Date(source.updatedAt).toLocaleString()}` : ' · update time unknown'}</li>)}</ul>
         </details>}
+        <BobWriteReceipts receipts={msg.evidence?.writes} />
         {msg.report && <div style={{ marginTop: 10, background: 'var(--canvas)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{msg.report}</div>}
         {msg.list && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>{msg.list.map((it, i) => <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><span style={{ width: 24, height: 24, borderRadius: 7, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: toneColor[it.tone].bg }}><Icon name={it.icon} weight="fill" size={13} color={toneColor[it.tone].c} /></span><span style={{ fontSize: 13.5, lineHeight: 1.4 }}>{it.text}</span></div>)}</div>}
         {msg.action && <button className="btn btn-primary" style={{ marginTop: 11, fontSize: 13 }} onClick={() => onAction?.(msg.action!)}><Icon name="sparkle" weight="fill" size={14} /> {msg.action}</button>}
@@ -211,7 +213,7 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
 }
 
 function WorkingBubble() {
-  return <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Icon name="tree-evergreen" weight="fill" size={17} color="var(--accent)" /></span><div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)', padding: '12px 15px', fontSize: 13.5, color: 'var(--ink-soft)', display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="hammer" weight="fill" size={15} color="var(--honey)" /><span>Bob is checking the project…</span></div></div>
+  return <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Icon name="tree-evergreen" weight="fill" size={17} color="var(--accent)" /></span><div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)', padding: '12px 15px', fontSize: 13.5, color: 'var(--ink-soft)', display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="hammer" weight="fill" size={15} color="var(--honey)" /><span>Bob is working on the project…</span></div></div>
 }
 
 export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
@@ -227,7 +229,16 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [historyReady, setHistoryReady] = useState(false)
   const [historyNotice, setHistoryNotice] = useState('')
   const [working, setWorking] = useState(false)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
+  const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
+  useEffect(() => {
+    if (!open && needsRefresh) { setNeedsRefresh(false); db.refreshAskBobProject(project.id) }
+  }, [open, needsRefresh, project.id])
   const scope = useRef(createRequestScope())
+  const historyScroll = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (open && historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
+  }, [open, extra.length, working])
   useEffect(() => () => scope.current.invalidate(), [project.id])
 
   useEffect(() => {
@@ -244,7 +255,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         const history = await db.getAskBobConversation(project.id)
         if (!current()) return
         if (history.mode === 'server') {
-          setLocalHistory(false); setExtra(history.messages); setHistoryReady(true)
+          setLocalHistory(false); setExtra(history.retry ? [...history.messages, { from: 'user', text: history.retry.text }] : history.messages); setHistoryReady(true)
+          setRetry(history.retry ?? null)
+          if (history.retry) setHistoryNotice('A previous request did not finish. Retry that request to recover any saved changes without repeating them.')
           return
         }
       } catch {
@@ -274,7 +287,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
-      setExtra([]); setDraft(''); setWorking(false); setConfirmReset(false)
+      setExtra([]); setDraft(''); setWorking(false); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
     }
@@ -295,7 +308,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
-      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setWorking(false)
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setWorking(false); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
         ? 'New conversation started. Saved project data is unchanged.'
@@ -310,20 +323,22 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
-  const send = async () => {
-    const text = draft.trim()
+  const send = async (retryRequest?: { text: string; turnId: string }, appendUser = !retryRequest) => {
+    const text = (retryRequest?.text ?? draft).trim()
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
     const isCurrent = scope.current.capture()
-    const clientTurnId = crypto.randomUUID()
-    setDraft('')
-    push({ from: 'user', text })
+    const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
+    setDraft(''); setRetry(null)
+    if (appendUser) push({ from: 'user', text })
     setWorking(true)
     const result = await db.askBob(project.id, text, clientTurnId)
     if (!isCurrent()) return
     setWorking(false)
     if ('answer' in result) {
+      if (result.evidence.writes?.length) setNeedsRefresh(true)
       push({ from: 'bob', text: result.answer, evidence: result.evidence })
     } else if (result.unavailable !== 'project_changed') {
+      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId })
       const message = result.unavailable === 'not_configured'
         ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
         : result.unavailable === 'unauthorized'
@@ -337,7 +352,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     }
   }
 
-  const handleAction = (action: string) => push({ from: 'bob', text: `"${action}" — I can't do that for you quite yet. Head to the area page and use the Assign button; real hands-on help from me is coming.` })
+  const handleAction = (action: string) => { void send({ text: action, turnId: crypto.randomUUID() }, true) }
 
   if (!open) return null
 
@@ -357,8 +372,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}. I can read project records and suggest next steps.` }} />
+        <div ref={historyScroll} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}. Ask about your project or request an update. I will tell you what was actually saved.` }} />
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} />)}
           {working && <WorkingBubble />}
@@ -366,6 +381,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
         <div style={{ padding: '0 18px 8px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>
 
+        {retry && <div role="status" style={{ padding: '8px 18px', fontSize: 12.5, color: 'var(--ink-soft)' }}>
+          <p>Retry the same request to check its result without duplicating saved changes.</p>
+          <button className="btn btn-secondary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)} style={{ marginTop: 6, minHeight: 44 }}>Retry request</button>
+        </div>}
         <form onSubmit={e => { e.preventDefault(); void send() }} style={{ display: 'flex', gap: 8, padding: 18, borderTop: '1px solid var(--line)' }}>
           <input disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }} />
           <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady} style={{ minWidth: 44, minHeight: 44, ...(working || resetting || !historyReady ? { opacity: 0.55 } : {}) }}><Icon name="paper-plane-right" weight="fill" size={16} /></button>
