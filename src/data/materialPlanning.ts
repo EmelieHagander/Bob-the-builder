@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { readSheetLayer, sheetPurchaseCount } from './sheetLayers'
+import type { SheetLayerSnapshot } from './sheetLayers'
 
 export type QuantityUnit = 'pcs' | 'm' | 'm2' | 'm3' | 'kg' | 'l'
 export type StockStatus = 'available' | 'inspect' | 'unavailable'
@@ -72,6 +74,7 @@ export interface MaterialRequirement {
   sourceKind: RequirementSourceKind
   methodKey: string
   methodVersion: string
+  sheetLayer?: SheetLayerSnapshot | null
   basis: string
   assumptions: string
   artifactId: string | null
@@ -138,6 +141,13 @@ function stockItem(row: Row): StockItem {
 }
 
 function requirement(row: Row): MaterialRequirement {
+  const sheetLayer = readSheetLayer(row.sheet_layer, row.method_key)
+  if (sheetLayer) {
+    if (row.unit !== 'm2' || sheetPurchaseCount(textNumber(row.purchase_increment), sheetLayer.unit_coverage_m2) !== '1') {
+      throw new Error('Sheet-layer coverage does not match the saved purchase unit. Reload the material plan.')
+    }
+    sheetPurchaseCount(textNumber(row.purchase_quantity), textNumber(row.purchase_increment))
+  }
   return {
     id: row.requirement_id ?? row.id,
     projectId: row.project_id,
@@ -159,6 +169,7 @@ function requirement(row: Row): MaterialRequirement {
     sourceKind: row.source_kind,
     methodKey: row.method_key,
     methodVersion: row.method_version,
+    sheetLayer,
     basis: row.basis,
     assumptions: row.assumptions ?? '',
     artifactId: row.artifact_id ?? null,
