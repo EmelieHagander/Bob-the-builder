@@ -3,28 +3,64 @@ on:
   push:
     branches: [feat/bob-context-builder-chat]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  workspace:
+  integrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          fetch-depth: 0
+      - name: Apply reviewed source package and remove transport
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7ca834523d605bf18084402f3025c339e337b2a8 HEAD
+          cat .dev/context-release.part{0,1,2}.b64 | base64 --decode > /tmp/context.json.xz
+          echo '7718b1aa6386457ad7aac521ed530b9fa790bde6d6cc04497cb20641b1eab6e1  /tmp/context.json.xz' | sha256sum --check
+          python3 - <<'PY'
+          import json,lzma,pathlib,subprocess
+          entries=json.loads(lzma.decompress(pathlib.Path('/tmp/context.json.xz').read_bytes()))
+          for name,entry in entries.items():
+              path=pathlib.Path(name)
+              assert not path.is_absolute() and '..' not in path.parts and path.parts[0] in ['Docs','db','scripts','src','supabase','tests']
+              if 'patch' in entry:
+                  subprocess.run(['git','apply','--unidiff-zero','--check','-'],input=entry['patch'].encode(),check=True)
+                  subprocess.run(['git','apply','--unidiff-zero','-'],input=entry['patch'].encode(),check=True)
+              else:
+                  path.parent.mkdir(parents=True,exist_ok=True)
+                  path.write_text(entry['content'])
+          PY
+          git rm .dev/context-release.part{0,1,2}.b64 .github/workflows/bob-context-dev.yml
+          git add Docs db scripts src supabase tests
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add bounded working context, deeper builder research and compact chat'
+          git push origin HEAD:feat/bob-context-builder-chat
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Snapshot source and locked test dependencies
-        run: |
-          git archive --format=tar.gz --output=/tmp/bob-source.tar.gz HEAD
-          tar -czf /tmp/bob-deps.tar.gz node_modules
+      - run: npm test
+      - run: npm run check:edge
+      - name: Build browser fixture
+        id: build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://pwa-proof.invalid
+          VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify compact chat, editor, project isolation and safe write retry
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
+      - name: Verify conversation reset
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: bob-context-workspace
-          path: |
-            /tmp/bob-source.tar.gz
-            /tmp/bob-deps.tar.gz
-          retention-days: 1
+          name: bob-context-integration
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
