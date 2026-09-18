@@ -1,0 +1,29 @@
+name: Drawing workbench
+on:
+  push:
+    branches: [feat/parametric-2d-drawings]
+    paths: [.github/workflows/drawing-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Package tracked source and test dependencies only
+        run: |
+          mkdir workbench
+          git archive --format=tar HEAD | gzip > workbench/source.tar.gz
+          tar -czf workbench/dependencies.tar.gz node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: drawing-workbench
+          path: workbench/
+          retention-days: 1
