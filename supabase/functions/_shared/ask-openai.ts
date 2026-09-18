@@ -26,7 +26,7 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const lookup = createProjectLookup(opts.projectId, (projectId, input, signal) =>
-    client.rpc('search_bob_project_data_v2', {
+    client.rpc('search_bob_project_data_v3', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }).abortSignal(signal), 10_000, 12)
@@ -61,7 +61,7 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // A shared guest identity has no private claimed thread and is read-only.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => client.rpc('bob_project_write', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
+    payload => client.rpc('bob_project_write_v2', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
