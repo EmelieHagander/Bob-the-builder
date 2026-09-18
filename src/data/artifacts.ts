@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import type { StudWallRole } from '../lib/artifactGeometry'
+import type { StorageBoxRecipe } from '../lib/storageBox'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
 export type ArtifactGenerator = 'stud_wall_opening_v1'
-export type ArtifactEditAction = 'create' | 'revise' | 'archive' | 'restore' | 'generate' | 'regenerate'
+export type ArtifactEditAction = 'create' | 'revise' | 'archive' | 'restore' | 'generate' | 'regenerate' | 'generate_box' | 'regenerate_box'
 
 export interface ArtifactMeasurement {
   id: string
@@ -59,6 +60,7 @@ export interface ProjectArtifact {
   recordedAt: string
   generator: ArtifactGenerator | null
   generatorVersion: number | null
+  parametricRecipe?: StorageBoxRecipe | null
 }
 
 export interface ArtifactVersion extends ProjectArtifact {
@@ -96,6 +98,7 @@ function artifact(row: Row): ProjectArtifact {
     recordedAt: row.recorded_at,
     generator: row.generator ?? null,
     generatorVersion: row.generator_version ?? null,
+    parametricRecipe: row.parametric_recipe ?? null,
   }
 }
 
@@ -157,6 +160,22 @@ export function createArtifacts(
     }
   }
 
+  async function recipes(projectId: string, pairs: { id: string; revision: number }[]) {
+    const { db, guard } = connection(projectId)
+    if (!pairs.length) return [] as Row[]
+    if (pairs.length > 24 || pairs.some(p => !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(p.id)
+      || !Number.isSafeInteger(p.revision) || p.revision < 1)) throw new Error('Invalid drawing revision reference.')
+    // Read the exact versions returned by the preceding query, not whichever
+    // recipe becomes current while a collaborator saves another revision.
+    const filter = pairs.map(p => `and(artifact_id.eq.${p.id},artifact_revision.eq.${p.revision})`).join(',')
+    const rows = checked(await db.from('artifact_parametric_recipes').select('*').eq('project_id', projectId).or(filter)) as Row[]
+    guard()
+    if (rows.some(row => !pairs.some(p => p.id === row.artifact_id && p.revision === row.artifact_revision))) {
+      throw new Error('Drawing recipe revision mismatch.')
+    }
+    return scoped(rows, projectId)
+  }
+
   async function version(projectId: string, id: string, revision: number): Promise<ArtifactVersion> {
     const { db, guard } = connection(projectId)
     const r = checked(await db.from('artifact_revision_details').select('*').eq('project_id', projectId)
@@ -169,9 +188,10 @@ export function createArtifacts(
       .order('measurement_id').limit(20)) as Row[]
     guard()
     const generated = r.generator ? await generation(projectId, id, revision) : null
+    const parametric = await recipes(projectId, [{ id, revision }])
     guard()
     return {
-      ...artifact(r),
+      ...artifact({ ...r, parametric_recipe: parametric[0]?.recipe ?? null }),
       measurements: scoped(refs, projectId).map(measurement),
       generation: generated,
     }
@@ -186,21 +206,28 @@ export function createArtifacts(
       if (areaId) query = query.eq('area_id', areaId)
       const rows = checked(await query.order('recorded_at', { ascending: false }).order('id').range(offset, offset + 24)) as Row[]
       guard()
-      return { items: scoped(rows.slice(0, 24), projectId).map(artifact), hasMore: rows.length > 24 }
+      const page = scoped(rows.slice(0, 24), projectId)
+      const parametric = await recipes(projectId, page.map(r => ({ id: r.id, revision: r.revision })))
+      guard()
+      return { items: page.map(r => artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_id === r.id && p.artifact_revision === r.revision)?.recipe })), hasMore: rows.length > 24 }
     },
     async history(projectId: string, id: string, offset = 0) {
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('artifact_revision_details').select('*').eq('project_id', projectId).eq('artifact_id', id)
         .order('revision', { ascending: false }).range(offset, offset + 12)) as Row[]
       guard()
-      return { items: scoped(rows.slice(0, 12), projectId).map(artifact), hasMore: rows.length > 12 }
+      const page = scoped(rows.slice(0, 12), projectId)
+      const parametric = await recipes(projectId, page.map(r => ({ id, revision: r.revision })))
+      guard()
+      return { items: page.map(r => artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_revision === r.revision)?.recipe })), hasMore: rows.length > 12 }
     },
     async edit(projectId: string, action: ArtifactEditAction, id: string, expected: number, data: Record<string, unknown> = {}) {
       const { db, guard } = connection(projectId)
       const generated = action === 'generate' || action === 'regenerate'
-      const saved = checked(await db.rpc(generated ? 'artifact_geometry_command' : 'artifact_command', {
+      const box = action === 'generate_box' || action === 'regenerate_box'
+      const saved = checked(await db.rpc(box ? 'artifact_box_command' : generated ? 'artifact_geometry_command' : 'artifact_command', {
         p_project: projectId,
-        p_action: action === 'generate' ? 'create' : action,
+        p_action: action === 'generate' || action === 'generate_box' ? 'create' : action === 'regenerate_box' ? 'regenerate' : action,
         p_artifact: id,
         p_expected: expected,
         p_data: data,

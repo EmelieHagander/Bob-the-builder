@@ -161,6 +161,95 @@ The foundation still does not yet provide:
 
 Those remain later Slice 4/5 gates. Future generated artifacts and BOM/work-plan records must reference the exact selected target and artifact/calculation revisions rather than infer lineage from whichever target is current later.
 
+## Parametric 2D storage box — implementation branch (2026-09-18)
+
+**Status:** implemented in code, not a statement of hosted deployment. Apply the additive
+`20260918204949_parametric_storage_box_drawings.sql` before the matching frontend and
+`ask-bob` rollout. The delivered 4A/4B1 status above is unchanged. Browser and hosted
+release proof must be recorded separately; committing a recipe is not a deployment.
+
+The first editable furniture drawing is deliberately one assembly: an **open-top,
+rectangular sheet-material storage box**. It has front elevation, plan, central
+section A–A and a finished-part table. `src/lib/storageBox.ts` is the shared,
+versioned geometry authority for the browser, exports and Bob's read tool. No 3D,
+external CAD service or image generator is required.
+
+The `storage_box_v1` / version `1` recipe holds outside width, overall height,
+depth and uniform sheet thickness, all in millimetres. Finite positive dimensions,
+maximums and at most three decimals are checked in both TypeScript and SQL.
+Arithmetic uses integer micrometres to avoid floating-point cut-list drift;
+that numerical precision is **not** a manufacturing tolerance.
+
+Assembly and finished sizes:
+
+- B1: one full bottom, width × depth × thickness.
+- S1: two sides, depth × (height − thickness) × thickness, standing on B1.
+- F1: front and back, (width − 2 × thickness) × (height − thickness) × thickness,
+  between the sides and standing on B1.
+
+There is no lid, runner, rebate, fixing schedule, structural/load rating, site-fit
+allowance, stock layout, saw-kerf optimisation or Shopping mutation. This is not a
+complete fitted drawer system or a general-purpose CAD editor. The limits remain
+visible in the app and print pack. Fixing, material suitability and site fit need
+project-specific checking before cutting or assembly.
+
+### One artifact, exact versions
+
+`bob.artifact_parametric_recipes` stores one recipe per existing Artifact revision.
+It does not create another project/drawing identity. The guarded
+`artifact_box_command` delegates target scope, membership, actor, measurements,
+optimistic revision checks and history to the canonical Artifact command. A
+revision cannot hold both a wall recipe and a storage-box recipe. Raw writes are
+not granted; SELECT remains under project RLS. No shared/hearth table changes.
+
+Create and regenerate save **Concept** revisions. Parameters are chosen design
+specifications, not observed Building/Space measurements. Optional linked
+measurement revisions are evidence, not implicit parameter bindings: changing a
+measurement warns through the existing evidence UI and does not silently resize
+the box. Regeneration retains old versions and deliberately does not carry a
+possibly obsolete illustration into the new revision. Archive/restore retain the
+same recipe. List/history/detail reads fetch the exact version pairs, not a newer
+recipe that happens to become current during a concurrent save.
+
+### Reachable UI and Bob tool
+
+`Plans & drawings → Draw storage box` uses the selected target for the current
+Project/Area. The initial numbers in the form are explicitly editable examples,
+not measurements from the user's project. Width, height, depth and thickness are
+editable with live preview. Saving reads back and opens the saved drawing.
+**Revise** edits the recipe, saves a new revision and preserves old evidence.
+
+The viewer has three views, labelled dimensions, internal dimensions, a readable
+part table, zoom and contained scrolling on phones. SVG, finished-parts CSV and
+Print / PDF are available for saved revisions only. Exports identify the revision;
+the drawing states **NOT TO SCALE**. Read written dimensions, never a ruler applied
+to the screen or a fit-to-page print. The print pack is generated from the same
+recipe; it is not a separately authored drawing.
+
+`save_project_drawing` creates/revises this supported assembly through the existing
+claimed-turn, caller-JWT, receipt and settlement boundary. The model cannot choose
+project authority, status or arbitrary code/SVG. It reads the selected target and
+current recipe first. `search_bob_project_data_v3` adds the recipe; the Edge lookup
+adds dimensions and parts using the shared generator. Old v2 callers stay valid.
+A validated drawing receipt links to its **exact revision** in Bob and closes the
+chat to reveal it. See [bounded writes](ask-bob-writes.md) for write authority.
+
+Mockup generation and automatic material-requirement publication are **not** part
+of this slice. Future mockups must pin their source Artifact revision and must not
+be silently relabelled current when the design changes.
+
+### Branch verification
+
+`tests/storage-box.test.ts` covers geometry, decimal arithmetic, version rejection,
+SVG escaping, consistent changes, parser scope, research derivation and receipt
+recovery. `tests/storage-box-db.test.ts` applies all migrations in PGlite and checks
+real role/RLS behavior, canonical target/measurement lineage, raw-write denial,
+stale edits, archive/restore and claimed-turn idempotency/settlement. Existing
+wall-generation tests remain intact. `scripts/storage-box-browser.mjs` is included
+in the production foundations browser gate at 320/390/1280px and exercises editing,
+conflict recovery, reload, exact old-version links and SVG/CSV/print rendering.
+These fixtures are not a live AI personality or hosted PostgREST test.
+
 ## Verification contract
 
 A 4A release requires proof that:

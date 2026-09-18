@@ -39,7 +39,8 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,3)
+  assert.equal(WRITE_TOOLS.length,4)
+  assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
 })
 
 test('measurement parser enforces canonical units, uncertainty, decimal limits and current revision',()=>{
@@ -137,9 +138,9 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v2'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
-  assert.doesNotMatch(source,/internal\.rpc\('bob_project_write'/)
+  assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v2)?'/)
   const conversation=await readFile(new URL('../supabase/functions/_shared/bob-conversation.ts',import.meta.url),'utf8')
   assert.match(conversation,/bob_commit_turn_v2/);assert.match(conversation,/p_generation: input\.generation/)
 })

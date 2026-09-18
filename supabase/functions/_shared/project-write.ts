@@ -1,4 +1,6 @@
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
+import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
+import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
 
 const nullableText = { type: ['string', 'null'] }
 const text = { type: 'string' }
@@ -9,6 +11,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
   tool('save_project_description', 'Save the requested project description/plan. Read the current project first; preserve unrelated content. This does not select a SolutionVersion or certify a design.', {
     description: { ...text, description: 'Full replacement description, at most 12000 characters.' },
     expected_updated_at: text, request_quote: quote,
@@ -31,7 +34,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement'
+  kind: 'project' | 'task' | 'measurement' | 'drawing'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -71,6 +74,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
     return { ...base, kind: 'task', expected_updated_at: v.expected_updated_at as string | null,
       data: { area_id: v.area_id, name: v.name, instructions: v.instructions } }
   }
+  if (name === 'save_project_drawing') return parseDrawingWrite(v)
   if (v.record_id !== null && !uuid.test(v.record_id as string)) return null
   if (v.create_area_id !== null && !isText(v.create_area_id, 200)) return null
   if (v.create_component_id !== null && (typeof v.create_component_id !== 'string' || !uuid.test(v.create_component_id))) return null
@@ -92,9 +96,8 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
 }
 function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
-  if (!r || r.projectId !== projectId || !['project', 'tasks', 'measurements'].includes(r.dataset)
-    || !isText(r.recordId, 200) || !isText(r.label, 300) || !['created', 'updated'].includes(r.operation)
-    || !isTime(r.savedAt) || !r.record || r.record.id !== r.recordId) throw new Error('Invalid write receipt')
+  if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
+    || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))) throw new Error('Invalid write receipt')
   return r
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
