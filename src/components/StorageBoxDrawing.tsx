@@ -67,10 +67,10 @@ export function StorageBoxDrawing({ recipe, stamp, preview = false }: { recipe: 
         <button type="button" className="btn" disabled={printing} onClick={() => setPrinting(true)}>Print / PDF</button></>}
     </div>
     <div className="box-drawing-viewport" tabIndex={0} aria-label={`${BOX_VIEW_LABELS[view]}. Scroll to read the full drawing.`}>
-      <div className="box-drawing-sheet" style={{ width: `${zoom * 100}%`, minWidth: 720 * zoom }}
+      <div className="box-drawing-sheet" style={{ width: `${zoom * 100}%` }}
         dangerouslySetInnerHTML={{ __html: svg }} />
     </div>
-    <p className="foundation-hint">Scroll inside the drawing on a phone. The dimensions below remain readable without zooming.</p>
+    <p className="foundation-hint">The full view fits the screen. Zoom in and scroll for details; the dimensions below remain readable without zooming.</p>
     <dl className="box-dimensions">
       <div><dt>Outside · W × H × D</dt><dd>{[geometry.recipe.width_mm, geometry.recipe.height_mm, geometry.recipe.depth_mm].map(formatDrawingMm).join(' × ')} mm</dd></div>
       <div><dt>Inside · W × H × D</dt><dd>{[geometry.innerWidthMm, geometry.innerHeightMm, geometry.innerDepthMm].map(formatDrawingMm).join(' × ')} mm</dd></div>
