@@ -1,4 +1,5 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.110.2'
+import type { ContextStore } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 
 export type BobTurnClaim =
@@ -22,6 +23,15 @@ function checked<T>(result: RpcResult<T>, operation: string): T {
  */
 export function createBobConversationStore(client: SupabaseClient<any, 'bob', any>) {
   return {
+    workingContext(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }): ContextStore {
+      const args = { p_project: binding.projectId, p_user: binding.userId, p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation }
+      const rpc = async (name: string, extra = {}) => checked(await client.rpc(name, { ...args, ...extra }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<unknown>, 'conversation context')
+      return {
+        load: () => rpc('bob_load_context'),
+        save: (expected, through, summary) => rpc('bob_save_context_summary', { p_expected_seq: expected, p_through_seq: through, p_summary: summary }),
+        search: (query, before) => rpc('bob_search_context_history', { p_query: query, p_before_seq: before }),
+      }
+    },
     async claim(projectId: string, userId: string, turnId: string, message: string): Promise<BobTurnClaim> {
       return checked(await client.rpc('bob_claim_turn', {
         p_project: projectId,

@@ -8,13 +8,15 @@ OpenAI is the permanent integration, not a temporary fallback. Later V1 slices
 extend this path. Provider configuration and tools are owned here.
 
 Bob answers through `ask-bob` using **direct OpenAI with
-bounded, read-only project tools**. The browser sends an explicit Bob project id;
+bounded caller-authorized project tools and guarded writes**. The browser sends an explicit Bob project id;
 the backend authenticates the user and uses their JWT for all project reads.
 
 Launchpad is retired from Bob's architecture. The old `ask-launchpad` endpoint
 has only a 410 retirement response for outdated clients; it makes no provider or
 database calls, even if old secrets remain configured. Deploy that response as
 part of the rollout so the previous live gateway cannot keep accepting requests.
+
+For current working context, five full recent messages, incremental summaries, history search and research-page limits, see [Ask bob conversations](../Docs/ask-bob-conversations.md). This September 2026 extension supersedes the Slice 0 budgets below; [write tools](../Docs/ask-bob-writes.md) own mutation authority. Launchpad remains retired as a runtime dependency; its memory-tier design informs Bob-owned context.
 
 ## Code ownership
 
@@ -26,11 +28,12 @@ part of the rollout so the previous live gateway cannot keep accepting requests.
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
-| `bob.search_project_data` | Static SQL projections under caller RLS; no arbitrary SQL/columns. |
+| `bob.search_bob_project_data_v2` | Current static paged research projections under caller RLS; original lookup kept compatible. |
+| `_shared/bob-working-context.ts` | Five verbatim messages, incremental older summary and claimed-thread history retrieval. |
 | `_shared/openai-service.ts` | Existing shared Responses service; two generic type annotations corrected, runtime behavior unchanged. |
 
 No browser or model has the service-role key. The shared service uses it only
-for `shared.ai_models`, `shared.ai_settings` and `shared.ai_usage_events`.
+for `shared.ai_models`, `shared.ai_settings` and `shared.ai_usage_events`, plus the guarded private Bob conversation/context commands. Domain reads and writes still use the caller JWT.
 `OPENAI_API_KEY` is still read only there. Model choice, reasoning effort,
 usage attribution and the kill switch retain their existing configuration.
 

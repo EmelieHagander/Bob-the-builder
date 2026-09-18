@@ -558,3 +558,7 @@ limitations and the remaining live/browser gates.
 `node scripts/check-restore-snapshot.mjs /absolute/path/to/private-snapshot.json`
 checks the affected tables' recovery data against a fresh local Postgres fixture.
 Recovery snapshots contain private data and must never be committed to this repo.
+
+## Bob working-context extension (September 2026)
+
+`20260918194106_ask_bob_context_memory.sql` adds a private thread-cascaded summary and service-only claimed-turn load/save/search commands. `20260918194147_ask_bob_research_pages.sql` adds the caller-RLS paged research RPC without altering legacy callers. No cross-app tables or project-content migrations. Current semantics and release gates: [Ask bob conversations](../Docs/ask-bob-conversations.md). Hosted registry timestamps can differ; apply only the reviewed new SQL and record the mapping in the release PR.

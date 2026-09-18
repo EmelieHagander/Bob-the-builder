@@ -1,3 +1,4 @@
+import type { WorkingContext } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer } from './project-answer.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -8,6 +9,8 @@ export async function runClaimedProjectTurn(opts: {
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
+  prepareContext?: () => Promise<WorkingContext>;
+  deadline?: number;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
 }): Promise<ProjectAnswer> {
@@ -17,8 +20,15 @@ export async function runClaimedProjectTurn(opts: {
   let recovered = false
   try {
     if (opts.writer) recovered = (await opts.writer.recover()).length > 0
-    if (!recovered) result = await runProjectAnswer(opts)
-  } catch { /* still settle any committed writes, even if model/transport threw */ }
+    if (!recovered) {
+      const context = opts.prepareContext ? await opts.prepareContext() : undefined
+      result = await runProjectAnswer({ ...opts, context })
+    }
+  } catch (error) {
+    // Still settle committed writes; never substitute a context-less answer.
+    const code = error instanceof Error ? error.message : ''
+    result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied'].includes(code) ? code : 'ai_unavailable' }
+  }
 
   if (opts.writer) {
     const uncertain = opts.writer.uncertain

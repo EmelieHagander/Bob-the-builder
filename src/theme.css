@@ -720,3 +720,31 @@ select {
 .volunteer-page input, .volunteer-page textarea, .volunteer-page select { min-height: 44px; font-size: 16px !important; }
 .volunteer-link-manager input, .volunteer-link-manager select { min-height: 44px; min-width: 0; }
 @media (max-width: 390px) { .volunteer-page { padding-left: 12px; padding-right: 12px; } .volunteer-join, .volunteer-intro, .volunteer-item { padding: 16px; } .volunteer-brand span { display: none; } }
+
+/* Ask Bob: more usable conversation width, adjustable density, growing composer. */
+.bob-overlay { position: fixed; inset: 0; z-index: 60; height: 100dvh; }
+.bob-drawer { position: absolute; inset: 0 0 0 auto; width: min(620px, 100%); background: var(--canvas); border-left: 1px solid var(--line); display: flex; flex-direction: column; box-shadow: -20px 0 50px -30px rgba(0,0,0,.5); animation: fadeUp .2s ease; min-height: 0; }
+.bob-drawer > header, .bob-toolbar, .bob-composer { flex-shrink: 0; }
+.bob-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 12px; border-bottom: 1px solid var(--line); }
+.bob-toolbar .btn { min-height: 44px; padding: 6px 10px; font-size: 13px; }
+.bob-density { min-width: 44px; }
+.bob-density[aria-pressed=true] { background: var(--surface-2); }
+.bob-history { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 12px; scrollbar-gutter: stable; }
+.bob-message { display: flex; flex-shrink: 0; min-width: 0; }
+.bob-bubble { min-width: 0; max-width: 100%; overflow-wrap: anywhere; padding: 10px 12px; font-size: 14px; line-height: 1.45; }
+.bob-message-assistant .bob-bubble { width: 100%; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px 12px 12px 3px; }
+.bob-message-user { justify-content: flex-end; }
+.bob-message-user .bob-bubble { max-width: 92%; color: var(--accent-ink); background: var(--accent); border-radius: 12px 12px 3px 12px; }
+.bob-markdown { display: flex; flex-direction: column; gap: 7px; }
+.bob-comfortable .bob-bubble { font-size: 16px; line-height: 1.6; padding: 14px 16px; }
+.bob-comfortable .bob-history { gap: 18px; }
+.bob-comfortable .bob-markdown { gap: 12px; }
+.bob-chips { padding: 0 12px 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.bob-jump { align-self: center; min-height: 44px; margin: 0 0 4px; font-size: 13px; }
+.bob-composer { display: flex; gap: 6px; align-items: flex-end; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--canvas); }
+.bob-composer textarea { flex: 1; min-width: 0; min-height: 44px; resize: none; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface); color: var(--ink); }
+.bob-composer-actions { display: flex; flex-direction: column; gap: 4px; }
+.bob-composer-actions .btn { min-width: 44px; min-height: 44px; padding: 8px; }
+.bob-composer textarea:focus-visible, .bob-drawer button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.bob-composer .btn:disabled { opacity: .55; }
+@media (min-width: 480px) { .bob-composer-actions { flex-direction: row; } }

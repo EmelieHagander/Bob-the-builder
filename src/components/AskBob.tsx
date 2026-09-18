@@ -4,7 +4,7 @@
  * remounts this drawer when project/auth context changes.
  */
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
 import { Modal } from './Modal'
@@ -183,17 +183,14 @@ function MarkdownText({ text }: { text: string }) {
     blocks.push(<p key={`p-${blockIndex++}`} style={{ margin: 0 }}>{renderInlineMarkdown(paragraph.join(' '), `p-${blockIndex}`)}</p>)
   }
 
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{blocks}</div>
+  return <div className="bob-markdown">{blocks}</div>
 }
 
 function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: string) => void }) {
   const isUser = msg.from === 'user'
   return (
-    <div style={{ display: 'flex', gap: 10, justifyContent: isUser ? 'flex-end' : 'flex-start', alignItems: 'flex-start' }}>
-      {!isUser && <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Icon name="tree-evergreen" weight="fill" size={17} color="var(--accent)" /></span>}
-      <div style={{ maxWidth: '80%', minWidth: 0, overflowWrap: 'anywhere', padding: '12px 15px', fontSize: 14.5, lineHeight: 1.5,
-        ...(isUser ? { background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: '16px 16px 4px 16px', fontWeight: 600 }
-          : { background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)' }) }}>
+    <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
+      <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
@@ -219,6 +216,28 @@ function WorkingBubble() {
 export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('bob:chat-density') !== 'comfortable' } catch { return true } })
+  const [expanded, setExpanded] = useState(false)
+  const [showJump, setShowJump] = useState(false)
+  const [viewport, setViewport] = useState<{ height: number; top: number } | null>(null)
+  const composer = useRef<HTMLTextAreaElement>(null)
+  const stickToEnd = useRef(true)
+  useEffect(() => { try { localStorage.setItem('bob:chat-density', compact ? 'compact' : 'comfortable') } catch { /* preference is optional */ } }, [compact])
+  useEffect(() => {
+    if (!open || !window.visualViewport) return
+    const v = window.visualViewport
+    const update = () => setViewport({ height: v.height, top: v.offsetTop })
+    update(); v.addEventListener('resize', update); v.addEventListener('scroll', update)
+    return () => { v.removeEventListener('resize', update); v.removeEventListener('scroll', update) }
+  }, [open])
+  useLayoutEffect(() => {
+    const input = composer.current
+    if (!input) return
+    const available = viewport?.height ?? window.innerHeight
+    const cap = expanded ? Math.max(80, Math.min(420, available * 0.5)) : Math.max(64, Math.min(160, available * 0.28))
+    input.style.height = 'auto'
+    input.style.height = `${expanded ? cap : Math.min(Math.max(44, input.scrollHeight), cap)}px`
+  }, [draft, expanded, open, viewport])
   const [extra, setExtra] = useState<ChatMessage[]>([])
   const [historyKey, setHistoryKey] = useState<string | null>(null)
   const [localHistory, setLocalHistory] = useState(false)
@@ -237,8 +256,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const scope = useRef(createRequestScope())
   const historyScroll = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (open && historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
-  }, [open, extra.length, working])
+    if (open && historyScroll.current && stickToEnd.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
+  }, [open, extra.length, working, viewport])
   useEffect(() => () => scope.current.invalidate(), [project.id])
 
   useEffect(() => {
@@ -287,7 +306,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
-      setExtra([]); setDraft(''); setWorking(false); setConfirmReset(false); setRetry(null)
+      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
     }
@@ -308,7 +327,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
-      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setWorking(false); setRetry(null)
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
         ? 'New conversation started. Saved project data is unchanged.'
@@ -328,7 +347,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
-    setDraft(''); setRetry(null)
+    setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null)
     if (appendUser) push({ from: 'user', text })
     setWorking(true)
     const result = await db.askBob(project.id, text, clientTurnId)
@@ -345,6 +364,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           ? 'Please sign in again before asking about this project.'
           : result.unavailable === 'project_denied'
             ? 'I could not access this project. Your membership may have changed.'
+            : result.unavailable === 'context_preparing'
+              ? 'Bob is catching up on the older conversation. Retry the same request to continue; no new project changes were made.'
+            : result.unavailable === 'context_unavailable'
+              ? 'Bob could not prepare the conversation context. No answer was generated from incomplete history. Please retry.'
             : result.unavailable === 'turn_in_flight'
               ? 'That conversation already has a question in progress. Try again when it finishes.'
               : 'I could not retrieve an answer for this project. Please try again.'
@@ -357,37 +380,51 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   if (!open) return null
 
   return (
-    <div className="no-print" style={{ position: 'fixed', inset: 0, zIndex: 60 }}>
+    <div className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
-      <aside aria-label={`Ask bob for ${project.name}`} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(440px, 100%)', background: 'var(--canvas)', borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', boxShadow: '-20px 0 50px -30px rgba(0,0,0,.5)', animation: 'fadeUp .25s ease' }}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '16px 18px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
+      <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" /></span>
           <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div></div>
           <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
         </header>
 
-        <div style={{ padding: '8px 18px', borderBottom: '1px solid var(--line)' }}>
+        <div className="bob-toolbar">
           <button type="button" className="btn" disabled={!historyReady || working || resetting} style={{ minHeight: 44 }} onClick={() => { setResetError(''); setConfirmReset(true) }}>
             <Icon name="arrow-counter-clockwise" size={16} /> New conversation
           </button>
+          <button type="button" className="btn bob-density" aria-label="Comfortable text spacing" aria-pressed={!compact} title={compact ? 'Use larger text and spacing' : 'Use compact text and spacing'} onClick={() => setCompact(value => !value)}>Aa</button>
         </div>
 
-        <div ref={historyScroll} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}. Ask about your project or request an update. I will tell you what was actually saved.` }} />
+        <div ref={historyScroll} className="bob-history" onScroll={e => {
+          const el = e.currentTarget
+          stickToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64
+          setShowJump(!stickToEnd.current)
+        }}>
+          {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} />)}
           {working && <WorkingBubble />}
         </div>
 
-        <div style={{ padding: '0 18px 8px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>
+        {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> Latest</button>}
+
+        {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
 
         {retry && <div role="status" style={{ padding: '8px 18px', fontSize: 12.5, color: 'var(--ink-soft)' }}>
           <p>Retry the same request to check its result without duplicating saved changes.</p>
           <button className="btn btn-secondary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)} style={{ marginTop: 6, minHeight: 44 }}>Retry request</button>
         </div>}
-        <form onSubmit={e => { e.preventDefault(); void send() }} style={{ display: 'flex', gap: 8, padding: 18, borderTop: '1px solid var(--line)' }}>
-          <input disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" style={{ flex: 1, minWidth: 0, border: '1px solid var(--line)', borderRadius: 12, padding: '11px 14px', fontSize: 14, background: 'var(--surface)', color: 'var(--ink)' }} />
-          <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady} style={{ minWidth: 44, minHeight: 44, ...(working || resetting || !historyReady ? { opacity: 0.55 } : {}) }}><Icon name="paper-plane-right" weight="fill" size={16} /></button>
+        <form onSubmit={e => { e.preventDefault(); void send() }} className={`bob-composer ${expanded ? 'bob-composer-expanded' : ''}`}>
+          <textarea ref={composer} rows={1} disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" onKeyDown={e => {
+            if (e.nativeEvent.isComposing) return
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() }
+            if (e.key === 'Escape' && expanded) { e.preventDefault(); setExpanded(false) }
+          }} />
+          <div className="bob-composer-actions">
+            <button type="button" className="btn" aria-label={expanded ? 'Collapse message editor' : 'Expand message editor'} aria-expanded={expanded} onClick={() => { setExpanded(value => !value); composer.current?.focus() }}><Icon name={expanded ? 'arrows-in-simple' : 'arrows-out-simple'} size={18} /></button>
+            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || !draft.trim()}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
+          </div>
         </form>
       </aside>
       {confirmReset && <Modal title="Start a new conversation?" onClose={() => { if (!resetPending.current) setConfirmReset(false) }}>
