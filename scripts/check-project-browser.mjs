@@ -249,7 +249,11 @@ try {
     await saved.getByText('Build 70 × 160 frame', { exact: true }).waitFor()
     assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Save receipts must fit a phone drawer')
     await saved.scrollIntoViewIfNeeded()
+    // Open real evidence disclosures so even a tall desktop has scrollable history.
+    // Compact mode can legitimately fit this short transcript without a jump button.
+    for (const summary of await drawer.locator('details:not([open]) > summary').all()) await summary.click()
     const history = drawer.locator('.bob-history')
+    assert(await history.evaluate(node => node.scrollHeight - node.clientHeight > 100), 'Scroll fixture must exceed the jump threshold')
     await history.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')) })
     await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).waitFor()
     assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Reading older messages preserves position')
