@@ -32,6 +32,7 @@ export function stairStudySvg(d:StairDetails,view:'lower'|'upper'|'section',titl
   image+=line(x(g.exit.x_mm),y(g.exit.y_mm),x(g.exit.x_mm+dir[0]*500),y(g.exit.y_mm+dir[1]*500),'stroke-width="3"')
   image+=text(25,169,'N ↑','font-weight="bold"')+text(25,196,'E →','font-weight="bold"')
   image+=text(30,624,'L = square turning landing · Dashed R outlines = room footprints, NOT walls/doors','font-size="14"')
+  image+=text(30,646,'Heavy dash = proposed floor opening · Dotted rectangles = approach and upper landing','font-size="14"')
  }else{
   const zMin=g.from.floor_z_mm!,zMax=Math.max(g.to.floor_z_mm!+700,g.upper_ceiling_z_mm??0)
   const pathMin=-s.landing_depth_mm,pathMax=g.path_length_mm+s.landing_depth_mm
@@ -43,7 +44,7 @@ export function stairStudySvg(d:StairDetails,view:'lower'|'upper'|'section',titl
    image+=line(start,z,end,z,'stroke-width="2"')
    if(i)image+=line(start,y(g.surfaces[i-1].z_mm),start,z,'stroke-width="2"')
    const open=s.opening&&rectContains(s.opening,t.bounds)
-   const partial=s.opening&&rectIntersection(s.opening,t.bounds)&&!open
+   const partial=s.opening&&rectIntersection(s.opening,s.bounds)&&!open
    if(t.kind!=='exit_landing'&&!open&&g.slab_underside_z_mm!==null){
     image+=`<rect x="${f(start)}" y="${f(y(g.to.floor_z_mm!))}" width="${f(end-start)}" height="${f((g.to.floor_z_mm!-g.slab_underside_z_mm)*sy)}" fill="#ddd" stroke="#555" ${partial?'stroke-dasharray="2 2"':''}/>`
    }
