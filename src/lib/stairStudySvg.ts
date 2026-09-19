@@ -44,7 +44,7 @@ export function stairStudySvg(d:StairDetails,view:'lower'|'upper'|'section',titl
    image+=line(start,z,end,z,'stroke-width="2"')
    if(i)image+=line(start,y(g.surfaces[i-1].z_mm),start,z,'stroke-width="2"')
    const open=s.opening&&rectContains(s.opening,t.bounds)
-   const partial=s.opening&&rectIntersection(s.opening,s.bounds)&&!open
+   const partial=s.opening&&rectIntersection(s.opening,t.bounds)&&!open
    if(t.kind!=='exit_landing'&&!open&&g.slab_underside_z_mm!==null){
     image+=`<rect x="${f(start)}" y="${f(y(g.to.floor_z_mm!))}" width="${f(end-start)}" height="${f((g.to.floor_z_mm!-g.slab_underside_z_mm)*sy)}" fill="#ddd" stroke="#555" ${partial?'stroke-dasharray="2 2"':''}/>`
    }
