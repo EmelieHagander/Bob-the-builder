@@ -129,9 +129,9 @@ export function BuildingContextEditor({
             <button className="btn btn-primary" type="button" onClick={() => setMode('space')}>Add space</button>
           </div>}
         </div>
-        {spaces.length === 0 ? <p style={{ marginTop: 14 }}>No spaces yet. Add only the room or space you know about.</p> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginTop: 14 }}>
+        {spaces.length === 0 ? <p style={{ marginTop: 14 }}>No spaces yet. Add only the room or space you know about.</p> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', marginTop: 14 }}>
           {spaces.filter(space => !space.archived).map(space => <div key={space.id} className="card" style={{ padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div><strong>{space.name}</strong><div className="foundation-hint">{space.kind || 'Space'}{space.levelId ? ` · ${levelNames.get(space.levelId) ?? 'Level'}` : ''}</div></div>
               <span className="image-purpose">{truthLabel(space.truth)}</span>
             </div>

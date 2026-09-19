@@ -1,11 +1,13 @@
 import type { ComponentProps } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { BuildingContextSurface } from '../components/BuildingContextSurface'
 import { Icon } from '../components/ui'
 
 type SurfaceProps = ComponentProps<typeof BuildingContextSurface>
 
 export function BuildingContext(props: SurfaceProps) {
+  const [params] = useSearchParams()
+  const building = params.get('building') ?? undefined
   return <div className="page building-context-page">
     <Link className="btn" to={props.projectId ? '/' : '/account'}><Icon name="arrow-left" size={15} /> {props.projectId ? 'Dashboard' : 'Account & projects'}</Link>
     <div className="page-head" style={{ marginTop: 18 }}>
@@ -30,6 +32,6 @@ export function BuildingContext(props: SurfaceProps) {
       </div>
     </div>
 
-    <div style={{ marginTop: 18 }}><BuildingContextSurface {...props} /></div>
+    <div style={{ marginTop: 18 }}><BuildingContextSurface key={`${props.projectId}:${building ?? ""}`} {...props} initialBuildingId={building} /></div>
   </div>
 }

@@ -14,10 +14,11 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
 | `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
 | `edit_project_room_layout` | Move the shared wall, change only furniture placement, or explicitly refresh source revisions | No silent source adoption, stock changes, construction approval or independent conflicting room sizes |
+| `save_building_context` | Atomic canonical Building/Level/Space/Element/Relationship capture and exact room measurement links; append Building notes | No general geometry, stairs, automatic proposal acceptance, unscoped Building access, deletion or safety approval |
 
 `search_project_data` gains a caller-RLS measurement projection and task instructions through a new `search_bob_project_data` RPC. The older lookup RPC stays compatible. Results remain literal, bounded and project-scoped; a chosen design dimension is a provided specification, not a physical measurement.
 
-The shared guest identity remains read-only: it has no private claimed server thread. Unrelated apps, household/Building authority, people, purchases, selected targets, checks and structural approval are not exposed by these tools.
+The shared guest identity remains read-only: it has no private claimed server thread. Unrelated apps, household sharing, people, purchases, selected targets, checks and structural approval are not exposed. The dedicated Building intake tool separately enforces existing Building-edit authority.
 
 ## Parametric drawing extension (implementation branch)
 
@@ -62,6 +63,22 @@ furniture. Readback includes exact versions and computed conflict state. Compact
 chat receipts continue to use the existing Artifact revision link. The full
 construction/placement contract and rollout dependencies are owned by
 [Plans and drawings](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19).
+
+## Building intake extension (implementation branch)
+
+`save_building_context` is wired through caller-JWT `bob_project_write_v4`;
+older kinds delegate unchanged to v3. It uses the same claimed-turn ownership,
+eight-write budget, private before-state audit, idempotent receipt and fenced
+settlement. `search_bob_project_data_v5` supplies scoped current physical records,
+measurement snapshots and separate proposals. The model's output allowance on a
+write-capable call is raised to 8,000 tokens to accommodate the bounded multi-node
+tool payload; the normal concise prose contract is unchanged.
+
+The [Building model's chat intake section](building-model.md#chat-driven-building-intake--implementation-branch-2026-09-19)
+owns the capture semantics, existing/proposed authority, local references, sources,
+limits and next geometry boundary. This extension is not yet hosted-deployed.
+A `building_context` receipt links to current Building context, not to a frozen
+multi-floor plan or a claim of computed staircase geometry.
 
 ## Authority and atomicity
 
