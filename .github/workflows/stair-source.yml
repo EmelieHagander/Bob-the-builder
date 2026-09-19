@@ -1,4 +1,4 @@
-name: Stair study source snapshot
+name: Publish verified stair study
 on:
   push:
     branches: [feat/bob-stair-study]
@@ -6,15 +6,40 @@ on:
 permissions:
   contents: read
 jobs:
-  snapshot:
+  publish:
+    if: github.repository == 'EmelieHagander/Bob-the-builder' && github.ref == 'refs/heads/feat/bob-stair-study'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - run: git archive --format=tar HEAD | gzip > stair-source.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: stair-source
-          path: stair-source.tar.gz
-          retention-days: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 12
+      - name: Verify unchanged source baseline and exact tested patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 12a5ebdd430c2235db9a4c37f17e058d5d2a9d07 -- Docs src scripts supabase tests
+          python3 - <<'PY'
+          import base64, hashlib, lzma, os
+          from pathlib import Path
+          parts = sorted(Path('.github/stair-patch').glob('*.b64'))
+          assert [p.name for p in parts] == [f'{i:02d}.b64' for i in range(4)]
+          patch = lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'a59a098a9e4a90146451d4d0a610ad6ca06178bf39c3c826fd38bf408e9841af'
+          Path(os.environ['RUNNER_TEMP'], 'stair-study.patch').write_bytes(patch)
+          PY
+          git apply --check --index --exclude=.github/workflows/stair-source.yml "$RUNNER_TEMP/stair-study.patch"
+          git apply --index --whitespace=error-all --exclude=.github/workflows/stair-source.yml "$RUNNER_TEMP/stair-study.patch"
+          git rm .github/workflows/stair-source.yml .github/stair-patch/*.b64
+          git diff --cached --check
+          test "$(git write-tree)" = '723d7291a3d0d7d6b76abb2f14187500f5fec8f7'
+      - name: Commit exact tested source on feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: add chat-driven stair geometry with source-linked outlets and headroom studies'
+          git push origin HEAD:refs/heads/feat/bob-stair-study
