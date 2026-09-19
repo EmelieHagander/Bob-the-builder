@@ -250,9 +250,16 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [working, setWorking] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
-  useEffect(() => {
-    if (!open && needsRefresh) { setNeedsRefresh(false); db.refreshAskBobProject(project.id) }
-  }, [open, needsRefresh, project.id])
+  // Layout unmounts this drawer on close; it never renders open=false.
+  // Refresh verified writes in the close event, after the reply has finished,
+  // including when a receipt links to the same route/Building already on screen.
+  const close = () => {
+    onClose()
+    if (needsRefresh) {
+      setNeedsRefresh(false)
+      db.refreshAskBobProject(project.id)
+    }
+  }
   const scope = useRef(createRequestScope())
   const historyScroll = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -381,12 +388,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   return (
     <div className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
+      <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" /></span>
           <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div></div>
-          <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
+          <button aria-label="Close Ask bob" onClick={close} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
         </header>
 
         <div className="bob-toolbar">
@@ -403,7 +410,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         }}>
           {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
-          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={onClose} />)}
+          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
           {working && <WorkingBubble />}
         </div>
 
