@@ -1,0 +1,20 @@
+name: Stair study source snapshot
+on:
+  push:
+    branches: [feat/bob-stair-study]
+    paths: [.github/workflows/stair-source.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar HEAD | gzip > stair-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stair-source
+          path: stair-source.tar.gz
+          retention-days: 1
