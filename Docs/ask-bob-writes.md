@@ -12,6 +12,8 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | `save_project_task` | Create a todo task or revise its name/instructions in one existing Area | No assignment, status changes, completion or readiness |
 | `save_project_measurement` | Create/revise the existing canonical measurement record and append revision history | No invented measured evidence, parent moves, source-image removal, archive or deletion |
 | `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
+| `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
+| `edit_project_room_layout` | Move the shared wall, change only furniture placement, or explicitly refresh source revisions | No silent source adoption, stock changes, construction approval or independent conflicting room sizes |
 
 `search_project_data` gains a caller-RLS measurement projection and task instructions through a new `search_bob_project_data` RPC. The older lookup RPC stays compatible. Results remain literal, bounded and project-scoped; a chosen design dimension is a provided specification, not a physical measurement.
 
@@ -38,6 +40,28 @@ before showing an exact-version **Open drawing** link. Receipt-only retry recove
 keeps that link. The full saved recipe is returned to the tool, not duplicated into
 the compact transcript receipt. Arbitrary user/provider text never creates a saved
 badge. Opening the link closes the drawer and uses the normal Artifact view.
+
+## Linked-room extension (implementation branch, 2026-09-19)
+
+The new `project-room-layout.ts` defines strict create/edit tool shapes. Bob reads
+canonical IDs using the caller-scoped `physical_spaces` and `physical_elements`
+research datasets, then the exact target and source furniture drawing. Parameters
+are proposed design specifications. Existing accepted physical context and a
+selected target are prerequisites, not records the tools may invent or approve.
+
+`search_bob_project_data_v4` adds bounded physical research and exact linked-plan
+source details. Derived geometry, outline conflicts and furniture parts use the
+same `roomLayout.ts` engine as the browser. The new `bob_project_write_v3` handles
+`room_layout` and delegates old write kinds to v2, preserving the existing claimed
+turn, caller JWT, eight-write budget, audit quotes, atomic receipts, retries and
+fenced settlement. No generic SQL or service-role domain writes are added.
+
+Source changes reject normal edits. `refresh_sources` is a separate, explicit
+adoption decision: it is not a permission to invent new measurements or resize
+furniture. Readback includes exact versions and computed conflict state. Compact
+chat receipts continue to use the existing Artifact revision link. The full
+construction/placement contract and rollout dependencies are owned by
+[Plans and drawings](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19).
 
 ## Authority and atomicity
 

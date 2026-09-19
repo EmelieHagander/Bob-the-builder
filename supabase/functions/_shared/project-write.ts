@@ -1,3 +1,5 @@
+import { ROOM_LAYOUT_TOOLS, parseRoomLayoutWrite } from './project-room-layout.ts'
+import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
 import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
@@ -11,6 +13,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  ...ROOM_LAYOUT_TOOLS,
   tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
   tool('save_project_description', 'Save the requested project description/plan. Read the current project first; preserve unrelated content. This does not select a SolutionVersion or certify a design.', {
     description: { ...text, description: 'Full replacement description, at most 12000 characters.' },
@@ -34,7 +37,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -60,6 +63,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (ROOM_LAYOUT_TOOLS.some(t => t.function.name === name)) return parseRoomLayoutWrite(name, v)
   const base = { kind: 'project' as WritePayload['kind'], record_id: projectId as string | null, expected_updated_at: null as string | null,
     expected_revision: null as number | null, request_quote: v.request_quote, data: {} as Record<string, unknown> }
   if (name === 'save_project_description') {
@@ -98,7 +102,7 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))) throw new Error('Invalid write receipt')
-  return r
+  return { ...r, record: withDerivedRoomLayout(r.record, projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)

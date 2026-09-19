@@ -23,7 +23,7 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| plans/drawings, parametric 2D storage boxes, exact target lineage and evidence | `Docs/artifacts.md` |
+| plans/drawings, parametric boxes, linked room/placement pilot and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
@@ -101,7 +101,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
-- `Docs/artifacts.md` — owning manual 4A, deployed narrow 4B1 geometry and implementation-branch parametric 2D storage-box contracts, including exact target/solution/physical/measurement lineage.
+- `Docs/artifacts.md` — owning manual 4A, deployed narrow 4B1 geometry and implementation-branch parametric box and linked two-room/placement contracts, including exact target/solution/physical/measurement lineage.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
 - `Docs/material-planning.md` + `src/data/materialPlanning.ts` — deployed manual 4B2a receiver and first narrow 4B2b deterministic material quantity, using the existing stock/reuse/Shopping path behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.

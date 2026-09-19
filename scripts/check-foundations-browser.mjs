@@ -8,6 +8,7 @@ import { chromium } from 'playwright-core'
 import { createFactsFixture, verifyFactsBrowser } from './project-facts-browser.mjs'
 import { createSolutionsFixture, verifySolutionsBrowser } from './solutions-browser.mjs'
 import { createArtifactsFixture, verifyArtifactsBrowser } from './artifacts-browser.mjs'
+import { createRoomLayoutFixture, verifyRoomLayoutBrowser } from './room-layout-browser.mjs'
 import { verifyStorageBoxBrowser } from './storage-box-browser.mjs'
 import { createMaterialPlanningFixture, verifyMaterialPlanningBrowser } from './material-planning-browser.mjs'
 
@@ -39,6 +40,7 @@ try {
     const facts = createFactsFixture(timestamp, assets)
     const solutions = createSolutionsFixture(timestamp, assets, facts)
     const artifacts = createArtifactsFixture(timestamp, assets, facts, solutions)
+    const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
     const materialPlanning = createMaterialPlanningFixture(timestamp, facts, solutions, artifacts)
     const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
     const area = { id: 'areaA', project_id: 'A', slug: 'entry', name: 'Entry', description: 'Entry work', icon: 'house', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: '', area_crew: [], area_reference_images: [{ label: 'Old reference note', sort_order: 1 }] }
@@ -55,6 +57,7 @@ try {
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
       if (path.startsWith('/rest/') || path.startsWith('/storage/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
+      if (await roomLayout.handle(request, url, respond)) return
       if (await facts.handle(request, url, respond)) return
       if (await solutions.handle(request, url, respond)) return
       if (await artifacts.handle(request, url, respond)) return
@@ -232,6 +235,7 @@ try {
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
     await verifyMaterialPlanningBrowser(page, base, materialPlanning, facts, viewport.width)
     await verifyStorageBoxBrowser(page, base, artifacts, viewport.width)
+    await verifyRoomLayoutBrowser(page, base, roomLayout, artifacts, viewport.width)
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
