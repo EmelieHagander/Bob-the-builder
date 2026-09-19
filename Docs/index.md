@@ -23,7 +23,7 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| plans/drawings, shared multi-floor coordinates, linked rooms and exact lineage | `Docs/artifacts.md` |
+| plans/drawings, shared multi-floor coordinates, stair studies and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |

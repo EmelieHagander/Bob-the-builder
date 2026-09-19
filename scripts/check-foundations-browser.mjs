@@ -1,3 +1,4 @@
+import { createStairFixture, verifyStairBrowser } from './stair-study-browser.mjs'
 import { createMultifloorFixture, verifyMultifloorBrowser } from './multifloor-browser.mjs'
 // Production React + database.ts + Supabase client; only HTTP services are fixtures.
 // No AI calls. The real SQL/RLS and deployed Storage service have separate checks.
@@ -42,6 +43,7 @@ try {
     const solutions = createSolutionsFixture(timestamp, assets, facts)
     const artifacts = createArtifactsFixture(timestamp, assets, facts, solutions)
     const multifloor = createMultifloorFixture(timestamp, artifacts, solutions)
+    const stair = createStairFixture(timestamp, artifacts, multifloor)
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
     const materialPlanning = createMaterialPlanningFixture(timestamp, facts, solutions, artifacts)
     const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
@@ -61,6 +63,7 @@ try {
       if (path.startsWith('/rest/') || path.startsWith('/storage/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
       // The active multi-floor scenario must own chat/history before the
       // older room fixture, which otherwise handles every Ask Bob request.
+      if (await stair.handle(request, url, respond)) return
       if (await multifloor.handle(request, url, respond)) return
       if (await roomLayout.handle(request, url, respond)) return
       if (await facts.handle(request, url, respond)) return
@@ -242,6 +245,7 @@ try {
     await verifyStorageBoxBrowser(page, base, artifacts, viewport.width)
     await verifyRoomLayoutBrowser(page, base, roomLayout, artifacts, viewport.width)
     await verifyMultifloorBrowser(page, base, multifloor, viewport.width)
+    await verifyStairBrowser(page, base, stair, artifacts, viewport.width)
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')

@@ -732,3 +732,10 @@ contains the exact math, persistence, tool, display and verification contract.
 This extension does not supersede the canonical physical history, proposal or
 acceptance model. Surveyed multi-floor geometry, general shapes, doors, real stair
 travel/headroom and live-model interpretation remain distinct future gates.
+
+The stair-study implementation branch consumes the multi-floor Artifact's exact
+Building/Level/Space versions; it does not create another physical hierarchy or
+write an actual staircase/opening into accepted building state. Stair shape,
+source-refresh and limited headroom behavior are owned by
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+A computed exit is not a verified clear passage or a structural approval.

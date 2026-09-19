@@ -1,3 +1,5 @@
+import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
+import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { BUILDING_PLAN_TOOL, parseBuildingPlanWrite } from './project-building-plan.ts'
 import { withDerivedBuildingPlan } from '../../../src/lib/buildingPlan.ts'
 import { BUILDING_INTAKE_TOOL, parseBuildingIntake } from './building-intake.ts'
@@ -16,6 +18,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  STAIR_WRITE_TOOL,
   BUILDING_PLAN_TOOL,
   BUILDING_INTAKE_TOOL,
   ...ROOM_LAYOUT_TOOLS,
@@ -42,7 +45,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -68,6 +71,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
   if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
   if (ROOM_LAYOUT_TOOLS.some(t => t.function.name === name)) return parseRoomLayoutWrite(name, v)
@@ -109,7 +113,7 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))) throw new Error('Invalid write receipt')
-  return { ...r, record: withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId) }
+  return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)

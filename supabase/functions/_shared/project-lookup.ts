@@ -1,3 +1,5 @@
+import { parseStairInspection } from './project-stair.ts'
+import { stairSummary, withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { buildingPlanGeometry, checkedBuildingPlan, withDerivedBuildingPlan } from '../../../src/lib/buildingPlan.ts'
 import { parseProjection } from './project-building-plan.ts'
 import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
@@ -79,6 +81,26 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
   let incomplete = false
   return {
     sources,
+    async inspectStairs(value: unknown) {
+      if (used>=budget) { incomplete=true; return {status:'budget_exhausted',saved:false} }
+      const input=parseStairInspection(value)
+      if (!input) { ++used; incomplete=true; return {status:'invalid',saved:false,message:'Use the supported stair candidate shape.'} }
+      const result=await this.search({dataset:'artifacts',query:null,status:null,area_id:null,record_id:input.plan_id,after_id:null})
+      if(result.status!=='ok')return {status:result.status,saved:false,message:'Source plan unavailable.'}
+      const row=result.records.find(r=>r.id===input.plan_id)
+      if(!row?.multifloor_plan)return {status:'unavailable',saved:false,message:'No authorised source plan. Never reconstruct it from memory.'}
+      if(row.revision!==input.plan_revision)return {status:'conflict',saved:false,message:'Read the current source-plan revision first.'}
+      try {
+        const d=checkedBuildingPlan(row.multifloor_plan,projectId,input.plan_id,input.plan_revision)
+        if(d.sources_changed||row.archived)return {status:'conflict',saved:false,message:'Review/refresh changed source plan before calculating stairs.'}
+        const candidates=input.candidates.map(c=>{
+          try{return {label:c.label,result:stairSummary(d.recipe,c.recipe)}}
+          catch(e){return {label:c.label,error:e instanceof Error?e.message:'Unsupported geometry'}}
+        })
+        return {status:'ok',saved:false,plan_id:input.plan_id,plan_revision:input.plan_revision,names:d.names,
+          physical_pending:d.physical_pending,candidates,assessment:'Geometric study only; no global fit, structural or safety approval.'}
+      } catch {return {status:'unavailable',saved:false,message:'Invalid source-plan readback.'}}
+    },
     async inspectProjection(value: unknown) {
       if(used>=budget){incomplete=true;return {status:'budget_exhausted',message:'Projection lookup budget exhausted; no change saved.'}}
       const input=parseProjection(value)
@@ -120,6 +142,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         if (!payload || !Array.isArray(payload.records) || !Array.isArray(payload.related) || typeof payload.truncated !== 'boolean') throw new Error('invalid_payload')
         const result: LookupResult = { ...base, status: 'ok', next_cursor: typeof payload.next_cursor === 'string' ? payload.next_cursor : null, records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
         if (input.dataset === 'artifacts') result.records = result.records.map(row => {
+          if (row.stair_study || row.has_stair_study) return row.stair_study ? withDerivedStair(row, projectId) : { ...row, stair_detail: input.record_id ? 'unavailable' : 'read_exact_record_id' }
           if (row.multifloor_plan || row.has_multifloor_plan) return row.multifloor_plan ? withDerivedBuildingPlan(row, projectId) : { ...row, coordinate_detail: input.record_id ? 'unavailable' : 'read_exact_record_id' }
           if (row.room_layout || row.has_room_layout) return withDerivedRoomLayout(row, projectId)
           if (!row.parametric_recipe) return row

@@ -14,6 +14,7 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
 | `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
 | `edit_project_room_layout` | Move the shared wall, change only furniture placement, or explicitly refresh source revisions | No silent source adoption, stock changes, construction approval or independent conflicting room sizes |
+| `save_project_stair` | Save/revise the supported stair study tied to one exact multi-floor plan; explicit source refresh | No accepted physical edits, source-plan mutation, rounded winders, approval or purchases |
 | `save_project_building_plan` | Create/revise one Concept multi-floor coordinate study with exact canonical sources | No accepted physical updates, automatic source adoption, arbitrary geometry, stair or safety claims |
 | `save_building_context` | Atomic canonical Building/Level/Space/Element/Relationship capture and exact room measurement links; append Building notes | No general geometry, stairs, automatic proposal acceptance, unscoped Building access, deletion or safety approval |
 
@@ -131,3 +132,14 @@ The drawer shows **Saved to project** only from validated, same-project server r
 - Existing project browser gate adds phone/desktop receipt display, wrong-project rejection, lost-answer retry with the same turn id, close/reopen and reload. Existing reset gate is retained.
 
 These deterministic tests do not claim a live model personality evaluation. Hosted Auth/PostgREST write proof, migration verification, Edge rollout and Pages are separate release gates. Roll back the Edge Function first if necessary; the additive migration and optional frontend receipt fields remain backward compatible. Do not replay the whole shared-database migration history.
+
+### Stair-study extension (implementation branch, not deployed)
+
+`inspect_stair_options` is read-only, bounded to four candidates and one fresh
+exact-plan lookup. `save_project_stair` enters caller-JWT `bob_project_write_v6`
+with existing claimed-turn, receipt and settlement rules; older kinds delegate to
+v5. Research v7 adds exact stair-source details. Project/Area, target and existing
+measurements come from the parent plan, not model-chosen authority. The geometry,
+unknowns, refresh semantics and limited headroom contract belong in
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+Neither an inspection nor a saved study is a physical floor modification.

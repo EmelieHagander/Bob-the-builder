@@ -475,6 +475,117 @@ or safety approval, generated mockups and material purchasing. The next stair to
 can consume this datum and source envelope instead of inventing a separate floor
 coordinate model.
 
+## Stair geometry study — implementation branch (2026-09-19)
+
+**Not merged or hosted-deployed.** Depends on the multi-floor study above (#86).
+`20260919200621_stair_studies.sql` adds a subordinate Artifact recipe, never a new
+physical building model. The parent multi-floor Artifact and its exact revision
+supply all room coordinates, floor heights, names, measurement evidence and target.
+No duplicate floor heights are accepted from the model in a stair command.
+
+### Chat first, not a form
+
+`inspect_stair_options` is a read-only tool for 1–4 candidates. It consumes one
+fresh, caller-authorised exact-plan lookup. It returns the calculated first-riser
+centre, upper terminal-riser centre, exit direction, upper landing rectangle,
+intersected room footprints, rise/count/going, requested headroom checks and
+explicit unknowns/conflicts. Unknown floor elevations, a nonascending pair or an
+intermediate/unlocated floor prevent a calculation. User questions do not save
+anything. Candidate labels are not rankings; Bob must explain a recommendation
+using computed results and the user's goal, not infer unmodelled circulation.
+
+`save_project_stair` saves/revises a Concept study on request. The Project/Area and
+selected-target lineage are inherited server-side from the source plan. Bob
+proposes reasonable reversible dimensions and states their basis. After readback,
+the normal receipt opens that exact stair revision in Plans & drawings. Lower and
+upper floor views, a developed walking section, numeric results, source links,
+zoom and SVG export all derive from the same versioned recipe. No manual stair
+editor is introduced; the user's role is to describe/correct, not draw.
+
+### Exact convention and supported shapes
+
+`stair_study_v1` / `1` supports straight stairs and left/right **quarter turns with
+a square level landing**. It does not substitute a square landing for rounded
+winders, a curved start, a spiral or a U-shaped stair. Unsupported requested forms
+need a separate generator and must be described honestly. Coordinates use the
+parent's east/north/up datum. Start is the centre of the first riser, looking up.
+The exit is the centre of the terminal riser at upper finished floor, not the
+centre of the upper landing. That landing extends forward from the exit.
+
+N equal rises span the exact floor-height difference. A straight flight has N−1
+horizontal treads. With N1 rises to the turn landing and N2=N−N1 above it there
+are (N1−1)+(N2−1) treads plus the turn landing. Overall rise is not rounded per
+step; displayed decimal precision is not a construction tolerance. Stair widths,
+goings and landing depths are integer millimetres; placements/opening bounds
+retain the coordinate plan's 0.001 mm arithmetic. Treads, landings and source
+room bounds are evaluated in the same axes, including rotations/reflections.
+The developed walking section unfolds the turn and explicitly has independent
+horizontal/vertical scales; it is not a structural building section.
+
+### Headroom and footprint checks have explicit limits
+
+Headroom is checked over **complete walking rectangles**, including approach,
+turn landing and upper landing, not just sampled centre points. A partially
+covered tread still checks the slab on its uncovered area. The only modelled
+overhead surfaces are the parent's flat upper slab and an optional flat upper
+ceiling with an explicit height. A proposed rectangular opening removes the slab
+only inside that rectangle. The upper landing may not overlap the opening.
+Unknown ceiling/slab/opening is unknown, not clear space.
+
+`required_headroom_mm` is a saved, explicit study criterion, not an automatically
+chosen legal rule. A calculated bounding rectangle for the walking surfaces that
+need an opening is a **conservative geometric proposal**, not a minimal opening,
+fabrication detail, material takeoff or permission to cut joists. Its envelope
+and potential impact on the upper landing still need checking.
+
+Results distinguish `conflict`, `incomplete` and `modelled_checks_only`.
+**None means a safe or build-ready stair.** Room footprints are not walls or
+verified circulation zones. Doors, beams, existing holes, roof slopes, chimney
+clearances, services, railings, stringers, structure, fall/child safety, fire and
+accessibility are not checked. The program must not say "the route is clear" or
+"approved" from this limited result. A supplied numeric specification is also
+not proof of a site measurement. Current Boverket guidance for actual projects
+covers substantially more than this study, including landings, free height,
+rails and protection; references checked 2026-09-19:
+https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/sakerhet-anvandning/trappor-ramper/
+No regulatory approval or universal regulation preset is added here.
+
+### History, authority and verification boundary
+
+Changing a stair does not change the parent plan or accepted Building state.
+Changing the parent plan, its target or physical/measurement inputs marks the
+stair's source changed. Normal edits require the current unchanged parent.
+`refresh_source` explicitly adopts a newer revision of the SAME parent without
+changing any stair parameter. The calculated rise/headroom/room context may still
+change because the parent changed; Bob must inspect and explain that result.
+Earlier stair versions continue using their exact earlier parent versions.
+Archive/restore carries source references and recipe unchanged.
+
+Raw writes are denied, RLS requires both project membership and whole-Building
+physical scope, and detail views are security-invoker. A revoked source removes
+geometry access while retaining the nongeometric artifact marker. Canonical
+Artifact concurrency and physical/measurement locks protect saves. The same
+claimed-turn receipt ledger, retry keys, write budget and generation-fenced
+settlement are reused by `bob_project_write_v6`; old RPCs remain available.
+Research v7 lists a marker and returns the source recipe only for exact lookup.
+
+`tests/stair-study.test.ts` exercises rises, exit positions, all four headings,
+reflection, decimal translation, whole-tread headroom and opening/landing
+conflicts, unknown inputs, schema/escaping and read-only research. The migrated
+`tests/stair-study-db.test.ts` verifies canonical source binding, permissions,
+rollback, stale revisions, history, explicit source adoption and the actual
+inspect/save tool loop against SQL with an injected provider response.
+`scripts/stair-study-browser.mjs` extends the ordinary 320/390/1280 foundations
+journey with read-only comparison, chat-save, exact links, source-preserving move,
+headroom conflict, unknown ceiling, historic reload, SVG and denied sources.
+
+These tests are not an arbitrary free-text understanding test, hosted
+Auth/PostgREST test or a real-model recommendation evaluation. Record actual CI
+and screenshot results in the PR; script presence is not passing evidence. Merge,
+additive migration application and Edge/frontend deployment are separate release
+actions. Apply only the new migration after its prerequisites, never replay the
+shared database history. Production/user house data is not changed by this branch.
+
 ## Verification contract
 
 A 4A release requires proof that:

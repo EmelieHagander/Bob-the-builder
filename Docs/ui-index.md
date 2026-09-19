@@ -142,3 +142,13 @@ is explicitly not a building section. Coordinate tables, unknowns, source warnin
 and denied source states remain readable on phones. No manual coordinate editor
 or new global navigation is introduced. The source/persistence contract belongs
 in `Docs/artifacts.md`; production status and screenshot evidence belong to its PR.
+
+### Stair-study viewer (implementation branch)
+
+Saved chat receipts open the exact stair Artifact revision. The owning
+Plans & drawings surface shows lower/upper plans and a developed walking section,
+with labelled START/EXIT, numeric coordinates, source revision, contained zoom,
+SVG and explicit conflict/unknown states. No manual stair drawing form is required.
+The full-view preview fits phone width; readable numbers remain below it. Source
+revocation hides geometry but retains the artifact and an honest unavailable state.
+See the [stair contract](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).

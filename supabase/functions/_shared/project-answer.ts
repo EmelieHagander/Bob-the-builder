@@ -1,3 +1,4 @@
+import { STAIR_INSPECT_TOOL } from './project-stair.ts'
 import { PROJECTION_TOOL } from './project-building-plan.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { createProjectLookup, SEARCH_TOOL } from './project-lookup.ts'
@@ -40,7 +41,12 @@ After the successful receipt, summarize what was recorded and what remains uncer
 Use save_project_building_plan for an authorised coordinate study. It references existing canonical Building/Level/Space IDs and a selected target; never manufacture duplicate rooms for a drawing. Research current physical sources, measurements and existing plans first. All levels share one stated origin with east +x, north +y, up +z. The supplied envelope is OUTSIDE dimensions; the tool derives inside dimensions from explicit wall thickness. A room outline is not a wall or a walkable connection. Above/below alone does not locate a room numerically.
 Use explicit given dimensions or clearly labelled estimates in the recipe. Unknown room bounds and floor heights stay null. Coordinate studies are Concept proposals; they do not rewrite accepted Building state. Do not give a floor height because the level has position 1.
 inspect_building_projection is read-only: use it for geometric questions without saving an unsolicited change. It projects an area vertically at unchanged x/y and returns intersected mapped room footprints, a signed floor-height difference when known, and an upper slab underside when known. Empty hits mean unmapped coverage, not an empty physical space. Distinguish contained, partial overlap and outside envelope. Check sources_changed, estimates and missing values before making claims.
-A projection is NOT a staircase solution: no stair form, step count, travel, landing or along-path headroom is calculated yet. Never say a staircase fits or comes up at the projected area just because a probe is there. Present it as a studied location and name the remaining geometric checks. Source refresh is explicit and cannot move/resize geometry.`,
+A projection is NOT a staircase solution. Use inspect_stair_options for actual bounded stair geometry, not a projected rectangle. Never say a staircase fits or comes up at the projected area just because a probe is there. Present it as a studied location and name the remaining geometric checks. Source refresh is explicit and cannot move/resize geometry.`,
+  stairContract: `# Stair studies
+Use inspect_stair_options (read-only) to compare 1–4 real parameterised candidates on a freshly read current multi-floor plan. It computes starts, steps, square turning landing, upper exit/direction/footprint and limited headroom checks. Offer a concrete recommended candidate only using returned facts and the user's goals. State estimated inputs, unknowns, source conflicts and what is NOT checked. No fabricated stair result from prose or a projection.
+Supported: straight and left/right quarter turn WITH A SQUARE LEVEL LANDING. A rounded/winder/spiral request is not the same shape: explain that it needs another generator; do not silently substitute a landing and claim it is rounded. Choose reversible dimensions/counts as labelled design assumptions, but never invent missing floor heights or ceilings for a verified check. Missing essential height means a specific measurement request.
+Headroom is checked over complete walking rectangles against a flat upper slab and an explicit rectangular opening, with an optional flat upper ceiling. The required_headroom_mm is an explicit study criterion, not an automatically verified building regulation. opening_suggestion is a conservative geometric BOUNDING rectangle, not a minimal/fabrication opening or permission to cut a floor. Exit landing must remain on solid upper floor, not over the opening. modelled_checks_only NEVER means globally safe, build ready, routes clear or approved; doors, walls, beams, roofs, structure, guardrails, fire and child safety are unmodelled.
+On a request to save/change, use save_project_stair now, preserving unrelated parameters and the exact parent plan. Geometry changes affect only the stair revision, not source rooms or accepted Building state. Changes to parent plan/measurements/target require explicit source refresh; refresh_source preserves every stair parameter but derived riser height/context may change, so inspect and explain that. Every saved result has an exact revision link in Bob.`,
   builderContract: `# Practical builder behaviour
 Lead with your concrete working design or completed result, not a discussion of possibilities. The user delegates ordinary reversible design choices: choose sensible dimensions, materials and sequencing until corrected. Do not hand every choice back or end with another offer to do the requested work.
 For a dimensioned furniture/build request, give the relevant actual proposed sizes and a consistent dimension stack (for example castor height + bottom + usable drawer/mattress height + clearance), with units and labelled assumptions. Derive dependent sizes, check that they fit the available opening, and distinguish inside/outside/finished dimensions. Use a compact list rather than vague advice such as 'low enough'. Missing noncritical values get an explicit reasonable working assumption, not a questionnaire. Ask only for an indispensable measurement that changes safety or feasibility.
@@ -106,7 +112,7 @@ export async function runProjectAnswer(opts: {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
     const tools = round < rounds - 1 && Date.now() + 40000 < deadline ? [
-      ...(opts.lookup.remaining > 0 ? [SEARCH_TOOL, PROJECTION_TOOL] : []),
+      ...(opts.lookup.remaining > 0 ? [SEARCH_TOOL, PROJECTION_TOOL, STAIR_INSPECT_TOOL] : []),
       ...(opts.context && opts.context.history.remaining > 0 ? [HISTORY_TOOL] : []),
       ...(opts.writer && opts.writer.remaining > 0 ? WRITE_TOOLS : []),
     ] : []
@@ -129,6 +135,7 @@ export async function runProjectAnswer(opts: {
         const offered = tools.some(t => t.function.name === call.function.name)
         const result = !offered ? { status: 'invalid', message: 'This tool is not available for the current call.' }
           : call.function.name === SEARCH_TOOL.function.name ? await opts.lookup.search(args)
+          : call.function.name === STAIR_INSPECT_TOOL.function.name ? await opts.lookup.inspectStairs(args)
           : call.function.name === PROJECTION_TOOL.function.name ? await opts.lookup.inspectProjection(args)
           : call.function.name === HISTORY_TOOL.function.name ? await opts.context!.history.search(args)
           : await opts.writer!.write(call.function.name, args)

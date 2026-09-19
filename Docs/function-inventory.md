@@ -727,3 +727,13 @@ That is the primary product gap — and it can be built on top of the existing B
 ## Next product step
 
 Use this inventory plus `Docs/user-stories.md` to create the **function difficulty/scope matrix** (`D1–D5`, V0-AUTO / V0-CORE / STRETCH / POST-V0) and then choose one end-to-end vertical slice.
+
+### Stair-study implementation branch (not deployed)
+
+The next bounded step after multi-floor coordinates is chat-driven straight and
+quarter-turn-with-square-landing geometry. Read-only candidate inspection derives
+actual upper exit coordinates and limited whole-walking-strip headroom checks.
+Saved Concept stairs pin an exact parent plan and have lower/upper/section views
+and history. This is not curved/winder design, whole-house circulation solving,
+structural approval or proven live-model recommendation quality. The owner is
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
