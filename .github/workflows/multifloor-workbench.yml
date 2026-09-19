@@ -1,0 +1,20 @@
+name: Multifloor source snapshot
+on:
+  push:
+    branches: [feat/bob-multifloor-geometry]
+    paths: [.github/workflows/multifloor-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=tar HEAD | gzip > multifloor-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: multifloor-source
+          path: multifloor-source.tar.gz
+          retention-days: 1
