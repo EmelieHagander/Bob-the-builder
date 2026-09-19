@@ -1,0 +1,21 @@
+name: Room pilot workbench
+on:
+  push:
+    branches: [feat/linked-room-drawing-pilot]
+    paths: [.github/workflows/room-pilot-workbench.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package tracked source only
+        run: git archive --format=tar HEAD | gzip > room-pilot-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: room-pilot-source
+          path: room-pilot-source.tar.gz
+          retention-days: 1
