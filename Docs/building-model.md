@@ -711,3 +711,24 @@ Apply only the additive `20260919172831_bob_building_intake.sql` after the pendi
 #83/#84 prerequisites, then the matching Edge and frontend. Old RPC versions stay
 available for rollback. Do not replay shared migration history. No production
 schema or user Project is changed by this implementation branch.
+
+
+## Multi-floor coordinate-study extension — implementation branch (2026-09-19)
+
+The branch after #85 adds a bounded geometric consumer of this canonical model:
+[Multi-floor coordinate studies](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19).
+Existing Building/Level/Space identities and accepted revisions are prerequisites;
+chat intake can create those identities but a qualitative relation alone cannot
+supply an exact x/y/z position. No accepted physical state is changed by a study.
+
+One Concept Artifact supplies a common east/north/up datum, rectangular floor
+outside/inside envelopes, independently mapped room footprints and known/unknown
+floor/slab heights. Two-dimensional views use that same frame; a read-only tool can
+project an area between levels. It does not infer a staircase or validate an actual
+floor opening. Full Building/Site project scope is required for this whole-house
+consumer; a room-only grant is not silently expanded. The linked Artifact owner
+contains the exact math, persistence, tool, display and verification contract.
+
+This extension does not supersede the canonical physical history, proposal or
+acceptance model. Surveyed multi-floor geometry, general shapes, doors, real stair
+travel/headroom and live-model interpretation remain distinct future gates.

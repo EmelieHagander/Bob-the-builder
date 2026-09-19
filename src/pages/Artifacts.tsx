@@ -1,3 +1,4 @@
+import { BuildingPlanDrawing } from '../components/BuildingPlanDrawing'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -107,6 +108,10 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
       lineageChanged={value.measurements.some(m => m.revision !== m.latestRevision || m.archived)
         || ((value.areaId ?? null) === target.requestedAreaId && (target.decision.revision !== value.targetRevision
           || target.solution?.id !== value.solutionId || target.solution?.revision !== value.solutionRevision))} />}
+    {value.hasMultifloorPlan && <BuildingPlanDrawing value={value.multifloorPlan ?? null} title={value.title}
+      source={`${value.solutionTitle} · solution v${value.solutionRevision} · target ${value.targetRevision}`}
+      lineageChanged={target.decision.revision !== value.targetRevision || target.solution?.id !== value.solutionId || target.solution?.revision !== value.solutionRevision
+        || value.measurements.some(m => m.revision !== m.latestRevision || m.archived)} />}
     <GeneratedDetails value={value} />
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View drawing image</button>
@@ -255,7 +260,7 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
   if (data?.parametricRecipe && !loading && !error && edit) return <StorageBoxEditor projectId={projectId} areaId={data.areaId ?? ''}
     target={target} value={data} onClose={onClose} onSaved={onSaved} />
   if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
-  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.parametricRecipe || data?.hasRoomLayout)} onClose={onClose}>
+  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.parametricRecipe || data?.hasRoomLayout || data?.hasMultifloorPlan)} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <VersionDetails value={data} target={target} />}
   </Modal>
 }
@@ -423,6 +428,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
             <span className="image-purpose">{STATUS_LABELS[item.status]}</span>
             {itemArea && <span className="image-purpose">{itemArea.name}</span>}
             {item.generator && <span className="image-purpose">Generated</span>}
+            {item.hasMultifloorPlan && <span className="image-purpose">Multi-floor coordinates</span>}
             {item.hasRoomLayout && <span className="image-purpose">Linked room plan</span>}
             {item.parametricRecipe && <span className="image-purpose">Parametric 2D</span>}
             <span className="image-purpose">Version {item.revision}{item.archived ? ' · Archived' : ''}</span></div>
@@ -431,8 +437,8 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
           {comparable && !current && <p className="solution-attention">The selected target for this scope changed after this drawing version. Review before building from it.</p>}
           {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}
           <div className="foundation-actions">
-            <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>{item.parametricRecipe || item.hasRoomLayout ? 'Open drawing' : 'View evidence'}</button>
-            {!item.archived && !item.hasRoomLayout && canCreate && editableInScope && (item.generator
+            <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>{item.parametricRecipe || item.hasRoomLayout || item.hasMultifloorPlan ? 'Open drawing' : 'View evidence'}</button>
+            {!item.archived && !item.hasRoomLayout && !item.hasMultifloorPlan && canCreate && editableInScope && (item.generator
               ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
               : <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>)}
             {!editableInScope && itemArea && <Link className="btn" to={`/artifacts?area=${encodeURIComponent(itemArea.id)}`}>Open {itemArea.name}</Link>}

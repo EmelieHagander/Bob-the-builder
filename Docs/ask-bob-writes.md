@@ -14,6 +14,7 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
 | `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
 | `edit_project_room_layout` | Move the shared wall, change only furniture placement, or explicitly refresh source revisions | No silent source adoption, stock changes, construction approval or independent conflicting room sizes |
+| `save_project_building_plan` | Create/revise one Concept multi-floor coordinate study with exact canonical sources | No accepted physical updates, automatic source adoption, arbitrary geometry, stair or safety claims |
 | `save_building_context` | Atomic canonical Building/Level/Space/Element/Relationship capture and exact room measurement links; append Building notes | No general geometry, stairs, automatic proposal acceptance, unscoped Building access, deletion or safety approval |
 
 `search_project_data` gains a caller-RLS measurement projection and task instructions through a new `search_bob_project_data` RPC. The older lookup RPC stays compatible. Results remain literal, bounded and project-scoped; a chosen design dimension is a provided specification, not a physical measurement.
@@ -79,6 +80,24 @@ owns the capture semantics, existing/proposed authority, local references, sourc
 limits and next geometry boundary. This extension is not yet hosted-deployed.
 A `building_context` receipt links to current Building context, not to a frozen
 multi-floor plan or a claim of computed staircase geometry.
+
+## Multi-floor coordinates (implementation branch after #85)
+
+`save_project_building_plan` uses caller-JWT writer v5 (older kinds delegate to v4)
+and the existing eight-write claimed-turn/receipt/settlement boundary. Research v6
+adds a non-geometric marker in artifact lists and full source-authorised details
+only on exact record lookup. Partial/stale/unavailable source states are explicit.
+
+`inspect_building_projection` is a **read-only** tool in the project lookup budget,
+not a write tool. It requires the current artifact revision and existing floor
+identities, and returns geometric overlaps and known height differences without
+saving a new plan. It cannot conclude stair fit, headroom, structural approval or
+physical emptiness from an unmapped area. Invalid calls consume the same bounded
+lookup allowance. Coordinates and source text remain untrusted data.
+
+[The Artifact owner](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19)
+owns the study semantics, source refresh and release dependencies. Both tools are
+implementation-branch capabilities, not a hosted/live-model release claim.
 
 ## Authority and atomicity
 

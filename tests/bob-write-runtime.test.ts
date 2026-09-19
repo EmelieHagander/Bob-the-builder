@@ -39,7 +39,7 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,7)
+  assert.equal(WRITE_TOOLS.length,8)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
 })
 
@@ -138,7 +138,7 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write_v4'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v5'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
   assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v\d+)?'/)
   const conversation=await readFile(new URL('../supabase/functions/_shared/bob-conversation.ts',import.meta.url),'utf8')
