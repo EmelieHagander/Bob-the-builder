@@ -358,6 +358,123 @@ then deploy the matching Edge and frontend versions. Do not replay the shared
 migration history. Research v4/writer v3 preserve their predecessors for rollback.
 This source branch does not apply production schema or modify user projects.
 
+## Multi-floor coordinate studies — implementation branch (2026-09-19)
+
+**Implemented on `feat/bob-multifloor-geometry`, stacked after #85; not merged or
+hosted-deployed.** This is the geometric bridge after narrative Building intake,
+not yet a stair generator. Apply only
+`20260919185244_multifloor_coordinate_plans.sql` after the pending prerequisites,
+then the matching Edge/frontend. Do not replay shared migration history.
+
+### One frame, several views
+
+`multifloor_v1` / version 1 binds existing canonical Building, Level and Space
+identities and their exact accepted revisions. It is an atomic **Concept Artifact**,
+not a new physical Building store or an automatic update of accepted building
+geometry. `src/lib/buildingPlan.ts` owns the versioned math; `buildingPlanSvg.ts`
+projects that same recipe into floor tabs and a separate **height comparison**.
+
+Every included floor uses one explicitly described datum: x east, y north, z up,
+in millimetres. Outside rectangular envelopes may be offset but are never
+independently recentered. Uniform exterior-wall thickness derives an inside
+envelope; this is not surveyed usable/lettable area. Room/zone rectangles represent
+inside footprints, not inferred partition walls. Qualitative `above` relationships
+do not establish numeric registration or equal footprints.
+
+The bounded study supports 2–6 existing levels, up to 32 existing spaces and 4
+projected study areas. Unknown floor elevation, slab thickness and room placement
+are explicit nulls. A level's sort position never supplies its height. Numeric
+inputs carry supplied-specification or estimate labels and source explanations;
+precise arithmetic does not promote them to measured truth. Optional linked
+measurement revisions remain separate evidence, not automatic parameter bindings.
+The recipe and server-owned source names together are limited to 16 KB so exact
+research remains bounded; concise source explanations may be needed on large plans.
+
+### What the calculations establish
+
+A study rectangle is projected vertically at unchanged building x/y between two
+floors. The engine reports intersections with mapped room footprints, full
+containment versus partial overlap, whether it crosses either inside envelope,
+and a signed finished-floor height difference when both elevations are known.
+For an upward projection with known destination slab thickness, it also reports
+the distance from the lower finished floor to that upper slab's underside.
+
+For the synthetic fixture, 9000 × 5000 mm outside with 300 mm walls produces an
+8400 × 4400 mm inside envelope. Floor elevations 0 and 2800 mm with a 250 mm
+upper slab give 2800 mm floor difference and 2550 mm to the slab underside.
+Changing only the upper floor to 2900 mm produces 2900 / 2650 mm without moving
+any room footprints. Translating the study area can change a single contained
+room hit into two partial hits without resizing either room.
+
+**This is not a staircase endpoint, travel calculation, along-path headroom check
+or approved floor opening.** Empty intersection results mean unmapped coverage,
+not an empty physical room. Footprint overlaps are reviewable conflicts (possibly
+intentional open zones), not proof of a physical collision. Missing values stay
+unknown and invalid shape/precision/identity inputs are rejected. Positive/negative
+coordinate and floor differences use integer-micrometre arithmetic; this numeric
+precision is not a site-measurement tolerance.
+
+### Bob owns creation and inspection
+
+`save_project_building_plan` creates or revises a saved study through the existing
+claimed-turn writer. `inspect_building_projection` is a separate **read-only** tool:
+it reads an exact current saved plan and computes a supplied study area without a
+new revision, write receipt or alteration of the house. Questions need not cause
+unsolicited edits. Current source warnings and estimate labels remain in the
+result. Saved research returns compact derived summaries; the inspection tool
+returns the full bounded intersections for one area.
+
+The existing receipt opens its exact revision in **Plans & drawings**. The viewer
+has floor/height tabs, a full-width overview, contained zoom, readable coordinate
+and dimension tables, source versions, explicit conflicts and revision-stamped
+SVG export. There is no manual coordinate-plan form. Height comparison is labelled
+as such, not as an architectural building section. All SVG is controlled/escaped;
+user/model SVG, script, URLs and arbitrary code are not accepted.
+
+### Version and authority boundary
+
+`bob.artifact_multifloor_plans` is a child of Artifact revisions. Raw writes remain
+denied. Both raw geometry SELECT and the invoker detail view require current
+project membership, access to the Building and **full Building or Site scope** in
+that project. Room-only scope cannot be expanded by guessing the Building ID.
+The artifact's non-geometric marker remains readable after scope revocation, while
+source geometry is withheld and the UI shows unavailable rather than silently
+substituting an old browser copy or another house.
+
+Canonical Artifact commands retain exact target/solution/measurement lineage.
+Source identities and existing evidence cannot be silently removed on revision.
+Changed sources block normal edits; `refresh_sources` explicitly adopts current
+revisions while keeping geometry unchanged. Normal edits and source refresh are
+separate operations. Archive/restore copy the complete saved recipe; one Artifact
+revision cannot simultaneously carry another generator's recipe. Source and target
+locks plus expected revisions protect commit-time checks. Old plans preserve their
+coordinates, source labels and history while access exists.
+
+Research v6 delegates older datasets to v5, and caller-JWT writer v5 delegates older
+write kinds to v4. Claimed-turn ownership, quote audit, eight-write budget,
+idempotent retry, atomic readback and settlement fencing are reused; there is no
+service-role domain write or new shared-app authority.
+
+### Verification boundary and remaining work
+
+`tests/multifloor.test.ts` checks exact geometry, unknowns, translations, strict
+schemas, SVG escaping, and read-only inspection/budgets. `tests/multifloor-db.test.ts`
+applies the migration chain to PGlite and checks RLS, raw-write denial, exact source
+lineage, stale evidence/targets, refresh, archive/restore, scope revocation, retries
+and the real tool loop against SQL using an injected provider response.
+`scripts/multifloor-browser.mjs` extends the normal 320/390/1280 foundations gate:
+chat create, receipt, floor tabs, height change, moved study area, unknown height,
+old-version reload, source warnings/denial and actual SVG download. Results and
+screenshot review belong on the exact PR/head, not an assertion from file presence.
+
+These tests do not establish arbitrary narrative-to-coordinate interpretation,
+hosted Auth/PostgREST behavior or live-model recommendations. Remaining scope:
+actual stairs and their openings/landings, beams/roofs/headroom, door and circulation
+geometry, general polygons, unselected alternative and as-built modes, construction
+or safety approval, generated mockups and material purchasing. The next stair tool
+can consume this datum and source envelope instead of inventing a separate floor
+coordinate model.
+
 ## Verification contract
 
 A 4A release requires proof that:

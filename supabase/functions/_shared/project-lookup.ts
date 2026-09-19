@@ -1,3 +1,5 @@
+import { buildingPlanGeometry, checkedBuildingPlan, withDerivedBuildingPlan } from '../../../src/lib/buildingPlan.ts'
+import { parseProjection } from './project-building-plan.ts'
 import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 import { storageBoxGeometry, BOX_LIMITS } from '../../../src/lib/storageBox.ts'
@@ -77,6 +79,23 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
   let incomplete = false
   return {
     sources,
+    async inspectProjection(value: unknown) {
+      if(used>=budget){incomplete=true;return {status:'budget_exhausted',message:'Projection lookup budget exhausted; no change saved.'}}
+      const input=parseProjection(value)
+      if(!input){++used;incomplete=true;return {status:'invalid',message:'Invalid projection request; no change saved.'}}
+      const result=await this.search({dataset:'artifacts',query:null,status:null,area_id:null,record_id:input.record_id,after_id:null})
+      if(result.status!=='ok')return {status:result.status,message:'Coordinate plan unavailable; no change saved.'}
+      const row=result.records.find(r=>r.id===input.record_id)
+      if(!row||!row.multifloor_plan)return {status:'unavailable',message:'No readable coordinate plan. Do not reconstruct from memory.'}
+      if(row.revision!==input.expected_revision)return {status:'conflict',message:'Plan revision changed. Read the current plan first.'}
+      try{
+        const d=checkedBuildingPlan(row.multifloor_plan,projectId,input.record_id,input.expected_revision)
+        const g=buildingPlanGeometry({...d.recipe,probes:[{key:'inspection',label:'Read-only study area',from_level_id:input.from_level_id,to_level_id:input.to_level_id,bounds:input.bounds}]})
+        return {status:'ok',saved:false,artifact_id:input.record_id,revision:input.expected_revision,unit:'mm',
+          projection:g.probes[0],names:d.names,sources_changed:d.sources_changed,physical_pending:d.physical_pending,
+          contains_estimates:g.contains_estimates,conflicts:g.conflicts.slice(0,12),conflicts_total:g.conflicts.length,limits:g.limits}
+      }catch{return {status:'invalid',message:'Cannot project these inputs in the saved frame. No change saved.'}}
+    },
     get remaining() { return Math.max(0, budget - used) },
     get partial() { return incomplete },
     async search(value: unknown): Promise<LookupResult> {
@@ -101,6 +120,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         if (!payload || !Array.isArray(payload.records) || !Array.isArray(payload.related) || typeof payload.truncated !== 'boolean') throw new Error('invalid_payload')
         const result: LookupResult = { ...base, status: 'ok', next_cursor: typeof payload.next_cursor === 'string' ? payload.next_cursor : null, records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
         if (input.dataset === 'artifacts') result.records = result.records.map(row => {
+          if (row.multifloor_plan || row.has_multifloor_plan) return row.multifloor_plan ? withDerivedBuildingPlan(row, projectId) : { ...row, coordinate_detail: input.record_id ? 'unavailable' : 'read_exact_record_id' }
           if (row.room_layout || row.has_room_layout) return withDerivedRoomLayout(row, projectId)
           if (!row.parametric_recipe) return row
           try {

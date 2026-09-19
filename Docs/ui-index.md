@@ -131,3 +131,14 @@ For phase-aware work, also prove the mixed-phase case:
 without target/readiness/history bleeding between Areas.
 
 If the change is docs-only or purely stylistic, state which parts of that chain do not apply rather than pretending they were tested.
+
+
+### Multi-floor coordinate study — implementation branch after #85
+
+`Plans & drawings` also renders chat-created multi-floor Concept studies, using
+`BuildingPlanDrawing` and the same contained vector/zoom styles as storage-box
+views. Floor tabs retain one shared datum and scale. A separate height comparison
+is explicitly not a building section. Coordinate tables, unknowns, source warnings
+and denied source states remain readable on phones. No manual coordinate editor
+or new global navigation is introduced. The source/persistence contract belongs
+in `Docs/artifacts.md`; production status and screenshot evidence belong to its PR.

@@ -13,6 +13,21 @@
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
+## Multi-floor coordinate branch delta — 2026-09-19
+
+**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #85, this adds a
+chat-authored Concept study tied to canonical Building/Level/Space versions. Floor
+views share one explicit x/y/z datum, outside/inside envelopes, room footprints,
+and known/unknown elevations. A read-only tool projects a study area between floors
+and returns containment/overlaps and known floor/slab differences. Source changes,
+conflicts and revoked physical scope are explicit. Saved versions remain stable.
+
+This is not yet an actual stair generator, a general surveyed/as-built house plan,
+door/circulation reasoning or live-model proof of narrative interpretation. It adds
+numeric coordinate studies beyond the preceding intake slice, not a second
+physical model. [Plans and drawings](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19)
+owns the bounded contract; the exact PR/head owns test and release evidence.
+
 ## Chat Building-intake branch delta — 2026-09-19
 
 **IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #84, this adds
@@ -20,7 +35,8 @@
 Space/zone, Element, Relationship and Measurement records. New root creation and
 linking, source-quoted bounded batches, patch preservation, separate proposals,
 caller-authorised research and current-context receipt navigation are implemented.
-It does not add house coordinates, a full blueprint or staircase calculations.
+The intake slice alone does not add house coordinates or staircase calculations;
+the separate coordinate-study delta above extends its geometric consumers.
 Live-model extraction accuracy remains a separate gate from deterministic tool,
 SQL and browser fixtures. [The Building owner](building-model.md#chat-driven-building-intake--implementation-branch-2026-09-19)
 owns this scope and its verification boundary; the PR owns results for its head.

@@ -1,3 +1,4 @@
+import { checkedBuildingPlan, type BuildingPlanDetails } from '../lib/buildingPlan'
 import { checkedRoomLayout, type RoomLayoutDetails } from '../lib/roomLayout'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
@@ -62,12 +63,14 @@ export interface ProjectArtifact {
   generator: ArtifactGenerator | null
   generatorVersion: number | null
   parametricRecipe?: StorageBoxRecipe | null
+  hasMultifloorPlan?: boolean
   hasRoomLayout?: boolean
 }
 
 export interface ArtifactVersion extends ProjectArtifact {
   measurements: ArtifactMeasurement[]
   generation: ArtifactGeneration | null
+  multifloorPlan?: BuildingPlanDetails | null
   roomLayout?: RoomLayoutDetails | null
 }
 
@@ -103,6 +106,7 @@ function artifact(row: Row): ProjectArtifact {
     generatorVersion: row.generator_version ?? null,
     parametricRecipe: row.parametric_recipe ?? null,
     hasRoomLayout: row.has_room_layout === true,
+    hasMultifloorPlan: row.has_multifloor_plan === true,
   }
 }
 
@@ -200,8 +204,16 @@ export function createArtifacts(
       guard()
       if (layout) roomLayout = checkedRoomLayout(layout, projectId, id, revision)
     }
+    let multifloorPlan: BuildingPlanDetails | null = null
+    if (r.has_multifloor_plan) {
+      const plan = checked(await db.from('artifact_multifloor_details').select('*').eq('project_id', projectId)
+        .eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle())
+      guard()
+      if (plan) multifloorPlan = checkedBuildingPlan(plan, projectId, id, revision)
+    }
     guard()
     return {
+      multifloorPlan,
       ...artifact({ ...r, parametric_recipe: parametric[0]?.recipe ?? null }),
       measurements: scoped(refs, projectId).map(measurement),
       generation: generated,
