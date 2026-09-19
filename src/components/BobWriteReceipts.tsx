@@ -8,6 +8,7 @@ export function BobWriteReceipts({ receipts, onOpenDrawing }: { receipts?: Proje
     <strong>Saved to project</strong>
     <ul style={{ margin: '5px 0', paddingLeft: 17 }}>{receipts.map(receipt =>
       <li key={`${receipt.dataset}:${receipt.recordId}`}><strong>{receipt.label}</strong> · {receipt.operation}
+        {receipt.dataset === 'building_context' && <span> · <Link onClick={onOpenDrawing} to={`/building?building=${encodeURIComponent(receipt.recordId)}`}>Open building context</Link></span>}
         {receipt.dataset === 'artifacts' && receipt.revision && <span> · <Link onClick={onOpenDrawing}
           to={`/artifacts?drawing=${encodeURIComponent(receipt.recordId)}&revision=${receipt.revision}${receipt.areaId ? `&area=${encodeURIComponent(receipt.areaId)}` : ''}`}>Open drawing · v{receipt.revision}</Link></span>}
       </li>,

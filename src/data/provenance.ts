@@ -14,7 +14,7 @@ export interface ProjectSource {
 
 export interface ProjectWriteReceipt {
   projectId: string
-  dataset: 'project' | 'tasks' | 'measurements' | 'artifacts'
+  dataset: 'project' | 'tasks' | 'measurements' | 'artifacts' | 'building_context'
   recordId: string
   label: string
   operation: 'created' | 'updated'
