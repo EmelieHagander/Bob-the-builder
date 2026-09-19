@@ -30,12 +30,16 @@ export function createBuildingIntakeFixture(state, audit) {
       elements.push({...audit,id:randomUUID(),building_id:buildingId,revision:1,space_id:diningId,kind:'bench',name:'Avdelande bänk',description:'Divider, not a wall.',truth:'provided_spec',source:'User description',has_proposal:false})
       for(const [subject_space_id,object_space_id,relation]of[[kitchenId,diningId,'connects_to'],[bedroomId,diningId,'above']])state.relationships.push({...audit,id:randomUUID(),building_id:buildingId,revision:1,subject_space_id,object_space_id,relation,truth:'provided_spec',source:'User description',notes:'',latest_revision:1,has_proposal:false})
       summary='Teststugan, våningarna och sambanden är sparade. Exakta mått och trappgeometri saknas fortfarande.'
-    }else{
-      assert.equal(body.message,'Föreslå att köket blir ett arbetsrum, men behåll nuläget.')
+    }else if(body.message==='Föreslå att köket blir ett arbetsrum, men behåll nuläget.'){
       const kitchen=state.spaces.find(s=>s.id===kitchenId)
       kitchen.latest_revision=2;kitchen.has_proposal=true
       proposals.push({...kitchen,revision:2,accepted_revision:1,project_id:'A',name:'Föreslaget arbetsrum',kind:'office',truth:'ai_assessment',notes:'Only a project proposal; the accepted Kitchen is unchanged.',source:'User description: Föreslå att köket blir ett arbetsrum'})
       summary='Förslaget är sparat separat. Köket är fortfarande kvar i nuläget.'
+    }else{
+      assert.equal(body.message,'Lägg till att takhöjden ännu är okänd.')
+      const building=state.buildings.find(b=>b.id===buildingId)
+      building.notes+=' Takhöjden är ännu okänd.';building.revision++
+      summary='Uppgiften om okänd takhöjd är sparad utan att ändra tidigare byggnadsuppgifter.'
     }
     const evidence={kind:'ai_assessment',sources:[],partial:false,writes:[{projectId:'A',dataset:'building_context',recordId:buildingId,label:'Teststuga',operation:messages.length?'updated':'created',savedAt:audit.recorded_at}]}
     const first=messages.length+1
@@ -45,12 +49,20 @@ export function createBuildingIntakeFixture(state, audit) {
 }
 
 export async function verifyBuildingIntakeBrowser(page,base,fixture,state,width){
-  const ask=async message=>{
+  const ask=async (message,viaReceipt=true)=>{
     await page.getByRole('button',{name:'Ask bob',exact:true}).click()
     const chat=page.getByRole('complementary',{name:'Ask bob for Porch A',exact:true})
     await chat.getByLabel('Question for bob',{exact:true}).fill(message)
+    // Wait for restored history before counting, then for THIS turn's receipt;
+    // clicking an old receipt during an in-flight write is not a saved readback.
+    await chat.getByRole('button',{name:'New conversation',exact:true}).waitFor()
+    await page.waitForFunction(()=>!document.querySelector('.bob-toolbar button')?.disabled)
+    const links=chat.getByRole('link',{name:'Open building context',exact:true})
+    const previousReceipts=await links.count()
     await chat.getByRole('button',{name:'Send',exact:true}).click()
-    await chat.getByRole('link',{name:'Open building context',exact:true}).last().click()
+    await links.nth(previousReceipts).waitFor()
+    if(viaReceipt)await links.nth(previousReceipts).click()
+    else await chat.getByRole('button',{name:'Close Ask bob',exact:true}).click()
     await chat.waitFor({state:'hidden'})
     await page.getByRole('heading',{name:'Teststuga',exact:true}).waitFor()
   }
@@ -75,11 +87,15 @@ export async function verifyBuildingIntakeBrowser(page,base,fixture,state,width)
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Intake details/proposals must fit a phone without page overflow')
   await page.screenshot({path:`test-results/building-intake-${width}.png`,fullPage:true})
   await page.reload();await proposed.getByText('Föreslaget arbetsrum',{exact:true}).waitFor()
+  // Ordinary close must refresh the same Building, too, without a page reload.
+  await ask('Lägg till att takhöjden ännu är okänd.',false)
+  await page.getByText('User-described layout; exact geometry is not established. Takhöjden är ännu okänd.',{exact:true}).waitFor()
+  await proposed.getByText('Föreslaget arbetsrum',{exact:true}).waitFor()
   // Explicit receipt links must never fall back to a different building.
   await page.goto(base+'#/building?building=10000000-0000-4000-8000-000000000099')
   await page.getByRole('heading',{name:'You can’t view this building context',exact:true}).waitFor()
   assert.equal(await page.getByRole('heading',{name:'Main house',exact:true}).count(),0)
   await page.goto(base+'#/building?building='+fixture.buildingId)
   await page.getByRole('heading',{name:'Teststuga',exact:true}).waitFor()
-  console.log(`Building intake chat/create/readback/reload/proposals/exact-building link passed at ${width}px; HTTP/provider fixtures.`)
+  console.log(`Building intake chat/create/readback/same-route-refresh/close/reload/proposals/exact-building link passed at ${width}px; HTTP/provider fixtures.`)
 }
