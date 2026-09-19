@@ -1,7 +1,8 @@
+import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 import { storageBoxGeometry, BOX_LIMITS } from '../../../src/lib/storageBox.ts'
 
-export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements', 'measurements', 'components', 'solutions', 'target', 'artifacts', 'requirements'] as const
+export const DATASETS = ['project', 'areas', 'tasks', 'materials', 'crew', 'events', 'announcements', 'measurements', 'components', 'solutions', 'target', 'artifacts', 'requirements', 'physical_spaces', 'physical_elements'] as const
 export const LIMITS = { lookups: 3, rows: 25, joinedRows: 25, bytes: 32 * 1024, queryChars: 200, timeoutMs: 10_000 } as const
 export interface LookupInput {
   dataset: typeof DATASETS[number]
@@ -57,7 +58,7 @@ export const SEARCH_TOOL = {
     parameters: {
       type: 'object', additionalProperties: false,
       properties: {
-        dataset: { type: 'string', enum: [...DATASETS], description: 'Measurements, components, selected target, solutions, artifacts (text and supported parametric recipes with deterministic part dimensions, not pixels), requirements and collaboration data. Follow next_cursor with after_id using identical filters.' },
+        dataset: { type: 'string', enum: [...DATASETS], description: 'physical_spaces and physical_elements expose only accepted context explicitly scoped to this project, never all buildings the user can access. Measurements, components, selected target, solutions, artifacts (text and supported parametric recipes with deterministic part dimensions, not pixels), requirements and collaboration data. Follow next_cursor with after_id using identical filters.' },
         query: { type: ['string', 'null'], description: 'Literal search text, max 200 characters.' },
         status: { type: ['string', 'null'], description: 'Task, material or event status only; otherwise null.' },
         area_id: { type: ['string', 'null'], description: 'Exact area id for task/design datasets; otherwise null. For target: an empty area result inherits record_id=project; an explicit row with null solution_id means cleared, not inherited.' },
@@ -100,6 +101,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         if (!payload || !Array.isArray(payload.records) || !Array.isArray(payload.related) || typeof payload.truncated !== 'boolean') throw new Error('invalid_payload')
         const result: LookupResult = { ...base, status: 'ok', next_cursor: typeof payload.next_cursor === 'string' ? payload.next_cursor : null, records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
         if (input.dataset === 'artifacts') result.records = result.records.map(row => {
+          if (row.room_layout || row.has_room_layout) return withDerivedRoomLayout(row, projectId)
           if (!row.parametric_recipe) return row
           try {
             const g = storageBoxGeometry(row.parametric_recipe)

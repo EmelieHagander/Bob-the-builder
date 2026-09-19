@@ -586,3 +586,26 @@ Before 2C may be called deployed, prove in SQL/RLS/data-boundary/browser/live ch
 - 320/390/1280px UI covers create/read/revise/propose/accept/history/reload/project-switch recovery;
 - deployed Auth/PostgREST behavior is proven separately from browser HTTP fixtures;
 - no AI/import call is required for this manual foundation.
+
+
+## 12. Linked two-room drawing pilot (2026-09-19, implementation branch)
+
+The [Artifact owner](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19)
+now specifies a narrow implemented proposal using two existing accepted Spaces,
+one canonical wall BuildingElement and one pinned furniture drawing. It is
+stacked on the unmerged 2D drawing work; it is not hosted physical-model delivery.
+
+The plan's local geometry and furniture placement do **not** update accepted
+physical dimensions, accept proposals, change levels, move actual walls or turn
+project completion into as-built evidence. Existing physical identity, project
+scope and revision history remain authoritative. A plan can be shown only with
+its explicit current project access; unrelated Building access cannot fill a
+missing project scope. Creation from hypothetical/new Spaces and full alternative
+or nuläge/as-built packages are not implemented by this pilot.
+
+The larger house/addition/level/room/element relationships and evolution scenarios
+in this document remain the direction, not newly claimed runtime. Keep building
+part and level as potentially overlapping relationships rather than forcing all
+future geometry into a single addition→level→room tree. Exact layout recipe,
+change propagation, source refresh, viewer and acceptance rules belong in
+`Docs/artifacts.md`; claimed-turn chat authority belongs in `Docs/ask-bob-writes.md`.

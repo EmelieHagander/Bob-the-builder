@@ -250,6 +250,114 @@ in the production foundations browser gate at 320/390/1280px and exercises editi
 conflict recovery, reload, exact old-version links and SVG/CSV/print rendering.
 These fixtures are not a live AI personality or hosted PostgREST test.
 
+## Linked two-room plan pilot — implementation branch (2026-09-19)
+
+**Status: implemented on `feat/linked-room-drawing-pilot`, stacked on #83; not
+merged or deployed.** The owning migration is
+`20260919055800_linked_room_drawing_pilot.sql`. The current pilot is not general
+house CAD and does not supersede the delivered 4A/4B1 scope above.
+
+### User journey and scope
+
+Bob creates a proposed two-room plan from the conversation. The user does not
+have to draw lines, map UUIDs or fill a drawing form. The tool reads the selected
+Project/Area target, two existing project-scoped accepted Spaces, one existing
+wall BuildingElement and an existing `storage_box_v1` drawing. These records are
+prerequisites: the new tool does not create or accept physical building records,
+select a target, or generate a bunk-bed construction. The earlier box tool can
+create the furniture drawing before the plan is made.
+
+The two rooms are rectangular, share a single straight wall and have the same
+depth. One stable furniture instance has its own placement and pins an exact
+furniture Artifact revision. The persisted plan uses canonical physical IDs;
+there is no second room/wall catalogue. Placement anchors are `shared_wall` or
+`outer_wall` on the chosen room side, with a gap, offset and 0/90-degree rotation.
+These mean proximity/placement, not a structural attachment.
+
+The recipe contains one fixed inside span across both rooms plus the separating
+wall. Right-room width is derived, never independently editable:
+
+`right width = fixed span − left width − wall thickness`
+
+`src/lib/roomLayout.ts` is the shared deterministic authority for UI, SVG and
+Bob's calculated read/write results. Dimensions are millimetres; calculations
+use integer micrometres. This precision is not a manufacturing tolerance. Local
+coordinates are not a surveyed house position, north direction or floor level.
+
+### Change rules and coherent versions
+
+- `create` saves one Concept Artifact revision containing the entire linked plan.
+- `move_wall` changes only the left inside width. Both room views and wall-anchored
+  placement change together; span, depth and wall thickness stay fixed.
+- `place_furniture` changes only the single instance's room/anchor/gap/offset/rotation.
+  It never edits its construction, part sizes, quantity or material purchases.
+- `refresh_sources` explicitly adopts the read current source revisions and target.
+  Parameters and canonical identities remain unchanged. Existing measurement
+  identities cannot be silently discarded. Refreshed sources are not proof that
+  the chosen dimensions or real site fit have been verified.
+
+For the synthetic acceptance fixture, `3400 + 120 + 2600 = 6120` becomes
+`3200 + 120 + 2800 = 6120` after moving the wall. The furniture construction and
+its part list remain byte-for-byte unchanged. Moving the furniture to the outer
+wall changes placement only. A footprint outside its room may be saved as an
+explicit Concept conflict; it is never automatically shrunk to fit.
+
+All views are projections of one atomic saved recipe, not sequential independent
+writes. Existing Artifact optimistic revisions, target/solution lineage,
+measurement snapshots and archive/restore history remain authoritative. The
+command also locks/checks current furniture and physical dependencies through
+commit. Changed sources reject normal edits and require explicit refresh. Old
+packages retain old source versions and remain reproducible while access exists.
+
+The new `artifact_room_layouts` relation is subordinate to Artifact revisions.
+Authenticated project members have SELECT only under RLS; writes use the guarded
+command. Source-detail views are security-invoker and require the active
+project's physical scope, even if the same caller can access another Building.
+Losing that scope yields an unavailable-source state, not a substituted drawing
+or use of another project's physical authority. Accepted building state, source
+furniture geometry and shared-app tables are never rewritten by this pilot.
+
+### Reading the result in Bob
+
+A verified chat receipt opens the exact saved revision in **Plans & drawings**.
+The linked viewer has both-room overview, individual room views, zoom/contained
+scroll, readable dimensions, placement explanation, source identities/versions,
+and a furniture-construction tab using the pinned existing box viewer. Its link
+opens that exact furniture revision. An SVG export identifies the plan revision,
+furniture revision, target and scope limitations; the screen/print is not to scale.
+Native target/measurement warnings and physical/furniture-source warnings retain
+old geometry instead of silently recomputing it. No manual plan-editing form is
+required or provided by this slice; Bob owns create/move/place/refresh operations.
+
+The outline check is deliberately **not** a safety/fit/structure assessment. No
+doors, windows, services, circulation, ceilings, roof slopes, material load ratings
+or connection details are modelled. Mockups, alternate unselected solution
+packages, nuläge/as-built drawing modes, arbitrary floor plans, multiple furniture
+instances, new hypothetical rooms and automatic stock/material publication remain
+later work. This pilot tests coherent relationships before those expansions.
+
+### Verification and deployment boundary
+
+`tests/room-layout.test.ts` covers conservation, micrometre arithmetic, placement,
+rotation, unchanged parts, conflicts, source binding, SVG escaping and strict tools.
+`tests/room-layout-db.test.ts` applies the actual migration chain in PGlite and
+exercises permissions, atomic rollback, revision/source/target conflicts,
+archive/restore, explicit adoption and claimed-turn receipt recovery. It also
+runs the real Bob tool orchestration against the migrated database with an
+injected deterministic provider, not a live model.
+
+`scripts/room-layout-browser.mjs` runs inside the ordinary foundations browser gate
+at 320/390/1280px. It exercises chat creation, wall movement, placement-only changes,
+unchanged furniture, saved links/reload, warnings, unavailable sources and SVG
+export. Production React/data code runs against HTTP/provider fixtures. Passing
+results must be recorded on the actual PR/head, not inferred from the script's
+presence. Hosted Auth/PostgREST and actual live-model behavior are separate gates.
+
+Stage after #83: apply only its still-pending prerequisites and this new migration,
+then deploy the matching Edge and frontend versions. Do not replay the shared
+migration history. Research v4/writer v3 preserve their predecessors for rollback.
+This source branch does not apply production schema or modify user projects.
+
 ## Verification contract
 
 A 4A release requires proof that:

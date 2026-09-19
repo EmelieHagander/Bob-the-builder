@@ -1,3 +1,4 @@
+import { checkedRoomLayout, type RoomLayoutDetails } from '../lib/roomLayout'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import type { StudWallRole } from '../lib/artifactGeometry'
@@ -61,11 +62,13 @@ export interface ProjectArtifact {
   generator: ArtifactGenerator | null
   generatorVersion: number | null
   parametricRecipe?: StorageBoxRecipe | null
+  hasRoomLayout?: boolean
 }
 
 export interface ArtifactVersion extends ProjectArtifact {
   measurements: ArtifactMeasurement[]
   generation: ArtifactGeneration | null
+  roomLayout?: RoomLayoutDetails | null
 }
 
 type Row = Record<string, any>
@@ -99,6 +102,7 @@ function artifact(row: Row): ProjectArtifact {
     generator: row.generator ?? null,
     generatorVersion: row.generator_version ?? null,
     parametricRecipe: row.parametric_recipe ?? null,
+    hasRoomLayout: row.has_room_layout === true,
   }
 }
 
@@ -189,11 +193,19 @@ export function createArtifacts(
     guard()
     const generated = r.generator ? await generation(projectId, id, revision) : null
     const parametric = await recipes(projectId, [{ id, revision }])
+    let roomLayout: RoomLayoutDetails | null = null
+    if (r.has_room_layout) {
+      const layout = checked(await db.from('artifact_room_layout_details').select('*').eq('project_id', projectId)
+        .eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle())
+      guard()
+      if (layout) roomLayout = checkedRoomLayout(layout, projectId, id, revision)
+    }
     guard()
     return {
       ...artifact({ ...r, parametric_recipe: parametric[0]?.recipe ?? null }),
       measurements: scoped(refs, projectId).map(measurement),
       generation: generated,
+      roomLayout,
     }
   }
 

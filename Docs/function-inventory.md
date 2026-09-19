@@ -13,6 +13,24 @@
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
+## 2D drawing and linked-room branch delta — 2026-09-19
+
+**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** The linked-room pilot is stacked
+on #83. It adds chat-created proposed plans using two existing accepted Spaces,
+one common wall and a separately versioned storage-box construction. A wall move
+updates both room widths and anchored placement; a placement change does not
+resize furniture or change its parts. Atomic Artifact revisions, dependency
+checks, explicit source refresh and readback links are implemented. The viewer
+uses existing Plans & drawings with overview/room/furniture tabs.
+
+This is not whole-house CAD, a bunk-bed generator, physical-model authoring via
+chat, alternative/nuläge/as-built drawing modes, a verified site-fit/safety check
+or mockup generation. Existing canonical physical sources and selected target
+remain prerequisites. [Plans and drawings](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19)
+owns the complete implementation and test contract; the PR owns results for its
+exact head and release status. Older inventory rows below are historical where
+superseded by an explicitly scoped branch/release delta.
+
 ## Household and friend sharing work — 2026-09-13
 
 **Status:** specified / implementation in progress. The user confirmed household
