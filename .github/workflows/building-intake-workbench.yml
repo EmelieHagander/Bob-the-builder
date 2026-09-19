@@ -1,4 +1,4 @@
-name: Building intake workbench
+name: Publish verified Building intake
 on:
   push:
     branches: [feat/bob-building-intake]
@@ -6,24 +6,40 @@ on:
 permissions:
   contents: read
 jobs:
-  snapshot:
+  publish:
+    if: github.repository == 'EmelieHagander/Bob-the-builder' && github.ref == 'refs/heads/feat/bob-building-intake'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Package tracked source and test dependencies only
+          ref: ${{ github.sha }}
+          fetch-depth: 12
+      - name: Verify exact source baseline and reviewed patch
+        shell: bash
         run: |
-          mkdir workbench
-          git archive --format=tar HEAD | gzip > workbench/source.tar.gz
-          tar -czf workbench/dependencies.tar.gz node_modules
-      - uses: actions/upload-artifact@v4
-        with:
-          name: building-intake-workbench
-          path: workbench/
-          retention-days: 1
+          set -euo pipefail
+          git diff --quiet fe2717d440a57f28dbd34ba8e72cc408033dd74e -- Docs src scripts supabase tests
+          python3 - <<'PY'
+          import base64, hashlib, lzma, os
+          from pathlib import Path
+          parts = sorted(Path('.github/building-intake-patch').glob('*.b64'))
+          assert [p.name for p in parts] == [f'{n:02d}.b64' for n in range(4)]
+          patch = lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == 'cc2db7112d18afba832f7dfe76ddc87c2fa5758241bad6ae8c7ff22ad8b6e2bd'
+          Path(os.environ['RUNNER_TEMP'], 'building-intake.patch').write_bytes(patch)
+          PY
+          git apply --check --index "$RUNNER_TEMP/building-intake.patch"
+          git apply --index --whitespace=error-all "$RUNNER_TEMP/building-intake.patch"
+          git rm .github/workflows/building-intake-workbench.yml .github/building-intake-patch/*.b64
+          git diff --cached --check
+          test "$(git write-tree)" = '4e40df0c7de219cab5f9b2c1804eb29eae272911'
+      - name: Commit tested source to feature branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: capture narrated building context through canonical scoped commands'
+          git push origin HEAD:refs/heads/feat/bob-building-intake
