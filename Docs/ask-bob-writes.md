@@ -102,7 +102,7 @@ The existing **New conversation → Clear chat and context** flow from #80 clear
 
 ## UI and refresh
 
-The drawer shows **Saved to project** only from validated, same-project server receipts. Saving does not certify measurements, safety or readiness. Project screens refresh when the drawer closes, avoiding the existing project-version event remounting the shell halfway through a reply. Error responses never create a receipt badge.
+The drawer shows **Saved to project** only from validated, same-project server receipts. Saving does not certify measurements, safety or readiness. Project screens refresh when the drawer closes, avoiding the existing project-version event remounting the shell halfway through a reply. The close event itself performs the refresh: Layout unmounts the drawer, so an effect waiting for `open=false` cannot do it. Both receipt links (including a second link to the same Building/route) and ordinary close refresh verified changes without requiring a browser reload. Error responses never create a receipt badge.
 
 ## Verification and release
 
