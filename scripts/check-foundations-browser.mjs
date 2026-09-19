@@ -59,8 +59,10 @@ try {
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
       if (path.startsWith('/rest/') || path.startsWith('/storage/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
-      if (await roomLayout.handle(request, url, respond)) return
+      // The active multi-floor scenario must own chat/history before the
+      // older room fixture, which otherwise handles every Ask Bob request.
       if (await multifloor.handle(request, url, respond)) return
+      if (await roomLayout.handle(request, url, respond)) return
       if (await facts.handle(request, url, respond)) return
       if (await solutions.handle(request, url, respond)) return
       if (await artifacts.handle(request, url, respond)) return
