@@ -27,7 +27,9 @@ export function createMediaTransport(client: SupabaseClient<any, any, any>, opts
         .eq('state', 'ready').eq('target.area_id', input.area_id) : base()
       if (input.query) q = q.ilike('title', '%' + input.query.replace(/[\\%_]/g, c => '\\' + c) + '%')
       if (input.after_id) q = q.gt('id', input.after_id)
-      return value(await q.order('id').limit(13).limit(26, { referencedTable: 'media_links' }).abortSignal(signal)) as unknown as MediaRow[]
+      // Conditional select strings have different SDK-inferred shapes. The
+      // adapter independently validates every returned row before disclosure.
+      return value<unknown>(await q.order('id').limit(13).limit(26, { referencedTable: 'media_links' }).abortSignal(signal)) as MediaRow[]
     },
     async read(id, signal) {
       const r = await base().eq('id', id).limit(26, { referencedTable: 'media_links' }).abortSignal(signal).maybeSingle()
