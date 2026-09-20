@@ -1,3 +1,6 @@
+import { createProjectContext } from './project-context/dispatcher.ts'
+import { createMediaAdapter } from './project-context/media.ts'
+import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses } from './openai-service.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
@@ -65,8 +68,12 @@ export async function answerWithOpenAi(opts: {
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
+  const projectContext = createProjectContext({
+    adapters: [createMediaAdapter(opts.projectId, createMediaTransport(client, { ...opts, url, key }))],
+    hasAccess, sources: lookup.sources,
+  })
   return runClaimedProjectTurn({
-    ...opts, lookup, hasAccess, writer, generation: claimedServer?.generation, deadline,
+    ...opts, lookup, hasAccess, writer, projectContext, generation: claimedServer?.generation, deadline,
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),
