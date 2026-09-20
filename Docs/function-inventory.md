@@ -13,6 +13,52 @@
 > verification records before treating an old gap as current.
 > [Verification evidence and limits](slice-0-verification.md) own the evidence.
 
+## Multi-floor coordinate branch delta — 2026-09-19
+
+**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #85, this adds a
+chat-authored Concept study tied to canonical Building/Level/Space versions. Floor
+views share one explicit x/y/z datum, outside/inside envelopes, room footprints,
+and known/unknown elevations. A read-only tool projects a study area between floors
+and returns containment/overlaps and known floor/slab differences. Source changes,
+conflicts and revoked physical scope are explicit. Saved versions remain stable.
+
+This is not yet an actual stair generator, a general surveyed/as-built house plan,
+door/circulation reasoning or live-model proof of narrative interpretation. It adds
+numeric coordinate studies beyond the preceding intake slice, not a second
+physical model. [Plans and drawings](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19)
+owns the bounded contract; the exact PR/head owns test and release evidence.
+
+## Chat Building-intake branch delta — 2026-09-19
+
+**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #84, this adds
+`save_building_context`: chat-driven capture into the existing Building, Level,
+Space/zone, Element, Relationship and Measurement records. New root creation and
+linking, source-quoted bounded batches, patch preservation, separate proposals,
+caller-authorised research and current-context receipt navigation are implemented.
+The intake slice alone does not add house coordinates or staircase calculations;
+the separate coordinate-study delta above extends its geometric consumers.
+Live-model extraction accuracy remains a separate gate from deterministic tool,
+SQL and browser fixtures. [The Building owner](building-model.md#chat-driven-building-intake--implementation-branch-2026-09-19)
+owns this scope and its verification boundary; the PR owns results for its head.
+
+## 2D drawing and linked-room branch delta — 2026-09-19
+
+**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** The linked-room pilot is stacked
+on #83. It adds chat-created proposed plans using two existing accepted Spaces,
+one common wall and a separately versioned storage-box construction. A wall move
+updates both room widths and anchored placement; a placement change does not
+resize furniture or change its parts. Atomic Artifact revisions, dependency
+checks, explicit source refresh and readback links are implemented. The viewer
+uses existing Plans & drawings with overview/room/furniture tabs.
+
+The linked-room slice alone is not whole-house CAD, a bunk-bed generator,
+physical-model authoring via chat (see the separate intake delta above), alternative/nuläge/as-built drawing modes, a verified site-fit/safety check
+or mockup generation. Existing canonical physical sources and selected target
+remain prerequisites. [Plans and drawings](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19)
+owns the complete implementation and test contract; the PR owns results for its
+exact head and release status. Older inventory rows below are historical where
+superseded by an explicitly scoped branch/release delta.
+
 ## Household and friend sharing work — 2026-09-13
 
 **Status:** specified / implementation in progress. The user confirmed household
@@ -681,3 +727,13 @@ That is the primary product gap — and it can be built on top of the existing B
 ## Next product step
 
 Use this inventory plus `Docs/user-stories.md` to create the **function difficulty/scope matrix** (`D1–D5`, V0-AUTO / V0-CORE / STRETCH / POST-V0) and then choose one end-to-end vertical slice.
+
+### Stair-study implementation branch (not deployed)
+
+The next bounded step after multi-floor coordinates is chat-driven straight and
+quarter-turn-with-square-landing geometry. Read-only candidate inspection derives
+actual upper exit coordinates and limited whole-walking-strip headroom checks.
+Saved Concept stairs pin an exact parent plan and have lower/upper/section views
+and history. This is not curved/winder design, whole-house circulation solving,
+structural approval or proven live-model recommendation quality. The owner is
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).

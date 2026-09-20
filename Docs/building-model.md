@@ -586,3 +586,156 @@ Before 2C may be called deployed, prove in SQL/RLS/data-boundary/browser/live ch
 - 320/390/1280px UI covers create/read/revise/propose/accept/history/reload/project-switch recovery;
 - deployed Auth/PostgREST behavior is proven separately from browser HTTP fixtures;
 - no AI/import call is required for this manual foundation.
+
+
+## 12. Linked two-room drawing pilot (2026-09-19, implementation branch)
+
+The [Artifact owner](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19)
+now specifies a narrow implemented proposal using two existing accepted Spaces,
+one canonical wall BuildingElement and one pinned furniture drawing. It is
+stacked on the unmerged 2D drawing work; it is not hosted physical-model delivery.
+
+The plan's local geometry and furniture placement do **not** update accepted
+physical dimensions, accept proposals, change levels, move actual walls or turn
+project completion into as-built evidence. Existing physical identity, project
+scope and revision history remain authoritative. A plan can be shown only with
+its explicit current project access; unrelated Building access cannot fill a
+missing project scope. Creation from hypothetical/new Spaces and full alternative
+or nuläge/as-built packages are not implemented by this pilot.
+
+The larger house/addition/level/room/element relationships and evolution scenarios
+in this document remain the direction, not newly claimed runtime. Keep building
+part and level as potentially overlapping relationships rather than forcing all
+future geometry into a single addition→level→room tree. Exact layout recipe,
+change propagation, source refresh, viewer and acceptance rules belong in
+`Docs/artifacts.md`; claimed-turn chat authority belongs in `Docs/ask-bob-writes.md`.
+
+## Chat-driven Building intake — implementation branch (2026-09-19)
+
+**Implemented on `feat/bob-building-intake`, stacked after #84; not merged or
+hosted-deployed.** The first narrative-to-model slice is canonical **context
+capture**, not a complete house geometry or staircase design engine.
+
+`save_building_context` lets Bob save a bounded batch of user-described Building
+context through the existing physical commands. The user does not fill out a
+Building/Space form. A requested new Building is created and linked to the active
+Project in the same transaction; an existing Building must already have an
+explicit whole-Building or Site scope in that Project. The tool cannot silently
+link an existing unscoped Building or turn room-only scope into whole-house writes.
+
+The batch may create/revise Levels, Spaces (including open use-zones), Elements,
+room-to-room Relationships and project Measurements linked to exact Space
+revisions. A Building operation appends sourced notes to the existing root; it
+cannot erase earlier Building context or move it to a different Site. Ordinary
+node updates are patches, preserving unspecified fields and existing measurement
+snapshots. Relationship endpoints remain immutable. No parallel identity store,
+free-form SQL or new raw-write privilege is introduced.
+
+### Meaning, evidence and partial knowledge
+
+The model is instructed to distinguish a zone from an enclosing wall, adjacency
+from a walkable connection, and **above** from identical or vertically aligned
+floor outlines. Compass locations and the described outer extent remain labelled
+notes at this stage, not invented geometric coordinates. Room lengths use the
+canonical Measurement records and exact Space measurement snapshots; estimates
+remain estimates. A list of passages becomes `connects_to` edges, not an invented
+straight corridor. Current-state observations and remodel proposals are separate.
+
+Each operation names an exact user source quote. It comes from the current user
+message or a specified earlier USER sequence in the same private thread; SQL
+checks the sequence/role/quote itself. Current-message authorisation is separately
+required. Old summaries, assistant messages and project records cannot supply
+permission. A matching quote is provenance, **not semantic proof** that the
+extraction is correct: the model must still preserve meaning and uncertainty.
+
+New nodes use dependency-ordered `@key` references within the batch. The server
+assigns persistent UUIDs. A local measurement reference must use the revision just
+saved by that operation; existing identities and revisions must come from fresh
+research. Failed later operations roll back the whole batch, including new root
+creation/linking, earlier nodes and receipts. Retries reuse the committed receipt
+rather than duplicate the Building or rooms. Bounds are 40 operations, 20 links
+per Space, existing canonical text lengths and the existing eight-write turn
+budget. A narrative requiring additional batches must be reported as partial,
+not silently described as fully captured.
+
+### Authority and readback
+
+Existing-state capture requires `can_edit_building`, not merely Project
+membership. Project-only collaborators may propose Space/Element/Relationship
+changes as `ai_assessment`; they cannot change accepted reality, create Levels,
+accept pending proposals or rewrite Building metadata. The batch cannot accept,
+archive, delete, change household access or choose a Solution. A pending proposal
+blocks an accidental ordinary update of the same identity.
+
+`search_bob_project_data_v5` adds paged, caller-RLS reads for scoped Buildings,
+Levels, Relationships, accepted Space measurement snapshots and separate current
+Project proposals, and retains the existing Space/Element/drawing research.
+Both ends of a returned accepted relationship must be in the active Project's
+Space scope. Existing physical snapshots can be preserved after their originating
+Project becomes inaccessible; the command copies the immutable snapshot rather
+than reaching back into another Project's live records.
+
+The validated `building_context` receipt opens the intended Building in the
+normal **Building & spaces** surface and closes the chat. Reload resolves the
+same explicit Building id. A missing/unscoped requested id produces an unavailable
+state, never a fallback to another house. Accepted context and labelled Project
+proposals are shown separately. Ordinary canonical revision history remains the
+owner of earlier facts; a Building link opens current context, not a frozen drawing
+package. Exact drawing-revision navigation remains unchanged.
+
+### Verification and next geometry boundary
+
+`tests/building-intake-db.test.ts` runs actual migrated PGlite SQL with distinct
+Project and Building authorities, source checks, snapshot preservation, stale
+updates, rollback, pagination, proposal separation and claimed-turn settlement.
+It also exercises the real Bob tool loop with an injected deterministic provider.
+`tests/building-intake.test.ts` checks the strict schema, dependency references,
+patch semantics and receipt validation. The normal Building browser gate includes
+chat-create/readback/reload, a separate proposal and unavailable-target navigation
+at 320/390/1280px through production UI/data code with HTTP/provider fixtures.
+These tests do **not** prove free-text extraction accuracy with a live model;
+CI results, screenshots and hosted/live-model evidence must be recorded separately
+on the actual PR/head before making a release claim. Fixtures use a synthetic
+building, not a user's real house description.
+
+This slice does not add a numeric Building envelope, per-Level coordinate frame or
+elevation, arbitrary room polygons, door geometry, cross-floor projection, stairs,
+headroom/circulation checks, a topology constraint solver or generated mockups.
+Even complete lengths do not imply that these missing calculations exist.
+`geometry_ready: false` in capture readback prevents a saved topology from being
+advertised as a measured blueprint. Subsequent work must connect exact length and
+height sources to a shared coordinate model, then test staircase endpoints and
+clearance against both Levels without rewriting accepted state.
+
+Apply only the additive `20260919172831_bob_building_intake.sql` after the pending
+#83/#84 prerequisites, then the matching Edge and frontend. Old RPC versions stay
+available for rollback. Do not replay shared migration history. No production
+schema or user Project is changed by this implementation branch.
+
+
+## Multi-floor coordinate-study extension — implementation branch (2026-09-19)
+
+The branch after #85 adds a bounded geometric consumer of this canonical model:
+[Multi-floor coordinate studies](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19).
+Existing Building/Level/Space identities and accepted revisions are prerequisites;
+chat intake can create those identities but a qualitative relation alone cannot
+supply an exact x/y/z position. No accepted physical state is changed by a study.
+
+One Concept Artifact supplies a common east/north/up datum, rectangular floor
+outside/inside envelopes, independently mapped room footprints and known/unknown
+floor/slab heights. Two-dimensional views use that same frame; a read-only tool can
+project an area between levels. It does not infer a staircase or validate an actual
+floor opening. Full Building/Site project scope is required for this whole-house
+consumer; a room-only grant is not silently expanded. The linked Artifact owner
+contains the exact math, persistence, tool, display and verification contract.
+
+This extension does not supersede the canonical physical history, proposal or
+acceptance model. Surveyed multi-floor geometry, general shapes, doors, real stair
+travel/headroom and live-model interpretation remain distinct future gates.
+
+The stair-study implementation branch consumes the multi-floor Artifact's exact
+Building/Level/Space versions; it does not create another physical hierarchy or
+write an actual staircase/opening into accepted building state. Stair shape,
+source-refresh and limited headroom behavior are owned by
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+A computed exit is not a verified clear passage or a structural approval.

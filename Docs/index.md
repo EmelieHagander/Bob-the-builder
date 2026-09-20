@@ -11,7 +11,7 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
-| persistent site/building/space context across projects | `Docs/building-model.md` |
+| persistent site/building/space context and chat-driven narrative capture | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
@@ -23,7 +23,7 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| manual plans/drawings, exact target lineage and measurement evidence | `Docs/artifacts.md` |
+| plans/drawings, shared multi-floor coordinates, stair studies and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
@@ -39,7 +39,7 @@
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
 - `Docs/material-planning.md` — **deployed 4B2a + first 4B2b material-planning contract** for manual requirements, the narrow `stud_wall_net_area` deterministic quantity, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Broader BOM/fastener/consumable rules remain later scope until explicitly modelled.
-- `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; broader geometry/import/AI fidelity remains planned.
+- `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; bounded chat intake is implemented on its separate, not-yet-deployed branch. The separate multi-floor coordinate-study branch consumes canonical identities through `Docs/artifacts.md`; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
 - `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
 - `Docs/Mockups and initial plans/bob-the-builder.html` — original visual/product mockup; use as historical composition reference, not runtime truth.
@@ -84,7 +84,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `src/pages/Food.tsx` + `src/pages/FoodShopping.tsx` — meal/allergy coordination.
 - `src/pages/AreaDetail.tsx` — tasks, materials, crew and reference-image surface.
 - `src/pages/Solutions.tsx` — manual alternatives and exact selected project target.
-- `src/pages/Artifacts.tsx` — manual plans/drawings and their exact target/measurement lineage when milestone 4A is available.
+- `src/pages/Artifacts.tsx` — plans/drawings, the parametric 2D editor and exact target/measurement lineage; implementation vs hosted state is recorded in `Docs/artifacts.md`.
 
 When a new major journey moves toward implementation, give it one canonical success/failure path rather than encoding the contract only in component behavior.
 
@@ -101,7 +101,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/projectFacts.ts` — measurement/component reads and commands behind `database.ts`.
 - `Docs/solutions.md` — owning alternative/revision, measurement-evidence and project-target decision contract for manual 3A.
 - `src/data/solutions.ts` — solution and target reads/commands behind `database.ts`.
-- `Docs/artifacts.md` — owning manual 4A plan/drawing and deployed narrow 4B1 deterministic-geometry contract, including exact target/solution/physical/measurement lineage.
+- `Docs/artifacts.md` — owning manual 4A, deployed narrow 4B1 geometry and implementation-branch parametric box and linked two-room/placement contracts, including exact target/solution/physical/measurement lineage.
 - `src/data/artifacts.ts` — project-artifact reads and commands behind `database.ts`.
 - `Docs/material-planning.md` + `src/data/materialPlanning.ts` — deployed manual 4B2a receiver and first narrow 4B2b deterministic material quantity, using the existing stock/reuse/Shopping path behind `database.ts`.
 - `src/data/types.ts` — current frontend domain types.
@@ -116,7 +116,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **conversation state owner**: implemented private transcript/Responses continuity and explicit reset, with compaction/reseed and provider erasure still planned; per-user/project privacy and release gates.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
-- `supabase/functions/_shared/project-answer.ts` — read-only tool loop and fixed truth rules.
+- `supabase/functions/_shared/project-answer.ts` — scoped research/write tool loop and fixed truth rules.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
 - `supabase/functions/_shared/serve-bob.ts` and `supabase/functions/ask-bob/` — authenticated OpenAI endpoint for Bob. The old `ask-launchpad/` contains only a retirement response.
 - `src/components/AskBob.tsx` — frontend interaction contract for Ask bob.

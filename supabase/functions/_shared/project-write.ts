@@ -1,4 +1,13 @@
+import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
+import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
+import { BUILDING_PLAN_TOOL, parseBuildingPlanWrite } from './project-building-plan.ts'
+import { withDerivedBuildingPlan } from '../../../src/lib/buildingPlan.ts'
+import { BUILDING_INTAKE_TOOL, parseBuildingIntake } from './building-intake.ts'
+import { ROOM_LAYOUT_TOOLS, parseRoomLayoutWrite } from './project-room-layout.ts'
+import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
+import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
+import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
 
 const nullableText = { type: ['string', 'null'] }
 const text = { type: 'string' }
@@ -9,6 +18,11 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  STAIR_WRITE_TOOL,
+  BUILDING_PLAN_TOOL,
+  BUILDING_INTAKE_TOOL,
+  ...ROOM_LAYOUT_TOOLS,
+  tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
   tool('save_project_description', 'Save the requested project description/plan. Read the current project first; preserve unrelated content. This does not select a SolutionVersion or certify a design.', {
     description: { ...text, description: 'Full replacement description, at most 12000 characters.' },
     expected_updated_at: text, request_quote: quote,
@@ -31,7 +45,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -57,6 +71,10 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
+  if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
+  if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
+  if (ROOM_LAYOUT_TOOLS.some(t => t.function.name === name)) return parseRoomLayoutWrite(name, v)
   const base = { kind: 'project' as WritePayload['kind'], record_id: projectId as string | null, expected_updated_at: null as string | null,
     expected_revision: null as number | null, request_quote: v.request_quote, data: {} as Record<string, unknown> }
   if (name === 'save_project_description') {
@@ -71,6 +89,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
     return { ...base, kind: 'task', expected_updated_at: v.expected_updated_at as string | null,
       data: { area_id: v.area_id, name: v.name, instructions: v.instructions } }
   }
+  if (name === 'save_project_drawing') return parseDrawingWrite(v)
   if (v.record_id !== null && !uuid.test(v.record_id as string)) return null
   if (v.create_area_id !== null && !isText(v.create_area_id, 200)) return null
   if (v.create_component_id !== null && (typeof v.create_component_id !== 'string' || !uuid.test(v.create_component_id))) return null
@@ -92,10 +111,9 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
 }
 function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
-  if (!r || r.projectId !== projectId || !['project', 'tasks', 'measurements'].includes(r.dataset)
-    || !isText(r.recordId, 200) || !isText(r.label, 300) || !['created', 'updated'].includes(r.operation)
-    || !isTime(r.savedAt) || !r.record || r.record.id !== r.recordId) throw new Error('Invalid write receipt')
-  return r
+  if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
+    || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))) throw new Error('Invalid write receipt')
+  return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)

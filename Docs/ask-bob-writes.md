@@ -11,16 +11,100 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | `save_project_description` | Replace the current description/plan with a timestamp precondition; preserve unrelated content | Not SolutionVersion selection, Building facts, or design approval |
 | `save_project_task` | Create a todo task or revise its name/instructions in one existing Area | No assignment, status changes, completion or readiness |
 | `save_project_measurement` | Create/revise the existing canonical measurement record and append revision history | No invented measured evidence, parent moves, source-image removal, archive or deletion |
+| `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
+| `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
+| `edit_project_room_layout` | Move the shared wall, change only furniture placement, or explicitly refresh source revisions | No silent source adoption, stock changes, construction approval or independent conflicting room sizes |
+| `save_project_stair` | Save/revise the supported stair study tied to one exact multi-floor plan; explicit source refresh | No accepted physical edits, source-plan mutation, rounded winders, approval or purchases |
+| `save_project_building_plan` | Create/revise one Concept multi-floor coordinate study with exact canonical sources | No accepted physical updates, automatic source adoption, arbitrary geometry, stair or safety claims |
+| `save_building_context` | Atomic canonical Building/Level/Space/Element/Relationship capture and exact room measurement links; append Building notes | No general geometry, stairs, automatic proposal acceptance, unscoped Building access, deletion or safety approval |
 
 `search_project_data` gains a caller-RLS measurement projection and task instructions through a new `search_bob_project_data` RPC. The older lookup RPC stays compatible. Results remain literal, bounded and project-scoped; a chosen design dimension is a provided specification, not a physical measurement.
 
-The shared guest identity remains read-only: it has no private claimed server thread. Unrelated apps, household/Building authority, people, purchases, selected targets, checks and structural approval are not exposed by these tools.
+The shared guest identity remains read-only: it has no private claimed server thread. Unrelated apps, household sharing, people, purchases, selected targets, checks and structural approval are not exposed. The dedicated Building intake tool separately enforces existing Building-edit authority.
+
+## Parametric drawing extension (implementation branch)
+
+The 2026-09-18 2D extension requires
+`20260918204949_parametric_storage_box_drawings.sql` before its frontend/Edge
+rollout; it is not yet a hosted-release claim. `bob_project_write_v2` handles the
+new drawing kind and delegates existing kinds to the established writer. It uses
+the **same** claimed turn, eight-write budget, semantic retry keys, private audit
+receipts and generation-fenced settlement. No service-role domain write is added.
+
+Read the exact current target and drawing before an edit. Full explicit design
+parameters produce one Concept revision; linked measurement references and
+unrelated description/assumptions must be retained unless the request changes them.
+`search_bob_project_data_v3` enriches artifact rows with their exact saved recipe;
+Edge adds finished-part sizes using the same deterministic generator as the UI.
+The generator and its limits live in [Plans and drawings](artifacts.md), not here.
+
+Drawing receipts add `revision` and `areaId`; parser and browser validate these
+before showing an exact-version **Open drawing** link. Receipt-only retry recovery
+keeps that link. The full saved recipe is returned to the tool, not duplicated into
+the compact transcript receipt. Arbitrary user/provider text never creates a saved
+badge. Opening the link closes the drawer and uses the normal Artifact view.
+
+## Linked-room extension (implementation branch, 2026-09-19)
+
+The new `project-room-layout.ts` defines strict create/edit tool shapes. Bob reads
+canonical IDs using the caller-scoped `physical_spaces` and `physical_elements`
+research datasets, then the exact target and source furniture drawing. Parameters
+are proposed design specifications. Existing accepted physical context and a
+selected target are prerequisites, not records the tools may invent or approve.
+
+`search_bob_project_data_v4` adds bounded physical research and exact linked-plan
+source details. Derived geometry, outline conflicts and furniture parts use the
+same `roomLayout.ts` engine as the browser. The new `bob_project_write_v3` handles
+`room_layout` and delegates old write kinds to v2, preserving the existing claimed
+turn, caller JWT, eight-write budget, audit quotes, atomic receipts, retries and
+fenced settlement. No generic SQL or service-role domain writes are added.
+
+Source changes reject normal edits. `refresh_sources` is a separate, explicit
+adoption decision: it is not a permission to invent new measurements or resize
+furniture. Readback includes exact versions and computed conflict state. Compact
+chat receipts continue to use the existing Artifact revision link. The full
+construction/placement contract and rollout dependencies are owned by
+[Plans and drawings](artifacts.md#linked-two-room-plan-pilot--implementation-branch-2026-09-19).
+
+## Building intake extension (implementation branch)
+
+`save_building_context` is wired through caller-JWT `bob_project_write_v4`;
+older kinds delegate unchanged to v3. It uses the same claimed-turn ownership,
+eight-write budget, private before-state audit, idempotent receipt and fenced
+settlement. `search_bob_project_data_v5` supplies scoped current physical records,
+measurement snapshots and separate proposals. The model's output allowance on a
+write-capable call is raised to 8,000 tokens to accommodate the bounded multi-node
+tool payload; the normal concise prose contract is unchanged.
+
+The [Building model's chat intake section](building-model.md#chat-driven-building-intake--implementation-branch-2026-09-19)
+owns the capture semantics, existing/proposed authority, local references, sources,
+limits and next geometry boundary. This extension is not yet hosted-deployed.
+A `building_context` receipt links to current Building context, not to a frozen
+multi-floor plan or a claim of computed staircase geometry.
+
+## Multi-floor coordinates (implementation branch after #85)
+
+`save_project_building_plan` uses caller-JWT writer v5 (older kinds delegate to v4)
+and the existing eight-write claimed-turn/receipt/settlement boundary. Research v6
+adds a non-geometric marker in artifact lists and full source-authorised details
+only on exact record lookup. Partial/stale/unavailable source states are explicit.
+
+`inspect_building_projection` is a **read-only** tool in the project lookup budget,
+not a write tool. It requires the current artifact revision and existing floor
+identities, and returns geometric overlaps and known height differences without
+saving a new plan. It cannot conclude stair fit, headroom, structural approval or
+physical emptiness from an unmapped area. Invalid calls consume the same bounded
+lookup allowance. Coordinates and source text remain untrusted data.
+
+[The Artifact owner](artifacts.md#multi-floor-coordinate-studies--implementation-branch-2026-09-19)
+owns the study semantics, source refresh and release dependencies. Both tools are
+implementation-branch capabilities, not a hosted/live-model release claim.
 
 ## Authority and atomicity
 
 The model cannot supply project, user, thread or generation authority. The Edge Function binds these from authenticated request and claimed server state. Domain calls use the **caller JWT**, not the service-role client. SQL independently checks current membership, thread ownership, active turn, generation, exact current-message request quote, allowed fields and same-project parents. A quote is an audit/reference constraint, not a semantic proof of consent; the model must distinguish requests from quotations, hypotheticals and suggestions.
 
-Updates require the current timestamp or canonical revision. Project/task changes and their audit receipt commit in one transaction. Measurement writes reuse `evidence_command` and preserve an existing source image. Receipts contain the actual post-write record; browser/transcript evidence receives only compact metadata. The private ledger retains before-state and write provenance and is never a public raw-table API.
+Updates require the current timestamp or canonical revision. Project/task changes and their audit receipt commit in one transaction. Measurement writes reuse `evidence_command` and preserve an existing source image. Drawing writes reuse `artifact_box_command` and the canonical Artifact command; new geometry never silently reuses an old illustration. Receipts contain the actual post-write record; browser/transcript evidence receives only compact metadata. The private ledger retains before-state and write provenance and is never a public raw-table API.
 
 There is no generic SQL, table-name, status, actor, readiness, purchase or delete argument. The migration changes only Bob schemas and grants no new raw domain-table privilege.
 
@@ -38,7 +122,7 @@ The existing **New conversation → Clear chat and context** flow from #80 clear
 
 ## UI and refresh
 
-The drawer shows **Saved to project** only from validated, same-project server receipts. Saving does not certify measurements, safety or readiness. Project screens refresh when the drawer closes, avoiding the existing project-version event remounting the shell halfway through a reply. Error responses never create a receipt badge.
+The drawer shows **Saved to project** only from validated, same-project server receipts. Saving does not certify measurements, safety or readiness. Project screens refresh when the drawer closes, avoiding the existing project-version event remounting the shell halfway through a reply. The close event itself performs the refresh: Layout unmounts the drawer, so an effect waiting for `open=false` cannot do it. Both receipt links (including a second link to the same Building/route) and ordinary close refresh verified changes without requiring a browser reload. Error responses never create a receipt badge.
 
 ## Verification and release
 
@@ -48,3 +132,14 @@ The drawer shows **Saved to project** only from validated, same-project server r
 - Existing project browser gate adds phone/desktop receipt display, wrong-project rejection, lost-answer retry with the same turn id, close/reopen and reload. Existing reset gate is retained.
 
 These deterministic tests do not claim a live model personality evaluation. Hosted Auth/PostgREST write proof, migration verification, Edge rollout and Pages are separate release gates. Roll back the Edge Function first if necessary; the additive migration and optional frontend receipt fields remain backward compatible. Do not replay the whole shared-database migration history.
+
+### Stair-study extension (implementation branch, not deployed)
+
+`inspect_stair_options` is read-only, bounded to four candidates and one fresh
+exact-plan lookup. `save_project_stair` enters caller-JWT `bob_project_write_v6`
+with existing claimed-turn, receipt and settlement rules; older kinds delegate to
+v5. Research v7 adds exact stair-source details. Project/Area, target and existing
+measurements come from the parent plan, not model-chosen authority. The geometry,
+unknowns, refresh semantics and limited headroom contract belong in
+[Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+Neither an inspection nor a saved study is a physical floor modification.

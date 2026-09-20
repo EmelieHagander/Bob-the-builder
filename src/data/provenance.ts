@@ -14,11 +14,14 @@ export interface ProjectSource {
 
 export interface ProjectWriteReceipt {
   projectId: string
-  dataset: 'project' | 'tasks' | 'measurements'
+  dataset: 'project' | 'tasks' | 'measurements' | 'artifacts' | 'building_context'
   recordId: string
   label: string
   operation: 'created' | 'updated'
   savedAt: string
+  /** Drawing receipts pin an exact saved revision and its immutable Area scope. */
+  revision?: number
+  areaId?: string | null
 }
 
 export interface AnswerEvidence {

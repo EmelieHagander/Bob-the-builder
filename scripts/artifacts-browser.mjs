@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 const generationKey = (id, revision) => `${id}:${revision}`
 
 export function createArtifactsFixture(timestamp, assets, facts, solutions) {
-  const records = new Map(), histories = new Map(), generations = new Map()
+  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map()
   const physical = {
     buildings: [{
       id: '90000000-0000-0000-0000-000000000001', site_id: null, project_id: 'A', revision: 1,
@@ -17,13 +17,13 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       change_note: 'Fixture room', actor_label: 'Fixture member', recorded_at: timestamp(),
     }],
   }
-  const fixture = { records, histories, generations, physical, rejectNext: false,
+  const fixture = { records, histories, generations, parametric, physical, rejectNext: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
         'current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
-        'project_buildings','project_spaces',
+        'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command',
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
@@ -39,13 +39,43 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
         const selected = solutions.histories.get(target.solution_id)?.find(item => item.revision === target.solution_revision)
         return selected ? { target, selected } : null
       }
-      const finish = async row => {
+      const finish = async (row, recipe) => {
+        const carried = recipe ?? parametric.get(generationKey(row.id, records.get(row.id)?.revision))?.recipe
         row.revision = (records.get(row.id)?.revision ?? 0) + 1
         row.actor_label = 'Fixture member'
         row.recorded_at = timestamp()
         records.set(row.id, row)
+        if (carried) parametric.set(generationKey(row.id, row.revision), { project_id: row.project_id, artifact_id: row.id, artifact_revision: row.revision, recipe: structuredClone(carried) })
         histories.set(row.id, [...(histories.get(row.id) ?? []), structuredClone(row)])
         return reply({ json: { id: row.id, revision: row.revision } })
+      }
+
+      if (table === 'artifact_parametric_recipes') {
+        const pairs = [...(url.searchParams.get('or') ?? '').matchAll(/and\(artifact_id\.eq\.([^,]+),artifact_revision\.eq\.(\d+)\)/g)]
+        assert(pairs.length > 0 && pairs.length <= 24, 'Recipe reads must pin exact bounded versions')
+        const rows = [...parametric.values()].filter(row => row.project_id === eq('project_id')
+          && pairs.some(pair => pair[1] === row.artifact_id && Number(pair[2]) === row.artifact_revision))
+        return reply({ json: rows })
+      }
+      if (table === 'artifact_box_command') {
+        const { p_project, p_action: action, p_artifact: id, p_expected: expected, p_data: data } = request.postDataJSON()
+        assert.equal(p_project, 'A')
+        const old = records.get(id)
+        if (fixture.rejectNext) { fixture.rejectNext = false; return fail('Project target changed. Reload before saving the drawing.') }
+        if (action === 'regenerate' && old?.revision !== expected) return fail('Drawing changed. Reload before saving again.')
+        if (action === 'create' && (old || expected !== 0)) return fail('Drawing already exists.')
+        const selectedTarget = exactTarget()
+        if (!selectedTarget || selectedTarget.target.revision !== data.target_revision) return fail('Project target changed. Reload before saving the drawing.')
+        assert.equal(data.recipe.generator, 'storage_box_v1'); assert.equal(data.recipe.version, 1)
+        const { width_mm: w, height_mm: h, depth_mm: d, thickness_mm: t } = data.recipe
+        assert([w, h, d, t].every(Number.isFinite) && w > 2*t && d > 2*t && h > t)
+        return finish({ ...old, id, artifact_id: id, project_id: 'A', area_id: action === 'create' ? data.area_id : old.area_id,
+          kind: 'detail', title: data.title, description: data.description, status: 'concept', assumptions: data.assumptions,
+          source_media_id: null, source_media_title: '', target_revision: selectedTarget.target.revision,
+          solution_id: selectedTarget.target.solution_id, solution_revision: selectedTarget.target.solution_revision,
+          solution_title: selectedTarget.selected.title, measurements: structuredClone(data.measurements),
+          generator: null, generator_version: null, archived: false, change_note: data.change_note ?? 'Initial drawing',
+        }, data.recipe)
       }
 
       if (table === 'artifact_command') {

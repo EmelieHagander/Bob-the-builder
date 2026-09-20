@@ -186,7 +186,7 @@ function MarkdownText({ text }: { text: string }) {
   return <div className="bob-markdown">{blocks}</div>
 }
 
-function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: string) => void }) {
+function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
   const isUser = msg.from === 'user'
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
@@ -199,7 +199,7 @@ function Bubble({ msg, onAction }: { msg: ChatMessage; onAction?: (action: strin
           {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
           <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {source.dataset}<br />Record {source.recordId}<br />Retrieved {new Date(source.retrievedAt).toLocaleString()}{source.updatedAt ? ` · updated ${new Date(source.updatedAt).toLocaleString()}` : ' · update time unknown'}</li>)}</ul>
         </details>}
-        <BobWriteReceipts receipts={msg.evidence?.writes} />
+        <BobWriteReceipts receipts={msg.evidence?.writes} onOpenDrawing={onOpenDrawing} />
         {msg.report && <div style={{ marginTop: 10, background: 'var(--canvas)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{msg.report}</div>}
         {msg.list && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>{msg.list.map((it, i) => <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><span style={{ width: 24, height: 24, borderRadius: 7, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: toneColor[it.tone].bg }}><Icon name={it.icon} weight="fill" size={13} color={toneColor[it.tone].c} /></span><span style={{ fontSize: 13.5, lineHeight: 1.4 }}>{it.text}</span></div>)}</div>}
         {msg.action && <button className="btn btn-primary" style={{ marginTop: 11, fontSize: 13 }} onClick={() => onAction?.(msg.action!)}><Icon name="sparkle" weight="fill" size={14} /> {msg.action}</button>}
@@ -250,9 +250,16 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [working, setWorking] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
-  useEffect(() => {
-    if (!open && needsRefresh) { setNeedsRefresh(false); db.refreshAskBobProject(project.id) }
-  }, [open, needsRefresh, project.id])
+  // Layout unmounts this drawer on close; it never renders open=false.
+  // Refresh verified writes in the close event, after the reply has finished,
+  // including when a receipt links to the same route/Building already on screen.
+  const close = () => {
+    onClose()
+    if (needsRefresh) {
+      setNeedsRefresh(false)
+      db.refreshAskBobProject(project.id)
+    }
+  }
   const scope = useRef(createRequestScope())
   const historyScroll = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -381,12 +388,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   return (
     <div className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
+      <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" /></span>
           <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div></div>
-          <button aria-label="Close Ask bob" onClick={onClose} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
+          <button aria-label="Close Ask bob" onClick={close} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
         </header>
 
         <div className="bob-toolbar">
@@ -403,7 +410,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         }}>
           {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
-          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} />)}
+          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
           {working && <WorkingBubble />}
         </div>
 

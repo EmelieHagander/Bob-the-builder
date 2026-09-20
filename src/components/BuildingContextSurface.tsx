@@ -6,11 +6,17 @@ import type {
   PhysicalRelationship,
   PhysicalSite,
   PhysicalSpace,
+  SpaceProposal,
+  ElementProposal,
+  RelationshipProposal,
 } from '../data/buildingContext'
 import { BuildingContextEditor } from './BuildingContextEditor'
 import { BuildingSharingCard } from './SharingCards'
 import { inputStyle } from './form'
 import { Loading } from './ui'
+
+type Proposals = { spaces: SpaceProposal[]; elements: ElementProposal[]; relationships: RelationshipProposal[] }
+const emptyProposals: Proposals = { spaces: [], elements: [], relationships: [] }
 
 type NodeKind = 'level' | 'space' | 'element' | 'relationship'
 
@@ -22,6 +28,7 @@ type BuildingContextGateway = {
   spaces(projectId: string, buildingId: string): Promise<PhysicalSpace[]>
   elements(projectId: string, buildingId: string): Promise<PhysicalElement[]>
   relationships(projectId: string, buildingId: string): Promise<PhysicalRelationship[]>
+  proposals(projectId: string, buildingId: string): Promise<Proposals>
   canDirectEdit(projectId: string, buildingId: string): Promise<boolean>
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editBuilding(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
@@ -35,13 +42,14 @@ type Detail = {
   elements: PhysicalElement[]
   relationships: PhysicalRelationship[]
   canDirectEdit: boolean
+  proposals: Proposals
 }
 
-const emptyDetail: Detail = { levels: [], spaces: [], elements: [], relationships: [], canDirectEdit: false }
+const emptyDetail: Detail = { levels: [], spaces: [], elements: [], relationships: [], canDirectEdit: false, proposals: emptyProposals }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const isDenied = (error: string) => /\bdenied\b|\bunauthori[sz]ed\b|\bforbidden\b|\bpermission\b|row[- ]level security|\brls\b/i.test(error)
 
-export function BuildingContextSurface({ projectId, context }: { projectId: string; context: BuildingContextGateway }) {
+export function BuildingContextSurface({ projectId, context, initialBuildingId }: { projectId: string; context: BuildingContextGateway; initialBuildingId?: string }) {
   const [version, setVersion] = useState(0)
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null)
   const [sites, setSites] = useState<PhysicalSite[]>([])
@@ -70,11 +78,16 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
     Promise.all([context.sites(projectId), context.buildings(projectId), projectId ? context.projectBuildings(projectId) : Promise.resolve([])])
       .then(([nextSites, nextBuildings, scoped]) => {
         if (!alive) return
+        if (initialBuildingId && (!nextBuildings.some(b => b.id === initialBuildingId)
+          || (projectId && !scoped.some(b => b.id === initialBuildingId)))) {
+          throw new Error('Requested building context is denied or no longer linked to this project.')
+        }
         setSites(nextSites)
         setBuildings(nextBuildings)
         setProjectBuildings(scoped)
         setSelectedBuildingId(current => {
           if (current && nextBuildings.some(building => building.id === current)) return current
+          if (initialBuildingId && nextBuildings.some(building => building.id === initialBuildingId) && (!projectId || scoped.some(building => building.id === initialBuildingId))) return initialBuildingId
           return scoped[0]?.id ?? nextBuildings[0]?.id ?? null
         })
       })
@@ -89,7 +102,7 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
       })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [context, projectId, version])
+  }, [context, projectId, version, initialBuildingId])
 
   useEffect(() => {
     let alive = true
@@ -103,8 +116,9 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
       context.elements(projectId, selectedBuildingId),
       context.relationships(projectId, selectedBuildingId),
       context.canDirectEdit(projectId, selectedBuildingId),
-    ]).then(([levels, spaces, elements, relationships, canDirectEdit]) => {
-      if (alive) setDetail({ levels, spaces, elements, relationships, canDirectEdit })
+      projectId ? context.proposals(projectId, selectedBuildingId) : Promise.resolve(emptyProposals),
+    ]).then(([levels, spaces, elements, relationships, canDirectEdit, proposals]) => {
+      if (alive) setDetail({ levels, spaces, elements, relationships, canDirectEdit, proposals })
     }).catch(reason => {
       if (alive) {
         setDetail(emptyDetail)
@@ -128,6 +142,7 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
 
   const refresh = () => setVersion(value => value + 1)
   const selectedBuilding = buildings.find(building => building.id === selectedBuildingId)
+  const spaceNames = new Map([...detail.spaces, ...detail.proposals.spaces].map(s => [s.id, s.name]))
   const detailDenied = detailError ? isDenied(detailError) : false
 
   if (detailDenied && selectedBuildingId) return <>
@@ -177,5 +192,18 @@ export function BuildingContextSurface({ projectId, context }: { projectId: stri
       onLinkProject={async (id, data) => { await context.editScope(projectId, 'project', 'link', id, data) }}
       onSaved={refresh}
     />}
+    {!detailError && !detailLoading && projectId && (detail.proposals.spaces.length + detail.proposals.elements.length + detail.proposals.relationships.length > 0) &&
+      <section className="card foundation-section" aria-label="Project proposals" style={{ overflowWrap: 'anywhere' }}>
+        <h3>Project proposals · not current state</h3>
+        <p>These are proposed changes for this project. They do not replace the accepted building context above.</p>
+        {[...detail.proposals.spaces.map(p => ({ ...p, label: p.name, type: 'Space' })),
+          ...detail.proposals.elements.map(p => ({ ...p, label: p.name, type: 'Element' })),
+          ...detail.proposals.relationships.map(p => ({ ...p, label: `${p.relation.replace(/_/g, ' ')} · ${spaceNames.get(p.subjectSpaceId) ?? 'Unresolved space'} → ${spaceNames.get(p.objectSpaceId) ?? 'Unresolved space'}`, type: 'Relationship' })),
+        ].map(p => <article className="fact-source" key={`${p.type}:${p.id}`}>
+          <strong>{p.label}</strong><p>{p.type} · Proposed version {p.revision} · {p.truth}</p>
+          <p>{'description' in p ? p.description : p.notes}</p><p>Source: {p.source || 'Not recorded'}</p>
+        </article>)}
+      </section>}
+
   </>
 }

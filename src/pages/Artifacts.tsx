@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { StairStudyDrawing } from '../components/StairStudyDrawing'
+import { BuildingPlanDrawing } from '../components/BuildingPlanDrawing'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type {
@@ -16,6 +18,10 @@ import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
 import { StudWallGeneratorModal } from '../components/StudWallGeneratorModal'
 import { generationGeometry, STUD_WALL_ROLE_LABELS, StudWallPreview } from '../components/StudWallPreview'
+
+import { RoomLayoutDrawing } from '../components/RoomLayoutDrawing'
+import { StorageBoxDrawing } from '../components/StorageBoxDrawing'
+import { StorageBoxEditor } from '../components/StorageBoxEditor'
 
 const KIND_LABELS = { plan: 'Plan', elevation: 'Elevation', section: 'Section', detail: 'Detail' } as const
 const STATUS_LABELS = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' } as const
@@ -95,6 +101,19 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
+    {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
+      artifactId: value.id, revision: value.revision, status: STATUS_LABELS[value.status],
+      source: `${value.solutionTitle} · solution v${value.solutionRevision} · target decision ${value.targetRevision}. ${value.assumptions}` }} />}
+    {value.hasRoomLayout && <RoomLayoutDrawing value={value.roomLayout ?? null} title={value.title}
+      source={`${value.solutionTitle} · solution v${value.solutionRevision} · target decision ${value.targetRevision}`}
+      lineageChanged={value.measurements.some(m => m.revision !== m.latestRevision || m.archived)
+        || ((value.areaId ?? null) === target.requestedAreaId && (target.decision.revision !== value.targetRevision
+          || target.solution?.id !== value.solutionId || target.solution?.revision !== value.solutionRevision))} />}
+    {value.hasMultifloorPlan && <BuildingPlanDrawing value={value.multifloorPlan ?? null} title={value.title}
+      source={`${value.solutionTitle} · solution v${value.solutionRevision} · target ${value.targetRevision}`}
+      lineageChanged={target.decision.revision !== value.targetRevision || target.solution?.id !== value.solutionId || target.solution?.revision !== value.solutionRevision
+        || value.measurements.some(m => m.revision !== m.latestRevision || m.archived)} />}
+    {value.hasStairStudy && <StairStudyDrawing value={value.stairStudy ?? null} title={value.title} areaId={value.areaId} />}
     <GeneratedDetails value={value} />
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View drawing image</button>
@@ -240,8 +259,10 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
     () => db.getProjectArtifactVersion(projectId, id, revision),
     [projectId, id, revision, attempt],
   )
+  if (data?.parametricRecipe && !loading && !error && edit) return <StorageBoxEditor projectId={projectId} areaId={data.areaId ?? ''}
+    target={target} value={data} onClose={onClose} onSaved={onSaved} />
   if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
-  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} onClose={onClose}>
+  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.parametricRecipe || data?.hasRoomLayout || data?.hasStairStudy || data?.hasMultifloorPlan)} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <VersionDetails value={data} target={target} />}
   </Modal>
 }
@@ -322,7 +343,7 @@ function ArchiveDialog({ projectId, record, onClose, onSaved }: {
   </Modal>
 }
 
-type Dialog = { kind: 'create' | 'generate' }
+type Dialog = { kind: 'create' | 'generate' | 'box' }
   | { kind: 'edit' | 'view' | 'history' | 'archive' | 'regenerate'; record: ProjectArtifact }
   | { kind: 'version'; id: string; revision: number }
 
@@ -341,7 +362,18 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     ])
     return { drawings, target, areas }
   }, [projectId, area, archived, offset, attempt])
-  const close = () => setDialog(null)
+  const drawingId = params.get('drawing')
+  const drawingRevision = params.get('revision')
+  useEffect(() => {
+    if (drawingId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(drawingId)
+      && drawingRevision && /^\d+$/.test(drawingRevision) && Number.isSafeInteger(Number(drawingRevision)) && Number(drawingRevision) > 0) {
+      setDialog({ kind: 'version', id: drawingId, revision: Number(drawingRevision) })
+    }
+  }, [drawingId, drawingRevision])
+  const close = () => {
+    setDialog(null)
+    if (drawingId || drawingRevision) setParams(area ? { area } : {}, { replace: true })
+  }
   const saved = () => { close(); setAttempt(value => value + 1) }
   const target = data?.target
   const areas = data?.areas ?? []
@@ -360,7 +392,8 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
       <div className="foundation-actions">
         <button className="btn" title={!area ? 'Choose an Area first so deterministic geometry uses the correct Area target and physical scope.' : undefined}
           disabled={loading || Boolean(error) || !canGenerate} onClick={() => setDialog({ kind: 'generate' })}>Generate wall elevation</button>
-        <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button>
+        <button className="btn btn-primary" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'box' })}>Draw storage box</button>
+        <button className="btn" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button>
       </div></div>
 
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && target && <>
@@ -397,14 +430,18 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
             <span className="image-purpose">{STATUS_LABELS[item.status]}</span>
             {itemArea && <span className="image-purpose">{itemArea.name}</span>}
             {item.generator && <span className="image-purpose">Generated</span>}
+            {item.hasStairStudy && <span className="image-purpose">Stair study</span>}
+            {item.hasMultifloorPlan && <span className="image-purpose">Multi-floor coordinates</span>}
+            {item.hasRoomLayout && <span className="image-purpose">Linked room plan</span>}
+            {item.parametricRecipe && <span className="image-purpose">Parametric 2D</span>}
             <span className="image-purpose">Version {item.revision}{item.archived ? ' · Archived' : ''}</span></div>
           <p>{item.description}</p>
           <p className="foundation-hint">Based on {item.solutionTitle} · Version {item.solutionRevision} · target decision {item.targetRevision}</p>
           {comparable && !current && <p className="solution-attention">The selected target for this scope changed after this drawing version. Review before building from it.</p>}
           {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}
           <div className="foundation-actions">
-            <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>View evidence</button>
-            {!item.archived && canCreate && editableInScope && (item.generator
+            <button className="btn" onClick={() => setDialog({ kind: 'view', record: item })}>{item.parametricRecipe || item.hasRoomLayout || item.hasMultifloorPlan || item.hasStairStudy ? 'Open drawing' : 'View evidence'}</button>
+            {!item.archived && !item.hasRoomLayout && !item.hasMultifloorPlan && !item.hasStairStudy && canCreate && editableInScope && (item.generator
               ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
               : <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>)}
             {!editableInScope && itemArea && <Link className="btn" to={`/artifacts?area=${encodeURIComponent(itemArea.id)}`}>Open {itemArea.name}</Link>}
@@ -416,6 +453,8 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
       <Pager offset={offset} size={24} more={data.drawings.hasMore} move={setOffset} />
     </>}
 
+    {dialog?.kind === 'box' && target && <StorageBoxEditor projectId={projectId} areaId={area} target={target} onClose={close}
+      onSaved={record => { setAttempt(value => value + 1); setDialog({ kind: 'view', record }) }} />}
     {dialog?.kind === 'create' && target && <Editor projectId={projectId} areas={areas} initialArea={area} target={target} onClose={close} onSaved={saved} />}
     {dialog?.kind === 'generate' && target && area && <StudWallGeneratorModal projectId={projectId} target={target} areas={areas.filter(item => item.id === area)}
       initialArea={area} onClose={close} onSaved={saved} />}

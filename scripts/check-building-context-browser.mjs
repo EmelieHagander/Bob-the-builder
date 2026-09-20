@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import { createBuildingIntakeFixture, verifyBuildingIntakeBrowser } from './building-intake-browser.mjs'
 
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
@@ -33,6 +34,7 @@ try {
     const state = { buildings: [], spaces: [], relationships: [], scopes: [], deny: false }
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = []
+    const intake = createBuildingIntakeFixture(state, audit)
 
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(api + '/**', async route => {
@@ -54,6 +56,8 @@ try {
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
       if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (path === '/rest/v1/account_notes' || path === '/rest/v1/areas' || path === '/rest/v1/tasks' || path === '/rest/v1/materials' || path === '/rest/v1/events' || path === '/rest/v1/announcements') return respond({ json: [] })
+
+      if (await intake.handle(request, url, respond)) return
 
       if (path === '/rest/v1/current_sites') return respond({ json: [] })
       if (path === '/rest/v1/current_buildings') return respond({ json: state.buildings })
@@ -165,6 +169,8 @@ try {
     await picker.selectOption({ label: 'Main house' })
     await page.getByText('Kids room', { exact: true }).first().waitFor()
 
+    await verifyBuildingIntakeBrowser(page, base, intake, state, viewport.width)
+
     await page.goto(base + '#/account')
     await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()
@@ -181,6 +187,12 @@ try {
   }
 
   console.log('Building context browser verification passed.')
+} catch (error) {
+  if (activePage && !activePage.isClosed()) {
+    console.error('Building UI at failure: ' + (await activePage.locator('body').innerText()).slice(0, 9000))
+    await activePage.screenshot({ path: 'test-results/building-intake-failure.png', fullPage: true })
+  }
+  throw error
 } finally {
   if (activePage && !activePage.isClosed()) await activePage.close().catch(() => {})
   if (browser) await browser.close().catch(() => {})
