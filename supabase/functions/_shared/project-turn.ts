@@ -1,3 +1,4 @@
+import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer } from './project-answer.ts'
@@ -9,6 +10,7 @@ export async function runClaimedProjectTurn(opts: {
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
+  projectContext?: ProjectContext;
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
@@ -44,7 +46,7 @@ export async function runClaimedProjectTurn(opts: {
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: opts.lookup.sources,
-      partial: opts.lookup.partial || !result.ok, writes: compactReceipts(opts.writer.receipts) }
+      partial: opts.lookup.partial || !!opts.projectContext?.partial || !result.ok, writes: compactReceipts(opts.writer.receipts) }
     if (opts.writer.receipts.length && (recovered || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) {
@@ -55,6 +57,15 @@ export async function runClaimedProjectTurn(opts: {
     }
   }
   if (!result.ok) { await fail(); return result }
+  if (opts.projectContext && !await opts.projectContext.validate()) {
+    if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
+    // A revoked photo cannot be cited or carried forward via a provider cursor.
+    // But a committed domain write is still committed: preserve its truthful receipt.
+    if (opts.writer?.receipts.length) {
+      result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts),
+        evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
+    } else { await fail(); return { ok: false, error: 'context_unavailable' } }
+  }
   if (opts.commit) {
     if (!result.providerResponseId && !result.evidence.writes?.length) {
       await fail(); return { ok: false, error: 'provider_state_unavailable' }

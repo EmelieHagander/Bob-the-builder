@@ -1,3 +1,4 @@
+import { responseMessageContent, hasImageContent, type OpenAIMessageContent } from './openai-content.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -69,6 +70,8 @@ interface AiModelRow {
   is_default: boolean;
   /** The model GENERATES images. Distinct from reading one as input. */
   supports_image_output: boolean;
+  /** The model can READ images as input, not generate them. */
+  supports_images: boolean;
   /** The model accepts a reasoning budget (reasoning.effort). */
   supports_reasoning: boolean;
 }
@@ -82,7 +85,7 @@ async function loadModels(aiClient: SupabaseClient): Promise<AiModelRow[]> {
 
   const { data, error } = await aiClient
     .from('ai_models')
-    .select('model_name,input_cost_per_1m_tokens,output_cost_per_1m_tokens,cached_input_cost_per_1m_tokens,max_output_tokens,is_default,supports_image_output,supports_reasoning')
+    .select('model_name,input_cost_per_1m_tokens,output_cost_per_1m_tokens,cached_input_cost_per_1m_tokens,max_output_tokens,is_default,supports_image_output,supports_reasoning,supports_images')
     .eq('is_active', true);
 
   if (error) {
@@ -148,7 +151,7 @@ export interface OpenAIServiceOptions {
   previousResponseId?: string;
   messages?: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
-    content: string | null;
+    content: OpenAIMessageContent;
     tool_calls?: Array<{
       id: string;
       type: 'function';
@@ -410,6 +413,9 @@ export async function callOpenAIResponses<T = unknown>(
   }
   
   try {
+    if (hasImageContent(options.messages) && modelRow.supports_images !== true) {
+      throw new Error('Configured model does not support image input');
+    }
     const modelParams = getModelParams(currentModel, configuredMaxTokens);
     const inputMessages: Array<Record<string, unknown>> = [];
     
@@ -427,25 +433,7 @@ export async function callOpenAIResponses<T = unknown>(
           continue;
         }
         
-        let content: Array<Record<string, unknown>>;
-        if (typeof msg.content === 'string') {
-          content = [{ type: msg.role === 'user' ? 'input_text' : 'output_text', text: msg.content }];
-        } else if (Array.isArray(msg.content)) {
-          content = (msg.content as Array<Record<string, unknown>>).map((c) => {
-            if (c.type === 'text' || c.type === 'input_text' || c.type === 'output_text') {
-              return { type: msg.role === 'user' ? 'input_text' : 'output_text', text: c.text };
-            }
-            if (c.type === 'image_url') {
-              return { type: 'input_image', image_url: c.image_url };
-            }
-            if (c.text) {
-              return { type: msg.role === 'user' ? 'input_text' : 'output_text', text: c.text };
-            }
-            return null;
-          }).filter(Boolean) as Array<Record<string, unknown>>;
-        } else {
-          content = [{ type: 'input_text', text: '' }];
-        }
+        const content = responseMessageContent(msg.role, msg.content);
         
         if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
           if (msg.content) {
@@ -633,13 +621,14 @@ export async function callOpenAIResponses<T = unknown>(
     console.log(`[OpenAI Service] Response status: ${response.status}`);
 
     if (!response.ok) {
-      console.error(`[OpenAI Service] API error:`, responseText);
+      // Provider errors may echo request content; never log inline images or URLs.
+      console.error(`[OpenAI Service] API error status: ${response.status}`);
       return {
         success: false,
         data: null,
         usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
         model: currentModel,
-        error: `OpenAI API error: ${response.status} - ${responseText}`
+        error: `OpenAI API error: ${response.status}`
       };
     }
 
@@ -752,9 +741,7 @@ export async function callOpenAIResponses<T = unknown>(
     }
     
     console.log('[OpenAI Service] Extracted content length:', content.length);
-    if (content.length > 0) {
-      console.log('[OpenAI Service] Content preview:', content.substring(0, 200));
-    }
+    // Response text may describe private images; log counts, never content previews.
     
     if (!content) {
       // Check if we got reasoning tokens but no output
@@ -822,7 +809,7 @@ export async function callOpenAIResponses<T = unknown>(
           if (match) parsedData = JSON.parse(match[0]);
         }
       } catch (_extractError) {
-        console.error(`[OpenAI Service] Failed to parse JSON. Content preview:`, content.substring(0, 500));
+        console.error(`[OpenAI Service] Failed to parse structured output`);
         
         // Attempt to recover truncated JSON (common with large responses)
         // Strategy A: Products array recovery (for store offers)
