@@ -66,6 +66,12 @@ try {
         const history = histories.get(body.projectId)
         if (history) history.thread ??= `thread-${body.projectId}`
         if (completedTurns.has(body.clientTurnId)) return respond({ json: completedTurns.get(body.clientTurnId) })
+        if (body.message === 'Inspect project photo') {
+          const response=success(body.projectId,'Project photo inspected.')
+          response.evidence.sources=[{projectId:body.projectId,dataset:'image_pixels',recordId:'10000000-0000-4000-8000-000000000001',label:'Bild öppnad: Fönsteranslutning',retrievedAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T11:00:00Z',truth:'unknown'}]
+          storeCompletedTurn(body,response)
+          return respond({json:response})
+        }
         if (body.message === 'Wrong receipt') {
           const response = success(body.projectId, 'FORGED SAVED ANSWER')
           response.evidence.writes = [{ projectId: 'B', dataset: 'tasks', recordId: 'foreign', label: 'FORGED SAVE', operation: 'created', savedAt: '2026-09-17T12:00:00Z' }]
@@ -267,6 +273,22 @@ try {
     await page.reload()
     drawer = await openBob('A')
     await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+
+    // Production source disclosure and persistence; HTTP fixture, not vision proof.
+    await send('Inspect project photo')
+    await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
+    await drawer.locator('details > summary').last().click()
+    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
+    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).scrollIntoViewIfNeeded()
+    assert(await drawer.evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Image evidence must fit the phone drawer')
+    await page.screenshot({path:`test-results/ask-bob-images-${viewport.width}.png`,fullPage:true})
+    await page.reload();drawer=await openBob('A')
+    await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
+    await drawer.locator('details > summary').last().click()
+    await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
+    drawer=await switchProject('B')
+    assert.equal(await drawer.getByText('Project photo inspected.',{exact:true}).count(),0)
+    drawer=await switchProject('A')
 
     if (viewport.width === 1280) {
       slow = deferred()

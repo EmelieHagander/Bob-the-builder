@@ -2,7 +2,8 @@
 
 **Status:** milestones 1A and 1B are implemented and deployed (2026-09-09).
 [Verification and rollout evidence](foundation-verification.md) owns the actual
-checks and their limits. The V1 plan owns delivery order; vision remains 1C.
+checks and their limits. The V1 plan owns delivery order. The on-demand image
+context slice below implements vision input (1C); PR #89 owns rollout proof.
 
 ## Ownership and authority
 
@@ -59,8 +60,8 @@ Removing a project image explains that all its attachments will disappear.
 Purposes are current state, reference, instruction, proposal, progress and as-built.
 These are user-provided classifications. A supplied instruction/proposal is not a
 verified drawing; a photo alone does not verify a measurement or professional check.
-AI consumption/generation is outside these milestones and the lookup allowlist
-does not expand merely because new tables exist.
+AI consumption/generation is outside milestones 1A/1B. The image-on-demand slice
+below adds explicit vision reads; generation remains separate scope.
 
 ## Manual task detail and steps
 
@@ -119,3 +120,85 @@ The owner does not need to test Bob or invoke AI for foundation work to proceed.
 
 See [the verification record](foundation-verification.md) for the applied migration
 and actual test/deployment results.
+
+## On-demand project image context (release bob-media-2026-09-20)
+
+This image slice supersedes the image-not-yet-implemented statements in
+`ask-bob-context.md` and `ask-bob-context-implementation.md` only. It does not
+claim their broader Current View, Context Router, Process Lens, full Project
+Catalog or Project Librarian are built. The registry currently exposes **images**;
+existing project data still uses `search_project_data`. Source implementation is
+not deployment proof: PR #89 records CI, Pages, Edge readback and live-test limits.
+
+### Model choice and delivery
+
+`project-context/dispatcher.ts` owns a per-turn adapter registry and two read-only
+tools: `list_project_category` and `open_project_item`. The first turn carries
+only category/count availability, not image bodies. Listing returns paged safe
+metadata (12 rows, next cursor), purpose and project attachment pointers. Main
+Bob chooses which refs to open, may open 1–4 together, and may reopen a previous
+ref in the same or a later turn. There is no permanent already-seen lock, automatic
+all-image injection, or AI-caption-only substitute for the image. No extra router
+model is inserted before each photo question.
+
+An explicit open rechecks the caller's current project/record/Storage access,
+reads the immutable original, and emits a transient image carrier to the SAME
+main model on its next call. The shared `openai-content.ts` serializer makes the
+`messages[]` Responses path genuinely multimodal, preserves paired tool outputs,
+and rejects unsupported content rather than silently dropping it. Input-vision
+support comes from `shared.ai_models.supports_images`, not image-generation
+capability. The generic shared-service fix is backward compatible for text;
+other applications' deployed service copies are not changed by this release.
+The new helper must accompany the shared service on future cross-repository syncs.
+
+Only after a successful model call containing the pixels is an `image_pixels`
+source appended, labelled `Bild öppnad: <title>`. The existing evidence UI and
+private conversation persistence display/retain this source. A list, download,
+failed provider call or claimed caption is not a viewed-image receipt. The tool
+JSON says `prepared` until delivery; pixels, storage paths, keys and signed URLs
+are never copied into the saved source envelope or ordinary tool JSON.
+
+### Authority, limits and recovery
+
+Both metadata and original bytes use the **caller JWT**, never service role.
+Every query pins the active Project even when the caller belongs to several.
+Only ready JPEG/PNG/WebP records in `bob-project-media` with the canonical
+`<project>/<image UUID>` path are openable. The adapter verifies byte count,
+file signature and current metadata before/after the download. The streamed body
+is bounded to the recorded size and 6 MiB; arbitrary URLs, redirects, pending or
+deleting files, guessed foreign refs and alternative buckets fail closed.
+Current image versions/access are checked before further model calls, after a
+model response, and before commit. Already transmitted provider input cannot be
+recalled; revocation stops subsequent calls/visual answers. Committed domain
+writes retain receipt-only recovery without stale image prose or provider cursor.
+
+The turn permits 12 list/open operations, batches of four, eight image opens
+(including deliberate reopens), and 16 MiB total accepted raw image bytes. Each
+read has a 12-second abortable bound. Partial batches identify failed members;
+unavailable storage is not reported as an empty library. No cross-turn pixel
+cache or new database table/migration is introduced. Provider-side continuation
+avoids retransmitting unchanged pixels inside the turn; a fresh turn can reopen.
+Direct Area filters cover direct Area attachments only; project-wide browsing
+also includes Task/Step attachments. Missing image captions are not backfilled.
+
+### Interpretation and verification
+
+Photographs and visible text are untrusted evidence, never instructions, write
+authority, exact measurements or proof of hidden structure. No automatic saving
+of visual interpretations as Building facts is added. Images can be selected or
+skipped; opening is not certification of what the model inferred.
+
+`project-images.test.ts`, `project-images-runtime.test.ts`,
+`project-images-db.test.ts` and `openai-image-wire.test.ts` cover bounded metadata,
+actual carrier/wire shape, image choice/reopening, failures, caller RLS,
+revocation, write-receipt survival and source persistence. Browser coverage in
+`check-project-browser.mjs` exercises existing disclosure/reload/isolation at
+320/390/1280; its HTTP fixtures are not a vision test.
+
+The existing live-Bob workflow and script remain unchanged by this release.
+Their real-model text retrieval proof is NOT proof of visual understanding.
+Publication of an extended live-image script was blocked by the tool environment;
+that extension was withdrawn rather than bypassing the control or shipping a
+known-bad fixture. An actual model-driven visual-only question and reopening test
+remain outstanding. Do not claim these checks passed from mocked model output.
+No real user's photos are used as release-test inputs.

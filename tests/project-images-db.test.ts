@@ -69,7 +69,7 @@ after(() => pg.close())
 test('image adapter consumes actual caller-RLS media/storage rows and cannot widen the explicit project', async () => {
   const a=imageId(51),b=imageId(52),pending=imageId(53)
   for(const [id,project]of[[a,'A'],[b,'B'],[pending,'A']]) {
-    await media(both,project,'reserve',id,{...reservation(),target_kind:'project',target_id:null,byte_size:8})
+    await media(both,project,'reserve',id,{...reservation(),target_kind:'project',target_id:project,byte_size:8})
     if(id!==pending){await upload(both,id,project,8);await media(both,project,'finalize',id)}
   }
   let downloads=0
