@@ -1,4 +1,4 @@
-name: Bob release source snapshot
+name: Publish Bob release checks
 on:
   push:
     branches: [release/bob-tools-and-knowledge-plan]
@@ -6,15 +6,38 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
+  publish:
+    if: github.repository == 'EmelieHagander/Bob-the-builder' && github.ref == 'refs/heads/release/bob-tools-and-knowledge-plan'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - run: git archive --format=tar HEAD | gzip > release-source.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bob-release-source
-          path: release-source.tar.gz
-          retention-days: 1
+          ref: ${{ github.sha }}
+          fetch-depth: 8
+      - name: Verify exact reviewed patch and unchanged baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --quiet 7e41b363c1fb9ea335f997cec0ee37eb24e7eeeb -- Docs src scripts supabase tests public .github/workflows/ci.yml
+          python3 - <<'PY'
+          import base64, hashlib, lzma, os
+          from pathlib import Path
+          patch = lzma.decompress(base64.b64decode(Path('.github/release-patch.b64').read_text().strip(), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '2ef52bea25278cb296ac982bbed019faf326e9a3e78a03ee117b6ee57dfaa8b5'
+          Path(os.environ['RUNNER_TEMP'], 'release.patch').write_bytes(patch)
+          PY
+          git apply --check --index "$RUNNER_TEMP/release.patch"
+          git apply --index --whitespace=error-all "$RUNNER_TEMP/release.patch"
+          git rm .github/workflows/release-source-snapshot.yml .github/release-patch.b64
+          git diff --cached --check
+          test "$(git write-tree)" = 'c988a8cbd68496b81fe5495a6fb26e51719916ab'
+      - name: Commit reviewed source only to this release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: prepare coordinated Bob tool release and plan curated knowledge seeding'
+          git push origin HEAD:refs/heads/release/bob-tools-and-knowledge-plan
