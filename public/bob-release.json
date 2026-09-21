@@ -1,6 +1,8 @@
 {
-  "release": "bob-media-2026-09-20",
-  "feature_source_commit": "ef032f3f804eef0e531cf52199cfe1b09348c0fb",
+  "release": "bob-grounding-2026-09-21",
+  "feature_source_commit": "20787e39a5af09b0284174c6832baf0950ef2051",
   "knowledge_library": "planned_not_seeded",
-  "project_images": "metadata_then_on_demand_pixels"
+  "project_images": "metadata_then_on_demand_pixels",
+  "image_grounding": "fresh_project_and_measurement_context",
+  "answer_voice": "first_person"
 }

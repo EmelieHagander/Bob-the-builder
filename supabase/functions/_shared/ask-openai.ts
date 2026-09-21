@@ -1,3 +1,4 @@
+import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext } from './project-context/dispatcher.ts'
 import { createMediaAdapter } from './project-context/media.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
@@ -79,7 +80,13 @@ export async function answerWithOpenAi(opts: {
       store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),
       callModel: options => callOpenAIResponses<string>(options), hasAccess, deadline: Math.min(deadline - 60000, Date.now() + 105000),
     }) } : {}),
-    callModel: options => callOpenAIResponses<string>(options),
+    // The main answer/continuation model gets the evidence policy. The older-history
+    // summarizer above is deliberately separate: it must not fetch project images.
+    callModel: createGroundedModelCall({
+      projectId: opts.projectId, message: opts.message, lookup, hasAccess, deadline,
+      validateImages: () => projectContext.validate(),
+      callModel: options => callOpenAIResponses<string>(options),
+    }),
     fail: async generation => {
       if (threadId) await conversations.fail(opts.projectId, opts.userId, threadId, opts.clientTurnId, generation)
     },

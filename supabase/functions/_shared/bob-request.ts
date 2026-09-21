@@ -5,7 +5,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Expose-Headers': 'X-Bob-Release',
-  'X-Bob-Release': 'bob-media-2026-09-20',
+  'X-Bob-Release': 'bob-grounding-2026-09-21',
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { ...CORS, 'Content-Type': 'application/json' },
