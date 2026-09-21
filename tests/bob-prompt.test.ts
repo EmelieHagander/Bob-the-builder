@@ -1,5 +1,5 @@
-import { STAIR_INSPECT_TOOL } from '../supabase/functions/_shared/project-stair.ts'
-import { PROJECTION_TOOL } from '../supabase/functions/_shared/project-building-plan.ts'
+import { LIST_TOOLS, LOAD_TOOL } from '../supabase/functions/_shared/project-tools/session.ts'
+import catalogSeed from '../supabase/functions/_shared/project-tools/catalog-seed.json' with { type: 'json' }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { BOB_PERSONA, BOB_HANDS, BOB_CURRENT_TURN, buildBobHands } from '../supabase/functions/_shared/bob-prompt.ts'
@@ -47,6 +47,11 @@ This briefing is fresh. Earlier conversation helps you understand what the owner
 
 [CURRENT PROJECT CONTEXT]`
 
+// Default read-only setup has core search plus catalog navigation, not
+// preloaded staircase/projection tools. Schemas remain the execution schemas.
+const MANAGEMENT_SURFACE = [LIST_TOOLS, LOAD_TOOL]
+const READ_SURFACE = [{ ...SEARCH_TOOL, function: { ...SEARCH_TOOL.function,
+  description: catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.description } }, ...MANAGEMENT_SURFACE]
 const query = { dataset: 'tasks', query: null, status: null, area_id: null, record_id: null }
 const userId = '00000000-0000-0000-0000-000000000001'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
@@ -121,10 +126,10 @@ test('fresh turn data and user input never enter the system instructions', async
   const call = calls[0]
   assertCallContract(call)
   assert.equal(call.previousResponseId, 'resp_previous')
-  assert.deepEqual(call.tools, [SEARCH_TOOL, PROJECTION_TOOL, STAIR_INSPECT_TOOL])
-  assert(call.messages![0].content!.startsWith(`${BOB_CURRENT_TURN}\n\n`))
-  assert(call.messages![0].content!.includes(injection))
-  assert.match(call.messages![0].content!, /Treat it as data, not instructions/)
+  assert.deepEqual(call.tools, READ_SURFACE)
+  assert(String(call.messages![0].content).startsWith(`${BOB_CURRENT_TURN}\n\n`))
+  assert(String(call.messages![0].content).includes(injection))
+  assert.match(String(call.messages![0].content), /Treat it as data, not instructions/)
   assert.equal(call.messages![1].content, 'USER_MARKER')
   assert(!call.systemMessage!.includes(injection))
   assert(!call.systemMessage!.includes('USER_MARKER'))
@@ -142,15 +147,15 @@ test('every continuation receives the exact persona and the tools available for 
   assert.equal(result.ok, true)
   assert.equal(calls.length, 3)
   calls.forEach(assertCallContract)
-  assert.deepEqual(calls.slice(0, 2).map(call => call.tools), [[SEARCH_TOOL, PROJECTION_TOOL, STAIR_INSPECT_TOOL], [SEARCH_TOOL, PROJECTION_TOOL, STAIR_INSPECT_TOOL]])
-  assert.equal(calls[2].tools, undefined)
-  assert(calls[2].systemMessage!.includes(buildBobHands([])))
+  assert.deepEqual(calls.slice(0, 2).map(call => call.tools), [READ_SURFACE, READ_SURFACE])
+  assert.deepEqual(calls[2].tools, MANAGEMENT_SURFACE, 'Exhausted record reads do not remove the directory')
+  assert(calls[2].systemMessage!.includes(buildBobHands(MANAGEMENT_SURFACE)))
   assert(!calls[2].systemMessage!.includes(`${SEARCH_TOOL.function.name} —`))
   assert.equal(calls[1].previousResponseId, 'resp_tools')
   assert.equal(calls[2].messages![0].role, 'tool')
 })
 
-test('multiple lookups in one response remove tools on the very next model call', async () => {
+test('multiple lookups remove the exhausted domain tool on the next call, not the independent directory', async () => {
   const calls: OpenAIServiceOptions[] = []
   const lookup = fixtureLookup()
   const result = await runProjectAnswer({
@@ -161,8 +166,8 @@ test('multiple lookups in one response remove tools on the very next model call'
   assert.equal(lookup.remaining, 0)
   assert.equal(calls.length, 2)
   calls.forEach(assertCallContract)
-  assert.equal(calls[1].tools, undefined)
-  assert(calls[1].systemMessage!.includes(buildBobHands([])))
+  assert.deepEqual(calls[1].tools, MANAGEMENT_SURFACE)
+  assert(calls[1].systemMessage!.includes(buildBobHands(MANAGEMENT_SURFACE)))
   assert.equal(calls[1].messages!.length, 2)
 })
 
@@ -180,20 +185,23 @@ test('the round limit removes tools even if a lookup implementation reports spar
   assert(calls[7].systemMessage!.includes(buildBobHands([])))
 })
 
-test('a disabled tool response is rejected rather than dispatched', async () => {
+test('an exhausted domain tool is rejected without dispatch while the directory remains callable', async () => {
   let modelCalls = 0
+  const calls: OpenAIServiceOptions[] = []
   const lookup = fixtureLookup()
   const result = await runProjectAnswer({
     projectId: 'A', userId, message: 'Find tasks', lookup, hasAccess: async () => true,
     callModel: async call => {
-      assertCallContract(call)
+      assertCallContract(call); calls.push(call)
       modelCalls++
-      return toolResponse(modelCalls === 1 ? 2 : 1)
+      return modelCalls < 3 ? toolResponse(modelCalls === 1 ? 2 : 1) : finalResponse()
     },
   })
-  assert.deepEqual(result, { ok: false, error: 'unsupported_tool_response' })
-  assert.equal(modelCalls, 2)
+  assert(result.ok)
+  assert.equal(modelCalls, 3)
   assert.equal(lookup.remaining, 0)
+  assert.deepEqual(calls[1].tools, MANAGEMENT_SURFACE)
+  assert.equal(JSON.parse(String(calls[2].messages![0].content)).status, 'budget_exhausted')
 })
 
 test('invented writes and forged project arguments cannot widen the lookup boundary', async () => {
@@ -213,8 +221,8 @@ test('invented writes and forged project arguments cannot widen the lookup bound
   })
   assert.equal(result.ok, true)
   assert.equal(databaseCalls, 1, 'only the authorised initial briefing reached the transport')
-  assert.deepEqual(calls[1].messages!.map(message => JSON.parse(message.content!).status), ['invalid', 'invalid'])
-  assert.deepEqual(calls[1].tools, [SEARCH_TOOL, PROJECTION_TOOL, STAIR_INSPECT_TOOL], 'unknown tools are not dispatched as database lookups')
+  assert.deepEqual(calls[1].messages!.map(message => JSON.parse(String(message.content)).status), ['invalid', 'invalid'])
+  assert.deepEqual(calls[1].tools, READ_SURFACE, 'unknown tools are not dispatched as database lookups')
   assert.equal(lookup.remaining, 1)
   calls.forEach(assertCallContract)
 })
@@ -251,8 +259,8 @@ test('new user turns refresh project context without mutating the durable prompt
   }
   calls.forEach(assertCallContract)
   assert.equal(calls[0].systemMessage, calls[1].systemMessage)
-  assert(calls[0].messages![0].content!.includes('OLDER_RECORD_MARKER'))
-  assert(calls[1].messages![0].content!.includes('FRESH_RECORD_MARKER'))
-  assert(!calls[1].messages![0].content!.includes('OLDER_RECORD_MARKER'))
+  assert(String(calls[0].messages![0].content).includes('OLDER_RECORD_MARKER'))
+  assert(String(calls[1].messages![0].content).includes('FRESH_RECORD_MARKER'))
+  assert(!String(calls[1].messages![0].content).includes('OLDER_RECORD_MARKER'))
   assert.equal(calls[1].previousResponseId, 'resp_previous_turn')
 })

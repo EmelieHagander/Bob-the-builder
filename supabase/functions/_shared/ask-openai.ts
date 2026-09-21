@@ -1,3 +1,4 @@
+import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext } from './project-context/dispatcher.ts'
 import { createMediaAdapter } from './project-context/media.ts'
@@ -75,6 +76,7 @@ export async function answerWithOpenAi(opts: {
   })
   return runClaimedProjectTurn({
     ...opts, lookup, hasAccess, writer, projectContext, generation: claimedServer?.generation, deadline,
+    readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),

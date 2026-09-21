@@ -1,3 +1,4 @@
+import { domainToolLoadout } from './support/tool-loadout.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -58,7 +59,6 @@ before(async () => {
     await as(one, 'select bob.solution_command($1,$2,$3,$4,$5)', ['A','create',id(n),0,json({ title:'Storage proposal',description:'Open-top box',assumptions:'Material and fit to verify',tradeoffs:'Simple joinery',area_id })])
     await as(one, 'select bob.solution_command($1,$2,$3,$4,$5)', ['A','select',id(n),0,json({ solution_revision:1,reason:'Use this scope',area_id })])
   }
-
   await as(both, 'select bob.physical_building_command($1,$2,0,$3)', ['create',id(200),json({name:'House',notes:'Persistent room fixture'})])
   await as(both, 'select bob.physical_node_command($1,$2,$3,$4,0,$5)', [id(200),'level','create',id(201),json({name:'Ground floor',position:0})])
   for (const [n,name] of [[202,'Children room'],[203,'Office']] as const) {
@@ -70,7 +70,6 @@ before(async () => {
   for (const [n,name] of [[207,'Bedroom'],[208,'Landing']] as const) await as(both, 'select bob.physical_node_command($1,$2,$3,$4,0,$5)', [id(200),'space','create',id(n),json({name,kind:'room',level_id:id(206),truth:'unknown',measurements:[]})])
 })
 after(() => pg.close())
-
 
 const data=(extra={})=>({title:'Shared floor coordinates',description:'Two aligned floors',assumptions:'Synthetic coordinate study, not observed site facts.',
  area_id:'areaA',target_revision:1,recipe:makePlan(),measurements:[],change_note:'Requested study',...extra})
@@ -171,14 +170,14 @@ test('real chat orchestration saves one plan then executes a read-only projectio
  const writer=createProjectWriter('A',message,async payload=>{writes++;return {data:(await as(one,'select bob.bob_project_write_v5($1,$2,$3,$4,$5) result',[...c.p,json(payload)])).rows[0].result,error:null}},
   async()=>({data:(await as(one,'select bob.bob_read_write_receipts($1,$2,$3,$4) result',c.p)).rows[0].result,error:null}),
   async()=>{const q=(await as(one,'select bob.bob_settle_project_writes($1,$2,$3,$4) result',c.p)).rows[0].result;c.p[3]=q.generation;return {data:q,error:null}})
- const result=await runClaimedProjectTurn({projectId:'A',userId:one,message,generation:Number(c.p[3]),writer,hasAccess:async()=>true,fail:async()=>{},
+ const result=await runClaimedProjectTurn({readToolPolicy:domainToolLoadout('save_project_building_plan','inspect_building_projection'),projectId:'A',userId:one,message,generation:Number(c.p[3]),writer,hasAccess:async()=>true,fail:async()=>{},
   lookup:createProjectLookup('A',async(project,input)=>({data:(await as(one,'select bob.search_bob_project_data_v6($1,$2,$3,$4,$5,$6,$7) result',
    [project,input.dataset,input.query,input.status,input.area_id,input.record_id,input.after_id??null])).rows[0].result,error:null})),
   callModel:async options=>{
    calls++;assert(options.tools?.some(t=>t.function.name==='inspect_building_projection'))
    const response={success:true,data:null,model:'deterministic fixture',responseId:'floor_tool_'+calls,usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
    if(calls===1)return {...response,toolCalls:[{id:'save',type:'function',function:{name:'save_project_building_plan',arguments:json(args)}}]}
-   const output=JSON.parse(options.messages![0].content!)
+   const output=JSON.parse(String(options.messages![0].content))
    if(calls===2){
     assert.equal(output.status,'saved');artifactId=output.receipt.recordId
     assert.equal(output.receipt.record.derived_multifloor.probes[0].floor_delta_mm,2800)

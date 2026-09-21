@@ -1,3 +1,4 @@
+import { domainToolLoadout } from './support/tool-loadout.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -170,12 +171,12 @@ test('the actual Bob orchestration can research and save the canonical building 
   const lookup=createProjectLookup('A',async(project,input)=>({data:(await as(one,'select bob.search_bob_project_data_v5($1,$2,$3,$4,$5,$6,$7) result',[project,input.dataset,input.query,input.status,input.area_id,input.record_id,input.after_id??null])).rows[0].result,error:null}),10000,12)
   let calls=0
   const usage={input_tokens:1,output_tokens:1,total_tokens:2}
-  const result=await runClaimedProjectTurn({projectId:'A',userId:one,message,generation:Number(c.binding[3]),writer,lookup,hasAccess:async()=>true,fail:async()=>{},
+  const result=await runClaimedProjectTurn({readToolPolicy:domainToolLoadout('save_building_context'),projectId:'A',userId:one,message,generation:Number(c.binding[3]),writer,lookup,hasAccess:async()=>true,fail:async()=>{},
     callModel:async options=>{
       calls++;assert(options.tools?.some(t=>t.function.name==='save_building_context'))
       if(calls===1)return{success:true,data:null,model:'fixture',responseId:'intake-read',usage,toolCalls:[{id:'read',type:'function',function:{name:'search_project_data',arguments:json({dataset:'physical_buildings',query:null,status:null,area_id:null,record_id:null,after_id:null})}}]}
       if(calls===2)return{success:true,data:null,model:'fixture',responseId:'intake-write',usage,toolCalls:[{id:'save',type:'function',function:{name:'save_building_context',arguments:json(args)}}]}
-      const output=JSON.parse(options.messages![0].content!);assert.equal(output.status,'saved');assert.equal(output.receipt.record.geometry_ready,false)
+      const output=JSON.parse(String(options.messages![0].content));assert.equal(output.status,'saved');assert.equal(output.receipt.record.geometry_ready,false)
       return{success:true,data:'Byggnaden och förrådet är sparade. Geometrin är ännu okänd.',model:'fixture',responseId:'intake-done',usage}
     },commit:async(_r,generation)=>{c.binding[3]=generation;await finish(c)},
   })
@@ -187,10 +188,8 @@ test('the actual Bob orchestration can research and save the canonical building 
 test('accepted snapshot sources survive an unrelated patch even after donor-project access is removed',async t=>{
   const ref=id(340),room=id(341)
   await as(two,"select bob.evidence_command('B','measurement','create',$1,0,$2)",[ref,json({subject:'Donor width',value:'2500',unit:'mm',truth:'provided_spec',source:'Earlier user specification',notes:'',required:false})])
-  // Create a canonical imported snapshot while an authorised user owns both scopes.
   await pg.query('insert into bob.building_members(building_id,auth_user_id,member_label) values($1,$2,$3)',[building,both,'Fixture editor'])
   await as(both,"select bob.physical_node_command($1,'space','create',$2,0,$3)",[building,room,json({name:'Imported measurement room',truth:'provided_spec',source:'Imported evidence',measurements:[{id:ref,revision:1}]})])
-  // User one never has project B access but legitimately reads the accepted Building snapshot.
   const c=await claim('Spara anteckningen om förrådet.');t.after(()=>finish(c))
   await save(c,amend([op('room','space',{notes:'Preserve evidence without reaching into donor project.'},'Spara anteckningen',{record_id:room,expected_revision:1})],{request_quote:'Spara anteckningen'}))
   const snapshots=(await as(one,'select * from bob.space_measurement_details where space_id=$1 and space_revision=2',[room])).rows
@@ -199,7 +198,6 @@ test('accepted snapshot sources survive an unrelated patch even after donor-proj
 })
 
 test('full-building scope is required even when the caller can directly edit the Building from another project',async t=>{
-  // Grant project membership for this test; a room link still must not broaden the write boundary.
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneB','B','One B','OB',$1)",[one])
   await as(one,"select bob.physical_scope_command('B','project','link',$1,$2)",[id(351),json({target_kind:'space',building_id:building,space_id:ids.bedroom})])
   const c=await claim('Spara rummet.',one,'B');t.after(()=>finish(c))

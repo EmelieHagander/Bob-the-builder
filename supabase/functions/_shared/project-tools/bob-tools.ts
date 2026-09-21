@@ -1,0 +1,33 @@
+import { SEARCH_TOOL, type createProjectLookup } from '../project-lookup.ts'
+import { PROJECTION_TOOL } from '../project-building-plan.ts'
+import { STAIR_INSPECT_TOOL } from '../project-stair.ts'
+import { WRITE_TOOLS, type ProjectWriter } from '../project-write.ts'
+import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
+import type { ProjectContext } from '../project-context/dispatcher.ts'
+import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
+
+/** Sole handler-registration seam. The catalog supplies surface/loadout data;
+ * handlers supply exact validated schemas and real, non-self-grantable authority.
+ * New handlers register here, not in the model loop. There is no object-name gate. */
+export function createBobToolSession(opts: {
+  lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
+  context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
+}) {
+  const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
+  const definitions: ToolDefinition[] = [
+    { spec: SEARCH_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.search(v) },
+    { spec: PROJECTION_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectProjection(v) },
+    { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
+    { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: v => opts.context!.history.search(v) },
+    ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.writer!.write(spec.function.name, v),
+    })),
+    ...(opts.projectContext?.tools ?? []).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => opts.projectContext!.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.projectContext!.execute(spec.function.name, v),
+    })),
+  ]
+  return createToolSession({ definitions, readPolicy: opts.readPolicy })
+}
