@@ -1,8 +1,10 @@
 {
-  "release": "bob-grounding-2026-09-21",
-  "feature_source_commit": "20787e39a5af09b0284174c6832baf0950ef2051",
+  "release": "bob-tool-catalog-2026-09-21",
+  "feature_source_commit": "82f2fa86fdedfea2e3e3783610e412988d0ad434",
   "knowledge_library": "planned_not_seeded",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "fresh_project_and_measurement_context",
-  "answer_voice": "first_person"
+  "answer_voice": "first_person",
+  "tool_loading": "core_phase_preload_exact_on_demand",
+  "general_drawing": "not_implemented"
 }

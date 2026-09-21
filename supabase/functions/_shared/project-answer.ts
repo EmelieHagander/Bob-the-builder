@@ -70,6 +70,8 @@ export type ProjectAnswer =
 /** Embedded seed is for injected/offline callers only. Production supplies the
  * caller-JWT reader in ask-openai.ts; a failed live read NEVER falls back here. */
 export const seedToolPolicy: ToolPolicyReader = async () => checkedToolSnapshot({ phase: null, tools: catalogSeed })
+const toolFailureCode = (error: unknown) => error instanceof Error && ['project_denied', 'tool_execution_unavailable'].includes(error.message)
+  ? error.message : 'tool_catalog_unavailable'
 
 export async function runProjectAnswer(opts: {
   projectId: string; userId: string; message: string;
@@ -97,7 +99,7 @@ export async function runProjectAnswer(opts: {
     try {
       if (round < rounds - 1 && Date.now() + 40000 < deadline) tools = await toolbox.prepare()
       else toolbox.closeSurface()
-    } catch (error) { return { ok: false, error: error instanceof Error && error.message === 'project_denied' ? 'project_denied' : 'tool_catalog_unavailable' } }
+    } catch (error) { return { ok: false, error: toolFailureCode(error) } }
     const response = await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage: buildBobSystemMessage(tools), useHardcodedPrompt: true,
@@ -116,10 +118,12 @@ export async function runProjectAnswer(opts: {
         try { args = JSON.parse(call.function.arguments) } catch { /* invalid attempt consumes its existing budget */ }
         let result: any
         try { result = await toolbox.execute(call.function.name, args) }
-        catch (error) { return { ok: false, error: error instanceof Error && error.message === 'project_denied' ? 'project_denied' : 'tool_catalog_unavailable' } }
+        catch (error) { return { ok: false, error: toolFailureCode(error) } }
         if (result?.status === 'denied') return { ok: false, error: 'project_denied' }
-        // Operational metadata only: no arguments, project content, IDs or images.
-        console.log('[Bob tool]', call.function.name, result?.status ?? 'returned')
+        // Names must be server-offered, not arbitrary model text. No arguments,
+        // project content, private IDs or images enter operational logs.
+        const loggedName = tools.some(t => t.function.name === call.function.name) ? call.function.name : 'unoffered'
+        console.log('[Bob tool]', loggedName, result?.status ?? 'returned')
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
       }
       continue

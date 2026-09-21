@@ -37,7 +37,6 @@ export function checkedToolSnapshot(value: unknown): ToolSnapshot {
       || row.preload_phases.some(p => typeof p !== 'string' || !PHASES.has(p))) throw new Error('tool_catalog_unavailable')
     names.add(row.name)
   }
-  // An unrecognised future phase selects no defaults. It NEVER widens authority.
   return { phase: PHASES.has(String(value.phase)) ? value.phase as string : null, tools: structuredClone(value.tools) as ToolPolicy[] }
 }
 const managementSpec = (name: string, description: string, properties: Record<string, unknown>): ToolSpec => ({
@@ -58,7 +57,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
-    if (!NAME.test(name) || handlers.has(name) || MANAGEMENT.some(t => t.function.name === name) || !Number.isSafeInteger(def.version)) throw new Error('Duplicate/invalid tool registration')
+    if (!NAME.test(name) || handlers.has(name) || MANAGEMENT.some(t => t.function.name === name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
     handlers.set(name, def)
   }
   const loaded = new Map<string, number>()
@@ -101,15 +100,13 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
           specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version)
         }
       }
-      // The directory survives an exhausted *domain* budget: it can explain the
-      // distinction, but it cannot reset it. Its own budget is bounded separately.
+      // Management has a separate bound; it cannot reset any domain budget.
       if (used < TOOL_LIMITS.managementCalls && current.tools.some(row => resolve(row).state === 'available')) for (const spec of MANAGEMENT) {
         specs.push(spec); offered.set(spec.function.name, 1)
       }
       return specs
     },
-    /** Supplying false is the final, tool-free answer call; no execution can use
-     * a stale fence from an earlier iteration. */
+    /** The final, tool-free answer call cannot use an earlier offered fence. */
     closeSurface() { offered.clear() },
     async execute(name: string, args: unknown): Promise<any> {
       const current = await refresh()
@@ -131,7 +128,6 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
           const terms = args.query ? normal(args.query as string).split(/\s+/).filter(Boolean) : []
           const eligible = current.tools.filter(row => {
             const { state } = resolve(row)
-            // No hidden tool descriptions/schemas for a caller with no grant.
             return row.active && state !== 'not_allowed' && state !== 'unavailable'
           }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
           const matches = eligible.filter(r => (!args.after_name || r.name > String(args.after_name))
@@ -161,9 +157,17 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       const { state, def } = resolve(row)
       if (state !== 'available' || !def) { record('execute', name, state); return safeStatus(state) }
       if (row.schema_version !== offered.get(name)) return safeStatus('contract_changed', 'Reload the exact tool before retrying.')
-      const result = await def.execute(args)
-      record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
-      return result
+      try {
+        const result = await def.execute(args)
+        record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
+        return result
+      } catch {
+        partial = true
+        record('execute', name, 'tool_execution_unavailable')
+        // Stop and settle possible writes. An unexpected handler failure is not
+        // a missing tool or catalog failure; never echo private error contents.
+        throw new Error('tool_execution_unavailable')
+      }
     },
   }
 }

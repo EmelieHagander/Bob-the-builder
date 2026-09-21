@@ -26,6 +26,7 @@
 | plans/drawings, shared multi-floor coordinates, stair studies and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
+| Ask bob core/on-demand tools, phase preloads, exact schema loading and authority | `Docs/ask-bob-tools.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
@@ -41,7 +42,7 @@
 - `Docs/material-planning.md` — **deployed 4B2a + first 4B2b material-planning contract** for manual requirements, the narrow `stud_wall_net_area` deterministic quantity, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Broader BOM/fastener/consumable rules remain later scope until explicitly modelled.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; bounded chat intake is implemented on its separate, not-yet-deployed branch. The separate multi-floor coordinate-study branch consumes canonical identities through `Docs/artifacts.md`; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
-- `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, user stories and scope; historical product intent where not superseded by a later current contract.
+- `Docs/Mockups and initial plans/BuildCoord_PRD.md` — original BuildCoord product requirements, personas, stories and scope; historical product intent where not superseded by a later current contract.
 - `Docs/Mockups and initial plans/bob-the-builder.html` — original visual/product mockup; use as historical composition reference, not runtime truth.
 
 ### Product-document status
@@ -92,7 +93,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 - `db/README.md` — database mapping, auth/membership and migration guidance; owns the household/friend-sharing authority extension and its account-isolation gate, with deployment status stated explicitly.
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
-- `supabase/migrations/` — new CLI-created migrations, applied after the legacy database bootstrap.
+- `supabase/migrations/` — versioned migrations, applied after the legacy database bootstrap; preserve CLI/managed-ledger identities.
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
 - `Docs/building-model.md` — product/domain owner for the deployed manual 2C persistent physical model; `db/README.md` maps its current schema/RLS/commands, while broader future fidelity remains specified here.
 - `Docs/media-and-steps.md` — owning media and manual-step contract: private files, same-project attachments, lifecycle/recovery, task checks and runtime consumption for milestones 1A/1B.
@@ -112,11 +113,13 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
-- `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research.
+- `Docs/ask-bob-tools.md` — **tool-system owner**: core/on-demand tiers, actual Project-phase preloads, browsable directory, exact schema/guide hydration, caller authority and execution fences. Supersedes fixed tool-array loading; does not claim the generic drawing engine is built. PR #91 owns release evidence.
+- `Docs/ask-bob-context.md` — **specified / pre-build** screen-aware runtime project-context contract: client navigation pointers, server-hydrated Current View, hierarchical Project Catalog, cheap category/scope + Process Lens routing, deterministic bounded manifests/open-by-ref, image-on-demand and Project Librarian research. Implemented image context is owned by `Docs/media-and-steps.md`; tool discovery is owned separately above.
 - `Docs/ask-bob-context-implementation.md` — **planned / pre-build** technical landing sequence for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **conversation state owner**: implemented private transcript/Responses continuity and explicit reset, with compaction/reseed and provider erasure still planned; per-user/project privacy and release gates.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
-- `supabase/functions/_shared/project-answer.ts` — scoped research/write tool loop and fixed truth rules.
+- `supabase/functions/_shared/project-answer.ts` — scoped research/write loop, assembled tool surface and fixed cross-tool truth rules.
+- `supabase/functions/_shared/project-tools/` — caller-scoped policy reader, exact handler registration and per-turn discovery/loading/dispatch.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
 - `supabase/functions/_shared/serve-bob.ts` and `supabase/functions/ask-bob/` — authenticated OpenAI endpoint for Bob. The old `ask-launchpad/` contains only a retirement response.
 - `src/components/AskBob.tsx` — frontend interaction contract for Ask bob.
