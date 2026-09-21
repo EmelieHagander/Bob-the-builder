@@ -1,5 +1,5 @@
--- Candidate for BOB-UC-MATERIAL-ASSEMBLY-01, slice A. Not applied to production.
--- Exact numbered migration is authored with the installed CLI during CI review.
+-- BOB-UC-MATERIAL-ASSEMBLY-01, definition catalog slice A.
+-- Filename authored by Supabase CLI 2.117.0 in CI #298; not applied to production.
 begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
@@ -121,7 +121,7 @@ create trigger catalog_profile_immutable before update or delete on bob.catalog_
 create trigger catalog_profile_fields_immutable before insert or update or delete on bob.catalog_profile_fields for each row execute function bob_private.catalog_profile_immutable();
 create trigger catalog_profile_rules_immutable before insert or update or delete on bob.catalog_profile_rules for each row execute function bob_private.catalog_profile_immutable();
 
--- Shared definition mechanics, explicit kind/material-version relation. No stock.
+-- Common revision mechanics, explicit material/part kind. This is NOT stock or Shopping.
 create table bob.catalog_items (
  id uuid primary key default gen_random_uuid(), project_id text references bob.projects(id) on delete cascade,
  kind text not null check(kind in ('material','part')), current_revision integer not null check(current_revision>0),
@@ -186,7 +186,7 @@ begin
       raise exception 'catalog_invalid_value:%',field.property_key using errcode='22023'; end if;
    param:=v->>'parameter';
    if param is not null then
-     if p_kind<>'part' or param!~'^[a-z][a-z0-9_]{0,63}$' or jsonb_typeof(v->'parameter')<>'string'
+     if p_kind<>'part' or param!~'^[a-z][a-z0-9_]{0,63}$' or param=any(array['constructor','prototype','__proto__']) or jsonb_typeof(v->'parameter')<>'string'
        or v->'value' is distinct from 'null'::jsonb or v->>'truth'<>'provided_spec' then
        raise exception 'catalog_invalid_parameter' using errcode='22023'; end if;
      keys:=array_append(keys,param);
@@ -269,11 +269,11 @@ $$;
 create function bob_private.catalog_save(p_project text,p_id uuid,p_expected integer,p_data jsonb,p_source jsonb)
  returns jsonb language plpgsql set search_path='' as $$
 declare d jsonb:=p_data; normalized jsonb; cats text[]; identity_doc jsonb; fingerprint text;
- h bob.catalog_items; mat bob.catalog_item_revisions; mid uuid; mrev integer; chosen uuid; revision integer; prop record; result jsonb; action text:=d->>'action';
+ h bob.catalog_items; mat bob.catalog_item_revisions; mid uuid; mrev integer; chosen uuid; next_revision integer; prop record; result jsonb; action text:=d->>'action';
 begin
  if not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
  if d-array['action','key','kind','name','aliases','profile_code','profile_revision','categories','properties','material_id','material_revision','notes','source_kind','source_quote','source_seq']::text[]<>'{}'
-    or (select count(*) from jsonb_object_keys(d))<>15 or action<>all(array['ensure','revise']) or coalesce(d->>'kind','')<>all(array['material','part'])
+    or (select count(*) from jsonb_object_keys(d))<>15 or coalesce(action,'')<>all(array['ensure','revise']) or coalesce(d->>'kind','')<>all(array['material','part'])
     or jsonb_typeof(d->'name') is distinct from 'string' or length(btrim(d->>'name')) not between 1 and 200
     or jsonb_typeof(d->'notes') is distinct from 'string' or length(d->>'notes')>2000
     or jsonb_typeof(d->'aliases') is distinct from 'array' or jsonb_array_length(d->'aliases')>12
@@ -285,7 +285,7 @@ begin
  if cardinality(cats)<>(select count(distinct x) from unnest(cats) x) or exists(select 1 from unnest(cats) x where not exists(select 1 from bob.catalog_categories c where c.code=x))
     or (select count(*) from bob.catalog_categories where code=any(cats) and axis='material')<>1
     or (select count(*) from bob.catalog_categories where code=any(cats) and axis='form')<>1
-    or not exists(select 1 from bob.catalog_profile_revisions where profile_code=d->>'profile_code' and revision=(d->>'profile_revision')::integer and form_code=any(cats)) then
+    or not exists(select 1 from bob.catalog_profile_revisions pr where pr.profile_code=d->>'profile_code' and pr.revision=(d->>'profile_revision')::integer and pr.form_code=any(cats)) then
     raise exception 'catalog_invalid_categories' using errcode='22023'; end if;
  mid:=(d->>'material_id')::uuid; mrev:=(d->>'material_revision')::integer;
  if d->>'kind'='material' then
@@ -316,7 +316,7 @@ begin
        order by i.project_id nulls first,i.id limit 1;
      if found then return jsonb_build_object('operation','reused','record',bob_private.catalog_record(p_project,chosen)); end if;
    end if;
-   chosen:=gen_random_uuid(); revision:=1;
+   chosen:=gen_random_uuid(); next_revision:=1;
    insert into bob.catalog_items(id,project_id,kind,current_revision,identity_hash) values(chosen,p_project,d->>'kind',1,fingerprint);
  else
    select * into h from bob.catalog_items where id=p_id and project_id=p_project for update;
@@ -324,47 +324,47 @@ begin
    if h.current_revision is distinct from p_expected then raise exception 'record_changed' using errcode='40001'; end if;
    if h.kind is distinct from d->>'kind' then raise exception 'catalog_kind_immutable' using errcode='22023'; end if;
    if fingerprint is not null and exists(select 1 from bob.catalog_items i where (i.project_id is null or i.project_id=p_project) and i.kind=h.kind and i.identity_hash=fingerprint and i.id<>h.id) then raise exception 'catalog_equivalent_exists' using errcode='40001'; end if;
-   chosen:=h.id; revision:=h.current_revision+1;
-   update bob.catalog_items set current_revision=revision,identity_hash=fingerprint where id=chosen;
+   chosen:=h.id; next_revision:=h.current_revision+1;
+   update bob.catalog_items set current_revision=next_revision,identity_hash=fingerprint where id=chosen;
  end if;
  insert into bob.catalog_item_revisions(item_id,revision,name,aliases,profile_code,profile_revision,properties,material_id,material_revision,notes,has_unknown,parameter_keys,identity_document,source_kind)
- values(chosen,revision,btrim(d->>'name'),array(select jsonb_array_elements_text(d->'aliases')),d->>'profile_code',(d->>'profile_revision')::integer,
+ values(chosen,next_revision,btrim(d->>'name'),array(select jsonb_array_elements_text(d->'aliases')),d->>'profile_code',(d->>'profile_revision')::integer,
    normalized->'properties',mid,mrev,d->>'notes',(normalized->>'has_unknown')::boolean or coalesce(mat.has_unknown,false),array(select jsonb_array_elements_text(normalized->'parameter_keys')),identity_doc,p_source->>'kind');
- insert into bob_private.catalog_item_provenance values(chosen,revision,auth.uid(),p_source->>'quote',(p_source->>'seq')::bigint,(p_source->>'thread')::uuid);
- insert into bob.catalog_item_categories select chosen,revision,x from unnest(cats) x;
- result:=bob_private.catalog_record(p_project,chosen,revision);
+ insert into bob_private.catalog_item_provenance values(chosen,next_revision,auth.uid(),p_source->>'quote',(p_source->>'seq')::bigint,(p_source->>'thread')::uuid);
+ insert into bob.catalog_item_categories select chosen,next_revision,x from unnest(cats) x;
+ result:=bob_private.catalog_record(p_project,chosen,next_revision);
  return jsonb_build_object('operation',case action when 'ensure' then 'created' else 'updated' end,'record',result);
 end $$;
 
 create function bob.catalog_read(p_project text,p_input jsonb) returns jsonb language plpgsql stable security invoker set search_path='' as $$
 declare action text:=p_input->>'action'; requested_kind text:=p_input->>'kind'; q text:=p_input->>'query'; cursor text:=p_input->>'after';
- id text:=p_input->>'id'; rev integer:=(p_input->>'revision')::integer; profile text:=p_input->>'profile_code';
+ requested_id text:=p_input->>'id'; rev integer:=(p_input->>'revision')::integer; profile text:=p_input->>'profile_code';
  filter_values jsonb; normalized jsonb; required_categories text[]; rows jsonb; result jsonb; has_next boolean;
 begin
  if not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
  if jsonb_typeof(p_input) is distinct from 'object' or octet_length(p_input::text)>20000 or p_input-array['action','kind','query','after','id','revision','profile_code','categories','properties']::text[]<>'{}'
-   or (select count(*) from jsonb_object_keys(p_input))<>9 or action<>all(array['categories','profiles','profile','search','read']) then raise exception 'catalog_invalid_read' using errcode='22023'; end if;
+   or (select count(*) from jsonb_object_keys(p_input))<>9 or coalesce(action,'')<>all(array['categories','profiles','profile','search','read']) then raise exception 'catalog_invalid_read' using errcode='22023'; end if;
  if action in ('profile','read') then
-   if id is null or length(id)>200 or (rev is not null and rev<1) then raise exception 'catalog_invalid_ref' using errcode='22023'; end if;
-   if action='read' then result:=bob_private.catalog_record(p_project,id::uuid,rev);
+   if requested_id is null or length(requested_id)>200 or (rev is not null and rev<1) then raise exception 'catalog_invalid_ref' using errcode='22023'; end if;
+   if action='read' then result:=bob_private.catalog_record(p_project,requested_id::uuid,rev);
    else
     select jsonb_build_object('id',p.profile_code,'revision',p.revision,'name',h.name,'form',p.form_code,
       'fields',coalesce((select jsonb_agg(to_jsonb(f)||jsonb_build_object('label',d.label,'value_type',d.value_type,'canonical_unit',d.canonical_unit) order by f.position,f.property_key)
         from bob.catalog_profile_fields f join bob.catalog_property_definitions d on d.key=f.property_key where f.profile_code=p.profile_code and f.profile_revision=p.revision),'[]'),
       'rules',coalesce((select jsonb_agg(to_jsonb(r) order by rule_key) from bob.catalog_profile_rules r where r.profile_code=p.profile_code and r.profile_revision=p.revision),'[]'),
       'units',(select jsonb_agg(to_jsonb(u) order by code) from bob.catalog_units u)) into result
-      from bob.catalog_profile_revisions p join bob.catalog_profiles h on h.code=p.profile_code where p.published and p.profile_code=id and (rev is null or p.revision=rev) order by p.revision desc limit 1;
+      from bob.catalog_profile_revisions p join bob.catalog_profiles h on h.code=p.profile_code where p.published and p.profile_code=requested_id and (rev is null or p.revision=rev) order by p.revision desc limit 1;
    end if;
    return jsonb_build_object('status',case when result is null then 'not_found' else 'ok' end,'projectId',p_project,'record',result);
  end if;
  if (q is not null and length(q)>200) or (cursor is not null and length(cursor)>200) then raise exception 'catalog_invalid_search' using errcode='22023'; end if;
  if action='categories' then
-   select coalesce(jsonb_agg(to_jsonb(c) order by code),'[]') into rows from (
+   select coalesce(jsonb_agg(to_jsonb(c) order by c.code),'[]') into rows from (
      select * from bob.catalog_categories where (cursor is null or code>cursor) and (q is null or strpos(lower(label||' '||code||' '||array_to_string(aliases,' ')),lower(q))>0) order by code limit 13) c;
  elsif action='profiles' then
-   select coalesce(jsonb_agg(to_jsonb(p) order by code),'[]') into rows from (
+   select coalesce(jsonb_agg(to_jsonb(p) order by p.code),'[]') into rows from (
      select h.code,h.name,max(r.revision) as revision from bob.catalog_profiles h join bob.catalog_profile_revisions r on r.profile_code=h.code
-     where r.published and (cursor is null or code>cursor) and (q is null or strpos(lower(h.name||' '||h.code),lower(q))>0) group by h.code,h.name order by h.code limit 13) p;
+     where r.published and (cursor is null or h.code>cursor) and (q is null or strpos(lower(h.name||' '||h.code),lower(q))>0) group by h.code,h.name order by h.code limit 13) p;
  else
    if requested_kind is not null and requested_kind<>all(array['material','part']) then raise exception 'catalog_invalid_kind' using errcode='22023'; end if;
    if jsonb_typeof(p_input->'categories') is distinct from 'array' or jsonb_array_length(p_input->'categories')>12 or jsonb_typeof(p_input->'properties') is distinct from 'object' then raise exception 'catalog_invalid_filters' using errcode='22023'; end if;
@@ -390,7 +390,7 @@ begin
       and r.properties @> filter_values
       and not exists(select 1 from unnest(required_categories) c where not exists(select 1 from bob.catalog_item_categories ic join descendants d on d.code=ic.category_code where d.root=c and ic.item_id=h.id and ic.item_revision=r.revision))
     order by h.id limit 13
-   ) select coalesce(jsonb_agg(to_jsonb(page) order by id),'[]') into rows from page;
+   ) select coalesce(jsonb_agg(to_jsonb(page) order by page.id),'[]') into rows from page;
  end if;
  has_next:=jsonb_array_length(rows)>12;
  return jsonb_build_object('status',case when jsonb_array_length(rows)=0 then 'empty' else 'ok' end,'projectId',p_project,

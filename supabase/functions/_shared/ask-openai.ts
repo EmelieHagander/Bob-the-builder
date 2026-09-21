@@ -80,6 +80,8 @@ export async function answerWithOpenAi(opts: {
       store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),
       callModel: options => callOpenAIResponses<string>(options), hasAccess, deadline: Math.min(deadline - 60000, Date.now() + 105000),
     }) } : {}),
+    // The main answer/continuation model gets the evidence policy. The older-history
+    // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
       projectId: opts.projectId, message: opts.message, lookup, hasAccess, deadline,
       validateImages: () => projectContext.validate(),

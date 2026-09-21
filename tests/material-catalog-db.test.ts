@@ -47,10 +47,10 @@ before(async()=>{
  await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Catalog A'),('B','b','Catalog B')")
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','O',$1),('twoB','B','Two','T',$2)",[one,two])
  await setupSharedSocial(pg)
+ // The catalog is now a normal CLI-authored migration in the complete chain.
  const dir=new URL('../supabase/migrations/',import.meta.url)
  for(const f of (await readdir(dir)).filter(f=>f.endsWith('.sql')).sort())await pg.exec(await readFile(new URL(f,dir),'utf8'))
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('bothA','A','Both','B',$1),('bothB','B','Both','B',$1),('guestA','A','Guest','G',$2)",[both,guest])
- await pg.exec(await readFile(new URL('../db/proposed/material_catalog.sql',import.meta.url),'utf8'))
 })
 after(()=>pg.close())
 
@@ -191,9 +191,10 @@ test('receipt failure rolls definition back and settlement fences delayed writes
  const c=await claim();try{
   await pg.exec(`create function bob_private.catalog_fixture_failure() returns trigger language plpgsql as $$begin if new.receipt->>'label'='Rollback fixture' then raise exception 'fixture_rollback';end if;return new;end$$;
    create trigger catalog_fixture_failure before insert on bob_private.bob_write_receipts for each row execute function bob_private.catalog_fixture_failure();`)
-  await assert.rejects(write(c,payload(definition('rollback',{name:'Rollback fixture',notes:'rollback unique'}))),/fixture_rollback/)
-  assert.equal((await read({query:'Rollback fixture'})).status,'empty')
-  await pg.exec('drop trigger catalog_fixture_failure on bob_private.bob_write_receipts;drop function bob_private.catalog_fixture_failure()')
+  try {
+   await assert.rejects(write(c,payload(definition('rollback',{name:'Rollback fixture',notes:'rollback unique'}))),/fixture_rollback/)
+   assert.equal((await read({query:'Rollback fixture'})).status,'empty')
+  } finally { await pg.exec('drop trigger catalog_fixture_failure on bob_private.bob_write_receipts;drop function bob_private.catalog_fixture_failure()') }
   const settled=(await as(c.user,'select bob.bob_settle_project_writes($1,$2,$3,$4) result',[c.project,c.thread,c.turn,c.generation])).rows[0].result
   await assert.rejects(write(c,payload(definition('late'))),/turn_not_claimed/)
   c.generation=settled.generation
