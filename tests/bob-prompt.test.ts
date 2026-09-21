@@ -47,10 +47,11 @@ This briefing is fresh. Earlier conversation helps you understand what the owner
 
 [CURRENT PROJECT CONTEXT]`
 
-// Default read-only setup now has core search plus catalog navigation, not
-// preloaded staircase/projection tools. Schemas remain the real execution schemas.
+// Default read-only setup has core search plus catalog navigation, not
+// preloaded staircase/projection tools. Schemas remain the execution schemas.
+const MANAGEMENT_SURFACE = [LIST_TOOLS, LOAD_TOOL]
 const READ_SURFACE = [{ ...SEARCH_TOOL, function: { ...SEARCH_TOOL.function,
-  description: catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.description } }, LIST_TOOLS, LOAD_TOOL]
+  description: catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.description } }, ...MANAGEMENT_SURFACE]
 const query = { dataset: 'tasks', query: null, status: null, area_id: null, record_id: null }
 const userId = '00000000-0000-0000-0000-000000000001'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
@@ -147,14 +148,14 @@ test('every continuation receives the exact persona and the tools available for 
   assert.equal(calls.length, 3)
   calls.forEach(assertCallContract)
   assert.deepEqual(calls.slice(0, 2).map(call => call.tools), [READ_SURFACE, READ_SURFACE])
-  assert.equal(calls[2].tools, undefined)
-  assert(calls[2].systemMessage!.includes(buildBobHands([])))
+  assert.deepEqual(calls[2].tools, MANAGEMENT_SURFACE, 'Exhausted record reads do not remove the directory')
+  assert(calls[2].systemMessage!.includes(buildBobHands(MANAGEMENT_SURFACE)))
   assert(!calls[2].systemMessage!.includes(`${SEARCH_TOOL.function.name} —`))
   assert.equal(calls[1].previousResponseId, 'resp_tools')
   assert.equal(calls[2].messages![0].role, 'tool')
 })
 
-test('multiple lookups in one response remove tools on the very next model call', async () => {
+test('multiple lookups remove the exhausted domain tool on the next call, not the independent directory', async () => {
   const calls: OpenAIServiceOptions[] = []
   const lookup = fixtureLookup()
   const result = await runProjectAnswer({
@@ -165,8 +166,8 @@ test('multiple lookups in one response remove tools on the very next model call'
   assert.equal(lookup.remaining, 0)
   assert.equal(calls.length, 2)
   calls.forEach(assertCallContract)
-  assert.equal(calls[1].tools, undefined)
-  assert(calls[1].systemMessage!.includes(buildBobHands([])))
+  assert.deepEqual(calls[1].tools, MANAGEMENT_SURFACE)
+  assert(calls[1].systemMessage!.includes(buildBobHands(MANAGEMENT_SURFACE)))
   assert.equal(calls[1].messages!.length, 2)
 })
 
@@ -184,20 +185,23 @@ test('the round limit removes tools even if a lookup implementation reports spar
   assert(calls[7].systemMessage!.includes(buildBobHands([])))
 })
 
-test('a disabled tool response is rejected rather than dispatched', async () => {
+test('an exhausted domain tool is rejected without dispatch while the directory remains callable', async () => {
   let modelCalls = 0
+  const calls: OpenAIServiceOptions[] = []
   const lookup = fixtureLookup()
   const result = await runProjectAnswer({
     projectId: 'A', userId, message: 'Find tasks', lookup, hasAccess: async () => true,
     callModel: async call => {
-      assertCallContract(call)
+      assertCallContract(call); calls.push(call)
       modelCalls++
-      return toolResponse(modelCalls === 1 ? 2 : 1)
+      return modelCalls < 3 ? toolResponse(modelCalls === 1 ? 2 : 1) : finalResponse()
     },
   })
-  assert.deepEqual(result, { ok: false, error: 'unsupported_tool_response' })
-  assert.equal(modelCalls, 2)
+  assert(result.ok)
+  assert.equal(modelCalls, 3)
   assert.equal(lookup.remaining, 0)
+  assert.deepEqual(calls[1].tools, MANAGEMENT_SURFACE)
+  assert.equal(JSON.parse(String(calls[2].messages![0].content)).status, 'budget_exhausted')
 })
 
 test('invented writes and forged project arguments cannot widen the lookup boundary', async () => {

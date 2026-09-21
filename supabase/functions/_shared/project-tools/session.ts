@@ -100,8 +100,10 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
           specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version)
         }
       }
-      // Management has a separate bound; it cannot reset any domain budget.
-      if (used < TOOL_LIMITS.managementCalls && current.tools.some(row => resolve(row).state === 'available')) for (const spec of MANAGEMENT) {
+      // Discovery is independent of domain eligibility/budgets. Even an empty
+      // or exhausted domain surface must remain diagnosable. Only management's
+      // own bound and the final tool-free call can remove this path.
+      if (used < TOOL_LIMITS.managementCalls) for (const spec of MANAGEMENT) {
         specs.push(spec); offered.set(spec.function.name, 1)
       }
       return specs
