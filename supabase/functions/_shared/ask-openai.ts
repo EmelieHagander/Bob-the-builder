@@ -41,16 +41,28 @@ export async function answerWithOpenAi(opts: {
     return !error && data?.id === opts.projectId
   }
 
+  // Access is checked with the caller JWT before the service-role conversation
+  // helper sees a project/user id. The helper independently verifies membership.
   if (!await hasAccess()) return { ok: false, error: 'project_denied' }
+
   let claim: BobTurnClaim
-  try { claim = await conversations.claim(opts.projectId, opts.userId, opts.clientTurnId, opts.message) }
-  catch (error) { return { ok: false, error: String(error).includes('project_denied') ? 'project_denied' : 'conversation_unavailable' } }
-  if (claim.mode === 'server' && claim.status === 'completed') return { ok: true, answer: claim.answer, projectId: opts.projectId, evidence: claim.evidence }
-  if (claim.mode === 'server' && (claim.status === 'in_flight' || claim.status === 'thread_busy')) return { ok: false, error: 'turn_in_flight' }
+  try {
+    claim = await conversations.claim(opts.projectId, opts.userId, opts.clientTurnId, opts.message)
+  } catch (error) {
+    return { ok: false, error: String(error).includes('project_denied') ? 'project_denied' : 'conversation_unavailable' }
+  }
+
+  if (claim.mode === 'server' && claim.status === 'completed') {
+    return { ok: true, answer: claim.answer, projectId: opts.projectId, evidence: claim.evidence }
+  }
+  if (claim.mode === 'server' && (claim.status === 'in_flight' || claim.status === 'thread_busy')) {
+    return { ok: false, error: 'turn_in_flight' }
+  }
 
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
   const deadline = Date.now() + 215000
   const threadId = claimedServer?.thread_id ?? null
+
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // A shared guest identity has no private claimed thread and is read-only.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
@@ -70,13 +82,16 @@ export async function answerWithOpenAi(opts: {
       store: conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation }),
       callModel: options => callOpenAIResponses<string>(options), hasAccess, deadline: Math.min(deadline - 60000, Date.now() + 105000),
     }) } : {}),
-    // Main answers retain current dimensions beside selected image pixels.
+    // The main answer/continuation model gets the evidence policy. The older-history
+    // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
       projectId: opts.projectId, message: opts.message, lookup, hasAccess, deadline,
       validateImages: () => projectContext.validate(),
       callModel: options => callOpenAIResponses<string>(options),
     }),
-    fail: async generation => { if (threadId) await conversations.fail(opts.projectId, opts.userId, threadId, opts.clientTurnId, generation) },
+    fail: async generation => {
+      if (threadId) await conversations.fail(opts.projectId, opts.userId, threadId, opts.clientTurnId, generation)
+    },
     ...(threadId ? { commit: async (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => {
       await conversations.commit({ projectId: opts.projectId, userId: opts.userId, threadId,
         turnId: opts.clientTurnId, answer: result.answer, evidence: result.evidence,

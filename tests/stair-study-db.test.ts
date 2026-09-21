@@ -1,3 +1,4 @@
+import { domainToolLoadout } from './support/tool-loadout.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -70,7 +71,6 @@ before(async () => {
   for (const [n,name] of [[207,'Bedroom'],[208,'Landing']] as const) await as(both, 'select bob.physical_node_command($1,$2,$3,$4,0,$5)', [id(200),'space','create',id(n),json({name,kind:'room',level_id:id(206),truth:'unknown',measurements:[]})])
 })
 after(() => pg.close())
-
 
 const data=(extra={})=>({title:'Shared floor coordinates',description:'Two aligned floors',assumptions:'Synthetic coordinate study, not observed site facts.',
  area_id:'areaA',target_revision:1,recipe:makePlan(),measurements:[],change_note:'Requested study',...extra})
@@ -156,12 +156,12 @@ test('real read-inspect-save tool loop runs against migrated SQL with fixture mo
  const lookup=createProjectLookup('A',async(project,i)=>({data:(await as(one,'select bob.search_bob_project_data_v7($1,$2,$3,$4,$5,$6,$7) result',[project,i.dataset,i.query,i.status,i.area_id,i.record_id,i.after_id??null])).rows[0].result,error:null}),10000,12)
  const writer=createProjectWriter('A',c.message,async p=>{writes++;return {data:(await as(one,'select bob.bob_project_write_v6($1,$2,$3,$4,$5) result',[...c.p,json(p)])).rows[0].result,error:null}},async()=>({data:[],error:null}),async()=>{const r=(await as(one,'select bob.bob_settle_project_writes($1,$2,$3,$4) result',c.p)).rows[0].result;c.p[3]=r.generation;return {data:r,error:null}})
  const tool=(name:string,args:unknown)=>({success:true,data:null,model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},responseId:'step'+calls,toolCalls:[{id:'call'+calls,type:'function' as const,function:{name,arguments:json(args)}}]})
- const answer=await runClaimedProjectTurn({projectId:'A',userId:one,message:c.message,generation:Number(c.p[3]),lookup,writer,hasAccess:async()=>true,fail:async()=>{},callModel:async options=>{
+ const answer=await runClaimedProjectTurn({readToolPolicy:domainToolLoadout('inspect_stair_options','save_project_stair'),projectId:'A',userId:one,message:c.message,generation:Number(c.p[3]),lookup,writer,hasAccess:async()=>true,fail:async()=>{},callModel:async options=>{
   calls++
   if(calls===1)return tool('inspect_stair_options',{plan_id:id(400),plan_revision:2,candidates:[{label:'Right',recipe:makeStair()}]})
-  if(calls===2){const r=JSON.parse(options.messages![0].content!);assert.equal(r.saved,false);assert.equal(r.candidates[0].result.rise_mm,187.5);assert.equal(writes,0)
+  if(calls===2){const r=JSON.parse(String(options.messages![0].content));assert.equal(r.saved,false);assert.equal(r.candidates[0].result.rise_mm,187.5);assert.equal(writes,0)
    return tool('save_project_stair',{record_id:null,expected_revision:0,action:'create',...stairData({plan_revision:2,title:'Tool-loop stair'}),request_quote:c.message})}
-  const r=JSON.parse(options.messages![0].content!);assert.equal(r.status,'saved');assert.equal(r.receipt.record.derived_stair.exit.x_mm,4910)
+  const r=JSON.parse(String(options.messages![0].content));assert.equal(r.status,'saved');assert.equal(r.receipt.record.derived_stair.exit.x_mm,4910)
   return {success:true,data:'Sparat. Utloppet ligger vid x 4910, y 3610 mm. Begränsad geometrikontroll, inte bygggodkännande.',model:'fixture',responseId:'done',usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
  }})
  assert.equal(answer.ok,true);assert.equal(writes,1);assert.equal(calls,3)

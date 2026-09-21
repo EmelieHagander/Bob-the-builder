@@ -1,3 +1,4 @@
+import { domainToolLoadout } from './support/tool-loadout.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -59,7 +60,6 @@ before(async () => {
     await as(one, 'select bob.solution_command($1,$2,$3,$4,$5)', ['A','create',id(n),0,json({ title:'Storage proposal',description:'Open-top box',assumptions:'Material and fit to verify',tradeoffs:'Simple joinery',area_id })])
     await as(one, 'select bob.solution_command($1,$2,$3,$4,$5)', ['A','select',id(n),0,json({ solution_revision:1,reason:'Use this scope',area_id })])
   }
-
   await as(both, 'select bob.physical_building_command($1,$2,0,$3)', ['create',id(200),json({name:'House',notes:'Persistent room fixture'})])
   await as(both, 'select bob.physical_node_command($1,$2,$3,$4,0,$5)', [id(200),'level','create',id(201),json({name:'Ground floor',position:0})])
   for (const [n,name] of [[202,'Children room'],[203,'Office']] as const) {
@@ -228,7 +228,7 @@ test('real Bob tool loop creates a linked drawing without a form and returns com
     const q=(await as(one,'select bob.bob_settle_project_writes($1,$2,$3,$4) result',c.p)).rows[0].result
     c.p[3]=q.generation;return {data:q,error:null}
   })
-  const result=await runClaimedProjectTurn({projectId:'A',userId:one,message,generation:c.p[3],hasAccess:async()=>true,writer,
+  const result=await runClaimedProjectTurn({readToolPolicy:domainToolLoadout('create_project_room_layout'),projectId:'A',userId:one,message,generation:c.p[3],hasAccess:async()=>true,writer,
     fail:async()=>{},lookup:createProjectLookup('A',async(project,input)=>({data:(await as(one,'select bob.search_bob_project_data_v4($1,$2,$3,$4,$5,$6,$7) result',
       [project,input.dataset,input.query,input.status,input.area_id,input.record_id,input.after_id??null])).rows[0].result,error:null})),
     callModel:async options=>{
@@ -236,7 +236,7 @@ test('real Bob tool loop creates a linked drawing without a form and returns com
       assert(options.tools?.some(t=>t.function.name==='create_project_room_layout'))
       if(calls===1)return {success:true,data:null,model:'deterministic fixture',responseId:'room_tool',usage:{input_tokens:1,output_tokens:1,total_tokens:2},
         toolCalls:[{id:'room_call',type:'function',function:{name:'create_project_room_layout',arguments:json(args)}}]}
-      const output=JSON.parse(options.messages![0].content!)
+      const output=JSON.parse(String(options.messages![0].content))
       assert.equal(output.status,'saved');assert.equal(output.receipt.record.derived_layout.right.width,2600)
       assert.equal(output.receipt.record.derived_layout.fit,'fits_outline_only')
       return {success:true,data:'Ritningen är sparad. Passning gäller enbart rumsomkretsen.',model:'fixture',responseId:'room_final',usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
