@@ -8,7 +8,7 @@ import { chromium } from 'playwright-core'
 const base = 'http://127.0.0.1:4184/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4184', '--strictPort'], { stdio: ['ignore','pipe','pipe'] })
-let output = '', browser
+let output = '', browser, activePage, activeWidth
 server.stdout.on('data', data => { output += data })
 server.stderr.on('data', data => { output += data })
 const user = { id:'00000000-0000-4000-8000-000000000003', email:'catalog-fixture@example.test', aud:'authenticated', role:'authenticated', app_metadata:{ provider:'email' }, user_metadata:{}, created_at:'2026-09-21T00:00:00Z' }
@@ -88,12 +88,19 @@ try {
       if(url.pathname==='/rest/v1/rpc/project_invitations') return respond({json:[]})
       if(url.pathname==='/rest/v1/projects') return respond({json:projects})
       if(url.pathname==='/rest/v1/account') return respond({json:{id:'account',name:'Catalog fixture account',owner_name:'',email:''}})
-      if(url.pathname==='/rest/v1/people') return respond({json:[]})
+      if(url.pathname==='/rest/v1/people') {
+        // getCurrentUser resolves actual project membership before chat hydration.
+        // A missing member would exercise join_project, not this receipt journey.
+        const pid=url.searchParams.get('project_id')?.replace(/^eq\./,'')??'A'
+        const row={id:`catalog-member-${pid}`,name:'Catalog fixture member',initials:'CM',color:'#41513f',role:'Organiser',diet:'',person_skills:[]}
+        return respond({json:(request.headers().accept??'').includes('application/vnd.pgrst.object+json')?row:[row]})
+      }
       if(url.pathname.startsWith('/rest/v1/')&&request.method()==='GET') return respond({json:[]})
       errors.push(`Unexpected request: ${request.method()} ${url.pathname}`)
       return respond({status:500,json:{error:'unexpected_fixture_request'}})
     })
     const page=await context.newPage()
+    activePage=page;activeWidth=viewport.width
     page.setDefaultTimeout(12000);page.setDefaultNavigationTimeout(12000)
     page.on('pageerror',e=>errors.push(e.message))
     const openBob=async id=>{
@@ -103,11 +110,13 @@ try {
       await drawer.getByRole('button',{name:'Send',exact:true}).waitFor()
       return drawer
     }
+    const requestFromAction=async action=>Promise.all([
+      page.waitForRequest(r=>r.url()===`${api}/functions/v1/ask-bob`&&r.method()==='POST'),
+      action(),
+    ])
     const send=async text=>{
-      const arrival=page.waitForRequest(r=>r.url()===`${api}/functions/v1/ask-bob`&&r.method()==='POST')
       await page.getByRole('textbox',{name:'Question for bob'}).fill(text)
-      await page.getByRole('button',{name:'Send',exact:true}).click()
-      await arrival
+      await requestFromAction(()=>page.getByRole('button',{name:'Send',exact:true}).click())
     }
     const switchProject=async id=>{
       await page.getByRole('button',{name:'Close Ask bob',exact:true}).click()
@@ -125,8 +134,7 @@ try {
     await send('Reuse catalog definition')
     const turnId=requests.at(-1).clientTurnId
     await drawer.getByRole('button',{name:'Retry request',exact:true}).waitFor()
-    const replay=page.waitForRequest(r=>r.url()===`${api}/functions/v1/ask-bob`&&r.method()==='POST')
-    await drawer.getByRole('button',{name:'Retry request',exact:true}).click();await replay
+    await requestFromAction(()=>drawer.getByRole('button',{name:'Retry request',exact:true}).click())
     await drawer.getByText('Existing definition reused.',{exact:true}).waitFor()
     assert.equal(requests.at(-1).clientTurnId,turnId)
     await drawer.getByText('Reused existing definitions',{exact:true}).waitFor()
@@ -157,9 +165,12 @@ try {
     assert.equal(await drawer.getByLabel('Saved project changes').count(),3)
     assert.equal(histories.get('A').messages.length,6,'Lost-response retry does not duplicate server transcript')
     assert.deepEqual(errors,[])
-    await context.close()
+    await context.close();activePage=undefined
     console.log(`Catalog receipts ${viewport.width}px: created/reused/revised, exact revision, lost-response retry, reload, forged receipt denial and A/B isolation passed. HTTP fixtures, not live model/SQL.`)
   }
+} catch(error) {
+  if(activePage&&!activePage.isClosed()) await activePage.screenshot({path:`test-results/material-catalog-failure-${activeWidth}.png`,fullPage:true}).catch(()=>{})
+  throw error
 } finally {
   if(browser) await browser.close()
   server.kill('SIGTERM')
