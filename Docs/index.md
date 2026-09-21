@@ -11,6 +11,7 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
+| material-led assemblies, dynamic specifications and linked drawing/pick/Shopping use case | `Docs/material-assembly-use-case.md` — specified; proposed database design, not implemented |
 | persistent site/building/space context and chat-driven narrative capture | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |
@@ -39,6 +40,7 @@
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
 - `Docs/user-stories.md` — **current canonical user-story landscape** for planning, media, measurements, drawings, material calculations, work guidance and the build-together collaboration loop, including specified household/friend-sharing goals in BOB-US-038 / BOB-US-059.
+- `Docs/material-assembly-use-case.md` — **specified end-to-end acceptance contract and proposed logical database design** for material/part reuse-or-create, typed dynamic properties, generic assemblies, derived drawing/part/pick outputs and many-to-many purchase allocation. Maps BOB-US-010 / BOB-US-018–026 to buildable acceptance cases and a staged implementation sequence. New names are proposals, not deployed tables or tools; existing domain owners remain authoritative for their shipped behavior.
 - `Docs/material-planning.md` — **deployed 4B2a + first 4B2b material-planning contract** for manual requirements, the narrow `stud_wall_net_area` deterministic quantity, stock/reuse allocation, transparent purchase arithmetic and explicit Shopping handoff. Broader BOM/fastener/consumable rules remain later scope until explicitly modelled.
 - `Docs/building-model.md` — **current persistent physical-context contract**: Sites, Buildings, optional Levels, Spaces, BuildingElements, spatial relationships, project scope, uncertainty and physical-state history. It also owns the four top-down/bottom-up/isolation/evolution acceptance fixtures. The manual 2C foundation is implemented, deployed and live-verified; bounded chat intake is implemented on its separate, not-yet-deployed branch. The separate multi-floor coordinate-study branch consumes canonical identities through `Docs/artifacts.md`; broader geometry/import/AI fidelity remains planned.
 - `Docs/function-scope.md` — **current next-phase function-scope contract**: D1–D5 difficulty, BASE / V0-AUTO / V0-CORE / V0-STRETCH / POST-V0 scope buckets, selected first vertical slice and its pre-build blockers. The `V0-*` names are scope labels created before the next release was named V1; release naming is owned by `Docs/v1-plan.md`.
@@ -47,7 +49,7 @@
 
 ### Product-document status
 
-`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
+`Docs/user-stories.md` owns **what users should be able to achieve** across the general project workflow. `Docs/material-assembly-use-case.md` owns the **specified cross-surface material/assembly success and failure path**, acceptance fixtures and proposed logical storage relationships; it is not an implemented-schema record. `Docs/building-model.md` owns the stable cross-project **physical-place model and its acceptance fixtures**. `Docs/function-inventory.md` owns the current **built/partial/gap audit**. `Docs/function-scope.md` owns **function difficulty/prioritisation and the first slice contract**. `Docs/v1-plan.md` owns **the V1 release thesis, boundary, ordering and release gates**. The original PRD remains valuable product history, especially for the collaborative-build core (organiser, skilled/general/drop-in volunteers, food manager, areas/tasks/materials/build days).
 
 ### Physical place vs project organisation
 
@@ -75,6 +77,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/v1-plan.md` — V1 release journey and integration boundary.
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
+- `Docs/material-assembly-use-case.md` — specified Bob-driven material → assembly → drawing/list → stock/pick/Shopping journey and change/recovery acceptance; no runtime implementation claim.
 - `db/README.md` → Household and friend sharing — specified/in-progress shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; no deployed sharing claim until its release evidence is recorded.
 - `Docs/building-model.md` — deployed persistent physical context that project/Area flows may target, with broader geometry/import/AI fidelity still planned.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
@@ -95,6 +98,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `db/migrations/` — canonical applied-schema intent; never rewrite an already-applied shared migration.
 - `supabase/migrations/` — versioned migrations, applied after the legacy database bootstrap; preserve CLI/managed-ledger identities.
 - `src/data/provenance.ts` — minimum V1 truth vocabulary and answer-source envelope.
+- `Docs/material-assembly-use-case.md` → §4–9 — proposed relational identities, versioned dynamic specifications, assembly/source links, cut/pick separation and Shopping allocation evolution. This is a design target, not applied DDL; shipped schema truth remains in migrations and `db/README.md`.
 - `Docs/building-model.md` — product/domain owner for the deployed manual 2C persistent physical model; `db/README.md` maps its current schema/RLS/commands, while broader future fidelity remains specified here.
 - `Docs/media-and-steps.md` — owning media and manual-step contract: private files, same-project attachments, lifecycle/recovery, task checks and runtime consumption for milestones 1A/1B.
 - `src/data/projectFiles.ts` — storage and step commands behind `database.ts`.
