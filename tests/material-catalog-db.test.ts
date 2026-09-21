@@ -121,15 +121,15 @@ test('PVC sheet and tube share a material category but use different dynamic pro
  }finally{await fail(c)}
 })
 
-test('new operator-published profiles and canonical units work without new API code; published profiles are immutable',async()=>{
- await pg.exec(`insert into bob.catalog_property_definitions values('test_span','Test span','quantity','cm','Fixture');
+test('new operator-published profiles work without new API code and all length storage remains mm',async()=>{
+ await pg.exec(`insert into bob.catalog_property_definitions values('test_span','Test span','quantity','mm','Fixture');
  insert into bob.catalog_profiles values('custom_fixture','Custom fixture');
  insert into bob.catalog_profile_revisions(profile_code,revision,form_code) values('custom_fixture',1,'rectangular_profile');
  insert into bob.catalog_profile_fields values('custom_fixture',1,'test_span',true,0.000001,10000,0);
  update bob.catalog_profile_revisions set published=true where profile_code='custom_fixture';`)
  const c=await claim();try{
-  const saved=await write(c,payload(definition('custom',{profile_code:'custom_fixture',categories:['wood.softwood','rectangular_profile'],properties:{test_span:val('120','mm')}})))
-  assert.equal(saved.record.properties.test_span.value,'12');assert.equal(saved.record.properties.test_span.unit,'cm')
+  const saved=await write(c,payload(definition('custom',{profile_code:'custom_fixture',categories:['wood.softwood','rectangular_profile'],properties:{test_span:val('12','cm')}})))
+  assert.equal(saved.record.properties.test_span.value,'120');assert.equal(saved.record.properties.test_span.unit,'mm')
  }finally{await fail(c)}
  await assert.rejects(pg.exec("update bob.catalog_profile_fields set required=false where profile_code='custom_fixture'"),/requires_new_revision/)
  await assert.rejects(pg.exec("update bob.catalog_property_definitions set canonical_unit='mm' where key='test_span'"),/requires_new_identity/)
