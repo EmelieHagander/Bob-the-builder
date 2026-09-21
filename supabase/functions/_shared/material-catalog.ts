@@ -6,7 +6,7 @@ export type CatalogValue = { value: string | boolean | null; unit: string | null
 export type CatalogProperties = Record<string, CatalogValue>
 const nullableText = { type: ['string', 'null'] }
 const propertiesSchema = {
-  type: 'object', description: 'Property keys come from read_material_catalog(profile). Each value has exactly value, unit, truth, parameter and note. Quantities are decimal strings (up to six decimals), not floats. A part may use value=null, truth=provided_spec and a named parameter; unknown requires a note.',
+  type: 'object', description: 'Property keys come from read_material_catalog(profile). Each value has exactly value, unit, truth, parameter and note. Quantities are strings, not floats; decimal inputs have at most six decimals. Modern inch/tum uses unit=in and a separate value, e.g. 0.75, 0,75, 3/4, 1 1/2 or ¾. SQL converts exactly to mm before search/save; do not pre-round or put unit suffixes in value. Nominal trade sizes (2x4, R 1/2) belong in nominal_size text/aliases, NEVER in a numeric dimension; retain independently specified dimensions or explicit unknowns. A part may use value=null, truth=provided_spec and a named parameter; unknown requires a note.',
   additionalProperties: { type: 'object', additionalProperties: false, properties: {
     value: { type: ['string', 'boolean', 'null'] }, unit: nullableText,
     truth: { type: 'string', enum: ['provided_spec', 'estimated', 'unknown'] }, parameter: nullableText, note: { type: 'string' },
