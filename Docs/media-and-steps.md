@@ -202,3 +202,35 @@ that extension was withdrawn rather than bypassing the control or shipping a
 known-bad fixture. An actual model-driven visual-only question and reopening test
 remain outstanding. Do not claim these checks passed from mocked model output.
 No real user's photos are used as release-test inputs.
+
+### Keep current facts beside selected images (release bob-grounding-2026-09-21)
+
+`project-grounding.ts`, connected to the main model in `ask-openai.ts`, adds the
+current project description and one bounded measurement page beside actual image
+input. It uses two parallel reads through the existing caller-JWT lookup and its
+existing twelve-read budget. No extra model/router call, image selection rule,
+new store, migration or cross-app service change is added. Only calls containing
+selected pixels incur these reads; ordinary text turns keep their existing path.
+Each explicit reopen reads again, including after a same-turn edit. Access and
+image versions are rechecked after hydration, before provider transmission, and
+the remaining turn deadline still caps the provider timeout.
+
+Values, units, notes, truth states, revisions, source dates, errors and pagination
+are retained. The page is not the full project: truncated or unavailable sources
+remain explicit and can require targeted follow-up research. An unknown field in
+an older record does not make an explicitly supplied choice unknown everywhere.
+The model must distinguish supplied specifications, conflicting records and truly
+missing information. Photos/mockups do not silently supersede textual choices;
+likewise, a more recent description timestamp is not permission to overwrite all
+older measurement records. No automatic data reconciliation or promotion to
+measured/verified truth is performed.
+
+The main-model policy also requires direct first-person replies, not narration
+about Bob as another worker, and prohibits offers for unsupported drawing actions.
+The approved verbatim persona and private-history summarizer remain unchanged.
+Generated text is not mechanically rewritten. `project-grounding.test.ts` and
+`project-grounding-runtime.test.ts` exercise input assembly, source preservation,
+reopening, failure/authority bounds, production tool-loop integration and wiring.
+These injected-provider tests do not prove perfect language behaviour or semantic
+conflict resolution by a live model. PR #90 owns verification and rollout evidence;
+the owner's actual project data and images are not used as model-test fixtures.
