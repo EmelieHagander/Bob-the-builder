@@ -4,14 +4,15 @@ import { STAIR_INSPECT_TOOL } from '../project-stair.ts'
 import { WRITE_TOOLS, type ProjectWriter } from '../project-write.ts'
 import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
 import type { ProjectContext } from '../project-context/dispatcher.ts'
+import type { MaterialCatalogReader } from '../material-catalog.ts'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
 
-/** Sole handler-registration seam. The catalog supplies surface/loadout data;
- * handlers supply exact validated schemas and real, non-self-grantable authority.
- * New handlers register here, not in the model loop. There is no object-name gate. */
+/** Sole handler-registration seam. Catalog names/forms/profiles are data; loading
+ * never grants authority. New handlers register here, not in the model loop. */
 export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
+  catalogReader?: MaterialCatalogReader;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const definitions: ToolDefinition[] = [
@@ -27,6 +28,10 @@ export function createBobToolSession(opts: {
     ...(opts.projectContext?.tools ?? []).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.projectContext!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.projectContext!.execute(spec.function.name, v),
+    })),
+    ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => opts.catalogReader!.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.catalogReader!.read(spec.function.name, v),
     })),
   ]
   return createToolSession({ definitions, readPolicy: opts.readPolicy })

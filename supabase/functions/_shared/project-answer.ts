@@ -1,3 +1,4 @@
+import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -79,6 +80,7 @@ export async function runProjectAnswer(opts: {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
+  catalogReader?: MaterialCatalogReader;
 }): Promise<ProjectAnswer> {
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
@@ -120,8 +122,6 @@ export async function runProjectAnswer(opts: {
         try { result = await toolbox.execute(call.function.name, args) }
         catch (error) { return { ok: false, error: toolFailureCode(error) } }
         if (result?.status === 'denied') return { ok: false, error: 'project_denied' }
-        // Names must be server-offered, not arbitrary model text. No arguments,
-        // project content, private IDs or images enter operational logs.
         const loggedName = tools.some(t => t.function.name === call.function.name) ? call.function.name : 'unoffered'
         console.log('[Bob tool]', loggedName, result?.status ?? 'returned')
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
@@ -132,7 +132,7 @@ export async function runProjectAnswer(opts: {
     if (typeof response.data !== 'string' || !response.data.trim()) return { ok: false, error: 'empty_response' }
     return { ok: true, answer: response.data.trim(), projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', sources: opts.lookup.sources,
-        partial: opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.writer?.uncertain,
+        partial: opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.writer?.uncertain,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

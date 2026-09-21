@@ -1,3 +1,4 @@
+import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ToolPolicyReader } from './project-tools/session.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { WorkingContext } from './bob-working-context.ts'
@@ -12,6 +13,7 @@ export async function runClaimedProjectTurn(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
+  catalogReader?: MaterialCatalogReader;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number;
@@ -43,7 +45,7 @@ export async function runClaimedProjectTurn(opts: {
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: opts.lookup.sources,
-      partial: opts.lookup.partial || !!opts.projectContext?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
+      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
     if (opts.writer.receipts.length && (recovered || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }
@@ -52,7 +54,6 @@ export async function runClaimedProjectTurn(opts: {
   if (!result.ok) { await fail(); return result }
   if (opts.projectContext && !await opts.projectContext.validate()) {
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
-    // Preserve committed writes without revoked image prose/provider continuation.
     if (opts.writer?.receipts.length) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts),
         evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
