@@ -24,7 +24,7 @@ The proposed separate material/part tables are refined to **one versioning mecha
 
 ## Canonical working units — owner decision 2026-09-21
 
-**All working length dimensions are stored in millimetres.** This includes width, depth, thickness, diameter, spacing, clearance and future length properties regardless of material or object name. New length properties cannot select cm, m or a custom length unit as their canonical unit. That is a database invariant, not an instruction the model must remember.
+**All working length dimensions are stored in millimetres.** This includes width, depth, thickness, diameter, spacing, clearance and future length properties regardless of material or object name. New length properties cannot select cm, m, in or a custom length unit as their canonical unit. That is a database invariant, not an instruction the model must remember.
 
 Input may still be expressed in supported length units. SQL normalizes before typed search, identity/equivalence and save. Thus `1.6 m`, `160 cm` and `1600 mm` denote the same working length; changing only its input unit cannot create a different complete definition. Fractional millimetres are retained using exact decimal arithmetic and the existing precision/range limits, never silently rounded to whole millimetres. Unknowns and unbound parameter slots retain null values, canonical mm and their original truth/parameter meaning.
 
@@ -40,6 +40,66 @@ Only lengths use mm. Counts, area, volume, mass, angles and designation text rem
 
 This migration does **not** rewrite earlier measurement history, legacy text quantities, existing drawings or other applications' data. Historical source units remain interpretable under their original contracts. A later bridge must normalize those source values at ingestion into the new working model while pinning the original evidence revision. No bulk conversion of the shared production database is implied.
 
+### Inches and nominal trade sizes
+
+The existing unit dictionary now includes **`in`, length, multiplier 25.4**.
+It means the modern international inch, exactly 25.4 mm, not a historical local
+inch or a product designation. The definition is checked against
+[NIST — SI Units: Length](https://www.nist.gov/pml/owm/si-units-length).
+No global mapping such as `2x4 = 45x95` is seeded or executed.
+
+In ordinary chat the user may write tum, inches or an inch mark. Bob separates
+the unit from the value: `¾ tum` becomes `{value: "¾", unit: "in", ...}`;
+`1 1/2"` becomes `{value: "1 1/2", unit: "in", ...}`. The **SQL command**, not
+mental arithmetic by the model, converts the numeric input before typed search,
+identity comparison and saving. The tool schema and loaded how-to describe this
+syntax. The user never needs to format JSON. Free-text interpretation by a live
+model remains a behavioral acceptance gate, not proven by numeric parser tests.
+
+With `unit=in`, supported numeric strings are integers, decimal point/comma
+(with at most six decimal places), simple fractions (`3/4`, `3/2`), mixed numbers
+(`1 1/2`, proper fractional tail), and `¼ ½ ¾ ⅛ ⅜ ⅝ ⅞` alone or after a whole
+number. Ordinary/nonbreaking spaces and the fraction slash are normalized.
+Other units retain their existing decimal-dot API syntax. Unit suffixes in the
+value, multiplication expressions, feet-and-inches strings and ambiguous
+hyphenated numbers are not accepted as a scalar; the caller must supply an
+unambiguous value/unit pair. This is not an arbitrary expression evaluator.
+
+`catalog_input_quantity` retains numerator and denominator while applying the
+unit multiplier. It checks exact divisibility at the existing six-decimal
+canonical precision **before division**, so it never rounds a repeating fraction
+into a false exact value. Examples:
+
+| Input | Stored working length |
+|---|---|
+| `¾ in`, `0.75 in`, `0,75 in` | `19.05 mm` |
+| `1½ in`, `1 1/2 in` | `38.1 mm` |
+| `1/64 in` | `0.396875 mm` |
+| `1/127 in` | `0.2 mm` (no intermediate inch-decimal rounding) |
+| `1/3 in` or `1/128 in` | Explicit precision error; no save or silent rounding |
+
+The precision bound is a storage contract, not a measurement-accuracy promise.
+Negative/zero values still obey the selected property's positive range rules;
+unknowns and unbound parameter slots remain null/mm. Source wording, source
+classification and the original idempotency payload remain unchanged.
+
+`nominal_size` is an existing **text** property with no unit. It is also available
+on rectangular material, sheet material and panel profiles, alongside its prior
+use for tubes. A trade label such as `2x4`, `tvåtumfyra` or `R 1/2` is kept in
+that field and/or search aliases, independently of the working dimensions.
+A missing section remains unknown; a label does not supply thickness, width or
+pipe diameter. Actual numeric values require a supplied specification, measurement
+source, or an explicitly labelled design choice. Different products with the
+same trade name and different sections are not automatically interchangeable.
+Nominal versus physical meaning cannot be certified from shape validation alone;
+Bob must interpret and cite the source correctly.
+
+This extends the existing catalog, not a separate imperial catalog/tool/schema.
+No material products, vendor mappings or stock counts are created by the inch
+seed. Input/storage/search support is implemented here; a selectable imperial
+**Shopping display**, fractional formatter and general-drawing UI are still
+future consuming features, not shipped by this change.
+
 ## Vocabulary and dynamic properties
 
 The migration seeds vocabulary and seven example specification profiles: sheet material, panel part, rectangular profile, tube material, tube part, fastener and liquid. It seeds **no actual stock, vendor products or material/part records**. It is not the licensed reference-book seeding in [building-knowledge.md](building-knowledge.md).
@@ -48,7 +108,7 @@ Material and form are independent. PVC sheet and PVC tube share the PVC category
 
 Within the supported quantity/text/boolean types, authorized new vocabulary and profiles require no new table column, model tool or object-specific handler. Profile rules are a bounded `factor * left < / <= / = right` vocabulary, not arbitrary executable SQL/JavaScript. A new physical/geometric operation is not implemented merely by adding a profile.
 
-Each property value is `{value, unit, truth, parameter, note}`. Numeric quantities use decimal **strings**, at most six fractional digits. SQL uses decimal arithmetic, verifies unit dimension, normalizes lengths to mm and other quantities to their compatible canonical unit, rejects precision loss/range overflow, and applies profile bounds. The global absolute quantity bound is 1,000,000,000; the seeded geometric fields have narrower limits. Limits are system validation, not a manufacturing-accuracy promise.
+Each property value is `{value, unit, truth, parameter, note}`. Stored numeric quantities use decimal **strings**, at most six fractional digits; inch input may also use the bounded fraction syntax above. SQL uses exact arithmetic, verifies unit dimension, normalizes lengths to mm and other quantities to their compatible canonical unit, rejects precision loss/range overflow, and applies profile bounds. The global absolute quantity bound is 1,000,000,000; the seeded geometric fields have narrower limits. Limits are system validation, not a manufacturing-accuracy promise.
 
 18 mm and 1.8 cm normalize identically. Inner diameter, outer diameter and nominal designation are different keys. A supplied tube wall/radius relation is geometric validation only, not pressure/temperature certification. Optional fields may be omitted; critical unstated suitability must not be inferred from a successful schema validation.
 
@@ -84,13 +144,13 @@ No automatic purchase, stock reservation, global publication or physical Buildin
 
 ## Verification and release
 
-Required coverage is represented by `material-catalog-shape.test.ts`, `material-catalog-evidence.test.ts`, `material-catalog-db.test.ts` and `material-catalog-mm.test.ts`: strict shapes, dynamic profiles, equivalent units, mm property/storage invariants, fractional lengths, source preservation, non-equivalent unknowns, exact history, part/material pinning, PVC in multiple forms, raw/RLS denial, project revocation, paging, atomic receipts and generation fencing. The real production tool session/turn orchestrator is exercised against an actually migrated PGlite database with an **injected provider response sequence**: list → load → profile/search → ensure material → ensure part → exact read → persisted transcript/receipts.
+Required coverage is represented by `material-catalog-shape.test.ts`, `material-catalog-evidence.test.ts`, `material-catalog-db.test.ts`, `material-catalog-mm.test.ts` and `material-catalog-inches.test.ts`: strict shapes, dynamic profiles, equivalent units, mm property/storage invariants, exact decimal/fractional inches, nominal-vs-physical sizes, source preservation, non-equivalent unknowns, exact history, part/material pinning, PVC in multiple forms, raw/RLS denial, project revocation, paging, atomic receipts and generation fencing. Inch tests run the actual tool parsers and migrated SQL commands; 384 generated fraction cases use an independent integer-rational expected result. These are not live-model interpretation tests. The real production tool session/turn orchestrator is exercised against an actually migrated PGlite database with an **injected provider response sequence**: list → load → profile/search → ensure material → ensure part → exact read → persisted transcript/receipts.
 
 That scripted seven-round journey demonstrates transport/SQL wiring within the existing eight-round limit, not arbitrary language behavior, acceptable live latency or the whole assembly workflow. A more complex definition set may exceed the current turn budget; do not conceal partial results. Actual named-member model tests, hosted Auth/PostgREST and parallel concurrency remain release gates.
 
 The focused production-build browser journey is `scripts/check-material-catalog-browser.mjs`, appended to the existing `verify:project` command without changing workflows or credentials. It exercises created/reused/revised catalog receipts, exact historical versions, a lost-response retry, reload, forged receipt rejection and project switching at 320/390/1280. All non-local network calls are blocked or fixture responses. Its assertions and screenshots prove UI behavior only, not live model/SQL behavior. PR #94 records which exact execution passed; existence of the script alone is not a passing gate. Ordinary existing browser gates must remain green too.
 
-Migration: `20260921095817_material_catalog.sql`. Its filename was generated by the repository's installed Supabase CLI 2.117.0 during CI #298 in an isolated directory; the temporary authoring test/candidate file were removed after authoring. Hosted read-only preflight on 2026-09-21 confirmed that the catalog tables, v7 writer and catalog migration are absent; the mm guards were therefore added to this still-unapplied candidate, not by rewriting deployed migration history.
+Migration: `20260921095817_material_catalog.sql`. Its filename was generated by the repository's installed Supabase CLI 2.117.0 during CI #298 in an isolated directory; the temporary authoring test/candidate file were removed after authoring. Hosted read-only preflight on 2026-09-21 confirmed that the catalog tables, v7 writer and catalog migration are absent; the mm guards were therefore added to this still-unapplied candidate, not by rewriting deployed migration history. Inch input is also part of the PR #94 candidate. Never apply a changed candidate over an already-installed version; recheck the hosted ledger first and author a follow-up migration if it has since been applied.
 
 Before rollout: reread current main/hosted schema and migration history; review exact diff, policy/grants/indexes and old-client receipt compatibility; verify the final ordinary test/Edge/build gates; apply only this additive migration; deploy the matching frontend and Edge code in a coordinated order; verify actual caller-JWT read/write/reuse/revision and independent named-member model behavior. Record runtime identity and rollback plan before claiming live. Roll back the Edge/frontend before removing additive schema. Never replay the shared database bootstrap.
 
