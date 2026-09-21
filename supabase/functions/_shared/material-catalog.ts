@@ -65,6 +65,16 @@ function propertiesValid(value: unknown, allowParameters: boolean, filter = fals
     return typeof v.value === 'boolean' || text(v.value, 200)
   })
 }
+/** The compact source label must not promote an estimated or incomplete definition.
+ * Full per-property provenance remains in the returned exact revision. */
+export function catalogSourceTruth(record: Record<string, unknown>): ProjectSource['truth'] {
+  if (record.source_kind === 'design_choice') return 'ai_assessment'
+  if (record.source_kind !== 'user_statement' || record.has_unknown !== false || !isObject(record.properties)) return 'unknown'
+  const values = Object.values(record.properties)
+  if (!values.length || values.some(v => !isObject(v) || !['provided_spec', 'estimated'].includes(String(v.truth)))) return 'unknown'
+  if (values.some(v => (v as Record<string, unknown>).truth === 'estimated')) return 'estimated'
+  return 'provided_spec'
+}
 export function parseCatalogWrite(value: unknown): WritePayload | null {
   if (!isObject(value) || !exactKeys(value, CATALOG_WRITE_TOOL.function.parameters.required)) return null
   const v = value
@@ -142,8 +152,7 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
             || (input.revision !== null && r.revision !== input.revision) || !text(r.recorded_at,80)) throw new Error('invalid_result')
           const recordId = `${r.id}@${r.revision}`
           if (!sources.some(s => s.dataset === 'catalog' && s.recordId === recordId)) sources.push({ projectId, dataset: 'catalog', recordId,
-            label: `${r.name} · v${r.revision}`, retrievedAt: new Date().toISOString(), updatedAt: r.recorded_at,
-            truth: r.source_kind === 'design_choice' ? 'ai_assessment' : r.has_unknown === false && r.source_kind === 'user_statement' ? 'provided_spec' : 'unknown' })
+            label: `${r.name} · v${r.revision}`, retrievedAt: new Date().toISOString(), updatedAt: r.recorded_at, truth: catalogSourceTruth(r) })
         } else if (data.status === 'ok' && !isObject(data.record)) throw new Error('invalid_result')
         return data
       } catch { partial = true; return { status: 'unavailable', message: 'Catalog read failed; this is not proof a definition is missing.' } }
