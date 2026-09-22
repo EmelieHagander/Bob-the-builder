@@ -1,4 +1,6 @@
 import { createMaterialCatalogReader } from './material-catalog.ts'
+import { createCadAdapter } from './cad-adapter.ts'
+import { assemblyToCad, type AssemblyRecipeV1 } from './project-assembly.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext } from './project-context/dispatcher.ts'
@@ -21,6 +23,8 @@ export async function answerWithOpenAi(opts: {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const cadUrl = Deno.env.get('BOB_CAD_WORKER_URL')?.trim()
+  const cadToken = Deno.env.get('BOB_CAD_WORKER_TOKEN')?.trim()
   if (!url || !key || !serviceKey) return { ok: false, error: 'not_configured' }
 
   const client = createClient(url, key, {
@@ -32,7 +36,7 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const lookup = createProjectLookup(opts.projectId, (projectId, input, signal) =>
-    client.rpc('search_bob_project_data_v7', {
+    client.rpc('search_bob_project_data_v8', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }).abortSignal(signal), 10_000, 12)
@@ -61,9 +65,25 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v7 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => client.rpc('bob_project_write_v7', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
+    payload => client.rpc('bob_project_write_v8', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
+    async payload => {
+      if (payload.kind !== 'assembly') return { status: 'ok' as const }
+      if (!cadUrl || !cadToken) return { status: 'unavailable' as const, message: 'CAD validation service is not configured. No assembly was saved.' }
+      try {
+        const data = payload.data as { recipe?: AssemblyRecipeV1 }
+        if (!data.recipe) return { status: 'invalid' as const, message: 'Assembly recipe missing. No change made.' }
+        const cad = createCadAdapter({ url: cadUrl, token: cadToken, timeoutMs: 20_000 })
+        await cad.render(assemblyToCad(`preflight.${opts.clientTurnId}`, data.recipe))
+        return { status: 'ok' as const }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : ''
+        return message.includes('invalid_contract')
+          ? { status: 'invalid' as const, message: 'CAD validation rejected this assembly. No change made.' }
+          : { status: 'unavailable' as const, message: 'CAD validation service is unavailable. No change made.' }
+      }
+    },
   ) : undefined
   const projectContext = createProjectContext({
     adapters: [createMediaAdapter(opts.projectId, createMediaTransport(client, { ...opts, url, key }))],
