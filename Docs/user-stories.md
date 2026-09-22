@@ -804,6 +804,8 @@ As a project owner, I want to record changes discovered during construction — 
 - Updates are proposed/confirmed rather than silently overwriting all downstream work.
 - Earlier plan/revision history remains available.
 
+The detailed Step / Completion Requirement / Evidence / replanning semantics behind BOB-US-052–053 are owned by [Living project plan](living-project-plan.md). This story document remains the owner of user outcomes rather than duplicating that domain model.
+
 ## BOB-US-053 — Continue cleanly on the next build day
 
 **Status:** PARTIAL  
@@ -873,6 +875,8 @@ As a project owner, I want bob to propose changes to the build plan, assignments
 - Material changes to selected solution/geometry/assignments are reviewable before canonical replacement where consequence warrants it.
 - The user can accept, reject or edit the proposal.
 - Rejection does not destroy the current project state.
+
+The explicit AI plan-change proposal/approval model behind BOB-US-057 is also specified in [Living project plan](living-project-plan.md). Existing write authority remains owned by the current data/auth and Ask Bob contracts until that plan model is implemented.
 
 ## BOB-US-058 — Escalate site-specific safety or professional judgement
 
