@@ -249,3 +249,12 @@ test('the read-only tool session can load catalog reads but cannot load definiti
  const result=await session.execute('search_material_catalog',{entity:'materials',query:null,categories:[],profile_code:null,profile_revision:null,properties:{},after:null})
  assert.equal(result.status,'empty')
 })
+
+
+test('material catalog search, read and save preload together in active planning phases',async()=>{
+ const rows=(await as(one,`select name,preload_phases from bob.tool_catalog
+   where name in ('search_material_catalog','read_material_catalog','save_catalog_definition')
+   order by name`)).rows as Array<{name:string,preload_phases:string[]}>
+ assert.equal(rows.length,3)
+ for(const row of rows) assert.deepEqual(row.preload_phases,['concept','design','planning','build'],row.name)
+})
