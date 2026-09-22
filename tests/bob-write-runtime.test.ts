@@ -45,6 +45,20 @@ test('strict write shapes bind project server-side and accept a real current-tur
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_catalog_definition'))
 })
 
+test('catalog revise may preserve metadata with null while ensure still requires concrete metadata',()=>{
+  const value={action:'ensure',key:'fixture',kind:'material',record_id:null,expected_revision:0,name:'Fixture',aliases:['plywood'],
+    profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},
+    material_id:null,material_revision:null,notes:'Keep note',source_kind:'user_statement',source_quote:'A',source_seq:null,request_quote:'A'}
+  assert(parseProjectWrite('save_catalog_definition',value,'A','A'))
+  assert.equal(parseProjectWrite('save_catalog_definition',{...value,aliases:null},'A','A'),null)
+  assert.equal(parseProjectWrite('save_catalog_definition',{...value,notes:null},'A','A'),null)
+  const revised={...value,action:'revise',record_id:'30000000-0000-4000-8000-000000000001',expected_revision:1,aliases:null,notes:null}
+  const parsed=parseProjectWrite('save_catalog_definition',revised,'A','A')!
+  assert.equal(parsed.record_id,revised.record_id)
+  assert.equal(parsed.data.aliases,null)
+  assert.equal(parsed.data.notes,null)
+})
+
 test('measurement parser enforces canonical units, uncertainty, decimal limits and current revision',()=>{
   const input={record_id:null,create_area_id:null,create_component_id:null,expected_revision:0,subject:'Chosen width',value:'70',unit:'cm',truth:'provided_spec',source:'User selected option A',notes:'Not measured on site',required:false,change_note:'Chosen dimension',request_quote:'A'}
   assert.equal(parseProjectWrite('save_project_measurement',input,'A','A')!.data.truth,'provided_spec')
