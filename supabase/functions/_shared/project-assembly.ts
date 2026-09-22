@@ -33,9 +33,9 @@ export const ASSEMBLY_TOOL = {
                 type:'object',
                 description:'Generic local geometry only. V1: box or hollow tube.',
                 oneOf:[
-                  { type:'object', additionalProperties:false, required:['kind','size_mm'], properties:{
+                  { type:'object', additionalProperties:false, required:['kind','length_mm','width_mm','thickness_mm'], properties:{
                     kind:{type:'string',enum:['box']},
-                    size_mm:{type:'array',minItems:3,maxItems:3,items:{type:'number'}},
+                    length_mm:{type:'number'}, width_mm:{type:'number'}, thickness_mm:{type:'number'},
                   }},
                   { type:'object', additionalProperties:false, required:['kind','outside_diameter_mm','wall_thickness_mm','length_mm'], properties:{
                     kind:{type:'string',enum:['tube']},
@@ -67,7 +67,7 @@ export const ASSEMBLY_TOOL = {
 }
 
 export type AssemblyShape =
-  | { kind:'box'; size_mm:[number,number,number] }
+  | { kind:'box'; length_mm:number; width_mm:number; thickness_mm:number }
   | { kind:'tube'; outside_diameter_mm:number; wall_thickness_mm:number; length_mm:number }
 export type AssemblyDefinition = { key:string; part_id:string; part_revision:number; shape:AssemblyShape }
 export type AssemblyInstance = { key:string; definition_key:string; position_mm:[number,number,number]; rotation_deg:[number,number,number] }
@@ -101,8 +101,8 @@ const exact=(v:Record<string,unknown>,keys:string[])=>Object.keys(v).length===ke
 function parseShape(raw:unknown):AssemblyShape|null{
   if(!isObject(raw)||typeof raw.kind!=='string')return null
   if(raw.kind==='box'){
-    if(!exact(raw,['kind','size_mm'])||!Array.isArray(raw.size_mm)||raw.size_mm.length!==3||!raw.size_mm.every(n=>finite(n,true)))return null
-    return {kind:'box',size_mm:[Number(raw.size_mm[0]),Number(raw.size_mm[1]),Number(raw.size_mm[2])]}
+    if(!exact(raw,['kind','length_mm','width_mm','thickness_mm'])||!finite(raw.length_mm,true)||!finite(raw.width_mm,true)||!finite(raw.thickness_mm,true))return null
+    return {kind:'box',length_mm:Number(raw.length_mm),width_mm:Number(raw.width_mm),thickness_mm:Number(raw.thickness_mm)}
   }
   if(raw.kind==='tube'){
     if(!exact(raw,['kind','outside_diameter_mm','wall_thickness_mm','length_mm'])
@@ -161,7 +161,7 @@ export function parseAssemblyWrite(value:unknown):ParsedAssemblyWrite|null{
 export function assemblyToCad(assemblyId:string,recipe:AssemblyRecipeV1):CadConstructionV1{
   if(!key.test(assemblyId))throw new Error('cad_invalid_assembly_id')
   const definitions:CadDefinition[]=recipe.definitions.map(d=>d.shape.kind==='box'
-    ?{id:d.key,kind:'box',size_mm:d.shape.size_mm,catalog_part_id:d.part_id,catalog_part_revision:d.part_revision}
+    ?{id:d.key,kind:'box',size_mm:[d.shape.length_mm,d.shape.width_mm,d.shape.thickness_mm],catalog_part_id:d.part_id,catalog_part_revision:d.part_revision}
     :{id:d.key,kind:'tube',outside_diameter_mm:d.shape.outside_diameter_mm,wall_thickness_mm:d.shape.wall_thickness_mm,length_mm:d.shape.length_mm,
       catalog_part_id:d.part_id,catalog_part_revision:d.part_revision})
   return {version:1,assembly_id:assemblyId,units:'mm',definitions,
