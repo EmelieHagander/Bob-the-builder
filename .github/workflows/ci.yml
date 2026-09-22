@@ -19,14 +19,6 @@ jobs:
           cache: pip
           cache-dependency-path: cad-worker/requirements.txt
       - run: npm ci
-      - name: Author generic assembly migration with repository Supabase CLI
-        run: npx supabase migration new generic_cad_assemblies
-      - name: Upload migration authoring artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cad-migration-authoring
-          path: supabase/migrations/*_generic_cad_assemblies.sql
-          if-no-files-found: error
       - name: Install pinned CAD engine
         run: python -m pip install -r cad-worker/requirements.txt
       - name: Verify build123d/OpenCascade adapter
