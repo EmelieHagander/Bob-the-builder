@@ -39,10 +39,11 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,10)
-  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,10)
+  assert.equal(WRITE_TOOLS.length,11)
+  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,11)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_catalog_definition'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_assembly'))
 })
 
 test('measurement parser enforces canonical units, uncertainty, decimal limits and current revision',()=>{
@@ -140,11 +141,41 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write_v7'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v8'/)
+  assert.match(source,/client\.rpc\('search_bob_project_data_v8'/)
   assert.match(source,/client\.rpc\('catalog_read'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
   assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v\d+)?'/)
   assert.doesNotMatch(source,/internal\.rpc\('catalog_read'/)
+  assert.match(source,/BOB_CAD_WORKER_URL/);assert.match(source,/BOB_CAD_WORKER_TOKEN/)
   const conversation=await readFile(new URL('../supabase/functions/_shared/bob-conversation.ts',import.meta.url),'utf8')
   assert.match(conversation,/bob_commit_turn_v2/);assert.match(conversation,/p_generation: input\.generation/)
+})
+
+
+test('assembly CAD preflight runs before transport and unavailable CAD is a definite no-write result',async()=>{
+  const assemblyTool=WRITE_TOOLS.find(t=>t.function.name==='save_project_assembly')!
+  const uid='90000000-0000-4000-8000-000000000001'
+  const input={
+    record_id:null,create_area_id:null,expected_revision:0,target_revision:1,title:'Frame',description:'Generic frame',assumptions:'Concept',
+    definitions:[{key:'P1',part_id:uid,part_revision:1,shape:{kind:'box',length_mm:1000,width_mm:70,thickness_mm:45}}],
+    instances:[{key:'I1',definition_key:'P1',position_mm:[0,0,0],rotation_deg:[0,0,0]}],views:['front'],measurements:[],
+    change_note:'Create',request_quote:'A',
+  }
+  assert.equal(assemblyTool.function.name,'save_project_assembly')
+  let writes=0,checks=0
+  const writer=createProjectWriter('A','A',async()=>{writes++;throw new Error('must not write')},async()=>noError([]),async()=>noError({generation:2,receipts:[]}),async payload=>{
+    checks++;assert.equal(payload.kind,'assembly');return {status:'unavailable',message:'CAD offline'}
+  })
+  const result=await writer.write('save_project_assembly',input)
+  assert.deepEqual(result,{status:'unavailable',message:'CAD offline'})
+  assert.equal(checks,1);assert.equal(writes,0);assert.equal(writer.uncertain,false)
+})
+
+test('non-assembly writes bypass a CAD-specific successful preflight without changing existing receipt semantics',async()=>{
+  let checks=0,writes=0
+  const writer=createProjectWriter('A','A',async payload=>{writes++;assert.equal(payload.kind,'task');return noError(receipt)},
+    async()=>noError([]),async()=>noError({generation:2,receipts:[receipt]}),async payload=>{checks++;assert.equal(payload.kind,'task');return {status:'ok'}})
+  const result=await writer.write('save_project_task',args)
+  assert.equal(result.status,'saved');assert.equal(checks,1);assert.equal(writes,1)
 })
