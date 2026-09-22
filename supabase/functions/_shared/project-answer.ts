@@ -109,7 +109,7 @@ export async function runProjectAnswer(opts: {
     { role: 'user', content: buildTurnFrame(opts.projectId, briefing, opts.context) + (catalog ? '\n\nProject Catalog (metadata only):\n' + JSON.stringify(catalog) : '') },
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
-  const rounds = 8, deadline = opts.deadline ?? Date.now() + 220_000
+  const rounds = 12, deadline = opts.deadline ?? Date.now() + 220_000
   for (let round = 0; round < rounds; round++) {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
