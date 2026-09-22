@@ -176,13 +176,13 @@ test('the round limit removes tools even if a lookup implementation reports spar
   const lookup = { ...fixtureLookup(), get remaining() { return 10 } }
   const result = await runProjectAnswer({
     projectId: 'A', userId, message: 'Find tasks', lookup, hasAccess: async () => true,
-    callModel: async call => { calls.push(call); return calls.length < 8 ? toolResponse() : finalResponse() },
+    callModel: async call => { calls.push(call); return calls.length < 12 ? toolResponse() : finalResponse() },
   })
   assert.equal(result.ok, true)
-  assert.equal(calls.length, 8)
+  assert.equal(calls.length, 12)
   calls.forEach(assertCallContract)
-  assert.equal(calls[7].tools, undefined)
-  assert(calls[7].systemMessage!.includes(buildBobHands([])))
+  assert.equal(calls[11].tools, undefined)
+  assert(calls[11].systemMessage!.includes(buildBobHands([])))
 })
 
 test('an exhausted domain tool is rejected without dispatch while the directory remains callable', async () => {

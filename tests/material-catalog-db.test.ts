@@ -219,17 +219,18 @@ test('actual chat discovers catalog tools, reads profiles, saves material/part a
    callModel:async options=>{
     rounds++;let calls:any[]=[]
     const previous=options.messages?.filter(m=>m.role==='tool').map(m=>JSON.parse(String(m.content)))??[]
-    if(rounds===1){assert(!options.tools?.some(t=>t.function.name==='save_catalog_definition'));calls=[call('list_tools',{query:'catalog',after_name:null})]}
-    else if(rounds===2){assert.match(JSON.stringify(previous),/save_catalog_definition/);calls=['search_material_catalog','read_material_catalog','save_catalog_definition'].map(name=>call('load_tool',{name}))}
-    else if(rounds===3){assert(options.tools?.some(t=>t.function.name==='save_catalog_definition'));calls=[call('read_material_catalog',{entity:'profile',id:'sheet_stock',revision:1}),call('read_material_catalog',{entity:'profile',id:'panel',revision:1}),call('search_material_catalog',{entity:'materials',query:null,categories:['wood.plywood','sheet'],profile_code:'sheet_stock',profile_revision:1,properties:{thickness:val('23')},after:null})]}
-    else if(rounds===4){assert.equal(previous[2].status,'empty');calls=[call('save_catalog_definition',{...definition('runtime-material',{name:'Runtime material',notes:'Runtime fixture',properties:{thickness:val('23')}}),record_id:null,expected_revision:0,request_quote:'Spara'})]}
-    else if(rounds===5){assert.equal(previous[0].status,'saved');materialId=previous[0].receipt.recordId;calls=[call('save_catalog_definition',{...definition('runtime-part',{kind:'part',name:'Runtime panel',profile_code:'panel',material_id:materialId,material_revision:1,properties:{thickness:val('23'),length:val(null,'mm','provided_spec','length'),width:val(null,'mm','provided_spec','width')}}),record_id:null,expected_revision:0,request_quote:'Spara'})]}
-    else if(rounds===6){assert.equal(previous[0].status,'saved');partId=previous[0].receipt.recordId;calls=[call('read_material_catalog',{entity:'definition',id:partId,revision:1})]}
+    if(rounds===1){
+      for(const name of ['search_material_catalog','read_material_catalog','save_catalog_definition']) assert(options.tools?.some(t=>t.function.name===name),name+' should preload in build')
+      calls=[call('read_material_catalog',{entity:'profile',id:'sheet_stock',revision:1}),call('read_material_catalog',{entity:'profile',id:'panel',revision:1}),call('search_material_catalog',{entity:'materials',query:null,categories:['wood.plywood','sheet'],profile_code:'sheet_stock',profile_revision:1,properties:{thickness:val('23')},after:null})]
+    }
+    else if(rounds===2){assert.equal(previous[2].status,'empty');calls=[call('save_catalog_definition',{...definition('runtime-material',{name:'Runtime material',notes:'Runtime fixture',properties:{thickness:val('23')}}),record_id:null,expected_revision:0,request_quote:'Spara'})]}
+    else if(rounds===3){assert.equal(previous[0].status,'saved');materialId=previous[0].receipt.recordId;calls=[call('save_catalog_definition',{...definition('runtime-part',{kind:'part',name:'Runtime panel',profile_code:'panel',material_id:materialId,material_revision:1,properties:{thickness:val('23'),length:val(null,'mm','provided_spec','length'),width:val(null,'mm','provided_spec','width')}}),record_id:null,expected_revision:0,request_quote:'Spara'})]}
+    else if(rounds===4){assert.equal(previous[0].status,'saved');partId=previous[0].receipt.recordId;calls=[call('read_material_catalog',{entity:'definition',id:partId,revision:1})]}
     else {assert.equal(previous[0].record.material_id,materialId);return {success:true,data:'Material och deldefinition sparade. Ingen ritning eller inköpslista skapad.',model:'injected-fixture',responseId:'resp_final',usage}}
     return {success:true,data:null,model:'injected-fixture',responseId:'resp_'+rounds,usage,toolCalls:calls}
    },
  })
- assert(result.ok,JSON.stringify(result));assert(committed);assert.equal(rounds,7)
+ assert(result.ok,JSON.stringify(result));assert(committed);assert.equal(rounds,5)
  assert.equal(result.evidence.writes?.length,2);assert(isBobAnswerEvidence(result.evidence,'A'))
  assert(result.evidence.sources.some(s=>s.dataset==='catalog'&&s.recordId===partId+'@1'))
  assert.equal((await read({action:'read',id:partId,revision:1})).record.material_id,materialId)
@@ -248,4 +249,13 @@ test('the read-only tool session can load catalog reads but cannot load definiti
  await session.prepare()
  const result=await session.execute('search_material_catalog',{entity:'materials',query:null,categories:[],profile_code:null,profile_revision:null,properties:{},after:null})
  assert.equal(result.status,'empty')
+})
+
+
+test('material catalog search, read and save preload together in active planning phases',async()=>{
+ const rows=(await as(one,`select name,preload_phases from bob.tool_catalog
+   where name in ('search_material_catalog','read_material_catalog','save_catalog_definition')
+   order by name`)).rows as Array<{name:string,preload_phases:string[]}>
+ assert.equal(rows.length,3)
+ for(const row of rows) assert.deepEqual(row.preload_phases,['concept','design','planning','build'],row.name)
 })
