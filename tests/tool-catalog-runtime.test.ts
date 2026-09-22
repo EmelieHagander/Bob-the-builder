@@ -87,3 +87,32 @@ test('production binds its caller-JWT catalog reader and retains selected-image 
   assert.match(reader,/eq\('id', projectId\)/);assert.match(reader,/select\('id,phase'\)/)
   assert.doesNotMatch(reader,/SUPABASE_SERVICE_ROLE_KEY|seedToolPolicy|localStorage/)
 })
+
+
+test('printed load_tool protocol is recovered internally and never reaches Bob prose',async()=>{
+  const f=fixture();let calls=0
+  const result=await runProjectAnswer({...f.opts,callModel:async o=>{
+    calls++
+    const task=o.tools?.find(t=>t.function.name==='save_project_task')
+    if(calls===1){
+      assert(!task)
+      return {success:true,data:'to=functions.load_tool 彩神争锋是不是json\n{"name":"save_project_task"}',model:'fixture',usage,responseId:'resp_printed'}
+    }
+    if(calls===2){
+      assert(task,'printed load_tool should activate the real schema for the next call')
+      return response('save_project_task',args,calls)
+    }
+    return final()
+  }})
+  assert(result.ok);assert.equal(calls,3);assert.equal(f.writes,1)
+  if(result.ok) assert.doesNotMatch(result.answer,/functions\.|load_tool|彩神/)
+})
+
+test('printed domain/write tool syntax fails closed instead of being shown or executed',async()=>{
+  const f=fixture()
+  const result=await runProjectAnswer({...f.opts,callModel:async()=>({
+    success:true,data:'to=functions.save_project_task <tool_call> {"name":"oops"}',model:'fixture',usage,responseId:'resp_bad'
+  })})
+  assert.deepEqual(result,{ok:false,error:'unsupported_tool_response'})
+  assert.equal(f.writes,0)
+})
