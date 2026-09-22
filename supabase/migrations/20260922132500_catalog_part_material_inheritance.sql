@@ -10,7 +10,7 @@ create or replace function bob_private.catalog_save(p_project text,p_id uuid,p_e
 declare d jsonb:=p_data; normalized jsonb; cats text[]; identity_doc jsonb; fingerprint text;
  h bob.catalog_items; mat bob.catalog_item_revisions; current_rev bob.catalog_item_revisions;
  mid uuid; mrev integer; chosen uuid; next_revision integer; prop record; result jsonb; action text:=d->>'action';
- effective_properties jsonb:=d->'properties'; inherited_properties jsonb:='{}'::jsonb; aliases_normalized text[];
+ effective_properties jsonb:=d->'properties'; inherited_properties jsonb:='{}'::jsonb; aliases_input text[];
 begin
  if not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
  if d-array['action','key','kind','name','aliases','profile_code','profile_revision','categories','properties','material_id','material_revision','notes','source_kind','source_quote','source_seq']::text[]<>'{}'
@@ -23,8 +23,8 @@ begin
  if exists(select 1 from jsonb_array_elements(d->'aliases') x where jsonb_typeof(x)<>'string' or length(btrim(x#>>'{}')) not between 1 and 200)
    or exists(select 1 from jsonb_array_elements(d->'categories') x where jsonb_typeof(x)<>'string') then raise exception 'catalog_invalid_labels' using errcode='22023'; end if;
  select array_agg(x order by x) into cats from jsonb_array_elements_text(d->'categories') x;
- select array_agg(x order by x) into aliases_normalized from jsonb_array_elements_text(d->'aliases') x;
- aliases_normalized:=coalesce(aliases_normalized,'{}'::text[]);
+ select array_agg(x) into aliases_input from jsonb_array_elements_text(d->'aliases') x;
+ aliases_input:=coalesce(aliases_input,'{}'::text[]);
  if cardinality(cats)<>(select count(distinct x) from unnest(cats) x) or exists(select 1 from unnest(cats) x where not exists(select 1 from bob.catalog_categories c where c.code=x))
     or (select count(*) from bob.catalog_categories where code=any(cats) and axis='material')<>1
     or (select count(*) from bob.catalog_categories where code=any(cats) and axis='form')<>1
@@ -81,7 +81,7 @@ begin
    select * into current_rev from bob.catalog_item_revisions where item_id=h.id and revision=h.current_revision;
    if current_rev.identity_document=identity_doc
       and current_rev.name=btrim(d->>'name')
-      and current_rev.aliases=aliases_normalized
+      and current_rev.aliases=aliases_input
       and current_rev.source_kind=p_source->>'kind' then
      return jsonb_build_object('operation','reused','record',bob_private.catalog_record(p_project,h.id,h.current_revision));
    end if;
@@ -90,7 +90,7 @@ begin
    update bob.catalog_items set current_revision=next_revision,identity_hash=fingerprint where id=chosen;
  end if;
  insert into bob.catalog_item_revisions(item_id,revision,name,aliases,profile_code,profile_revision,properties,material_id,material_revision,notes,has_unknown,parameter_keys,identity_document,source_kind)
- values(chosen,next_revision,btrim(d->>'name'),aliases_normalized,d->>'profile_code',(d->>'profile_revision')::integer,
+ values(chosen,next_revision,btrim(d->>'name'),aliases_input,d->>'profile_code',(d->>'profile_revision')::integer,
    normalized->'properties',mid,mrev,d->>'notes',(normalized->>'has_unknown')::boolean or coalesce(mat.has_unknown,false),array(select jsonb_array_elements_text(normalized->'parameter_keys')),identity_doc,p_source->>'kind');
  insert into bob_private.catalog_item_provenance values(chosen,next_revision,auth.uid(),p_source->>'quote',(p_source->>'seq')::bigint,(p_source->>'thread')::uuid);
  insert into bob.catalog_item_categories select chosen,next_revision,x from unnest(cats) x;
