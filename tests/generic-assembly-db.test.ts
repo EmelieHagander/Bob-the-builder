@@ -134,6 +134,7 @@ test('archive/restore carries assembly and source revisions; changed part is rep
  await as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A','archive',aid,1,'{}'])
  await as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A','restore',aid,2,'{}'])
  assert.equal((await as(one,'select count(*)::int n from bob.artifact_assemblies where artifact_id=$1',[aid])).rows[0].n,3)
+ await finish(c)
  const revise={...catalog('post_1600_rev','part','rectangular_part',['wood.softwood','rectangular_profile'],{length:value('1700'),width:value('70'),thickness:value('45')},seeded.material.recordId,1),action:'revise'}
  const next=await claim('Spara ändringen och bygg ramen.');t.after(()=>finish(next))
  await write(next,{kind:'catalog',record_id:seeded.post.recordId,expected_updated_at:null,expected_revision:1,request_quote:'Spara',data:{...revise,key:'post_revise',source_quote:'bygg ramen'}})
