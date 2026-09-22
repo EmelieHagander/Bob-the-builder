@@ -161,7 +161,9 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         if (error) {
           if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
           if (error.code === '40001' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
-          if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
+          if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) return payload.kind === 'catalog'
+            ? { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
+            : { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)
