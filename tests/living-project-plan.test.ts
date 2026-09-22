@@ -138,7 +138,10 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
   ])
   let b=await briefing()
   assert.equal(b.current_step.requirements[0].status.state,'satisfied')
-  await fact('measurement','revise',id(1),1,measurement('Opening width','915','measured'))
+  const revisedMeasurement:any=measurement('Opening width','915','measured')
+  delete revisedMeasurement.area_id
+  delete revisedMeasurement.component_id
+  await fact('measurement','revise',id(1),1,revisedMeasurement)
   b=await briefing()
   assert.equal(b.current_step.requirements[0].status.state,'stale')
 })
