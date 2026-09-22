@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "assembly_id": "ci.generic_frame",
+  "units": "mm",
+  "definitions": [
+    {
+      "id": "P-POST",
+      "kind": "box",
+      "size_mm": [
+        45,
+        70,
+        1600
+      ],
+      "catalog_part_id": "00000000-0000-4000-8000-000000000001",
+      "catalog_part_revision": 1
+    },
+    {
+      "id": "P-RAIL",
+      "kind": "box",
+      "size_mm": [
+        45,
+        70,
+        910
+      ],
+      "catalog_part_id": "00000000-0000-4000-8000-000000000002",
+      "catalog_part_revision": 1
+    },
+    {
+      "id": "P-TUBE",
+      "kind": "tube",
+      "outside_diameter_mm": 32,
+      "wall_thickness_mm": 2,
+      "length_mm": 900,
+      "catalog_part_id": "00000000-0000-4000-8000-000000000003",
+      "catalog_part_revision": 1
+    }
+  ],
+  "instances": [
+    {
+      "id": "I-POST-L",
+      "definition_id": "P-POST",
+      "position_mm": [
+        0,
+        0,
+        800
+      ],
+      "rotation_deg": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "I-POST-R",
+      "definition_id": "P-POST",
+      "position_mm": [
+        1000,
+        0,
+        800
+      ],
+      "rotation_deg": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "I-RAIL-B",
+      "definition_id": "P-RAIL",
+      "position_mm": [
+        500,
+        0,
+        100
+      ],
+      "rotation_deg": [
+        0,
+        90,
+        0
+      ]
+    },
+    {
+      "id": "I-RAIL-T",
+      "definition_id": "P-RAIL",
+      "position_mm": [
+        500,
+        0,
+        1500
+      ],
+      "rotation_deg": [
+        0,
+        90,
+        0
+      ]
+    },
+    {
+      "id": "I-TUBE",
+      "definition_id": "P-TUBE",
+      "position_mm": [
+        500,
+        0,
+        800
+      ],
+      "rotation_deg": [
+        0,
+        90,
+        0
+      ]
+    }
+  ],
+  "views": [
+    "front",
+    "right",
+    "top",
+    "isometric"
+  ]
+}
