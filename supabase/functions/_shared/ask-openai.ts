@@ -59,7 +59,7 @@ export async function answerWithOpenAi(opts: {
   const deadline = Date.now() + 215000
   const threadId = claimedServer?.thread_id ?? null
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
-  // The v7 wrapper preserves all older write kinds and the same claimed-turn ledger.
+  // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
     payload => client.rpc('bob_project_write_v8', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
