@@ -305,3 +305,29 @@ test('exact no-op revise reuses current revision without appending history',asyn
   assert.equal((await pg.query('select count(*)::int n from bob.catalog_item_revisions where item_id=$1',[first.recordId])).rows[0].n,1)
  }finally{await fail(d)}
 })
+
+
+test('ordinary revise preserves aliases when no replacement aliases are supplied',async()=>{
+ const c=await claim();let first:any
+ try{
+  first=await write(c,payload(definition('alias-preserve-create',{
+    name:'Alias material',
+    aliases:['plywood','kryssfaner'],
+    notes:'alias fixture',
+    properties:{thickness:val('18')}
+  })))
+ }finally{await fail(c)}
+ const d=await claim()
+ try{
+  const revised=await write(d,payload(definition('alias-preserve-revise',{
+    action:'revise',
+    name:'Alias material',
+    aliases:[],
+    notes:'alias fixture',
+    properties:{thickness:val('19')}
+  }),first.recordId,1))
+  assert.equal(revised.operation,'updated')
+  assert.deepEqual(revised.record.aliases,['plywood','kryssfaner'])
+  assert.equal(revised.record.properties.thickness.value,'19')
+ }finally{await fail(d)}
+})
