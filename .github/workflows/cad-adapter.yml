@@ -1,0 +1,44 @@
+name: CAD adapter
+
+on:
+  pull_request:
+    paths:
+      - 'cad-worker/**'
+      - 'supabase/functions/_shared/cad-adapter.ts'
+      - 'tests/cad-adapter.test.ts'
+      - 'Docs/cad-adapter.md'
+      - '.github/workflows/cad-adapter.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cad-worker/**'
+      - 'supabase/functions/_shared/cad-adapter.ts'
+      - 'tests/cad-adapter.test.ts'
+      - 'Docs/cad-adapter.md'
+      - '.github/workflows/cad-adapter.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: cad-worker/requirements.txt
+      - run: python -m pip install -r cad-worker/requirements.txt
+      - name: Run real build123d worker tests
+        env:
+          PYTHONPATH: cad-worker
+        run: python -m unittest cad-worker/test_worker.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --import tsx --test tests/cad-adapter.test.ts
