@@ -7,8 +7,8 @@ const uid=(n:number)=>'90000000-0000-4000-8000-'+String(n).padStart(12,'0')
 const base=()=>({
   record_id:null,create_area_id:null,expected_revision:0,target_revision:1,title:'Generic frame',description:'Reusable parts',assumptions:'Design proposal',
   definitions:[
-    {key:'P-POST',part_id:uid(1),part_revision:2,shape:{kind:'box',size_mm:[45,70,1600]}},
-    {key:'P-RAIL',part_id:uid(2),part_revision:1,shape:{kind:'box',size_mm:[45,70,910]}},
+    {key:'P-POST',part_id:uid(1),part_revision:2,shape:{kind:'box',length_mm:1600,width_mm:70,thickness_mm:45}},
+    {key:'P-RAIL',part_id:uid(2),part_revision:1,shape:{kind:'box',length_mm:910,width_mm:70,thickness_mm:45}},
   ],
   instances:[
     {key:'I-L',definition_key:'P-POST',position_mm:[0,0,800],rotation_deg:[0,0,0]},
@@ -58,5 +58,5 @@ test('part list is counted from instances once and preserves exact part revision
   assert.equal(post.quantity,2)
   assert.deepEqual(post.instance_keys,['I-L','I-R'])
   assert.equal(post.part_revision,2)
-  assert.deepEqual(post.shape,{kind:'box',size_mm:[45,70,1600]})
+  assert.deepEqual(post.shape,{kind:'box',length_mm:1600,width_mm:70,thickness_mm:45})
 })
