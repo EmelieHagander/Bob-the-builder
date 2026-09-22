@@ -369,7 +369,7 @@ grant execute on function bob_private.bob_project_write_v8(text,uuid,uuid,bigint
 
 insert into bob.tool_catalog(name,description,how_to,schema_version,always_load,preload_phases,active) values(
  'save_project_assembly',
- 'Create or revise a generic versioned part assembly that can be rendered by Bob\'s CAD adapter. Uses catalog parts, reusable generic geometry and placed instances; not an object-specific generator.',
+ 'Create or revise a generic versioned part assembly that can be rendered by Bob''s CAD adapter. Uses catalog parts, reusable generic geometry and placed instances; not an object-specific generator.',
  'Search/read exact catalog part revisions first. Build definitions from supported generic geometry only (box = length/width/thickness, tube = OD/wall/length), then place one or more instances with stable keys. Known catalog dimensions must match; parameter slots may be resolved here, but an unknown critical part dimension cannot be invented. Moving an instance changes placement only. Use mm working dimensions. Preserve target and measurement lineage. CAD validation happens before the database write; a successful save remains Concept, not engineering/manufacturing approval. No stock, Shopping, order or physical Building state is changed.',
  1,false,array['design','planning'],true
 );
