@@ -1,4 +1,5 @@
 import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
+import { PLAN_WRITE_TOOLS, parsePlanWrite } from './project-plan.ts'
 import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
 import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { BUILDING_PLAN_TOOL, parseBuildingPlanWrite } from './project-building-plan.ts'
@@ -20,6 +21,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
 }
 export const WRITE_TOOLS = [
   CATALOG_WRITE_TOOL,
+  ...PLAN_WRITE_TOOLS,
   STAIR_WRITE_TOOL,
   BUILDING_PLAN_TOOL,
   BUILDING_INTAKE_TOOL,
@@ -47,7 +49,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -74,6 +76,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
   if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
+  if (PLAN_WRITE_TOOLS.some(t => t.function.name === name)) return parsePlanWrite(name, v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
   if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
@@ -116,7 +119,7 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))
-    || (r.dataset === 'catalog' && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
+    || (['catalog','plan'].includes(r.dataset) && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
   return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
@@ -161,9 +164,11 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         if (error) {
           if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
           if (error.code === '40001' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
-          if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) return payload.kind === 'catalog'
-            ? { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
-            : { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
+          if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
+            if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
+            if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
+            return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
+          }
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)

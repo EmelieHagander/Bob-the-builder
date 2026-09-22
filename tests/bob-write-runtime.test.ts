@@ -39,10 +39,13 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,10)
-  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,10)
+  assert.equal(WRITE_TOOLS.length,13)
+  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,13)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_catalog_definition'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='propose_project_plan'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='decide_project_plan'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='link_project_plan_evidence'))
 })
 
 test('catalog revise may preserve metadata with null while ensure still requires concrete metadata',()=>{
@@ -154,11 +157,30 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write_v7'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v8'/)
   assert.match(source,/client\.rpc\('catalog_read'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
   assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v\d+)?'/)
   assert.doesNotMatch(source,/internal\.rpc\('catalog_read'/)
   const conversation=await readFile(new URL('../supabase/functions/_shared/bob-conversation.ts',import.meta.url),'utf8')
   assert.match(conversation,/bob_commit_turn_v2/);assert.match(conversation,/p_generation: input\.generation/)
+})
+
+
+test('living-plan parser keeps proposal, approval and evidence shapes bounded and project-bound',()=>{
+  const requirement={requirement_id:null,type:'measurement',title:'Opening width',description:'Measure before cutting',resolution:'open',
+    responsible_kind:'person',responsible_person_id:'person-a',evidence_selector:{kind:'measurement',id:null,subject:'Opening width',area_id:'areaA'}}
+  const step={step_id:null,title:'Verify opening',goal:'Know the real opening before framing',state:'active',area_id:'areaA',
+    responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[requirement]}
+  const proposal={expected_revision:0,summary:'Measure, then frame',reason:'Initial plan',steps:[step],request_quote:'Planera projektet'}
+  const parsed=parseProjectWrite('propose_project_plan',proposal,'A','Planera projektet')!
+  assert.equal(parsed.kind,'plan_proposal');assert.equal(parsed.expected_revision,0)
+  assert.equal(parseProjectWrite('propose_project_plan',{...proposal,steps:[step,{...step,title:'Second active'}]},'A','Planera projektet'),null)
+  const decision=parseProjectWrite('decide_project_plan',{action:'approve',proposal_revision:1,expected_revision:0,decision_note:'Ser bra ut',request_quote:'Godkänn planen'},'A','Godkänn planen')!
+  assert.equal(decision.kind,'plan_decision')
+  const evidence=parseProjectWrite('link_project_plan_evidence',{plan_revision:1,requirement_id:'30000000-0000-4000-8000-000000000001',
+    relation:'resolves',evidence_kind:'measurement',evidence_id:'30000000-0000-4000-8000-000000000002',evidence_revision:2,request_quote:'Koppla måttet'},'A','Koppla måttet')!
+  assert.equal(evidence.kind,'plan_evidence')
+  assert.equal(parseProjectWrite('link_project_plan_evidence',{plan_revision:1,requirement_id:'30000000-0000-4000-8000-000000000001',
+    relation:'resolves',evidence_kind:'measurement',evidence_id:'30000000-0000-4000-8000-000000000002',evidence_revision:null,request_quote:'Koppla måttet'},'A','Koppla måttet'),null)
 })
