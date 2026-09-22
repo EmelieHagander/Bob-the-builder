@@ -259,3 +259,49 @@ test('material catalog search, read and save preload together in active planning
  assert.equal(rows.length,3)
  for(const row of rows) assert.deepEqual(row.preload_phases,['concept','design','planning','build'],row.name)
 })
+
+
+test('generic part inherits compatible material properties and stores part-specific dimensions structurally',async()=>{
+ const c=await claim()
+ try{
+  const material=await write(c,payload(definition('inherit-material',{name:'Inherited plywood',notes:'inheritance fixture',properties:{thickness:val('19.05')}})))
+  const part=await write(c,payload(definition('inherit-panel',{
+    kind:'part',name:'Inherited panel',profile_code:'panel',material_id:material.recordId,material_revision:1,
+    notes:'panel fixture',properties:{length:val('640'),width:val('320')}
+  })))
+  assert.equal(part.operation,'created')
+  assert.equal(part.record.material_id,material.recordId)
+  assert.equal(part.record.material_revision,1)
+  assert.equal(part.record.properties.thickness.value,'19.05')
+  assert.equal(part.record.properties.length.value,'640')
+  assert.equal(part.record.properties.width.value,'320')
+  assert.equal(part.record.properties.thickness.unit,'mm')
+ }finally{await fail(c)}
+})
+
+test('part cannot override an inherited material property with a conflicting value',async()=>{
+ const c=await claim()
+ try{
+  const material=await write(c,payload(definition('inherit-conflict-material',{name:'Conflict plywood',notes:'conflict fixture',properties:{thickness:val('18')}})))
+  await assert.rejects(write(c,payload(definition('inherit-conflict-panel',{
+    kind:'part',name:'Conflict panel',profile_code:'panel',material_id:material.recordId,material_revision:1,
+    notes:'conflict panel',properties:{thickness:val('19'),length:val('640'),width:val('320')}
+  }))),/catalog_material_property_mismatch:thickness/)
+ }finally{await fail(c)}
+})
+
+test('exact no-op revise reuses current revision without appending history',async()=>{
+ const c=await claim();let first:any
+ try{
+  first=await write(c,payload(definition('noop-base',{name:'Noop material',notes:'same metadata',properties:{thickness:val('18')}})))
+ }finally{await fail(c)}
+ const d=await claim()
+ try{
+  const same=definition('noop-revise',{action:'revise',name:'Noop material',notes:'same metadata',properties:{thickness:val('18')}})
+  const reused=await write(d,payload(same,first.recordId,1))
+  assert.equal(reused.operation,'reused')
+  assert.equal(reused.recordId,first.recordId)
+  assert.equal(reused.revision,1)
+  assert.equal((await pg.query('select count(*)::int n from bob.catalog_item_revisions where item_id=$1',[first.recordId])).rows[0].n,1)
+ }finally{await fail(d)}
+})
