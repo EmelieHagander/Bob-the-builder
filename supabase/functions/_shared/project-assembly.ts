@@ -167,3 +167,28 @@ export function assemblyToCad(assemblyId:string,recipe:AssemblyRecipeV1):CadCons
   return {version:1,assembly_id:assemblyId,units:'mm',definitions,
     instances:recipe.instances.map(i=>({id:i.key,definition_id:i.definition_key,position_mm:i.position_mm,rotation_deg:i.rotation_deg})),views:recipe.views}
 }
+
+
+export interface AssemblyPartListLine {
+  definition_key:string
+  part_id:string
+  part_revision:number
+  quantity:number
+  instance_keys:string[]
+  shape:AssemblyShape
+}
+
+/** Deterministic manufacturing identity summary from the exact assembly recipe.
+ * Quantity is counted ONLY from leaf instances; definitions never carry a second count. */
+export function assemblyPartList(recipe:AssemblyRecipeV1):AssemblyPartListLine[]{
+  const byDefinition=new Map(recipe.definitions.map(d=>[d.key,{...d,quantity:0,instance_keys:[] as string[]}]))
+  for(const instance of recipe.instances){
+    const line=byDefinition.get(instance.definition_key)
+    if(!line)throw new Error('assembly_dangling_instance')
+    line.quantity++;line.instance_keys.push(instance.key)
+  }
+  return [...byDefinition.values()].filter(line=>line.quantity>0).map(line=>({
+    definition_key:line.key,part_id:line.part_id,part_revision:line.part_revision,quantity:line.quantity,
+    instance_keys:[...line.instance_keys],shape:structuredClone(line.shape),
+  }))
+}
