@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ASSEMBLY_TOOL, assemblyToCad, parseAssemblyWrite } from '../supabase/functions/_shared/project-assembly.ts'
+import { ASSEMBLY_TOOL, assemblyPartList, assemblyToCad, parseAssemblyWrite } from '../supabase/functions/_shared/project-assembly.ts'
 import { parseCadConstruction } from '../supabase/functions/_shared/cad-adapter.ts'
 
 const uid=(n:number)=>'90000000-0000-4000-8000-'+String(n).padStart(12,'0')
@@ -48,4 +48,15 @@ test('assembly rejects unknown geometry, missing part pins and dangling instance
     (v:any)=>{v.instances[0].definition_key='missing'},
     (v:any)=>{v.units='in'},
   ]){const value:any=base();mutate(value);assert.equal(parseAssemblyWrite(value),null)}
+})
+
+
+test('part list is counted from instances once and preserves exact part revision',()=>{
+  const parsed=parseAssemblyWrite(base())!
+  const list=assemblyPartList(parsed.data.recipe)
+  const post=list.find(line=>line.definition_key==='P-POST')!
+  assert.equal(post.quantity,2)
+  assert.deepEqual(post.instance_keys,['I-L','I-R'])
+  assert.equal(post.part_revision,2)
+  assert.deepEqual(post.shape,{kind:'box',size_mm:[45,70,1600]})
 })
