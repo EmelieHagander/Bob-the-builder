@@ -1,6 +1,6 @@
 # Bob CAD adapter — build123d foundation
 
-**Status:** implementation branch; not merged or deployed. This is the first Slice B geometry foundation, stacked on the material-catalog work. It does not complete the drawing/cut/pick/Shopping use case.
+**Status:** merged to main 2026-09-22; engine seam verified, not hosted as an app CAD service. This is the first Slice B geometry foundation. Main commit `a9861000e011aba5a511455dea354e5c9d88a989` contains the adapter and worker. It does not complete the drawing/cut/pick/Shopping use case.
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
@@ -41,7 +41,7 @@ No Bob tool is registered yet. The next integration should wrap this worker in a
 
 `cad-worker/test_worker.py` imports the real pinned build123d package and must generate STEP plus four SVG views. `tests/cad-adapter.test.ts` checks the Bob-side contract and failure semantics.
 
-The dedicated `CAD adapter` workflow installs Python 3.13 and build123d 0.13.0 on GitHub Actions and runs both layers. Passing this proves the adapter/engine seam, not hosted deployment, model behavior, structural engineering or BOM/Shopping completion.
+The dedicated `CAD adapter` workflow installs Python 3.13 and build123d 0.13.0 on GitHub Actions and runs both layers. PR #96 and the post-merge main run both passed: the real engine generated STEP/SVG and the TypeScript contract tests passed. This proves the adapter/engine seam, not hosted CAD availability in Bob, model behavior, structural engineering or BOM/Shopping completion.
 
 ## Next
 
