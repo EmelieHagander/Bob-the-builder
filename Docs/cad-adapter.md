@@ -70,6 +70,14 @@ This does **not** yet prove:
 
 Those are later slices. Add operations as generic CAD vocabulary only when there is an acceptance case; do not add `bunk_bed_v1`, `shelf_v1`, etc.
 
+## Generic assembly command boundary
+
+`supabase/functions/_shared/project-assembly.ts` now defines the strict model-facing `save_project_assembly` contract and the deterministic mapping into the CAD contract. It is intentionally **not registered in WRITE_TOOLS yet**: there is no persisted generic-assembly command on this branch, and advertising a write before the database can atomically version/read it back would violate Bob's receipt contract.
+
+The model-facing assembly contains only exact catalog part id/revision pins, generic resolved `box`/hollow-`tube` geometry, stable definition keys, placed instance keys/transforms, selected drawing views, existing measurement revision links and the normal Artifact target metadata. There is no object/category field such as bed/shelf/cabinet. Moving an instance leaves the pinned part/shape unchanged. The resulting recipe maps one-to-one into `CadConstructionV1` and keeps the same stable keys.
+
+The persistence migration must be created with the repository's Supabase CLI, then add relational assembly/definition/instance rows under the existing Artifact revision and a claimed-turn write wrapper that delegates older write kinds. Until that exists and is tested, the tool remains source-defined but unavailable to Bob.
+
 ## Next integration
 
-The next database/application step should persist a versioned generic assembly that references exact catalog material/part versions, then send its resolved geometry to this adapter. The same assembly revision must drive drawing views and downstream part/cut/material records. Placement changes should alter instances, not part recipes; dimension constraints may explicitly cause part recalculation in the domain layer before CAD.
+The next database/application step should persist this versioned generic assembly that references exact catalog material/part versions, then send its resolved geometry to this adapter. The same assembly revision must drive drawing views and downstream part/cut/material records. Placement changes should alter instances, not part recipes; dimension constraints may explicitly cause part recalculation in the domain layer before CAD.
