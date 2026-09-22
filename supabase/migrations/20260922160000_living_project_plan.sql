@@ -478,7 +478,7 @@ end $$;
 
 create function bob_private.project_plan_link_evidence(p_project text,p_expected integer,p_requirement uuid,p_kind text,p_id text,p_revision integer,p_relation text)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare cur jsonb; title text;
+declare cur jsonb; requirement_title text;
 begin
   if auth.uid() is null or not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
   if (select current_revision from bob.project_plans where project_id=p_project) is distinct from p_expected then
@@ -496,9 +496,9 @@ begin
   insert into bob.project_plan_evidence(project_id,plan_revision,requirement_id,evidence_kind,evidence_id,evidence_revision,relation,linked_by)
     values(p_project,p_expected,p_requirement,p_kind,p_id,p_revision,p_relation,auth.uid())
     on conflict do nothing;
-  select title into title from bob.project_plan_requirements where project_id=p_project and plan_revision=p_expected and requirement_id=p_requirement;
+  select q.title into requirement_title from bob.project_plan_requirements q where q.project_id=p_project and q.plan_revision=p_expected and q.requirement_id=p_requirement;
   return jsonb_build_object('id',p_project,'revision',p_expected,'name','Living project plan v'||p_expected,
-    'requirement_id',p_requirement,'requirement_title',title,'requirement_status',bob_private.plan_requirement_state(p_project,p_expected,p_requirement),
+    'requirement_id',p_requirement,'requirement_title',requirement_title,'requirement_status',bob_private.plan_requirement_state(p_project,p_expected,p_requirement),
     'updated_at',clock_timestamp());
 end $$;
 
