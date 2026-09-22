@@ -1,4 +1,5 @@
 import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
+import { ASSEMBLY_TOOL, parseAssemblyWrite } from './project-assembly.ts'
 import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
 import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { BUILDING_PLAN_TOOL, parseBuildingPlanWrite } from './project-building-plan.ts'
@@ -20,6 +21,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
 }
 export const WRITE_TOOLS = [
   CATALOG_WRITE_TOOL,
+  ASSEMBLY_TOOL,
   STAIR_WRITE_TOOL,
   BUILDING_PLAN_TOOL,
   BUILDING_INTAKE_TOOL,
@@ -47,7 +49,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'assembly'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -56,7 +58,7 @@ export interface WritePayload {
 }
 export interface WriteReadback extends ProjectWriteReceipt { record: Record<string, unknown> }
 export interface WriteResult {
-  status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
+  status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unavailable' | 'unknown' | 'budget_exhausted'
   receipt?: WriteReadback
   message?: string
 }
@@ -74,6 +76,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
   if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
+  if (name === ASSEMBLY_TOOL.function.name) return parseAssemblyWrite(v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
   if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
@@ -122,7 +125,8 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)
 }
-export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport) {
+export type WritePreflight = (payload: WritePayload) => PromiseLike<{ status: 'ok' | 'invalid' | 'unavailable'; message?: string }>
+export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, preflight?: WritePreflight) {
   let used = 0
   let uncertain = false
   let settled = false
@@ -157,6 +161,11 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       const payload = parseProjectWrite(name, value, projectId, userMessage)
       if (!payload) return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' }
       try {
+        if (preflight) {
+          let check: Awaited<ReturnType<WritePreflight>>
+          try { check = await preflight(payload) } catch { check = { status: 'unavailable', message: 'Required geometry validation is unavailable. No change made.' } }
+          if (check.status !== 'ok') return { status: check.status, message: check.message ?? (check.status === 'invalid' ? 'Geometry validation rejected this construction. No change made.' : 'Required geometry validation is unavailable. No change made.') }
+        }
         const { data, error } = await transport(payload)
         if (error) {
           if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
