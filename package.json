@@ -13,7 +13,7 @@
     "check:edge": "deno check --node-modules-dir=manual supabase/functions/ask-bob/index.ts supabase/functions/ask-launchpad/index.ts supabase/functions/volunteer-media/index.ts",
     "verify:pwa": "node scripts/check-pwa.mjs",
     "verify:install": "node scripts/check-installation-browser.mjs",
-    "verify:project": "node scripts/check-project-browser.mjs",
+    "verify:project": "node scripts/check-project-browser.mjs && node scripts/check-material-catalog-browser.mjs",
     "verify:foundations": "node scripts/check-foundations-browser.mjs",
     "verify:building": "node scripts/check-building-context-browser.mjs"
   },

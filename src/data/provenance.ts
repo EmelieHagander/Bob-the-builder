@@ -14,12 +14,13 @@ export interface ProjectSource {
 
 export interface ProjectWriteReceipt {
   projectId: string
-  dataset: 'project' | 'tasks' | 'measurements' | 'artifacts' | 'building_context'
+  dataset: 'project' | 'tasks' | 'measurements' | 'artifacts' | 'building_context' | 'catalog'
   recordId: string
   label: string
-  operation: 'created' | 'updated'
+  /** reused is permitted only for an unchanged catalog definition. */
+  operation: 'created' | 'updated' | 'reused'
   savedAt: string
-  /** Drawing receipts pin an exact saved revision and its immutable Area scope. */
+  /** Drawing and catalog receipts pin an exact saved revision. */
   revision?: number
   areaId?: string | null
 }

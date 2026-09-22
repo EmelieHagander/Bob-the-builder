@@ -1,3 +1,4 @@
+import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
 import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
 import { withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { BUILDING_PLAN_TOOL, parseBuildingPlanWrite } from './project-building-plan.ts'
@@ -18,6 +19,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  CATALOG_WRITE_TOOL,
   STAIR_WRITE_TOOL,
   BUILDING_PLAN_TOOL,
   BUILDING_INTAKE_TOOL,
@@ -45,7 +47,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair'
+  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -71,6 +73,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
   if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
@@ -112,7 +115,8 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
 function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
-    || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))) throw new Error('Invalid write receipt')
+    || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))
+    || (r.dataset === 'catalog' && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
   return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
@@ -156,7 +160,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         const { data, error } = await transport(payload)
         if (error) {
           if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
-          if (error.code === '40001' || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed. Read the current record and do not overwrite unrelated changes.' }
+          if (error.code === '40001' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
           throw new Error('Unknown write result')
         }
@@ -174,8 +178,8 @@ export type ProjectWriter = ReturnType<typeof createProjectWriter>
 
 /** Receipt-only recovery: no second model run or accidental repeated edits. */
 export function savedWriteSummary(receipts: WriteReadback[], uncertain = false): string {
-  const saved = receipts.length ? `Sparat i projektet:\n${receipts.map(r => `• ${r.label} (${r.operation === 'created' ? 'skapad' : 'uppdaterad'}).`).join('\n')}\n\n` : ''
+  const saved = receipts.length ? `Sparat eller återanvänt i projektet:\n${receipts.map(r => `• ${r.label} (${r.operation === 'created' ? 'skapad' : r.operation === 'reused' ? 'återanvänd, oförändrad' : 'uppdaterad'}).`).join('\n')}\n\n` : ''
   return saved + (uncertain
     ? 'En skrivning kunde inte verifieras. Jag har stoppat fler ändringar; kontrollera uppgifterna innan du försöker igen.'
-    : 'Ändringarna ovan är verifierade. Svaret kunde inte slutföras normalt, så jag visar sparningskvittot i stället. Jag har inte upprepat ändringarna.')
+    : 'Åtgärderna ovan är verifierade. Svaret kunde inte slutföras normalt, så jag visar kvittot i stället. Jag har inte upprepat ändringarna.')
 }

@@ -1,3 +1,4 @@
+import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext } from './project-context/dispatcher.ts'
@@ -41,32 +42,26 @@ export async function answerWithOpenAi(opts: {
     return !error && data?.id === opts.projectId
   }
 
-  // Access is checked with the caller JWT before the service-role conversation
-  // helper sees a project/user id. The helper independently verifies membership.
   if (!await hasAccess()) return { ok: false, error: 'project_denied' }
-
   let claim: BobTurnClaim
   try {
     claim = await conversations.claim(opts.projectId, opts.userId, opts.clientTurnId, opts.message)
   } catch (error) {
     return { ok: false, error: String(error).includes('project_denied') ? 'project_denied' : 'conversation_unavailable' }
   }
-
   if (claim.mode === 'server' && claim.status === 'completed') {
     return { ok: true, answer: claim.answer, projectId: opts.projectId, evidence: claim.evidence }
   }
   if (claim.mode === 'server' && (claim.status === 'in_flight' || claim.status === 'thread_busy')) {
     return { ok: false, error: 'turn_in_flight' }
   }
-
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
   const deadline = Date.now() + 215000
   const threadId = claimedServer?.thread_id ?? null
-
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
-  // A shared guest identity has no private claimed thread and is read-only.
+  // The v7 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => client.rpc('bob_project_write_v6', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
+    payload => client.rpc('bob_project_write_v7', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -74,8 +69,11 @@ export async function answerWithOpenAi(opts: {
     adapters: [createMediaAdapter(opts.projectId, createMediaTransport(client, { ...opts, url, key }))],
     hasAccess, sources: lookup.sources,
   })
+  const catalogReader = createMaterialCatalogReader(opts.projectId,
+    (input, signal) => client.rpc('catalog_read', { p_project: opts.projectId, p_input: input }).abortSignal(signal),
+    hasAccess, lookup.sources)
   return runClaimedProjectTurn({
-    ...opts, lookup, hasAccess, writer, projectContext, generation: claimedServer?.generation, deadline,
+    ...opts, lookup, hasAccess, writer, projectContext, catalogReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
