@@ -157,7 +157,7 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write_v7'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v8'/)
   assert.match(source,/client\.rpc\('catalog_read'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
   assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v\d+)?'/)
