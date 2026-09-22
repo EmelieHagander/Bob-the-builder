@@ -465,7 +465,6 @@ begin
     update bob.project_plan_revisions set status='rejected',decided_at=clock_timestamp() where project_id=p_project and revision=p_proposal;
     return bob.project_plan_read(p_project,p_proposal);
   end if;
-  set constraints project_plans_current_fk deferred;
   if h.current_revision is not null then
     update bob.project_plan_revisions set status='superseded',decided_at=coalesce(decided_at,clock_timestamp()),
       approved_by=coalesce(approved_by,auth.uid())
