@@ -25,6 +25,8 @@ jobs:
         run: |
           python -m pip check
           PYTHONPATH=cad-worker python -m unittest cad-worker/test_worker.py
+          mkdir -p test-results/cad-generic-frame
+          PYTHONPATH=cad-worker python cad-worker/bob_cad_worker.py cad-worker/fixtures/generic_frame.json test-results/cad-generic-frame
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-foundations.mjs
