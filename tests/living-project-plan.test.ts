@@ -97,11 +97,12 @@ test('project briefing v8 carries the compact living-plan story and plan dataset
 test('replanning carries completed history and rejects invented stable IDs',async()=>{
   const current=(await as(owner,"select bob.project_plan_read('A',1) result")).rows[0].result.record as any
   const currentStep=current.steps[0]
+  const oldReq=currentStep.requirements[0]
   const completed={step_id:currentStep.id,title:currentStep.title,goal:currentStep.goal,state:'completed',area_id:'areaA',
-    responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[{...currentStep.requirements[0],requirement_id:currentStep.requirements[0].id,
-      type:currentStep.requirements[0].type,status:undefined}]}
-  delete completed.requirements[0].status
-  delete completed.requirements[0].id
+    responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[{
+      requirement_id:oldReq.id,type:oldReq.type,title:oldReq.title,description:oldReq.description,resolution:oldReq.resolution,
+      responsible_kind:oldReq.responsible_kind,responsible_person_id:oldReq.responsible_person_id,evidence_selector:oldReq.evidence_selector
+    }]}
   const future={step_id:null,title:'Frame opening',goal:'Build from verified dimensions',state:'active',area_id:'areaA',
     responsible_kind:'person',responsible_person_id:'ownerA',notes:'',requirements:[]}
   const p2=await propose(1,{summary:'Measured opening, now frame',reason:'Opening width is known',steps:[completed,future]})
@@ -136,6 +137,6 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
 
 test('raw writes are denied while caller-scoped reads stay isolated',async()=>{
   await assert.rejects(as(owner,"insert into bob.project_plans(project_id) values('B')"),/permission denied/)
-  assert.equal((await as(outsider,'select * from bob.project_plans')).rows.length,1,'outsider still sees own project rows only if present')
+  assert.equal((await as(outsider,'select * from bob.project_plans')).rows.length,0)
   assert.equal((await as(outsider,"select * from bob.project_plan_revisions where project_id='A'")).rows.length,0)
 })
