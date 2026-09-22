@@ -305,3 +305,61 @@ test('exact no-op revise reuses current revision without appending history',asyn
   assert.equal((await pg.query('select count(*)::int n from bob.catalog_item_revisions where item_id=$1',[first.recordId])).rows[0].n,1)
  }finally{await fail(d)}
 })
+
+
+test('revise can explicitly preserve aliases and notes while changing only requested catalog data',async()=>{
+ const c=await claim();let first:any
+ try{
+  first=await write(c,payload(definition('preserve-create',{
+    name:'Metadata plywood',
+    aliases:['plywood','kryssfaner'],
+    notes:'Keep this note',
+    properties:{thickness:val('18')}
+  })))
+ }finally{await fail(c)}
+ const d=await claim()
+ try{
+  const changed=await write(d,payload(definition('preserve-revise',{
+    action:'revise',
+    name:'Metadata plywood',
+    aliases:null,
+    notes:null,
+    properties:{thickness:val('21')}
+  }),first.recordId,1))
+  assert.equal(changed.operation,'updated')
+  assert.equal(changed.revision,2)
+  assert.deepEqual(changed.record.aliases,['plywood','kryssfaner'])
+  assert.equal(changed.record.notes,'Keep this note')
+  assert.equal(changed.record.properties.thickness.value,'21')
+ }finally{await fail(d)}
+})
+
+test('preserved metadata plus identical data is a no-op reuse, while explicit empty aliases really clears them',async()=>{
+ const c=await claim();let first:any
+ try{
+  first=await write(c,payload(definition('preserve-noop-create',{
+    name:'Noop metadata',
+    aliases:['keep-me'],
+    notes:'Keep note',
+    properties:{thickness:val('18')}
+  })))
+ }finally{await fail(c)}
+ const d=await claim()
+ try{
+  const reused=await write(d,payload(definition('preserve-noop',{
+    action:'revise',name:'Noop metadata',aliases:null,notes:null,properties:{thickness:val('18')}
+  }),first.recordId,1))
+  assert.equal(reused.operation,'reused')
+  assert.equal(reused.revision,1)
+  assert.equal((await pg.query('select count(*)::int n from bob.catalog_item_revisions where item_id=$1',[first.recordId])).rows[0].n,1)
+ }finally{await fail(d)}
+ const e=await claim()
+ try{
+  const cleared=await write(e,payload(definition('preserve-clear',{
+    action:'revise',name:'Noop metadata',aliases:[],notes:null,properties:{thickness:val('18')}
+  }),first.recordId,1))
+  assert.equal(cleared.operation,'updated')
+  assert.deepEqual(cleared.record.aliases,[])
+  assert.equal(cleared.record.notes,'Keep note')
+ }finally{await fail(e)}
+})

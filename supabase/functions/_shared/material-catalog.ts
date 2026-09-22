@@ -35,11 +35,11 @@ export const CATALOG_WRITE_TOOL = tool('save_catalog_definition',
     key: { type: 'string', description: 'Stable short operation key for this intended definition in this turn; reuse for an exact retry. Letters, numbers, _ and - only.' },
     kind: { type: 'string', enum: ['material', 'part'] },
     record_id: nullableText, expected_revision: { type: 'integer', description: '0 for ensure; exact current revision for revise.' },
-    name: { type: 'string' }, aliases: { type: 'array', maxItems: 12, items: { type: 'string' } },
+    name: { type: 'string' }, aliases: { type: ['array', 'null'], maxItems: 12, items: { type: 'string' }, description: 'For revise, null preserves existing aliases exactly; [] explicitly clears them. For ensure, supply an array.' },
     profile_code: { type: 'string' }, profile_revision: { type: 'integer' },
     categories: { type: 'array', maxItems: 12, uniqueItems: true, items: { type: 'string' }, description: 'Exactly one material and one form category, plus optional function categories. Reuse codes returned by search.' },
     properties: { ...propertiesSchema, description: propertiesSchema.description + ' For a part, put user-specified dimensions in the exact required profile keys. Compatible keys already present on the pinned material revision are inherited server-side; omitted required keys must therefore exist either on the material or in this object. Never put dimensions only in notes.' },
-    material_id: { ...nullableText, description: 'Exact catalog material ID for a part; null for a material. Read that exact revision before saving the part.' }, material_revision: { type: ['integer', 'null'] }, notes: { type: 'string', description: 'Descriptive notes only. Do not encode required dimensions here instead of properties.' },
+    material_id: { ...nullableText, description: 'Exact catalog material ID for a part; null for a material. Read that exact revision before saving the part.' }, material_revision: { type: ['integer', 'null'] }, notes: { type: ['string','null'], description: 'Descriptive notes only. Do not encode required dimensions here instead of properties. For revise, null preserves existing notes exactly; for ensure, supply a string.' },
     source_kind: { type: 'string', enum: ['user_statement', 'design_choice'], description: 'design_choice for delegated design decisions; no invented measured/manufacturer evidence.' },
     source_quote: { type: 'string', description: 'Exact excerpt from a current or earlier user message. For design_choice it records the design request, not proof the user measured the values.' },
     source_seq: { type: ['integer', 'null'], description: 'Earlier user-message seq from this conversation, or null for the current message.' },
@@ -80,8 +80,11 @@ export function parseCatalogWrite(value: unknown): WritePayload | null {
   const v = value
   if (!['material','part'].includes(String(v.kind)) || !['ensure','revise'].includes(String(v.action))
     || typeof v.key !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(v.key)
-    || !text(v.name, 200) || !text(v.notes, 2000, true)
-    || !Array.isArray(v.aliases) || v.aliases.length > 12 || v.aliases.some(x => !text(x, 200))
+    || !text(v.name, 200)
+    || (v.action === 'ensure'
+      ? (!text(v.notes, 2000, true) || !Array.isArray(v.aliases))
+      : !((v.notes === null || text(v.notes, 2000, true)) && (v.aliases === null || Array.isArray(v.aliases))))
+    || (Array.isArray(v.aliases) && (v.aliases.length > 12 || v.aliases.some(x => !text(x, 200))))
     || typeof v.profile_code !== 'string' || !code.test(v.profile_code) || !revision(v.profile_revision)
     || !Array.isArray(v.categories) || v.categories.length < 2 || v.categories.length > 12
     || new Set(v.categories).size !== v.categories.length || v.categories.some(x => typeof x !== 'string' || !category.test(x))
