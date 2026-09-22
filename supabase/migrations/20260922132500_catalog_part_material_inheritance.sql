@@ -44,12 +44,14 @@ begin
    -- inherited. Part-specific user values override this merge temporarily and
    -- are then checked below for exact equality with material truth.
    select coalesce(jsonb_object_agg(mp.key,mp.value),'{}'::jsonb) into inherited_properties
-   from jsonb_each(mat.properties) mp
-   join bob.catalog_profile_fields f
-     on f.profile_code=d->>'profile_code'
-    and f.profile_revision=(d->>'profile_revision')::integer
-    and f.property_key=mp.key;
-   effective_properties:=inherited_properties || d->'properties';
+   from jsonb_each(mat.properties) as mp(key,value)
+   where exists(
+     select 1 from bob.catalog_profile_fields f
+     where f.profile_code=d->>'profile_code'
+       and f.profile_revision=(d->>'profile_revision')::integer
+       and f.property_key=mp.key
+   );
+   effective_properties:=coalesce(inherited_properties,'{}'::jsonb) || coalesce(d->'properties','{}'::jsonb);
  end if;
 
  normalized:=bob_private.catalog_normalize(d->>'profile_code',(d->>'profile_revision')::integer,effective_properties,d->>'kind');
