@@ -124,10 +124,12 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
   const approved=(await as(owner,"select bob.project_plan_read('A',2) result")).rows[0].result.record as any
   const active=approved.steps.find((s:any)=>s.state==='active')
   const noSelector={kind:'none',id:null,subject:null,area_id:null}
-  const p3=await propose(2,{summary:'Frame with one check',reason:'Need exact evidence pin',steps:[{...active,step_id:active.id,requirements:[
-    {requirement_id:null,type:'measurement',title:'Pinned opening',description:'Pin exact measurement',resolution:'open',
-      responsible_kind:'bob',responsible_person_id:null,evidence_selector:noSelector}
-  ]}]})
+  const activeWrite={step_id:active.id,title:active.title,goal:active.goal,state:active.state,area_id:active.area_id,
+    responsible_kind:active.responsible_kind,responsible_person_id:active.responsible_person_id,notes:active.notes,requirements:[
+      {requirement_id:null,type:'measurement',title:'Pinned opening',description:'Pin exact measurement',resolution:'open',
+        responsible_kind:'bob',responsible_person_id:null,evidence_selector:noSelector}
+    ]}
+  const p3=await propose(2,{summary:'Frame with one check',reason:'Need exact evidence pin',steps:[activeWrite]})
   await decide(2,3)
   const p=(await as(owner,"select bob.project_plan_read('A',3) result")).rows[0].result.record as any
   const q=p.steps.find((s:any)=>s.state==='active').requirements[0]
