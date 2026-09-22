@@ -17,11 +17,17 @@ async function as(uid:string|null,sql:string,params:unknown[]=[],role='authentic
     return tx.query(sql,params)
   })
 }
+async function server(uid:string,sql:string,params:unknown[]=[]){
+  return pg.transaction(async tx=>{
+    await tx.query("select set_config('request.jwt.claims',$1,true)",[JSON.stringify({sub:uid})])
+    return tx.query(sql,params)
+  })
+}
 async function propose(expected:number,data:any,uid=owner){
-  return (await as(uid,'select bob_private.project_plan_propose($1,$2,$3) result',['A',expected,JSON.stringify(data)])).rows[0].result as any
+  return (await server(uid,'select bob_private.project_plan_propose($1,$2,$3) result',['A',expected,JSON.stringify(data)])).rows[0].result as any
 }
 async function decide(expected:number,proposal:number,action='approve',uid=owner){
-  return (await as(uid,'select bob_private.project_plan_decide($1,$2,$3,$4,$5) result',['A',expected,proposal,action,'decision'])).rows[0].result as any
+  return (await server(uid,'select bob_private.project_plan_decide($1,$2,$3,$4,$5) result',['A',expected,proposal,action,'decision'])).rows[0].result as any
 }
 async function briefing(uid=owner){
   return (await as(uid,'select bob.project_plan_briefing($1) result',['A'])).rows[0].result as any
@@ -125,7 +131,7 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
   await decide(2,3)
   const p=(await as(owner,"select bob.project_plan_read('A',3) result")).rows[0].result.record as any
   const q=p.steps.find((s:any)=>s.state==='active').requirements[0]
-  await as(owner,'select bob_private.project_plan_link_evidence($1,$2,$3,$4,$5,$6,$7)',[
+  await server(owner,'select bob_private.project_plan_link_evidence($1,$2,$3,$4,$5,$6,$7)',[
     'A',3,q.id,'measurement',id(1),1,'resolves'
   ])
   let b=await briefing()
