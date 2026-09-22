@@ -13,7 +13,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: cad-worker/requirements.txt
       - run: npm ci
+      - name: Install pinned CAD engine
+        run: python -m pip install -r cad-worker/requirements.txt
+      - name: Verify build123d/OpenCascade adapter
+        run: |
+          python -m pip check
+          PYTHONPATH=cad-worker python -m unittest cad-worker/test_worker.py
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-foundations.mjs
