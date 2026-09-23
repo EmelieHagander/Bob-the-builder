@@ -199,7 +199,7 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
   assert.equal(proposed.record.steps[0].tasks[1].status,'planned')
 
   await decideV2('C',0,1,'approve',workspaceOwner)
-  const tasks=(await as(workspaceOwner,"select id,name,status from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C' order by name")).rows
+  const tasks=(await as(workspaceOwner,"select t.id,t.name,t.status from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C' order by t.name")).rows
   assert.equal(tasks.length,2,'Only the current Step blueprint materializes on approval')
   assert(tasks.some((t:any)=>t.name==='Measure roof connection'&&t.status==='todo'))
   assert(!tasks.some((t:any)=>t.name==='Draft connection detail'),'Future Step blueprints stay inside the plan until they become current')
