@@ -66,6 +66,8 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
   assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,undefined,'model choice stays in shared.ai_settings')
   assert.match(calls[0].systemMessage!,/Bob is the project manager/)
   assert.match(calls[1].systemMessage!,/Bob remains the project manager/)
+  assert(calls[0].systemMessage!.trim().split(/\s+/).length <= 300, 'compiler guidance stays focused on representation')
+  assert(calls[1].systemMessage!.trim().split(/\s+/).length <= 250, 'reviewer guidance stays focused on evidence')
   assert.equal(result.compiled_plan.steps[0].state,'active')
   assert.equal(result.review.ready_to_save,true)
   assert.equal(result.task_candidates[0].task_id,taskId)

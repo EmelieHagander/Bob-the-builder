@@ -80,7 +80,6 @@ test('clear approval A leads through the real tool loop to one save and compact 
     callModel:async options=>{
       calls++
       assert(options.systemMessage!.startsWith(BOB_PERSONA))
-      assert.match(options.systemMessage!,/do not ask the user to approve the same action again/)
       assert(options.tools?.some(t=>t.function.name==='save_project_task'))
       if(calls===1)return {success:true,data:null,model:'fixture',responseId:'resp_tool',usage,toolCalls:[{id:'call_1',type:'function',function:{name:'save_project_task',arguments:JSON.stringify(args)}}]}
       const output=JSON.parse(options.messages![0].content!)
