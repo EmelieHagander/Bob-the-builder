@@ -8,6 +8,7 @@ const pg=new PGlite()
 const owner='00000000-0000-0000-0000-000000000701'
 const carl='00000000-0000-0000-0000-000000000702'
 const outsider='00000000-0000-0000-0000-000000000703'
+const workspaceOwner='00000000-0000-0000-0000-000000000704'
 const id=(n:number)=>'97000000-0000-4000-8000-'+String(n).padStart(12,'0')
 
 async function as(uid:string|null,sql:string,params:unknown[]=[],role='authenticated'){
@@ -69,11 +70,11 @@ before(async()=>{
     'create policy broad_b on storage.buckets for all to anon,authenticated using(true) with check(true);',
     "insert into storage.buckets(id,name) values('other-app','other-app');",
   ].join('\n'))
-  for(const [i,u] of [owner,carl,outsider].entries()) await pg.query('insert into auth.users values($1,$2,now())',[u,'plan'+i+'@example.test'])
+  for(const [i,u] of [owner,carl,outsider,workspaceOwner].entries()) await pg.query('insert into auth.users values($1,$2,now())',[u,'plan'+i+'@example.test'])
   const legacy=new URL('../db/migrations/',import.meta.url)
   for(const f of (await readdir(legacy)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,legacy),'utf8'))
   await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Shared porch'),('B','b','Private project'),('C','c','Workspace plan project')")
-  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3),('ownerC','C','Owner','OW',$1)",[owner,carl,outsider])
+  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3),('ownerC','C','Owner','OW',$4)",[owner,carl,outsider,workspaceOwner])
   await setupSharedSocial(pg)
   const migrations=new URL('../supabase/migrations/',import.meta.url)
   for(const f of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
@@ -170,7 +171,7 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
 })
 
 test('workspace plan keeps blueprints inert, materializes current work on approval and carries a compact expert briefing',async()=>{
-  await as(owner,"insert into bob.tasks(id,area_id,name,instructions,status) values('existingC','areaC','Inspect support','Check rot and bearing','todo')")
+  await as(workspaceOwner,"insert into bob.tasks(id,area_id,name,instructions,status) values('existingC','areaC','Inspect support','Check rot and bearing','todo')")
   const taskRequirement={requirement_id:null,type:'task',title:'Support inspection completed',description:'The inspection task must actually be done before leaving the Step',
     resolution:'open',responsible_kind:'bob',responsible_person_id:null,
     evidence_selector:{kind:'task',id:'existingC',subject:null,area_id:null}}
@@ -190,20 +191,20 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
     tasks:[{task_key:'draft_connection',task_id:null,area_id:'areaC',title:'Draft connection detail',instructions:'Create the connection detail after geometry is verified.'}],
     requirements:[{requirement_id:null,type:'drawing',title:'Connection detail exists',description:'A current target-linked detail is available',
       resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}]}
-  const proposed=await proposeV2('C',0,{summary:'Verify, then design',reason:'Initial workspace plan',steps:[active,future]})
+  const proposed=await proposeV2('C',0,{summary:'Verify, then design',reason:'Initial workspace plan',steps:[active,future]},workspaceOwner)
   assert.equal(proposed.record.status,'proposed')
-  assert.equal((await as(owner,"select count(*) n from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C'")).rows[0].n,1,
+  assert.equal((await as(workspaceOwner,"select count(*) n from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C'")).rows[0].n,1,
     'Proposal-only task blueprints must not create project Tasks')
   assert.equal(proposed.record.steps[0].brief,active.brief)
   assert.equal(proposed.record.steps[0].tasks[1].status,'planned')
 
-  await decideV2('C',0,1)
-  const tasks=(await as(owner,"select id,name,status from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C' order by name")).rows
+  await decideV2('C',0,1,'approve',workspaceOwner)
+  const tasks=(await as(workspaceOwner,"select id,name,status from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C' order by name")).rows
   assert.equal(tasks.length,2,'Only the current Step blueprint materializes on approval')
   assert(tasks.some((t:any)=>t.name==='Measure roof connection'&&t.status==='todo'))
   assert(!tasks.some((t:any)=>t.name==='Draft connection detail'),'Future Step blueprints stay inside the plan until they become current')
 
-  let b=await briefingV2('C')
+  let b=await briefingV2('C',workspaceOwner)
   assert.deepEqual(b.plan_spine.map((s:any)=>[s.title,s.state]),[['Verify existing structure','active'],['Design the connection','planned']])
   assert.equal(b.current_step.brief,active.brief)
   assert.equal(b.current_step.tasks.length,2)
@@ -211,22 +212,22 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
   assert.equal(b.current_step.requirements[1].status.state,'missing','A materialized blueprint Task still needs to be completed')
   const roofTask=b.current_step.tasks.find((t:any)=>t.task_key==='measure_roof')
   assert(roofTask?.task_id)
-  const approved=(await as(owner,"select bob.project_plan_read_v2('C',1) result")).rows[0].result
+  const approved=(await as(workspaceOwner,"select bob.project_plan_read_v2('C',1) result")).rows[0].result
   assert.equal(approved.record.steps[0].requirements[1].evidence_selector.id,roofTask.task_id,
     'Approval resolves the local @task key to the exact materialized Task ID')
   assert.equal(b.recent_shared_facts.length,0,'Initialized plans do not carry a generic fact dump')
 
-  await as(owner,"update bob.tasks set status='done' where id in ('existingC',$1)",[roofTask.task_id])
-  b=await briefingV2('C')
+  await as(workspaceOwner,"update bob.tasks set status='done' where id in ('existingC',$1)",[roofTask.task_id])
+  b=await briefingV2('C',workspaceOwner)
   assert.equal(b.current_step.requirements[0].status.state,'satisfied','Existing Task evidence satisfies only when the Task is done')
   assert.equal(b.current_step.requirements[1].status.state,'satisfied','Blueprint Task evidence satisfies after its real Task is done')
 
   const futureId=b.plan_spine[1].id
-  const exact=(await as(owner,'select bob.project_plan_step_read($1,$2,$3) result',['C',futureId,null])).rows[0].result
+  const exact=(await as(workspaceOwner,'select bob.project_plan_step_read($1,$2,$3) result',['C',futureId,null])).rows[0].result
   assert.equal(exact.record.title,'Design the connection')
   assert.equal(exact.record.brief,future.brief)
   assert.equal(exact.record.tasks[0].status,'planned')
-  const lookup=(await as(owner,"select bob.search_bob_project_data_v9('C','plan',null,null,null,$1,null) result",[futureId])).rows[0].result
+  const lookup=(await as(workspaceOwner,"select bob.search_bob_project_data_v9('C','plan',null,null,null,$1,null) result",[futureId])).rows[0].result
   assert.equal(lookup.records[0].title,'Design the connection')
 })
 
