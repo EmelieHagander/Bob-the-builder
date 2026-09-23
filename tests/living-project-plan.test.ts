@@ -174,13 +174,16 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
   const taskRequirement={requirement_id:null,type:'task',title:'Support inspection completed',description:'The inspection task must actually be done before leaving the Step',
     resolution:'open',responsible_kind:'bob',responsible_person_id:null,
     evidence_selector:{kind:'task',id:'existingC',subject:null,area_id:null}}
+  const blueprintRequirement={requirement_id:null,type:'task',title:'Roof connection measured',description:'The planned measurement Task must be completed before leaving the Step',
+    resolution:'open',responsible_kind:'bob',responsible_person_id:null,
+    evidence_selector:{kind:'task',id:'@task:measure_roof',subject:null,area_id:null}}
   const active={step_id:null,title:'Verify existing structure',goal:'Know what can safely carry the new work',
     brief:'Work from observed structure. Confirm support condition before deciding the next construction detail.',
     state:'active',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
     tasks:[
       {task_key:'inspect_support',task_id:'existingC',area_id:'areaC',title:'Inspect support',instructions:'Check rot and bearing'},
       {task_key:'measure_roof',task_id:null,area_id:'areaC',title:'Measure roof connection',instructions:'Measure the actual roof connection and record the reference clearly.'},
-    ],requirements:[taskRequirement]}
+    ],requirements:[taskRequirement,blueprintRequirement]}
   const future={step_id:null,title:'Design the connection',goal:'Turn verified geometry into a buildable connection',
     brief:'Use the verified structure and dimensions; do not carry forward assumptions from the investigation Step.',
     state:'planned',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
@@ -205,18 +208,25 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
   assert.equal(b.current_step.brief,active.brief)
   assert.equal(b.current_step.tasks.length,2)
   assert.equal(b.current_step.requirements[0].status.state,'missing','Task existence is not task completion')
+  assert.equal(b.current_step.requirements[1].status.state,'missing','A materialized blueprint Task still needs to be completed')
+  const roofTask=b.current_step.tasks.find((t:any)=>t.task_key==='measure_roof')
+  assert(roofTask?.task_id)
+  const approved=(await as(owner,"select bob.project_plan_read_v2('C',1) result")).rows[0].result
+  assert.equal(approved.record.steps[0].requirements[1].evidence_selector.id,roofTask.task_id,
+    'Approval resolves the local @task key to the exact materialized Task ID')
   assert.equal(b.recent_shared_facts.length,0,'Initialized plans do not carry a generic fact dump')
 
-  await as(owner,"update bob.tasks set status='done' where id='existingC'")
+  await as(owner,"update bob.tasks set status='done' where id in ('existingC',$1)",[roofTask.task_id])
   b=await briefingV2('C')
-  assert.equal(b.current_step.requirements[0].status.state,'satisfied','Task evidence satisfies only when the Task is done')
+  assert.equal(b.current_step.requirements[0].status.state,'satisfied','Existing Task evidence satisfies only when the Task is done')
+  assert.equal(b.current_step.requirements[1].status.state,'satisfied','Blueprint Task evidence satisfies after its real Task is done')
 
   const futureId=b.plan_spine[1].id
   const exact=(await as(owner,'select bob.project_plan_step_read($1,$2,$3) result',['C',futureId,null])).rows[0].result
   assert.equal(exact.record.title,'Design the connection')
   assert.equal(exact.record.brief,future.brief)
   assert.equal(exact.record.tasks[0].status,'planned')
-  const lookup=(await as(owner,"select bob.search_bob_project_data_v9('C','plan_step',null,null,null,$1,null) result",[futureId])).rows[0].result
+  const lookup=(await as(owner,"select bob.search_bob_project_data_v9('C','plan',null,null,null,$1,null) result",[futureId])).rows[0].result
   assert.equal(lookup.records[0].title,'Design the connection')
 })
 
