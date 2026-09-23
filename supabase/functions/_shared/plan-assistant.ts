@@ -35,6 +35,19 @@ export const AUDIT_PLAN_TOOL={
   },
 }
 
+export const SAVE_COMPILED_PLAN_TOOL={
+  type:'function' as const,
+  function:{
+    name:'save_compiled_project_plan',
+    description:'Save the exact current-turn plan compilation that already passed Bob\'s server validation and independent nano review. This creates only a reviewable proposal, never approval. Do not reconstruct the plan JSON yourself.',
+    parameters:{
+      type:'object',additionalProperties:false,
+      properties:{request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this plan proposal.'}},
+      required:['request_quote'],
+    },
+  },
+}
+
 const proposalSteps=(PLAN_PROPOSAL_TOOL.function.parameters.properties as Record<string,any>).steps
 const compilationSchema={
   type:'object',additionalProperties:false,
@@ -217,9 +230,12 @@ export function createPlanAssistant(opts:{
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
   let used=0,partial=false
+  let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[]}=null
   const sources:ProjectSource[]=[]
   return {
     tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL],
+    get canSave(){return savableProposal!==null},
+    get compiledProposal(){return savableProposal?structuredClone(savableProposal):null},
     get remaining(){return Math.max(0,MAX_CALLS-used)},
     get partial(){return partial},
     get sources(){return sources.slice()},
@@ -228,6 +244,7 @@ export function createPlanAssistant(opts:{
         :name===AUDIT_PLAN_TOOL.function.name?'audit_plan' as const
         :null
       if(!mode) return {status:'invalid',saved:false}
+      savableProposal=null
       if(++used>MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
       const args=object(value)?value:{}
       const planIntent=mode==='compile_plan'&&Object.keys(args).length===1&&text(args.plan_intent,12000)
@@ -278,14 +295,19 @@ export function createPlanAssistant(opts:{
       }else review=reviewer.data
       review.issues=[...localIssues,...(Array.isArray(review.issues)?review.issues:[])]
       if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
+      if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
+        savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
+      }
       for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
       return {
         status:'ok',saved:false,mode,current_revision:expectedRevision,compiled_plan:{
           expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
-        },task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
+        },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note:'Read-only advisory result. Bob owns the plan decision. task_candidates are NOT saved Step↔Task links. A plan proposal does not create those links; after approval use link_project_plan_task and only report a Task as linked after its successful write receipt. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
+        note:savableProposal
+          ? 'Read-only advisory result. Bob owns the plan decision. This exact compilation is ready for save_compiled_project_plan; do not reconstruct propose_project_plan JSON. task_candidates are NOT saved Step↔Task links.'
+          : 'Read-only advisory result. Bob owns the plan decision. The compilation is not cleared for saving; resolve review errors and compile again. task_candidates are NOT saved Step↔Task links.',
       }
     },
   }

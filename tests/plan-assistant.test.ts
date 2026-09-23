@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
+import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL, SAVE_COMPILED_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
@@ -40,7 +40,7 @@ const compiled={
 const cleanReview={ready_to_save:true,summary:'Compilation is semantically grounded.',issues:[]}
 
 function response<T>(data:T,model:string):OpenAIServiceResponse<T>{
-  return {success:true,data,model,usage,responseId:'resp_'+model}
+  return {success:true,data:structuredClone(data),model,usage,responseId:'resp_'+model}
 }
 
 test('compile tool needs only Bob intent; server supplies revision and mini+nano remain read-only',async()=>{
@@ -55,6 +55,7 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
     plan_intent:'First verify the opening, then frame it.'
   })
   assert.equal(result.status,'ok');assert.equal(result.saved,false);assert.equal(result.current_revision,0)
+  assert.equal(result.proposal_ready,true);assert.equal(assistant.canSave,true)
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
   assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low')
@@ -106,6 +107,7 @@ test('local validation cannot be overruled by a cheerful nano review',async()=>{
   })
   const result:any=await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening.'})
   assert.equal(result.review.ready_to_save,false)
+  assert.equal(result.proposal_ready,false);assert.equal(assistant.canSave,false)
   assert(result.review.issues.some((i:any)=>i.code==='unknown_task_id'&&i.severity==='error'))
 })
 
@@ -154,4 +156,62 @@ test('tool registry exposes two simple core read-only capabilities and not the l
   assert.deepEqual(COMPILE_PLAN_TOOL.function.parameters.required,['plan_intent'])
   assert.deepEqual(AUDIT_PLAN_TOOL.function.parameters.properties,{})
   assert.equal(assistant.remaining,2)
+})
+
+
+test('reviewed compilation is saved verbatim through one-field bridge instead of model reserialization',async()=>{
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async (o:OpenAIServiceOptions)=>o.functionName==='plan-compiler'
+      ? response(compiled,'gpt-5.4-mini')
+      : response(cleanReview,'gpt-5.4-nano'),
+  })
+  let saved:any=null
+  const writer:any={
+    get remaining(){return 8},
+    write:async(name:string,value:unknown)=>{saved={name,value};return{status:'saved',receipt:{projectId:'A',dataset:'plan',recordId:'A',label:'Plan proposal v1',operation:'created',savedAt:'2026-09-23T00:00:00Z',record:{}}}},
+  }
+  const rows=[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Fixture',
+    schema_version:1,always_load:true,preload_phases:[],active:true,
+  }))
+  const session=createBobToolSession({
+    lookup:makeLookup(),writer,planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows}),
+  })
+  let tools=await session.prepare()
+  assert(!tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name),'save stays hidden until a clean current-turn compilation exists')
+  const result:any=await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening, then frame.'})
+  assert.equal(result.proposal_ready,true)
+  const expected=assistant.compiledProposal
+  tools=await session.prepare()
+  assert(tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name))
+  const savedResult:any=await session.execute(SAVE_COMPILED_PLAN_TOOL.function.name,{request_quote:'rätta till planen'})
+  assert.equal(savedResult.status,'saved')
+  assert.equal(saved.name,'propose_project_plan')
+  assert.deepEqual(saved.value,{...expected,request_quote:'rätta till planen'})
+  assert.equal(Object.keys(saved.value).length,5,'bridge supplies the exact write schema without model-copying nested JSON')
+})
+
+test('compiled save bridge remains unavailable after reviewer blocks the proposal',async()=>{
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async (o:OpenAIServiceOptions)=>o.functionName==='plan-compiler'
+      ? response(compiled,'gpt-5.4-mini')
+      : response({ready_to_save:false,summary:'Fix evidence first',issues:[{
+        severity:'error',code:'evidence_mismatch',step_position:1,requirement_position:1,evidence_id:measurementId,
+        message:'Wrong evidence',suggestion:'Use the matching measurement',
+      }]},'gpt-5.4-nano'),
+  })
+  await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening.'})
+  assert.equal(assistant.canSave,false);assert.equal(assistant.compiledProposal,null)
+  const rows=[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Fixture',
+    schema_version:1,always_load:true,preload_phases:[],active:true,
+  }))
+  const session=createBobToolSession({
+    lookup:makeLookup(),writer:{remaining:8,write:async()=>{throw new Error('must not save')}} as any,
+    planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows}),
+  })
+  const tools=await session.prepare()
+  assert(!tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name))
 })

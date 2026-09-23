@@ -684,3 +684,8 @@ Bob remains the project manager. Runtime exposes two read-only assistant calls:
 - `audit_project_plan({})` — no project/revision arguments. The server audits the current approved living plan against current authorised project evidence.
 
 The former multiplexed `consult_plan_assistant` contract is retired because making Bob also carry mode/revision plumbing caused avoidable invalid tool calls. Task candidates remain advisory until a real `link_project_plan_task` write receipt exists.
+
+
+### Reviewed-plan save bridge
+
+When `compile_project_plan` returns `proposal_ready=true`, Bob must not reconstruct the nested plan payload himself. The turn retains the exact reviewed compilation server-side and exposes `save_compiled_project_plan({ request_quote })`. That write remains Bob's action, passes through the normal write/receipt boundary, creates only a proposal, and preserves mini/nano as read-only assistants. If review blocks the compilation, the save bridge is not available.
