@@ -393,5 +393,7 @@ test('exhausted repair reports its limit and logs only structural diagnostics',a
   assert.equal(diagnostics.length,2)
   assert.deepEqual(diagnostics.map(d=>d.attempt),[1,2])
   assert(diagnostics.every(d=>d.shape_valid===true&&d.review_error_count===1))
+  assert(diagnostics.every(d=>d.review_issues[0].code==='unclassified'))
+  assert(diagnostics.every(d=>d.review_issues[0].step_position===1&&d.review_issues[0].requirement_position===1))
   assert(!JSON.stringify(logs).includes(privateText));assert(!JSON.stringify(logs).includes(measurementId))
 })

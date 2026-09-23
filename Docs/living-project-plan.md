@@ -740,8 +740,9 @@ Evidence semantics remain an independent review gate: knowing a door width still
 does not prove its centered placement.
 
 Each review attempt logs only shape-validity, availability, readiness, server-owned
-validation codes and row positions, and a semantic error count. No project text,
-record IDs, reviewer prose or model-selected codes enter these logs. An exhausted
+validation codes and row positions, and semantic issue categories from a fixed
+allowlist with bounded row positions. No project text, record IDs, reviewer prose
+or arbitrary model-selected codes enter these logs. An exhausted
 repair result includes its remaining-attempt count and explicitly tells Bob to
 report the attempted repair rather than offer an unavailable immediate retry.
 

@@ -73,6 +73,8 @@ const compilationSchema={
   required:['expected_revision','summary','reason','steps','task_candidates','observations'],
 }
 
+const REVIEW_CODES=['active_step_count','bundled_requirement','evidence_mismatch','unresolved_conflict',
+  'identity_mismatch','task_not_completion_proof','strategy_changed','incomplete_snapshot','uncertainty','other'] as const
 const reviewSchema={
   type:'object',additionalProperties:false,
   properties:{
@@ -83,7 +85,7 @@ const reviewSchema={
         type:'object',additionalProperties:false,
         properties:{
           severity:{type:'string',enum:['info','warning','error']},
-          code:{type:'string'},
+          code:{type:'string',enum:[...REVIEW_CODES]},
           step_position:{type:['integer','null']},
           requirement_position:{type:['integer','null']},
           evidence_id:{type:['string','null']},
@@ -317,14 +319,21 @@ export function createPlanAssistant(opts:{
           partial=true
           review={ready_to_save:false,summary:'Nano review unavailable.',issues:[{severity:'error',code:'review_unavailable',step_position:null,requirement_position:null,evidence_id:null,message:'The independent plan review did not complete.',suggestion:'Retry the assistant when review is available; do not bypass the independent review.'}]}
         }else review=reviewer.data
-        review.issues=[...localIssues,...(Array.isArray(review.issues)?review.issues:[])]
+        const semanticIssues=Array.isArray(review.issues)?review.issues:[]
+        review.issues=[...localIssues,...semanticIssues]
         if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
         // Log only server-owned codes/counts/positions, never project text, ids,
         // reviewer prose or raw model-selected issue codes.
         console.log('[Bob plan review]',JSON.stringify({mode,attempt:attempts,shape_valid:parsed!==null,
           reviewer_available:reviewer.success&&!!reviewer.data,ready_to_save:review.ready_to_save===true,
           local_issues:localIssues.map(i=>({code:i.code,step_position:i.step_position,requirement_position:i.requirement_position})),
-          review_error_count:review.issues.filter((i:any)=>i.severity==='error').length-localIssues.filter(i=>i.severity==='error').length}))
+          review_error_count:semanticIssues.filter((i:any)=>i.severity==='error').length,
+          review_issues:semanticIssues.slice(0,40).map((i:any)=>({
+            code:REVIEW_CODES.includes(i.code)?i.code:'unclassified',
+            severity:['info','warning','error'].includes(i.severity)?i.severity:'unclassified',
+            step_position:Number.isSafeInteger(i.step_position)&&i.step_position>=1&&i.step_position<=30?i.step_position:null,
+            requirement_position:Number.isSafeInteger(i.requirement_position)&&i.requirement_position>=1&&i.requirement_position<=20?i.requirement_position:null,
+          }))}))
         if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
           savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
         }
