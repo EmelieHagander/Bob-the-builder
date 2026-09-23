@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPlanAssistant, PLAN_ASSISTANT_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
+import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
 const usage={input_tokens:10,output_tokens:5,total_tokens:15}
@@ -96,4 +97,22 @@ test('assistant is bounded, read-only and mode inputs fail closed',async()=>{
   await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'B'})
   assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'C'}) as any).status,'budget_exhausted')
   assert.equal(modelCalls,4)
+})
+
+
+test('tool registry can expose the assistant as a core read-only capability',async()=>{
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async()=>{throw new Error('model should not run during prepare')},
+  })
+  const session=createBobToolSession({
+    lookup:makeLookup(),planAssistant:assistant,
+    readPolicy:async()=>({phase:null,tools:[{
+      name:PLAN_ASSISTANT_TOOL.function.name,description:'Plan assistant',how_to:'Read-only assistant',
+      schema_version:1,always_load:true,preload_phases:[],active:true,
+    }]}),
+  })
+  const tools=await session.prepare()
+  assert(tools.some(t=>t.function.name===PLAN_ASSISTANT_TOOL.function.name))
+  assert.equal(assistant.remaining,2)
 })
