@@ -114,6 +114,8 @@ test('server safeguards remain separate from the persona and old voice overrides
   assert.match(BOB_TRUTH_RULES, /Step brief is your concise self-prompt/)
   assert.match(BOB_TRUTH_RULES, /consult_plan_assistant in compile_plan mode/)
   assert.match(BOB_TRUTH_RULES, /You own the strategy; the assistant only grounds it/)
+  assert.match(BOB_TRUTH_RULES, /propose_project_plan never creates Step↔Task links/)
+  assert.match(BOB_TRUTH_RULES, /successful write receipt for that Task/)
   assert.match(BOB_TRUTH_RULES, /Text is literal, not SQL/)
   assert(!BOB_TRUTH_RULES.includes(BOB_PERSONA))
   assert.doesNotMatch(system, /# Identity|# Expertise|# Voice|Be concise, practical and calm/)
