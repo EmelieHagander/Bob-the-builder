@@ -29,6 +29,13 @@ test('core plus phase preloads, never every large schema or guide', async () => 
   f.setPhase('unrecognised'); assert(!names(await f.make().prepare()).includes('draw_shape'))
 })
 
+test('core tools remain offered when project phase is null', async () => {
+  const f = fixture(); f.setPhase(null)
+  const tools = await f.make().prepare()
+  assert(names(tools).includes('read_records'))
+  assert(!names(tools).includes('draw_shape'))
+})
+
 test('browse names and short descriptions, exact load hydrates the schema on the next iteration, then executes', async () => {
   const f = fixture(); await f.session.prepare()
   const listed = await f.session.execute('list_tools', browse)
