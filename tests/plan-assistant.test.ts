@@ -45,9 +45,9 @@ test('mini compiles and nano reviews while Bob retains the write decision',async
   const calls:OpenAIServiceOptions[]=[]
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
-    callModel:async <T>(o:OpenAIServiceOptions)=>{calls.push(o);return (o.functionName==='plan-compiler'
+    callModel:async (o:OpenAIServiceOptions)=>{calls.push(o);return o.functionName==='plan-compiler'
       ? response(compiled,'gpt-5.4-mini')
-      : response(cleanReview,'gpt-5.4-nano')) as OpenAIServiceResponse<T>},
+      : response(cleanReview,'gpt-5.4-nano')},
   })
   const result:any=await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{
     mode:'compile_plan',expected_revision:0,plan_intent:'First verify the opening, then frame it.'
@@ -70,9 +70,9 @@ test('local validation cannot be overruled by a cheerful nano review',async()=>{
   const bad={...compiled,task_candidates:[{...compiled.task_candidates[0],task_id:'invented-task'}]}
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
-    callModel:async <T>(o:OpenAIServiceOptions)=>(o.functionName==='plan-compiler'
+    callModel:async (o:OpenAIServiceOptions)=>o.functionName==='plan-compiler'
       ? response(bad,'gpt-5.4-mini')
-      : response(cleanReview,'gpt-5.4-nano')) as OpenAIServiceResponse<T>,
+      : response(cleanReview,'gpt-5.4-nano'),
   })
   const result:any=await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{
     mode:'compile_plan',expected_revision:0,plan_intent:'Verify opening.'
@@ -85,9 +85,9 @@ test('assistant is bounded, read-only and mode inputs fail closed',async()=>{
   let modelCalls=0
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
-    callModel:async <T>(o:OpenAIServiceOptions)=>{modelCalls++;return (o.functionName==='plan-compiler'
+    callModel:async (o:OpenAIServiceOptions)=>{modelCalls++;return o.functionName==='plan-compiler'
       ? response(compiled,'gpt-5.4-mini')
-      : response(cleanReview,'gpt-5.4-nano')) as OpenAIServiceResponse<T>},
+      : response(cleanReview,'gpt-5.4-nano')},
   })
   assert.equal((await assistant.consult('invented_tool',{} as any) as any).status,'invalid')
   assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:null}) as any).status,'invalid')
