@@ -8,6 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses } from './openai-service.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup } from './project-lookup.ts'
+import { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectAnswer } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext } from './bob-working-context.ts'
@@ -31,11 +32,12 @@ export async function answerWithOpenAi(opts: {
     db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
   })
   const conversations = createBobConversationStore(internal)
-  const lookup = createProjectLookup(opts.projectId, (projectId, input, signal) =>
+  const lookupTransport = (projectId: string, input: Parameters<ReturnType<typeof createProjectLookup>['search']>[0] & { after_id?: string | null }, signal: AbortSignal) =>
     client.rpc('search_bob_project_data_v8', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
-    }).abortSignal(signal), 10_000, 12)
+    }).abortSignal(signal)
+  const lookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 12)
   const hasAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -72,8 +74,13 @@ export async function answerWithOpenAi(opts: {
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     (input, signal) => client.rpc('catalog_read', { p_project: opts.projectId, p_input: input }).abortSignal(signal),
     hasAccess, lookup.sources)
+  const planAssistant = createPlanAssistant({
+    projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
+    makeLookup: () => createProjectLookup(opts.projectId, lookupTransport, 10_000, 12),
+    callModel: options => callOpenAIResponses(options),
+  })
   return runClaimedProjectTurn({
-    ...opts, lookup, hasAccess, writer, projectContext, catalogReader, generation: claimedServer?.generation, deadline,
+    ...opts, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
