@@ -14,7 +14,6 @@ export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
   catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
-  currentRequest?: string;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const definitions: ToolDefinition[] = [
