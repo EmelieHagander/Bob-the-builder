@@ -1,6 +1,6 @@
 # Living project plan — steps, completion requirements and replanning
 
-**Status: foundation + active workspace deployed; read-only plan-assistant implementation pending release.**
+**Status: foundation + active workspace + read-only mini/nano plan assistant deployed; simple compile/audit tool surface pending release.**
 
 This document owns Bob's future **living project-plan model**: how a build moves from an idea through dynamic steps, how a step knows what is still missing, how evidence such as measurements/photos/drawings/material state satisfies those needs, who owns the work, and how Bob proposes changes as reality changes.
 
@@ -674,3 +674,13 @@ At any point, Bob and the people building should be able to answer:
 > **What are we doing now, what is still needed to finish this step, who owns it, what evidence do we already have, and what changed the plan?**
 
 That shared answer is the living project plan.
+
+
+## Simple plan-assistant tool surface
+
+Bob remains the project manager. Runtime exposes two read-only assistant calls:
+
+- `compile_project_plan({ plan_intent })` — Bob supplies only his project-manager intent. The server resolves the current approved plan revision and project binding before mini compiles and nano reviews.
+- `audit_project_plan({})` — no project/revision arguments. The server audits the current approved living plan against current authorised project evidence.
+
+The former multiplexed `consult_plan_assistant` contract is retired because making Bob also carry mode/revision plumbing caused avoidable invalid tool calls. Task candidates remain advisory until a real `link_project_plan_task` write receipt exists.
