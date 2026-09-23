@@ -7,7 +7,7 @@ import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses } from './openai-service.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
-import { createProjectLookup } from './project-lookup.ts'
+import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectAnswer } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
@@ -32,7 +32,7 @@ export async function answerWithOpenAi(opts: {
     db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
   })
   const conversations = createBobConversationStore(internal)
-  const lookupTransport = (projectId: string, input: Parameters<ReturnType<typeof createProjectLookup>['search']>[0] & { after_id?: string | null }, signal: AbortSignal) =>
+  const lookupTransport = (projectId: string, input: LookupInput, signal: AbortSignal) =>
     client.rpc('search_bob_project_data_v8', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
