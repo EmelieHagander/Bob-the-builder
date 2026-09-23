@@ -40,7 +40,7 @@ const compiled={
 const cleanReview={ready_to_save:true,summary:'Compilation is semantically grounded.',issues:[]}
 
 function response<T>(data:T,model:string):OpenAIServiceResponse<T>{
-  return {success:true,data,model,usage,responseId:'resp_'+model}
+  return {success:true,data:structuredClone(data),model,usage,responseId:'resp_'+model}
 }
 
 test('compile tool needs only Bob intent; server supplies revision and mini+nano remain read-only',async()=>{
