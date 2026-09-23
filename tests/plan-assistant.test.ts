@@ -56,6 +56,7 @@ test('mini compiles and nano reviews while Bob retains the write decision',async
   assert.equal(result.status,'ok');assert.equal(result.saved,false)
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
+  assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low','nano fallback uses a supported GPT-5.4 reasoning effort')
   assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,undefined,'model choice stays in shared.ai_settings')
   assert.match(calls[0].systemMessage!,/Bob is the project manager/)
   assert.match(calls[1].systemMessage!,/Bob remains the project manager/)
