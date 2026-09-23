@@ -5,7 +5,7 @@ import { WRITE_TOOLS, type ProjectWriter } from '../project-write.ts'
 import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
 import type { ProjectContext } from '../project-context/dispatcher.ts'
 import type { MaterialCatalogReader } from '../material-catalog.ts'
-import type { createPlanAssistant } from '../plan-assistant.ts'
+import { SAVE_COMPILED_PLAN_TOOL, type createPlanAssistant } from '../plan-assistant.ts'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
 
 /** Sole handler-registration seam. Catalog names/forms/profiles are data; loading
@@ -14,6 +14,7 @@ export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
   catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  currentRequest?: string;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const definitions: ToolDefinition[] = [
@@ -38,6 +39,16 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => opts.planAssistant!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.planAssistant!.consult(spec.function.name, v),
     })),
+    ...(opts.planAssistant ? [{
+      spec:SAVE_COMPILED_PLAN_TOOL,version:1,
+      gate:():ToolGate=>!opts.writer?'not_allowed':opts.planAssistant!.canSave?'available':'missing_context',
+      execute:async(v:unknown)=>{
+        if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
+        const proposal=opts.planAssistant!.compiledProposal
+        if(!proposal) return {status:'missing_context',saved:false}
+        return opts.writer!.write('propose_project_plan',{...proposal,request_quote:(v as any).request_quote})
+      },
+    }] : []),
   ]
   return createToolSession({ definitions, readPolicy: opts.readPolicy })
 }
