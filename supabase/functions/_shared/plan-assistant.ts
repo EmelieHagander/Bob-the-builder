@@ -224,9 +224,9 @@ export function createPlanAssistant(opts:{
     get partial(){return partial},
     get sources(){return sources.slice()},
     async consult(name:string,value:unknown){
-      const mode:Mode=name===COMPILE_PLAN_TOOL.function.name?'compile_plan'
-        :name===AUDIT_PLAN_TOOL.function.name?'audit_plan'
-        :null as never
+      const mode=name===COMPILE_PLAN_TOOL.function.name?'compile_plan' as const
+        :name===AUDIT_PLAN_TOOL.function.name?'audit_plan' as const
+        :null
       if(!mode) return {status:'invalid',saved:false}
       if(++used>MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
       const args=object(value)?value:{}
