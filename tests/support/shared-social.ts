@@ -6,6 +6,34 @@ export async function setupSharedSocial(pg: PGlite) {
     create schema shared;
     create type shared.access_status as enum ('invited','active','revoked');
     create type shared.access_level as enum ('member','admin');
+    -- Minimal cross-app AI catalogue/settings contract. Bob migrations may seed
+    -- their own function configuration, but tests never need real provider data.
+    create type shared.ai_model_type as enum ('nano','mini','standard','image','embedding');
+    create type shared.ai_reasoning_effort as enum ('minimal','low','medium','high');
+    create table shared.ai_models(
+      model_name text primary key,
+      is_active boolean not null default true
+    );
+    insert into shared.ai_models(model_name,is_active)
+      values('gpt-5.4-mini',true),('gpt-5.4-nano',true);
+    create table shared.ai_settings(
+      id uuid primary key default gen_random_uuid(),
+      app text not null,
+      coworker_id text not null,
+      function_name text not null,
+      module_id text not null,
+      model text references shared.ai_models(model_name),
+      model_type shared.ai_model_type,
+      max_output_tokens integer,
+      temperature numeric,
+      reasoning_effort shared.ai_reasoning_effort,
+      prompt_template text,
+      web_search boolean,
+      is_enabled boolean,
+      metadata jsonb,
+      updated_at timestamptz not null default clock_timestamp(),
+      unique(app,coworker_id,function_name,module_id)
+    );
     create table shared.households(id uuid primary key default gen_random_uuid(),name text not null);
     create table shared.members(id uuid primary key default gen_random_uuid(),household_id uuid not null references shared.households(id),display_name text not null,unique(id,household_id));
     create table shared.household_access(id uuid primary key default gen_random_uuid(),household_id uuid not null references shared.households(id),
