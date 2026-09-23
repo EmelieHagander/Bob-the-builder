@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPlanAssistant, PLAN_ASSISTANT_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
+import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
@@ -15,9 +15,10 @@ const projectData:Record<string,any[]>={
   measurements:[{id:measurementId,subject:'Opening width',value:'910',unit:'mm',truth:'measured',area_id:'areaA',revision:2}],
   components:[],solutions:[],target:[],artifacts:[],requirements:[],plan:[],
 }
-const makeLookup=()=>createProjectLookup('A',async(_project,input)=>({
-  data:{records:projectData[input.dataset]??[],related:[],truncated:false,next_cursor:null},error:null,
+const makeLookupFor=(data:Record<string,any[]>)=>()=>createProjectLookup('A',async(_project,input)=>({
+  data:{records:data[input.dataset]??[],related:[],truncated:false,next_cursor:null},error:null,
 }),1000,12)
+const makeLookup=makeLookupFor(projectData)
 
 const compiled={
   expected_revision:0,
@@ -42,7 +43,7 @@ function response<T>(data:T,model:string):OpenAIServiceResponse<T>{
   return {success:true,data,model,usage,responseId:'resp_'+model}
 }
 
-test('mini compiles and nano reviews while Bob retains the write decision',async()=>{
+test('compile tool needs only Bob intent; server supplies revision and mini+nano remain read-only',async()=>{
   const calls:OpenAIServiceOptions[]=[]
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
@@ -50,13 +51,15 @@ test('mini compiles and nano reviews while Bob retains the write decision',async
       ? response(compiled,'gpt-5.4-mini')
       : response(cleanReview,'gpt-5.4-nano')},
   })
-  const result:any=await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{
-    mode:'compile_plan',expected_revision:0,plan_intent:'First verify the opening, then frame it.'
+  const result:any=await assistant.consult(COMPILE_PLAN_TOOL.function.name,{
+    plan_intent:'First verify the opening, then frame it.'
   })
-  assert.equal(result.status,'ok');assert.equal(result.saved,false)
+  assert.equal(result.status,'ok');assert.equal(result.saved,false);assert.equal(result.current_revision,0)
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
-  assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low','nano fallback uses a supported GPT-5.4 reasoning effort')
+  assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low')
+  const prompt=JSON.parse(String(calls[0].prompt))
+  assert.equal(prompt.expected_revision,0);assert.equal(prompt.plan_intent,'First verify the opening, then frame it.')
   assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,undefined,'model choice stays in shared.ai_settings')
   assert.match(calls[0].systemMessage!,/Bob is the project manager/)
   assert.match(calls[1].systemMessage!,/Bob remains the project manager/)
@@ -65,10 +68,32 @@ test('mini compiles and nano reviews while Bob retains the write decision',async
   assert.equal(result.task_candidates[0].task_id,taskId)
   assert.equal(result.task_links_saved,false)
   assert.match(result.note,/NOT saved Step↔Task links/)
-  assert.match(result.note,/successful write receipt/)
-  assert(result.note.includes('Bob owns the plan decision'))
   assert(assistant.sources.some(s=>s.recordId===measurementId))
   assert(assistant.sources.some(s=>s.recordId===taskId))
+})
+
+test('server derives current approved revision for compile and audit; Bob cannot supply revision plumbing',async()=>{
+  const current={...projectData,plan:[{id:'A',name:'Living project plan v7',revision:7,steps:[]}]}
+  const makeCurrentLookup=makeLookupFor(current)
+  const calls:OpenAIServiceOptions[]=[]
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup:makeCurrentLookup,
+    callModel:async (o:OpenAIServiceOptions)=>{
+      calls.push(o)
+      return o.functionName==='plan-compiler'
+        ? response({...compiled,expected_revision:7},'gpt-5.4-mini')
+        : response(cleanReview,'gpt-5.4-nano')
+    },
+  })
+  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{
+    plan_intent:'Keep the same sequence but make geometry the active desk.',expected_revision:999
+  }) as any).status,'invalid','legacy revision plumbing is rejected rather than trusted')
+  const audit:any=await assistant.consult(AUDIT_PLAN_TOOL.function.name,{})
+  assert.equal(audit.status,'ok');assert.equal(audit.current_revision,7);assert.equal(audit.mode,'audit_plan')
+  const compilerPrompt=JSON.parse(String(calls[0].prompt))
+  assert.equal(compilerPrompt.expected_revision,7)
+  assert.equal(compilerPrompt.plan_intent,null)
+  assert.equal(compilerPrompt.mode,'audit_plan')
 })
 
 test('local validation cannot be overruled by a cheerful nano review',async()=>{
@@ -79,14 +104,22 @@ test('local validation cannot be overruled by a cheerful nano review',async()=>{
       ? response(bad,'gpt-5.4-mini')
       : response(cleanReview,'gpt-5.4-nano'),
   })
-  const result:any=await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{
-    mode:'compile_plan',expected_revision:0,plan_intent:'Verify opening.'
-  })
+  const result:any=await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening.'})
   assert.equal(result.review.ready_to_save,false)
   assert(result.review.issues.some((i:any)=>i.code==='unknown_task_id'&&i.severity==='error'))
 })
 
-test('assistant is bounded, read-only and mode inputs fail closed',async()=>{
+test('audit without a current plan stops before model calls',async()=>{
+  let modelCalls=0
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async()=>{modelCalls++;return response(cleanReview,'fixture')},
+  })
+  const result:any=await assistant.consult(AUDIT_PLAN_TOOL.function.name,{})
+  assert.equal(result.status,'not_initialized');assert.equal(result.saved,false);assert.equal(modelCalls,0)
+})
+
+test('assistant is bounded and simple tool shapes fail closed',async()=>{
   let modelCalls=0
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
@@ -94,30 +127,31 @@ test('assistant is bounded, read-only and mode inputs fail closed',async()=>{
       ? response(compiled,'gpt-5.4-mini')
       : response(cleanReview,'gpt-5.4-nano')},
   })
-  assert.equal((await assistant.consult('invented_tool',{} as any) as any).status,'invalid')
-  assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:null}) as any).status,'invalid')
+  assert.equal((await assistant.consult('consult_plan_assistant',{mode:'compile_plan',expected_revision:0,plan_intent:'A'}) as any).status,'invalid')
+  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'A',mode:'compile_plan'}) as any).status,'invalid')
   assert.equal(modelCalls,0)
-  await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'A'})
-  assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'B'}) as any).status,'budget_exhausted',
-    'Malformed attempts consume the bounded assistant budget just like other Bob tools')
-  assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'C'}) as any).status,'budget_exhausted')
+  await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'A'})
+  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'B'}) as any).status,'budget_exhausted')
   assert.equal(modelCalls,2)
 })
 
-
-test('tool registry can expose the assistant as a core read-only capability',async()=>{
+test('tool registry exposes two simple core read-only capabilities and not the legacy multiplexer',async()=>{
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
     callModel:async()=>{throw new Error('model should not run during prepare')},
   })
+  const rows=[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Read-only assistant',
+    schema_version:1,always_load:true,preload_phases:[],active:true,
+  }))
   const session=createBobToolSession({
-    lookup:makeLookup(),planAssistant:assistant,
-    readPolicy:async()=>({phase:null,tools:[{
-      name:PLAN_ASSISTANT_TOOL.function.name,description:'Plan assistant',how_to:'Read-only assistant',
-      schema_version:1,always_load:true,preload_phases:[],active:true,
-    }]}),
+    lookup:makeLookup(),planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows}),
   })
   const tools=await session.prepare()
-  assert(tools.some(t=>t.function.name===PLAN_ASSISTANT_TOOL.function.name))
+  assert(tools.some(t=>t.function.name===COMPILE_PLAN_TOOL.function.name))
+  assert(tools.some(t=>t.function.name===AUDIT_PLAN_TOOL.function.name))
+  assert(!tools.some(t=>t.function.name==='consult_plan_assistant'))
+  assert.deepEqual(COMPILE_PLAN_TOOL.function.parameters.required,['plan_intent'])
+  assert.deepEqual(AUDIT_PLAN_TOOL.function.parameters.properties,{})
   assert.equal(assistant.remaining,2)
 })
