@@ -16,7 +16,7 @@ export const PLAN_ASSISTANT_TOOL={
   type:'function' as const,
   function:{
     name:'consult_plan_assistant',
-    description:'Ask Bob\'s read-only planning assistant to ground/compile Bob\'s project-manager plan or audit the current living plan. The assistant never changes project strategy and never writes project data; Bob decides what to save.',
+    description:'Ask Bob\'s read-only planning assistant to ground/compile Bob\'s project-manager plan or audit the current living plan. The assistant never changes project strategy and never writes project data; task_candidates are suggestions, not saved Step↔Task links. Bob decides what to save.',
     parameters:{
       type:'object',additionalProperties:false,
       properties:{
