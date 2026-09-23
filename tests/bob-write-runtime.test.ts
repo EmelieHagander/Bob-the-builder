@@ -39,13 +39,14 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,13)
-  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,13)
+  assert.equal(WRITE_TOOLS.length,14)
+  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,14)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_catalog_definition'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='propose_project_plan'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='decide_project_plan'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='link_project_plan_evidence'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='link_project_plan_task'))
 })
 
 test('catalog revise may preserve metadata with null while ensure still requires concrete metadata',()=>{
@@ -171,7 +172,7 @@ test('living-plan parser keeps proposal, approval and evidence shapes bounded an
   const requirement={requirement_id:null,type:'measurement',title:'Opening width',description:'Measure before cutting',resolution:'open',
     responsible_kind:'person',responsible_person_id:'person-a',evidence_selector:{kind:'measurement',id:null,subject:'Opening width',area_id:'areaA'}}
   const step={step_id:null,title:'Verify opening',goal:'Know the real opening before framing',state:'active',area_id:'areaA',
-    responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[requirement]}
+    responsible_kind:'bob',responsible_person_id:null,notes:'Focus on verified opening geometry and do not cut from conflicted dimensions.',requirements:[requirement]}
   const proposal={expected_revision:0,summary:'Measure, then frame',reason:'Initial plan',steps:[step],request_quote:'Planera projektet'}
   const parsed=parseProjectWrite('propose_project_plan',proposal,'A','Planera projektet')!
   assert.equal(parsed.kind,'plan_proposal');assert.equal(parsed.expected_revision,0)
@@ -181,6 +182,11 @@ test('living-plan parser keeps proposal, approval and evidence shapes bounded an
   const evidence=parseProjectWrite('link_project_plan_evidence',{plan_revision:1,requirement_id:'30000000-0000-4000-8000-000000000001',
     relation:'resolves',evidence_kind:'measurement',evidence_id:'30000000-0000-4000-8000-000000000002',evidence_revision:2,request_quote:'Koppla måttet'},'A','Koppla måttet')!
   assert.equal(evidence.kind,'plan_evidence')
+  const taskLink=parseProjectWrite('link_project_plan_task',{action:'link',plan_revision:1,
+    step_id:'30000000-0000-4000-8000-000000000003',task_id:'task-a',request_quote:'Koppla tasken'},'A','Koppla tasken')!
+  assert.equal(taskLink.kind,'plan_task');assert.equal(taskLink.data.action,'link')
+  assert.equal(parseProjectWrite('link_project_plan_task',{action:'link',plan_revision:1,
+    step_id:'not-a-uuid',task_id:'task-a',request_quote:'Koppla tasken'},'A','Koppla tasken'),null)
   assert.equal(parseProjectWrite('link_project_plan_evidence',{plan_revision:1,requirement_id:'30000000-0000-4000-8000-000000000001',
     relation:'resolves',evidence_kind:'measurement',evidence_id:'30000000-0000-4000-8000-000000000002',evidence_revision:null,request_quote:'Koppla måttet'},'A','Koppla måttet'),null)
 })
