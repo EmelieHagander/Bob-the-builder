@@ -43,12 +43,13 @@ const requirementSchema = {
 const taskSchema = {
   type:'object',additionalProperties:false,
   properties:{
+    task_key:{ type:'string',description:'Short Step-local key (letters/numbers/_/-) used to connect Completion Requirements to this Task, including before a new Task has a project ID.' },
     task_id:{ type:['string','null'],description:'Exact existing project Task ID to reuse, or null for a task blueprint that remains inside the proposal until approval.' },
     area_id:{ type:'string',description:'Exact project Area ID for this Task. When the Step has an Area, the Task must use the same Area.' },
     title:{ type:'string' },
     instructions:{ type:'string',description:'Practical Task instructions. For an existing Task these must match its current saved instructions.' },
   },
-  required:['task_id','area_id','title','instructions'],
+  required:['task_key','task_id','area_id','title','instructions'],
 }
 const stepSchema = {
   type:'object',additionalProperties:false,
@@ -122,17 +123,24 @@ function requirement(v:unknown) {
     && responsibility(v)&&selector(v.evidence_selector)
 }
 function plannedTask(v:unknown) {
-  if(!object(v)||!exact(v,['task_id','area_id','title','instructions'])) return false
-  return (v.task_id===null||text(v.task_id,200))
+  if(!object(v)||!exact(v,['task_key','task_id','area_id','title','instructions'])) return false
+  return text(v.task_key,64)&&/^[a-z][a-z0-9_-]{0,63}$/i.test(String(v.task_key))
+    && (v.task_id===null||text(v.task_id,200))
     && text(v.area_id,200)&&text(v.title,300)&&text(v.instructions,12000,true)
 }
 function step(v:unknown) {
   if(!object(v)||!exact(v,['step_id','title','goal','brief','state','area_id','responsible_kind','responsible_person_id','notes','tasks','requirements'])) return false
+  if(!Array.isArray(v.tasks)||v.tasks.length>20||!v.tasks.every(plannedTask)
+    ||!Array.isArray(v.requirements)||v.requirements.length<1||v.requirements.length>20||!v.requirements.every(requirement)) return false
+  const keys=new Set((v.tasks as Record<string,unknown>[]).map(t=>String(t.task_key)))
+  if(keys.size!==v.tasks.length) return false
+  for(const r of v.requirements as Record<string,unknown>[]) {
+    const s=r.evidence_selector as Record<string,unknown>
+    if(s.kind==='task'&&typeof s.id==='string'&&s.id.startsWith('@task:')&&!keys.has(s.id.slice(6))) return false
+  }
   return (v.step_id===null||(typeof v.step_id==='string'&&uuid.test(v.step_id)))
     && text(v.title,240)&&text(v.goal,4000)&&text(v.brief,1600)&&['planned','active','blocked','completed'].includes(String(v.state))
     && (v.area_id===null||text(v.area_id,200))&&responsibility(v)&&text(v.notes,4000,true)
-    && Array.isArray(v.tasks)&&v.tasks.length<=20&&v.tasks.every(plannedTask)
-    && Array.isArray(v.requirements)&&v.requirements.length>=1&&v.requirements.length<=20&&v.requirements.every(requirement)
 }
 
 export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
