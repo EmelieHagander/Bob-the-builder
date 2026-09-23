@@ -231,7 +231,7 @@ end $$;
 
 create function bob.project_plan_briefing_v2(p_project text) returns jsonb
 language plpgsql stable security invoker set search_path='' as $$
-declare rev integer; meta bob.project_plan_revisions; full jsonb; record jsonb; current_step jsonb;
+declare rev integer; meta bob.project_plan_revisions; plan_doc jsonb; record jsonb; current_step jsonb;
   spine jsonb:='[]'::jsonb; tasks jsonb:='[]'::jsonb; reqs jsonb:='[]'::jsonb;
   task_counts jsonb; req_counts jsonb; recent jsonb:='[]'::jsonb; new_count integer:=0;
 begin
@@ -251,8 +251,8 @@ begin
   end if;
 
   select * into meta from bob.project_plan_revisions where project_id=p_project and revision=rev;
-  full:=bob.project_plan_read_v2(p_project,rev);
-  record:=full->'record';
+  plan_doc:=bob.project_plan_read_v2(p_project,rev);
+  record:=plan_doc->'record';
 
   select coalesce(jsonb_agg(jsonb_build_object(
       'id',e.value->>'id','position',(e.value->>'position')::integer,'title',e.value->>'title','state',e.value->>'state')
