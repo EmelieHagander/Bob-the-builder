@@ -748,3 +748,31 @@ ran two mini/nano pairs through the shared AI service and saved nothing. The fin
 answer reported ID and width/centering issues; raw reviewer payloads were not retained,
 so the exact ID diagnosis is unconfirmed. #117 replaces the orchestration that left
 Bob unable to assess those objections himself.
+
+
+### Delegated prerequisites and nonblocking measurement warnings
+
+The September 23 20:26 UTC v25 retry ended with server validation true and nano
+ready-to-save true, zero errors and one warning. Bob nevertheless withheld the
+proposal because a roof-step reference to a dimension lacked its own measurement
+selector. The dimension already existed in the authorised snapshot; the next user
+request to create it led Bob to find it again and merely offer to continue.
+
+Bob's cross-tool instructions now explicitly distinguish action requests phrased
+as questions from informational questions. Resolving a prerequisite continues the
+same unfinished request: reuse an existing record or record a justified working
+value with honest provenance, then continue the authorised plan work. Unknown
+values are never fabricated, and a saved measured fact is not silently downgraded.
+An uncertain numeric working value is estimated with a verification note; a chosen
+design target is provided_spec. A brief reminder to remeasure does not require a
+new permission loop for the planning work.
+
+Compiler and reviewer instructions distinguish contextual dimensions in Step
+briefs from completion evidence. Not every number needs its own selector. Missing
+future checks can remain open while Bob saves a useful proposal. Actual false
+evidence links and deterministic write errors still require correction; approving
+a plan and performing physical work remain separate from saving a proposal.
+
+These are model instructions in the existing shared AI path, not a new automatic
+write/repair controller. Deterministic tests verify available tool/receipt paths;
+they do not prove that every live model answer will follow the instructions.

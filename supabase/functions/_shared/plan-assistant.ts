@@ -107,7 +107,7 @@ Your job is to translate Bob's intent into Bob's exact living-plan representatio
 Rules:
 - Keep Bob's strategic Step sequence. Ground names, Areas, existing Tasks and evidence to exact current project records.
 - For an unfinished plan, produce exactly one active Step: the current Step Bob should be working in. Future Steps are planned/blocked. Reuse stable Step/Requirement IDs only when the current plan shows the same identity; genuinely new identities are null. Completed Steps are omitted because the server preserves completed history.
-- Step notes are the Step Brief: Bob's compact self-prompt for that Step (purpose, focus, important constraints, what matters). It is not project truth.
+- Step notes are the Step Brief: Bob's compact self-prompt for that Step (purpose, focus, important constraints, what matters). It is not project truth. A known dimension may be contextual guidance in this brief; it does not need a new Completion Requirement or evidence selector merely because it is mentioned. Reuse the matching existing measurement where an atomic criterion actually calls for it. Preserve the record's truth classification.
 - Tasks are actions. Completion Requirements are finish criteria. Do not mirror every Task as a requirement.
 - A Completion Requirement must be atomic enough that its evidence can decide the whole condition. If width and height are independently evidenced, split them. If several independent facts are needed, split them.
 - An exact measurement selector may be used only when that one current measurement semantically proves the entire requirement. Do not let an unrelated dimension satisfy a roof/placement/check requirement just because it exists.
@@ -135,7 +135,7 @@ Mark ready_to_save=false when there is a known semantic error. In particular fla
 - a strategic Step/goal change not supported by Bob's PLAN INTENT.
 
 An open requirement with kind=none honestly records work or evidence still needed. It does not have to be satisfied to save a proposal. Review whether the plan represents the uncertainty truthfully, not whether construction can start or every requirement is complete.
-Use warnings (not errors) for incomplete snapshot coverage or reasonable uncertainty that Bob can resolve with an exact project lookup. Return concise issues and suggested representation fixes. Return only the structured review.`
+Use warnings (not errors) for incomplete snapshot coverage or reasonable uncertainty that Bob can resolve with an exact project lookup. A contextual dimension in a Step brief is not automatically a claim that the Step is complete. Do not demand a separate measurement selector for every number in the prose. Assess whether the completion criteria falsely claim proof; an open future roof/connection check can coexist with a known footprint dimension. Return concise issues and suggested representation fixes. Return only the structured review.`
 
 const pick=(row:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))
 function compact(dataset:string,row:Record<string,unknown>){
@@ -349,7 +349,7 @@ export function createPlanAssistant(opts:{
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
         note: 'Read-only result. Bob owns the plan decision. Nano review is advisory, not permission. Assess its issues against the actual plan and evidence; if a correction is needed, call compile_project_plan again with your updated plan_intent. The server supplies the previous compilation and feedback; no automatic repair has run. '+
           (savableProposal
-            ? 'Server validation passed. If you judge the proposal sound and the current request authorizes it, use save_compiled_project_plan; do not reconstruct propose_project_plan JSON. A mistaken nano objection does not veto your decision. Do not knowingly save mismatched evidence; keep missing evidence as open requirements. '
+            ? 'Server validation passed. If you judge the proposal sound and the current request authorizes it, use save_compiled_project_plan; do not reconstruct propose_project_plan JSON. A mistaken nano objection does not veto your decision. A remaining warning or a contextual dimension without its own selector is not by itself a reason to stop an authorised proposal save. Keep genuine missing evidence as open requirements, save the useful proposal and report any remeasurement follow-up. Do not knowingly save mismatched evidence. '
             : 'Server validation failed or this is audit-only: no compiled proposal is available for saving. Correct the listed server errors before saving. ')+
           (used>=MAX_CALLS?'No compilation attempts remain this turn. Assess the available proposal; if real defects remain, report them and that nothing was saved. Do not offer an immediate retry. ':'You can request another compilation in this turn if needed. ')+
           'This is NOT a missing user permission. Do not ask for repeated approval of an already requested proposal. task_candidates are NOT saved Step↔Task links.',
