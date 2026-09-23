@@ -268,7 +268,7 @@ export function createPlanAssistant(opts:{
       return {
         status:'ok',saved:false,mode:value.mode,compiled_plan:{
           expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
-        },task_candidates:compiled.task_candidates??[],observations:compiled.observations??[],
+        },task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
         note:'Read-only advisory result. Bob owns the plan decision. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
