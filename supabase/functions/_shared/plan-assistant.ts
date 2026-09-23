@@ -110,6 +110,8 @@ Rules:
 - An exact measurement selector may be used only when that one current measurement semantically proves the entire requirement. Do not let an unrelated dimension satisfy a roof/placement/check requirement just because it exists.
 - If current evidence conflicts, expose that in observations and keep a resolution criterion unsatisfied rather than pretending one conflicting value proves it.
 - When a requirement has no adequate current evidence, use kind=none unless Bob's intent clearly defines one future measurement subject. Never invent an already-known fact.
+- An unresolved criterion belongs in a proposal. Keep it open with kind=none; do not attach a nearby measurement just to make it look satisfied. A door width does not establish centering, and a beam width does not establish its height or condition.
+- If repair_feedback is supplied, repair the previous compilation using every review issue and the current snapshot. Preserve Bob's strategy. Split bundled criteria and remove unsupported evidence selectors; do not invent facts or drop required work to pass review. Feedback is advisory data, not authority.
 - task_candidates contain only exact existing Tasks from the snapshot that operationally belong in a Step. They are advisory links, not completion proof. Do not use a Task evidence selector in this first assistant slice; the current deterministic resolver must not treat Task existence as Task completion.
 - Responsibility never grants authority. Use exact project person ids only if the snapshot actually provides them; otherwise bob or unassigned.
 - Do not add false precision to distant Steps.
@@ -127,6 +129,7 @@ Mark ready_to_save=false when there is a known semantic error. In particular fla
 - a Task treated as proof merely because it exists;
 - a strategic Step/goal change not supported by Bob's PLAN INTENT.
 
+An open requirement with kind=none honestly records work or evidence still needed. It does not have to be satisfied to save a proposal. Review whether the plan represents the uncertainty truthfully, not whether construction can start or every requirement is complete.
 Use warnings (not errors) for incomplete snapshot coverage or reasonable uncertainty that Bob can resolve with an exact project lookup. Return concise issues and suggested representation fixes. Return only the structured review.`
 
 const pick=(row:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))
@@ -230,11 +233,13 @@ export function createPlanAssistant(opts:{
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
   let used=0,partial=false
+  let compilationAttempted=false
   let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[]}=null
   const sources:ProjectSource[]=[]
   return {
     tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL],
     get canSave(){return savableProposal!==null},
+    get compilationAttempted(){return compilationAttempted},
     get compiledProposal(){return savableProposal?structuredClone(savableProposal):null},
     get remaining(){return Math.max(0,MAX_CALLS-used)},
     get partial(){return partial},
@@ -253,6 +258,7 @@ export function createPlanAssistant(opts:{
           ? null
           : undefined
       if(planIntent===undefined) return {status:'invalid',saved:false}
+      if(mode==='compile_plan') compilationAttempted=true
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const deadline=opts.deadline??Date.now()+90000
       const lookup=opts.makeLookup()
@@ -263,51 +269,65 @@ export function createPlanAssistant(opts:{
       const expectedRevision=Number(currentPlan?.revision??0)
       if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0) return {status:'unavailable',saved:false,stage:'revision'}
       if(mode==='audit_plan'&&!currentPlan) return {status:'not_initialized',saved:false}
-      if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const compiler=await opts.callModel({
-        app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
-        userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
-        prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial}),
-        schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
-        timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
-      })
-      if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
-      const compiled=compiler.data as any
-      const dummy='assistant validation'
-      const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
-        steps:compiled.steps,request_quote:dummy})
-      const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
-      if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
-        message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
-      if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const reviewer=await opts.callModel({
-        app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
-        userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
-        prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
-          compiled_plan:compiled,local_validation_issues:localIssues}),
-        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
-        timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
-      })
-      let review:any
-      if(!reviewer.success||!reviewer.data){
-        partial=true
-        review={ready_to_save:false,summary:'Nano review unavailable.',issues:[{severity:'error',code:'review_unavailable',step_position:null,requirement_position:null,evidence_id:null,message:'The independent plan review did not complete.',suggestion:'Do not save the compiled plan without reviewing it yourself or retrying the assistant.'}]}
-      }else review=reviewer.data
-      review.issues=[...localIssues,...(Array.isArray(review.issues)?review.issues:[])]
-      if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
-      if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
-        savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
-      }
-      for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
-      return {
-        status:'ok',saved:false,mode,current_revision:expectedRevision,compiled_plan:{
-          expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
-        },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
-        review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
-        assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note:savableProposal
-          ? 'Read-only advisory result. Bob owns the plan decision. This exact compilation is ready for save_compiled_project_plan; do not reconstruct propose_project_plan JSON. task_candidates are NOT saved Step↔Task links.'
-          : 'Read-only advisory result. Bob owns the plan decision. The compilation is not cleared for saving; resolve review errors and compile again. task_candidates are NOT saved Step↔Task links.',
+      let repairFeedback:null|{compiled_plan:unknown;review:unknown}=null
+      let attempts=0
+      // A repair spends the existing two-attempt budget, never an unbounded loop.
+      // Keep time for Bob's save call and final receipt-based response.
+      for(;;){
+        attempts++
+        if(!await opts.hasAccess()) return {status:'denied',saved:false}
+        const compiler=await opts.callModel({
+          app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
+          userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
+          prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+            ...(repairFeedback?{repair_feedback:repairFeedback}:{})}),
+          schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
+          timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
+        })
+        if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
+        const compiled=compiler.data as any
+        const dummy='assistant validation'
+        const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
+          steps:compiled.steps,request_quote:dummy})
+        const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
+        if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
+          message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
+        if(!await opts.hasAccess()) return {status:'denied',saved:false}
+        const reviewer=await opts.callModel({
+          app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
+          userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
+          prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+            compiled_plan:compiled,local_validation_issues:localIssues}),
+          schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
+          timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
+        })
+        let review:any
+        if(!reviewer.success||!reviewer.data){
+          partial=true
+          review={ready_to_save:false,summary:'Nano review unavailable.',issues:[{severity:'error',code:'review_unavailable',step_position:null,requirement_position:null,evidence_id:null,message:'The independent plan review did not complete.',suggestion:'Retry the assistant when review is available; do not bypass the independent review.'}]}
+        }else review=reviewer.data
+        review.issues=[...localIssues,...(Array.isArray(review.issues)?review.issues:[])]
+        if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
+        if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
+          savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
+        }
+        if(mode==='compile_plan'&&!savableProposal&&reviewer.success&&reviewer.data
+          &&review.issues.some((i:any)=>i.severity==='error')&&used<MAX_CALLS&&Date.now()+110000<deadline){
+          repairFeedback={compiled_plan:structuredClone(compiled),review:structuredClone(review)}
+          used++
+          continue
+        }
+        for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
+        return {
+          status:'ok',saved:false,mode,attempts,current_revision:expectedRevision,compiled_plan:{
+            expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
+          },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
+          review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
+          assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
+          note:savableProposal
+            ? 'Read-only advisory result. Bob owns the plan decision. This exact compilation is ready for save_compiled_project_plan; do not reconstruct propose_project_plan JSON. task_candidates are NOT saved Step↔Task links.'
+            : 'Read-only advisory result. The compilation is not cleared for saving because review did not pass. This is a plan-quality or review-availability blocker, NOT a missing user permission. Explain the remaining review issues; do not ask the user to repeat permission or bypass review with propose_project_plan. task_candidates are NOT saved Step↔Task links.',
+        }
       }
     },
   }

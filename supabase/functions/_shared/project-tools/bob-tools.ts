@@ -23,7 +23,9 @@ export function createBobToolSession(opts: {
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
     ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => !opts.writer ? 'not_allowed'
+        : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
+        : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.writer!.write(spec.function.name, v),
     })),
     ...(opts.projectContext?.tools ?? []).map(spec => ({ spec, version: 1,
