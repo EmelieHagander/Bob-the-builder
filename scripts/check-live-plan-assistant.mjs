@@ -1,20 +1,40 @@
-// Release proof using the existing public guest and a new disposable project.
-// Never grant the guest access to real projects. Delete only the printed fixture
-// after verification; no service key or raw Auth/session data is used or logged.
+// Operator-run proof with a verified named member and a new disposable project.
+// Requires VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, BOB_TEST_MEMBER_ID,
+// BOB_TEST_MEMBER_ACCESS_TOKEN and BOB_PLAN_LIVE_CONFIRM=disposable-fixtures-only.
+// Supply the session through a secure runner environment, never chat or logs.
+// Public guest deliberately has no Bob conversation/write authority. No fallback,
+// Auth-user creation, grant changes or privileged token generation is permitted.
+// Delete only the printed fixture afterward. The supplied session is not revoked.
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
-const url = process.env.VITE_SUPABASE_URL?.replace(/\/$/, '')
-assert.equal(url, 'https://yuobtgoidmmmwfqenkau.supabase.co')
-const key = process.env.VITE_SUPABASE_ANON_KEY
-assert(key, 'Publishable configuration required')
-const client = createClient(url, key, { db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false } })
-const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
-try {
-  checked(await client.auth.signInWithPassword({ email: 'guest@bob.local', password: 'bob-guest-2026' }))
-  const denied = await client.functions.invoke('ask-bob', { body: { action: 'send', projectId: 'p_bygga_in_entren', message: 'Permission check' } })
-  assert.equal(denied.error?.context?.status, 403)
+import { pathToFileURL } from 'node:url'
+
+export function planTestConfig(env) {
+  assert.equal(env.VITE_SUPABASE_URL?.replace(/\/$/, ''), 'https://yuobtgoidmmmwfqenkau.supabase.co')
+  assert.equal(env.BOB_PLAN_LIVE_CONFIRM, 'disposable-fixtures-only', 'Explicit disposable-fixture configuration required')
+  const key = env.VITE_SUPABASE_ANON_KEY?.trim(), token = env.BOB_TEST_MEMBER_ACCESS_TOKEN?.trim()
+  const memberId = env.BOB_TEST_MEMBER_ID?.trim()
+  const role = value => { try { return JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString()).role } catch { return null } }
+  assert(key && (key.startsWith('sb_publishable_') || role(key) === 'anon'), 'Publishable configuration required')
+  assert(token && role(token) === 'authenticated', 'A named test member session is required; never use guest or a service key')
+  assert(memberId && /^[0-9a-f-]{36}$/i.test(memberId), 'Expected test member id required')
+  return { url: env.VITE_SUPABASE_URL.replace(/\/$/, ''), key, token, memberId }
+}
+
+export async function requirePlanTestMember(client, token, memberId) {
+  const { data, error } = await client.auth.getUser(token)
+  assert(!error && data?.user?.id === memberId && data.user.is_anonymous !== true && data.user.email_confirmed_at
+    && data.user.email && data.user.email.toLowerCase() !== 'guest@bob.local', 'Verified named test member required; public guest has no Bob write/conversation authority')
+}
+
+export async function runLivePlanCheck(env = process.env) {
+  const { url, key, token, memberId } = planTestConfig(env)
+  const client = createClient(url, key, { db: { schema: 'bob' }, global: { headers: { Authorization: 'Bearer ' + token } },
+    auth: { persistSession: false, autoRefreshToken: false } })
+  const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
+  await requirePlanTestMember(client, token, memberId)
   const project = checked(await client.rpc('create_project', { p_input: {
     name: `Bob plan release verification ${randomUUID()}`,
     description: 'Disposable synthetic test. A non-load-bearing decorative panel with a centered opening. Width and centering still need measurement.',
@@ -46,9 +66,11 @@ try {
   console.log(JSON.stringify({ passed: true, projectId: project.id, revision: revisions[0].revision,
     status: plan.record.status, steps: plan.record.steps.length, requirements: requirements.length,
     writes: planWrites.length, criteria: requirements.map(q => ({ title: q.title, description: q.description, state: q.status?.state, selector: q.evidence_selector })), summary: next.summary }))
-} catch (error) {
-  console.error(`Live plan verification failed: ${error.message}`)
-  process.exitCode = 1
-} finally {
-  await client.auth.signOut({ scope: 'local' })
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runLivePlanCheck().catch(error => {
+    console.error(`Live plan verification failed: ${error.message}`)
+    process.exitCode = 1
+  })
 }

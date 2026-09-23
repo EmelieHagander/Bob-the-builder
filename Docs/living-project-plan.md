@@ -733,8 +733,14 @@ receipt readback. It proves that Bob receives a genuine semantic objection, requ
 a correction, can reject a subsequent mistaken null-ID objection, and saves a
 `proposed` revision without approval. This is deterministic orchestration proof,
 not evidence of live model judgment. `scripts/check-live-plan-assistant.mjs` adds
-an authenticated live two-message check in an isolated public-guest fixture, with
-proposal readback, open requirements, non-member denial and no automatic approval.
+an authenticated live two-message check in an isolated fixture owned by a verified
+named test member, with proposal readback, open requirements and no automatic approval.
+The public guest is intentionally local-only and has no Bob writer or server
+conversation. The v25 guest probe therefore could not validate continuation/saving;
+it was an invalid test setup, not a successful release proof. The corrected probe
+rejects guests and missing/privileged credentials before creating any fixture.
+A named member session must be supplied through the secure runner environment;
+never create privileged credentials or change guest access to run this test.
 
 Incident history: PR #114 made nano approval a save gate; PR #116 (v24) added an
 internal retry and manual-path fence. The September 23 18:10 UTC production attempt
