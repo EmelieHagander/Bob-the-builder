@@ -80,7 +80,7 @@ const reviewSchema={
 
 const COMPILER_SYSTEM=`You are Bob's Plan Compiler. Bob is the project manager. Bob's PLAN INTENT owns the project strategy, sequence and goals. You do not invent a different workflow and you do not write project data.
 
-Your job is to translate Bob's intent into Bob's exact living-plan representation using only the authorised PROJECT SNAPSHOT.
+Your job is to translate Bob's intent into Bob's exact living-plan representation using only the authorised PROJECT SNAPSHOT. In audit_plan mode there is no new PLAN INTENT: preserve the current plan's strategy and repair only representation/grounding problems.
 
 Rules:
 - Keep Bob's strategic Step sequence. Ground names, Areas, existing Tasks and evidence to exact current project records.
@@ -91,7 +91,7 @@ Rules:
 - An exact measurement selector may be used only when that one current measurement semantically proves the entire requirement. Do not let an unrelated dimension satisfy a roof/placement/check requirement just because it exists.
 - If current evidence conflicts, expose that in observations and keep a resolution criterion unsatisfied rather than pretending one conflicting value proves it.
 - When a requirement has no adequate current evidence, use kind=none unless Bob's intent clearly defines one future measurement subject. Never invent an already-known fact.
-- task_candidates contain only exact existing Tasks from the snapshot that operationally belong in a Step. They are advisory links, not completion proof.
+- task_candidates contain only exact existing Tasks from the snapshot that operationally belong in a Step. They are advisory links, not completion proof. Do not use a Task evidence selector in this first assistant slice; the current deterministic resolver must not treat Task existence as Task completion.
 - Responsibility never grants authority. Use exact project person ids only if the snapshot actually provides them; otherwise bob or unassigned.
 - Do not add false precision to distant Steps.
 
