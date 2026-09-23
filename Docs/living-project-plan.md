@@ -689,3 +689,34 @@ The former multiplexed `consult_plan_assistant` contract is retired because maki
 ### Reviewed-plan save bridge
 
 When `compile_project_plan` returns `proposal_ready=true`, Bob must not reconstruct the nested plan payload himself. The turn retains the exact reviewed compilation server-side and exposes `save_compiled_project_plan({ request_quote })`. That write remains Bob's action, passes through the normal write/receipt boundary, creates only a proposal, and preserves mini/nano as read-only assistants. If review blocks the compilation, the save bridge is not available.
+
+### Review repair and continuation (prepared source; not yet deployed)
+
+The September 23 live test reached compilation and review, but no save receipt.
+Bob stopped after the first review, then treated the user's continuation as
+insufficient permission and tried invalid manual proposal writes. The logs showed
+`missing_context` and `invalid`, not a database permission denial. Detailed reviewer
+payloads were not retained, so the exact semantic findings cannot be independently
+reconstructed from those logs.
+
+Compilation now spends at most the existing two compiler/reviewer attempts in a
+turn. When a semantic review fails and at least 110 seconds remain, the compiler
+receives the exact prior compilation and review to repair, then nano reviews the
+repaired result. This reserves time for Bob to save and report the receipt. An
+unavailable reviewer is not retried automatically. Access is rechecked before
+repair; both attempts remain read-only. A failed second review keeps saving closed.
+After compilation starts, the manual proposal tool cannot bypass that review or
+reconstruct the nested plan. Other write capabilities keep their existing gates.
+
+Missing evidence may remain an open requirement with no evidence selector; a
+proposal need not pretend construction is ready. False evidence matches still
+block saving. A current continuation such as “Okej, kör vidare” may refer to the
+clearly scoped, unfinished proposal request in recent conversation. Its exact
+current wording remains the audit quote; earlier approval text cannot replace it.
+Continuing a proposal does not approve it or override a cancellation.
+
+Deterministic fixtures cover repair feedback, unresolved requirements, exact
+repaired-payload saving, current versus old quotes, the bounded failure path,
+deadline reserve, unavailable review and revoked access. These checks do not prove
+that a live model will always interpret a continuation correctly; that remains a
+post-deployment conversational check.

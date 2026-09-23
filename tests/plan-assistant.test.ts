@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL, SAVE_COMPILED_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
+import { PLAN_PROPOSAL_TOOL } from '../supabase/functions/_shared/project-plan.ts'
+import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
 const usage={input_tokens:10,output_tokens:5,total_tokens:15}
@@ -214,4 +216,110 @@ test('compiled save bridge remains unavailable after reviewer blocks the proposa
   })
   const tools=await session.prepare()
   assert(!tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name))
+})
+
+const blockedReview={ready_to_save:false,summary:'Width cannot prove height.',issues:[{
+  severity:'error',code:'evidence_mismatch',step_position:1,requirement_position:1,evidence_id:measurementId,
+  message:'Width cannot prove height.',suggestion:'Keep the height criterion open without unrelated evidence.',
+}]}
+
+test('a blocked compilation is repaired with exact review feedback and saved using the current continuation quote',async()=>{
+  const bad=structuredClone(compiled)
+  bad.steps[0].requirements[0].title='Opening height known'
+  bad.steps[0].requirements[0].description='The opening height is measured.'
+  const repaired=structuredClone(bad)
+  repaired.steps[0].requirements[0].evidence_selector={kind:'none',id:null,subject:null,area_id:null} as any
+  const calls:OpenAIServiceOptions[]=[]
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
+    callModel:async o=>{
+      calls.push(o)
+      if(calls.length===1) return response(bad,'mini')
+      if(calls.length===2) return response(blockedReview,'nano')
+      if(calls.length===3){
+        const input=JSON.parse(String(o.prompt))
+        assert.deepEqual(input.repair_feedback,{compiled_plan:bad,review:blockedReview})
+        assert.equal(input.plan_intent,'Verify the opening before framing.')
+        assert.deepEqual(input.project_snapshot.measurements,projectData.measurements)
+        return response(repaired,'mini')
+      }
+      assert.deepEqual(JSON.parse(String(o.prompt)).compiled_plan,repaired)
+      return response(cleanReview,'nano')
+    },
+  })
+  const followup='Okej, kör vidare :)'
+  let stored:any=null
+  const writer=createProjectWriter('A',followup,async payload=>{
+    stored=payload
+    return {data:{projectId:'A',dataset:'plan',recordId:'A',revision:1,label:'Plan proposal v1',operation:'created',
+      savedAt:'2026-09-23T00:00:00Z',record:{id:'A',revision:1}},error:null}
+  },async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}))
+  const rows=[COMPILE_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL,PLAN_PROPOSAL_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Fixture',schema_version:1,always_load:true,preload_phases:[],active:true,
+  }))
+  const session=createBobToolSession({lookup:makeLookup(),writer,planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows})})
+  await session.prepare()
+  const result:any=await session.execute('compile_project_plan',{plan_intent:'Verify the opening before framing.'})
+  assert.equal(result.attempts,2);assert.equal(result.proposal_ready,true)
+  assert.equal(assistant.remaining,0)
+  assert.deepEqual(calls.map(o=>o.functionName),['plan-compiler','plan-reviewer','plan-compiler','plan-reviewer'])
+  assert.equal(stored,null,'compilation and repair remain read-only')
+  const tools=await session.prepare()
+  assert(tools.some(t=>t.function.name==='save_compiled_project_plan'))
+  assert(!tools.some(t=>t.function.name==='propose_project_plan'),'compiled proposals cannot switch to manual reconstruction')
+  assert.equal((await session.execute('save_compiled_project_plan',{request_quote:'Jag godkänner att du sparar förslaget'})).status,'invalid',
+    'an older approval is still not a current-turn audit quote')
+  assert.equal(stored,null)
+  assert.equal((await session.execute('save_compiled_project_plan',{request_quote:followup})).status,'saved')
+  assert.equal(stored.kind,'plan_proposal','continuation does not approve the proposal')
+  assert.equal(stored.request_quote,followup)
+  assert.deepEqual(stored.data.steps,repaired.steps,'save exactly the repaired and reviewed plan')
+})
+
+test('a second failed review stops repair and cannot be bypassed with the manual proposal tool',async()=>{
+  let calls=0
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
+    callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini'):response(blockedReview,'nano')},
+  })
+  const rows=[COMPILE_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL,PLAN_PROPOSAL_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Fixture',schema_version:1,always_load:true,preload_phases:[],active:true,
+  }))
+  const session=createBobToolSession({lookup:makeLookup(),planAssistant:assistant,
+    writer:{remaining:8,write:async()=>{throw new Error('must not write')}} as any,readPolicy:async()=>({phase:null,tools:rows})})
+  await session.prepare()
+  const result:any=await session.execute('compile_project_plan',{plan_intent:'Verify opening.'})
+  assert.equal(calls,4);assert.equal(result.attempts,2);assert.equal(result.proposal_ready,false)
+  assert.equal(assistant.canSave,false);assert.equal(assistant.remaining,0)
+  assert.match(result.note,/NOT a missing user permission/)
+  // Recheck even an old offered packet, before prepare removes the manual tool.
+  assert.equal((await session.execute('propose_project_plan',compiled)).status,'missing_context')
+  assert.equal((await session.execute('load_tool',{name:'propose_project_plan'})).status,'missing_context')
+  await session.prepare()
+  assert.equal((await session.execute('save_compiled_project_plan',{request_quote:'continue'})).status,'missing_context')
+})
+
+test('repair reserves the remaining turn budget and does not retry a failed reviewer service',async()=>{
+  for(const scenario of ['short_deadline','reviewer_unavailable'] as const){
+    let calls=0
+    const assistant=createPlanAssistant({
+      projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+      deadline:Date.now()+(scenario==='short_deadline'?90000:215000),
+      callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini')
+        :scenario==='short_deadline'?response(blockedReview,'nano'):{success:false,data:null,model:'nano',usage}},
+    })
+    const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+    assert.equal(calls,2);assert.equal(result.attempts,1);assert.equal(assistant.canSave,false)
+  }
+})
+
+test('access revocation between review and repair stops before a second compilation',async()=>{
+  let access=true,calls=0
+  const assistant=createPlanAssistant({
+    projectId:'A',userId:'user-a',hasAccess:async()=>access,makeLookup,deadline:Date.now()+215000,
+    callModel:async o=>{calls++;if(o.functionName==='plan-compiler')return response(compiled,'mini')
+      access=false;return response(blockedReview,'nano')},
+  })
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+  assert.equal(result.status,'denied');assert.equal(calls,2);assert.equal(assistant.canSave,false)
 })
