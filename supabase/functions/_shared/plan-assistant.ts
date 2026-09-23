@@ -1,10 +1,10 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { PLAN_PROPOSAL_TOOL, parsePlanWrite } from './project-plan.ts'
-import type { LookupResult, createProjectLookup } from './project-lookup.ts'
+import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
 type Lookup = ReturnType<typeof createProjectLookup>
-export type PlanAssistantModelCall = <T=unknown>(options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<T>>
+export type PlanAssistantModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>
 
 const MODES=['compile_plan','audit_plan'] as const
 type Mode=typeof MODES[number]
