@@ -55,7 +55,7 @@ const stepSchema = {
 }
 
 export const PLAN_PROPOSAL_TOOL = tool('propose_project_plan',
-  'Create a reviewable living-plan proposal. It does not replace the approved project plan until a later explicit approval. Completed Steps from the approved plan are carried forward unchanged server-side; submit the active/future plan you now propose.', {
+  'Create a reviewable living-plan proposal. It does not replace the approved project plan until a later explicit approval and it does NOT create Step↔Task links. Completed Steps from the approved plan are carried forward unchanged server-side; submit the active/future plan you now propose.', {
     expected_revision:{type:'integer',description:'Current approved living-plan revision, or 0 when none exists.'},
     summary:{type:'string',description:'Compact description of the proposed working plan.'},
     reason:{type:'string',description:'Why this plan or replan is appropriate now, including material new evidence.'},
