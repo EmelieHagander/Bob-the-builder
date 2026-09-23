@@ -178,13 +178,13 @@ test('workspace plan keeps blueprints inert, materializes current work on approv
     brief:'Work from observed structure. Confirm support condition before deciding the next construction detail.',
     state:'active',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
     tasks:[
-      {task_id:'existingC',area_id:'areaC',title:'Inspect support',instructions:'Check rot and bearing'},
-      {task_id:null,area_id:'areaC',title:'Measure roof connection',instructions:'Measure the actual roof connection and record the reference clearly.'},
+      {task_key:'inspect_support',task_id:'existingC',area_id:'areaC',title:'Inspect support',instructions:'Check rot and bearing'},
+      {task_key:'measure_roof',task_id:null,area_id:'areaC',title:'Measure roof connection',instructions:'Measure the actual roof connection and record the reference clearly.'},
     ],requirements:[taskRequirement]}
   const future={step_id:null,title:'Design the connection',goal:'Turn verified geometry into a buildable connection',
     brief:'Use the verified structure and dimensions; do not carry forward assumptions from the investigation Step.',
     state:'planned',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
-    tasks:[{task_id:null,area_id:'areaC',title:'Draft connection detail',instructions:'Create the connection detail after geometry is verified.'}],
+    tasks:[{task_key:'draft_connection',task_id:null,area_id:'areaC',title:'Draft connection detail',instructions:'Create the connection detail after geometry is verified.'}],
     requirements:[{requirement_id:null,type:'drawing',title:'Connection detail exists',description:'A current target-linked detail is available',
       resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}]}
   const proposed=await proposeV2('C',0,{summary:'Verify, then design',reason:'Initial workspace plan',steps:[active,future]})
