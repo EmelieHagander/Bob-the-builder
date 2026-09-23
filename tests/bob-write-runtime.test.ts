@@ -157,7 +157,7 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{
   const source=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(source,/client\.rpc\('bob_project_write_v8'/)
+  assert.match(source,/client\.rpc\('bob_project_write_v9'/)
   assert.match(source,/client\.rpc\('catalog_read'/)
   assert.match(source,/client\.rpc\('bob_settle_project_writes'/)
   assert.doesNotMatch(source,/internal\.rpc\('bob_project_write(?:_v\d+)?'/)
@@ -170,8 +170,11 @@ test('deployed wiring uses caller-JWT writes and fenced commit, not service-role
 test('living-plan parser keeps proposal, approval and evidence shapes bounded and project-bound',()=>{
   const requirement={requirement_id:null,type:'measurement',title:'Opening width',description:'Measure before cutting',resolution:'open',
     responsible_kind:'person',responsible_person_id:'person-a',evidence_selector:{kind:'measurement',id:null,subject:'Opening width',area_id:'areaA'}}
-  const step={step_id:null,title:'Verify opening',goal:'Know the real opening before framing',state:'active',area_id:'areaA',
-    responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[requirement]}
+  const step={step_id:null,title:'Verify opening',goal:'Know the real opening before framing',
+    brief:'Lock the opening geometry before framing; keep measured facts separate from design choices.',
+    state:'active',area_id:'areaA',responsible_kind:'bob',responsible_person_id:null,notes:'',
+    tasks:[{task_id:null,area_id:'areaA',title:'Measure opening',instructions:'Measure the clear opening and record the result.'}],
+    requirements:[requirement]}
   const proposal={expected_revision:0,summary:'Measure, then frame',reason:'Initial plan',steps:[step],request_quote:'Planera projektet'}
   const parsed=parseProjectWrite('propose_project_plan',proposal,'A','Planera projektet')!
   assert.equal(parsed.kind,'plan_proposal');assert.equal(parsed.expected_revision,0)
