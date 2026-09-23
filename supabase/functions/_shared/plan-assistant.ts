@@ -254,7 +254,7 @@ export function createPlanAssistant(opts:{
         userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
         prompt:JSON.stringify({mode:value.mode,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           compiled_plan:compiled,local_validation_issues:localIssues}),
-        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'minimal',
+        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
         timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
       })
       let review:any
