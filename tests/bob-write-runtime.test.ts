@@ -173,7 +173,7 @@ test('living-plan parser keeps proposal, approval and evidence shapes bounded an
   const step={step_id:null,title:'Verify opening',goal:'Know the real opening before framing',
     brief:'Lock the opening geometry before framing; keep measured facts separate from design choices.',
     state:'active',area_id:'areaA',responsible_kind:'bob',responsible_person_id:null,notes:'',
-    tasks:[{task_id:null,area_id:'areaA',title:'Measure opening',instructions:'Measure the clear opening and record the result.'}],
+    tasks:[{task_key:'measure_opening',task_id:null,area_id:'areaA',title:'Measure opening',instructions:'Measure the clear opening and record the result.'}],
     requirements:[requirement]}
   const proposal={expected_revision:0,summary:'Measure, then frame',reason:'Initial plan',steps:[step],request_quote:'Planera projektet'}
   const parsed=parseProjectWrite('propose_project_plan',proposal,'A','Planera projektet')!
