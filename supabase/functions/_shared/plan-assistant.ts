@@ -16,7 +16,7 @@ export const PLAN_ASSISTANT_TOOL={
   type:'function' as const,
   function:{
     name:'consult_plan_assistant',
-    description:'Ask Bob\'s read-only planning assistant to ground/compile Bob\'s project-manager plan or audit the current living plan. The assistant never changes project strategy and never writes project data; Bob decides what to save.',
+    description:'Ask Bob\'s read-only planning assistant to ground/compile Bob\'s project-manager plan or audit the current living plan. The assistant never changes project strategy and never writes project data; task_candidates are suggestions, not saved Step↔Task links. Bob decides what to save.',
     parameters:{
       type:'object',additionalProperties:false,
       properties:{
@@ -254,7 +254,7 @@ export function createPlanAssistant(opts:{
         userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
         prompt:JSON.stringify({mode:value.mode,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           compiled_plan:compiled,local_validation_issues:localIssues}),
-        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'minimal',
+        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
         timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
       })
       let review:any
@@ -268,10 +268,10 @@ export function createPlanAssistant(opts:{
       return {
         status:'ok',saved:false,mode:value.mode,compiled_plan:{
           expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
-        },task_candidates:compiled.task_candidates??[],observations:compiled.observations??[],
+        },task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note:'Read-only advisory result. Bob owns the plan decision. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
+        note:'Read-only advisory result. Bob owns the plan decision. task_candidates are NOT saved Step↔Task links. A plan proposal does not create those links; after approval use link_project_plan_task and only report a Task as linked after its successful write receipt. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
       }
     },
   }
