@@ -94,9 +94,10 @@ test('assistant is bounded, read-only and mode inputs fail closed',async()=>{
   assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:null}) as any).status,'invalid')
   assert.equal(modelCalls,0)
   await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'A'})
-  await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'B'})
+  assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'B'}) as any).status,'budget_exhausted',
+    'Malformed attempts consume the bounded assistant budget just like other Bob tools')
   assert.equal((await assistant.consult(PLAN_ASSISTANT_TOOL.function.name,{mode:'compile_plan',expected_revision:0,plan_intent:'C'}) as any).status,'budget_exhausted')
-  assert.equal(modelCalls,4)
+  assert.equal(modelCalls,2)
 })
 
 
