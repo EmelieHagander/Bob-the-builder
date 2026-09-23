@@ -5,6 +5,7 @@ import { WRITE_TOOLS, type ProjectWriter } from '../project-write.ts'
 import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
 import type { ProjectContext } from '../project-context/dispatcher.ts'
 import type { MaterialCatalogReader } from '../material-catalog.ts'
+import type { createPlanAssistant } from '../plan-assistant.ts'
 import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
 
 /** Sole handler-registration seam. Catalog names/forms/profiles are data; loading
@@ -12,7 +13,7 @@ import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyR
 export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
-  catalogReader?: MaterialCatalogReader;
+  catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const definitions: ToolDefinition[] = [
@@ -32,6 +33,10 @@ export function createBobToolSession(opts: {
     ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.catalogReader!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.catalogReader!.read(spec.function.name, v),
+    })),
+    ...(opts.planAssistant?.tools ?? []).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => opts.planAssistant!.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.planAssistant!.consult(spec.function.name, v),
     })),
   ]
   return createToolSession({ definitions, readPolicy: opts.readPolicy })

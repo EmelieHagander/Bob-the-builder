@@ -1,6 +1,7 @@
 import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ToolPolicyReader } from './project-tools/session.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
+import type { createPlanAssistant } from './plan-assistant.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer } from './project-answer.ts'
@@ -13,7 +14,7 @@ export async function runClaimedProjectTurn(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
-  catalogReader?: MaterialCatalogReader;
+  catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number;
@@ -44,8 +45,8 @@ export async function runClaimedProjectTurn(opts: {
         evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
-    const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: opts.lookup.sources,
-      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
+    const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
     if (opts.writer.receipts.length && (recovered || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }

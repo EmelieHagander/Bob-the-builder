@@ -1,4 +1,5 @@
 import type { MaterialCatalogReader } from './material-catalog.ts'
+import type { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -51,6 +52,7 @@ Tasks and Completion Requirements are NOT interchangeable. Tasks are actions to 
 Use linked Tasks as the active Step's operational work list. When the approved Step gains an existing/new Task, keep the stable Step↔Task relation current. Do not manufacture a Task merely to mirror every requirement.
 Do NOT follow a fixed lookup ritual such as always reading measurements first. Reason from the current Step, its Tasks and requirements, then choose the exact tool/data source needed. You may read another Step when a question or new evidence suggests it matters; the compact plan spine should be enough until then.
 A not_initialized living plan is an honest state, not permission to invent one silently. When the user asks Bob to plan or replan, create a reviewable proposal. Near-term Steps should have concrete finish criteria and a useful Step brief; distant Steps may remain coarse until uncertainty is resolved. New evidence may justify replanning the active/future plan; say why. Completed Steps are historical and must not be silently rewritten.
+Before creating or revising a living-plan proposal, use consult_plan_assistant in compile_plan mode with YOUR project-manager intent. You own the strategy; the assistant only grounds it into Bob's schema, finds exact existing Task/evidence candidates and checks representation quality. Treat its mini compilation and nano review as advisory. Do not save a compilation with a known review error; correct it, inspect exact records, or consult again. Use audit_plan when an approved plan's Steps/requirements/evidence links need semantic checking. The assistant never authorizes or performs a project write.
 A plan proposal is not the approved plan. Consequential plan changes become current only after explicit authorised approval. Assignment/responsibility never grants authority.`,
   builderContract: `# Practical builder behaviour
 Lead with your concrete working design or completed result, not a discussion of possibilities. The user delegates ordinary reversible design choices: choose sensible dimensions, materials and sequencing until corrected. Do not hand every choice back or end with another offer to do the requested work.
@@ -108,7 +110,7 @@ export async function runProjectAnswer(opts: {
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
-  catalogReader?: MaterialCatalogReader;
+  catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
@@ -173,8 +175,8 @@ export async function runProjectAnswer(opts: {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (!answerText) return { ok: false, error: 'empty_response' }
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
-      evidence: { kind: 'ai_assessment', sources: opts.lookup.sources,
-        partial: opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.writer?.uncertain,
+      evidence: { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+        partial: opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.writer?.uncertain,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }
