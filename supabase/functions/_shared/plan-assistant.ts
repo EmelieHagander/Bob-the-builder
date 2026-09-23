@@ -233,7 +233,7 @@ export function createPlanAssistant(opts:{
       try{snapshot=await buildSnapshot(lookup)}catch(e){return {status:e instanceof Error&&e.message==='project_denied'?'denied':'unavailable',saved:false}}
       partial ||= snapshot.partial
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const compiler=await opts.callModel<any>({
+      const compiler=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
         userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
         prompt:JSON.stringify({mode:value.mode,expected_revision:value.expected_revision,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial}),
@@ -249,7 +249,7 @@ export function createPlanAssistant(opts:{
       if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
         message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const reviewer=await opts.callModel<any>({
+      const reviewer=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
         userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
         prompt:JSON.stringify({mode:value.mode,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
