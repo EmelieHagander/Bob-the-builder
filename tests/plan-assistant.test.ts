@@ -108,9 +108,10 @@ test('local validation cannot be overruled by a cheerful nano review',async()=>{
       : response(cleanReview,'gpt-5.4-nano'),
   })
   const result:any=await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening.'})
-  assert.equal(result.review.ready_to_save,false)
+  assert.equal(result.review.ready_to_save,true,'nano advice stays separate from server validation')
+  assert.equal(result.server_validation.valid,false)
   assert.equal(result.proposal_ready,false);assert.equal(assistant.canSave,false)
-  assert(result.review.issues.some((i:any)=>i.code==='unknown_task_id'&&i.severity==='error'))
+  assert(result.server_validation.issues.some((i:any)=>i.code==='unknown_task_id'&&i.severity==='error'))
 })
 
 test('audit without a current plan stops before model calls',async()=>{
@@ -135,8 +136,9 @@ test('assistant is bounded and simple tool shapes fail closed',async()=>{
   assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'A',mode:'compile_plan'}) as any).status,'invalid')
   assert.equal(modelCalls,0)
   await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'A'})
-  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'B'}) as any).status,'budget_exhausted')
-  assert.equal(modelCalls,2)
+  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'B'}) as any).status,'ok')
+  assert.equal((await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'C'}) as any).status,'budget_exhausted')
+  assert.equal(modelCalls,4)
 })
 
 test('tool registry exposes two simple core read-only capabilities and not the legacy multiplexer',async()=>{
@@ -194,7 +196,7 @@ test('reviewed compilation is saved verbatim through one-field bridge instead of
   assert.equal(Object.keys(saved.value).length,5,'bridge supplies the exact write schema without model-copying nested JSON')
 })
 
-test('compiled save bridge remains unavailable after reviewer blocks the proposal',async()=>{
+test('nano objections return to Bob without vetoing a structurally valid proposal',async()=>{
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
     callModel:async (o:OpenAIServiceOptions)=>o.functionName==='plan-compiler'
@@ -205,7 +207,7 @@ test('compiled save bridge remains unavailable after reviewer blocks the proposa
       }]},'gpt-5.4-nano'),
   })
   await assistant.consult(COMPILE_PLAN_TOOL.function.name,{plan_intent:'Verify opening.'})
-  assert.equal(assistant.canSave,false);assert.equal(assistant.compiledProposal,null)
+  assert.equal(assistant.canSave,true);assert(assistant.compiledProposal)
   const rows=[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL].map(spec=>({
     name:spec.function.name,description:spec.function.description,how_to:'Fixture',
     schema_version:1,always_load:true,preload_phases:[],active:true,
@@ -215,7 +217,7 @@ test('compiled save bridge remains unavailable after reviewer blocks the proposa
     planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows}),
   })
   const tools=await session.prepare()
-  assert(!tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name))
+  assert(tools.some(t=>t.function.name===SAVE_COMPILED_PLAN_TOOL.function.name))
 })
 
 const blockedReview={ready_to_save:false,summary:'Width cannot prove height.',issues:[{
@@ -223,7 +225,7 @@ const blockedReview={ready_to_save:false,summary:'Width cannot prove height.',is
   message:'Width cannot prove height.',suggestion:'Keep the height criterion open without unrelated evidence.',
 }]}
 
-test('a blocked compilation is repaired with exact review feedback and saved using the current continuation quote',async()=>{
+test('Bob requests a correction after seeing the review and saves with the current continuation quote',async()=>{
   const bad=structuredClone(compiled)
   bad.steps[0].requirements[0].title='Opening height known'
   bad.steps[0].requirements[0].description='The opening height is measured.'
@@ -238,8 +240,9 @@ test('a blocked compilation is repaired with exact review feedback and saved usi
       if(calls.length===2) return response(blockedReview,'nano')
       if(calls.length===3){
         const input=JSON.parse(String(o.prompt))
-        assert.deepEqual(input.repair_feedback,{compiled_plan:bad,review:blockedReview})
-        assert.equal(input.plan_intent,'Verify the opening before framing.')
+        assert.deepEqual(input.repair_feedback.compiled_plan,bad)
+        assert.deepEqual(input.repair_feedback.review.issues,blockedReview.issues)
+        assert.equal(input.plan_intent,'Keep the height criterion open without width evidence.')
         assert.deepEqual(input.project_snapshot.measurements,projectData.measurements)
         return response(repaired,'mini')
       }
@@ -259,7 +262,12 @@ test('a blocked compilation is repaired with exact review feedback and saved usi
   }))
   const session=createBobToolSession({lookup:makeLookup(),writer,planAssistant:assistant,readPolicy:async()=>({phase:null,tools:rows})})
   await session.prepare()
-  const result:any=await session.execute('compile_project_plan',{plan_intent:'Verify the opening before framing.'})
+  const first:any=await session.execute('compile_project_plan',{plan_intent:'Verify the opening before framing.'})
+  assert.equal(calls.length,2,'server returns to Bob without retrying')
+  assert.equal(first.review.ready_to_save,false);assert.equal(first.remaining_attempts,1)
+  assert.equal(stored,null)
+  await session.prepare()
+  const result:any=await session.execute('compile_project_plan',{plan_intent:'Keep the height criterion open without width evidence.'})
   assert.equal(result.attempts,2);assert.equal(result.proposal_ready,true)
   assert.equal(assistant.remaining,0)
   assert.deepEqual(calls.map(o=>o.functionName),['plan-compiler','plan-reviewer','plan-compiler','plan-reviewer'])
@@ -276,44 +284,29 @@ test('a blocked compilation is repaired with exact review feedback and saved usi
   assert.deepEqual(stored.data.steps,repaired.steps,'save exactly the repaired and reviewed plan')
 })
 
-test('a second failed review stops repair and cannot be bypassed with the manual proposal tool',async()=>{
+test('repeated semantic objections do not erase a valid candidate or trigger automatic retries',async()=>{
   let calls=0
-  const assistant=createPlanAssistant({
-    projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
-    callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini'):response(blockedReview,'nano')},
-  })
-  const rows=[COMPILE_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL,PLAN_PROPOSAL_TOOL].map(spec=>({
-    name:spec.function.name,description:spec.function.description,how_to:'Fixture',schema_version:1,always_load:true,preload_phases:[],active:true,
-  }))
-  const session=createBobToolSession({lookup:makeLookup(),planAssistant:assistant,
-    writer:{remaining:8,write:async()=>{throw new Error('must not write')}} as any,readPolicy:async()=>({phase:null,tools:rows})})
-  await session.prepare()
-  const result:any=await session.execute('compile_project_plan',{plan_intent:'Verify opening.'})
-  assert.equal(calls,4);assert.equal(result.attempts,2);assert.equal(result.proposal_ready,false)
-  assert.equal(assistant.canSave,false);assert.equal(assistant.remaining,0)
-  assert.match(result.note,/NOT a missing user permission/)
-  // Recheck even an old offered packet, before prepare removes the manual tool.
-  assert.equal((await session.execute('propose_project_plan',compiled)).status,'missing_context')
-  assert.equal((await session.execute('load_tool',{name:'propose_project_plan'})).status,'missing_context')
-  await session.prepare()
-  assert.equal((await session.execute('save_compiled_project_plan',{request_quote:'continue'})).status,'missing_context')
+  const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
+    callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini'):response(blockedReview,'nano')}})
+  await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+  assert.equal(calls,2);assert.equal(assistant.remaining,1)
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Width requirement is already atomic. Preserve it.'})
+  assert.equal(calls,4);assert.equal(result.remaining_attempts,0)
+  assert.equal(result.review.ready_to_save,false);assert.equal(result.proposal_ready,true)
+  assert.equal((await assistant.consult('compile_project_plan',{plan_intent:'Again'})).status,'budget_exhausted')
+  assert.equal(assistant.canSave,true,'an exhausted extra request must not erase the current valid proposal')
 })
 
-test('repair reserves the remaining turn budget and does not retry a failed reviewer service',async()=>{
-  for(const scenario of ['short_deadline','reviewer_unavailable'] as const){
-    let calls=0
-    const assistant=createPlanAssistant({
-      projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
-      deadline:Date.now()+(scenario==='short_deadline'?90000:215000),
-      callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini')
-        :scenario==='short_deadline'?response(blockedReview,'nano'):{success:false,data:null,model:'nano',usage}},
-    })
-    const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
-    assert.equal(calls,2);assert.equal(result.attempts,1);assert.equal(assistant.canSave,false)
-  }
+test('unavailable nano is disclosed for Bob to assess, without granting or revoking write authority',async()=>{
+  let calls=0
+  const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async o=>{calls++;return o.functionName==='plan-compiler'?response(compiled,'mini'):{success:false,data:null,model:'nano',usage}}})
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+  assert.equal(calls,2);assert.equal(result.review.available,false);assert.equal(result.review.advisory,true)
+  assert.equal(result.proposal_ready,true);assert.equal(assistant.partial,true)
 })
 
-test('access revocation between review and repair stops before a second compilation',async()=>{
+test('access revocation during review clears the candidate before returning to Bob',async()=>{
   let access=true,calls=0
   const assistant=createPlanAssistant({
     projectId:'A',userId:'user-a',hasAccess:async()=>access,makeLookup,deadline:Date.now()+215000,
@@ -354,7 +347,7 @@ test('malformed requirement identities identify the exact row and cannot pass a 
     const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
       callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(cleanReview,'nano')})
     const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
-    const issue=result.review.issues.find((i:any)=>i.code==='invalid_requirement_id')
+    const issue=result.server_validation.issues.find((i:any)=>i.code==='invalid_requirement_id')
     assert.equal(issue.step_position,1);assert.equal(issue.requirement_position,1)
     assert.equal(result.proposal_ready,false)
   }
@@ -374,11 +367,11 @@ test('existing requirement identities preserve their parent and occur only once,
       callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(cleanReview,'nano')})
     const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Refine current step.'})
     assert.equal(result.proposal_ready,scenario==='valid')
-    if(scenario!=='valid')assert(result.review.issues.some((i:any)=>i.code===(scenario==='wrong_parent'?'requirement_parent_mismatch':'duplicate_requirement_id')))
+    if(scenario!=='valid')assert(result.server_validation.issues.some((i:any)=>i.code===(scenario==='wrong_parent'?'requirement_parent_mismatch':'duplicate_requirement_id')))
   }
 })
 
-test('exhausted repair reports its limit and logs only structural diagnostics',async t=>{
+test('Bob-directed compilation budget is explicit and logs contain only structural diagnostics',async t=>{
   const logs:unknown[][]=[]
   t.mock.method(console,'log',(...args:unknown[])=>logs.push(args))
   const privateText='PRIVATE_PROJECT_AND_REVIEW_TEXT'
@@ -386,9 +379,10 @@ test('exhausted repair reports its limit and logs only structural diagnostics',a
   const review={...blockedReview,summary:privateText,issues:[{...blockedReview.issues[0],code:privateText,message:privateText}]}
   const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
     callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(review,'nano')})
+  await assistant.consult('compile_project_plan',{plan_intent:privateText})
   const result:any=await assistant.consult('compile_project_plan',{plan_intent:privateText})
   assert.equal(result.remaining_attempts,0);assert.equal(result.attempts,2)
-  assert.match(result.note,/automatic repair budget is exhausted/)
+  assert.match(result.note,/No compilation attempts remain/)
   const diagnostics=logs.filter(args=>args[0]==='[Bob plan review]').map(args=>JSON.parse(String(args[1])))
   assert.equal(diagnostics.length,2)
   assert.deepEqual(diagnostics.map(d=>d.attempt),[1,2])
@@ -396,4 +390,24 @@ test('exhausted repair reports its limit and logs only structural diagnostics',a
   assert(diagnostics.every(d=>d.review_issues[0].code==='unclassified'))
   assert(diagnostics.every(d=>d.review_issues[0].step_position===1&&d.review_issues[0].requirement_position===1))
   assert(!JSON.stringify(logs).includes(privateText));assert(!JSON.stringify(logs).includes(measurementId))
+})
+
+
+test('a failed second compilation clears an older candidate and hard errors cannot use either save path',async()=>{
+  let compilerCalls=0
+  const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async o=>o.functionName==='plan-compiler'
+      ? response(++compilerCalls===1?compiled:{...compiled,expected_revision:99},'mini') :response(cleanReview,'nano')})
+  const rows=[COMPILE_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL,PLAN_PROPOSAL_TOOL].map(spec=>({
+    name:spec.function.name,description:spec.function.description,how_to:'Fixture',schema_version:1,always_load:true,preload_phases:[],active:true}))
+  const session=createBobToolSession({lookup:makeLookup(),planAssistant:assistant,
+    writer:{remaining:8,write:async()=>{throw new Error('must not write')}} as any,readPolicy:async()=>({phase:null,tools:rows})})
+  await session.prepare()
+  await session.execute('compile_project_plan',{plan_intent:'Initial plan'})
+  assert.equal(assistant.canSave,true)
+  await session.prepare()
+  const result:any=await session.execute('compile_project_plan',{plan_intent:'Correct the proposal'})
+  assert.equal(result.server_validation.valid,false);assert.equal(assistant.canSave,false)
+  assert.equal((await session.execute('save_compiled_project_plan',{request_quote:'continue'})).status,'missing_context')
+  assert.equal((await session.execute('propose_project_plan',compiled)).status,'missing_context')
 })

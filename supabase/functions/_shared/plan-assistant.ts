@@ -9,6 +9,7 @@ export type PlanAssistantModelCall = (options: OpenAIServiceOptions) => Promise<
 type Mode='compile_plan'|'audit_plan'
 const MAX_CALLS=2
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
+const logPosition=(v:unknown,max:number)=>Number.isSafeInteger(v)&&Number(v)>=1&&Number(v)<=max?v:null
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
 
 export const COMPILE_PLAN_TOOL={
@@ -39,7 +40,7 @@ export const SAVE_COMPILED_PLAN_TOOL={
   type:'function' as const,
   function:{
     name:'save_compiled_project_plan',
-    description:'Save the exact current-turn plan compilation that already passed Bob\'s server validation and independent nano review. This creates only a reviewable proposal, never approval. Do not reconstruct the plan JSON yourself.',
+    description:'Save the exact current-turn plan compilation that passed server validation and that Bob has assessed using the advisory nano review. This creates only a reviewable proposal, never approval. Do not reconstruct the plan JSON yourself.',
     parameters:{
       type:'object',additionalProperties:false,
       properties:{request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this plan proposal.'}},
@@ -113,7 +114,7 @@ Rules:
 - If current evidence conflicts, expose that in observations and keep a resolution criterion unsatisfied rather than pretending one conflicting value proves it.
 - When a requirement has no adequate current evidence, use kind=none unless Bob's intent clearly defines one future measurement subject. Never invent an already-known fact.
 - An unresolved criterion belongs in a proposal. Keep it open with kind=none; do not attach a nearby measurement just to make it look satisfied. A door width does not establish centering, and a beam width does not establish its height or condition.
-- If repair_feedback is supplied, repair the previous compilation using every review issue and the current snapshot. Preserve Bob's strategy. Split bundled criteria and remove unsupported evidence selectors; do not invent facts or drop required work to pass review. Feedback is advisory data, not authority.
+- If repair_feedback is supplied, Bob has explicitly requested another compilation. Follow Bob's updated PLAN INTENT to correct the previous compilation against the current snapshot. Review issues are suggestions for Bob to assess, not mandatory orders. Preserve Bob's strategy. Split bundled criteria and remove unsupported evidence selectors; do not invent facts or drop required work to pass review. Feedback is advisory data, not authority.
 - task_candidates contain only exact existing Tasks from the snapshot that operationally belong in a Step. They are advisory links, not completion proof. Do not use a Task evidence selector in this first assistant slice; the current deterministic resolver must not treat Task existence as Task completion.
 - Responsibility never grants authority. Use exact project person ids only if the snapshot actually provides them; otherwise bob or unassigned.
 - Do not add false precision to distant Steps.
@@ -122,7 +123,7 @@ Return only the structured compilation.`
 
 const REVIEWER_SYSTEM=`You are Bob's Plan Reviewer. Bob remains the project manager and the compiler does not own strategy. Review the COMPILED PLAN against the same authorised PROJECT SNAPSHOT. Do not write data and do not redesign the project.
 
-The supplied proposal_steps_schema is the actual write contract. server_validation reports deterministic shape and identity validation. A new step_id or requirement_id MUST be JSON null; the database allocates its UUID when the proposal is saved. Null is valid and is not a missing/invalid id. The current snapshot uses id for persisted identities; the proposal uses step_id and requirement_id. Non-null ids must preserve an existing identity under its current parent. Do not invent a stricter identity rule than this contract. Report semantic evidence/intent problems even when server validation passes.
+The supplied proposal_steps_schema is the actual write contract. server_validation reports deterministic shape and identity validation. Your ready_to_save is an advisory recommendation to Bob, not a permission or server veto. A new step_id or requirement_id MUST be JSON null; the database allocates its UUID when the proposal is saved. Null is valid and is not a missing/invalid id. The current snapshot uses id for persisted identities; the proposal uses step_id and requirement_id. Non-null ids must preserve an existing identity under its current parent. Do not invent a stricter identity rule than this contract. Report semantic evidence/intent problems even when server validation passes.
 
 Mark ready_to_save=false when there is a known semantic error. In particular flag:
 - zero or multiple active Steps while unfinished work exists;
@@ -188,8 +189,8 @@ async function buildSnapshot(lookup:Lookup){
 function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<string,unknown>){
   const issues:Array<Record<string,unknown>>=[]
   if(compiled.expected_revision!==expected) issues.push({severity:'error',code:'revision_mismatch',step_position:null,requirement_position:null,evidence_id:null,message:'Compiler changed the expected plan revision.',suggestion:'Keep the exact current approved revision.'})
-  const active=(compiled.steps??[]).filter((s:any)=>s.state==='active').length
-  if((compiled.steps??[]).length>0&&active!==1) issues.push({severity:'error',code:'active_step_count',step_position:null,requirement_position:null,evidence_id:null,message:'An unfinished compiled plan must have exactly one active Step.',suggestion:'Choose the current Step and mark exactly that Step active.'})
+  const active=(Array.isArray(compiled.steps)?compiled.steps:[]).filter((s:any)=>s?.state==='active').length
+  if((Array.isArray(compiled.steps)?compiled.steps:[]).length>0&&active!==1) issues.push({severity:'error',code:'active_step_count',step_position:null,requirement_position:null,evidence_id:null,message:'An unfinished compiled plan must have exactly one active Step.',suggestion:'Choose the current Step and mark exactly that Step active.'})
 
   const current=((snapshot.plan as any[])?.[0]??null)
   const knownSteps=new Set<string>(),knownReqs=new Map<string,string>()
@@ -202,18 +203,20 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
     solution:new Set(((snapshot.solutions as any[])??[]).map((r:any)=>String(r.id))),
     task:new Set(((snapshot.tasks as any[])??[]).map((r:any)=>String(r.id))),
   }
-  for(const [si,s] of (compiled.steps??[]).entries()){
+  for(const [si,s] of (Array.isArray(compiled.steps)?compiled.steps:[]).entries()){
+    if(!object(s)) continue
     if(!isPlanIdentity(s.step_id)) issues.push({severity:'error',code:'invalid_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'step_id must be JSON null for a new Step or a valid existing UUID.',suggestion:'Use literal null for a new Step, not an empty string, missing field or invented identifier.'})
     if(s.step_id&&(!knownSteps.has(String(s.step_id))||expected===0)) issues.push({severity:'error',code:'unknown_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'Compiled plan used a Step id that is not in the current plan.',suggestion:'Use null for a genuinely new Step or the exact existing stable id.'})
     if(s.step_id&&seenSteps.has(String(s.step_id))) issues.push({severity:'error',code:'duplicate_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'A stable Step id was reused twice.',suggestion:'Preserve each existing Step only once; genuinely new Steps use null.'})
     if(s.step_id)seenSteps.add(String(s.step_id))
-    for(const [qi,q] of (s.requirements??[]).entries()){
+    for(const [qi,q] of (Array.isArray(s.requirements)?s.requirements:[]).entries()){
+      if(!object(q)) continue
       if(!isPlanIdentity(q.requirement_id)) issues.push({severity:'error',code:'invalid_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'requirement_id must be JSON null for a new requirement or a valid existing UUID.',suggestion:'Use literal null for a new criterion, not an empty string, missing field or invented identifier.'})
       if(q.requirement_id&&(!knownReqs.has(String(q.requirement_id))||expected===0)) issues.push({severity:'error',code:'unknown_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'Compiled plan used a Requirement id that is not in the current plan.',suggestion:'Use null for a new criterion or the exact current id.'})
       else if(q.requirement_id&&knownReqs.get(String(q.requirement_id))!==s.step_id) issues.push({severity:'error',code:'requirement_parent_mismatch',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'An existing requirement id belongs to another Step.',suggestion:'Keep its existing parent Step; a genuinely new criterion under a new Step uses null.'})
       if(q.requirement_id&&seenReqs.has(String(q.requirement_id))) issues.push({severity:'error',code:'duplicate_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'A stable requirement id was reused twice.',suggestion:'Keep each existing criterion only once; a new split criterion uses null.'})
       if(q.requirement_id)seenReqs.add(String(q.requirement_id))
-      const sel=q.evidence_selector
+      const sel=q.evidence_selector as any
       if(sel?.kind==='task'&&sel.id) issues.push({severity:'error',code:'task_selector_not_completion_safe',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'A Task selector cannot currently prove completion merely from Task existence.',suggestion:'Keep the Task as an operational Step link and use an independently verifiable completion criterion.'})
       else if(sel?.kind==='media'&&sel.id) issues.push({severity:'warning',code:'media_not_in_assistant_snapshot',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'This assistant snapshot does not verify project media ids.',suggestion:'Bob should inspect the exact project image before saving this evidence selector.'})
       else if(sel?.id&&sel.kind!=='none'&&evidenceSets[String(sel.kind)]&&!evidenceSets[String(sel.kind)].has(String(sel.id))) {
@@ -222,8 +225,9 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
     }
   }
   const tasks=new Map(((snapshot.tasks as any[])??[]).map((t:any)=>[String(t.id),t]))
-  for(const c of compiled.task_candidates??[]){
-    const task=tasks.get(String(c.task_id))
+  for(const c of Array.isArray(compiled.task_candidates)?compiled.task_candidates:[]){
+    if(!object(c)) continue
+    const task=tasks.get(String(c?.task_id))
     if(!task) issues.push({severity:'error',code:'unknown_task_id',step_position:c.step_position,requirement_position:null,evidence_id:c.task_id,message:'Task candidate is absent from the authorised snapshot.',suggestion:'Use an exact existing Task id or omit the candidate.'})
     else if(String(task.name)!==String(c.task_name)) issues.push({severity:'warning',code:'task_name_mismatch',step_position:c.step_position,requirement_position:null,evidence_id:c.task_id,message:'Task candidate name does not match the current Task record.',suggestion:'Use the current Task name from project data.'})
   }
@@ -233,8 +237,8 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
 
 function referencedSources(compiled:any,review:any,sources:ProjectSource[]){
   const ids=new Set<string>()
-  for(const c of compiled?.task_candidates??[]) ids.add(String(c.task_id))
-  for(const s of compiled?.steps??[]) for(const q of s.requirements??[]) if(q.evidence_selector?.id) ids.add(String(q.evidence_selector.id))
+  for(const c of Array.isArray(compiled?.task_candidates)?compiled.task_candidates:[]) ids.add(String(c?.task_id))
+  for(const s of Array.isArray(compiled?.steps)?compiled.steps:[]) for(const q of Array.isArray(s?.requirements)?s.requirements:[]) if(q?.evidence_selector?.id) ids.add(String(q.evidence_selector.id))
   for(const i of review?.issues??[]) if(i.evidence_id) ids.add(String(i.evidence_id))
   const chosen=sources.filter(s=>ids.has(s.recordId))
   return chosen.slice(0,24)
@@ -246,6 +250,7 @@ export function createPlanAssistant(opts:{
 }){
   let used=0,partial=false
   let compilationAttempted=false
+  let repairFeedback:null|{compiled_plan:unknown;review:unknown;server_validation:unknown}=null
   let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[]}=null
   const sources:ProjectSource[]=[]
   return {
@@ -261,8 +266,6 @@ export function createPlanAssistant(opts:{
         :name===AUDIT_PLAN_TOOL.function.name?'audit_plan' as const
         :null
       if(!mode) return {status:'invalid',saved:false}
-      savableProposal=null
-      if(++used>MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
       const args=object(value)?value:{}
       const planIntent=mode==='compile_plan'&&Object.keys(args).length===1&&text(args.plan_intent,12000)
         ? String(args.plan_intent)
@@ -270,6 +273,9 @@ export function createPlanAssistant(opts:{
           ? null
           : undefined
       if(planIntent===undefined) return {status:'invalid',saved:false}
+      if(used>=MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
+      used++
+      savableProposal=null
       if(mode==='compile_plan') compilationAttempted=true
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const deadline=opts.deadline??Date.now()+90000
@@ -281,79 +287,72 @@ export function createPlanAssistant(opts:{
       const expectedRevision=Number(currentPlan?.revision??0)
       if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0) return {status:'unavailable',saved:false,stage:'revision'}
       if(mode==='audit_plan'&&!currentPlan) return {status:'not_initialized',saved:false}
-      let repairFeedback:null|{compiled_plan:unknown;review:unknown}=null
-      let attempts=0
-      // A repair spends the existing two-attempt budget, never an unbounded loop.
-      // Keep time for Bob's save call and final receipt-based response.
-      for(;;){
-        attempts++
-        if(!await opts.hasAccess()) return {status:'denied',saved:false}
-        const compiler=await opts.callModel({
-          app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
-          userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
-          prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
-            ...(repairFeedback?{repair_feedback:repairFeedback}:{})}),
-          schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
-          timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
-        })
-        if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
-        const compiled=compiler.data as any
-        const dummy='assistant validation'
-        const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
-          steps:compiled.steps,request_quote:dummy})
-        const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
-        if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
-          message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
-        if(!await opts.hasAccess()) return {status:'denied',saved:false}
-        const reviewer=await opts.callModel({
-          app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
-          userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
-          prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
-            proposal_steps_schema:proposalSteps,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null},
-            compiled_plan:compiled,local_validation_issues:localIssues}),
-          schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
-          timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
-        })
-        let review:any
-        if(!reviewer.success||!reviewer.data){
-          partial=true
-          review={ready_to_save:false,summary:'Nano review unavailable.',issues:[{severity:'error',code:'review_unavailable',step_position:null,requirement_position:null,evidence_id:null,message:'The independent plan review did not complete.',suggestion:'Retry the assistant when review is available; do not bypass the independent review.'}]}
-        }else review=reviewer.data
-        const semanticIssues=Array.isArray(review.issues)?review.issues:[]
-        review.issues=[...localIssues,...semanticIssues]
-        if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
-        // Log only server-owned codes/counts/positions, never project text, ids,
-        // reviewer prose or raw model-selected issue codes.
-        console.log('[Bob plan review]',JSON.stringify({mode,attempt:attempts,shape_valid:parsed!==null,
-          reviewer_available:reviewer.success&&!!reviewer.data,ready_to_save:review.ready_to_save===true,
-          local_issues:localIssues.map(i=>({code:i.code,step_position:i.step_position,requirement_position:i.requirement_position})),
-          review_error_count:semanticIssues.filter((i:any)=>i.severity==='error').length,
-          review_issues:semanticIssues.slice(0,40).map((i:any)=>({
-            code:REVIEW_CODES.includes(i.code)?i.code:'unclassified',
-            severity:['info','warning','error'].includes(i.severity)?i.severity:'unclassified',
-            step_position:Number.isSafeInteger(i.step_position)&&i.step_position>=1&&i.step_position<=30?i.step_position:null,
-            requirement_position:Number.isSafeInteger(i.requirement_position)&&i.requirement_position>=1&&i.requirement_position<=20?i.requirement_position:null,
-          }))}))
-        if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
-          savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
-        }
-        if(mode==='compile_plan'&&!savableProposal&&reviewer.success&&reviewer.data
-          &&review.issues.some((i:any)=>i.severity==='error')&&used<MAX_CALLS&&Date.now()+110000<deadline){
-          repairFeedback={compiled_plan:structuredClone(compiled),review:structuredClone(review)}
-          used++
-          continue
-        }
-        for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
-        return {
-          status:'ok',saved:false,mode,attempts,remaining_attempts:Math.max(0,MAX_CALLS-used),current_revision:expectedRevision,compiled_plan:{
-            expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
-          },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
-          review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
-          assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-          note:savableProposal
-            ? 'Read-only advisory result. Bob owns the plan decision. This exact compilation is ready for save_compiled_project_plan; do not reconstruct propose_project_plan JSON. task_candidates are NOT saved Step↔Task links.'
-            : `Read-only advisory result. The compilation is not cleared for saving because review did not pass. This is a plan-quality or review-availability blocker, NOT a missing user permission. ${used>=MAX_CALLS?'The automatic repair budget is exhausted for this turn; report that the repair was attempted and what still failed. Do not offer to repair it immediately as if that attempt were still available.':'If time and attempts remain, correct the actual review issues without asking for the same permission again.'} Do not bypass review with propose_project_plan. task_candidates are NOT saved Step↔Task links.`,
-        }
+      // One compiler/reviewer pair per Bob tool call. Return to Bob before any repair.
+      if(!await opts.hasAccess()) return {status:'denied',saved:false}
+      const compiler=await opts.callModel({
+        app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
+        userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
+        prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+          ...(mode==='compile_plan'&&repairFeedback?{repair_feedback:repairFeedback}:{})}),
+        schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
+        timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
+      })
+      if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
+      const compiled=compiler.data as any
+      const dummy='assistant validation'
+      const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
+        steps:compiled.steps,request_quote:dummy})
+      const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
+      if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
+        message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
+      if(!await opts.hasAccess()) return {status:'denied',saved:false}
+      const reviewer=await opts.callModel({
+        app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
+        userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
+        prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+          proposal_steps_schema:proposalSteps,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null,issues:localIssues},
+          compiled_plan:compiled,local_validation_issues:localIssues}),
+        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
+        timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
+      })
+      let review:any
+      if(!reviewer.success||!reviewer.data){
+        partial=true
+        review={ready_to_save:false,summary:'Nano review unavailable.',issues:[{severity:'error',code:'review_unavailable',step_position:null,requirement_position:null,evidence_id:null,message:'The independent plan review did not complete.',suggestion:'Bob must assess the compiled plan and available evidence himself; the unavailable reviewer does not decide whether a valid proposal can be saved.'}]}
+      }else review=reviewer.data
+      const semanticIssues=Array.isArray(review.issues)?review.issues:[]
+      review={...review,issues:semanticIssues,advisory:true,available:reviewer.success&&!!reviewer.data}
+      const serverValidation={valid:parsed!==null&&!localIssues.some(i=>i.severity==='error'),issues:localIssues}
+      // Log only server-owned codes/counts/positions, never project text, ids,
+      // reviewer prose or raw model-selected issue codes.
+      console.log('[Bob plan review]',JSON.stringify({mode,attempt:used,shape_valid:parsed!==null,server_valid:serverValidation.valid,
+        reviewer_available:reviewer.success&&!!reviewer.data,ready_to_save:review.ready_to_save===true,
+        local_issues:localIssues.map(i=>({code:i.code,step_position:logPosition(i.step_position,30),requirement_position:logPosition(i.requirement_position,20)})),
+        review_error_count:semanticIssues.filter((i:any)=>i.severity==='error').length,
+        review_issues:semanticIssues.slice(0,40).map((i:any)=>({
+          code:REVIEW_CODES.includes(i.code)?i.code:'unclassified',
+          severity:['info','warning','error'].includes(i.severity)?i.severity:'unclassified',
+          step_position:logPosition(i.step_position,30),
+          requirement_position:logPosition(i.requirement_position,20),
+        }))}))
+      if(mode==='compile_plan'&&serverValidation.valid){
+        savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
+      }
+      if(!await opts.hasAccess()){savableProposal=null;return {status:'denied',saved:false}}
+      if(mode==='compile_plan') repairFeedback={compiled_plan:structuredClone(compiled),review:structuredClone(review),server_validation:structuredClone(serverValidation)}
+      for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
+      return {
+        status:'ok',saved:false,mode,attempts:used,remaining_attempts:Math.max(0,MAX_CALLS-used),current_revision:expectedRevision,compiled_plan:{
+          expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
+        },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
+        review,server_validation:serverValidation,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
+        assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
+        note: 'Read-only result. Bob owns the plan decision. Nano review is advisory, not permission. Assess its issues against the actual plan and evidence; if a correction is needed, call compile_project_plan again with your updated plan_intent. The server supplies the previous compilation and feedback; no automatic repair has run. '+
+          (savableProposal
+            ? 'Server validation passed. If you judge the proposal sound and the current request authorizes it, use save_compiled_project_plan; do not reconstruct propose_project_plan JSON. A mistaken nano objection does not veto your decision. Do not knowingly save mismatched evidence; keep missing evidence as open requirements. '
+            : 'Server validation failed or this is audit-only: no compiled proposal is available for saving. Correct the listed server errors before saving. ')+
+          (used>=MAX_CALLS?'No compilation attempts remain this turn. Assess the available proposal; if real defects remain, report them and that nothing was saved. Do not offer an immediate retry. ':'You can request another compilation in this turn if needed. ')+
+          'This is NOT a missing user permission. Do not ask for repeated approval of an already requested proposal. task_candidates are NOT saved Step↔Task links.',
       }
     },
   }
