@@ -35,6 +35,15 @@ async function briefing(uid=owner){
 async function fact(kind:string,action:string,record:string,expected:number,data:any,uid=carl){
   return (await as(uid,'select bob.evidence_command($1,$2,$3,$4,$5,$6) result',['A',kind,action,record,expected,JSON.stringify(data)])).rows[0].result as any
 }
+async function proposeV2(project:string,expected:number,data:any,uid=owner){
+  return (await server(uid,'select bob_private.project_plan_propose_v2($1,$2,$3) result',[project,expected,JSON.stringify(data)])).rows[0].result as any
+}
+async function decideV2(project:string,expected:number,proposal:number,action='approve',uid=owner){
+  return (await server(uid,'select bob_private.project_plan_decide_v2($1,$2,$3,$4,$5) result',[project,expected,proposal,action,'decision'])).rows[0].result as any
+}
+async function briefingV2(project:string,uid=owner){
+  return (await as(uid,'select bob.project_plan_briefing_v2($1) result',[project])).rows[0].result as any
+}
 const selector=(subject:string)=>({kind:'measurement',id:null,subject,area_id:'areaA'})
 const req=(title:string,sel:any=selector(title))=>({requirement_id:null,type:'measurement',title,description:'Needed before cutting',resolution:'open',
   responsible_kind:'person',responsible_person_id:'carlA',evidence_selector:sel})
@@ -63,12 +72,12 @@ before(async()=>{
   for(const [i,u] of [owner,carl,outsider].entries()) await pg.query('insert into auth.users values($1,$2,now())',[u,'plan'+i+'@example.test'])
   const legacy=new URL('../db/migrations/',import.meta.url)
   for(const f of (await readdir(legacy)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,legacy),'utf8'))
-  await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Shared porch'),('B','b','Private project')")
-  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3)",[owner,carl,outsider])
+  await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Shared porch'),('B','b','Private project'),('C','c','Workspace plan project')")
+  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('ownerA','A','Owner','OW',$1),('carlA','A','Carl','CA',$2),('outB','B','Out','OU',$3),('ownerC','C','Owner','OW',$1)",[owner,carl,outsider])
   await setupSharedSocial(pg)
   const migrations=new URL('../supabase/migrations/',import.meta.url)
   for(const f of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
-  await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('areaA','A','porch','Porch','planning'),('areaB','B','private','Private','planning')")
+  await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('areaA','A','porch','Porch','planning'),('areaB','B','private','Private','planning'),('areaC','C','entry','Entry','planning')")
 })
 after(()=>pg.close())
 
@@ -158,6 +167,57 @@ test('pinned evidence becomes stale after the source revision changes',async()=>
   await fact('measurement','revise',id(1),1,revisedMeasurement)
   b=await briefing()
   assert.equal(b.current_step.requirements[0].status.state,'stale')
+})
+
+test('workspace plan keeps blueprints inert, materializes current work on approval and carries a compact expert briefing',async()=>{
+  await as(owner,"insert into bob.tasks(id,area_id,name,instructions,status) values('existingC','areaC','Inspect support','Check rot and bearing','todo')")
+  const taskRequirement={requirement_id:null,type:'task',title:'Support inspection completed',description:'The inspection task must actually be done before leaving the Step',
+    resolution:'open',responsible_kind:'bob',responsible_person_id:null,
+    evidence_selector:{kind:'task',id:'existingC',subject:null,area_id:null}}
+  const active={step_id:null,title:'Verify existing structure',goal:'Know what can safely carry the new work',
+    brief:'Work from observed structure. Confirm support condition before deciding the next construction detail.',
+    state:'active',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
+    tasks:[
+      {task_id:'existingC',area_id:'areaC',title:'Inspect support',instructions:'Check rot and bearing'},
+      {task_id:null,area_id:'areaC',title:'Measure roof connection',instructions:'Measure the actual roof connection and record the reference clearly.'},
+    ],requirements:[taskRequirement]}
+  const future={step_id:null,title:'Design the connection',goal:'Turn verified geometry into a buildable connection',
+    brief:'Use the verified structure and dimensions; do not carry forward assumptions from the investigation Step.',
+    state:'planned',area_id:'areaC',responsible_kind:'bob',responsible_person_id:null,notes:'',
+    tasks:[{task_id:null,area_id:'areaC',title:'Draft connection detail',instructions:'Create the connection detail after geometry is verified.'}],
+    requirements:[{requirement_id:null,type:'drawing',title:'Connection detail exists',description:'A current target-linked detail is available',
+      resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}]}
+  const proposed=await proposeV2('C',0,{summary:'Verify, then design',reason:'Initial workspace plan',steps:[active,future]})
+  assert.equal(proposed.record.status,'proposed')
+  assert.equal((await as(owner,"select count(*) n from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C'")).rows[0].n,1,
+    'Proposal-only task blueprints must not create project Tasks')
+  assert.equal(proposed.record.steps[0].brief,active.brief)
+  assert.equal(proposed.record.steps[0].tasks[1].status,'planned')
+
+  await decideV2('C',0,1)
+  const tasks=(await as(owner,"select id,name,status from bob.tasks t join bob.areas a on a.id=t.area_id where a.project_id='C' order by name")).rows
+  assert.equal(tasks.length,2,'Only the current Step blueprint materializes on approval')
+  assert(tasks.some((t:any)=>t.name==='Measure roof connection'&&t.status==='todo'))
+  assert(!tasks.some((t:any)=>t.name==='Draft connection detail'),'Future Step blueprints stay inside the plan until they become current')
+
+  let b=await briefingV2('C')
+  assert.deepEqual(b.plan_spine.map((s:any)=>[s.title,s.state]),[['Verify existing structure','active'],['Design the connection','planned']])
+  assert.equal(b.current_step.brief,active.brief)
+  assert.equal(b.current_step.tasks.length,2)
+  assert.equal(b.current_step.requirements[0].status.state,'missing','Task existence is not task completion')
+  assert.equal(b.recent_shared_facts.length,0,'Initialized plans do not carry a generic fact dump')
+
+  await as(owner,"update bob.tasks set status='done' where id='existingC'")
+  b=await briefingV2('C')
+  assert.equal(b.current_step.requirements[0].status.state,'satisfied','Task evidence satisfies only when the Task is done')
+
+  const futureId=b.plan_spine[1].id
+  const exact=(await as(owner,'select bob.project_plan_step_read($1,$2,$3) result',['C',futureId,null])).rows[0].result
+  assert.equal(exact.record.title,'Design the connection')
+  assert.equal(exact.record.brief,future.brief)
+  assert.equal(exact.record.tasks[0].status,'planned')
+  const lookup=(await as(owner,"select bob.search_bob_project_data_v9('C','plan_step',null,null,null,$1,null) result",[futureId])).rows[0].result
+  assert.equal(lookup.records[0].title,'Design the connection')
 })
 
 test('raw writes are denied while caller-scoped reads stay isolated',async()=>{
