@@ -40,22 +40,34 @@ const requirementSchema = {
   },
   required:['requirement_id','type','title','description','resolution','responsible_kind','responsible_person_id','evidence_selector'],
 }
+const taskSchema = {
+  type:'object',additionalProperties:false,
+  properties:{
+    task_id:{ type:['string','null'],description:'Exact existing project Task ID to reuse, or null for a task blueprint that remains inside the proposal until approval.' },
+    area_id:{ type:'string',description:'Exact project Area ID for this Task. When the Step has an Area, the Task must use the same Area.' },
+    title:{ type:'string' },
+    instructions:{ type:'string',description:'Practical Task instructions. For an existing Task these must match its current saved instructions.' },
+  },
+  required:['task_id','area_id','title','instructions'],
+}
 const stepSchema = {
   type:'object',additionalProperties:false,
   properties:{
     step_id:{ type:['string','null'],description:'Stable UUID from current plan when this is the same active/future Step; null for a new Step.' },
     title:{type:'string'}, goal:{type:'string'},
+    brief:{type:'string',description:'Concise working note to future Bob: what this Step is, what matters, and how to think about it. It is not evidence.'},
     state:{type:'string',enum:['planned','active','blocked','completed']},
     area_id:nullableText,
     ...responsibilityProperties,
     notes:{type:'string'},
-    requirements:{type:'array',maxItems:20,items:requirementSchema},
+    tasks:{type:'array',maxItems:20,items:taskSchema,description:'Actions belonging to this Step. Existing Task IDs are reused; null IDs stay as proposal-only blueprints until approval.'},
+    requirements:{type:'array',minItems:1,maxItems:20,items:requirementSchema,description:'Conditions that must be true before this Step can be considered complete. Tasks are actions, not completion criteria.'},
   },
-  required:['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'],
+  required:['step_id','title','goal','brief','state','area_id','responsible_kind','responsible_person_id','notes','tasks','requirements'],
 }
 
 export const PLAN_PROPOSAL_TOOL = tool('propose_project_plan',
-  'Create a reviewable living-plan proposal. It does not replace the approved project plan until a later explicit approval. Completed Steps from the approved plan are carried forward unchanged server-side; submit the active/future plan you now propose.', {
+  'Create a reviewable living-plan proposal. Each Step has a concise working brief, Tasks/actions and Completion Requirements. New Task blueprints do not become real project Tasks until explicit plan approval.', {
     expected_revision:{type:'integer',description:'Current approved living-plan revision, or 0 when none exists.'},
     summary:{type:'string',description:'Compact description of the proposed working plan.'},
     reason:{type:'string',description:'Why this plan or replan is appropriate now, including material new evidence.'},
@@ -64,7 +76,7 @@ export const PLAN_PROPOSAL_TOOL = tool('propose_project_plan',
   })
 
 export const PLAN_DECISION_TOOL = tool('decide_project_plan',
-  'Approve or reject one exact living-plan proposal. Approval makes that proposal the current plan; rejection leaves the current approved plan unchanged.', {
+  'Approve or reject one exact living-plan proposal. Approval makes it current and materializes new Task blueprints for active/blocked work; rejection creates no Tasks.', {
     action:{type:'string',enum:['approve','reject']},
     proposal_revision:{type:'integer'},
     expected_revision:{type:'integer',description:'Current approved revision, or 0 when approving the first plan.'},
@@ -109,12 +121,18 @@ function requirement(v:unknown) {
     && ['open','waived','not_applicable'].includes(String(v.resolution))
     && responsibility(v)&&selector(v.evidence_selector)
 }
+function plannedTask(v:unknown) {
+  if(!object(v)||!exact(v,['task_id','area_id','title','instructions'])) return false
+  return (v.task_id===null||text(v.task_id,200))
+    && text(v.area_id,200)&&text(v.title,300)&&text(v.instructions,12000,true)
+}
 function step(v:unknown) {
-  if(!object(v)||!exact(v,['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'])) return false
+  if(!object(v)||!exact(v,['step_id','title','goal','brief','state','area_id','responsible_kind','responsible_person_id','notes','tasks','requirements'])) return false
   return (v.step_id===null||(typeof v.step_id==='string'&&uuid.test(v.step_id)))
-    && text(v.title,240)&&text(v.goal,4000)&&['planned','active','blocked','completed'].includes(String(v.state))
+    && text(v.title,240)&&text(v.goal,4000)&&text(v.brief,1600)&&['planned','active','blocked','completed'].includes(String(v.state))
     && (v.area_id===null||text(v.area_id,200))&&responsibility(v)&&text(v.notes,4000,true)
-    && Array.isArray(v.requirements)&&v.requirements.length<=20&&v.requirements.every(requirement)
+    && Array.isArray(v.tasks)&&v.tasks.length<=20&&v.tasks.every(plannedTask)
+    && Array.isArray(v.requirements)&&v.requirements.length>=1&&v.requirements.length<=20&&v.requirements.every(requirement)
 }
 
 export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
