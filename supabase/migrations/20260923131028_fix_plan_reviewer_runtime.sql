@@ -1,4 +1,3 @@
--- Proposal only. Managed apply supplies the authoritative migration timestamp.
 -- Fix Bob's plan-reviewer model setting and make advisory Task candidates explicit.
 begin;
 
