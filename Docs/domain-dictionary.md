@@ -88,15 +88,41 @@ The Project may still be broadly `Build` while these Area phases differ.
 
 Area phase is planned product direction; it is not a current persisted runtime field.
 
+## Project Plan
+
+A **Project Plan** is Bob's current approved project-specific strategy: an ordered, versioned sequence of Steps. It is not a universal construction template. Bob chooses the Steps from the actual project goal, evidence and constraints.
+
+## Plan Step
+
+A **Plan Step** is one meaningful project result/stage Bob is trying to get through.
+
+A Step may organise several Tasks, but it is not a Task. It carries a goal, state, Step Brief, responsibility and Completion Requirements.
+
+## Step Brief
+
+A **Step Brief** is Bob's compact self-prompt for the current Step: purpose, focus, important constraints and what matters while working there.
+
+It is working guidance, not project evidence. Structured project facts and Completion Requirement state outrank it.
+
+## Completion Requirement
+
+A **Completion Requirement** is one structured condition that must be true before Bob may judge a Plan Step complete.
+
+Tasks are actions; Completion Requirements are finish criteria. A completed Task does not automatically satisfy or complete a Step. Requirements are satisfied, conflicted or made stale by project evidence.
+
+Owner: [`living-project-plan.md`](living-project-plan.md).
+
 ## Task
 
 A **Task** is one executable unit of work inside an Area.
 
 Tasks describe work people can perform/assign/track. Their operational state is task status (`todo`, `doing`, `done`, `blocked`), not Project phase.
 
+A Task may be linked to a stable living-plan Step as an action inside that Step. This does not turn the Task into a completion criterion; the Step's Completion Requirements remain the finish test.
+
 A Task may later carry richer dependencies, tools, material requirements, guidance and readiness.
 
-**Not:** a Project phase or physical Building element.
+**Not:** a Project phase, Plan Step, Completion Requirement or physical Building element.
 
 ## Task step
 

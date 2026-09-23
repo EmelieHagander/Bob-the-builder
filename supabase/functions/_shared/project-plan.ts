@@ -48,7 +48,7 @@ const stepSchema = {
     state:{type:'string',enum:['planned','active','blocked','completed']},
     area_id:nullableText,
     ...responsibilityProperties,
-    notes:{type:'string'},
+    notes:{type:'string',description:'Step Brief: Bob\'s concise self-prompt for this Step — purpose, focus, important constraints and what matters while working here. Keep it compact; project facts and Completion Requirements remain authoritative.'},
     requirements:{type:'array',maxItems:20,items:requirementSchema},
   },
   required:['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'],
@@ -83,7 +83,16 @@ export const PLAN_EVIDENCE_TOOL = tool('link_project_plan_evidence',
     request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this evidence link.'},
   })
 
-export const PLAN_WRITE_TOOLS=[PLAN_PROPOSAL_TOOL,PLAN_DECISION_TOOL,PLAN_EVIDENCE_TOOL]
+export const PLAN_TASK_TOOL = tool('link_project_plan_task',
+  'Link or unlink one exact existing Task to a stable Step in the CURRENT approved living plan. Tasks are actions inside a Step; Completion Requirements are separate conditions for deciding whether the Step is complete.', {
+    action:{type:'string',enum:['link','unlink']},
+    plan_revision:{type:'integer',description:'Current approved living-plan revision.'},
+    step_id:{type:'string',description:'Exact stable Step UUID from the current approved plan.'},
+    task_id:{type:'string',description:'Exact existing Task ID in this project.'},
+    request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this task/plan organisation change.'},
+  })
+
+export const PLAN_WRITE_TOOLS=[PLAN_PROPOSAL_TOOL,PLAN_DECISION_TOOL,PLAN_EVIDENCE_TOOL,PLAN_TASK_TOOL]
 
 function responsibility(v:Record<string,unknown>) {
   if(!['bob','person','unassigned'].includes(String(v.responsible_kind))) return false
@@ -145,6 +154,13 @@ export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
     return {kind:'plan_evidence',record_id:null,expected_updated_at:null,expected_revision:v.plan_revision as number,
       request_quote:v.request_quote as string,data:{requirement_id:v.requirement_id,relation:v.relation,evidence_kind:v.evidence_kind,
         evidence_id:v.evidence_id,evidence_revision:v.evidence_revision}}
+  }
+  if(name===PLAN_TASK_TOOL.function.name) {
+    if(!exact(v,PLAN_TASK_TOOL.function.parameters.required)||!['link','unlink'].includes(String(v.action))
+      ||!revision(v.plan_revision)||typeof v.step_id!=='string'||!uuid.test(v.step_id)
+      ||!text(v.task_id,200)||!text(v.request_quote,500)) return null
+    return {kind:'plan_task',record_id:null,expected_updated_at:null,expected_revision:v.plan_revision as number,
+      request_quote:v.request_quote as string,data:{action:v.action,step_id:v.step_id,task_id:v.task_id}}
   }
   return null
 }

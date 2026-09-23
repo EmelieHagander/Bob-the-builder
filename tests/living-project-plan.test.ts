@@ -39,7 +39,7 @@ const selector=(subject:string)=>({kind:'measurement',id:null,subject,area_id:'a
 const req=(title:string,sel:any=selector(title))=>({requirement_id:null,type:'measurement',title,description:'Needed before cutting',resolution:'open',
   responsible_kind:'person',responsible_person_id:'carlA',evidence_selector:sel})
 const step=(state='active',changes:any={})=>({step_id:null,title:'Verify opening',goal:'Know the real opening before framing',state,area_id:'areaA',
-  responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[req('Opening width')],...changes})
+  responsible_kind:'bob',responsible_person_id:null,notes:'Lock the opening geometry before framing; measurements and requirements control completion.',requirements:[req('Opening width')],...changes})
 const plan=(steps:any[]= [step()])=>({summary:'Measure then frame',reason:'Current project state',steps})
 const measurement=(subject:string,value:string|null,truth='unknown')=>({subject,unit:'mm',value,truth,source:value?'Tape measurement':'',
   notes:'',required:true,area_id:'areaA',component_id:null,source_media_id:null,change_note:value?'Measured':'Placeholder'})
@@ -69,6 +69,7 @@ before(async()=>{
   const migrations=new URL('../supabase/migrations/',import.meta.url)
   for(const f of (await readdir(migrations)).filter(f=>f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f,migrations),'utf8'))
   await pg.exec("insert into bob.areas(id,project_id,slug,name,phase) values('areaA','A','porch','Porch','planning'),('areaB','B','private','Private','planning')")
+  await pg.exec("insert into bob.tasks(id,area_id,name,status,instructions) values('taskA','areaA','Control-measure opening','todo','Measure the actual opening before framing.'),('taskB','areaB','Private task','todo','Private')")
 })
 after(()=>pg.close())
 
@@ -76,10 +77,10 @@ test('living-plan tools are core even when the Project has no lifecycle phase',a
   const project=(await as(owner,"select phase from bob.projects where id='A'")).rows[0]
   assert.equal(project.phase,null,'Legacy/unclassified projects reproduce the production null-phase case')
   const rows=(await as(owner,`select name,always_load,description from bob.tool_catalog
-    where name in ('propose_project_plan','decide_project_plan','link_project_plan_evidence','save_project_task')
+    where name in ('propose_project_plan','decide_project_plan','link_project_plan_evidence','link_project_plan_task','save_project_task')
     order by name`)).rows as Array<{name:string;always_load:boolean;description:string}>
-  assert.equal(rows.length,4)
-  for(const name of ['propose_project_plan','decide_project_plan','link_project_plan_evidence']){
+  assert.equal(rows.length,5)
+  for(const name of ['propose_project_plan','decide_project_plan','link_project_plan_evidence','link_project_plan_task']){
     const row=rows.find(r=>r.name===name)
     assert.equal(row?.always_load,true,`${name} must remain visible without a Project phase`)
   }
@@ -93,7 +94,16 @@ test('shared measurement satisfies a living-plan requirement for every authorise
   await decide(0,1)
   let b=await briefing()
   assert.equal(b.status,'ok');assert.equal(b.current_revision,1)
+  assert.equal(b.plan_spine.length,1);assert.equal(b.plan_spine[0].title,'Verify opening')
+  assert.match(b.current_step.brief,/Lock the opening geometry/)
   assert.equal(b.current_step.requirements[0].status.state,'missing')
+  assert.equal(b.current_step.tasks.length,0)
+  await server(owner,'select bob_private.project_plan_link_task($1,$2,$3,$4,$5)',[
+    'A',1,b.current_step.id,'taskA','link'
+  ])
+  b=await briefing()
+  assert.equal(b.current_step.task_count,1)
+  assert.deepEqual(b.current_step.tasks.map((t:any)=>[t.id,t.name,t.status]),[['taskA','Control-measure opening','todo']])
 
   await fact('measurement','create',id(1),0,measurement('Opening width','910','measured'))
   b=await briefing(owner)
@@ -131,6 +141,9 @@ test('replanning carries completed history and rejects invented stable IDs',asyn
   assert.equal(approved.steps[0].id,currentStep.id)
   assert.equal(approved.steps[0].state,'completed')
   assert.equal(approved.steps[1].title,'Frame opening')
+  const b=await briefing()
+  assert.deepEqual(b.plan_spine.map((s:any)=>[s.title,s.state]),[['Verify opening','completed'],['Frame opening','active']])
+  assert.equal(b.current_step.tasks.length,0,'Task links stay with their stable Step and do not bleed into a different active Step')
   await assert.rejects(propose(2,{summary:'Bad',reason:'Invented id',steps:[{...future,step_id:id(99)}]}),/plan_unknown_step_id/)
 })
 
@@ -164,4 +177,8 @@ test('raw writes are denied while caller-scoped reads stay isolated',async()=>{
   await assert.rejects(as(owner,"insert into bob.project_plans(project_id) values('B')"),/permission denied/)
   assert.equal((await as(outsider,'select * from bob.project_plans')).rows.length,0)
   assert.equal((await as(outsider,"select * from bob.project_plan_revisions where project_id='A'")).rows.length,0)
+  assert.equal((await as(outsider,"select * from bob.project_plan_step_tasks where project_id='A'")).rows.length,0)
+  await assert.rejects(server(outsider,'select bob_private.project_plan_link_task($1,$2,$3,$4,$5)',[
+    'A',3,(await briefing(owner)).current_step.id,'taskB','link'
+  ]),/project_denied/)
 })

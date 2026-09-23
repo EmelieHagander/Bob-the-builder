@@ -386,21 +386,27 @@ The answer should be able to follow the historical plan/evidence chain instead o
 
 This model changes what Storybook-style prompting should provide.
 
-Bob should begin with a compact **working project briefing** such as:
+Bob should begin with a compact **working project briefing** in two levels:
 
 ```text
-Project goal
-Current approved plan revision
-Current active Step
-Why this Step exists
-Who owns it
-Completion: 8/9 requirements satisfied
-Recently satisfied requirements
-Missing/conflicted/stale requirements
-Immediate next planned Step(s)
-Important recent project changes
-Plan-review signal if downstream plan predates important new evidence
+PLAN SPINE
+✓ Step 1 — title
+→ Step 2 — title
+○ Step 3 — title
+○ Step 4 — title
+
+ACTIVE STEP WORKSPACE
+Goal
+Step Brief — Bob's compact self-prompt for this Step
+Linked Tasks + operational status
+Completion Requirements + evidence-derived state
+Completion counts
+Small recent-change signal/context
 ```
+
+The Plan Spine always carries every current Step but only its identity/order/title/state. It is orientation, not a dump of future detail.
+
+The Active Step Workspace is richer. The **Step Brief** is Bob's own concise working note: what this Step is for, what matters, important constraints and what to keep in mind. It is versioned with the Step and never outranks structured project facts, Tasks or Completion Requirement state.
 
 This is the **story of the project state**.
 
@@ -450,23 +456,19 @@ The actor who created a fact must not become an accidental visibility filter for
 
 ## 12. Relationship to current Tasks
 
-The shipped `bob.tasks` model remains runtime truth today.
+The shipped `bob.tasks` model remains the executable-work runtime truth.
 
-This contract does not yet decide whether future Step and Task are:
+The product decision is now explicit:
 
-- one generalized entity;
-- separate entities where a Step contains Tasks;
-- a migration/evolution of the existing Task model.
+- **Step and Task are separate entities.**
+- A Step may organise/link many Tasks.
+- **Step** answers: "what project result are we trying to get through?";
+- **Task/action** answers: "what does a person/Bob actually do?";
+- **Completion Requirement** answers: "what must be true before Bob may judge the Step complete?".
 
-That implementation decision requires a data/authority design pass.
+Task completion and Step completion are therefore intentionally different. A Step is not complete merely because every linked Task says done; its Completion Requirements still control the completion judgment. Conversely, a Requirement may be satisfied directly by evidence without a dedicated Task.
 
-Product semantics are clearer:
-
-- **Step** answers: "what project stage/result are we trying to get through?";
-- **Completion Requirement** answers: "what must be true before we can leave it?";
-- **Task/action** answers: "what does a person/Bob actually do?".
-
-One Step may contain many actions. Some Completion Requirements may be satisfied directly by evidence without a dedicated manual task.
+Task links are operational children of a stable Step identity rather than part of the immutable plan-revision decision. This lets Bob add or remove useful actions while working a Step without rewriting historical approved plan revisions. The current approved plan determines whether that stable Step is part of the active project story.
 
 ---
 
