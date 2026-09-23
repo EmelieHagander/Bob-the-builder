@@ -21,7 +21,7 @@ export function createBobToolSession(opts: {
     { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
-    ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
+    ...WRITE_TOOLS.map(spec => ({ spec, version: ['propose_project_plan','decide_project_plan'].includes(spec.function.name) ? 2 : 1,
       gate: (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.writer!.write(spec.function.name, v),
     })),
