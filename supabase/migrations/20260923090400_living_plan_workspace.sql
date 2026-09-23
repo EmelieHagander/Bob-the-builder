@@ -465,7 +465,7 @@ create function bob_private.project_plan_decide_v2(
   p_project text,p_expected integer,p_proposal integer,p_action text,p_note text
 ) returns jsonb
 language plpgsql security definer set search_path='' as $$
-declare current_sid uuid; pt record; tid text; saved jsonb;
+declare current_sid uuid; task_row record; tid text; saved jsonb;
 begin
   if auth.uid() is null or not bob_private.has_project_access(p_project) then
     raise exception 'project_denied' using errcode='42501';
@@ -504,36 +504,36 @@ begin
   end if;
 
   if current_sid is not null then
-    for pt in
+    for task_row in
       select * from bob.project_plan_step_tasks
       where project_id=p_project and plan_revision=p_proposal and step_id=current_sid
       order by position,item_id
       for update
     loop
-      if pt.task_id is null and pt.materialized_at is null then
+      if task_row.task_id is null and task_row.materialized_at is null then
         if exists(
           select 1 from bob.tasks t
-          where t.area_id=pt.area_id and lower(btrim(t.name))=lower(btrim(pt.title))
+          where t.area_id=task_row.area_id and lower(btrim(t.name))=lower(btrim(task_row.title))
         ) then
           raise exception 'plan_task_conflict' using errcode='40001';
         end if;
         tid:='t_'||replace(gen_random_uuid()::text,'-','');
         insert into bob.tasks(id,area_id,name,instructions,status)
-          values(tid,pt.area_id,pt.title,pt.instructions,'todo');
+          values(tid,task_row.area_id,task_row.title,task_row.instructions,'todo');
         update bob.project_plan_step_tasks
           set task_id=tid,materialized_at=clock_timestamp()
-          where project_id=p_project and plan_revision=p_proposal and item_id=pt.item_id;
+          where project_id=p_project and plan_revision=p_proposal and item_id=task_row.item_id;
       end if;
     end loop;
 
     update bob.project_plan_requirements q
-      set evidence_selector=jsonb_set(q.evidence_selector,'{id}',to_jsonb(pt.task_id),false)
-    from bob.project_plan_step_tasks pt
+      set evidence_selector=jsonb_set(q.evidence_selector,'{id}',to_jsonb(task_link.task_id),false)
+    from bob.project_plan_step_tasks task_link
     where q.project_id=p_project and q.plan_revision=p_proposal and q.step_id=current_sid
-      and pt.project_id=q.project_id and pt.plan_revision=q.plan_revision and pt.step_id=q.step_id
+      and task_link.project_id=q.project_id and task_link.plan_revision=q.plan_revision and task_link.step_id=q.step_id
       and q.evidence_selector->>'kind'='task'
-      and q.evidence_selector->>'id'='@task:'||pt.task_key
-      and pt.task_id is not null;
+      and q.evidence_selector->>'id'='@task:'||task_link.task_key
+      and task_link.task_id is not null;
   end if;
 
   saved:=bob_private.project_plan_decide(p_project,p_expected,p_proposal,p_action,p_note);
