@@ -73,17 +73,23 @@ before(async()=>{
 })
 after(()=>pg.close())
 
-test('living-plan tools are core even when the Project has no lifecycle phase',async()=>{
+test('living-plan tools stay available without a Project lifecycle phase, with reviewed compilation as the core proposal path',async()=>{
   const project=(await as(owner,"select phase from bob.projects where id='A'")).rows[0]
   assert.equal(project.phase,null,'Legacy/unclassified projects reproduce the production null-phase case')
-  const rows=(await as(owner,`select name,always_load,description from bob.tool_catalog
-    where name in ('propose_project_plan','decide_project_plan','link_project_plan_evidence','link_project_plan_task','save_project_task')
-    order by name`)).rows as Array<{name:string;always_load:boolean;description:string}>
-  assert.equal(rows.length,5)
-  for(const name of ['propose_project_plan','decide_project_plan','link_project_plan_evidence','link_project_plan_task']){
+  const rows=(await as(owner,`select name,always_load,active,description from bob.tool_catalog
+    where name in ('compile_project_plan','audit_project_plan','save_compiled_project_plan','propose_project_plan',
+      'decide_project_plan','link_project_plan_evidence','link_project_plan_task','save_project_task')
+    order by name`)).rows as Array<{name:string;always_load:boolean;active:boolean;description:string}>
+  assert.equal(rows.length,8)
+  for(const name of ['compile_project_plan','audit_project_plan','save_compiled_project_plan',
+    'decide_project_plan','link_project_plan_evidence','link_project_plan_task']){
     const row=rows.find(r=>r.name===name)
+    assert.equal(row?.active,true)
     assert.equal(row?.always_load,true,`${name} must remain visible without a Project phase`)
   }
+  const manual=rows.find(r=>r.name==='propose_project_plan')
+  assert.equal(manual?.active,true,'manual proposal remains an implemented fallback')
+  assert.equal(manual?.always_load,false,'manual nested proposal JSON is no longer the core path')
   assert.match(rows.find(r=>r.name==='save_project_task')?.description ?? '',/not a living Project Plan/)
 })
 
