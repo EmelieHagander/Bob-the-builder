@@ -169,10 +169,23 @@ function localValidation(mode:Mode,input:Record<string,unknown>,compiled:any,sna
   const current=((snapshot.plan as any[])?.[0]??null)
   const knownSteps=new Set<string>(),knownReqs=new Set<string>()
   for(const s of current?.steps??[]){if(s.id)knownSteps.add(String(s.id));for(const q of s.requirements??[])if(q.id)knownReqs.add(String(q.id))}
+  const evidenceSets:Record<string,Set<string>>={
+    measurement:new Set(((snapshot.measurements as any[])??[]).map((r:any)=>String(r.id))),
+    artifact:new Set(((snapshot.artifacts as any[])??[]).map((r:any)=>String(r.id))),
+    material_requirement:new Set(((snapshot.requirements as any[])??[]).map((r:any)=>String(r.id))),
+    solution:new Set(((snapshot.solutions as any[])??[]).map((r:any)=>String(r.id))),
+    task:new Set(((snapshot.tasks as any[])??[]).map((r:any)=>String(r.id))),
+  }
   for(const [si,s] of (compiled.steps??[]).entries()){
     if(s.step_id&&(!knownSteps.has(String(s.step_id))||expected===0)) issues.push({severity:'error',code:'unknown_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'Compiled plan used a Step id that is not in the current plan.',suggestion:'Use null for a genuinely new Step or the exact existing stable id.'})
     for(const [qi,q] of (s.requirements??[]).entries()){
       if(q.requirement_id&&(!knownReqs.has(String(q.requirement_id))||expected===0)) issues.push({severity:'error',code:'unknown_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'Compiled plan used a Requirement id that is not in the current plan.',suggestion:'Use null for a new criterion or the exact current id.'})
+      const sel=q.evidence_selector
+      if(sel?.kind==='task'&&sel.id) issues.push({severity:'error',code:'task_selector_not_completion_safe',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'A Task selector cannot currently prove completion merely from Task existence.',suggestion:'Keep the Task as an operational Step link and use an independently verifiable completion criterion.'})
+      else if(sel?.kind==='media'&&sel.id) issues.push({severity:'warning',code:'media_not_in_assistant_snapshot',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'This assistant snapshot does not verify project media ids.',suggestion:'Bob should inspect the exact project image before saving this evidence selector.'})
+      else if(sel?.id&&sel.kind!=='none'&&evidenceSets[String(sel.kind)]&&!evidenceSets[String(sel.kind)].has(String(sel.id))) {
+        issues.push({severity:'error',code:'unknown_evidence_id',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'Compiled plan used an exact evidence id absent from the authorised snapshot.',suggestion:'Use an exact current project record or leave the selector unresolved.'})
+      }
     }
   }
   const tasks=new Map(((snapshot.tasks as any[])??[]).map((t:any)=>[String(t.id),t]))
