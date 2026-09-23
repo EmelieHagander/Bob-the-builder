@@ -690,7 +690,7 @@ The former multiplexed `consult_plan_assistant` contract is retired because maki
 
 When `compile_project_plan` returns `proposal_ready=true`, Bob must not reconstruct the nested plan payload himself. The turn retains the exact reviewed compilation server-side and exposes `save_compiled_project_plan({ request_quote })`. That write remains Bob's action, passes through the normal write/receipt boundary, creates only a proposal, and preserves mini/nano as read-only assistants. If review blocks the compilation, the save bridge is not available.
 
-### Review repair and continuation (prepared source; not yet deployed)
+### Review repair and continuation (deployed in Ask Bob v24, PR #116)
 
 The September 23 live test reached compilation and review, but no save receipt.
 Bob stopped after the first review, then treated the user's continuation as
@@ -720,3 +720,31 @@ repaired-payload saving, current versus old quotes, the bounded failure path,
 deadline reserve, unavailable review and revoked access. These checks do not prove
 that a live model will always interpret a continuation correctly; that remains a
 post-deployment conversational check.
+
+### Reviewer contract and structural diagnostics (prepared follow-up)
+
+The 18:10 UTC September 23 retry on v24 did run both compiler/reviewer attempts,
+then returned no write receipt. The final answer reported two invalid requirement
+identities and a width-versus-centering mismatch. The compiled payload and review
+were not retained, so whether those identities were malformed or valid new null
+identities cannot be recovered. The reviewer had not received the proposal schema.
+
+The reviewer now receives the canonical proposal Steps schema and the server's
+shape-validation result. It is explicitly told that new Step/Requirement identities
+are JSON null, while persisted readback uses `id` and proposals use `step_id` /
+`requirement_id`. Database allocation of new UUIDs is unchanged. Local validation
+uses the same identity predicate as the write parser and provides exact row
+positions for malformed identities, wrong requirement parents, duplicates and
+attempts to reuse completed Steps. No unknown identity is silently changed to null.
+Evidence semantics remain an independent review gate: knowing a door width still
+does not prove its centered placement.
+
+Each review attempt logs only shape-validity, availability, readiness, server-owned
+validation codes and row positions, and a semantic error count. No project text,
+record IDs, reviewer prose or model-selected codes enter these logs. An exhausted
+repair result includes its remaining-attempt count and explicitly tells Bob to
+report the attempted repair rather than offer an unavailable immediate retry.
+
+Regression fixtures cover valid new null identities, malformed identities,
+retained-parent constraints, duplicates, reviewer contract delivery and diagnostic
+privacy. Live model behavior still requires a conversational check after release.

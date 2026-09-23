@@ -1,5 +1,5 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import { PLAN_PROPOSAL_TOOL, parsePlanWrite } from './project-plan.ts'
+import { PLAN_PROPOSAL_TOOL, parsePlanWrite, isPlanIdentity } from './project-plan.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
@@ -120,6 +120,8 @@ Return only the structured compilation.`
 
 const REVIEWER_SYSTEM=`You are Bob's Plan Reviewer. Bob remains the project manager and the compiler does not own strategy. Review the COMPILED PLAN against the same authorised PROJECT SNAPSHOT. Do not write data and do not redesign the project.
 
+The supplied proposal_steps_schema is the actual write contract. server_validation reports deterministic shape and identity validation. A new step_id or requirement_id MUST be JSON null; the database allocates its UUID when the proposal is saved. Null is valid and is not a missing/invalid id. The current snapshot uses id for persisted identities; the proposal uses step_id and requirement_id. Non-null ids must preserve an existing identity under its current parent. Do not invent a stricter identity rule than this contract. Report semantic evidence/intent problems even when server validation passes.
+
 Mark ready_to_save=false when there is a known semantic error. In particular flag:
 - zero or multiple active Steps while unfinished work exists;
 - a Completion Requirement that bundles independently verifiable conditions under one evidence selector;
@@ -188,8 +190,9 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
   if((compiled.steps??[]).length>0&&active!==1) issues.push({severity:'error',code:'active_step_count',step_position:null,requirement_position:null,evidence_id:null,message:'An unfinished compiled plan must have exactly one active Step.',suggestion:'Choose the current Step and mark exactly that Step active.'})
 
   const current=((snapshot.plan as any[])?.[0]??null)
-  const knownSteps=new Set<string>(),knownReqs=new Set<string>()
-  for(const s of current?.steps??[]){if(s.id)knownSteps.add(String(s.id));for(const q of s.requirements??[])if(q.id)knownReqs.add(String(q.id))}
+  const knownSteps=new Set<string>(),knownReqs=new Map<string,string>()
+  for(const s of current?.steps??[]){if(s.id&&s.state!=='completed')knownSteps.add(String(s.id));for(const q of s.requirements??[])if(q.id)knownReqs.set(String(q.id),String(s.id))}
+  const seenSteps=new Set<string>(),seenReqs=new Set<string>()
   const evidenceSets:Record<string,Set<string>>={
     measurement:new Set(((snapshot.measurements as any[])??[]).map((r:any)=>String(r.id))),
     artifact:new Set(((snapshot.artifacts as any[])??[]).map((r:any)=>String(r.id))),
@@ -198,9 +201,16 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
     task:new Set(((snapshot.tasks as any[])??[]).map((r:any)=>String(r.id))),
   }
   for(const [si,s] of (compiled.steps??[]).entries()){
+    if(!isPlanIdentity(s.step_id)) issues.push({severity:'error',code:'invalid_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'step_id must be JSON null for a new Step or a valid existing UUID.',suggestion:'Use literal null for a new Step, not an empty string, missing field or invented identifier.'})
     if(s.step_id&&(!knownSteps.has(String(s.step_id))||expected===0)) issues.push({severity:'error',code:'unknown_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'Compiled plan used a Step id that is not in the current plan.',suggestion:'Use null for a genuinely new Step or the exact existing stable id.'})
+    if(s.step_id&&seenSteps.has(String(s.step_id))) issues.push({severity:'error',code:'duplicate_step_id',step_position:si+1,requirement_position:null,evidence_id:null,message:'A stable Step id was reused twice.',suggestion:'Preserve each existing Step only once; genuinely new Steps use null.'})
+    if(s.step_id)seenSteps.add(String(s.step_id))
     for(const [qi,q] of (s.requirements??[]).entries()){
+      if(!isPlanIdentity(q.requirement_id)) issues.push({severity:'error',code:'invalid_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'requirement_id must be JSON null for a new requirement or a valid existing UUID.',suggestion:'Use literal null for a new criterion, not an empty string, missing field or invented identifier.'})
       if(q.requirement_id&&(!knownReqs.has(String(q.requirement_id))||expected===0)) issues.push({severity:'error',code:'unknown_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'Compiled plan used a Requirement id that is not in the current plan.',suggestion:'Use null for a new criterion or the exact current id.'})
+      else if(q.requirement_id&&knownReqs.get(String(q.requirement_id))!==s.step_id) issues.push({severity:'error',code:'requirement_parent_mismatch',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'An existing requirement id belongs to another Step.',suggestion:'Keep its existing parent Step; a genuinely new criterion under a new Step uses null.'})
+      if(q.requirement_id&&seenReqs.has(String(q.requirement_id))) issues.push({severity:'error',code:'duplicate_requirement_id',step_position:si+1,requirement_position:qi+1,evidence_id:null,message:'A stable requirement id was reused twice.',suggestion:'Keep each existing criterion only once; a new split criterion uses null.'})
+      if(q.requirement_id)seenReqs.add(String(q.requirement_id))
       const sel=q.evidence_selector
       if(sel?.kind==='task'&&sel.id) issues.push({severity:'error',code:'task_selector_not_completion_safe',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'A Task selector cannot currently prove completion merely from Task existence.',suggestion:'Keep the Task as an operational Step link and use an independently verifiable completion criterion.'})
       else if(sel?.kind==='media'&&sel.id) issues.push({severity:'warning',code:'media_not_in_assistant_snapshot',step_position:si+1,requirement_position:qi+1,evidence_id:String(sel.id),message:'This assistant snapshot does not verify project media ids.',suggestion:'Bob should inspect the exact project image before saving this evidence selector.'})
@@ -297,6 +307,7 @@ export function createPlanAssistant(opts:{
           app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
           userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
           prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+            proposal_steps_schema:proposalSteps,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null},
             compiled_plan:compiled,local_validation_issues:localIssues}),
           schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
           timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
@@ -308,6 +319,12 @@ export function createPlanAssistant(opts:{
         }else review=reviewer.data
         review.issues=[...localIssues,...(Array.isArray(review.issues)?review.issues:[])]
         if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
+        // Log only server-owned codes/counts/positions, never project text, ids,
+        // reviewer prose or raw model-selected issue codes.
+        console.log('[Bob plan review]',JSON.stringify({mode,attempt:attempts,shape_valid:parsed!==null,
+          reviewer_available:reviewer.success&&!!reviewer.data,ready_to_save:review.ready_to_save===true,
+          local_issues:localIssues.map(i=>({code:i.code,step_position:i.step_position,requirement_position:i.requirement_position})),
+          review_error_count:review.issues.filter((i:any)=>i.severity==='error').length-localIssues.filter(i=>i.severity==='error').length}))
         if(mode==='compile_plan'&&parsed&&review.ready_to_save===true){
           savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
         }
@@ -319,14 +336,14 @@ export function createPlanAssistant(opts:{
         }
         for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
         return {
-          status:'ok',saved:false,mode,attempts,current_revision:expectedRevision,compiled_plan:{
+          status:'ok',saved:false,mode,attempts,remaining_attempts:Math.max(0,MAX_CALLS-used),current_revision:expectedRevision,compiled_plan:{
             expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
           },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
           review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
           assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
           note:savableProposal
             ? 'Read-only advisory result. Bob owns the plan decision. This exact compilation is ready for save_compiled_project_plan; do not reconstruct propose_project_plan JSON. task_candidates are NOT saved Step↔Task links.'
-            : 'Read-only advisory result. The compilation is not cleared for saving because review did not pass. This is a plan-quality or review-availability blocker, NOT a missing user permission. Explain the remaining review issues; do not ask the user to repeat permission or bypass review with propose_project_plan. task_candidates are NOT saved Step↔Task links.',
+            : `Read-only advisory result. The compilation is not cleared for saving because review did not pass. This is a plan-quality or review-availability blocker, NOT a missing user permission. ${used>=MAX_CALLS?'The automatic repair budget is exhausted for this turn; report that the repair was attempted and what still failed. Do not offer to repair it immediately as if that attempt were still available.':'If time and attempts remain, correct the actual review issues without asking for the same permission again.'} Do not bypass review with propose_project_plan. task_candidates are NOT saved Step↔Task links.`,
         }
       }
     },

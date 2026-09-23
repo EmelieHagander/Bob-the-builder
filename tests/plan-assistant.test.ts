@@ -323,3 +323,75 @@ test('access revocation between review and repair stops before a second compilat
   const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
   assert.equal(result.status,'denied');assert.equal(calls,2);assert.equal(assistant.canSave,false)
 })
+
+test('reviewer receives the canonical identity contract and new null identities pass server validation',async()=>{
+  const proposal=structuredClone(compiled)
+  proposal.steps[0].requirements.push(structuredClone(proposal.steps[0].requirements[0]))
+  proposal.steps[0].requirements[1].title='Opening height known'
+  proposal.steps[0].requirements[1].description='Height still needs measurement.'
+  proposal.steps[0].requirements[1].evidence_selector={kind:'none',id:null,subject:null,area_id:null} as any
+  const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+    callModel:async o=>{
+      if(o.functionName==='plan-compiler') return response(proposal,'mini')
+      const input=JSON.parse(String(o.prompt))
+      assert.deepEqual(input.proposal_steps_schema,PLAN_PROPOSAL_TOOL.function.parameters.properties.steps)
+      assert.equal(input.server_validation.proposal_shape_valid,true)
+      assert.equal(input.server_validation.new_identity_value,null)
+      assert.deepEqual(input.local_validation_issues,[],'two new null ids are not missing or duplicated ids')
+      assert.match(o.systemMessage!,/Null is valid and is not a missing\/invalid id/)
+      assert.equal(input.compiled_plan.steps[0].requirements[1].evidence_selector.kind,'none')
+      return response(cleanReview,'nano')
+    },
+  })
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+  assert.equal(result.proposal_ready,true);assert.equal(result.attempts,1)
+})
+
+test('malformed requirement identities identify the exact row and cannot pass a positive model review',async()=>{
+  for(const id of ['',undefined,'not-a-uuid']){
+    const proposal=structuredClone(compiled)
+    ;(proposal.steps[0].requirements[0] as any).requirement_id=id
+    const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
+      callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(cleanReview,'nano')})
+    const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Verify opening.'})
+    const issue=result.review.issues.find((i:any)=>i.code==='invalid_requirement_id')
+    assert.equal(issue.step_position,1);assert.equal(issue.requirement_position,1)
+    assert.equal(result.proposal_ready,false)
+  }
+})
+
+test('existing requirement identities preserve their parent and occur only once, including during repair',async()=>{
+  const stepId='40000000-0000-4000-8000-000000000001'
+  const requirementId='50000000-0000-4000-8000-000000000001'
+  const data={...projectData,plan:[{id:'A',revision:1,steps:[{id:stepId,state:'active',requirements:[{id:requirementId}]}]}]}
+  for(const scenario of ['valid','wrong_parent','duplicate'] as const){
+    const proposal=structuredClone(compiled) as any
+    proposal.expected_revision=1
+    proposal.steps[0].step_id=scenario==='wrong_parent'?null:stepId
+    proposal.steps[0].requirements[0].requirement_id=requirementId
+    if(scenario==='duplicate')proposal.steps[0].requirements.push(structuredClone(proposal.steps[0].requirements[0]))
+    const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup:makeLookupFor(data),
+      callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(cleanReview,'nano')})
+    const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Refine current step.'})
+    assert.equal(result.proposal_ready,scenario==='valid')
+    if(scenario!=='valid')assert(result.review.issues.some((i:any)=>i.code===(scenario==='wrong_parent'?'requirement_parent_mismatch':'duplicate_requirement_id')))
+  }
+})
+
+test('exhausted repair reports its limit and logs only structural diagnostics',async t=>{
+  const logs:unknown[][]=[]
+  t.mock.method(console,'log',(...args:unknown[])=>logs.push(args))
+  const privateText='PRIVATE_PROJECT_AND_REVIEW_TEXT'
+  const proposal={...compiled,summary:privateText}
+  const review={...blockedReview,summary:privateText,issues:[{...blockedReview.issues[0],code:privateText,message:privateText}]}
+  const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,deadline:Date.now()+215000,
+    callModel:async o=>o.functionName==='plan-compiler'?response(proposal,'mini'):response(review,'nano')})
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:privateText})
+  assert.equal(result.remaining_attempts,0);assert.equal(result.attempts,2)
+  assert.match(result.note,/automatic repair budget is exhausted/)
+  const diagnostics=logs.filter(args=>args[0]==='[Bob plan review]').map(args=>JSON.parse(String(args[1])))
+  assert.equal(diagnostics.length,2)
+  assert.deepEqual(diagnostics.map(d=>d.attempt),[1,2])
+  assert(diagnostics.every(d=>d.shape_valid===true&&d.review_error_count===1))
+  assert(!JSON.stringify(logs).includes(privateText));assert(!JSON.stringify(logs).includes(measurementId))
+})
