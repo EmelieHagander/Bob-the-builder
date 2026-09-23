@@ -1,6 +1,6 @@
 # Living project plan — steps, completion requirements and replanning
 
-**Status: specified / not built.**
+**Status: foundation + active workspace deployed; read-only plan-assistant implementation pending release.**
 
 This document owns Bob's future **living project-plan model**: how a build moves from an idea through dynamic steps, how a step knows what is still missing, how evidence such as measurements/photos/drawings/material state satisfies those needs, who owns the work, and how Bob proposes changes as reality changes.
 
@@ -429,6 +429,40 @@ The desired behavior is:
 2. Bob reasons about what information is relevant;
 3. Bob chooses the appropriate tool/data source;
 4. current project truth is available regardless of which collaborator created it.
+
+### 10.1 Bob may delegate information work, never project leadership
+
+Bob should not spend main-model context on mechanical project-wide matching when a smaller read-only assistant can do it.
+
+The first assistant boundary is:
+
+```text
+BOB — project manager
+writes the project-specific plan intent
+        ↓
+PLAN COMPILER — mini
+grounds Bob's intent into exact Steps / atomic Completion Requirements
+and candidate existing Task/evidence links
+        ↓
+PLAN REVIEWER — nano
+checks semantic evidence fit and representation errors
+        ↓
+BOB
+accepts/rejects/corrects the advice and performs any authorised writes
+```
+
+The assistants are deliberately **not another planning authority**:
+
+- Bob owns Step sequence, goals and project strategy.
+- The compiler may split an over-broad finish criterion into atomic criteria, map exact IDs and find existing operational Tasks/evidence.
+- The reviewer may flag that evidence does not actually prove a criterion, that a conflict was hidden, or that an ID/relationship is invalid.
+- Neither assistant receives a project write tool or direct service-role project access.
+- Their output is advisory data. Bob decides whether it represents his intent before using the normal living-plan write tools.
+- Human approval of consequential plan revisions remains unchanged.
+
+This pattern also leaves room for later specialist assistants without bloating Bob's permanent context. A future **impact scan** may, for example, find every current drawing, Task, material requirement or plan criterion that references a changed timber dimension and return a compact consequence proposal. It may find and suggest; Bob still decides what should change.
+
+The goal is not "more agents". The goal is to put high-volume retrieval/extraction work somewhere cheaper while keeping one clear project manager.
 
 ---
 
