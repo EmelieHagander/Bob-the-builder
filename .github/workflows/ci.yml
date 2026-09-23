@@ -16,6 +16,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
+      - run: node --check scripts/check-live-plan-assistant.mjs
       - run: node --check scripts/check-live-foundations.mjs
       - run: node --check scripts/check-live-project-facts.mjs
       - run: node --check scripts/check-live-solutions.mjs

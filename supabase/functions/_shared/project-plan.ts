@@ -6,6 +6,8 @@ const object = (v: unknown): v is Record<string,unknown> => !!v && typeof v === 
 const text = (v: unknown,n:number,empty=false): v is string => typeof v === 'string' && v.length<=n && (empty || v.trim().length>0)
 const revision = (v: unknown,zero=false): v is number => Number.isSafeInteger(v) && Number(v)>=(zero?0:1) && Number(v)<1_000_000_000
 const exact = (v: Record<string,unknown>, keys:string[]) => Object.keys(v).length===keys.length && keys.every(k=>Object.hasOwn(v,k))
+// New identities are allocated by project_plan_propose, never by the model.
+export const isPlanIdentity = (v:unknown):boolean => v===null||(typeof v==='string'&&uuid.test(v))
 
 function tool(name:string,description:string,properties:Record<string,unknown>) {
   return { type:'function' as const, function:{ name,description,parameters:{
@@ -112,7 +114,7 @@ function selector(v:unknown) {
 }
 function requirement(v:unknown) {
   if(!object(v)||!exact(v,['requirement_id','type','title','description','resolution','responsible_kind','responsible_person_id','evidence_selector'])) return false
-  return (v.requirement_id===null||(typeof v.requirement_id==='string'&&uuid.test(v.requirement_id)))
+  return isPlanIdentity(v.requirement_id)
     && ['measurement','photo','decision','drawing','material_requirement','material_delivery','task','approval','check','other'].includes(String(v.type))
     && text(v.title,240)&&text(v.description,2000,true)
     && ['open','waived','not_applicable'].includes(String(v.resolution))
@@ -120,7 +122,7 @@ function requirement(v:unknown) {
 }
 function step(v:unknown) {
   if(!object(v)||!exact(v,['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'])) return false
-  return (v.step_id===null||(typeof v.step_id==='string'&&uuid.test(v.step_id)))
+  return isPlanIdentity(v.step_id)
     && text(v.title,240)&&text(v.goal,4000)&&['planned','active','blocked','completed'].includes(String(v.state))
     && (v.area_id===null||text(v.area_id,200))&&responsibility(v)&&text(v.notes,4000,true)
     && Array.isArray(v.requirements)&&v.requirements.length<=20&&v.requirements.every(requirement)

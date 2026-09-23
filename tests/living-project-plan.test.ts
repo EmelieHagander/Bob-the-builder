@@ -2,6 +2,10 @@ import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
+import { createPlanAssistant } from '../supabase/functions/_shared/plan-assistant.ts'
+import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
+import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
+import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 
 const pg=new PGlite()
@@ -187,4 +191,81 @@ test('raw writes are denied while caller-scoped reads stay isolated',async()=>{
   await assert.rejects(server(outsider,'select bob_private.project_plan_link_task($1,$2,$3,$4,$5)',[
     'A',3,(await briefing(owner)).current_step.id,'taskB','link'
   ]),/project_denied/)
+})
+
+
+test('Bob sees nano feedback, requests repair, rejects a mistaken veto and saves a real proposed revision through the claimed writer',async()=>{
+  const project='bob-led-fixture',turn=id(900)
+  await pg.query('insert into bob.projects(id,slug,name) values($1,$1,$2)',[project,'Bob-led fixture'])
+  await pg.query('insert into bob.people(id,project_id,name,initials,auth_user_id) values($1,$2,$3,$4,$5)',[project,project,'Owner','OW',owner])
+  const message='Okej, kör vidare :)'
+  const claim=(await as(null,'select bob.bob_claim_turn($1,$2,$3,$4) result',[project,owner,turn,message],'service_role')).rows[0].result as any
+  assert.equal(claim.status,'claimed')
+  const binding=[project,claim.thread_id,turn,claim.generation]
+  const query=async(sql:string,params:unknown[])=>({data:(await as(owner,sql,params)).rows[0].result,error:null})
+  const writer=createProjectWriter(project,message,
+    payload=>query('select bob.bob_project_write_v8($1,$2,$3,$4,$5) result',[...binding,JSON.stringify(payload)]),
+    ()=>query('select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding),
+    ()=>query('select bob.bob_settle_project_writes($1,$2,$3,$4) result',binding))
+  const lookup=()=>createProjectLookup(project,async(_project,input)=>query(
+    'select bob.search_bob_project_data_v8($1,$2,$3,$4,$5,$6,$7) result',
+    [project,input.dataset,input.query,input.status,input.area_id,input.record_id,input.after_id]),10000,12)
+  const usage={input_tokens:1,output_tokens:1,total_tokens:2}
+  const response=(data:any)=>({success:true,data,model:'fixture',usage})
+  const proposal={expected_revision:0,summary:'Kontrollera dörren',reason:'Mått och placering behöver kontrolleras',
+    steps:[step('active',{area_id:null,requirements:[{...req('Centrerad dörr',{kind:'none',id:null,subject:null,area_id:null}),
+      responsible_kind:'bob',responsible_person_id:null,description:'Kontrollera dörrens bredd.'}]})],task_candidates:[],observations:[]}
+  const order:string[]=[]
+  let compilerCalls=0,mainCalls=0
+  const assistant=createPlanAssistant({projectId:project,userId:owner,hasAccess:async()=>true,makeLookup:lookup,
+    callModel:async o=>{
+      order.push(o.functionName!)
+      if(o.functionName==='plan-compiler'){
+        compilerCalls++
+        if(compilerCalls===2){
+          const input=JSON.parse(String(o.prompt))
+          assert.match(input.plan_intent,/centrering/)
+          assert.equal(input.repair_feedback.review.issues[0].code,'evidence_mismatch')
+          proposal.steps[0].requirements[0].description='Kontrollera centrering mot öppningens mitt; mätning återstår.'
+        }
+        return response(structuredClone(proposal))
+      }
+      return response({ready_to_save:false,summary:'Review advice',issues:[{
+        severity:'error',code:compilerCalls===1?'evidence_mismatch':'identity_mismatch',step_position:1,requirement_position:1,evidence_id:null,
+        message:compilerCalls===1?'Bredd är inte centrering.':'New requirement_id is null.',suggestion:'Check this criterion.'}]})
+    }})
+  const result=await runProjectAnswer({projectId:project,userId:owner,message,lookup:lookup(),writer,planAssistant:assistant,hasAccess:async()=>true,
+    readToolPolicy:async()=>({phase:null,tools:(await as(owner,'select * from bob.tool_catalog')).rows as any}),
+    callModel:async o=>{
+      mainCalls++;order.push('bob')
+      const call=(name:string,args:any)=>({...response(null),responseId:'main_'+mainCalls,
+        toolCalls:[{id:'call_'+mainCalls,type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
+      if(mainCalls===1)return call('compile_project_plan',{plan_intent:'Kontrollera dörrens centrering.'})
+      const toolResult=JSON.parse(String(o.messages?.find(m=>m.role==='tool')?.content))
+      if(mainCalls===2){
+        assert.equal(toolResult.review.issues[0].code,'evidence_mismatch')
+        assert.equal(compilerCalls,1,'Bob must see the review before another compiler call')
+        assert.equal(writer.receipts.length,0)
+        return call('compile_project_plan',{plan_intent:'Behåll kravet men beskriv centrering, inte bredd. Lämna det öppet.'})
+      }
+      if(mainCalls===3){
+        assert.equal(toolResult.review.ready_to_save,false)
+        assert.equal(toolResult.server_validation.valid,true)
+        assert(o.tools?.some(t=>t.function.name==='save_compiled_project_plan'),'nano cannot hide the valid save')
+        return call('save_compiled_project_plan',{request_quote:message})
+      }
+      assert.equal(mainCalls,4);assert.equal(toolResult.status,'saved')
+      assert.equal(toolResult.receipt.record.status,'proposed')
+      return {...response('Förslaget är sparat. Centreringen återstår att mäta.'),responseId:'final'}
+    }})
+  assert.equal(result.ok,true)
+  assert.deepEqual(order,['bob','plan-compiler','plan-reviewer','bob','plan-compiler','plan-reviewer','bob','bob'])
+  assert.equal(writer.receipts.length,1)
+  const saved=(await as(owner,'select bob.project_plan_read($1,1) result',[project])).rows[0].result as any
+  assert.equal(saved.record.status,'proposed')
+  assert.match(saved.record.steps[0].requirements[0].description,/centrering/)
+  assert.equal(saved.record.steps[0].requirements[0].evidence_selector.kind,'none')
+  assert.match(saved.record.steps[0].requirements[0].id,/^[0-9a-f-]{36}$/,'database assigns the new null identity')
+  assert.equal(((await as(owner,'select bob.project_plan_briefing($1) result',[project])).rows[0].result as any).status,'not_initialized','save never approves the plan')
+  assert.equal(((await as(owner,'select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding)).rows[0].result as any[]).length,1)
 })
