@@ -72,6 +72,20 @@ before(async()=>{
 })
 after(()=>pg.close())
 
+test('living-plan tools are core even when the Project has no lifecycle phase',async()=>{
+  const project=(await as(owner,"select phase from bob.projects where id='A'")).rows[0]
+  assert.equal(project.phase,null,'Legacy/unclassified projects reproduce the production null-phase case')
+  const rows=(await as(owner,\`select name,always_load,description from bob.tool_catalog
+    where name in ('propose_project_plan','decide_project_plan','link_project_plan_evidence','save_project_task')
+    order by name\`)).rows as Array<{name:string;always_load:boolean;description:string}>
+  assert.equal(rows.length,4)
+  for(const name of ['propose_project_plan','decide_project_plan','link_project_plan_evidence']){
+    const row=rows.find(r=>r.name===name)
+    assert.equal(row?.always_load,true,\`${name} must remain visible without a Project phase\`)
+  }
+  assert.match(rows.find(r=>r.name==='save_project_task')?.description ?? '',/not a living Project Plan/)
+})
+
 test('shared measurement satisfies a living-plan requirement for every authorised member',async()=>{
   const proposed=await propose(0,plan())
   assert.equal(proposed.record.status,'proposed')
