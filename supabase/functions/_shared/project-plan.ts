@@ -124,7 +124,7 @@ function requirement(v:unknown) {
 }
 function plannedTask(v:unknown) {
   if(!object(v)||!exact(v,['task_key','task_id','area_id','title','instructions'])) return false
-  return text(v.task_key,64)&&/^[a-z][a-z0-9_-]{0,63}$/i.test(String(v.task_key))
+  return text(v.task_key,64)&&/^[a-z][a-z0-9_-]{0,63}$/.test(String(v.task_key))
     && (v.task_id===null||text(v.task_id,200))
     && text(v.area_id,200)&&text(v.title,300)&&text(v.instructions,12000,true)
 }
