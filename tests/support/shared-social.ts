@@ -12,10 +12,11 @@ export async function setupSharedSocial(pg: PGlite) {
     create type shared.ai_reasoning_effort as enum ('minimal','low','medium','high');
     create table shared.ai_models(
       model_name text primary key,
-      is_active boolean not null default true
+      is_active boolean not null default true,
+      supports_reasoning boolean not null default true
     );
-    insert into shared.ai_models(model_name,is_active)
-      values('gpt-5.4-mini',true),('gpt-5.4-nano',true);
+    insert into shared.ai_models(model_name,is_active,supports_reasoning)
+      values('gpt-5.4-mini',true,true),('gpt-5.4-nano',true,true);
     create table shared.ai_settings(
       id uuid primary key default gen_random_uuid(),
       app text not null,
