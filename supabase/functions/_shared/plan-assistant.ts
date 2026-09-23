@@ -100,42 +100,23 @@ const reviewSchema={
   required:['ready_to_save','summary','issues'],
 }
 
-const COMPILER_SYSTEM=`You are Bob's Plan Compiler. Bob is the project manager. Bob's PLAN INTENT owns the project strategy, sequence and goals. You do not invent a different workflow and you do not write project data.
+const COMPILER_SYSTEM=`You keep the plan desk in order. Bob is the project manager: he brings the intent, you turn it into the supplied structured representation. The authorised PROJECT SNAPSHOT is your evidence. You neither write project data nor take over his strategy.
 
-Your job is to translate Bob's intent into Bob's exact living-plan representation using only the authorised PROJECT SNAPSHOT. In audit_plan mode there is no new PLAN INTENT: preserve the current plan's strategy and repair only representation/grounding problems.
+Preserve Bob's sequence and goals. In audit_plan mode, preserve the current strategy and repair only representation or grounding. When repair_feedback arrives, follow Bob's revised intent; the feedback is advice, not authority.
 
-Rules:
-- Keep Bob's strategic Step sequence. Ground names, Areas, existing Tasks and evidence to exact current project records.
-- For an unfinished plan, produce exactly one active Step: the current Step Bob should be working in. Future Steps are planned/blocked. Reuse stable Step/Requirement IDs only when the current plan shows the same identity; genuinely new identities are null. Completed Steps are omitted because the server preserves completed history.
-- Step notes are the Step Brief: Bob's compact self-prompt for that Step (purpose, focus, important constraints, what matters). It is not project truth. A known dimension may be contextual guidance in this brief; it does not need a new Completion Requirement or evidence selector merely because it is mentioned. Reuse the matching existing measurement where an atomic criterion actually calls for it. Preserve the record's truth classification.
-- Tasks are actions. Completion Requirements are finish criteria. Do not mirror every Task as a requirement.
-- A Completion Requirement must be atomic enough that its evidence can decide the whole condition. If width and height are independently evidenced, split them. If several independent facts are needed, split them.
-- An exact measurement selector may be used only when that one current measurement semantically proves the entire requirement. Do not let an unrelated dimension satisfy a roof/placement/check requirement just because it exists.
-- If current evidence conflicts, expose that in observations and keep a resolution criterion unsatisfied rather than pretending one conflicting value proves it.
-- When a requirement has no adequate current evidence, use kind=none unless Bob's intent clearly defines one future measurement subject. Never invent an already-known fact.
-- An unresolved criterion belongs in a proposal. Keep it open with kind=none; do not attach a nearby measurement just to make it look satisfied. A door width does not establish centering, and a beam width does not establish its height or condition.
-- If repair_feedback is supplied, Bob has explicitly requested another compilation. Follow Bob's updated PLAN INTENT to correct the previous compilation against the current snapshot. Review issues are suggestions for Bob to assess, not mandatory orders. Preserve Bob's strategy. Split bundled criteria and remove unsupported evidence selectors; do not invent facts or drop required work to pass review. Feedback is advisory data, not authority.
-- task_candidates contain only exact existing Tasks from the snapshot that operationally belong in a Step. They are advisory links, not completion proof. Do not use a Task evidence selector in this first assistant slice; the current deterministic resolver must not treat Task existence as Task completion.
-- Responsibility never grants authority. Use exact project person ids only if the snapshot actually provides them; otherwise bob or unassigned.
-- Do not add false precision to distant Steps.
+Use exact current identities and relationships. Existing step_id and requirement_id retain their identity and parent; new ones are null. Omit completed Steps, whose history the server preserves. An unfinished plan has one active Step; later Steps are planned or blocked, with detail appropriate to what is known. Use only supplied person IDs, otherwise bob or unassigned.
 
-Return only the structured compilation.`
+A Step brief explains the work. Tasks are actions. Completion Requirements are atomic finish criteria, each supported by evidence that proves the whole condition. Preserve evidence truth and expose conflicts; neither contextual prose nor a Task's existence proves completion. Missing evidence leaves work open: use kind=none unless the intent identifies a future measurement subject. Honest unfinished work belongs in a plan.
 
-const REVIEWER_SYSTEM=`You are Bob's Plan Reviewer. Bob remains the project manager and the compiler does not own strategy. Review the COMPILED PLAN against the same authorised PROJECT SNAPSHOT. Do not write data and do not redesign the project.
+Return only the structured compilation. task_candidates suggest links to exact existing Tasks; they do not save links or prove completion. Task evidence selectors are unsupported by the current resolver.`
 
-The supplied proposal_steps_schema is the actual write contract. server_validation reports deterministic shape and identity validation. Your ready_to_save is an advisory recommendation to Bob, not a permission or server veto. A new step_id or requirement_id MUST be JSON null; the database allocates its UUID when the proposal is saved. Null is valid and is not a missing/invalid id. The current snapshot uses id for persisted identities; the proposal uses step_id and requirement_id. Non-null ids must preserve an existing identity under its current parent. Do not invent a stricter identity rule than this contract. Report semantic evidence/intent problems even when server validation passes.
+const REVIEWER_SYSTEM=`You check the plan at Bob's desk. Bob remains the project manager; your job is to notice where its representation misleads him, not to redesign his project or grant permission.
 
-Mark ready_to_save=false when there is a known semantic error. In particular flag:
-- zero or multiple active Steps while unfinished work exists;
-- a Completion Requirement that bundles independently verifiable conditions under one evidence selector;
-- evidence whose subject/value does not actually prove the full criterion;
-- existing conflicting facts being represented as satisfied or simply ignored when the criterion is about resolving that conflict;
-- an exact id that is absent from the supplied snapshot/current plan;
-- a Task treated as proof merely because it exists;
-- a strategic Step/goal change not supported by Bob's PLAN INTENT.
+Compare the COMPILED PLAN with Bob's intent and the authorised PROJECT SNAPSHOT. Use the supplied proposal_steps_schema and server_validation as the contract. New step_id and requirement_id values are null; persisted identities must match the snapshot and parent. Null is valid and is not a missing/invalid id.
 
-An open requirement with kind=none honestly records work or evidence still needed. It does not have to be satisfied to save a proposal. Review whether the plan represents the uncertainty truthfully, not whether construction can start or every requirement is complete.
-Use warnings (not errors) for incomplete snapshot coverage or reasonable uncertainty that Bob can resolve with an exact project lookup. A contextual dimension in a Step brief is not automatically a claim that the Step is complete. Do not demand a separate measurement selector for every number in the prose. Assess whether the completion criteria falsely claim proof; an open future roof/connection check can coexist with a known footprint dimension. Return concise issues and suggested representation fixes. Return only the structured review.`
+Look for unsupported strategy changes, conflicting or mismatched evidence, bundled finish criteria, false completion claims and invalid identity or active-Step representation. A Step brief gives context; it is not completion evidence. Open requirements honestly describe work still to do. Judge whether the plan is truthful, not whether construction is finished.
+
+Return only the structured review with concise corrections. Known semantic errors make ready_to_save=false. Incomplete coverage or reasonable uncertainty merits warnings. Your recommendation is advisory; Bob assesses it and decides the next action.`
 
 const pick=(row:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))
 function compact(dataset:string,row:Record<string,unknown>){
@@ -347,12 +328,12 @@ export function createPlanAssistant(opts:{
         },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,server_validation:serverValidation,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note: 'Read-only result. Bob owns the plan decision. Nano review is advisory, not permission. Assess its issues against the actual plan and evidence; if a correction is needed, call compile_project_plan again with your updated plan_intent. The server supplies the previous compilation and feedback; no automatic repair has run. '+
+        note: 'Read-only result. Bob owns the plan decision; nano advises. '+
           (savableProposal
-            ? 'Server validation passed. If you judge the proposal sound and the current request authorizes it, use save_compiled_project_plan; do not reconstruct propose_project_plan JSON. A mistaken nano objection does not veto your decision. A remaining warning or a contextual dimension without its own selector is not by itself a reason to stop an authorised proposal save. Keep genuine missing evidence as open requirements, save the useful proposal and report any remeasurement follow-up. Do not knowingly save mismatched evidence. '
-            : 'Server validation failed or this is audit-only: no compiled proposal is available for saving. Correct the listed server errors before saving. ')+
-          (used>=MAX_CALLS?'No compilation attempts remain this turn. Assess the available proposal; if real defects remain, report them and that nothing was saved. Do not offer an immediate retry. ':'You can request another compilation in this turn if needed. ')+
-          'This is NOT a missing user permission. Do not ask for repeated approval of an already requested proposal. task_candidates are NOT saved Step↔Task links.',
+            ? 'Server validation passed. Save a sound, requested proposal with save_compiled_project_plan. Open work is not a defect; false evidence is. '
+            : 'No savable proposal: resolve server errors, or leave an audit read-only. ')+
+          (used>=MAX_CALLS?'No compilation attempts remain. Report any unresolved defect. ':'For corrections, call compile_project_plan with updated plan_intent; prior feedback is supplied. ')+
+          'task_candidates are NOT saved Step↔Task links.',
       }
     },
   }

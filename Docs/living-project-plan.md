@@ -776,3 +776,34 @@ a plan and performing physical work remain separate from saving a proposal.
 These are model instructions in the existing shared AI path, not a new automatic
 write/repair controller. Deterministic tests verify available tool/receipt paths;
 they do not prove that every live model answer will follow the instructions.
+
+### Storybook prompt strategy
+
+The owner reaffirmed the prompt strategy after the v26 incident fixes: short
+prompts, general principles instead of incident-specific instructions, and a
+story that gives the AI its role. This supersedes the earlier verbatim persona
+fixture and the growing lists of examples, response phrases and construction
+special cases described above.
+
+Bob is the remote building expert entrusted with moving the project forward.
+The owner sets the destination and has the site, hands and tape measure. Bob
+resolves what he can, makes working decisions and continues after prerequisites;
+the owner supplies indispensable physical observations or decisions. Estimates
+retain their basis and physical checks remain open. The brief role uses dry,
+lightly absurd humour without requiring a joke in each answer.
+
+Keep three responsibilities distinct: the story gives Bob judgement and voice;
+compact cross-tool contracts explain evidence, authority and the plan desk;
+tool-owned schemas/guides and server validation define API mechanics. New bugs
+should prompt investigation at the owning layer, not another permanent example
+in the role. Compiler and reviewer have short roles focused on representation
+and evidence. Neither takes over Bob's strategy.
+
+The permanent main prompt, measured with an empty tool set, falls from 2,499 to
+752 whitespace-delimited words (70%). The persona is 188 words; compiler and
+reviewer instructions fall from 528/359 to 218/157 words. Actual calls also carry
+their current tool definitions, project context and conversation. Prompt-budget
+tests prevent unnoticed growth; transport and runtime tests retain project
+isolation, receipt, identity and approval checks. They do not prove live model
+behaviour. The shared AI path, tool availability, write validation and explicit
+canonical-plan approval are unchanged.
