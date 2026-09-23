@@ -271,7 +271,7 @@ export function createPlanAssistant(opts:{
         },task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note:'Read-only advisory result. Bob owns the plan decision. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
+        note:'Read-only advisory result. Bob owns the plan decision. task_candidates are NOT saved Step↔Task links. A plan proposal does not create those links; after approval use link_project_plan_task and only report a Task as linked after its successful write receipt. Use the normal living-plan write tools only after Bob judges this compilation represents the intended project strategy.',
       }
     },
   }
