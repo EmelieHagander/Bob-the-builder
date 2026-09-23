@@ -40,12 +40,12 @@ try {
   assert.equal(plan.record.steps.filter(s => s.state === 'active').length, 1)
   const requirements = plan.record.steps.flatMap(s => s.requirements)
   assert(requirements.length >= 2, 'Distinct width and centering criteria must be represented')
-  assert(requirements.every(q => q.id && q.evidence_selector.kind === 'none'), 'Missing measurements stay open without invented evidence')
+  assert(requirements.every(q => q.id && q.evidence_selector.id === null && q.status?.state !== 'satisfied'), 'Missing measurements stay open without invented evidence')
   const briefing = checked(await client.rpc('project_plan_briefing', { p_project: project.id }))
   assert.equal(briefing.status, 'not_initialized', 'Proposal must not silently become the approved plan')
   console.log(JSON.stringify({ passed: true, projectId: project.id, revision: revisions[0].revision,
     status: plan.record.status, steps: plan.record.steps.length, requirements: requirements.length,
-    writes: planWrites.length, summary: next.summary }))
+    writes: planWrites.length, criteria: requirements.map(q => ({ title: q.title, description: q.description, state: q.status?.state, selector: q.evidence_selector })), summary: next.summary }))
 } catch (error) {
   console.error(`Live plan verification failed: ${error.message}`)
   process.exitCode = 1
