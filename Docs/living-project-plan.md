@@ -1,8 +1,8 @@
 # Living project plan — steps, completion requirements and replanning
 
-**Status: specified / not built.**
+**Status: implemented foundation + active-step workspace in source; deployment state is verified separately by release evidence.**
 
-This document owns Bob's future **living project-plan model**: how a build moves from an idea through dynamic steps, how a step knows what is still missing, how evidence such as measurements/photos/drawings/material state satisfies those needs, who owns the work, and how Bob proposes changes as reality changes.
+This document owns Bob's **living project-plan model**: how a build moves from an idea through dynamic steps, how a step knows what is still missing, how evidence such as measurements/photos/drawings/material state satisfies those needs, who owns the work, and how Bob proposes changes as reality changes.
 
 It does **not** replace the shipped task/readiness model, project facts, media, artifacts, material planning or collaboration authority. Those remain the runtime owners for what is built today. This contract defines the product model they should converge toward.
 
@@ -103,6 +103,7 @@ A Step is a meaningful unit of project progress.
 A step describes:
 
 - **goal/result** — what should be achieved;
+- **Step Brief** — Bob's concise working note to future Bob about what this Step is, what matters and how to think about it; it is context, never evidence;
 - **state** — e.g. planned / active / blocked / completed;
 - **responsibility** — who owns the step or its requirements;
 - **completion requirements** — what must be true before completion;
@@ -384,45 +385,49 @@ The answer should be able to follow the historical plan/evidence chain instead o
 
 ## 10. Bob's working context should be a project story, not a database dump
 
-This model changes what Storybook-style prompting should provide.
+Bob should carry two plan layers on every normal turn.
 
-Bob should begin with a compact **working project briefing** such as:
+### Plan Spine — always present, deliberately tiny
+
+The whole approved plan stays in context as:
 
 ```text
-Project goal
-Current approved plan revision
-Current active Step
-Why this Step exists
-Who owns it
-Completion: 8/9 requirements satisfied
-Recently satisfied requirements
-Missing/conflicted/stale requirements
-Immediate next planned Step(s)
-Important recent project changes
-Plan-review signal if downstream plan predates important new evidence
+✓ Step 1 — title
+→ Step 2 — title
+○ Step 3 — title
+○ Step 4 — title
 ```
 
-This is the **story of the project state**.
+Only stable Step identity, position, title and state belong here. Goals, Tasks, detailed requirements and future-step prose do not.
 
-It is not a replacement for tools.
+The spine exists so Bob never loses the shape of the plan he is leading.
 
-Bob still uses project tools when the question requires exact detail:
+### Active Step Workspace — Bob's working desk
 
-- open the relevant Measurement revision;
-- inspect a drawing;
-- inspect material state;
-- check a photograph;
-- read downstream steps;
-- compare a changed source.
+The current active Step, or the first blocked Step when no Step is active, carries the detail Bob needs to lead the work:
 
-There should be **no universal rule that Bob must always search measurements first**.
+- Step goal;
+- Step Brief;
+- responsibility;
+- Tasks with exact identity/title/status where materialized;
+- Task blueprints that are still plan-only;
+- Completion Requirements with current missing/satisfied/conflicted/stale/waived state;
+- compact completion counts;
+- a signal that new shared evidence arrived after the plan was approved.
 
-The desired behavior is:
+The Step Brief is intentionally small. It is Bob's note to himself about **what this Step is and what matters**. It must never override structured Tasks, Completion Requirements or project evidence.
 
-1. the briefing tells Bob what kind of situation he is in;
-2. Bob reasons about what information is relevant;
-3. Bob chooses the appropriate tool/data source;
-4. current project truth is available regardless of which collaborator created it.
+Initialized plans should not carry a generic dump of recent measurements merely because those facts exist. Bob fetches exact evidence when the active workspace or the user's question makes it relevant.
+
+If Bob needs detail from another Step, he opens that exact Step by its Step ID. He does not need to reload the full detailed plan.
+
+There should be **no universal rule that Bob must always search measurements first**. The desired behavior is:
+
+1. Plan Spine preserves orientation;
+2. Active Step Workspace provides current expertise;
+3. Bob reasons about what exact information is relevant;
+4. Bob chooses the appropriate tool/data source;
+5. current project truth remains shared regardless of which collaborator created it.
 
 ---
 
@@ -450,23 +455,28 @@ The actor who created a fact must not become an accidental visibility filter for
 
 ## 12. Relationship to current Tasks
 
-The shipped `bob.tasks` model remains runtime truth today.
+Step and Task are separate first-class concepts.
 
-This contract does not yet decide whether future Step and Task are:
+- **Step** answers: "what project result are we trying to get through?";
+- **Task/action** answers: "what does a person/Bob actually do inside that Step?";
+- **Completion Requirement** answers: "what must be true before we can leave the Step?".
 
-- one generalized entity;
-- separate entities where a Step contains Tasks;
-- a migration/evolution of the existing Task model.
+A Step owns an ordered set of Task references/blueprints plus its Completion Requirements.
 
-That implementation decision requires a data/authority design pass.
+A plan proposal may contain **Task blueprints** that do not yet exist in `bob.tasks`. This is important: Bob must be free to propose how the work should be broken down without polluting the live project with speculative Tasks.
 
-Product semantics are clearer:
+When the exact proposal is approved:
 
-- **Step** answers: "what project stage/result are we trying to get through?";
-- **Completion Requirement** answers: "what must be true before we can leave it?";
-- **Task/action** answers: "what does a person/Bob actually do?".
+- existing Task references are rechecked against current project state;
+- only Task blueprints belonging to the current active Step (or current blocked Step when none is active) materialize as real project Tasks;
+- future-Step Task blueprints remain plan data until a later approved replan makes that Step current;
+- rejection creates no Tasks.
 
-One Step may contain many actions. Some Completion Requirements may be satisfied directly by evidence without a dedicated manual task.
+Each Step Task has a short Step-local `task_key`. A task-based Completion Requirement may point to `@task:<task_key>` while the Task is still a blueprint. Approval atomically replaces that local reference with the exact materialized Task ID.
+
+Task existence is not completion. A task-based requirement is satisfied only when the exact Task is actually `done`.
+
+Some Completion Requirements are satisfied directly by measurements, drawings, decisions, material state or other evidence and therefore need no dedicated Task at all.
 
 ---
 
@@ -598,9 +608,6 @@ These are product acceptance scenarios, **not passing-test claims**.
 
 This document intentionally does not decide:
 
-- exact SQL table/function names;
-- whether Step replaces or contains current Task;
-- the first database migration shape;
 - exact UI presentation;
 - automatic versus explicit evidence-matching thresholds;
 - how broad semantic matching may be before human confirmation is required;
@@ -617,13 +624,19 @@ Those belong to subsequent data/authority, Ask Bob runtime and UI contracts.
 
 A truthful implementation should probably proceed in slices:
 
-1. **Plan / Step / Completion Requirement identity and revision model** with manual creation and evidence links.
-2. **Requirement resolution from existing project facts** such as Measurements, decisions and images.
-3. **Compact working-project briefing** consumed by Ask Bob.
-4. **Bob plan/change proposals + approval flow**.
-5. **Responsibility model** spanning Bob, members and permitted volunteers.
-6. **Replanning checkpoints** on Step start/completion and relevant project changes.
-7. Integration with drawings/material planning/Shopping/as-built evidence.
+Implemented source foundations now cover:
+
+1. **Plan / Step / Completion Requirement identity and revision model** with evidence links.
+2. **Requirement resolution from project facts**, including Task completion semantics.
+3. **Plan Spine + Active Step Workspace** consumed by Ask Bob.
+4. **Bob plan/change proposals + explicit approval flow**.
+5. **Step Brief + Step-owned Task references/blueprints**, with current-Step Task materialization on approval.
+6. **Responsibility model** spanning Bob and exact project people.
+
+The next larger slices remain:
+
+7. **Automatic replanning checkpoints / impact signals** on Step start/completion and relevant project changes.
+8. Broader integration with drawings/material planning/Shopping/as-built evidence and future bounded assistant scans.
 
 This ordering is guidance from the product model, not an approved release schedule.
 
