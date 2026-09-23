@@ -6,26 +6,32 @@ import type { ProjectSource } from '../../../src/data/provenance.ts'
 type Lookup = ReturnType<typeof createProjectLookup>
 export type PlanAssistantModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>
 
-const MODES=['compile_plan','audit_plan'] as const
-type Mode=typeof MODES[number]
+type Mode='compile_plan'|'audit_plan'
 const MAX_CALLS=2
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
 
-export const PLAN_ASSISTANT_TOOL={
+export const COMPILE_PLAN_TOOL={
   type:'function' as const,
   function:{
-    name:'consult_plan_assistant',
-    description:'Ask Bob\'s read-only planning assistant to ground/compile Bob\'s project-manager plan or audit the current living plan. The assistant never changes project strategy and never writes project data; task_candidates are suggestions, not saved Step↔Task links. Bob decides what to save.',
+    name:'compile_project_plan',
+    description:'Ground Bob\'s own project-manager plan intent against the current authorised project. The server supplies the current approved revision automatically. Read-only: returns a mini compilation plus nano review; never writes project data.',
     parameters:{
       type:'object',additionalProperties:false,
       properties:{
-        mode:{type:'string',enum:[...MODES],description:'compile_plan turns Bob\'s plan intent into a grounded proposal shape. audit_plan checks the current approved plan against project facts.'},
-        expected_revision:{type:'integer',minimum:0,description:'Current approved living-plan revision, or 0 when none exists.'},
-        plan_intent:{type:['string','null'],description:'Bob\'s own project-manager plan in plain text. Required for compile_plan; null for audit_plan.'},
+        plan_intent:{type:'string',description:'Bob\'s concise project-manager intent: Step sequence, goals and what should change. Do not include project/revision plumbing.'},
       },
-      required:['mode','expected_revision','plan_intent'],
+      required:['plan_intent'],
     },
+  },
+}
+
+export const AUDIT_PLAN_TOOL={
+  type:'function' as const,
+  function:{
+    name:'audit_project_plan',
+    description:'Audit the current approved living plan against authorised project evidence. Takes no project/revision arguments; the server reads the current approved plan automatically. Read-only.',
+    parameters:{type:'object',additionalProperties:false,properties:{},required:[]},
   },
 }
 
@@ -159,9 +165,8 @@ async function buildSnapshot(lookup:Lookup){
   return {data:out,partial,sources:lookup.sources.slice()}
 }
 
-function localValidation(mode:Mode,input:Record<string,unknown>,compiled:any,snapshot:Record<string,unknown>){
+function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<string,unknown>){
   const issues:Array<Record<string,unknown>>=[]
-  const expected=Number(input.expected_revision)
   if(compiled.expected_revision!==expected) issues.push({severity:'error',code:'revision_mismatch',step_position:null,requirement_position:null,evidence_id:null,message:'Compiler changed the expected plan revision.',suggestion:'Keep the exact current approved revision.'})
   const active=(compiled.steps??[]).filter((s:any)=>s.state==='active').length
   if((compiled.steps??[]).length>0&&active!==1) issues.push({severity:'error',code:'active_step_count',step_position:null,requirement_position:null,evidence_id:null,message:'An unfinished compiled plan must have exactly one active Step.',suggestion:'Choose the current Step and mark exactly that Step active.'})
@@ -214,29 +219,38 @@ export function createPlanAssistant(opts:{
   let used=0,partial=false
   const sources:ProjectSource[]=[]
   return {
-    tools:[PLAN_ASSISTANT_TOOL],
+    tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL],
     get remaining(){return Math.max(0,MAX_CALLS-used)},
     get partial(){return partial},
     get sources(){return sources.slice()},
     async consult(name:string,value:unknown){
-      if(name!==PLAN_ASSISTANT_TOOL.function.name) return {status:'invalid',saved:false}
+      const mode:Mode=name===COMPILE_PLAN_TOOL.function.name?'compile_plan'
+        :name===AUDIT_PLAN_TOOL.function.name?'audit_plan'
+        :null as never
+      if(!mode) return {status:'invalid',saved:false}
       if(++used>MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
-      if(!object(value)||Object.keys(value).length!==3||!MODES.includes(value.mode as Mode)
-        ||!Number.isSafeInteger(value.expected_revision)||Number(value.expected_revision)<0
-        ||!(value.plan_intent===null||text(value.plan_intent,12000))
-        ||(value.mode==='compile_plan'&&!text(value.plan_intent,12000))
-        ||(value.mode==='audit_plan'&&value.plan_intent!==null)) return {status:'invalid',saved:false}
+      const args=object(value)?value:{}
+      const planIntent=mode==='compile_plan'&&Object.keys(args).length===1&&text(args.plan_intent,12000)
+        ? String(args.plan_intent)
+        :mode==='audit_plan'&&Object.keys(args).length===0
+          ? null
+          : undefined
+      if(planIntent===undefined) return {status:'invalid',saved:false}
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const deadline=opts.deadline??Date.now()+90000
       const lookup=opts.makeLookup()
       let snapshot:{data:Record<string,unknown>;partial:boolean;sources:ProjectSource[]}
       try{snapshot=await buildSnapshot(lookup)}catch(e){return {status:e instanceof Error&&e.message==='project_denied'?'denied':'unavailable',saved:false}}
       partial ||= snapshot.partial
+      const currentPlan=((snapshot.data.plan as any[])?.[0]??null)
+      const expectedRevision=Number(currentPlan?.revision??0)
+      if(!Number.isSafeInteger(expectedRevision)||expectedRevision<0) return {status:'unavailable',saved:false,stage:'revision'}
+      if(mode==='audit_plan'&&!currentPlan) return {status:'not_initialized',saved:false}
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const compiler=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
         userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
-        prompt:JSON.stringify({mode:value.mode,expected_revision:value.expected_revision,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial}),
+        prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial}),
         schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
         timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
       })
@@ -245,14 +259,14 @@ export function createPlanAssistant(opts:{
       const dummy='assistant validation'
       const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
         steps:compiled.steps,request_quote:dummy})
-      const localIssues=localValidation(value.mode as Mode,value,compiled,snapshot.data)
+      const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
       if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
         message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const reviewer=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
         userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
-        prompt:JSON.stringify({mode:value.mode,plan_intent:value.plan_intent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
+        prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           compiled_plan:compiled,local_validation_issues:localIssues}),
         schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
         timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
@@ -266,7 +280,7 @@ export function createPlanAssistant(opts:{
       if(review.issues.some((i:any)=>i.severity==='error')) review.ready_to_save=false
       for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
       return {
-        status:'ok',saved:false,mode:value.mode,compiled_plan:{
+        status:'ok',saved:false,mode,current_revision:expectedRevision,compiled_plan:{
           expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
         },task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
