@@ -1,5 +1,7 @@
 # bob — V1 release plan
 
+> **Product correction, 2026-09-24:** the five outcome use cases in [user-stories.md](user-stories.md#product-mandate--2026-09-24) are the acceptance baseline. Narrow examples below are implementation fixtures, not the allowed construction types or evidence that the full product works. Generic drawing, autonomous delegated work and step-linked human/AI media remain required outcomes where not yet built. Earlier slice completion must not be reported as completion of these use cases.
+
 > **Status:** current V1 release contract  
 > **Owns:** V1 product thesis, release boundary, slice sequence, release gates and golden-path acceptance  
 > **Inputs:** `Docs/user-stories.md`, `Docs/building-model.md`, `Docs/function-inventory.md`, `Docs/function-scope.md`, `Docs/ui-index.md`

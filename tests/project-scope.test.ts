@@ -196,6 +196,7 @@ test('lookup validation, row/join/byte budgets and timeout are enforced', async 
   assert.equal(joined.truncated, true)
   await pg.query("update bob.tasks set name=$1 where id='taskA'", ['🌲'.repeat(20000)])
   const huge = await lookupFor(u1, 'A').search(input('tasks', { record_id: 'taskA' }))
+  assert.equal(huge.status, 'record_too_large')
   assert.equal(huge.truncated, true)
   assert.ok(Buffer.byteLength(JSON.stringify(huge)) <= LIMITS.bytes)
   await pg.exec("update bob.tasks set name='Fit 100% board' where id='taskA'")

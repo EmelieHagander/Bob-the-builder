@@ -2,6 +2,13 @@
 
 **build together, in the forest**
 
+Bob's primary purpose is to help someone with no previous building knowledge go
+from an idea to a completed DIY project. It also helps people take on larger builds
+by organising helpers across several days. Bob is the remote building expert;
+guidance, mockups and drawings belong beside the steps where people need them.
+The [five outcome use cases](Docs/user-stories.md#product-mandate--2026-09-24)
+define success and record the remaining gaps. They are not all implemented yet.
+
 bob is a mobile-friendly web app for coordinating community build and renovation
 projects — from a 50-volunteer house extension down to a 5-friend chicken coop.
 It keeps areas, tasks, people, materials, shopping lists, food and volunteer

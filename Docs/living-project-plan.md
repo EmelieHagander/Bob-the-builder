@@ -678,6 +678,15 @@ That shared answer is the living project plan.
 
 ## Simple plan-assistant tool surface
 
+**September 24 context correction (source implementation; release proof belongs
+to the PR):** the assistant follows all pages of its project snapshot, including
+all active project measurements and tasks, rather than stopping at 50. A separate
+128-read budget, deadline and 512 KiB aggregate limit bound the work. Incomplete,
+stalled or oversized retrieval stops before compilation with an explicit snapshot
+failure; it is not treated as proof that an evidence ID does not exist. Bob can
+continue using the existing project tools. The compiler/reviewer remain read-only;
+updates are performed by Bob through the normal write/receipt path.
+
 Bob remains the project manager. Runtime exposes two read-only assistant calls:
 
 - `compile_project_plan({ plan_intent })` — Bob supplies only his project-manager intent. The server resolves the current approved plan revision and project binding before mini compiles and nano reviews.

@@ -20,6 +20,8 @@
 
 ## Product north stars
 
+- **Idea to completed build without prior knowledge.** The five outcome use cases in `Docs/user-stories.md` are the product acceptance baseline. Tie changes to an observable outcome; a working technical slice does not prove the full user journey.
+- **Bob drives delegated work.** Ordinary reversible decisions and prerequisites are part of the request. Preserve physical uncertainty and consequential owner decisions without creating a confirmation step for every tool call.
 - **Build together.** bob exists to make a real build understandable and actionable for the people doing it together.
 - **The next useful action should be obvious.** On build days, a participant should quickly understand what they are doing, with whom, and what they need.
 - **Unknown stays unknown.** AI may analyse, explain and propose, but must not disguise assumptions as measured or verified project truth.

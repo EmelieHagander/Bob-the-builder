@@ -11,6 +11,8 @@
 | current V1 release goal / scope / slice sequence | `Docs/v1-plan.md` |
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
+| five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
+| baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
 | dynamic project Steps, completion requirements, responsibility, evidence and replanning | `Docs/living-project-plan.md` — specified product contract; not yet implemented |
 | material-led assemblies, dynamic specifications and linked drawing/pick/Shopping use case | `Docs/material-assembly-use-case.md` — specified end-to-end target; not a complete implementation |
 | reusable material/part definitions, dynamic profiles and catalog tools | `Docs/material-catalog.md` — slice A deployed 2026-09-22; live versioned material/part definitions and tools, no assembly geometry yet |

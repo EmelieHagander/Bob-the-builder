@@ -19,7 +19,7 @@ export interface LookupInput {
 type Row = Record<string, unknown> & { id: string; updated_at?: string | null }
 export interface LookupPayload { records: Row[]; related: Row[]; truncated: boolean; next_cursor?: string | null }
 export interface LookupResult {
-  status: 'ok' | 'empty' | 'denied' | 'invalid' | 'unavailable' | 'budget_exhausted'
+  status: 'ok' | 'empty' | 'denied' | 'invalid' | 'unavailable' | 'budget_exhausted' | 'record_too_large'
   projectId: string
   dataset?: LookupInput['dataset']
   retrievedAt: string
@@ -140,6 +140,10 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
         }
         const payload = data as LookupPayload
         if (!payload || !Array.isArray(payload.records) || !Array.isArray(payload.related) || typeof payload.truncated !== 'boolean') throw new Error('invalid_payload')
+        if (!payload.records.length && payload.truncated && !payload.next_cursor) {
+          incomplete = true
+          return { ...base, status: 'record_too_large', truncated: true }
+        }
         const result: LookupResult = { ...base, status: 'ok', next_cursor: typeof payload.next_cursor === 'string' ? payload.next_cursor : null, records: payload.records.slice(0, LIMITS.rows), related: payload.related.slice(0, LIMITS.joinedRows), truncated: payload.truncated || payload.records.length > LIMITS.rows || payload.related.length > LIMITS.joinedRows }
         if (input.dataset === 'artifacts') result.records = result.records.map(row => {
           if (row.stair_study || row.has_stair_study) return row.stair_study ? withDerivedStair(row, projectId) : { ...row, stair_detail: input.record_id ? 'unavailable' : 'read_exact_record_id' }
@@ -157,6 +161,10 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
           result.truncated = true
           if (result.related.length) result.related.pop()
           else {
+            if (result.records.length <= 1) {
+              incomplete = true
+              return { ...base, status: 'record_too_large', truncated: true }
+            }
             result.records.pop()
             result.next_cursor = result.records.at(-1)?.id ?? null
           }

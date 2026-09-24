@@ -41,6 +41,36 @@ const compiled={
 }
 const cleanReview={ready_to_save:true,summary:'Compilation is semantically grounded.',issues:[]}
 
+test('compiler receives every measurement page and can reference a record beyond the old fifty-row limit',async()=>{
+  const rows=Array.from({length:101},(_,i)=>({...projectData.measurements[0],id:`30000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`}))
+  const proposal=structuredClone(compiled)
+  proposal.steps[0].requirements[0].evidence_selector.id=rows[100].id
+  const makePagedLookup=()=>createProjectLookup('A',async(_p,input)=>{
+    const all=input.dataset==='measurements'?rows:projectData[input.dataset]??[]
+    const start=input.after_id?all.findIndex(r=>r.id===input.after_id)+1:0
+    const records=all.slice(start,start+25),more=start+records.length<all.length
+    return {data:{records,related:[],truncated:more,next_cursor:more?records.at(-1).id:null},error:null}
+  },1000,128)
+  const assistant=createPlanAssistant({projectId:'A',userId:'u',hasAccess:async()=>true,makeLookup:makePagedLookup,
+    callModel:async o=>{
+      assert.equal(JSON.parse(String(o.prompt)).project_snapshot.measurements.length,101)
+      assert.equal(JSON.parse(String(o.prompt)).snapshot_partial,false)
+      return o.functionName==='plan-compiler'?response(proposal,'mini'):response(cleanReview,'nano')
+    }})
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Use the last current measurement'})
+  assert.equal(result.proposal_ready,true);assert.equal(result.server_validation.valid,true)
+})
+
+test('incomplete evidence stops before compiling and is reported as retrieval failure, not unknown evidence',async()=>{
+  let calls=0
+  const assistant=createPlanAssistant({projectId:'A',userId:'u',hasAccess:async()=>true,
+    makeLookup:()=>createProjectLookup('A',async(_p,input)=>({data:{records:projectData[input.dataset]??[],related:[],truncated:input.dataset==='measurements',next_cursor:input.dataset==='measurements'?'stalled':null},error:null}),1000,128),
+    callModel:async()=>{calls++;return response(compiled,'mini')}})
+  const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Continue'})
+  assert.equal(calls,0);assert.equal(result.status,'unavailable');assert.equal(result.stage,'snapshot')
+  assert.equal(result.reason,'snapshot_incomplete');assert.equal(assistant.canSave,false)
+})
+
 function response<T>(data:T,model:string):OpenAIServiceResponse<T>{
   return {success:true,data:structuredClone(data),model,usage,responseId:'resp_'+model}
 }
