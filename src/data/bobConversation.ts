@@ -25,6 +25,8 @@ type AskBobResponse = {
   error?: string
   projectId?: string
   status?: string
+  jobId?: string
+  expiresAt?: string
   summary?: string
   evidence?: AnswerEvidence
 }
@@ -84,6 +86,16 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
       messages.push({ from: 'bob', text: row.text, ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
     }
   }
+  const unfinished = pending ?? retry
+  if (unfinished) {
+    const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
+    if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
+    if (job.data && ['queued', 'running'].includes(job.data.status)) {
+      const expiresAt = Date.parse(job.data.expiresAt)
+      if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
+      pending = { ...unfinished, expiresAt }; retry = undefined
+    } else if (job.data?.status === 'failed') { retry = unfinished; pending = undefined }
+  }
   return { mode: 'server', messages, retry, pending, lastCompletedTurnId }
 }
 
@@ -112,11 +124,12 @@ export async function askBob(
   projectId: string,
   message: string,
   clientTurnId: string = crypto.randomUUID(),
-): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string }> {
+): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string } | { pending: true; expiresAt: number }> {
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
-  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId })
+  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true })
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
+  if (res.ok && res.status === 'accepted' && res.jobId && Number.isFinite(Date.parse(res.expiresAt ?? ''))) return { pending: true, expiresAt: Date.parse(res.expiresAt!) }
   if (res.ok && res.status === 'completed' && res.summary && isBobAnswerEvidence(res.evidence, projectId)
     && res.evidence.sources.every(source => source.projectId === projectId)) {
     return { answer: res.summary, evidence: res.evidence }

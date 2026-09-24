@@ -1,3 +1,4 @@
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { RecordDetailReader } from './project-record-detail.ts'
 import type { ProjectImageTools } from './project-image-tools.ts'
 import { type CadAssistant } from './cad-assistant.ts'
@@ -86,7 +87,7 @@ export async function runProjectAnswer(opts: {
   projectId: string; userId: string; message: string;
   lookup: ReturnType<typeof createProjectLookup>; callModel: ModelCall;
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
-  writer?: ProjectWriter; context?: WorkingContext; deadline?: number;
+  writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
@@ -109,13 +110,13 @@ export async function runProjectAnswer(opts: {
     try {
       if (round < rounds - 1 && Date.now() + 40000 < deadline) tools = await toolbox.prepare()
       else toolbox.closeSurface()
-    } catch (error) { return { ok: false, error: toolFailureCode(error) } }
+    } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
     console.log('[Bob context]', JSON.stringify({round,system_chars:buildBobSystemMessage(tools).length,tool_schema_bytes:new TextEncoder().encode(JSON.stringify(tools)).length,message_bytes:new TextEncoder().encode(JSON.stringify(messages)).length,remaining_ms:Math.max(0,deadline-Date.now())}))
     const response = await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage: buildBobSystemMessage(tools), useHardcodedPrompt: true,
       messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
-      maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(45_000, deadline - Date.now()),
+      maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
     if (!response.success) return { ok: false, error: 'ai_unavailable' }
     opts.projectContext?.confirmDelivery()
@@ -129,7 +130,7 @@ export async function runProjectAnswer(opts: {
         try { args = JSON.parse(call.function.arguments) } catch { /* invalid attempt consumes its existing budget */ }
         let result: any
         try { result = await toolbox.execute(call.function.name, args) }
-        catch (error) { return { ok: false, error: toolFailureCode(error) } }
+        catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
         if (result?.status === 'denied') return { ok: false, error: 'project_denied' }
         const loggedName = tools.some(t => t.function.name === call.function.name) ? call.function.name : 'unoffered'
         console.log('[Bob tool]', loggedName, result?.status ?? 'returned')
@@ -142,7 +143,7 @@ export async function runProjectAnswer(opts: {
     if (printedLoad && tools.some(t => t.function.name === 'load_tool')) {
       let result: any
       try { result = await toolbox.execute('load_tool', printedLoad) }
-      catch (error) { return { ok: false, error: toolFailureCode(error) } }
+      catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
       console.log('[Bob tool protocol recovery] load_tool', result?.status ?? 'returned')
       if (result?.status === 'loaded') continue
       return { ok: false, error: 'unsupported_tool_response' }

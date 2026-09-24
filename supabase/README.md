@@ -22,6 +22,7 @@ For current working context, five full recent messages, incremental summaries, h
 
 | File | Responsibility |
 | --- | --- |
+| `bob-worker/index.ts`, `_shared/bob-background.ts` | Private-capability background worker; see [durable turns](../Docs/ask-bob-conversations.md#durable-background-turns). |
 | `ask-bob/index.ts`, `_shared/serve-bob.ts` | Bob's OpenAI endpoint; validate Supabase Auth user. |
 | `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |

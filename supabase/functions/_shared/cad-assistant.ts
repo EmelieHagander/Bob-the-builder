@@ -1,3 +1,4 @@
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { SEARCH_TOOL, type createProjectLookup } from './project-lookup.ts'
 import { parseCadAssemblyRequest, type CadAssemblyRequest } from './cad-adapter.ts'
@@ -90,12 +91,12 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
        out={status:'rendered',saved:false,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,views:Object.keys(packet.files),note:'Check dimensions and construction intent. Geometry does not verify physical fit or strength.'}
       }
-     }catch(error){out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
+     }catch(error){rethrowContinuation(error);out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
      messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(out)})
     }
    }
    candidate=null;partial=true;return {status:'budget_exhausted',saved:false}
-  }catch(error){candidate=null;partial=true;if(error instanceof Error&&error.message==='project_denied')throw error;return {status:'unavailable',saved:false}}
+  }catch(error){rethrowContinuation(error);candidate=null;partial=true;if(error instanceof Error&&error.message==='project_denied')throw error;return {status:'unavailable',saved:false}}
   finally{sources.push(...lookup.sources)}
  }}
 }

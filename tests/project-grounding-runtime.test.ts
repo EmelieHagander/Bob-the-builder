@@ -80,6 +80,7 @@ test('deployment adapter applies the policy to the main answer model, not the pr
   assert.match(code, /callModel: createGroundedModelCall\(\{/)
   assert.match(code, /validateImages: \(\) => projectContext\.validate\(\)/)
   const summary = code.slice(code.indexOf('prepareContext:'), code.indexOf('// The main answer'))
-  assert.match(summary, /callModel: options => callOpenAIResponses<string>\(options\)/)
+  assert.match(summary, /callModel, hasAccess/)
   assert.doesNotMatch(summary, /createGroundedModelCall/)
+  assert.match(code, /const result = await callOpenAIResponses<string>\(options\)/)
 })
