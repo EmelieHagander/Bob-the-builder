@@ -2,6 +2,21 @@
 
 Datum: 2026-09-24. Granskad kod: `aa9188b0be2bce209faa7fa93a892fa7726adf65`, Ask Bob v28. Produktionsinställningar och verktygskatalog lästes under granskningen. Inga produktionsinställningar eller projektposter ändrades.
 
+## Uppföljning — korrigeringsbranch 2026-09-24
+
+Baslinjen nedan beskriver v28 och är historisk. #122 rättade modellval, minnessammanfattning, hela planassistentens paginering, storleksfel och tidigare skrivkvitton. Följande integration rättar återstående promptlager och guideleverans samt tillför generella mått-/lösnings-/target-/uppgiftsverktyg, CAD-assistent, bildflöde och detaljläsning av stora plan/CAD-poster.
+
+| Fynd | Kodstatus | Kvar för slutlig stängning |
+|---|---|---|
+| 1. Ofullständigt urval | Rättat i #122; ofullständiga läsningar stoppar före validering | Verklig modellacceptans över stora projekt |
+| 2. Dubbla promptlager | Extra beteendetext borttagen; en systemägare, separat verktygsdata, storleksloggning | Driftavläsning av nya promptstorlekar |
+| 3. Saknade förladdade guider | Guide levereras i varje erbjudet verktyg | Ingen känd kodlucka |
+| 4. Saknade skrivkvitton | Rättat i #122, även nya dataset följer samma kvitton | Återbesök med verkliga användarsamtal |
+| 5. Tomt svar för stor post | Tydligt storleksfel + navigerbar detaljläsning för plan/CAD | Andra stora dataset kan fortfarande behöva egna detaljläsare |
+| 6. Saknade förmågor | Nya generella projektverktyg och CAD-/bildintegration implementerade | CAD-hosting och verkliga användarflöden; full flerdagars-/volontärkedja är fortsatt PARTIAL |
+
+Detta är inte ett påstående att alla produktmål är stängda. [CAD-kontraktet](cad-adapter.md) äger driftblockeraren; [mediekontraktet](media-and-steps.md) äger stegkoppling och återhämtning. Befintligt uttryckligt godkännande för kanonisk projektplan är oförändrat; vanliga delegerade arbetsval får göras utan extra bekräftelser.
+
 ## Bedömning
 
 Bob har redan en handlingsorienterad roll och stöd för flera handlingar per tur. Hans arbetsmiljö ger honom däremot ojämnt underlag: ytterligare instruktioner tillkommer efter den korta prompten, verktygsguider följer inte automatiskt med förladdade verktyg, och tidigare sparade handlingar försvinner ur nästa turs strukturerade samtalsunderlag. Planassistentens begränsade urval kan dessutom felaktigt stoppa giltigt underlag.

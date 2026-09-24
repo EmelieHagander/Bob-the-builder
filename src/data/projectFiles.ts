@@ -17,10 +17,10 @@ function mapImage(row: Row): MediaAsset {
     id: row.id, projectId: row.project_id, bucket: row.bucket_id, path: row.object_path,
     title: row.title, originalName: row.original_name, purpose: row.purpose,
     contentType: row.content_type, byteSize: row.byte_size, width: row.width, height: row.height,
-    state: row.state, createdAt: row.created_at,
+    sourceKind: row.source_kind, state: row.state, createdAt: row.created_at,
     links: (row.media_links ?? []).map((l: Row) => ({
-      id: l.id, kind: l.step_id ? 'step' : l.task_id ? 'task' : 'area',
-      targetId: l.step_id ?? l.task_id ?? l.area_id,
+      id: l.id, kind: l.plan_step_id ? 'plan_step' : l.step_id ? 'step' : l.task_id ? 'task' : 'area',
+      targetId: l.plan_step_id ?? l.step_id ?? l.task_id ?? l.area_id,
     })),
   }
 }
@@ -51,8 +51,8 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     if (!client) return { items: [], hasMore: false }
     const { db, assertCurrent } = connection(projectId)
     if (target.kind === 'project' && target.id !== projectId) throw new Error('Project changed.')
-    const relation = target.kind === 'project' ? '' : ',target:media_links!inner(area_id,task_id,step_id)'
-    let query = db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id)' + relation).eq('project_id', projectId)
+    const relation = target.kind === 'project' ? '' : ',target:media_links!inner(area_id,task_id,step_id,plan_step_id)'
+    let query = db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)' + relation).eq('project_id', projectId)
     if (target.kind !== 'project') query = query.eq('target.' + target.kind + '_id', target.id)
     const rows = value(await query.order('created_at', { ascending: false }).order('id').range(offset, offset + 12)) as unknown as Row[]
     assertCurrent()
@@ -61,7 +61,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
   }
   async function getImage(projectId: string, mediaId: string) {
     const { db, assertCurrent } = connection(projectId)
-    const row = value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id)')
+    const row = value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)')
       .eq('project_id', projectId).eq('id', mediaId).single()) as Row
     assertCurrent()
     if (row.project_id !== projectId) throw new Error('Image project mismatch.')

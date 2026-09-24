@@ -1,0 +1,5 @@
+import {test} from 'node:test'
+import assert from 'node:assert/strict'
+import {createRecordDetailReader} from '../supabase/functions/_shared/project-record-detail.ts'
+test('large plans remain navigable to exact criteria without empty success',async()=>{const record={steps:Array.from({length:80},(_,i)=>({id:i,title:'x'.repeat(1000)}))};const reader=createRecordDetailReader(async()=>record,async()=>true);const input={dataset:'plan',record_id:'3',revision:null,path:[]};assert.equal((await reader.execute(input)).status,'too_large');const part:any=await reader.execute({...input,path:['steps','79']});assert.equal(part.status,'ok');assert.equal(part.data.id,79);assert.equal((await reader.execute({...input,path:['constructor']})).status,'invalid')})
+test('revoked project access does not disclose even a cached detail',async()=>{let allowed=true;const r=createRecordDetailReader(async()=>{allowed=false;return {secret:'x'}},async()=>allowed);await assert.rejects(r.execute({dataset:'plan',record_id:'2',revision:null,path:[]}),/project_denied/)})

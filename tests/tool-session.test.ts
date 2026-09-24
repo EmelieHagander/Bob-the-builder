@@ -19,11 +19,12 @@ function fixture(rows = [policy('read_records', true), policy('draw_shape', fals
 const names = (specs: { function: { name: string } }[]) => specs.map(s => s.function.name)
 const browse = { query: null, after_name: null }
 
-test('core plus phase preloads, never every large schema or guide', async () => {
+test('core and phase preloads receive their guides; unloaded tools stay absent', async () => {
   const f = fixture()
   let tools = await f.session.prepare()
   assert.deepEqual(names(tools), ['read_records', 'list_tools', 'load_tool'])
-  assert.doesNotMatch(JSON.stringify(tools), /FULL_GUIDE|draw_shape|analyse_materials/)
+  assert.match(JSON.stringify(tools), /FULL_GUIDE for read_records/)
+  assert.doesNotMatch(JSON.stringify(tools), /draw_shape|analyse_materials/)
   f.setPhase('design'); tools = await f.make().prepare()
   assert.deepEqual(names(tools), ['draw_shape', 'read_records', 'list_tools', 'load_tool'])
   f.setPhase('unrecognised'); assert(!names(await f.make().prepare()).includes('draw_shape'))

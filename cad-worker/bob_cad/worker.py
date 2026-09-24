@@ -27,16 +27,18 @@ def _shape(d:dict[str,Any]):
 
 def validate_request(raw:Any)->dict[str,Any]:
     if not isinstance(raw,dict) or set(raw)!={"contract_version","units","assembly_id","definitions","instances","views"}: raise CadContractError("request_shape")
-    if raw["contract_version"]!=1 or raw["units"]!="mm" or not isinstance(raw["assembly_id"],str) or not ID.fullmatch(raw["assembly_id"]): raise CadContractError("contract")
+    if isinstance(raw["contract_version"],bool) or raw["contract_version"]!=1 or raw["units"]!="mm" or not isinstance(raw["assembly_id"],str) or not ID.fullmatch(raw["assembly_id"]): raise CadContractError("contract")
     defs=raw["definitions"]; inst=raw["instances"]; views=raw["views"]
     if not isinstance(defs,list) or not 1<=len(defs)<=128 or not isinstance(inst,list) or not 1<=len(inst)<=512: raise CadContractError("counts")
     ids=set()
     for d in defs:
         if not isinstance(d,dict) or not isinstance(d.get("id"),str) or not ID.fullmatch(d["id"]) or d["id"] in ids: raise CadContractError("definition")
+        fields = {"id", "primitive", "material_ref", "x_mm", "y_mm", "z_mm"} if d.get("primitive")=="box" else {"id", "primitive", "material_ref", "outside_diameter_mm", "wall_thickness_mm", "length_mm"}
+        if set(d)!=fields or (d["material_ref"] is not None and (not isinstance(d["material_ref"],str) or not ID.fullmatch(d["material_ref"]))): raise CadContractError("definition_fields")
         ids.add(d["id"]); _shape(d)
     seen=set()
     for i in inst:
-        if not isinstance(i,dict) or set(i)!={"id","definition_id","placement"} or not isinstance(i["id"],str) or i["id"] in seen or i["definition_id"] not in ids: raise CadContractError("instance")
+        if not isinstance(i,dict) or set(i)!={"id","definition_id","placement"} or not isinstance(i["id"],str) or not ID.fullmatch(i["id"]) or i["id"] in seen or not isinstance(i["definition_id"],str) or i["definition_id"] not in ids: raise CadContractError("instance")
         seen.add(i["id"]); p=i["placement"]
         if not isinstance(p,dict) or set(p)!={"x","y","z","rx","ry","rz"}: raise CadContractError("placement")
         for k in ("x","y","z"): _num(p[k],k,bound=10_000_000)

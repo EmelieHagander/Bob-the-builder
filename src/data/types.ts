@@ -97,8 +97,9 @@ export interface Task {
 }
 
 export type MediaPurpose = 'current_state' | 'reference' | 'instruction' | 'proposal' | 'progress' | 'as_built'
-export type MediaTarget = { kind: 'project' | 'area' | 'task' | 'step'; id: string }
+export type MediaTarget = { kind: 'project' | 'area' | 'task' | 'step' | 'plan_step'; id: string }
 export interface MediaAsset {
+  sourceKind?: 'user_upload' | 'ai_generated'
   id: string
   projectId: string
   bucket: string
@@ -112,7 +113,7 @@ export interface MediaAsset {
   height: number
   state: 'pending' | 'ready' | 'deleting'
   createdAt: string
-  links: { id: string; kind: 'area' | 'task' | 'step'; targetId: string }[]
+  links: { id: string; kind: 'area' | 'task' | 'step' | 'plan_step'; targetId: string }[]
 }
 export interface MediaPage { items: MediaAsset[]; hasMore: boolean }
 export interface TaskStep {

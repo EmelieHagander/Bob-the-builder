@@ -1,3 +1,7 @@
+import { createRecordDetailReader } from './project-record-detail.ts'
+import { createProjectImageTools } from './project-image-tools.ts'
+import { createCadAssistant } from './cad-assistant.ts'
+import { createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
@@ -5,7 +9,7 @@ import { createProjectContext } from './project-context/dispatcher.ts'
 import { createMediaAdapter } from './project-context/media.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses } from './openai-service.ts'
+import { callOpenAIResponses, generateImage } from './openai-service.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
@@ -63,7 +67,7 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => client.rpc('bob_project_write_v8', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
+    payload => client.rpc('bob_project_write_v10', { ...binding, p_payload: payload }).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -79,8 +83,31 @@ export async function answerWithOpenAi(opts: {
     makeLookup: () => createProjectLookup(opts.projectId, lookupTransport, 10_000, 128),
     callModel: options => callOpenAIResponses(options),
   })
+  const cadAssistant = createCadAssistant({
+    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,
+    available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
+    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
+    callModel:options=>callOpenAIResponses<string>(options),
+    render:createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN')),
+    readArtifact:async(id,revision)=>{
+      const {data,error}=await client.rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision}).abortSignal(AbortSignal.timeout(10000));
+      if(error)throw new Error('cad_read_unavailable');return data
+    },
+    catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>client.rpc('catalog_read',{p_project:opts.projectId,p_input:input}).abortSignal(signal),hasAccess,lookup.sources),
+    context:createProjectContext({adapters:[createMediaAdapter(opts.projectId,createMediaTransport(client,{...opts,url,key}))],hasAccess,sources:lookup.sources}),
+  })
+  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
+    generate:prompt=>generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,timeoutMs:Math.min(120000,Math.max(1000,deadline-Date.now()-20000))}),
+    upload:async(id,bytes)=>{const {error}=await client.storage.from('bob-project-media').upload(`${opts.projectId}/${id}`,bytes,{contentType:'image/png',upsert:false,cacheControl:'0'});if(error)throw new Error('upload_failed')},
+  }):undefined
+  const recordReader=createRecordDetailReader(async(dataset,id,revision)=>{
+    const {data,error}=dataset==='plan'
+      ?await client.rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)}).abortSignal(AbortSignal.timeout(10000))
+      :await client.rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision}).abortSignal(AbortSignal.timeout(10000));
+    if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
+  },hasAccess)
   return runClaimedProjectTurn({
-    ...opts, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, generation: claimedServer?.generation, deadline,
+    ...opts, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

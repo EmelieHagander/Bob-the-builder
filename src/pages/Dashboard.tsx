@@ -1,3 +1,4 @@
+import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
@@ -293,6 +294,7 @@ export function Dashboard() {
           <p className="foundation-hint">Record lengths, track unknowns and keep the history of parts you may reuse.</p></div>
         <Icon name="arrow-right" size={20} />
       </Link>
+      {project && db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
       {project && <div className="card foundation-section"><ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" /></div>}
 
       {addingTask && (

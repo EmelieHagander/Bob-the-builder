@@ -14,7 +14,7 @@ import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/fu
 // preloaded staircase/projection tools. Schemas remain the execution schemas.
 const MANAGEMENT_SURFACE = [LIST_TOOLS, LOAD_TOOL]
 const READ_SURFACE = [{ ...SEARCH_TOOL, function: { ...SEARCH_TOOL.function,
-  description: catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.description } }, ...MANAGEMENT_SURFACE]
+  description: [...new Set([catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.description, SEARCH_TOOL.function.description, catalogSeed.find(row => row.name === SEARCH_TOOL.function.name)!.how_to])].join('\n\n') } }, ...MANAGEMENT_SURFACE]
 const query = { dataset: 'tasks', query: null, status: null, area_id: null, record_id: null }
 const userId = '00000000-0000-0000-0000-000000000001'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
@@ -51,9 +51,9 @@ test('the permanent prompt stays compact as the tool catalog grows', () => {
 
 test('tool names and descriptions come from the actual server definitions, not a second list', () => {
   const tool = { ...SEARCH_TOOL, function: { ...SEARCH_TOOL.function, name: 'fixture_read', description: 'Fixture-only read.' } }
-  assert.equal(buildBobHands([tool]), `${BOB_HANDS}\n\nfixture_read — Fixture-only read.`)
+  assert.equal(buildBobHands([tool]), `${BOB_HANDS}\n\nfixture_read`)
   assert(!buildBobHands([tool]).includes(SEARCH_TOOL.function.name))
-  assert.equal(buildBobHands([SEARCH_TOOL, tool]), `${BOB_HANDS}\n\n${SEARCH_TOOL.function.name} — ${SEARCH_TOOL.function.description}\nfixture_read — Fixture-only read.`)
+  assert.equal(buildBobHands([SEARCH_TOOL, tool]), `${BOB_HANDS}\n\n${SEARCH_TOOL.function.name}, fixture_read`)
 })
 
 test('an empty tool set is explicit and never advertises the default search tool', () => {

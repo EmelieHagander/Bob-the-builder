@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 const generationKey = (id, revision) => `${id}:${revision}`
 
 export function createArtifactsFixture(timestamp, assets, facts, solutions) {
-  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map()
+  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map(), cad = new Map()
   const physical = {
     buildings: [{
       id: '90000000-0000-0000-0000-000000000001', site_id: null, project_id: 'A', revision: 1,
@@ -17,19 +17,20 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       change_note: 'Fixture room', actor_label: 'Fixture member', recorded_at: timestamp(),
     }],
   }
-  const fixture = { records, histories, generations, parametric, physical, rejectNext: false,
+  const fixture = { records, histories, generations, parametric, cad, physical, rejectNext: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
         'current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
-        'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command',
+        'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions',
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
 
+      if (table === 'artifact_cad_revisions') { const row=cad.get(generationKey(eq('artifact_id'),Number(eq('artifact_revision'))));return reply({json:row?.project_id===eq('project_id')?row:null}) }
       if (table === 'project_buildings') return reply({ json: eq('project_id') === 'A' ? physical.buildings : [] })
       if (table === 'project_spaces') return reply({ json: eq('project_id') === 'A' ? physical.spaces : [] })
 

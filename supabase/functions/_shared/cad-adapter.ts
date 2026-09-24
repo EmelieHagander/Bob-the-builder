@@ -38,9 +38,13 @@ export function parseCadAssemblyRequest(v:unknown):CadAssemblyRequest|null{
 }
 const vec=(v:unknown)=>Array.isArray(v)&&v.length===3&&v.every(x=>finite(x,1e7))
 const bounds=(v:unknown)=>obj(v)&&exact(v,['min','max','size'])&&vec(v.min)&&vec(v.max)&&vec(v.size)
+  &&(v.size as number[]).every((n,i)=>n>=0&&Math.abs(((v.max as number[])[i]-(v.min as number[])[i])-n)<0.001)
 export function parseCadAssemblyResult(v:unknown,r:CadAssemblyRequest):CadAssemblyResult|null{
   if(!obj(v)||v.contract_version!==1||v.assembly_id!==r.assembly_id||!obj(v.engine)||v.engine.name!=='build123d'||v.engine.version!=='0.13.0'||v.engine.units!=='mm'
     ||!bounds(v.bounding_box_mm)||!Array.isArray(v.instances)||v.instances.length!==r.instances.length||!obj(v.exports))return null
+  if(JSON.stringify(v.definitions)!==JSON.stringify(r.definitions))return null
+  const seen=new Set<string>()
+  for(const row of v.instances){if(!obj(row)||typeof row.id!=='string'||seen.has(row.id)||!r.instances.some(i=>i.id===row.id&&i.definition_id===row.definition_id)||!bounds(row.bounding_box_mm))return null;seen.add(row.id)}
   for(const key of ['step',...r.views]){const e=v.exports[key];if(!obj(e)||!exact(e,['file','sha256'])||typeof e.file!=='string'||!/^[A-Za-z0-9_.-]{1,100}$/.test(e.file)||typeof e.sha256!=='string'||!/^[0-9a-f]{64}$/.test(e.sha256))return null}
   return v as unknown as CadAssemblyResult
 }

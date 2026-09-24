@@ -13,6 +13,7 @@ export async function setupSharedSocial(pg: PGlite) {
     create table shared.ai_models(
       model_name text primary key,
       is_active boolean not null default true,
+      supports_image_output boolean not null default false,
       supports_reasoning boolean not null default true
     );
     insert into shared.ai_models(model_name,is_active,supports_reasoning)

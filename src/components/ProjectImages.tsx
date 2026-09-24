@@ -37,7 +37,7 @@ export function StoredImage({ projectId, image, original = false }: { projectId:
 function UploadImage({ projectId, target, onClose, onSaved }: { projectId: string; target: MediaTarget; onClose: () => void; onSaved: () => void }) {
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
-  const [purpose, setPurpose] = useState<MediaPurpose>(target.kind === 'step' || target.kind === 'task' ? 'instruction' : 'current_state')
+  const [purpose, setPurpose] = useState<MediaPurpose>(target.kind === 'plan_step' || target.kind === 'step' || target.kind === 'task' ? 'instruction' : 'current_state')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   return <Modal title="Add image" onClose={() => { if (!busy) onClose() }}>
@@ -115,7 +115,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
           <button type="button" className="image-open btn" aria-label={'Open image: ' + image.title} onClick={() => setDialog({ kind: 'view', image })}>View original</button>
         </div> : <div className="image-loading" role="status">{image.state === 'pending' ? 'Upload incomplete' : 'Removal in progress'}</div>}
         <div className="project-image-caption"><strong>{image.title}</strong>
-          <span className="image-purpose">{IMAGE_PURPOSES[image.purpose]}</span>
+          <span className="image-purpose">{IMAGE_PURPOSES[image.purpose]}{image.sourceKind==='ai_generated' ? ' · AI illustration' : ''}</span>
           <span className="foundation-hint">Uploaded {new Date(image.createdAt).toLocaleDateString()}</span>
         </div>
         <div className="foundation-actions">

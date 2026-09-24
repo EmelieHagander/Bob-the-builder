@@ -69,7 +69,10 @@ export interface ProjectArtifact {
   hasRoomLayout?: boolean
 }
 
+export interface CadDrawing { recipe: Record<string, any>; manifest: Record<string, any>; files: Record<string, string>; step_id: string | null; source_artifact_id: string | null; source_revision: number | null; source_changed?: boolean }
+
 export interface ArtifactVersion extends ProjectArtifact {
+  cad?: CadDrawing | null
   measurements: ArtifactMeasurement[]
   generation: ArtifactGeneration | null
   stairStudy?: StairDetails | null
@@ -222,8 +225,14 @@ export function createArtifacts(
       guard()
       if (plan) multifloorPlan = checkedBuildingPlan(plan, projectId, id, revision)
     }
+    const cad = checked(await db.from('artifact_cad_revisions').select('*').eq('project_id',projectId).eq('artifact_id',id).eq('artifact_revision',revision).maybeSingle()) as CadDrawing | null
+    if(cad?.source_artifact_id){
+      const parent=checked(await db.from('artifacts').select('current_revision').eq('project_id',projectId).eq('id',cad.source_artifact_id).maybeSingle())
+      cad.source_changed=!parent||parent.current_revision!==cad.source_revision
+    }
     guard()
     return {
+      cad,
       multifloorPlan,
       stairStudy,
       ...artifact({ ...r, parametric_recipe: parametric[0]?.recipe ?? null }),

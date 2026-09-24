@@ -42,7 +42,7 @@ test('actual claimed visual loop delivers pixels and fresh contradictory facts t
   let calls = 0, committed: unknown
   const f = fixture(async options => {
     calls++
-    assert.match(options.systemMessage!, /first person/)
+    assert.match(options.systemMessage!, /You are Bob/)
     if (calls === 1) {
       assert(!hasImageContent(options.messages))
       return { ...success, data: null, responseId: 'resp_open', toolCalls: [{ id: 'open', type: 'function', function: {
@@ -70,7 +70,7 @@ test('actual claimed visual loop delivers pixels and fresh contradictory facts t
 })
 
 test('the same production loop can skip images without added measurement reads or a router-model call', async () => {
-  const f = fixture(async o => { assert(!hasImageContent(o.messages)); assert.match(o.systemMessage!, /first person/); return success })
+  const f = fixture(async o => { assert(!hasImageContent(o.messages)); assert.match(o.systemMessage!, /You are Bob/); return success })
   const answer = await runClaimedProjectTurn(f.opts)
   assert(answer.ok); assert.equal(f.downloads, 0); assert.deepEqual(f.reads, ['project'])
 })

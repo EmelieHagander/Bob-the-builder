@@ -27,3 +27,7 @@ npm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Python CAD worker bytecode
+__pycache__/
+*.pyc

@@ -242,3 +242,11 @@ reopening, failure/authority bounds, production tool-loop integration and wiring
 These injected-provider tests do not prove perfect language behaviour or semantic
 conflict resolution by a live model. PR #90 owns verification and rollout evidence;
 the owner's actual project data and images are not used as model-test fixtures.
+
+## Generated media and living-plan Step links — September 24 integration
+
+Implementation branch adds `media_links.plan_step_id` alongside the existing Task instruction `step_id`. Exactly one target is present. Linking validates the current project plan; a stable Step retains its links across ordinary replanning. Dashboard Step workspaces show descriptions, linked current CAD revisions and the existing project-image controls. User uploads and Bob-created images use the same private media store. The broader guest/volunteer Step view remains unverified; this change does not declare all five outcome use cases complete.
+
+`generate_project_image` uses the shared configured image-generation path, then reserves a canonical media record, uploads through the caller's Storage authority and finalizes against actual object metadata. Only proposal/instruction purposes are generated; provenance is `ai_generated`. A reservation is visibly pending. Failed upload retains its ID; failed finalization can use `finalize_project_image` without another generation/upload. `attach_project_image` reuses existing ready media. Every database action uses the claimed-turn write ledger; a final success requires real bytes and the saved attachment. The model never receives storage credentials or arbitrary destinations.
+
+Apply `20260924084046_bob_cad_and_project_tools.sql` then `20260924084937_bob_step_media.sql` before deploying matching Edge/frontend code. These are additive changes to Bob's shared-database objects and scoped AI settings; no other app settings or project records are migrated.

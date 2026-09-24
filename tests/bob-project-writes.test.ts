@@ -217,6 +217,50 @@ test('measurement revision preserves an existing source image attachment', async
   await fail(c)
 })
 
+
+async function expertWrite(c:Claim,payload:unknown){return (await as(c.user,'select bob.bob_project_write_v9($1,$2,$3,$4,$5) result',[c.project,c.thread,c.turn,c.generation,JSON.stringify(payload)])).rows[0].result}
+test('expert tools archive with history, assign only project people, and preserve idempotent receipts',async()=>{
+ const c=await claim();const m=await write(c,measurement('Retired CAD test measurement'))
+ const archived=await expertWrite(c,{kind:'measurement_state',record_id:m.recordId,expected_updated_at:null,expected_revision:1,request_quote:'Spara',data:{action:'archive'}})
+ assert.equal(archived.record.archived,true);assert.equal(archived.record.revision,2)
+ const t:any=(await pg.query("select * from bob.tasks where id='taskA'")).rows[0]
+ const payload={kind:'task_work',record_id:'taskA',expected_updated_at:t.updated_at,expected_revision:null,request_quote:'Spara',data:{status:'doing',person_ids:['oneA']}}
+ const saved=await expertWrite(c,payload);assert.deepEqual(saved.record.person_ids,['oneA']);assert.equal(saved.record.status,'doing');assert.deepEqual(await expertWrite(c,payload),saved)
+ await fail(c)
+ const next=await claim();await assert.rejects(expertWrite(next,{...payload,expected_updated_at:saved.record.updated_at,data:{status:'done',person_ids:['twoB']}}),/project_denied/)
+ await assert.rejects(expertWrite(next,payload),/record_changed/);await fail(next)
+})
+test('CAD stores an exact Artifact revision; duplicate retries reuse it and cross-project sources fail',async()=>{
+ const c=await claim()
+ const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'CAD design',description:'Generic assembly',assumptions:'Concept',tradeoffs:'Simple',measurements:[],area_id:null}})
+ const targetBefore:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
+ const target=await expertWrite(c,{kind:'target',record_id:sol.recordId,expected_updated_at:null,expected_revision:targetBefore?.current_revision??0,request_quote:'Spara',data:{solution_revision:sol.revision,reason:'Delegated design'}})
+ const recipe={contract_version:1,units:'mm',assembly_id:'shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:400,z_mm:18}],instances:[{id:'top',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
+ const data={title:'Shelf',description:'Generic CAD',assumptions:'Concept only',target_revision:target.revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'Zml4dHVyZQ=='}}}
+ const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data}
+ const drawing=await expertWrite(c,payload);assert.equal(drawing.dataset,'artifacts');assert.equal(drawing.revision,1);assert.deepEqual(await expertWrite(c,payload),drawing)
+ const read:any=(await as(one,'select bob.read_cad_artifact($1,$2,null) value',['A',drawing.recordId])).rows[0].value
+ assert.deepEqual(read.recipe,recipe)
+ await assert.rejects(as(two,'select bob.read_cad_artifact($1,$2,null)',['A',drawing.recordId]),/project_denied/)
+ await assert.rejects(expertWrite(c,{...payload,data:{...data,title:'Bad source',source_artifact_id:newId(),source_revision:1}}),/source_changed/)
+ await assert.rejects(expertWrite(c,{...payload,data:{...data,title:'Bad step',step_id:newId()}}),/step_changed/)
+ await fail(c)
+})
+
+test('generated image reserves an honest pending record, checks stored bytes, and recovers without duplication',async()=>{
+ const c=await claim();const id=newId()
+ const command=async(payload:any)=>(await as(one,'select bob.bob_project_write_v10($1,$2,$3,$4,$5) result',[c.project,c.thread,c.turn,c.generation,JSON.stringify(payload)])).rows[0].result
+ const base={record_id:id,expected_updated_at:null,expected_revision:null,request_quote:'Spara'}
+ const pending=await command({...base,kind:'image_reserve',data:{title:'Assembly guide',purpose:'instruction',byte_size:24,width:1,height:1,target_kind:'task',target_id:'taskA'}})
+ assert.equal(pending.record.state,'pending');assert.equal(pending.record.source_kind,'ai_generated')
+ await assert.rejects(command({...base,kind:'image_finalize',data:{}}),/Upload incomplete/)
+ await pg.query("insert into storage.objects(bucket_id,name,metadata) values('bob-project-media',$1,$2)",['A/'+id,JSON.stringify({size:24,mimetype:'image/png'})])
+ const ready=await command({...base,kind:'image_finalize',data:{}});assert.equal(ready.record.state,'ready');assert.deepEqual(await command({...base,kind:'image_finalize',data:{}}),ready)
+ await assert.rejects(command({...base,kind:'image_link',data:{target_kind:'task',target_id:'taskB'}}),/project_denied/)
+ assert.equal((await pg.query('select count(*)::int n from bob.media_assets where id=$1',[id])).rows[0].n,1)
+ await fail(c)
+})
+
 test('shared guest has no writable claimed thread; revoked membership denies receipt access and mutations', async () => {
   const guestClaim=(await as(null,'select bob.bob_claim_turn($1,$2,$3,$4) result',['A',guest,newId(),message],'service_role')).rows[0].result
   assert.equal(guestClaim.mode,'local_only')

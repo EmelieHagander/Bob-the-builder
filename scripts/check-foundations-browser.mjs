@@ -246,6 +246,19 @@ try {
     await verifyRoomLayoutBrowser(page, base, roomLayout, artifacts, viewport.width)
     await verifyMultifloorBrowser(page, base, multifloor, viewport.width)
     await verifyStairBrowser(page, base, stair, artifacts, viewport.width)
+    // Real app component/data adapter, with a persisted CAD response fixture.
+    const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
+    const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[]}
+    artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:{definitions:[{id:'shelf.panel',primitive:'box',x_mm:800,y_mm:400,z_mm:18}]},manifest:{},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByText('Parts and dimensions',{exact:true}).click()
+    await page.getByRole('cell',{name:'800 × 400 × 18',exact:true}).waitFor()
+    await page.reload()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),1)
+    await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
