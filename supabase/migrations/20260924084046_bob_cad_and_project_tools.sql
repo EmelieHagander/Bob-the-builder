@@ -97,6 +97,12 @@ begin
   select to_jsonb(t)||jsonb_build_object('person_ids',d->'person_ids') into rec from bob.tasks t where id=rid;
   dataset:='tasks';label:=task.name;
  else
+  -- Use the canonical Artifact lock before validating the source revision.
+  perform 1 from bob.projects where id=p_project for no key update;
+  -- Plan acceptance serializes on this row, independently of Artifact writes.
+  if d->>'step_id' is not null then
+   perform 1 from bob.project_plans where project_id=p_project for share;
+  end if;
   packet:=d->'packet';recipe:=packet->'recipe';
   if d-array['packet','title','description','assumptions','target_revision','measurements','source_artifact_id','source_revision','part_ids','area_id','component_id','step_id','artifact_id','expected_revision']::text[]<>'{}'
    or jsonb_typeof(recipe)<>'object' or recipe->>'contract_version'<>'1' or recipe->>'units'<>'mm'

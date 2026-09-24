@@ -30,7 +30,9 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
 
-      if (table === 'artifact_cad_revisions') { const row=cad.get(generationKey(eq('artifact_id'),Number(eq('artifact_revision'))));return reply({json:row?.project_id===eq('project_id')?row:null}) }
+      if (table === 'artifact_cad_revisions') {
+        if(!eq('artifact_id')) return reply({json:[...cad.values()].filter(r=>r.project_id===eq('project_id')&&r.step_id).map(r=>({...r,artifacts:{current_revision:records.get(r.artifact_id)?.revision}}))})
+        const row=cad.get(generationKey(eq('artifact_id'),Number(eq('artifact_revision'))));return reply({json:row?.project_id===eq('project_id')?row:null}) }
       if (table === 'project_buildings') return reply({ json: eq('project_id') === 'A' ? physical.buildings : [] })
       if (table === 'project_spaces') return reply({ json: eq('project_id') === 'A' ? physical.spaces : [] })
 

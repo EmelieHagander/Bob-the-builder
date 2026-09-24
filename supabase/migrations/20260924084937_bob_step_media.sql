@@ -18,7 +18,9 @@ begin
  elsif p_kind='area' then select project_id into target_project from bob.areas where id=p_target for share;
  elsif p_kind='task' then select a.project_id into target_project from bob.tasks t join bob.areas a on a.id=t.area_id where t.id=p_target for share of t;
  elsif p_kind='step' then select project_id into target_project from bob.task_steps where id=p_target::uuid for share;
- elsif p_kind='plan_step' then select s.project_id into target_project from bob.project_plan_steps s join bob.project_plans p on p.project_id=s.project_id and p.current_revision=s.plan_revision where s.project_id=p_project and s.step_id=p_target::uuid;
+ elsif p_kind='plan_step' then
+  perform 1 from bob.project_plans where project_id=p_project for share;
+  select s.project_id into target_project from bob.project_plan_steps s join bob.project_plans p on p.project_id=s.project_id and p.current_revision=s.plan_revision where s.project_id=p_project and s.step_id=p_target::uuid;
  else raise exception 'Invalid image attachment'; end if;
  if target_project is distinct from p_project then raise exception 'project_denied' using errcode='42501'; end if;
  insert into bob.media_links(project_id,media_id,area_id,task_id,step_id,plan_step_id) values(p_project,p_media,

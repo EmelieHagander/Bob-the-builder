@@ -37,7 +37,7 @@ try {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = [], assets = new Map(), objects = new Map(), steps = []
     let imageBytes, failUpload = false, slowDownload = null
-    let clock = 0
+    let clock = 0, currentPlan = null
     const timestamp = () => new Date(Date.UTC(2026, 8, 9, 12, 0, ++clock)).toISOString()
     const facts = createFactsFixture(timestamp, assets)
     const solutions = createSolutionsFixture(timestamp, assets, facts)
@@ -57,7 +57,7 @@ try {
       const fail = message => respond({ status: 409, json: { message } })
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
-      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
+      if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
@@ -113,7 +113,7 @@ try {
       if (path === '/rest/v1/media_assets') {
         let rows = [...assets.values()].filter(a => a.project_id === eq('project_id'))
         if (eq('id')) return respond({ json: rows.find(a => a.id === eq('id')) ?? null })
-        for (const field of ['area_id', 'task_id', 'step_id']) {
+        for (const field of ['area_id', 'task_id', 'step_id', 'plan_step_id']) {
           const id = eq('target.' + field)
           if (id) rows = rows.filter(a => a.media_links.some(link => link[field] === id))
         }
@@ -260,6 +260,22 @@ try {
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),1)
     await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
+    // A saved plan step reopens its exact construction and scoped images.
+    const planStepId=randomUUID()
+    currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
+    artifacts.cad.get(`${cadId}:1`).step_id=planStepId
+    await page.goto(base)
+    const workspace=page.getByRole('region',{name:'Project steps',exact:true})
+    await workspace.getByText('Check the saved drawing before assembly.',{exact:true}).waitFor()
+    await workspace.getByRole('region',{name:'Images for this step',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
+    await workspace.getByRole('link',{name:'Open drawing · v1',exact:true}).click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByRole('button',{name:'Revise',exact:true}).click()
+    await page.getByText('Ask Bob to revise this drawing.',{exact:false}).waitFor()
+    assert.equal(await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).count(),0)
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    currentPlan=null
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
