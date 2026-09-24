@@ -67,6 +67,11 @@ try {
         const history = histories.get(body.projectId)
         if (history) history.thread ??= `thread-${body.projectId}`
         if (completedTurns.has(body.clientTurnId)) return respond({ json: completedTurns.get(body.clientTurnId) })
+        if (body.message === 'Long conversation fixture') {
+          const response = success(body.projectId, Array.from({ length: 18 }, (_, i) => `Build detail ${i + 1}: Check the position and record the result before the next step.`).join('\n\n'))
+          storeCompletedTurn(body, response)
+          return respond({ json: response })
+        }
         if (body.message === 'Inspect project photo') {
           const response=success(body.projectId,'Project photo inspected.')
           response.evidence.sources=[{projectId:body.projectId,dataset:'image_pixels',recordId:'10000000-0000-4000-8000-000000000001',label:'Bild öppnad: Fönsteranslutning',retrievedAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T11:00:00Z',truth:'unknown'}]
@@ -251,8 +256,10 @@ try {
     assert.equal(writeCommits, 1, 'Lost response must not lead to a second write')
     assert.equal(await drawer.getByLabel('Saved project changes').count(), 0, 'Save diagnostics are not rendered in live chat')
     assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Chat must fit a phone drawer')
-    // Open real evidence disclosures so even a tall desktop has scrollable history.
-    // Compact mode can legitimately fit this short transcript without a jump button.
+    // Use actual long conversation content; scroll coverage must not depend on
+    // bulky save diagnostics or transient error messages being present.
+    await send('Long conversation fixture')
+    await drawer.getByText('Build detail 18: Check the position and record the result before the next step.', { exact: true }).waitFor()
     while (await drawer.locator('details:not([open]) > summary').count()) await drawer.locator('details:not([open]) > summary').first().click()
     const history = drawer.locator('.bob-history')
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight > 100), 'Scroll fixture must exceed the jump threshold')
@@ -300,7 +307,7 @@ try {
     }
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset, write receipts, same-turn lost-response retry and reload: OK`)
+    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset, compact save feedback, lost-response recovery without resending and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()
