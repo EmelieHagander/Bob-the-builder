@@ -623,7 +623,7 @@ Bob uses `link_project_drawing` to add/remove a work link without re-rendering. 
 Verification: `tests/project-drawing-workspace.test.ts` checks actual SQL/RLS, Bob tool discovery/writes/readback, retries, multiple Steps, archive/restore, unchanged geometry and cross-project denial. The foundations browser flow covers phone/desktop previews, exact-version opening, Step navigation, reload and preview failure. These controlled tests do not claim that an unconstrained live model has created the owner's bunk-bed drawing. Production release evidence belongs in the implementing PR.
 
 
-## Source freshness corrections — September 24, pending release
+## Source freshness corrections — September 24, deployed
 
 `artifact_source_status` assesses each exact revision under the caller's RLS.
 It compares the effective Project/Area target, linked measurement revisions and
@@ -645,10 +645,10 @@ archive/restore do not recreate links. Area drawing links carry their scope into
 the exact-version viewer. Regression coverage is in
 `tests/review-workflow.test.ts`, the drawing workspace and physical-source tests,
 and the foundations browser's navigation/reload/changed/unavailable cases.
-These are source changes until their migration and frontend release are applied.
+These corrections are deployed; [release evidence](foundation-verification.md#september-24-work-and-drawing-release) distinguishes hosted checks from browser fixtures and real-user acceptance.
 
 
-## Volunteer task drawings — September 24, pending release
+## Volunteer task drawings — September 24, deployed
 
 The name-only participant Task panel now contains **Drawings for this task**.
 It lists only the current, non-archived drawings linked to the Task's current primary
@@ -668,7 +668,7 @@ are part of its bounded render; they do not grant browsing of those source recor
 CAD manifests/STEP export files and unrelated physical records are excluded.
 
 The authority and release order belong to
-[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-pending-release).
+[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-deployed).
 Regression coverage: `tests/volunteer-drawings.test.ts` (real migrated PostgreSQL,
 current ownership/version, source loss, physical unlink, pagination and denial),
 `tests/volunteer-media.test.ts` (exact-revision byte checks), and

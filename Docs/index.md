@@ -45,6 +45,8 @@
 
 ## Product
 
+The [September 24 work/drawing release](foundation-verification.md#september-24-work-and-drawing-release) records deployed archive/restore, participant drawings, source freshness and the hosted query-planning correction.
+
 - `README.md` — current repository/app overview and implemented route/architecture summary.
 - `Docs/v1-plan.md` — **current V1 release contract**: V1 thesis, release boundary, slice sequence, release gates and golden-path acceptance. It consumes the accepted user stories/inventory/scope without duplicating their detailed function lists.
 - `Docs/function-inventory.md` — **current implementation audit**: capabilities that are built, partial or absent, plus cross-cutting correctness/foundation gaps. Use this for claims about what bob actually supports today.
