@@ -146,16 +146,19 @@ export function AreaModal({ people, area, onClose, onDone }: { people: Person[];
         </Field>
         {area && (
           <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', margin: 0 }}>
-            Tasks stay in the project. Area materials are removed. Areas referenced by a current or historical plan cannot be deleted. Moving the current steps does not remove those historical references.
+            Archiving keeps completed work, images, materials and plan history. Move or finish unfinished Steps and Tasks first, and resolve any pending plan proposal that uses this Area. You can restore the Area later. Permanent deletion is only for unused Areas and removes Area materials.
           </p>
         )}
+        {area && <button type="button" className="btn" disabled={busy} onClick={() => run(() => db.setAreaArchived(area, !area.archivedAt))}>
+          <Icon name={area.archivedAt ? 'arrow-counter-clockwise' : 'archive'} size={15} /> {area.archivedAt ? 'Restore Area' : 'Archive Area'}
+        </button>}
         {error && <FormError>{error}</FormError>}
         <Actions
           busy={busy}
           onClose={onClose}
           label={area ? 'Save area' : 'Add area'}
-          deleteLabel={area ? 'Delete area' : undefined}
-          onDelete={area ? () => run(() => db.deleteArea(area.id)) : undefined}
+          deleteLabel={area && !area.archivedAt ? 'Delete area' : undefined}
+          onDelete={area && !area.archivedAt ? () => run(() => db.deleteArea(area.id)) : undefined}
         />
       </FormShell>
     </Modal>

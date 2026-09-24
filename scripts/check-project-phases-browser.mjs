@@ -31,6 +31,9 @@ try {
     let toolRevision = 1
     const readinessReviewed = new Set()
     const areaPhase = new Map([['bedroom', 'complete'], ['office', 'build'], ['guestroom', 'design']])
+    const archivedAreas = new Map()
+    let archiveVersion = 0
+    const areaStamp = () => `2026-09-24T12:00:${String(archiveVersion).padStart(2, '0')}Z`
     const errors = []
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
@@ -45,7 +48,17 @@ try {
       } })
       if (request.method() === 'OPTIONS') return respond({ status: 204, body: '' })
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
-      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[...areaPhase].map(([id,phase])=>({id,slug:id,name:id==='guestroom'?'Guestroom':id[0].toUpperCase()+id.slice(1),phase})),steps:[],unorganised_tasks:[]}})
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[...areaPhase].map(([id,phase])=>({id,slug:id,name:id==='guestroom'?'Guestroom':id[0].toUpperCase()+id.slice(1),phase,archived_at:archivedAreas.get(id)??null})),steps:[],unorganised_tasks:[]}})
+      if (url.pathname === '/rest/v1/rpc/area_lifecycle_command') {
+        const body = request.postDataJSON()
+        assert.equal(body.p_project, 'P'); assert.equal(body.p_expected, areaStamp())
+        if (body.p_action === 'archive' && body.p_area === 'office') return respond({ status: 400, json: { message: "Move or finish this Area's unfinished Steps and Tasks before archiving." } })
+        assert.equal(body.p_area, 'bedroom')
+        archiveVersion++
+        if (body.p_action === 'archive') archivedAreas.set(body.p_area, areaStamp())
+        else { assert.equal(body.p_action, 'restore'); archivedAreas.delete(body.p_area) }
+        return respond({ json: { id: body.p_area, project_id: 'P', archived_at: archivedAreas.get(body.p_area) ?? null, updated_at: areaStamp() } })
+      }
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
       if (url.pathname === '/auth/v1/user') return respond({ json: user })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
@@ -93,8 +106,8 @@ try {
           { id: 'bedroom', slug: 'bedroom', name: 'Bedroom', description: 'Finished room', icon: 'bed', lead_id: 'member', assigned_pct: 100, materials_pct: 100, done_pct: 100, task_summary: '2 tasks · 2 done', phase: areaPhase.get('bedroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'office', slug: 'office', name: 'Office', description: 'Work underway', icon: 'hammer', lead_id: 'member', assigned_pct: 100, materials_pct: 75, done_pct: 50, task_summary: '2 tasks · 1 done', phase: areaPhase.get('office'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
           { id: 'guestroom', slug: 'guestroom', name: 'Guestroom', description: 'Still comparing solutions', icon: 'lamp', lead_id: 'member', assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: 'No tasks yet', phase: areaPhase.get('guestroom'), area_crew: [{ person_id: 'member' }], area_reference_images: [] },
-        ]
-        if (accountPhaseOnly) return respond({ json: rows.map(({ phase }) => ({ project_id: 'P', phase })) })
+        ].map(row => ({ ...row, archived_at: archivedAreas.get(row.id) ?? null, updated_at: areaStamp() }))
+        if (accountPhaseOnly) return respond({ json: rows.filter(row => !row.archived_at).map(({ phase }) => ({ project_id: 'P', phase })) })
         return respond({ json: phaseOnly ? rows.map(({ id, phase }) => ({ id, phase })) : rows })
       }
       if (url.pathname === '/rest/v1/tasks') {
@@ -206,6 +219,42 @@ try {
 
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Phase UI must not overflow horizontally')
     await page.screenshot({ path: `test-results/project-phases-${viewport.width}.png`, fullPage: true })
+
+    await page.goto(`${base}#/areas/office`)
+    await page.getByText('More tools', { exact: true }).click()
+    await page.getByRole('button', { name: 'Edit Area', exact: true }).click()
+    await page.getByRole('button', { name: 'Archive Area', exact: true }).click()
+    await page.getByText("Move or finish this Area's unfinished Steps and Tasks before archiving.", { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.goto(`${base}#/areas/bedroom`)
+    await page.getByText('More tools', { exact: true }).click()
+    await page.getByRole('button', { name: 'Edit Area', exact: true }).click()
+    await page.getByRole('button', { name: 'Archive Area', exact: true }).click()
+    await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
+    await page.getByRole('link', { name: 'Finish trim', exact: true }).waitFor()
+    await page.reload()
+    await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Add task', exact: true }).count(), 0)
+    await page.goto(`${base}#/`)
+    await page.getByText('Archived Areas · 1', { exact: true }).click()
+    await plan.getByRole('region', { name: 'Bedroom', exact: true }).waitFor()
+    await page.goto(`${base}#/areas`)
+    await page.getByRole('button', { name: 'Archived Areas · 1', exact: true }).waitFor()
+    assert.equal(await page.locator('article').filter({ hasText: 'Bedroom' }).count(), 0)
+    await page.getByRole('button', { name: 'Archived Areas · 1', exact: true }).click()
+    await page.locator('article').filter({ hasText: 'Bedroom' }).waitFor()
+    await page.reload()
+    await page.locator('article').filter({ hasText: 'Bedroom' }).waitFor()
+    await page.getByRole('link', { name: 'Open Area', exact: true }).click()
+    await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
+    await page.locator('.page').evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })
+    await page.screenshot({ path: `test-results/area-archive-${viewport.width}.png`, fullPage: true })
+    await page.getByRole('button', { name: 'Restore Area', exact: true }).click()
+    await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor({ state: 'hidden' })
+    await page.reload()
+    await page.getByRole('button', { name: 'Add task', exact: true }).waitFor()
+    await page.getByRole('link', { name: 'Finish trim', exact: true }).waitFor()
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
     console.log(`Project phases ${viewport.width}px: account summary, mixed Areas, Today/Task field context, explicit transitions and reload: OK`)

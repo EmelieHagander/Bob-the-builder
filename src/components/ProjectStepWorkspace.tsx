@@ -52,20 +52,25 @@ function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspac
 }
 /** Shared rendering of the canonical projection; references never become duplicate Tasks. */
 export function ProjectPlanContent({work,selected=null,people=new Map(),onAdd}:{work:Workspace;selected?:string|null;people?:Map<string,string>;onAdd?:(step:WorkStep)=>void}){
- const renderStep=(step:WorkStep)=><StepCard key={step.id} step={step} work={work} selected={selected} people={people} onAdd={onAdd}/>
+ const renderStep=(step:WorkStep)=><StepCard key={step.id} step={step} work={work} selected={selected} people={people} onAdd={work.areas.find(area=>area.id===step.area_id)?.archived_at ? undefined : onAdd}/>
  const unorganised=(tasks:WorkTask[])=>tasks.length?<details className="work-unorganised"><summary>Tasks to organise · {tasks.length}</summary>
   <p className="foundation-hint">These saved tasks do not yet have a primary step.</p><TaskLinks tasks={tasks} people={people}/></details>:null
+ const renderArea=(area:Workspace['areas'][number])=><section className="work-area" key={area.id} aria-label={area.name}>
+   <div className="foundation-heading"><h3><Link to={`/areas/${area.slug}`}>{area.name}</Link></h3><PhasePill phase={area.phase}/></div>
+   {work.steps.filter(s=>s.area_id===area.id).map(renderStep)}
+   {unorganised(work.unorganised_tasks.filter(t=>t.area_id===area.id))}
+   {!work.steps.some(s=>s.area_id===area.id)&&!work.unorganised_tasks.some(t=>t.area_id===area.id)&&<p className="foundation-hint">No work organised here yet.</p>}
+  </section>
+ const archived=work.areas.filter(area=>area.archived_at)
  return <section className="card foundation-section" id="project-plan" tabIndex={-1} aria-label="Project plan">
   <div className="foundation-heading"><h2>Plan</h2><Link to="/areas">Manage areas</Link></div>
   {!work.steps.length&&<p className="foundation-hint">No current plan yet. Bob can organise the project’s work into steps.</p>}
   {work.steps.filter(s=>!s.area_id).map(renderStep)}
   {unorganised(work.unorganised_tasks.filter(t=>!t.area_id))}
-  {work.areas.map(area=><section className="work-area" key={area.id} aria-label={area.name}>
-   <div className="foundation-heading"><h3><Link to={`/areas/${area.slug}`}>{area.name}</Link></h3><PhasePill phase={area.phase}/></div>
-   {work.steps.filter(s=>s.area_id===area.id).map(renderStep)}
-   {unorganised(work.unorganised_tasks.filter(t=>t.area_id===area.id))}
-   {!work.steps.some(s=>s.area_id===area.id)&&!work.unorganised_tasks.some(t=>t.area_id===area.id)&&<p className="foundation-hint">No work organised here yet.</p>}
-  </section>)}
+  {work.areas.filter(area=>!area.archived_at).map(renderArea)}
+  {!!archived.length&&<details open={!!selected&&work.steps.some(step=>step.id===selected&&archived.some(area=>area.id===step.area_id))}>
+   <summary>Archived Areas · {archived.length}</summary>{archived.map(renderArea)}
+  </details>}
  </section>
 }
 export function ProjectStepWorkspace({projectId}:{projectId:string}){
@@ -77,6 +82,6 @@ export function ProjectStepWorkspace({projectId}:{projectId:string}){
  if(error)return <p role="alert">Project plan could not be loaded. <button className="btn" onClick={()=>setLocal(v=>v+1)}>Try again</button></p>
  if(!data)return null
  return <><ProjectPlanContent work={data} selected={selected.get('step')} people={new Map(crew?.map(p=>[p.id,p.name])??[])} onAdd={setAdding}/>
-  {adding&&<TaskModal areas={data.areas} areaId={adding.area_id??undefined} stepId={adding.id} onClose={()=>setAdding(null)} onDone={()=>{setAdding(null);setLocal(v=>v+1)}}/>}
+  {adding&&<TaskModal areas={data.areas.filter(area=>!area.archived_at)} areaId={adding.area_id??undefined} stepId={adding.id} onClose={()=>setAdding(null)} onDone={()=>{setAdding(null);setLocal(v=>v+1)}}/>}
  </>
 }

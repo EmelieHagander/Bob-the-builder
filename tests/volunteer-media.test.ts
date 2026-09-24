@@ -31,3 +31,17 @@ test('image proxy rechecks revocation after download and serves exact bytes with
   const wrongSize = createVolunteerMediaHandler({ authorize: async () => manifest, download: async () => new Blob(['wrong']) })
   assert.equal((await wrongSize(request({ session, taskId: 'task', mediaId }))).status, 503)
 })
+
+test('drawing images bind both checks to the exact revision and reject incomplete drawing context', async () => {
+  const drawingId = '93000000-0000-0000-0000-000000000002', calls: unknown[] = []
+  const handler = createVolunteerMediaHandler({
+    authorize: async (_session, _task, _media, drawing) => { calls.push(drawing); return calls.length === 1 ? manifest : null },
+    download: async () => new Blob(['abc']),
+  })
+  for (const extra of [{ drawingId }, { revision: 2 }, { drawingId, revision: 0 }, { drawingId, revision: 1.5 }]) {
+    assert.equal((await handler(request({ session, taskId: 'task', mediaId, ...extra }))).status, 400)
+  }
+  assert.equal(calls.length, 0)
+  assert.equal((await handler(request({ session, taskId: 'task', mediaId, drawingId, revision: 2 }))).status, 403)
+  assert.deepEqual(calls, [{ id: drawingId, revision: 2 }, { id: drawingId, revision: 2 }])
+})

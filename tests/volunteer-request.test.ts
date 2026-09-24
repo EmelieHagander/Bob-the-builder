@@ -53,3 +53,13 @@ test('volunteer image transport preserves binary bytes and rechecks the same cap
   const bad = createVolunteers(null, client({}), () => () => {}, async () => new Response('error', { headers: { 'Content-Type': 'text/html' } }))
   await assert.rejects(bad.image(secret, 'T', mediaId), /image could not be loaded/)
 })
+
+test('volunteer drawing replies must match the task and exact revision before render', async () => {
+  let result = { projectId: 'A', taskId: 'wrong', id: 'D', revision: 1 }
+  const api = createVolunteers(null, client({ rpc: async () => ({ data: result, error: null }) }), () => () => {})
+  await assert.rejects(api.drawings('secret', 'A', 'T'), /Task could not be confirmed/)
+  await assert.rejects(api.drawing('secret', 'A', 'T', 'D', 1), /Drawing could not be confirmed/)
+  result = { ...result, taskId: 'T', revision: 2 }
+  await assert.rejects(api.drawing('secret', 'A', 'T', 'D', 1), /Drawing could not be confirmed/)
+  assert.equal((await api.drawing('secret', 'A', 'T', 'D', 2)).revision, 2)
+})

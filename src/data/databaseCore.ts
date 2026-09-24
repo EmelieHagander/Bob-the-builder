@@ -144,6 +144,7 @@ type PersonRow = {
 }
 type AreaRow = {
   id: string; slug: string; name: string; description: string; icon: string
+  archived_at: string | null; updated_at: string
   lead_id: string | null; assigned_pct: number; materials_pct: number; done_pct: number
   task_summary: string
   area_crew: { person_id: string }[]
@@ -866,9 +867,9 @@ function deriveAreaStats(area: Area, tasks: Task[], materials: Material[]): Area
   }
 }
 
-export async function getAreas(): Promise<Area[]> {
+export async function getAreas(options: { includeArchived?: boolean } = {}): Promise<Area[]> {
   const [areas, tasks, materials] = await Promise.all([fetchAreas(), getTasks(), getMaterials()])
-  return areas.map((a) => deriveAreaStats(a, tasks, materials))
+  return areas.filter(a => options.includeArchived || !a.archivedAt).map((a) => deriveAreaStats(a, tasks, materials))
 }
 
 async function fetchAreas(): Promise<Area[]> {
@@ -879,7 +880,7 @@ async function fetchAreas(): Promise<Area[]> {
     await db
       .from('areas')
       .select(
-        'id, slug, name, description, icon, lead_id, assigned_pct, materials_pct, done_pct, task_summary, area_crew(person_id), area_reference_images(label, sort_order)',
+        'id, slug, name, description, icon, archived_at, updated_at, lead_id, assigned_pct, materials_pct, done_pct, task_summary, area_crew(person_id), area_reference_images(label, sort_order)',
       )
       .eq('project_id', pid)
       .order('sort_order'),
@@ -887,6 +888,8 @@ async function fetchAreas(): Promise<Area[]> {
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
+    archivedAt: row.archived_at ?? null,
+    updatedAt: row.updated_at,
     name: row.name,
     description: row.description,
     icon: row.icon,
@@ -903,7 +906,28 @@ async function fetchAreas(): Promise<Area[]> {
 }
 
 export async function getArea(slug: string): Promise<Area | undefined> {
-  return (await getAreas()).find((a) => a.slug === slug)
+  return (await getAreas({ includeArchived: true })).find((a) => a.slug === slug)
+}
+
+export async function setAreaArchived(area: Area, archived: boolean): Promise<void> {
+  const projectId = await activeProjectId()
+  if (!projectId) throw new Error('Open a project before changing an Area.')
+  const guard = captureFileContext(projectId)
+  if (!db) {
+    const stored = mock.areas.find(item => item.id === area.id)
+    if (!stored) throw new Error('Area unavailable')
+    if (archived && mock.tasks.some(task => task.areaId === area.id && task.status !== 'done')) throw new Error('Move or finish this Area’s unfinished Tasks before archiving.')
+    stored.archivedAt = archived ? new Date().toISOString() : null
+    stored.updatedAt = new Date().toISOString()
+    await read(null)
+  } else {
+    if (!area.updatedAt) throw new Error('Refresh the Area before trying again.')
+    const result = await db.rpc('area_lifecycle_command', { p_project: projectId, p_area: area.id, p_action: archived ? 'archive' : 'restore', p_expected: area.updatedAt })
+    guard()
+    if (result.error) throw new Error(result.error.message)
+    if (result.data?.id !== area.id || result.data?.project_id !== projectId || !!result.data.archived_at !== archived) throw new Error('The Area change could not be confirmed. Refresh and try again.')
+  }
+  window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
 }
 
 export interface NewArea {
@@ -915,7 +939,7 @@ export interface NewArea {
 
 /** Create a work area on the active project. Progress starts at zero. */
 export async function createArea(input: NewArea): Promise<Area> {
-  const existing = await getAreas()
+  const existing = await getAreas({ includeArchived: true })
   const baseSlug = slugify(input.name, 'area')
   // Keep slugs unique within the project — the router looks areas up by slug.
   const slug = existing.some((a) => a.slug === baseSlug) ? `${baseSlug}-${existing.length + 1}` : baseSlug
@@ -1997,7 +2021,7 @@ export async function getAttention(): Promise<AttentionItem[]> {
   // Areas with unassigned tasks
   const unassignedByArea = new Map<string | null, number>()
   for (const t of tasks) {
-    if (t.assigneeIds.length === 0) {
+    if (t.status !== 'done' && t.assigneeIds.length === 0) {
       unassignedByArea.set(t.areaId, (unassignedByArea.get(t.areaId) ?? 0) + 1)
     }
   }
@@ -2015,7 +2039,7 @@ export async function getAttention(): Promise<AttentionItem[]> {
   }
 
   // Expert tasks with no assignee
-  const expertGap = tasks.find((t) => t.skill === 'expert' && t.assigneeIds.length === 0)
+  const expertGap = tasks.find((t) => t.status !== 'done' && t.skill === 'expert' && t.assigneeIds.length === 0)
   if (expertGap) {
     items.push({ icon: 'medal', tone: 'clay', text: `"${expertGap.name}" needs a skilled hand — none confirmed` })
   }

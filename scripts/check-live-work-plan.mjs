@@ -60,19 +60,20 @@ export async function verifyWorkPlan(client, anonymous, projectId) {
     { id: frame, area_id: areaId, name: 'Frame opening' },
     { id: close, area_id: areaId, name: 'Close wall' },
   ]))
-  await expectState(prep, 'blocked', 'phase')
-  checked(await phase('design'))
-  await expectState(prep, 'blocked', 'phase')
-  await denied(work(prep, 'confirm_readiness'), /Resolve named blockers/, 'Design work cannot be confirmed start-ready')
-  checked(await phase('build'))
   await expectState(prep, 'unreviewed')
-  checked(await work(prep, 'confirm_readiness', null, 0, { note: 'Current work plan reviewed' }))
+  checked(await phase('design'))
+  await expectState(prep, 'unreviewed')
+  checked(await work(prep, 'confirm_readiness', null, 0, { note: 'Design work reviewed independently of lifecycle phase' }))
+  await expectState(prep, 'ready')
+  checked(await phase('build'))
+  // Phase changes do not turn reviewed work into a new blocker.
+  await expectState(prep, 'ready')
   const ready = await expectState(prep, 'ready')
   assert(ready.reviewed_at && ready.reviewed_by, 'Confirmation must have server attribution')
   const review = checked(await client.from('task_readiness_reviews').select('confirmed_by,note')
     .eq('project_id', projectId).eq('task_id', prep).single())
   assert.equal(review.confirmed_by, user.id)
-  assert.equal(review.note, 'Current work plan reviewed')
+  assert.equal(review.note, 'Design work reviewed independently of lifecycle phase')
   assert.equal(ready.task_status, 'todo', 'Readiness does not rewrite task status')
 
   checked(await work(frame, 'add_need', tool, 0, { kind: 'tool', label: 'Circular saw', notes: 'Charged battery' }))
@@ -203,5 +204,5 @@ export async function verifyWorkPlan(client, anonymous, projectId) {
   assert.equal(checked(await client.from('task_dependencies').select('id').eq('project_id', projectId)
     .eq('id', checkpointDependency).single()).id, checkpointDependency)
   await expectState(close, 'complete')
-  console.log('Live work readiness: explicit confirmation, phase/tool/information/dependency blockers, stale writes, checkpoints, canonical Shopping delivery, material revision re-review, Today visibility, completion and project/raw/anonymous denial passed. No AI invoked.')
+  console.log('Live work readiness: explicit confirmation, phase-independent review, tool/information/dependency blockers, stale writes, checkpoints, canonical Shopping delivery, material revision re-review, Today visibility, completion and project/raw/anonymous denial passed. No AI invoked.')
 }

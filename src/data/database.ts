@@ -58,10 +58,10 @@ export async function getAccountAreaPhases(projectIds: string[]): Promise<Accoun
   if (!phaseDb) {
     const activeProjectId = core.getActiveProjectId()
     return activeProjectId && ids.includes(activeProjectId)
-      ? mock.areas.map(area => ({ projectId: activeProjectId, phase: area.phase ?? null }))
+      ? mock.areas.filter(area => !area.archivedAt).map(area => ({ projectId: activeProjectId, phase: area.phase ?? null }))
       : []
   }
-  const rows = checked(await phaseDb.from('areas').select('project_id, phase').in('project_id', ids)) as { project_id: string; phase: ProjectPhase | null }[]
+  const rows = checked(await phaseDb.from('areas').select('project_id, phase').in('project_id', ids).is('archived_at', null)) as { project_id: string; phase: ProjectPhase | null }[]
   return rows.map(row => ({ projectId: row.project_id, phase: row.phase ?? null }))
 }
 
@@ -91,8 +91,8 @@ export async function createProject(input: core.NewProject): Promise<Project> {
   return { ...project, phase: 'concept' }
 }
 
-export async function getAreas(): Promise<Area[]> {
-  const areas = await core.getAreas()
+export async function getAreas(options: { includeArchived?: boolean } = {}): Promise<Area[]> {
+  const areas = await core.getAreas(options)
   const projectId = core.getActiveProjectId()
   if (!projectId) return areas.map(area => ({ ...area, phase: null }))
   const phases = await areaPhases(projectId)
@@ -100,7 +100,7 @@ export async function getAreas(): Promise<Area[]> {
 }
 
 export async function getArea(slug: string): Promise<Area | undefined> {
-  return (await getAreas()).find(area => area.slug === slug)
+  return (await getAreas({ includeArchived: true })).find(area => area.slug === slug)
 }
 
 export async function createArea(input: core.NewArea): Promise<Area> {
@@ -117,7 +117,7 @@ async function setPhase(scope: 'project' | 'area', areaId: string | null, phase:
     if (scope === 'project') {
       const project = mock.projects.find(item => item.id === projectId)
       if (!project) throw new Error('database: no such project')
-      if (phase === 'complete' && mock.areas.some(area => area.phase !== 'complete')) {
+      if (phase === 'complete' && mock.areas.some(area => !area.archivedAt && area.phase !== 'complete')) {
         throw new Error('Complete or explicitly defer every Area before completing the Project.')
       }
       project.phase = phase

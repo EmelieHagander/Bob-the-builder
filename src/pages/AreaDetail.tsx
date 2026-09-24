@@ -16,6 +16,7 @@ import {
 } from '../components/ui'
 import { AreaModal, AssignModal, MaterialModal, TaskModal } from '../components/editors'
 import { ProjectImages } from '../components/ProjectImages'
+import { AreaArchiveNotice } from '../components/AreaArchiveNotice'
 
 type Tab = 'tasks' | 'materials' | 'images'
 
@@ -95,7 +96,7 @@ export function AreaDetail() {
           <Link className="btn" to={'/facts?area=' + encodeURIComponent(area.id)}><Icon name="ruler" size={15} /> Measurements & parts</Link>
           <button className="btn" onClick={() => setModal({ kind: 'area' })}><Icon name="pencil-simple" size={15} /> Edit</button>
           <button className="btn" onClick={() => setModal({ kind: 'material' })}><Icon name="package" size={15} /> Add material</button>
-          <button className="btn btn-primary" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" weight="bold" size={14} /> Add task</button>
+          {!area.archivedAt && <button className="btn btn-primary" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" weight="bold" size={14} /> Add task</button>}
         </div>
       </div>
 
@@ -105,6 +106,7 @@ export function AreaDetail() {
         </div>
       )}
 
+      <AreaArchiveNotice area={area} onChanged={reload} />
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginTop: 18, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
         {tabs.map((t) => {
@@ -143,7 +145,8 @@ export function AreaDetail() {
                   <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
                     <button
                       className="no-print"
-                      title={`Mark as ${NEXT_TASK_STATUS[t.status]}`}
+                      title={area.archivedAt ? 'Restore this Area before reopening work' : `Mark as ${NEXT_TASK_STATUS[t.status]}`}
+                      disabled={!!area.archivedAt}
                       onClick={() => act(() => db.setTaskStatus(t.id, NEXT_TASK_STATUS[t.status]))}
                       style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}
                     >
@@ -251,7 +254,7 @@ export function AreaDetail() {
           onDone={() => {
             setModal(null)
             // A delete leaves nothing here; a rename changes the slug lookup target.
-            void db.getAreas().then((all) => {
+            void db.getAreas({ includeArchived: true }).then((all) => {
               const still = all.find((a) => a.id === area.id)
               if (!still) navigate('/areas')
               else if (still.slug !== slug) navigate(`/areas/${still.slug}`)

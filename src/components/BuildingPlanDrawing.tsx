@@ -4,7 +4,7 @@ import { buildingPlanSvg } from '../lib/buildingPlanSvg'
 import { formatDrawingMm as f } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
 const number=(n:number|null)=>n===null?'Unknown':`${f(n)} mm`
-export function BuildingPlanDrawing({value,title,source,lineageChanged=false}:{value:BuildingPlanDetails|null;title:string;source:string;lineageChanged?:boolean}){
+export function BuildingPlanDrawing({value,title,source,lineageChanged=false,participant=false}:{value:BuildingPlanDetails|null;title:string;source:string;lineageChanged?:boolean;participant?:boolean}){
  const [chosen,setChosen]=useState<string|null>(null),[zoom,setZoom]=useState(1)
  const result=useMemo(()=>{
   try{
@@ -19,8 +19,8 @@ export function BuildingPlanDrawing({value,title,source,lineageChanged=false}:{v
  const name=(id:string)=>d.names[id]??id
  const spaces=g.recipe.spaces.filter(s=>!level||s.level_id===level.level_id)
  return <section className="box-drawing" aria-label="Multi-floor coordinate plan">
-  <p className="foundation-hint">Ask Bob to update this study or compare a location between floors. You do not need to draw the views.</p>
-  {(d.sources_changed||lineageChanged)&&<p role="status" className="solution-attention">Sources changed. These are the saved coordinates, not an automatically updated plan. Ask Bob to review and explicitly refresh sources.</p>}
+  <p className="foundation-hint">{participant ? 'Saved coordinate study. Ask the organiser about changes or unclear dimensions.' : 'Ask Bob to update this study or compare a location between floors. You do not need to draw the views.'}</p>
+  {(d.sources_changed||lineageChanged)&&<p role="status" className="solution-attention">Sources changed. These are the saved coordinates, not an automatically updated plan. {participant ? 'Ask the organiser to review these sources before use.' : 'Ask Bob to review and explicitly refresh sources.'}</p>}
   {d.physical_pending&&<p className="solution-attention">Physical proposals are pending; this study references accepted source versions only.</p>}
   <div className="foundation-actions" aria-label="Floor plan views">
    {g.levels.map(l=><button type="button" className={`btn${view===l.level_id?' btn-primary':''}`} key={l.level_id} aria-pressed={view===l.level_id} onClick={()=>{setChosen(l.level_id);setZoom(1)}}>{name(l.level_id)}</button>)}

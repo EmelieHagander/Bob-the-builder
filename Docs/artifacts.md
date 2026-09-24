@@ -646,3 +646,32 @@ the exact-version viewer. Regression coverage is in
 `tests/review-workflow.test.ts`, the drawing workspace and physical-source tests,
 and the foundations browser's navigation/reload/changed/unavailable cases.
 These are source changes until their migration and frontend release are applied.
+
+
+## Volunteer task drawings — September 24, pending release
+
+The name-only participant Task panel now contains **Drawings for this task**.
+It lists only the current, non-archived drawings linked to the Task's current primary
+Step. Opening a drawing rechecks that relationship and its exact current revision.
+A moved Task, removed link/Step, archived/replaced drawing, expired invitation or
+revoked session denies the next read. Refresh discards the previous render before
+loading; a failed request never retains geometry from an earlier successful response.
+
+The reader reuses the saved CAD SVG, storage-box, generated-wall, linked-room,
+coordinate-plan and stair renderers and the image byte proxy. It shows the recorded
+Concept/Measured/Build ready label, description, assumptions and independent source
+status. Changed sources keep the saved geometry with a review warning; unavailable
+sources hide every render payload. Viewing does not approve fit or construction.
+Participant variants stay within the Task instead of linking to authenticated editors
+or offering Bob commands. Pinned furniture/source-plan inputs inside a linked drawing
+are part of its bounded render; they do not grant browsing of those source records.
+CAD manifests/STEP export files and unrelated physical records are excluded.
+
+The authority and release order belong to
+[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-pending-release).
+Regression coverage: `tests/volunteer-drawings.test.ts` (real migrated PostgreSQL,
+current ownership/version, source loss, physical unlink, pagination and denial),
+`tests/volunteer-media.test.ts` (exact-revision byte checks), and
+`scripts/check-volunteer-browser.mjs` (rendered CAD/parametric/image content, refresh,
+reload, changed/unavailable sources and revoked access on phone/desktop). These test
+participants provide technical proof, not acceptance by actual volunteers.

@@ -29,7 +29,7 @@ export interface ProjectWork {
   status: string
   revision: number | null
   focus_step_id: string | null
-  areas: { id: string; name: string; slug: string; phase: ProjectPhase | null }[]
+  areas: { id: string; name: string; slug: string; phase: ProjectPhase | null; archived_at?: string | null }[]
   steps: WorkStep[]
   unorganised_tasks: WorkTask[]
 }

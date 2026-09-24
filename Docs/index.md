@@ -26,6 +26,9 @@
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
 | share a Building or selected projects with a household / invite an existing friend | `Docs/user-stories.md` → BOB-US-038 / BOB-US-059 + `db/README.md` → Household and friend sharing |
 | volunteers joining with only a name / optional allergies when food is planned | `Docs/user-stories.md` → BOB-US-038 + `db/README.md` → Name-only volunteer access |
+| preserve old Areas through archive/restore | `db/README.md` → Area archive and volunteer drawing reader; `Docs/ui-index.md` |
+| volunteer task drawing reader and its release boundary | `Docs/artifacts.md` → Volunteer task drawings; `db/README.md` → capability endpoints |
+| deliberate organisation of older Tasks / preserved history | `Docs/living-project-plan.md` → Older work organisation and Area lifecycle |
 | household physical-edit authority versus project collaboration | `Docs/building-model.md` → §11.1A + `db/README.md` → Effective authority and revocation |
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |

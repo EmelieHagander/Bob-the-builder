@@ -18,6 +18,7 @@ import {
   useAsync,
 } from '../components/ui'
 import { areaNextAction } from '../lib/projectPhase'
+import { AreaArchiveNotice } from '../components/AreaArchiveNotice'
 
 type Tab = 'tasks' | 'materials' | 'images'
 const NEXT_TASK_STATUS: Record<TaskStatus, TaskStatus> = { todo: 'doing', doing: 'done', done: 'todo', blocked: 'doing' }
@@ -106,7 +107,7 @@ export function AreaWorkstream() {
         </div>
       </div>
       <div className="cluster no-print">
-        <button className="btn" onClick={() => setPhaseOpen(true)}><Icon name="signpost" size={15} /> {area.phase ? 'Review phase' : 'Set phase'}</button>
+        {!area.archivedAt && <button className="btn" onClick={() => setPhaseOpen(true)}><Icon name="signpost" size={15} /> {area.phase ? 'Review phase' : 'Set phase'}</button>}
         <details style={{ position: 'relative' }}>
           <summary className="btn" style={{ listStyle: 'none', cursor: 'pointer' }}><Icon name="dots-three" size={17} /> More tools</summary>
           <div className="card" style={{ position: 'absolute', right: 0, zIndex: 10, width: 220, padding: 9, marginTop: 6, display: 'grid', gap: 4 }}>
@@ -122,10 +123,11 @@ export function AreaWorkstream() {
 
     <div style={{ marginTop: 16 }}><PhaseRail phase={area.phase} compact /></div>
 
-    <section style={{ marginTop: 16 }}>
+    <AreaArchiveNotice area={area} onChanged={reload} />
+    {!area.archivedAt && <section style={{ marginTop: 16 }}>
       <NextActionCard eyebrow="This Area" title={primary.title} text={primary.text} icon={primary.icon}
         action={<Link className="btn btn-primary" to={primary.to}>Open next step <Icon name="arrow-right" size={14} /></Link>} />
-    </section>
+    </section>}
 
     {error && <div role="alert" style={{ marginTop: 12, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>{error}</div>}
 
@@ -141,7 +143,7 @@ export function AreaWorkstream() {
     <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 22, marginTop: 18 }}>
       <div>
         {tab === 'tasks' && <>
-          <div className="foundation-heading" style={{ marginBottom: 10 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tasks</h2><button className="btn btn-primary no-print" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" size={15} /> Add task</button></div>
+          <div className="foundation-heading" style={{ marginBottom: 10 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tasks</h2>{!area.archivedAt && <button className="btn btn-primary no-print" onClick={() => setModal({ kind: 'task' })}><Icon name="plus" size={15} /> Add task</button>}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {!tasks.length && <EmptyState icon="list-plus" title="No tasks yet" hint={area.phase === 'planning' ? 'Break the selected plan into executable work when it is ready.' : 'Add work here when tasks are useful for this Area.'} />}
             {tasks.map(task => {
@@ -150,7 +152,7 @@ export function AreaWorkstream() {
               const materialReady = got === total
               const taskPlan = readinessByTask.get(task.id)
               return <div key={task.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
-                <button className="no-print" title={`Mark as ${NEXT_TASK_STATUS[task.status]}`} onClick={() => act(() => db.setTaskStatus(task.id, NEXT_TASK_STATUS[task.status]))} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}>
+                <button className="no-print" disabled={!!area.archivedAt} title={area.archivedAt ? 'Restore the Area to reopen work' : `Mark as ${NEXT_TASK_STATUS[task.status]}`} onClick={() => act(() => db.setTaskStatus(task.id, NEXT_TASK_STATUS[task.status]))} style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer' }}>
                   <Icon name={check.icon} size={22} color={check.color} />
                 </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -222,7 +224,7 @@ export function AreaWorkstream() {
     {modal?.kind === 'assign' && <AssignModal task={modal.task} people={people ?? []} onClose={() => setModal(null)} onDone={reload} />}
     {modal?.kind === 'area' && <AreaModal people={people ?? []} area={area} onClose={() => setModal(null)} onDone={() => {
       setModal(null)
-      void db.getAreas().then(all => {
+      void db.getAreas({ includeArchived: true }).then(all => {
         const still = all.find(item => item.id === area.id)
         if (!still) navigate('/areas')
         else if (still.slug !== slug) navigate(`/areas/${still.slug}`)

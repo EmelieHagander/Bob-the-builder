@@ -6,7 +6,7 @@ import { formatDrawingMm as f } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
 const labels={lower:'Lower plan',upper:'Upper plan',section:'Walking section'} as const
 const code=(s:string)=>s.replace(/_/g,' ')
-export function StairStudyDrawing({value,title,areaId=null}:{value:StairDetails|null;title:string;areaId?:string|null}){
+export function StairStudyDrawing({value,title,areaId=null,participant=false}:{value:StairDetails|null;title:string;areaId?:string|null;participant?:boolean}){
  const [view,setView]=useState<keyof typeof labels>('upper'),[zoom,setZoom]=useState(1)
  const result=useMemo(()=>{
   try{if(!value)throw new Error('Source plan is not available in this project.')
@@ -17,7 +17,7 @@ export function StairStudyDrawing({value,title,areaId=null}:{value:StairDetails|
  if(!result.d||!result.g)return <p role="alert" className="solution-attention">Cannot display stair study: {result.error} Saved history has not been replaced.</p>
  const {d,g}=result,svg=stairStudySvg(d,view,title),name=(id:string)=>d.plan.names[id]??id
  return <section className="box-drawing" aria-label="Stair study">
-  <p className="foundation-hint">Ask Bob to compare or change the stair. Plans and the walking section use the same saved recipe; no drawing form is required.</p>
+  <p className="foundation-hint">{participant ? 'Saved stair study. Plans and walking section use the same recorded dimensions. Ask the organiser about changes.' : 'Ask Bob to compare or change the stair. Plans and the walking section use the same saved recipe; no drawing form is required.'}</p>
   {d.sources_changed&&<p role="status" className="solution-attention">Source plan changed. This drawing retains its old source version. Review and explicitly refresh before further stair edits.</p>}
   {d.plan.physical_pending&&<p className="solution-attention">Physical proposals are pending. This study uses the pinned accepted identities only.</p>}
   <div className="foundation-actions">{(Object.keys(labels) as (keyof typeof labels)[]).map(k=><button type="button" className={`btn${k===view?' btn-primary':''}`} aria-pressed={k===view} key={k} onClick={()=>{setView(k);setZoom(1)}}>{labels[k]}</button>)}</div>
@@ -47,7 +47,7 @@ export function StairStudyDrawing({value,title,areaId=null}:{value:StairDetails|
   <details><summary>Walking-surface clearances and exact sources</summary>
    <div className="box-parts" tabIndex={0}><table><caption>Whole walking strips · flat slab / ceiling model only</caption><thead><tr><th>Part</th><th>Lowest known clearance</th><th>Complete inputs?</th></tr></thead><tbody>{g.clearance.map(c=><tr key={c.key}><th scope="row">{code(c.key)}</th><td>{c.minimum_mm===null?'Unknown':`${f(c.minimum_mm)} mm`}</td><td>{c.unknown?'No':'For this model only'}</td></tr>)}</tbody></table></div>
    <p>{g.spec.basis}: {g.spec.source}</p><p>Source plan v{d.plan_revision}. {d.plan.recipe.origin}</p>
-   <Link className="btn" to={`/artifacts?drawing=${d.plan_id}&revision=${d.plan_revision}${areaId?`&area=${encodeURIComponent(areaId)}`:''}`}>Open source coordinate plan</Link>
+   {!participant && <Link className="btn" to={`/artifacts?drawing=${d.plan_id}&revision=${d.plan_revision}${areaId?`&area=${encodeURIComponent(areaId)}`:''}`}>Open source coordinate plan</Link>}
   </details>
   <p className="solution-attention">{STAIR_LIMITS}</p>
  </section>

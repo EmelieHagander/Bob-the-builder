@@ -67,6 +67,8 @@ export interface AccountNote {
 
 export interface Area {
   id: string
+  archivedAt?: string | null
+  updatedAt?: string
   slug: string
   name: string
   description: string
