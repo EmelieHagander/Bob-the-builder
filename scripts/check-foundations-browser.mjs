@@ -13,6 +13,7 @@ import { createArtifactsFixture, verifyArtifactsBrowser } from './artifacts-brow
 import { createRoomLayoutFixture, verifyRoomLayoutBrowser } from './room-layout-browser.mjs'
 import { verifyStorageBoxBrowser } from './storage-box-browser.mjs'
 import { createMaterialPlanningFixture, verifyMaterialPlanningBrowser } from './material-planning-browser.mjs'
+import { installSheetLayerFixture, verifySheetLayersBrowser } from './sheet-layer-browser.mjs'
 
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
@@ -46,6 +47,7 @@ try {
     const stair = createStairFixture(timestamp, artifacts, multifloor)
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
     const materialPlanning = createMaterialPlanningFixture(timestamp, facts, solutions, artifacts)
+    installSheetLayerFixture(materialPlanning, timestamp, solutions)
     const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
     const area = { id: 'areaA', project_id: 'A', slug: 'entry', name: 'Entry', description: 'Entry work', icon: 'house', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: '', area_crew: [], area_reference_images: [{ label: 'Old reference note', sort_order: 1 }] }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
@@ -243,6 +245,7 @@ try {
     await verifySolutionsBrowser(page, base, solutions, facts, viewport.width)
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
     await verifyMaterialPlanningBrowser(page, base, materialPlanning, facts, viewport.width)
+    await verifySheetLayersBrowser(page, base, materialPlanning, viewport.width)
     await verifyStorageBoxBrowser(page, base, artifacts, viewport.width)
     await verifyRoomLayoutBrowser(page, base, roomLayout, artifacts, viewport.width)
     await verifyMultifloorBrowser(page, base, multifloor, viewport.width)

@@ -8,6 +8,7 @@ import { verifyProjectFacts, verifyFactImageCleanup } from './check-live-project
 import { verifySolutions, verifySolutionImageCleanup } from './check-live-solutions.mjs'
 import { verifyArtifacts, verifyArtifactImageCleanup } from './check-live-artifacts.mjs'
 import { verifyMaterialPlanning } from './check-live-material-planning.mjs'
+import { verifySheetLayers } from './check-live-sheet-layers.mjs'
 import { verifyBuildingContext } from './check-live-building-context.mjs'
 import { verifyVolunteerAccess } from './check-live-volunteers.mjs'
 import { verifyWorkPlan } from './check-live-work-plan.mjs'
@@ -82,6 +83,7 @@ try {
   solutions = await verifySolutions(client, project.id, areaId, imageId, facts)
   artifacts = await verifyArtifacts(client, project.id, areaId, imageId, facts, solutions)
   await verifyMaterialPlanning(client, anonymous, project.id, areaId, taskId, facts, artifacts)
+  await verifySheetLayers(client, anonymous, project.id, areaId, artifacts.geometryArtifactId)
   await verifyBuildingContext(client, anonymous, project.id, areaId, facts)
   await verifyVolunteerAccess(client, anonymous, url, key, project.id, areaId, taskId, imageId, png)
   await verifyWorkPlan(client, anonymous, project.id)
