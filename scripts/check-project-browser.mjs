@@ -67,6 +67,11 @@ try {
         const history = histories.get(body.projectId)
         if (history) history.thread ??= `thread-${body.projectId}`
         if (completedTurns.has(body.clientTurnId)) return respond({ json: completedTurns.get(body.clientTurnId) })
+        if (body.message === 'Long conversation fixture') {
+          const response = success(body.projectId, Array.from({ length: 18 }, (_, i) => `Build detail ${i + 1}: Check the position and record the result before the next step.`).join('\n\n'))
+          storeCompletedTurn(body, response)
+          return respond({ json: response })
+        }
         if (body.message === 'Inspect project photo') {
           const response=success(body.projectId,'Project photo inspected.')
           response.evidence.sources=[{projectId:body.projectId,dataset:'image_pixels',recordId:'10000000-0000-4000-8000-000000000001',label:'Bild öppnad: Fönsteranslutning',retrievedAt:'2026-09-20T12:00:00Z',updatedAt:'2026-09-20T11:00:00Z',truth:'unknown'}]
@@ -245,19 +250,16 @@ try {
 
     await send('Save chosen plan')
     const writeTurnId = requests.at(-1).clientTurnId
-    await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
-    const replay = page.waitForRequest(request => request.url() === `${api}/functions/v1/ask-bob` && request.method() === 'POST')
-    await drawer.getByRole('button', { name: 'Retry request', exact: true }).click()
-    await replay
     await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
-    assert.equal(requests.at(-1).clientTurnId, writeTurnId, 'Retry must reuse the original mutation turn id')
+    assert.equal(requests.at(-1).clientTurnId, writeTurnId)
+    assert.equal(requests.filter(r => r.clientTurnId === writeTurnId).length, 1, 'Recover the committed answer without another model call')
     assert.equal(writeCommits, 1, 'Lost response must not lead to a second write')
-    const saved = drawer.getByLabel('Saved project changes')
-    await saved.getByText('Build 70 × 160 frame', { exact: true }).waitFor()
-    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Save receipts must fit a phone drawer')
-    await saved.scrollIntoViewIfNeeded()
-    // Open real evidence disclosures so even a tall desktop has scrollable history.
-    // Compact mode can legitimately fit this short transcript without a jump button.
+    assert.equal(await drawer.getByLabel('Saved project changes').count(), 0, 'Save diagnostics are not rendered in live chat')
+    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Chat must fit a phone drawer')
+    // Use actual long conversation content; scroll coverage must not depend on
+    // bulky save diagnostics or transient error messages being present.
+    await send('Long conversation fixture')
+    await drawer.getByText('Build detail 18: Check the position and record the result before the next step.', { exact: true }).waitFor()
     while (await drawer.locator('details:not([open]) > summary').count()) await drawer.locator('details:not([open]) > summary').first().click()
     const history = drawer.locator('.bob-history')
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight > 100), 'Scroll fixture must exceed the jump threshold')
@@ -270,10 +272,10 @@ try {
     await page.getByRole('button', { name: 'Close Ask bob' }).click()
     await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()
     drawer = await openBob('A')
-    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
     await page.reload()
     drawer = await openBob('A')
-    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
 
     // Production source disclosure and persistence; HTTP fixture, not vision proof.
     await send('Inspect project photo')
@@ -305,7 +307,7 @@ try {
     }
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset, write receipts, same-turn lost-response retry and reload: OK`)
+    console.log(`Ask bob ${viewport.width}px: explicit project, server-synchronised per-project chat, sources, failures, A → B → A late response, draft reset, compact save feedback, lost-response recovery without resending and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()

@@ -201,6 +201,7 @@ function MobileNav() {
 
 export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } }) {
   const [bobOpen, setBobOpen] = useState(false)
+  const [bobStarted, setBobStarted] = useState(false)
 
   return (
     <div className="app-shell">
@@ -209,7 +210,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
 
       <button
         className="no-print"
-        onClick={() => setBobOpen(true)}
+        onClick={() => { setBobStarted(true); setBobOpen(true) }}
         style={{
           position: 'fixed',
           right: 'clamp(16px, 3vw, 30px)',
@@ -236,7 +237,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
       </button>
 
       <MobileNav />
-      {bobOpen && <AskBob project={project} open onClose={() => setBobOpen(false)} />}
+      {bobStarted && <AskBob project={project} open={bobOpen} onClose={() => setBobOpen(false)} />}
     </div>
   )
 }

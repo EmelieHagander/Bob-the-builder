@@ -210,7 +210,10 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
 }
 
 function WorkingBubble() {
-  return <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Icon name="tree-evergreen" weight="fill" size={17} color="var(--accent)" /></span><div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '16px 16px 16px 4px', boxShadow: 'var(--shadow-sm)', padding: '12px 15px', fontSize: 13.5, color: 'var(--ink-soft)', display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="hammer" weight="fill" size={15} color="var(--honey)" /><span>Bob is working on the project…</span></div></div>
+  return <div className="bob-working" role="status">
+    <span className="bob-hammer"><Icon name="hammer" weight="fill" size={20} color="var(--honey)" /></span>
+    <span>Bob is working on the project…</span>
+  </div>
 }
 
 export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
@@ -250,16 +253,30 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [working, setWorking] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
-  // Layout unmounts this drawer on close; it never renders open=false.
-  // Refresh verified writes in the close event, after the reply has finished,
-  // including when a receipt links to the same route/Building already on screen.
+  const [recovering, setRecovering] = useState<{ text: string; turnId: string; expiresAt: number } | null>(null)
+  // Keep this component alive when closed so a local request and draft survive.
+  // A page reload recovers the same turn from the private server transcript.
   const close = () => {
     onClose()
-    if (needsRefresh) {
+    if (needsRefresh && !working) {
       setNeedsRefresh(false)
       db.refreshAskBobProject(project.id)
     }
   }
+  useEffect(() => {
+    if (!open && needsRefresh && !working) {
+      setNeedsRefresh(false)
+      db.refreshAskBobProject(project.id)
+    }
+  }, [open, needsRefresh, working, project.id])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !confirmReset) { event.preventDefault(); close() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, confirmReset, needsRefresh, working])
   const scope = useRef(createRequestScope())
   const historyScroll = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -281,9 +298,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         const history = await db.getAskBobConversation(project.id)
         if (!current()) return
         if (history.mode === 'server') {
-          setLocalHistory(false); setExtra(history.retry ? [...history.messages, { from: 'user', text: history.retry.text }] : history.messages); setHistoryReady(true)
-          setRetry(history.retry ?? null)
-          if (history.retry) setHistoryNotice('A previous request did not finish. Retry that request to recover any saved changes without repeating them.')
+          applyServerHistory(history); setHistoryReady(true)
           return
         }
       } catch {
@@ -300,6 +315,49 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     return () => { cancelled = true }
   }, [project.id])
 
+  function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
+    const unfinished = history.pending ?? history.retry
+    setLocalHistory(false)
+    setExtra(unfinished ? [...history.messages, { from: 'user', text: unfinished.text }] : history.messages)
+    setRetry(history.retry ?? null)
+    setRecovering(history.pending ?? null)
+    setWorking(!!history.pending)
+    setHistoryNotice(history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
+  }
+
+  // Reopening/reloading never resends a pending question. Read until the server
+  // commits the answer, reports failure, or its existing five-minute lease ends.
+  useEffect(() => {
+    if (!recovering) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const isCurrent = scope.current.capture()
+    const current = () => !cancelled && isCurrent()
+    const poll = async () => {
+      try {
+        const history = await db.getAskBobConversation(project.id)
+        if (!current()) return
+        if (history.mode !== 'server') throw new Error('Conversation unavailable')
+        applyServerHistory(history)
+        if (!history.pending) {
+          if (history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
+          return
+        }
+      } catch {
+        if (!current()) return
+        if (Date.now() >= recovering.expiresAt) {
+          setRecovering(null); setWorking(false); setRetry(recovering)
+          setHistoryNotice('Could not check the answer. Reconnect and retry to recover it without repeating saved changes.')
+          return
+        }
+        setHistoryNotice('Connection interrupted. Checking for Bob’s answer…')
+      }
+      if (current()) timer = setTimeout(poll, 2000)
+    }
+    timer = setTimeout(poll, 1500)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [recovering?.turnId, recovering?.expiresAt, project.id])
+
   useEffect(() => {
     if (!historyReady || !historyKey || !localHistory) return
     try {
@@ -313,7 +371,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
-      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setConfirmReset(false); setRetry(null)
+      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
     }
@@ -334,7 +392,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
-      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRetry(null)
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
         ? 'New conversation started. Saved project data is unchanged.'
@@ -354,10 +412,29 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
-    setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null)
+    setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
     if (appendUser) push({ from: 'user', text })
     setWorking(true)
     const result = await db.askBob(project.id, text, clientTurnId)
+    if (!isCurrent()) return
+    // A disconnected HTTP response does not mean the server stopped working.
+    if ('unavailable' in result && ['turn_in_flight', 'seam_unreachable'].includes(result.unavailable)) {
+      try {
+        const history = await db.getAskBobConversation(project.id)
+        if (!isCurrent()) return
+        if (history.mode === 'server' && (history.pending || history.lastCompletedTurnId === clientTurnId)) {
+          applyServerHistory(history)
+          if (history.lastCompletedTurnId === clientTurnId && history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
+          return
+        }
+      } catch { /* Preserve the same turn id for a later recovery attempt. */ }
+      if (!isCurrent()) return
+      if (result.unavailable === 'turn_in_flight') {
+        setRecovering({ text, turnId: clientTurnId, expiresAt: Date.now() + 5 * 60_000 })
+        setHistoryNotice('Bob is still working. Reconnecting to the conversation…')
+        return
+      }
+    }
     if (!isCurrent()) return
     setWorking(false)
     if ('answer' in result) {
@@ -390,10 +467,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     <div className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
       <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 12px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
+        <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: 'max(8px, env(safe-area-inset-top)) 12px 8px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" /></span>
           <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div></div>
-          <button aria-label="Close Ask bob" onClick={close} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, width: 44, height: 44, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={16} /></button>
+          <button aria-label="Close Ask bob" onClick={close} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, padding: '0 12px', minHeight: 44, gap: 6, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={18} /><span>Close</span></button>
         </header>
 
         <div className="bob-toolbar">
@@ -411,8 +488,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
-          {working && <WorkingBubble />}
         </div>
+
+        {working && <WorkingBubble />}
 
         {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> Latest</button>}
 
