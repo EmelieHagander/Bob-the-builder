@@ -1,0 +1,38 @@
+name: Modal connection
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment containing the Modal credentials
+        default: github-pages
+        required: true
+        type: environment
+  push:
+    branches: [main]
+    paths: ['.github/workflows/modal-connection.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: ${{ inputs.environment || 'github-pages' }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install modal==1.5.5
+      - name: Verify Modal credentials without displaying them
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        shell: python
+        run: |
+          import os, subprocess
+          missing = [name for name in ("MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET") if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("Missing environment secrets: " + ", ".join(missing))
+          result = subprocess.run(["python", "-m", "modal", "token", "info"], capture_output=True, timeout=90)
+          if result.returncode:
+              raise SystemExit("Modal authentication failed. Check the token pair and whether it is active.")
+          print("Modal authentication passed. Both environment secrets are available.")
