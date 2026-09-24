@@ -49,6 +49,10 @@ begin
     if not exists(select 1 from bob.bob_messages where thread_id=j.thread_id and turn_id=p_turn and role='user' and text=p_message) then
       raise exception 'turn_reused' using errcode='22023';
     end if;
+    if j.status in ('queued','running') and j.expires_at<=clock_timestamp() then
+      perform bob_private.bob_finish_job(j.id,j.claim_token,'background_expired');
+      select * into j from bob_private.bob_jobs where id=j.id;
+    end if;
     if j.status in ('queued','running') then
       return jsonb_build_object('status','accepted','jobId',j.id,'expiresAt',j.expires_at);
     end if;

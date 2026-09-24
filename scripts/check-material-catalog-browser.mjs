@@ -50,7 +50,7 @@ try {
       if(url.pathname==='/functions/v1/ask-bob') {
         assert.equal(request.headers().authorization,`Bearer ${token}`)
         const body=request.postDataJSON()
-        assert.deepEqual(Object.keys(body).sort(),['action','clientTurnId','message','projectId'])
+        assert.deepEqual(Object.keys(body).sort(),['action','background','clientTurnId','message','projectId'])
         assert.equal(body.action,'send');assert.equal(body.projectId,'A')
         requests.push(body)
         if(completed.has(body.clientTurnId)) return respond({json:completed.get(body.clientTurnId)})

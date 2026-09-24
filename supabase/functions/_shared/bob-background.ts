@@ -32,6 +32,7 @@ export async function enqueueBobTurn(input: Input) {
     p_worker_url: s.url.replace(/\/$/, '') + '/functions/v1/bob-worker',
   })
   if (result.status === 'accepted') {
+    console.log('[Bob job]', JSON.stringify({ jobId: result.jobId, turnId: input.clientTurnId, status: 'queued' }))
     // The committed queue survives even if this kick fails; cron owns recovery.
     try { await s.rpc('bob_dispatch_jobs') } catch { /* next minute */ }
     return { ok: true as const, status: 'accepted' as const, projectId: input.projectId, jobId: result.jobId as string, expiresAt: result.expiresAt as string }
@@ -57,23 +58,30 @@ export async function serveBobWorker(req: Request): Promise<Response> {
   if (job.status !== 'claimed') return new Response(null, { status: 204 })
   const args = { p_job: job.id, p_claim: job.claimToken }
   const work = async () => {
+    let phase = 'credential'
+    console.log('[Bob job]', JSON.stringify({ jobId: job.id, turnId: job.clientTurnId, status: 'running', generation: job.generation }))
     try {
       const token = await openCredential(job.credential, binding(job), s.secret)
       const caller = createClient(s.url, s.key, { global: { headers: { Authorization: 'Bearer ' + token } }, auth: { persistSession: false, autoRefreshToken: false } })
+      phase = 'authentication'
       const auth = await caller.auth.getUser(token)
       if (auth.error || auth.data.user?.id !== job.userId) throw new Error('unauthorized')
       const journal = createBobJournal({ entries: job.entries, save: async entry => {
         await s.rpc('bob_save_job_step', { ...args, p_key: entry.key, p_fingerprint: entry.fingerprint, p_value: entry.value })
       } }, started + 140000)
+      phase = 'answer'
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId,
         background: { claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0 } })
       journal.check()
-      await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
+      const finished = await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
+      console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: finished.status, error: result.ok ? undefined : result.error }))
     } catch (error) {
+      const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
+      console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase }))
       try {
         if (error instanceof BobContinuation && error.kind === 'yield') await s.rpc('bob_yield_job', args)
-        else await s.rpc('bob_finish_job', { ...args, p_error: error instanceof BobContinuation ? error.message : 'background_failed' })
+        else await s.rpc('bob_finish_job', { ...args, p_error: reason })
       } catch { /* A stale worker cannot settle another lease. The driver recovers. */ }
     }
     try { await s.rpc('bob_dispatch_jobs') } catch { /* cron recovery */ }

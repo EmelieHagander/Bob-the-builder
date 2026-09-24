@@ -60,7 +60,7 @@ try {
       if (url.pathname === '/functions/v1/ask-bob') {
         assert.equal(request.headers().authorization, `Bearer ${token}`)
         const body = request.postDataJSON()
-        assert.deepEqual(Object.keys(body).sort(), ['action', 'clientTurnId', 'message', 'projectId'])
+        assert.deepEqual(Object.keys(body).sort(), ['action', 'background', 'clientTurnId', 'message', 'projectId'])
         assert.equal(body.action, 'send')
         assert.match(body.clientTurnId, UUID, 'Bob turn id is a client UUID idempotency key')
         requests.push(body)
