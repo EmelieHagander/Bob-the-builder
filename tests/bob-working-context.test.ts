@@ -13,6 +13,9 @@ const pg = new PGlite()
 const one = '00000000-0000-4000-8000-000000000001', two = '00000000-0000-4000-8000-000000000002'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const result = (data: string) => ({ success: true, data, responseId: 'resp_fixture', model: 'fixture', usage })
+const briefResult = (options: any, gist: string) => ({ ...result(''), data: {
+  gist, index: JSON.parse(options.messages[0].content).olderMessages.map((m: any) => ({ seq: m.seq, descriptor: `Topic ${m.seq}` })),
+} as any })
 async function as(uid: string | null, sql: string, params: unknown[] = [], role = 'authenticated'): Promise<any> {
   return pg.transaction(async tx => {
     await tx.query("select set_config('request.jwt.claims',$1,true)", [JSON.stringify({ sub: uid })])
@@ -68,6 +71,45 @@ before(async () => {
   await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','main','Main'),('areaB','B','private','Private')")
 })
 after(()=>pg.close())
+
+test('main Bob has standard/high settings while memory folding has its own mini/low settings',async()=>{
+  const rows=(await pg.query("select function_name,model,model_type,reasoning_effort from shared.ai_settings where app='bob' and function_name in ('ask-bob','context-summary') order by function_name")).rows
+  assert.deepEqual(rows,[
+    {function_name:'ask-bob',model:'gpt-5.4',model_type:'standard',reasoning_effort:'high'},
+    {function_name:'context-summary',model:'gpt-5.4-mini',model_type:'mini',reasoning_effort:'low'},
+  ])
+})
+
+test('next turn receives real saved action IDs separately from prose and excludes another private thread',async()=>{
+  await clean()
+  async function saveDescription(userId:string,description:string){
+    const c=await claim('Spara beskrivningen',userId)
+    const row:any=(await pg.query("select updated_at from bob.projects where id='A'")).rows[0]
+    await as(userId,'select bob.bob_project_write($1,$2,$3,$4,$5)',[c.projectId,c.threadId,c.turn,c.generation,JSON.stringify({
+      kind:'project',record_id:'A',expected_updated_at:row.updated_at,expected_revision:null,request_quote:'Spara',data:{description},
+    })])
+    await commit(c,'Saved work');return c
+  }
+  const owned=await saveDescription(one,'Original working specification')
+  await saveDescription(two,'Other member specification')
+  const next=await claim('Fortsätt')
+  const frame=await store(next).load() as ContextFrame
+  assert.equal(frame.recentWrites?.length,1)
+  assert.equal(frame.recentWrites?.[0].recordId,'A')
+  assert(!Object.hasOwn(frame.recentWrites![0],'record'),'the current record payload is not stale context')
+  const prepared=await prepareWorkingContext({...next,store:store(next),hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>{throw new Error('No fold expected')}})
+  const calls:any[]=[]
+  await runProjectAnswer({projectId:'A',userId:one,message:next.message,context:prepared,hasAccess:async()=>true,
+    lookup:createProjectLookup('A',async()=>({data:{records:[{id:'A',description:'Fresh truth'}],related:[],truncated:false},error:null}),1000,12),
+    callModel:async o=>{calls.push(o);return result('Continued')}})
+  const carrier=calls[0].messages[0].content
+  assert(carrier.includes('recentWrites'));assert(carrier.includes('Fresh truth'));assert(!carrier.includes('Other member specification'))
+  await fail(next)
+  await pg.query('delete from bob.bob_threads where id=$1',[owned.threadId])
+  const reset=await claim('New conversation')
+  assert.deepEqual((await store(reset).load() as ContextFrame).recentWrites,[])
+  await fail(reset)
+})
 
 test('T1 contains exactly five individual verbatim messages; T2 folds only older prefix and advances incrementally', async () => {
   await clean()
@@ -136,9 +178,12 @@ test('real orchestration folds once, replays full recent messages, drops old pro
   const c=await claim('Välj höjderna, ta ett arbetsbeslut.')
   let summaries=0
   const prepared=await prepareWorkingContext({...c,store:store(c),hasAccess:async()=>true,deadline:Date.now()+100000,
-    callModel:async options=>{summaries++;assert.equal(options.previousResponseId,undefined); assert.equal(options.tools,undefined);return result('Earlier working choices, not measured [seq 1–4]')},
+    callModel:async options=>{summaries++;assert.equal(options.previousResponseId,undefined); assert.equal(options.tools,undefined);
+      assert.equal(options.functionName,'context-summary');assert.equal(options.aiFunction,'context-summary');
+      return briefResult(options,'Earlier working choices, not measured [seq 1–4]')},
   })
   assert.equal(summaries,1); assert.equal(prepared.recent.length,5)
+  assert.deepEqual(prepared.historyIndex?.map(e=>e.seq),[1,2,3,4])
   const calls:any[]=[]
   const answer=await runProjectAnswer({projectId:'A',userId:one,message:c.message,context:prepared,previousResponseId:'FORBIDDEN_OLD_CHAIN',hasAccess:async()=>true,
     lookup:createProjectLookup('A',async()=>({data:{records:[{id:'A',description:'Current plan'}],related:[],truncated:false},error:null}),1000,12),
@@ -168,7 +213,7 @@ test('summary failure never generates an answer from partial history; retry can 
     prepareContext:async()=>{throw new Error('context_unavailable')},fail:async()=>{failures++},
   })
   assert.deepEqual(out,{ok:false,error:'context_unavailable'}); assert.equal(answers,0); assert.equal(failures,1)
-  const ready=await prepareWorkingContext({...c,store:store(c),hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>result('Recovered summary')})
+  const ready=await prepareWorkingContext({...c,store:store(c),hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async o=>briefResult(o,'Recovered summary')})
   assert.equal(ready.summary,'Recovered summary');await fail(c)
 })
 

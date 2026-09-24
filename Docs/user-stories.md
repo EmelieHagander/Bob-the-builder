@@ -2,11 +2,114 @@
 
 > **Status:** current product contract for user goals and acceptance intent  
 > **Scope:** planning a build, preparing it, doing it together, and learning from what actually happened  
-> **Priority:** intentionally not assigned here; V0/next-slice prioritisation comes after the story landscape is agreed
+> **Priority:** the five outcome use cases below are the product acceptance baseline, confirmed 2026-09-24. Existing feature stories serve these outcomes; a finished technical slice is not a finished use case.
 
 This document is the current owning home for bob's user stories. It preserves the original BuildCoord collaboration thesis while extending bob into the workflow that has emerged through real use: **show bob the real project → understand it → measure it → choose a solution → produce buildable information → calculate what is needed → organise the work and people → build → document what actually happened**.
 
 The historical `Docs/Mockups and initial plans/BuildCoord_PRD.md` remains useful prior art and product history. Where user-story wording conflicts, this document is the current story contract; the original PRD is not rewritten retroactively.
+
+## Product mandate — 2026-09-24
+
+**Bobs främsta uppgift är att göra det möjligt att gå från idé till genomfört byggprojekt utan tidigare byggkunskap.** Den andra bärande uppgiften är att göra stora byggen snabbare, roligare och mer tillgängliga genom att organisera människor över flera dagar. Information, mockups och hjälpbilder hör hemma där de behövs i arbetet. Användaren och Bob ska båda kunna skapa och koppla sådant underlag till rätt steg.
+
+Bob är byggexperten och driver det delegerade arbetet. Projektledaren anger mål, ändrar riktning och bidrar med observationer på plats. Bob gör rimliga reversibla arbetsval, sparar dem med rätt ursprung och fortsätter till ett användbart resultat. Han ber om hjälp när en fysisk observation, ett faktiskt saknat mandat eller ett avgörande ägarbeslut behövs. Han kan inte mäta, inspektera eller bygga på distans. Ett uppskattat mått får användas som uppskattning i konceptarbete, men blir inte uppmätt för att Bob har sparat det.
+
+**Promptstrategi:** en kort sammanhängande roll, allmänna principer och verktygskontrakt. Inga objektspecifika manus eller allt längre listor av tidigare incidenter. Humor får färga rösten; den ersätter inte funktion. Huvud-Bob använder en standardmodell med reasoning **high** via den gemensamma AI-vägen. Assistent- och minnesuppgifter har egna modellinställningar.
+
+Denna precisering ersätter äldre formuleringar som kräver ett nytt godkännande för varje vanlig arbetsändring. Den avskaffar inte projektbehörighet, revisionskontroll, synlig osäkerhet eller uttryckliga beslut där de faktiskt behövs. Ändrade produktkrav är inte bevis på ändrad runtime.
+
+### BOB-UC-001 — Från idé till genomfört bygge utan förkunskaper
+
+**Användarberättelse:** Som projektledare vill jag kunna gå från idé till genomfört byggprojekt utan tidigare byggkunskap, för att minska tröskeln för att göra saker själv.
+
+**Start:** ett önskemål i vanligt språk, eventuellt med bilder och ofullständiga mått. Användaren behöver inte känna till byggtermer, rätt verktygsnamn eller datamodellen.
+
+**Huvudflöde:** Bob läser aktuellt projekt och tidigare samtal, förklarar en lämplig väg och gör nödvändiga arbetsval. Han bygger en levande plan, tar fram underlag, material och genomförbara uppgifter, och leder användaren genom nästa steg. Nya mått och verkliga resultat förändrar samma projekt. Arbetet avslutas med dokumenterat resultat och eventuella återstående kontroller.
+
+**Acceptans:**
+- En vanlig beställning omfattar sina normala förberedelser. Bob fortsätter över flera verktygsanrop och efter ett vanligt ”fortsätt” utan att be om samma mandat igen.
+- Kända mått och tidigare rättelser används även om de ligger långt bak i chatten eller efter första sidan projektdata.
+- Bob kan lägga till, uppdatera och ta bort inaktuella mått ur aktiv användning. Borttagning bevarar historik och visar berörda ritningar/krav; uppskattningar blir aldrig mätningar genom denna hantering.
+- Saknad fysisk kontroll ligger kvar som en tydlig uppgift. Oberoende planering fortsätter under tiden.
+- En generisk rit-/sammanställningsförmåga kan representera olika konstruktioner med delar, material och relationer. Samma förmåga ska klara exempelvis en våningssäng och en hylla utan nya objektspecifika verktyg. Exemplen är provfall, inte en tillåten objektlista.
+- Ändrade mått kan följas till berörda vyer, delar, materialbehov och steg. Bob återöppnar sparat underlag efter omladdning och fortsätter nästa dag.
+- ”Färdigt” kräver genomfört arbete och relevanta kontroller; skapad plan eller uppgiftslista räcker inte.
+
+**Avvikelseväg:** motstridiga mått, otillräckligt underlag, resursgräns eller saknad förmåga redovisas som just det. Bob förklarar det verkliga hindret och driver den del som fortfarande går att utföra. Ett tekniskt fel får inte döpas om till att användaren måste godkänna igen.
+
+**Verifieringsscenario:** en nybörjare beskriver en våningssäng, rättar ett tidigare arbetsmått, lämnar appen och återkommer. Följ hela kedjan till underlag, arbete och dokumenterat resultat. Upprepa med en annan konstruktion för att avslöja objekthårdkodning. Relaterade stories: 001–037, 049–058.
+
+### BOB-UC-002 — Organisera ett större bygge över flera dagar
+
+**Användarberättelse:** Som projektledare vill jag kunna ta på mig stora projekt och organisera människor över flera dagar för att göra byggprojekt snabbare, roligare och mer tillgängliga.
+
+**Huvudflöde:** projektledaren beskriver målet och byggdagarna. Deltagare anmäler tillgänglighet och erfarenhet. Arbete, beroenden, verktyg, material och lämplig handledning fördelas över dagarna. Varje deltagare får en begriplig dagsvy. Verklig närvaro och färdiga/återstående moment ligger till grund för nästa dag.
+
+**Acceptans:**
+- Ett flerdagarsprojekt kan planeras med personer som bara deltar vissa dagar och med olika erfarenhet. Fördelningen uppdateras när någon får förhinder.
+- En ny deltagare ser vad, var, med vem och med vilka förberedelser arbetet ska göras, samt hittar anvisningar och bilder direkt där.
+- Uppgifter med saknade material eller beroenden framställs inte som startklara. Mindre erfarna deltagare får lämpliga uppgifter och handledning.
+- Ej slutfört arbete följer med till nästa dag utan att förlora ansvar, kontroller eller dokumentation. Gjort arbete görs inte ogjort av en omplanering.
+- Volontärer kan delta med namn enligt befintlig gästmodell; ett nytt konto är inte ett villkor för den avsedda volontärvägen. Mat och allergier hanteras när projektet har mat.
+
+**Verifieringsscenario:** tre byggdagar, blandad erfarenhet, en avbokning och en materialförsening. Följ inbjudan, planering, deltagarvy, rapportering och omplanering. Relaterade stories: 038–048, 053, 059.
+
+### BOB-UC-003 — Se rätt information och bild vid rätt steg
+
+**Användarberättelse:** Som användare vill jag smidigt kunna se information, mockups och hjälpbilder i relation till de steg de är till för.
+
+**Huvudflöde:** användaren öppnar ett arbetssteg och ser dess förklaring och relevanta underlag. Originalbild eller ritning kan öppnas, förstoras och förstås utan att söka i en gammal chatt. Samma underlag kan användas i flera steg.
+
+**Acceptans:**
+- Rätt version visas och syftet framgår: nuläge, förslag, måttsatt underlag, instruktion eller faktiskt resultat.
+- Steganknytningen överlever navigation, omladdning och omplanering som bevarar stegets identitet.
+- Uppdaterat eller inaktuellt underlag går att skilja åt. Borttagna filer och bruten åtkomst visas ärligt.
+- Flödet fungerar på mobil och inom deltagarens rättigheter, även i avsedd volontärvy.
+
+**Verifieringsscenario:** deltagaren öppnar samma steg från projektets plan och sin arbetsuppgift, använder en hjälpbild och återkommer efter att bilden fått en ny version. Projektplanens Step och uppgiftens instruktionsteg är olika identiteter; implementationen måste uttryckligen visa vilken länk som används. Relaterade stories: 003–005, 016, 032–037, 050–051.
+
+### BOB-UC-004 — Projektledaren lägger underlag där det behövs
+
+**Användarberättelse:** Som projektledare vill jag smidigt kunna lägga till information, mockups och hjälpbilder i relation till de steg de är till för.
+
+**Huvudflöde:** från relevant steg skriver projektledaren information, laddar upp nytt underlag eller väljer ett redan sparat. Syfte och stegkoppling sparas tillsammans så att nästa deltagare hittar dem.
+
+**Acceptans:**
+- Både befintliga och nya bilder/filer kan kopplas till ett steg; återanvändning kräver ingen duplicerad uppladdning.
+- Information och länkar kan ändras eller tas bort utan att oavsiktligt radera andra stegs underlag.
+- Misslyckad uppladdning eller koppling ger ett tydligt återhämtningsbart resultat. Ingen lyckad uppladdningsetikett ersätter en faktiskt sparad fil och länk.
+- Sparat underlag syns på avsedd plats efter omladdning och för behöriga deltagare.
+
+**Verifieringsscenario:** ladda upp en fotoanvisning, återanvänd den i två steg, byt koppling i ett steg och kontrollera båda vyerna efter omladdning. Relaterade stories: 003–004, 049–051.
+
+### BOB-UC-005 — Bob skapar och placerar användbart underlag
+
+**Användarberättelse:** Som projektledare vill jag att AI ska kunna skapa och lägga till information, mockups och hjälpbilder smidigt i relation till de steg de är till för.
+
+**Huvudflöde:** inom det delegerade arbetet upptäcker Bob att en förklaring, mockup, ritning eller hjälpbild behövs. Han läser relevanta källor, använder rätt genereringsförmåga, sparar resultatet och kopplar det till rätt steg. Svaret pekar på resultatet där användaren arbetar.
+
+**Acceptans:**
+- Text, illustrativa bilder och beräknad ritgeometri använder lämpliga förmågor. En illustrativ bild blir inte en måttsatt ritning genom sin etikett.
+- Resultatet har faktiskt innehåll, projektkoppling, rätt steglänk, syfte, ursprung och relevanta käll-/versionsreferenser.
+- Bob kan revidera samma underlag efter återkoppling och visar vilka steg som påverkas.
+- ”Jag lade in det” kräver kvitto för både sparande och koppling. Om generering lyckas men koppling misslyckas behålls resultatet för säker återhämtning; nästa försök ska inte skapa blinda dubbletter.
+- En deltagare hittar resultatet efter omladdning utan att öppna Bobs privata chatt. Generering utanför appen med manuell överföring uppfyller inte detta flöde.
+
+**Verifieringsscenario:** Bob skapar en monteringsförklaring och hjälpbild vid rätt steg, sparar och kopplar dem; en annan behörig deltagare använder dem. Prova ändrad källa och avbrutet sparande. Relaterade stories: 012–018, 032–037, 056.
+
+### Release acceptance and current gaps
+
+**Status 2026-09-24:** alla fem är **PARTIAL**, inte slutverifierade. Manuella delytor och backendgrunder finns, men hela kedjan och AI-handlingsytan saknas på flera ställen. Den daterade [kontextauditen](bob-context-audit-2026-09-24.md) är en baslinje före korrigeringarna, inte en levande statuslista.
+
+| Use case | Viktig kvarvarande lucka | Ansvarig kontraktsyta |
+|---|---|---|
+| UC-001 | Fullständig måtthantering inklusive arkivering, robust kontext/återhämtning, tillgänglig generell ritning och konsekvent genomförandeflöde | `ask-bob-conversations.md`, `project-facts.md`, `living-project-plan.md`, `material-assembly-use-case.md`, `cad-adapter.md` |
+| UC-002 | Sammanhängande planering/omplanering av personer och dagar via Bob samt verifierad deltagarkedja | stories 038–048, `living-project-plan.md` |
+| UC-003 | Enhetlig konsumtion av rätt underlag vid både projektplanens steg och uppgifternas instruktioner | `media-and-steps.md`, `living-project-plan.md` |
+| UC-004 | Komplett hantering av text/media/länkar i de avsedda stegytorna | `media-and-steps.md` |
+| UC-005 | Generering → lagring → steglänk → deltagarvisning genom Bobs egna verktyg | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
+
+En implementation ska ange vilket UC och vilket observerbart delresultat den levererar. Ett helt UC får markeras BUILT först efter dokumenterat test av huvudflöde, viktig felväg, återbesök och rätt användarroll. Databasfixturer bevisar mekanik; verkliga modellkörningar och användarflöden behövs för beteende och slutnytta. En specialgenerator, schemaändring eller lyckad API-körning ensam stänger inget UC.
 
 ## Story status legend
 
@@ -34,7 +137,7 @@ May only join for one build day. Needs extremely fast context: what is happening
 Needs the real attendance picture, dietary/allergy information, meal plan and shopping requirements without needing to care about construction details.
 
 ### Bob
-Bob is a system/assistant actor, not a human persona. Bob may analyse, derive, explain, calculate and propose. Bob must keep uncertainty, provenance and human authority visible rather than turning an estimate or AI judgement into fake project truth.
+Bob is the remote building expert and project-driving assistant. He investigates, decides ordinary working details and executes delegated work across tools, while preserving uncertainty, provenance and the owner's ability to change direction. He cannot perform physical site work or turn an estimate into measured truth. The product mandate above owns this distinction.
 
 ---
 
@@ -863,18 +966,20 @@ As a project owner, I want to know when a drawing note, quantity, proposed task 
 - Human confirmation/verification can be recorded separately from AI origin.
 - Revisions do not destroy the origin of prior outputs.
 
-## BOB-US-057 — Let bob propose consequential changes, not silently commit them
+## BOB-US-057 — Delegate ordinary work and retain control over consequential changes
 
 **Status:** NEW  
 **Persona:** Project owner / organiser
 
 **Story**  
-As a project owner, I want bob to propose changes to the build plan, assignments, drawings or material quantities and show me their impact before committing them, so that AI helps me without taking hidden authority over the project.
+As a project owner, I want Bob to carry out ordinary reversible work within my request and explain consequential changes that need my decision, so that the project advances without repeated permission questions and I retain control over its direction.
 
 **Acceptance criteria**
 - Material changes to selected solution/geometry/assignments are reviewable before canonical replacement where consequence warrants it.
 - The user can accept, reject or edit the proposal.
 - Rejection does not destroy the current project state.
+- Saving a working specification, updating delegated task instructions or preparing a proposal does not require a new confirmation for each tool call. Follow-up messages continue the understood task until changed or cancelled.
+- Existing explicit approval of the canonical project plan is a distinct decision, not a general gate on all preparatory work. Necessary physical checks remain open while independent work continues.
 
 The explicit AI plan-change proposal/approval model behind BOB-US-057 is also specified in [Living project plan](living-project-plan.md). Existing write authority remains owned by the current data/auth and Ask Bob contracts until that plan model is implemented.
 

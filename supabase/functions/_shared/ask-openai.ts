@@ -76,7 +76,7 @@ export async function answerWithOpenAi(opts: {
     hasAccess, lookup.sources)
   const planAssistant = createPlanAssistant({
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
-    makeLookup: () => createProjectLookup(opts.projectId, lookupTransport, 10_000, 12),
+    makeLookup: () => createProjectLookup(opts.projectId, lookupTransport, 10_000, 128),
     callModel: options => callOpenAIResponses(options),
   })
   return runClaimedProjectTurn({

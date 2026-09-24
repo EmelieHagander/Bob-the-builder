@@ -45,6 +45,14 @@ The dedicated `CAD adapter` workflow installs Python 3.13 and build123d 0.13.0 o
 
 ## Next
 
+The September 24 product mandate makes this integration a delivery gap for
+[UC-001 and UC-005](user-stories.md#product-mandate--2026-09-24), not an optional
+alternative to the legacy storage-box tool. The existing generic engine must
+become reachable through Bob, persist under Artifact identity, and return views
+that the relevant project step can display. A passing engine fixture alone does
+not satisfy that outcome. Do not add a `bed_v1` tool to work around the missing
+integration.
+
 After this seam passes:
 1. pin exact catalog material/part revisions in construction definitions;
 2. persist the assembly recipe under the existing Artifact identity;

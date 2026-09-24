@@ -135,34 +135,33 @@ function compact(dataset:string,row:Record<string,unknown>){
   return pick(row,keys[dataset]??['id','name','title','updated_at'])
 }
 
-async function page(lookup:Lookup,dataset:any,maxPages:number){
+async function page(lookup:Lookup,dataset:any,deadline:number){
   const rows:Record<string,unknown>[]=[]
-  let after:string|null=null,partial=false,status='empty'
-  for(let i=0;i<maxPages;i++){
+  let after:string|null=null,status='empty'
+  const cursors=new Set<string>()
+  while(lookup.remaining>0&&Date.now()<deadline){
     const result=await lookup.search({dataset,query:null,status:null,area_id:null,record_id:null,after_id:after})
     status=result.status
     if(result.status==='denied') return {status:'denied',rows,partial:true}
-    if(!['ok','empty'].includes(result.status)){partial=true;break}
+    if(!['ok','empty'].includes(result.status))return {status,rows,partial:true}
     rows.push(...result.records.map(r=>compact(dataset,r)))
-    if(!result.next_cursor) { partial ||= result.truncated; break }
-    after=result.next_cursor; partial=true
+    if(!result.next_cursor)return {status,rows,partial:result.truncated}
+    if(cursors.has(result.next_cursor))return {status:'cursor_stalled',rows,partial:true}
+    after=result.next_cursor; cursors.add(after)
   }
-  return {status,rows,partial}
+  return {status:'budget_exhausted',rows,partial:true}
 }
 
-async function buildSnapshot(lookup:Lookup){
+async function buildSnapshot(lookup:Lookup,deadline:number){
   const out:Record<string,unknown>={}
   let partial=false
-  const singles=['project','areas','plan','target','components','solutions','artifacts','requirements'] as const
-  for(const dataset of singles){
-    const r=await page(lookup,dataset,1)
+  const datasets=['project','areas','plan','target','measurements','tasks','components','solutions','artifacts','requirements'] as const
+  for(const dataset of datasets){
+    const r=await page(lookup,dataset,deadline)
     if(r.status==='denied') throw new Error('project_denied')
+    if(r.partial) throw new Error('snapshot_incomplete')
     out[dataset]=r.rows; partial ||= r.partial
-  }
-  for(const dataset of ['tasks','measurements'] as const){
-    const r=await page(lookup,dataset,2)
-    if(r.status==='denied') throw new Error('project_denied')
-    out[dataset]=r.rows; partial ||= r.partial
+    if(new TextEncoder().encode(JSON.stringify(out)).length>512*1024)throw new Error('snapshot_too_large')
   }
   return {data:out,partial,sources:lookup.sources.slice()}
 }
@@ -262,7 +261,12 @@ export function createPlanAssistant(opts:{
       const deadline=opts.deadline??Date.now()+90000
       const lookup=opts.makeLookup()
       let snapshot:{data:Record<string,unknown>;partial:boolean;sources:ProjectSource[]}
-      try{snapshot=await buildSnapshot(lookup)}catch(e){return {status:e instanceof Error&&e.message==='project_denied'?'denied':'unavailable',saved:false}}
+      try{snapshot=await buildSnapshot(lookup,deadline)}catch(e){
+        partial=true
+        return {status:e instanceof Error&&e.message==='project_denied'?'denied':'unavailable',saved:false,
+          stage:'snapshot',reason:e instanceof Error?e.message:'snapshot_unavailable',
+          message:'The complete project snapshot could not be loaded. No plan was compiled; this is a retrieval limit, not missing project evidence.'}
+      }
       partial ||= snapshot.partial
       const currentPlan=((snapshot.data.plan as any[])?.[0]??null)
       const expectedRevision=Number(currentPlan?.revision??0)

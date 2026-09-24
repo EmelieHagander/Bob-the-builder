@@ -5,6 +5,12 @@
 > **Audited against:** current `main` runtime/schema/code after the user-story contract was added  
 > **Related product intent:** `Docs/user-stories.md`
 
+> **Acceptance correction, 2026-09-24:** use the five UC-001–005 outcome cases in
+> [user-stories.md](user-stories.md#product-mandate--2026-09-24) to assess completion.
+> No full case is yet end-to-end verified. The general CAD adapter exists but has
+> no Bob tool/hosted Artifact integration; AI-generated step media and measurement
+> archiving through Bob remain gaps. Manual support is not AI capability.
+
 > **Slice 0 release delta (2026-09-09):** project membership/RLS, explicit-project
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
 > local and CI tests. OpenAI is the permanent provider; Launchpad is retired. The

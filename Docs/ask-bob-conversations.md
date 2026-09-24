@@ -12,14 +12,17 @@ The project database remains the authority for **saved** project state. Conversa
 
 ## Explicit T1 / T2 / T3 context
 
-The shape is adapted from Launchpad's `docs/planning/laf-session-working-context-memory-tiers-canvas.md` (parked design, not a shipped library port). There is no Launchpad runtime dependency and no provider compaction claim.
+The September 24 correction follows Launchpad's actual context implementation, inspected at commit `28834d6efbf7ac0cb2f7069b7d275b729cb4b28e`, rather than only its earlier parked canvas. References: [`session-brief.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/session-brief.ts), [`prompt-assembly.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/prompt-assembly.ts), and [`session-recall.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/session-recall.ts). There is no Launchpad runtime dependency or claim that its private deployment was tested here.
+
+The common pattern is **verbatim recent chat + older gist and sequence index + exact recall + separate current/action state**. Bob retains the owner's five-message window; Launchpad uses a nominal six-turn window with a budget guard. Bob has one private owner/project thread, not Launchpad's coworker audience routing, so those audience rules are not copied. Current project records still come from caller-authorised reads.
 
 | State | Source and boundary | Lifetime |
 | --- | --- | --- |
 | T1: recent conversation | Four most recent previous **individual messages**, plus the current pending user request. Full original text and role; sequence/delivery metadata in the frame. Not five pairs. | Rebuilt for each request |
-| T2: older working brief | Private `bob_thread_summary`, thread FK, summary plus `last_folded_seq`. Only the prefix before T1 is folded. | Same thread; reset cascade deletes it |
+| T2: older working brief | Private `bob_thread_summary`, thread FK, JSON-encoded gist + up to 40 sequence/topic pointers and `last_folded_seq`. Only the prefix before T1 is folded. Legacy plain-text summaries remain readable until the next fold. | Same thread; reset cascade deletes it |
 | T3: original history | `search_conversation_history`, exact messages, role and sequence, literal query and exclusive sequence cursor. Same owner/project/thread/claimed turn. | Read-only, same thread |
 | In-flight state | Existing turn claim, generation, lease and write receipts. Never reconstructed from prose. | Existing write/turn recovery contract |
+| Recent saved actions | Last 16 compact ledger receipts for this actor/project and turns in this private thread. No stale record body, other member's conversation or new permission. | Read afresh alongside T1/T2; old-thread receipts are not injected after reset |
 | Project evidence | Fresh briefing and caller-RLS project tools. Not summary or history search. | Current turn |
 
 An old failed request retried later remains the final current input, even if its original sequence is earlier. Delivery metadata distinguishes failed attempts from completed answers. Recent messages are never character-sliced. A summary is necessarily lossy: exact older decisions can be retrieved with T3, and saved state must be re-read with project tools.
@@ -30,9 +33,9 @@ After claiming a turn, recover durable write receipts **before** any new model c
 
 Otherwise, load T1 and the unsummarized older prefix under the service-only claim guard. Fold up to 16 old messages and approximately 60,000 characters per batch; one longer legacy message is kept whole rather than cut. A request makes at most four folds within a 105-second preparation budget. Each successful fold persists with compare-and-swap on the previous high-water mark and exact batch endpoint, then reloads. The summary has a 12,000-character storage limit, with a shorter prompt target.
 
-The separate summarizer has no tools, receives no provider cursor, treats transcript text as untrusted data and preserves units, assumptions, explicit corrections, open dependencies and important sequence references. Claimed saves in prose are not receipts. It uses the same governed Bob model configuration, usage accounting and kill switch, not a new hardcoded model or cross-app setting.
+The separate summarizer has no tools, receives no provider cursor, treats transcript text as untrusted data and preserves units, assumptions, explicit corrections and open dependencies. Structured output indexes each newly folded message using a supplied sequence number; invalid/future/duplicate pointers are rejected before saving. Older pointer topics compress into the gist while originals remain retrievable. Claimed saves in prose are not receipts. `context-summary/global` has its own governed mini/low settings and usage category through the same shared AI service. `ask-bob/global` is reserved for the main standard/high model. Neither changes another app's settings.
 
-Preparation is synchronous before answering, not Launchpad's proposed post-turn worker. When a long legacy thread needs more batches, return `context_preparing`; retry the same request to continue from saved progress. A failed fold returns an explicit failure rather than answering with silently missing history. Original messages are never rewritten. Exact recent text is not silently truncated on model-limit errors either.
+Preparation is synchronous before answering, not Launchpad's separate fold worker. When a long legacy thread needs more batches, return `context_preparing`; retry the same request to continue from saved progress. A failed fold returns an explicit failure rather than answering with silently missing history. Original messages are never rewritten. Exact recent text is not silently truncated on model-limit errors either.
 
 ### Provider calls
 
@@ -58,7 +61,14 @@ Compact chat is the default, with an **Aa** comfortable-spacing toggle stored as
 
 ## Verification and deployment
 
-The migrations are additive: `20260918194106_ask_bob_context_memory.sql` and `20260918194147_ask_bob_research_pages.sql`. Apply only those after checking the hosted registry; do not replay this repository's history into the shared database. Apply schema before deploying the matching `ask-bob` bundle. Preserve `verify_jwt=true`, model configuration and the exact persona. Existing frontend reset works with the new cascade.
+The September 24 correction adds `20260924070107_bob_main_model_and_memory_settings.sql`
+and `20260924070321_bob_context_action_receipts.sql`. Apply these before the matching
+Edge code. The first configures standard/high main Bob and a separate mini/low
+summary worker. The second replaces only the existing service-guarded context
+reader, adding compact same-thread action receipts. Gist/index stays within the
+existing summary column and compare-and-swap contract; no new transcript store.
+
+The migrations are additive: `20260918194106_ask_bob_context_memory.sql` and `20260918194147_ask_bob_research_pages.sql`. Apply only those after checking the hosted registry; do not replay this repository's history into the shared database. Apply schema before deploying the matching `ask-bob` bundle. Preserve `verify_jwt=true` and the shared AI path; the September 24 migration sets main Bob to standard/high and gives memory folding a separate configuration. Existing frontend reset works with the new cascade.
 
 Automated evidence covers exact five-message replay, incremental folding/CAS, failed summaries, private history, stale/revoked access, reset, selected-version provenance, query pagination/size limits and existing write retry guards. Browser evidence must cover 320/390/1280 widths, density, growing/expanded drafts, Enter semantics, scroll position, reset and saved-write receipts. Test fixtures are not live-model quality evidence.
 

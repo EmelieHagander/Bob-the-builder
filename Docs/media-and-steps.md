@@ -7,6 +7,14 @@ context slice below implements vision input (1C); PR #89 owns rollout proof.
 
 ## Ownership and authority
 
+The [September 24 outcome use cases UC-003–005](user-stories.md#product-mandate--2026-09-24)
+require both people and Bob to create, attach, revise and consume information,
+mockups and guidance at the relevant step. Existing manual uploads and image
+vision do not establish AI generation or AI attachment support. The current
+`media_links.step_id` is a task instruction-step identity; project-plan Steps
+need an explicit same-project relation and rendering path rather than silently
+reusing that foreign key. These remain integration work, not shipped claims.
+
 Images are durable project records. Use a new private `bob-project-media` bucket;
 the public `bob-assets` bucket and `bob.asset` app catalog keep their existing job.
 An image belongs to exactly one Bob project. The current membership rules apply
