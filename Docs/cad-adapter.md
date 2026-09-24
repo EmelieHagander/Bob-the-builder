@@ -85,6 +85,8 @@ Modal deployment credentials are verified through the `Modal connection` workflo
 
 The `Deploy CAD to Modal` workflow uses GitHub environment `github-pages`. Setup:
 
+For the existing installation, GitHub secret `BOB_CAD_TOKE` is also accepted as a fallback. The workflow maps it to runtime variable `BOB_CAD_TOKEN` in all three credential-consuming steps. If both names exist, `BOB_CAD_TOKEN` takes precedence. Supabase continues to use the canonical `BOB_CAD_TOKEN` name; this alias does not change or rotate the value.
+
 1. Keep the verified `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` there. Add a distinct `BOB_CAD_TOKEN`: a password-manager-generated random value of 64 ASCII letters/digits (minimum 32, no whitespace). Keep the value in the password manager for the next step; never put it in chat, source or logs.
 2. Run the workflow from main, or re-run its job after adding a missing secret. It checks secrets, runs the real engine tests, deploys the Modal app, then tests the live HTTPS endpoint using synthetic geometry. Runtime secret injection uses Modal's secret mechanism; no separate manual Modal secret is required.
 3. Read `BOB_CAD_URL` from the successful workflow summary. In the existing Supabase project's **Edge Functions → Secrets**, set this URL (including `/render`) and the same `BOB_CAD_TOKEN`. Keep both out of the frontend/Vite environment. New Edge invocations read these secrets without a function redeploy.
