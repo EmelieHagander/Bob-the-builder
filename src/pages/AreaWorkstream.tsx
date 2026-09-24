@@ -224,7 +224,7 @@ export function AreaWorkstream() {
     {modal?.kind === 'assign' && <AssignModal task={modal.task} people={people ?? []} onClose={() => setModal(null)} onDone={reload} />}
     {modal?.kind === 'area' && <AreaModal people={people ?? []} area={area} onClose={() => setModal(null)} onDone={() => {
       setModal(null)
-      void db.getAreas().then(all => {
+      void db.getAreas({ includeArchived: true }).then(all => {
         const still = all.find(item => item.id === area.id)
         if (!still) navigate('/areas')
         else if (still.slug !== slug) navigate(`/areas/${still.slug}`)

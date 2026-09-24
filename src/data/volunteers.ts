@@ -72,7 +72,9 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
     }
     const result = await client.rpc(name, args)
     guard()
-    if (result.error?.code === 'PGRST202') throw new Error('Volunteer links are not available on this server yet. No change was confirmed.')
+    if (result.error?.code === 'PGRST202') throw new Error(name === 'volunteer_drawings' || name === 'volunteer_drawing'
+      ? 'Volunteer drawings are not available on this server yet. Ask the organiser to update Bob.'
+      : 'Volunteer links are not available on this server yet. No change was confirmed.')
     if (result.error) throw new Error(result.error.message)
     if (!result.data || (projectId && result.data.projectId !== projectId)) throw new Error('The project could not be confirmed. Reopen your invitation.')
     return result.data as T

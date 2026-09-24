@@ -254,7 +254,7 @@ export function AreaDetail() {
           onDone={() => {
             setModal(null)
             // A delete leaves nothing here; a rename changes the slug lookup target.
-            void db.getAreas().then((all) => {
+            void db.getAreas({ includeArchived: true }).then((all) => {
               const still = all.find((a) => a.id === area.id)
               if (!still) navigate('/areas')
               else if (still.slug !== slug) navigate(`/areas/${still.slug}`)
