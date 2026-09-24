@@ -231,5 +231,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "set_project_plan_focus",
+    "description": "Choose Bob focus without stopping parallel work.",
+    "how_to": "Read current plan revision and Step; focus does not change phase, state or readiness.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "save_project_area",
+    "description": "Create or revise an optional Area grouping of project Steps.",
+    "how_to": "Read and reuse existing Areas; optional grouping is not a physical Space.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
   }
 ]

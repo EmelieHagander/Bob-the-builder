@@ -15,7 +15,7 @@ export interface TaskBlocker {
 export interface TaskReadiness {
   taskId: string
   projectId: string
-  areaId: string
+  areaId: string | null
   areaPhase: AreaPhase | null
   taskStatus: TaskStatus
   state: TaskReadinessState
@@ -205,7 +205,7 @@ function mockReadiness(projectId: string): TaskReadiness[] {
     }
     const blockers: TaskBlocker[] = []
     if (area?.phase !== 'build') blockers.push({
-      kind: 'phase', id: area?.id ?? task.areaId,
+      kind: 'phase', id: area?.id ?? task.areaId ?? task.id,
       label: area?.phase ? `Area is in ${area.phase}; move to Build when work is actually ready` : 'Set Area phase before starting',
     })
     if (task.status === 'blocked') blockers.push({ kind: 'status', id: task.id, label: 'Task is manually marked Blocked' })

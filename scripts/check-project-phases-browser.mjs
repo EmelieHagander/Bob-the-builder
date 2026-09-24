@@ -45,6 +45,7 @@ try {
       } })
       if (request.method() === 'OPTIONS') return respond({ status: 204, body: '' })
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[...areaPhase].map(([id,phase])=>({id,slug:id,name:id==='guestroom'?'Guestroom':id[0].toUpperCase()+id.slice(1),phase})),steps:[],unorganised_tasks:[]}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
       if (url.pathname === '/auth/v1/user') return respond({ json: user })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
@@ -153,7 +154,9 @@ try {
 
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
     await page.getByLabel('Project phase: Build').waitFor()
-    await page.getByText('1 Design · 1 Build · 1 Complete', { exact: false }).first().waitFor()
+    const plan = page.getByRole('region', { name: 'Project plan', exact: true })
+    await plan.getByRole('region', { name: 'Office', exact: true }).getByLabel('phase: Build').waitFor()
+    await plan.getByRole('region', { name: 'Guestroom', exact: true }).getByLabel('phase: Design').waitFor()
     await page.getByRole('link', { name: /Guestroom/ }).first().waitFor()
     assert.equal(await page.getByText('50% done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
     assert.equal(await page.getByText('0% done', { exact: true }).count(), 0, 'Design Area must not show build completion as primary meaning')

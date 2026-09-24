@@ -14,6 +14,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:vocabulary
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-plan-assistant.mjs
@@ -40,6 +41,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify unified Project, Area, Step and Task work
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-work-browser.mjs
       - name: Verify Bob conversation reset and recovery
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
       - name: Verify household sharing and friend invitation UI

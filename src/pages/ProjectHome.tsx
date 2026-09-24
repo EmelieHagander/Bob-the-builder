@@ -132,7 +132,7 @@ export function ProjectHome() {
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
     </section>
 
-    <section style={{ marginTop: 24 }}>
+    {!db.authEnabled() && <section style={{ marginTop: 24 }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
         Workstreams <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areaPhaseSummary(areaItems)}</span>
       </SectionTitle>
@@ -162,7 +162,7 @@ export function ProjectHome() {
             </article>
           })}
         </div>}
-    </section>
+    </section>}
 
     <section style={{ marginTop: 24 }} aria-label="Project tools">
       <SectionTitle>Project tools</SectionTitle>

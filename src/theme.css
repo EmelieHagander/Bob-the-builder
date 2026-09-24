@@ -754,3 +754,16 @@ select {
 .bob-hammer { display: inline-flex; transform-origin: 75% 80%; animation: bob-hammering 1s ease-in-out infinite; }
 @keyframes bob-hammering { 0%, 60%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-35deg); } 40% { transform: rotate(12deg); } }
 @media (prefers-reduced-motion: reduce) { .bob-hammer { animation: none; } }
+
+/* One work hierarchy: optional Areas, Steps and their Tasks. */
+.work-area { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line); }
+.work-area h3 { margin: 0; }
+.work-step { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.work-step > summary { cursor: pointer; min-height: 32px; overflow-wrap: anywhere; }
+.work-step > summary > span { display: block; margin: 5px 0 0 18px; }
+.work-step-body { padding-top: 8px; }
+.work-task-list { padding-left: 20px; }
+.work-task-list li { margin: 10px 0; overflow-wrap: anywhere; }
+.work-task-list li > span { display: block; }
+.work-criteria, .work-unorganised { margin-top: 14px; }
+.work-criteria summary, .work-unorganised summary { cursor: pointer; min-height: 32px; }

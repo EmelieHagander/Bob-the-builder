@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "bob — build together, in the forest. Community build & renovation coordination app.",
+  "description": "bob \u2014 build together, in the forest. Community build & renovation coordination app.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -15,7 +15,9 @@
     "verify:install": "node scripts/check-installation-browser.mjs",
     "verify:project": "node scripts/check-project-browser.mjs && node scripts/check-material-catalog-browser.mjs",
     "verify:foundations": "node scripts/check-foundations-browser.mjs",
-    "verify:building": "node scripts/check-building-context-browser.mjs"
+    "verify:building": "node scripts/check-building-context-browser.mjs",
+    "sync:vocabulary": "node --import tsx scripts/sync-domain-vocabulary.ts",
+    "check:vocabulary": "node --import tsx scripts/sync-domain-vocabulary.ts --check"
   },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.1",

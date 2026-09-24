@@ -1,6 +1,8 @@
 # Living project plan — steps, completion requirements and replanning
 
-**Status: foundation + active workspace + read-only mini/nano plan assistant deployed; simple compile/audit tool surface pending release.**
+**Status: existing foundation deployed; unified Task ownership, optional Areas, parallel Steps and focus implemented, release verification pending.**
+
+**Vocabulary review, 2026-09-24:** [domain-dictionary.md](domain-dictionary.md) owns the refined **Project → optional Area → Step → Task** hierarchy and implementation boundaries. Its meanings supersede older descriptions here that suggest a separate planning-only Step tree. Finish criteria, evidence, stable identities and history remain relevant; a criterion is not an extra hierarchy level. Migration `20260924135637_unified_project_work.sql` removes the one-active-Step constraint and stores Bob focus separately. Compiler task links are staged with proposals and applied atomically at approval; stale Task timestamps reject approval. The earlier implementation notes below describe their original release and are superseded on these points.
 
 This document owns Bob's future **living project-plan model**: how a build moves from an idea through dynamic steps, how a step knows what is still missing, how evidence such as measurements/photos/drawings/material state satisfies those needs, who owns the work, and how Bob proposes changes as reality changes.
 

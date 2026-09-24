@@ -1,3 +1,4 @@
+import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { SEARCH_TOOL, type createProjectLookup } from './project-lookup.ts'
@@ -49,7 +50,7 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
    for(let round=0;round<10&&Date.now()<until;round++){
     if(!await opts.hasAccess())throw new Error('project_denied')
     const tools=[SEARCH_TOOL,READ_CAD_TOOL,...(renders<4?[RENDER_CAD_TOOL]:[]),...(opts.catalog?.tools??[]),...(opts.context?.tools??[])]
-    const result=await opts.callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM,useHardcodedPrompt:true,messages:[...messages,...(opts.context?.carrier()??[])],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(60000,until-Date.now())})
+    const result=await opts.callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,messages:[...messages,...(opts.context?.carrier()??[])],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(60000,until-Date.now())})
     if(!result.success||!result.responseId)throw new Error('model_unavailable')
     opts.context?.confirmDelivery()
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')

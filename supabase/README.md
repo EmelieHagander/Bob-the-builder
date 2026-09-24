@@ -20,6 +20,8 @@ For current working context, five full recent messages, incremental summaries, h
 
 ## Code ownership
 
+The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), including the 2026-09-24 Area/Step/Task review. `src/domain/vocabulary.ts` provides the compact runtime bundle to main Bob, plan compiler/reviewer and CAD. Its marked documentation table is generated and checked in CI. Actual-call tests verify delivery; migration `20260924135637_unified_project_work.sql` aligns Task Project/primary-Step ownership, optional Areas, parallel Step state and separate focus. Legacy Tasks without a primary Step remain visible as unorganised work.
+
 | File | Responsibility |
 | --- | --- |
 | `bob-worker/index.ts`, `_shared/bob-background.ts` | Private-capability background worker; see [durable turns](../Docs/ask-bob-conversations.md#durable-background-turns). |

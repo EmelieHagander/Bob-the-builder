@@ -149,7 +149,7 @@ type AreaRow = {
   area_reference_images: { label: string; sort_order: number }[]
 }
 type TaskRow = {
-  id: string; area_id: string; name: string; skill: string; hours: string
+  id: string; area_id: string | null; primary_step_id: string | null; name: string; skill: string; hours: string
   status: string; materials: string
   task_assignees: { person_id: string }[]
 }
@@ -1000,14 +1000,14 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
   }
 }
 
-/** Delete an area and everything in it (tasks cascade; its materials go too). */
+/** Delete an unused area; preserve Tasks in the Project. Area-labelled materials are removed. */
 export async function deleteArea(id: string): Promise<void> {
   if (!db) {
     const i = mock.areas.findIndex((a) => a.id === id)
     if (i < 0) return
     const name = mock.areas[i].name
     mock.areas.splice(i, 1)
-    for (let t = mock.tasks.length - 1; t >= 0; t--) if (mock.tasks[t].areaId === id) mock.tasks.splice(t, 1)
+    for (const task of mock.tasks) if (task.areaId === id) task.areaId = null
     for (let m = mock.materials.length - 1; m >= 0; m--) if (mock.materials[m].area === name) mock.materials.splice(m, 1)
     await read(null)
     return
@@ -1040,17 +1040,18 @@ export async function getTasks(): Promise<Task[]> {
   if (!db) return readScoped(mock.tasks)
   const pid = await activeProjectId()
   if (!pid) return []
-  // tasks carry no project_id — scope through their area
+  // Project is explicit; an Area is optional and never the authorization root.
   const rows = unwrap<TaskRow[]>(
     await db
       .from('tasks')
-      .select('id, area_id, name, skill, hours, status, materials, task_assignees(person_id), areas!inner(project_id)')
-      .eq('areas.project_id', pid)
+      .select('id, area_id, primary_step_id, name, skill, hours, status, materials, task_assignees(person_id)')
+      .eq('project_id', pid)
       .order('id'),
   )
   return rows.map((row) => ({
     id: row.id,
     areaId: row.area_id,
+    primaryStepId: row.primary_step_id,
     name: row.name,
     skill: row.skill as SkillLevel,
     hours: row.hours,
@@ -1065,7 +1066,8 @@ export async function getTasksByArea(areaId: string): Promise<Task[]> {
 }
 
 export interface NewTask {
-  areaId: string
+  areaId: string | null
+  primaryStepId?: string | null
   name: string
   skill: SkillLevel
   hours: string
@@ -1075,6 +1077,7 @@ export async function createTask(input: NewTask): Promise<Task> {
   const task: Task = {
     id: newId('t'),
     areaId: input.areaId,
+    primaryStepId: input.primaryStepId ?? null,
     name: input.name,
     skill: input.skill,
     hours: input.hours,
@@ -1086,17 +1089,11 @@ export async function createTask(input: NewTask): Promise<Task> {
     mock.tasks.push(task)
     return read(task)
   }
-  const res = await db.from('tasks').insert({
-    id: task.id,
-    area_id: task.areaId,
-    name: task.name,
-    skill: task.skill,
-    hours: task.hours,
-    status: task.status,
-    materials: task.materials,
-  })
+  const pid = await activeProjectId()
+  if (!pid) throw new Error('No active project.')
+  const res = await db.rpc('create_work_task',{p_project:pid,p_step:task.primaryStepId,p_area:task.areaId,p_name:task.name,p_skill:task.skill,p_hours:task.hours})
   if (res.error) throw new Error(`database: ${res.error.message}`)
-  return task
+  return {...task, id:res.data.id, areaId:res.data.area_id, primaryStepId:res.data.primary_step_id}
 }
 
 export async function setTaskStatus(id: string, status: TaskStatus): Promise<void> {
@@ -1995,7 +1992,7 @@ export async function getAttention(): Promise<AttentionItem[]> {
   const items: AttentionItem[] = []
 
   // Areas with unassigned tasks
-  const unassignedByArea = new Map<string, number>()
+  const unassignedByArea = new Map<string | null, number>()
   for (const t of tasks) {
     if (t.assigneeIds.length === 0) {
       unassignedByArea.set(t.areaId, (unassignedByArea.get(t.areaId) ?? 0) + 1)
@@ -2003,7 +2000,7 @@ export async function getAttention(): Promise<AttentionItem[]> {
   }
   for (const [areaId, count] of unassignedByArea) {
     if (count >= 2) {
-      items.push({ icon: 'user-circle-dashed', tone: 'clay', text: `${count} tasks in ${areaName.get(areaId)} have nobody assigned yet` })
+      items.push({ icon: 'user-circle-dashed', tone: 'clay', text: `${count} tasks in ${(areaId&&areaName.get(areaId))||'the project'} have nobody assigned yet` })
     }
   }
 
@@ -2035,14 +2032,20 @@ export async function getFoodSummary(): Promise<string> {
   return `${confirmed} confirmed for ${when}${parts.length > 0 ? ' · ' + parts.join(' · ') : ''}`
 }
 
-/** Current plan and exact current CAD links share the existing project guard. */
-export async function getProjectStepWorkspace(projectId:string):Promise<{steps:any[];drawings:any[]}|null>{
+/** One Project work projection; project scope does not depend on optional Areas. */
+export async function getProjectWork(projectId:string):Promise<import('./projectWork').ProjectWork|null>{
  const guard=captureFileContext(projectId);guard()
  if(!db)return null
- const plan=await db.rpc('project_plan_read',{p_project:projectId,p_revision:null})
- guard();if(plan.error)throw new Error('Project step information could not be loaded.')
- if(!plan.data?.record?.steps?.length)return {steps:[],drawings:[]}
+ const result=await db.rpc('project_work_read',{p_project:projectId})
+ guard();if(result.error)throw new Error('Project plan could not be loaded.')
+ return result.data as import('./projectWork').ProjectWork
+}
+
+export async function getProjectStepWorkspace(projectId:string):Promise<import('./projectWork').ProjectStepWorkspace|null>{
+ const guard=captureFileContext(projectId);guard()
+ const work=await getProjectWork(projectId)
+ if(!work||!db)return null
  const drawings=await db.from('artifact_cad_revisions').select('artifact_id,artifact_revision,step_id,artifacts!inner(current_revision)').eq('project_id',projectId).not('step_id','is',null)
  guard();if(drawings.error)throw new Error('Project step drawings could not be loaded.')
- return {steps:plan.data?.record?.steps??[],drawings:(drawings.data??[]).filter((r:any)=>r.artifact_revision===r.artifacts.current_revision)}
+ return {...work,drawings:(drawings.data??[]).filter((r:any)=>r.artifact_revision===r.artifacts.current_revision)}
 }
