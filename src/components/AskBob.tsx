@@ -428,6 +428,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           return
         }
       } catch { /* Preserve the same turn id for a later recovery attempt. */ }
+      if (!isCurrent()) return
+      if (result.unavailable === 'turn_in_flight') {
+        setRecovering({ text, turnId: clientTurnId, expiresAt: Date.now() + 5 * 60_000 })
+        setHistoryNotice('Bob is still working. Reconnecting to the conversation…')
+        return
+      }
     }
     if (!isCurrent()) return
     setWorking(false)
@@ -482,8 +488,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
           {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
-          {working && <WorkingBubble />}
         </div>
+
+        {working && <WorkingBubble />}
 
         {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> Latest</button>}
 
