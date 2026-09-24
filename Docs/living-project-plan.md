@@ -807,3 +807,33 @@ tests prevent unnoticed growth; transport and runtime tests retain project
 isolation, receipt, identity and approval checks. They do not prove live model
 behaviour. The shared AI path, tool availability, write validation and explicit
 canonical-plan approval are unchanged.
+
+### Autonomy and saved proposal continuity
+
+The September 24 bunk-bed conversation exposed a context gap. Bob saved proposal
+v1, but the next turn's briefing described only the absent approved plan and set
+`plan_needed=true`. Plan searches with no revision returned no approved record.
+After the user's explicit approval, Bob compiled twice instead of invoking
+`decide_project_plan`; the second compilation failed shape validation. The saved
+proposal still existed. Increasing the action budget would not fix this path.
+
+The project briefing now includes `pending_proposal` with its exact read handle,
+revision, base revision and summary, including before any plan is approved.
+`plan_needed` is false when that saved proposal exists. The approved plan remains
+distinct; a pending replan never becomes current merely by being visible. Search
+tool metadata explains that a plan's `record_id` is its revision string and null
+reads only the approved plan. The existing caller-scoped, security-invoker reader
+and access checks are preserved.
+
+The short role now says `Autonomy: extra high` and describes continuing across
+tool calls until the delegated work reaches a useful result or a real blocker.
+This is a model instruction, not an API setting or an authority override. The
+existing loop already supports twelve model rounds, up to eight calls per model
+response and eight write attempts per turn; no budget increase is needed here.
+
+A PGlite integration test runs the claimed writer and actual lookup/tool loop:
+discover the saved proposal, read its revision, approve it, then create two Tasks
+from a single model response in the same turn. It checks three persisted receipts,
+one plan revision and project isolation. Controlled model responses prove the
+mechanism, not live model compliance. Explicit plan approval and physical
+measurement evidence retain their existing meanings.
