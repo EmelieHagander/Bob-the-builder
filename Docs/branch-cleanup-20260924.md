@@ -12,7 +12,7 @@ Baseline: main `faa39a035fd91579fc53bab7bacf04245dd86014`. Nine open PRs were re
 | #95 earlier CAD architecture | Closed: current CAD engine/assistant/hosting supersedes the competing path. Exact catalog-part revision pins and instance-derived part lists retained in issue #128. |
 | #106 earlier plan workspace | Closed: #107 supplies the workspace; deferred task blueprints retained in issue #129. Do not replay the conflicting old tables/RPC migration. |
 | #53 early AI discovery | Closed: historical runtime audit is obsolete; ten useful outcome-evaluation families retained in issue #130 and aligned with current UC-001–005/autonomy. |
-| #76 sheet-layer quantities | Integrated on a fresh main-based branch. Preserve the existing requirement/stock/Shopping model; complete CI, hosted migration/proof and Pages before closing as delivered. |
+| #76 sheet-layer quantities | Closed as delivered through #131. 460 tests, three-width browser proof, hosted migration/Auth/PostgREST, Pages and exact fixture cleanup passed. [Release record](sheet-layers.md#verification-and-rollout). |
 
 PR #88 owns the September 20 consolidated deployment evidence. Source presence and earlier fixture tests do not prove arbitrary real-model interpretation or named-member write outcomes. The original stacked PRs' 'not deployed' statements are historical.
 
