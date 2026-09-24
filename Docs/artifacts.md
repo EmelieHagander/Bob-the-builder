@@ -627,7 +627,10 @@ Verification: `tests/project-drawing-workspace.test.ts` checks actual SQL/RLS, B
 
 `artifact_source_status` assesses each exact revision under the caller's RLS.
 It compares the effective Project/Area target, linked measurement revisions and
-archive state, physical sources/proposals and source drawing revisions. Physical
+archive state, physical sources/proposals and source drawing revisions. CAD
+details also follow their pinned source chain and its measurements, so a parent
+does not appear current merely because its geometry was not re-saved. An
+unreadable source or a chain beyond the bounded depth is unavailable. Physical
 sources that are no longer accessible produce `unavailable`, not an unchanged
 result. `current_drawing_overview`, `current_drawing_steps` and the detail reader
 consume this same assessment. Bob’s `read_project_record_section` drawing

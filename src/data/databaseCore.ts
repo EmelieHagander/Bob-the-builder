@@ -33,7 +33,7 @@ import { createMaterialPlanning } from './materialPlanning'
 import { createWorkPlan } from './workPlan'
 import { createBuildingContext } from './buildingContext'
 import { createSharing } from './sharing'
-import { createVolunteers } from './volunteers'
+import { createVolunteers, createVolunteerMediaTransport } from './volunteers'
 import * as mock from './mockData'
 import type {
   Account,
@@ -221,7 +221,8 @@ const volunteerClient = db && SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(S
   db: { schema: 'bob' },
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'bob-volunteer-rpc' },
 }) : null
-export const volunteers = createVolunteers(db, volunteerClient, captureAccountContext)
+export const volunteers = createVolunteers(db, volunteerClient, captureAccountContext,
+  SUPABASE_URL && SUPABASE_ANON_KEY ? createVolunteerMediaTransport(SUPABASE_URL, SUPABASE_ANON_KEY) : undefined)
 export const getSolutions = solutions.list
 export const getSolutionVersion = solutions.version
 export const getSolutionHistory = solutions.history

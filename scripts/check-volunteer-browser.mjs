@@ -18,16 +18,16 @@ async function fixture(viewport) {
   const taskTime = () => `2026-09-14T06:01:${String(state.taskRevision).padStart(2, '0')}Z`
   const project = { name: 'The community garden and long workshop renovation', description: 'Help make a place for everyone.', location: 'The garden', theme: 'birch', startLabel: 'Saturday', startDate: null, endDate: null }
   const snapshot = () => ({ projectId: 'A', linkId: 'L', project, person: { id: 'v-Kim', name: state.name, allergies: state.food ? state.allergies : null, updatedAt: profileTime() }, hasFood: state.food, expiresAt: '2099-01-01T00:00:00Z' })
-  const task = () => ({ projectId: 'A', id: 'T', name: 'Paint the bench', area: 'Garden', status: state.status, instructions: 'Prepare the surface before painting.', updatedAt: taskTime(), mine: state.mine, images: [{id: 'step-image', title: 'Primary Step assembly guide'}], steps: [{ id: 'S', title: 'Check the surface', instructions: 'Ask the crew before starting if you are unsure.', required: true, isCheckpoint: true, completedAt: state.checked ? taskTime() : null, revision: state.checkRevision }] })
+  const task = () => ({ projectId: 'A', id: 'T', name: 'Paint the bench', area: 'Garden', status: state.status, instructions: 'Prepare the surface before painting.', updatedAt: taskTime(), mine: state.mine, images: [{id: '80000000-0000-4000-8000-000000000001', title: 'Primary Step assembly guide'}], steps: [{ id: 'S', title: 'Check the surface', instructions: 'Ask the crew before starting if you are unsure.', required: true, isCheckpoint: true, completedAt: state.checked ? taskTime() : null, revision: state.checkRevision }] })
   await context.route('https://fonts.googleapis.com/**', route => route.abort())
   await context.route(api + '/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname
     const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS' } })
     if (request.method() === 'OPTIONS') return respond({ status: 204 })
     if (path === '/functions/v1/volunteer-media') {
-      assert.deepEqual(request.postDataJSON(), {session: state.secret, taskId: 'T', mediaId: 'step-image'})
+      assert.deepEqual(request.postDataJSON(), {session: state.secret, taskId: 'T', mediaId: '80000000-0000-4000-8000-000000000001'})
       assert(!state.revoked)
-      return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j6XkAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*'}})
+      return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*'}})
     }
     assert(!path.startsWith('/auth/'), 'The volunteer journey must never call Auth')
     assert(path.startsWith('/rest/v1/rpc/volunteer_'), 'Guest must not query raw tables, account or shared-app APIs')
@@ -115,6 +115,7 @@ try {
     await dialog.getByRole('heading',{name:'Task, step & area images',exact:true}).waitFor()
     await dialog.getByRole('button',{name:'View image',exact:true}).click()
     await dialog.getByRole('img',{name:'Primary Step assembly guide',exact:true}).waitFor()
+    assert(await dialog.getByRole('img',{name:'Primary Step assembly guide',exact:true}).evaluate(img=>img.complete && img.naturalWidth>0),'Original image bytes render')
 
     await dialog.getByRole('button', { name: 'Join this task', exact: true }).click()
     await dialog.getByLabel('Task progress').selectOption('doing')

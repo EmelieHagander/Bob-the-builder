@@ -240,12 +240,12 @@ AI promotion of uncertain evidence into fact.
 
 ## Household and friend sharing
 
-> **Status:** specified / implementation in progress, 2026-09-13. The working
-> source is `supabase/migrations/20260913213712_household_project_sharing.sql`
-> plus `supabase/migrations/20260913214355_household_account_sharing.sql`, with
-> `src/data/sharing.ts` behind `database.ts`. Local validation, hosted
-> application and runtime delivery must be recorded separately in
-> `Docs/foundation-verification.md`; no hosted migration is claimed here yet.
+> **Status:** source merged and sharing/account migrations deployed, confirmed
+> read-only on 2026-09-24. Source migrations are
+> `20260913213712_household_project_sharing.sql` and
+> `20260913214355_household_account_sharing.sql`; the hosted ledger uses different
+> timestamps. `Docs/foundation-verification.md` records that mapping and separates
+> deployed schema, controlled test evidence and remaining real-user acceptance.
 
 [`Docs/user-stories.md`](../Docs/user-stories.md) owns BOB-US-038 and BOB-US-059.
 [`Docs/building-model.md` §11.1A](../Docs/building-model.md#111a-household-sharing-extension)
@@ -339,11 +339,11 @@ share. Media and Ask bob continue through the same backend project-access bounda
 
 ### Legacy account boundary — release gate
 
-The deployed `bob.account` / `bob.account_notes` singleton predates private project
-authority and has broad legacy access. The sharing rollout must replace that
-posture before exposing new friend access to the account shell. Source is prepared
-in `supabase/migrations/20260913214355_household_account_sharing.sql`; it is not yet
-applied or live-verified.
+The original `bob.account` / `bob.account_notes` singleton predates private project
+authority and had broad legacy access. The account-sharing migration replaces
+that boundary. Source is
+`supabase/migrations/20260913214355_household_account_sharing.sql`; hosted
+application is confirmed in the September 24 verification record.
 
 The migration removes the broad legacy policies and limits account/settings/notes
 reads and allowed writes to active access in the account's explicitly bound
@@ -362,13 +362,13 @@ If legacy settings are configured or any notes exist, migration requires the
 transaction-local reviewed mapping `bob.reviewed_account_household`; without it,
 the migration aborts. The read-only rollout baseline found no configured legacy
 account content and no notes. That baseline never chooses a household: there is
-no first-user, first-project or first-household fallback. Hosted application,
-denied-access checks and normal-user binding/read-back proof remain release gates;
-prepared source does not establish that deployed account records are private.
+no first-user, first-project or first-household fallback. Hosted application is
+confirmed; it alone does not prove normal-user binding/read-back, denied access
+or the complete cross-app participant journey.
 
 ## Name-only volunteer access
 
-**Prepared source, not deployed (2026-09-14).** The owner explicitly requires a
+**Deployed foundation, confirmed read-only 2026-09-24.** The owner requires a
 project link and a name, with optional allergies only when the project has food.
 There is no email, password, manual registration, anonymous Auth signup or shared
 Guest-account login in this journey. `BOB-US-038` owns the user goal;
@@ -451,7 +451,7 @@ With no env config the app falls back to the in-memory mock data.
 
 > Applied to the shared database on 2026-09-09; see the verification record for release evidence.
 > Legacy migrations 0001–0010 describe the previous household-wide policies.
-> This section records the deployed Slice 0 baseline. The household/friend extension above specifies the newer authority model; its source is not yet a deployment claim.
+> This section records the deployed Slice 0 baseline. The deployed household/friend extension above supersedes this earlier authority baseline; use its current contract and verification record.
 
 Apply `supabase/migrations/20260909182548_project_scope_and_bounded_lookup.sql`
 **after** the ten legacy migrations. It was created with `supabase migration new`.

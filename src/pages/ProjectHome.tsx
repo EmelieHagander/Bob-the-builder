@@ -175,7 +175,7 @@ export function ProjectHome() {
       <div className="cluster" style={{ gap: 8 }}>
         <Link className="btn" to="/facts"><Icon name="ruler" size={15} /> Measurements &amp; existing parts</Link>
         <Link className="btn" to="/solutions"><Icon name="path" size={15} /> Solutions &amp; target</Link>
-        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Plans &amp; drawings</Link>
+        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Drawings</Link>
         <Link className="btn" to="/material-plan"><Icon name="package" size={15} /> Material plan</Link>
       </div>
       <p className="foundation-hint" style={{ marginBottom: 0 }}>These stay available across phases. The current phase changes emphasis, not access to project truth.</p>

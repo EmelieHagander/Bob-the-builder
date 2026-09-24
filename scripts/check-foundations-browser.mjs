@@ -305,6 +305,7 @@ try {
     await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert.equal(await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).count(),0)
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
+    await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
     await page.screenshot({path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true

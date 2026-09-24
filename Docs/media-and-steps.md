@@ -261,3 +261,9 @@ validate that current relationship; a stale image ID grants no access after a
 Task move or revocation. The UI calls Task-level checks “instructions”, reserving
 “Step” for project work. Volunteer consumption of saved drawings remains a
 separate gap in `Docs/user-stories.md`; Step images alone do not complete it.
+
+The same correction fixes volunteer image response handling: the app fetches the
+existing capability endpoint as binary and keeps its original MIME type. The
+Functions client parses `image/*` as text, so it is not used to decode these
+responses. The endpoint still checks the capability before and after download;
+no Auth session or general Storage access is added.
