@@ -244,6 +244,18 @@ test('CAD stores an exact Artifact revision; duplicate retries reuse it and cros
  await assert.rejects(as(two,'select bob.read_cad_artifact($1,$2,null)',['A',drawing.recordId]),/project_denied/)
  await assert.rejects(expertWrite(c,{...payload,data:{...data,title:'Bad source',source_artifact_id:newId(),source_revision:1}}),/source_changed/)
  await assert.rejects(expertWrite(c,{...payload,data:{...data,title:'Bad step',step_id:newId()}}),/step_changed/)
+ // Ordinary Artifact edits cannot strip geometry; archive/restore preserve it.
+ await assert.rejects(as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A','revise',drawing.recordId,1,'{}']),/CAD assistant/)
+ for(const [action,revision] of [['archive',1],['restore',2]] as const){
+  await as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A',action,drawing.recordId,revision,'{}'])
+  const retained:any=(await as(one,'select bob.read_cad_artifact($1,$2,null) value',['A',drawing.recordId])).rows[0].value
+  assert.equal(retained.revision,revision+1);assert.deepEqual(retained.recipe,recipe)
+ }
+ const revised=await expertWrite(c,{...payload,record_id:drawing.recordId,expected_revision:3,data:{...data,title:'Revised shelf',expected_revision:3,artifact_id:drawing.recordId}})
+ assert.equal(revised.revision,4)
+ assert.deepEqual((await as(one,'select bob.read_cad_artifact($1,$2,null) value',['A',drawing.recordId])).rows[0].value.recipe,recipe)
+ await assert.rejects(as(one,'select bob_private.artifact_command_before_cad($1,$2,$3,$4,$5)',['A','revise',drawing.recordId,4,'{}']),/permission denied/)
+
  await fail(c)
 })
 
