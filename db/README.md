@@ -582,7 +582,11 @@ Recovery snapshots contain private data and must never be committed to this repo
 The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks, but current **and historical** plan references prevent deletion. Moving current Steps does not remove historical references. The Area archive extension below provides a reversible alternative to deletion. No other app's schemas or access policies change.
 
 
-### September 24 review corrections — source changes, pending release
+### September 24 review corrections — deployed
+
+The coordinated backend/frontend release is complete.
+[Foundation verification](../Docs/foundation-verification.md#september-24-work-and-drawing-release)
+owns hosted timestamp mappings, Edge versions, live checks and remaining acceptance.
 
 `20260924183706_review_workflow_integrity.sql` makes intentional CAD saves update
 `artifact_step_links` in the guarded writer, and records the actual current
@@ -608,7 +612,7 @@ reads and volunteer revocation after deployment. No migration should classify
 existing unorganised Tasks or rewrite saved drawing history automatically.
 
 
-## Area archive and volunteer drawing reader — September 24, pending release
+## Area archive and volunteer drawing reader — September 24, deployed
 
 `20260924194300_area_archiving.sql` adds `areas.archived_at`, the guarded
 `area_lifecycle_command` and project-scoped `area_lifecycle_events`. Archive/restore
@@ -637,7 +641,7 @@ or stair geometry; household/direct Building membership is not assumed or impers
 Room/wall and generated-wall sources retain the Project source checks. Unavailable
 sources return metadata and `content: null`. CAD output includes only saved SVG views
 and part dimensions, excluding manifests and STEP files. The render contract is owned
-by [Artifacts](../Docs/artifacts.md#volunteer-task-drawings--september-24-pending-release).
+by [Artifacts](../Docs/artifacts.md#volunteer-task-drawings--september-24-deployed).
 Ordinary guest image access is not widened. Anonymous callers still cannot query
 Artifact, physical-model or Storage tables, or edit drawings.
 
@@ -647,3 +651,17 @@ prior review's `ask-bob`/`bob-worker` deployment requirements still apply. Repos
 checks do not deploy these changes. SQL tests use isolated test participants; browser
 fixtures use the real frontend and guest transport at 320/390/1280 px. No real volunteer
 acceptance has been claimed; the owner currently has no volunteers available.
+
+
+### Drawing query planning follow-up
+
+The release's hosted read check exposed planner expansion through the nested source
+views. `20260924211243_bounded_drawing_source_planning.sql` puts the same exact-revision
+assessment behind `bob_private.artifact_source_assessment`, a stable **security invoker**
+function with caller RLS and function-local join planning limits. The public
+`artifact_source_status` view retains its API, grants and `security_invoker` setting.
+Direct helper calls cannot read another Project or bypass revision scope.
+`20260924211440_bounded_volunteer_drawing_planning.sql` bounds planning of the existing
+volunteer detail reader's render joins. Capability checks and grants remain unchanged;
+no database-wide configuration or API timeout is relaxed. Both follow-ups are deployed;
+see the release evidence above.

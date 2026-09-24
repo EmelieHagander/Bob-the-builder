@@ -73,10 +73,13 @@ test('cross-project, stale and direct client writes are rejected at the database
  await assert.rejects(c.rpc(payload),/project_denied/)
  await assert.rejects(c.rpc({...payload,expected_revision:2,data:{step_id:steps[0],action:'link'}}),/record_changed/)
  await assert.rejects(c.rpc({...payload,request_quote:'Invented permission'}),/request_quote_required/)
- for(const view of ['artifact_step_links','current_drawing_steps','current_drawing_overview']) {
+ for(const view of ['artifact_step_links','current_drawing_steps','current_drawing_overview','artifact_source_status']) {
   assert.deepEqual((await query(stranger,`select * from bob.${view} where project_id=$1`,[project])).rows,[])
   await assert.rejects(query(null,`select * from bob.${view}`,[],'anon'),/permission denied/)
  }
+ assert.deepEqual((await query(stranger,'select * from bob_private.artifact_source_assessment($1,$2,1)',[project,drawing])).rows,[])
+ assert.deepEqual((await query(owner,'select * from bob_private.artifact_source_assessment($1,$2,1)',[otherProject,drawing])).rows,[])
+ await assert.rejects(query(null,'select * from bob_private.artifact_source_assessment($1,$2,1)',[project,drawing],'anon'),/permission denied/)
  await assert.rejects(query(owner,'delete from bob.artifact_step_links where project_id=$1',[project]),/permission denied/)
  await c.finish()
 })

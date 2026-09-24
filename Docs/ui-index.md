@@ -162,7 +162,9 @@ Browser coverage: `scripts/check-project-work-browser.mjs` and the existing foun
 Project home now places `ProjectDrawings` below the phase rail. It previews recent saved drawings and links to their exact versions and related work Steps. A Step shows drawing count even while collapsed, and named drawing links when open. The drawing/work persistence contract is owned by [artifacts](artifacts.md#project-home-drawings-and-work-links--september-24-2026).
 
 
-### Area history and participant drawings — September 24, pending release
+### Area history and participant drawings — September 24, deployed
+
+[Release evidence](foundation-verification.md#september-24-work-and-drawing-release) records the hosted checks and remaining real-user acceptance.
 
 Areas has explicit **Active Areas / Archived Areas** filters. Archive/restore lives in
 Area editing and the archived Area notice; it preserves readable history. The Plan
@@ -174,6 +176,6 @@ The name-only participant Task panel embeds `VolunteerDrawings`, using the canon
 renderers with participant wording and no editor navigation. It keeps saved status,
 source warnings and assumptions visible, and clears renders on refresh/failure.
 Loading, empty, missing-server and revoked states remain in the participant flow.
-[Artifacts](artifacts.md#volunteer-task-drawings--september-24-pending-release) owns
-render scope; [Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-pending-release)
+[Artifacts](artifacts.md#volunteer-task-drawings--september-24-deployed) owns
+render scope; [Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-deployed)
 owns permissions and deployment. Phone/desktop browser proof is in the implementing PR.

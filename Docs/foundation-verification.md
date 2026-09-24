@@ -1,5 +1,53 @@
 # Foundation verification and rollout
 
+## September 24 work and drawing release
+
+**Deployed 2026-09-24:** [PR 137](https://github.com/EmelieHagander/Bob-the-builder/pull/137)
+and [PR 138](https://github.com/EmelieHagander/Bob-the-builder/pull/138) are merged.
+The matching frontend is published by [Pages run 36059264359](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36059264359)
+at merge `49ef0c7`. The served JavaScript contains the archive and volunteer drawing
+readers. Backend release preceded frontend publication: `ask-bob` v37,
+`bob-worker` v5 and `volunteer-media` v4 are active with their previous JWT modes.
+
+| Source migration | Hosted migration |
+|---|---|
+| `20260924183706_review_workflow_integrity.sql` | `20260924210338_review_workflow_integrity` |
+| `20260924183913_drawing_source_status.sql` | `20260924210348_drawing_source_status` |
+| `20260924194300_area_archiving.sql` | `20260924210349_area_archiving` |
+| `20260924195744_volunteer_task_drawings.sql` | `20260924210353_volunteer_task_drawings` |
+| `20260924211243_bounded_drawing_source_planning.sql` | `20260924211354_bounded_drawing_source_planning` |
+| `20260924211440_bounded_volunteer_drawing_planning.sql` | `20260924211512_bounded_volunteer_drawing_planning` |
+
+The release check found PostgreSQL planner expansion that fixture correctness tests
+had not exposed: even an empty Project drawing overview exceeded ten seconds.
+The follow-up keeps exact-revision assessment behind a caller-RLS invoker function
+and bounds join planning inside that function and the volunteer detail reader.
+The same full empty overview then planned in 17.9 ms and executed in 1.9 ms.
+No shared-database, role-wide or API timeout settings were changed.
+
+Hosted checks used the member/anonymous database roles and a disposable participant
+inside a transaction that was rolled back. Archive/restore, stale-write denial,
+lifecycle audit, current saved parametric geometry, anonymous raw-table denial,
+removed Step-link denial and capability revocation all passed. Final measured reads
+were 365 ms for a member drawing, 141 ms for the volunteer list and 264 ms for its
+detail. These are individual release observations, not a load benchmark. No Auth
+account was created and a separate read confirmed zero leftover fixture Projects.
+HTTP checks also confirmed `volunteer-media` denies an invalid capability (403),
+and `ask-bob`/`bob-worker` deny unauthenticated calls (401).
+
+The original final [CI run 36054103129](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36054103129)
+passed 496 tests, Edge/build/PWA gates and every browser flow. Phone/desktop archive
+and drawing screenshots were reviewed. The planning follow-up reran all 13 affected
+database groups and adds direct-helper cross-project/anonymous denial checks.
+Post-DDL security review found only the existing INFO notices for intentionally
+RPC/service-only Bob tables, with no new Bob warning or error.
+
+Both existing Projects still contain all 56 organised Tasks and zero unorganised
+Tasks. Neither Project currently has a saved Artifact or CAD revision; deployment
+does not itself create the owner's drawing. Real model-driven drawing creation,
+real participant acceptance, authenticated browser/PostgREST acceptance and live
+image Storage round trips are not established by the rollback SQL fixture.
+
 ## Household and project sharing — deployed foundation
 
 **Read-only status check, 2026-09-24:** the sharing, account boundary and volunteer
@@ -19,7 +67,7 @@ The existing [CI run 36032936034](https://github.com/EmelieHagander/Bob-the-buil
 passed the sharing and volunteer browser flows for the code merged into the
 reviewed `main` (`6ee5405`). The new review corrections are tracked in
 [PR 137](https://github.com/EmelieHagander/Bob-the-builder/pull/137); their source
-migration files are not yet applied. Real participant acceptance remains separate.
+migrations are now applied as recorded above. Real participant acceptance remains separate.
 
 ### Original implementation evidence — September 13–14
 
@@ -78,8 +126,9 @@ unexpired volunteer capability for each request; no anonymous-Auth enablement or
 new user registration is required. A hosted disposable volunteer check must show
 unchanged Auth user counts, correct person/optional allergy persistence, original
 image read-back, task/attendance/check behavior and denied access after revocation.
-The September 24 review did not perform those live fixture mutations, create
-household grants, send real project invitations or change hosted records. Fixture proof does not establish live cross-app Auth,
+The initial September 24 read-only review did not perform those live fixture mutations,
+create household grants or send real project invitations. The later work/drawing
+release and its rollback-only SQL checks are recorded above. Fixture proof does not establish live cross-app Auth,
 PostgREST, Storage or realtime behavior. After migration and frontend deployment,
 verify with separately authorized household and friend identities that one
 accepted project is visible, unrelated projects/account notes stay hidden, family

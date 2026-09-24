@@ -511,7 +511,7 @@ Task links are operational children of a stable Step identity rather than part o
 ## 13. Relationship to current readiness
 
 Task readiness remains separate from phase, execution status and Step completion.
-The September 24 review correction (source, pending release) removes the universal
+The deployed September 24 review correction removes the universal
 Build-phase blocker: design, measurement and CAD Tasks can be reviewed in their
 actual phase. Named prerequisites still block, and no blockers does not imply
 confirmed readiness. `db/README.md` owns the implemented readiness boundary.
@@ -877,7 +877,7 @@ standing permission to reorganise future work. Other/new ambiguous Tasks remain
 visible until deliberately linked. Plan reasons distinguish organisation from approval
 of physical facts or construction.
 
-Area archive/restore is now implemented in source, pending release. Historical plan
+Area archive/restore is deployed, with hosted rollback-fixture verification. Historical plan
 references remain intact; unfinished current work or a pending proposal prevents
 archiving. The owning persistence/UI contract and release order are in
-[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-pending-release).
+[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-deployed).
