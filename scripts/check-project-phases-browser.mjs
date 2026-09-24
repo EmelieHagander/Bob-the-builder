@@ -158,8 +158,7 @@ try {
     await plan.getByRole('region', { name: 'Office', exact: true }).getByLabel('phase: Build').waitFor()
     await plan.getByRole('region', { name: 'Guestroom', exact: true }).getByLabel('phase: Design').waitFor()
     await page.getByRole('link', { name: /Guestroom/ }).first().waitFor()
-    assert.equal(await page.getByText('50% done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
-    assert.equal(await page.getByText('0% done', { exact: true }).count(), 0, 'Design Area must not show build completion as primary meaning')
+    assert.equal(await plan.locator('.work-area').count(),3,'Every Area appears once in the shared Plan')
 
     if (viewport.width < 860) await page.getByRole('link', { name: 'Today', exact: true }).waitFor()
 
@@ -192,6 +191,8 @@ try {
 
     await page.getByRole('link', { name: 'Areas', exact: true }).first().click()
     await page.getByRole('heading', { name: 'Areas', exact: true }).waitFor()
+    assert.equal(await page.getByText('50% done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
+    assert.equal(await page.getByText('0% done', { exact: true }).count(), 0, 'Design Area must not show build completion as primary meaning')
     const guest = page.locator('article').filter({ hasText: 'Guestroom' })
     await guest.getByLabel('phase: Design').waitFor()
     await guest.getByRole('button', { name: 'Review phase', exact: true }).click()
