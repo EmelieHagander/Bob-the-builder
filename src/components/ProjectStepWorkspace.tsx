@@ -17,10 +17,15 @@ function TaskLinks({tasks,people}:{tasks:WorkTask[];people:Map<string,string>}){
 }
 function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspace;selected:string|null;people:Map<string,string>;onAdd?:(step:WorkStep)=>void}){
  const [open,setOpen]=useState(selected===step.id||step.state==='active')
- useEffect(()=>{if(selected===step.id)setOpen(true)},[selected,step.id])
+ useEffect(()=>{
+  if(selected!==step.id)return
+  setOpen(true)
+  const frame=requestAnimationFrame(()=>document.getElementById(`step-${step.id}`)?.scrollIntoView({block:'start'}))
+  return()=>cancelAnimationFrame(frame)
+ },[selected,step.id])
  const drawings=work.drawings.filter(d=>d.step_id===step.id)
  return <details className="work-step" id={`step-${step.id}`} open={open} onToggle={e=>setOpen(e.currentTarget.open)}>
-  <summary><strong>{step.title}</strong><span className="foundation-hint">{stepState[step.state]} · {step.tasks.length} tasks</span></summary>
+  <summary><strong>{step.title}</strong><span className="foundation-hint">{stepState[step.state]} · {step.tasks.length} tasks{drawings.length ? ` · ${drawings.length} ${drawings.length===1?'drawing':'drawings'}` : ''}</span></summary>
   {open&&<div className="work-step-body">
    <p>{step.goal}</p>
    <div className="foundation-actions"><PhasePill phase={step.phase} />
@@ -34,7 +39,10 @@ function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspac
     <ul>{step.requirements.map(r=><li key={r.id}>{r.title} <span className="foundation-hint">· {r.status.state.replace(/_/g,' ')}</span></li>)}</ul>
    </details>}
    {!!step.related_tasks.length&&<details><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people}/></details>}
-   {drawings.map(d=><p key={d.artifact_id}><Link to={`/artifacts?drawing=${encodeURIComponent(d.artifact_id)}&revision=${d.artifact_revision}`}>Open drawing · v{d.artifact_revision}</Link></p>)}
+   {!!drawings.length&&<ul className="work-task-list" aria-label="Step drawings">{drawings.map(d=><li key={d.artifact_id}>
+    <Link to={`/artifacts?drawing=${encodeURIComponent(d.artifact_id)}&revision=${d.artifact_revision}`}>{d.title} · v{d.artifact_revision}</Link>
+    <span className="foundation-hint">{d.status==='concept'?'Concept':d.status==='measured'?'Measured':'Build ready'}</span>
+   </li>)}</ul>}
    {db.authEnabled()&&<ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
   </div>}
  </details>

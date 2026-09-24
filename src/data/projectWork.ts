@@ -33,5 +33,5 @@ export interface ProjectWork {
   unorganised_tasks: WorkTask[]
 }
 export interface ProjectStepWorkspace extends ProjectWork {
-  drawings: { artifact_id: string; artifact_revision: number; step_id: string }[]
+  drawings: { artifact_id: string; artifact_revision: number; step_id: string; title: string; status: string }[]
 }

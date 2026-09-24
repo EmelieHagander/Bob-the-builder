@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 const generationKey = (id, revision) => `${id}:${revision}`
 
 export function createArtifactsFixture(timestamp, assets, facts, solutions) {
-  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map(), cad = new Map()
+  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map(), cad = new Map(), workLinks = new Map()
   const physical = {
     buildings: [{
       id: '90000000-0000-0000-0000-000000000001', site_id: null, project_id: 'A', revision: 1,
@@ -17,18 +17,34 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       change_note: 'Fixture room', actor_label: 'Fixture member', recorded_at: timestamp(),
     }],
   }
-  const fixture = { records, histories, generations, parametric, cad, physical, rejectNext: false,
+  const fixture = { records, histories, generations, parametric, cad, workLinks, physical, rejectNext: false, rejectPreview: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
         'current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
-        'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions',
+        'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions','current_drawing_overview','current_drawing_steps',
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
+
+      if(table==='current_drawing_steps') return reply({json:[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
+        .flatMap(r=>(workLinks.get(r.id)??[]).map(s=>({project_id:r.project_id,artifact_id:r.id,artifact_revision:r.revision,title:r.title,status:r.status,step_id:s.id,step_title:s.title})))})
+      if(table==='current_drawing_overview') {
+        const rows=[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
+          .sort((a,b)=>b.recorded_at.localeCompare(a.recorded_at)||a.id.localeCompare(b.id))
+        if(eq('id')) {
+          if(fixture.rejectPreview)return reply({status:503,json:{message:'Fixture preview unavailable'}})
+          const row=rows.find(r=>r.id===eq('id')&&r.revision===Number(eq('revision')))
+          if(!row)return reply({status:406,json:{message:'Drawing changed'}})
+          const c=cad.get(generationKey(row.id,row.revision))
+          return reply({json:{preview_svg:c?.files?.isometric??c?.files?.front??null,parametric_recipe:parametric.get(generationKey(row.id,row.revision))?.recipe??null,source_media_id:row.source_media_id}})
+        }
+        assert(!url.searchParams.get('select').includes('preview_svg'),'Overview does not fetch geometry or export bytes')
+        return reply({json:rows.slice(0,4).map(r=>({id:r.id,project_id:r.project_id,revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,steps:workLinks.get(r.id)??[]}))})
+      }
 
       if (table === 'artifact_cad_revisions') {
         if(!eq('artifact_id')) return reply({json:[...cad.values()].filter(r=>r.project_id===eq('project_id')&&r.step_id).map(r=>({...r,artifacts:{current_revision:records.get(r.artifact_id)?.revision}}))})

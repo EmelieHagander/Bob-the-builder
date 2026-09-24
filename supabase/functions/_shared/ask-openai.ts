@@ -94,7 +94,7 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v10', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v11', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -147,6 +147,12 @@ export async function answerWithOpenAi(opts: {
     })},
   }):undefined
   const recordReader=createRecordDetailReader(async(dataset,id,revision)=>{
+    if(dataset==='drawing') {
+      const {data,error}=await client.from('current_drawing_overview')
+        .select('id,project_id,revision,title,status,area_id,steps').eq('project_id',opts.projectId)
+        .eq('id',id).eq('revision',revision).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+      if(error)throw new Error('record_unavailable');return data
+    }
     const {data,error}=dataset==='plan'
       ?await rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)},AbortSignal.timeout(10000))
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));

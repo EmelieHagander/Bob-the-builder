@@ -13,7 +13,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a construction/drawing job to the CAD assistant. It has its own project, material, image and geometry tools and can inspect, render and repair repeatedly. Returns a checked candidate, not a saved drawing. Specify intent and relevant object IDs; the assistant can fetch wider dependencies.',
-  {brief:{type:'string'},area_id:nullable,component_id:nullable,step_id:nullable,artifact_id:nullable})
+  {brief:{type:'string'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:nullable})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 export const READ_CAD_TOOL=tool('read_cad_artifact','Read an exact saved CAD artifact revision, including its reusable assembly and pinned inputs. Null revision reads current. Use part_ids to select an existing subassembly when rendering; do not redesign it merely to obtain a detail view.',

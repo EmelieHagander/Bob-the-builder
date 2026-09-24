@@ -253,7 +253,7 @@ try {
     await verifyStairBrowser(page, base, stair, artifacts, viewport.width)
     // Real app component/data adapter, with a persisted CAD response fixture.
     const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
-    const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[]}
+    const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[],recorded_at:timestamp()}
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
     artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:{definitions:[{id:'shelf.panel',primitive:'box',x_mm:800,y_mm:400,z_mm:18}]},manifest:{},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
@@ -268,17 +268,40 @@ try {
     const planStepId=randomUUID()
     currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
     artifacts.cad.get(`${cadId}:1`).step_id=planStepId
+    artifacts.workLinks.set(cadId,[{id:planStepId,title:'Assemble the shelf'}])
     await page.goto(base)
+    const drawings=page.getByRole('region',{name:'Project drawings',exact:true})
+    await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
+    await page.reload()
+    await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
+    assert.equal(await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).evaluate(img=>img.complete&&img.naturalWidth>0),true)
+    await page.screenshot({path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
+    await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.goto(base)
+    await drawings.getByRole('link',{name:'Assemble the shelf',exact:true}).click()
     const workspace=page.getByRole('region',{name:'Project plan',exact:true})
     await workspace.getByText('Join the panel to its supports',{exact:true}).waitFor()
     await workspace.getByRole('region',{name:'Step images',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
-    await workspace.getByRole('link',{name:'Open drawing · v1',exact:true}).click()
+    await workspace.getByRole('link',{name:'CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByRole('button',{name:'Revise',exact:true}).click()
     await page.getByText('Ask Bob to revise this drawing.',{exact:false}).waitFor()
     assert.equal(await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).count(),0)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    artifacts.rejectPreview=true
+    await page.goto(base)
+    await drawings.getByText('Preview unavailable. Open the saved drawing.',{exact:true}).first().waitFor()
+    await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    artifacts.rejectPreview=false
+    cadRow.archived=true
+    await page.goto(base)
+    await drawings.getByRole('heading',{name:'Drawings',exact:true}).waitFor()
+    await page.waitForFunction(()=>!document.querySelector('[aria-label="Project drawings"]')?.textContent.includes('CAD shelf detail'))
+    assert.equal(await page.getByRole('link',{name:'CAD shelf detail · v1',exact:true}).count(),0)
+    cadRow.archived=false
     currentPlan=null
     await page.goto(base)
     failUpload = true

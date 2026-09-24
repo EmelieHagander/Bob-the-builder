@@ -86,6 +86,16 @@
   box-sizing: border-box;
 }
 
+.project-drawings { margin-top: 20px; }
+.project-drawing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; }
+.project-drawing-card { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.project-drawing-open { display: block; padding: 12px; }
+.project-drawing-open h3 { margin-top: 10px; overflow-wrap: anywhere; }
+.project-drawing-preview { height: 180px; display: flex; align-items: center; justify-content: center; background: var(--surface-2); border-radius: var(--r-sm); overflow: hidden; padding: 6px; }
+.project-drawing-preview img { width: 100%; height: 100%; object-fit: contain; background: white; }
+.project-drawing-steps { list-style: none; padding: 0 12px 8px; }
+.project-drawing-steps a { display: block; padding: 10px 0; color: var(--accent-2); text-decoration: underline; overflow-wrap: anywhere; }
+
 html,
 body,
 #root {

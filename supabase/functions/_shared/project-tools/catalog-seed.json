@@ -226,7 +226,7 @@
   {
     "name": "read_project_record_section",
     "description": "Read sections of an oversized plan or CAD artifact.",
-    "how_to": "Use after record_too_large or for an exact CAD recipe. Start with path=[] and follow returned keys or array indices to narrow the section. Plan record_id is the exact revision; CAD uses an Artifact ID plus revision. An inaccessible section is not proof the full record is absent.",
+    "how_to": "Use after record_too_large or for an exact CAD recipe. Start with path=[] and follow returned keys or array indices to narrow the section. Plan record_id is the exact revision; CAD uses an Artifact ID plus revision. An inaccessible section is not proof the full record is absent. Dataset drawing returns current metadata and linked work Steps by Artifact ID and exact revision, without geometry.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -247,6 +247,15 @@
     "how_to": "Read and reuse existing Areas; optional grouping is not a physical Space.",
     "schema_version": 1,
     "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "link_project_drawing",
+    "description": "Link or unlink a saved drawing and a project Step without redrawing.",
+    "how_to": "Read the current drawing revision and plan Step IDs. Reuse the same drawing across relevant Steps. The project home shows saved drawings automatically. Planning is a phase; attach to the work the drawing describes. Read existing links using read_project_record_section with dataset drawing.",
+    "schema_version": 1,
+    "always_load": false,
     "preload_phases": [],
     "active": true
   }
