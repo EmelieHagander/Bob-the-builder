@@ -26,6 +26,15 @@ test('access revocation prevents generation and has no candidate',async()=>{cons
 test('stale measurement references block rendering and can be corrected in another call',async()=>{const f=fixture();let n=0,renders=0;f.opts.callModel=async()=>n++===0?response('render_cad_candidate',{...candidate,measurements:[{id,revision:1}]}):response();f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}};const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'incomplete');assert.equal(renders,0)})
 
 
+test('CAD revisions inherit current work links instead of a removed historical Step',async()=>{
+ for(const links of [[],['current-step'],['current-step','other-step']]){
+  const f=fixture(),a=createCadAssistant({...f.opts,readArtifact:async()=>({revision:2,recipe:structuredClone(recipe),step_id:'retired-step',current_step_ids:links})})
+  assert.equal((await a.consult({...request,artifact_id:id})).status,'ready')
+  assert.equal(a.candidate!.step_id,links.length===1?links[0]:null)
+  assert.equal(a.candidate!.expected_revision,2)
+ }
+})
+
 test('CAD restart restores the rendered candidate without rendering or asking the model twice',async()=>{
  const f=fixture(),entries:JournalEntry[]=[];let now=0,renders=0
  const run=()=>{

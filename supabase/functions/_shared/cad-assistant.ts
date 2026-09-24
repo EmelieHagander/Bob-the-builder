@@ -43,7 +43,14 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   const lookup=opts.makeLookup(),until=Math.min(opts.deadline-20000,Date.now()+150000)
   let expected=0
-  if(raw.artifact_id){const old=await opts.readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'};expected=old.revision;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null;raw.step_id??=old.step_id??null}
+  if(raw.artifact_id){
+   const old=await opts.readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
+   expected=old.revision;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null
+   // Work links may have changed independently of the geometry revision.
+   raw.step_id??=Array.isArray(old.current_step_ids)
+    ?old.current_step_ids.length===1?old.current_step_ids[0]:null
+    :old.step_id??null
+  }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
   let previousResponseId:string|undefined, renders=0
   try{

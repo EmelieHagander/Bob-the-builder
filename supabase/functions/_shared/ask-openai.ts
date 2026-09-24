@@ -122,7 +122,13 @@ export async function answerWithOpenAi(opts: {
     render:recipe=>memo('cad:render',recipe,()=>createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe),45000),
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
-      if(error)throw new Error('cad_read_unavailable');return data
+      if(error)throw new Error('cad_read_unavailable');if(!data)return null
+      const links=await memo('cad:work_scope',{id,revision},async()=>{
+        const result=await client.from('current_drawing_steps').select('step_id')
+          .eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))
+        if(result.error)throw new Error('drawing_links_unavailable');return result.data.map(row=>row.step_id)
+      })
+      return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
     context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
