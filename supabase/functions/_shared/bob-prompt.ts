@@ -29,6 +29,6 @@ This briefing is fresh. Earlier conversation helps you understand what the owner
 
 /** Render only the same server-owned definitions supplied to this model call. */
 export function buildBobHands(tools: OpenAIServiceOptions['tools'] = []): string {
-  const currentTools = tools.map(tool => `${tool.function.name} — ${tool.function.description}`).join('\n')
+  const currentTools = tools.map(tool => tool.function.name).join(', ')
   return `${BOB_HANDS}\n\n${currentTools || 'None. No tools are available for this model call.'}`
 }

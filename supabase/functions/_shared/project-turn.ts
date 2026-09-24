@@ -1,3 +1,6 @@
+import type { RecordDetailReader } from './project-record-detail.ts'
+import type { ProjectImageTools } from './project-image-tools.ts'
+import { type CadAssistant } from './cad-assistant.ts'
 import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ToolPolicyReader } from './project-tools/session.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
@@ -14,7 +17,7 @@ export async function runClaimedProjectTurn(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
-  catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number;
@@ -45,8 +48,8 @@ export async function runClaimedProjectTurn(opts: {
         evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
-    const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
+    const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
     if (opts.writer.receipts.length && (recovered || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }

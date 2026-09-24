@@ -1,3 +1,4 @@
+import { CadDrawingView } from '../components/CadDrawingView'
 import { StairStudyDrawing } from '../components/StairStudyDrawing'
 import { BuildingPlanDrawing } from '../components/BuildingPlanDrawing'
 import { useEffect, useState } from 'react'
@@ -101,6 +102,7 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
+    {value.cad && <CadDrawingView value={value.cad} title={value.title} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
       artifactId: value.id, revision: value.revision, status: STATUS_LABELS[value.status],
       source: `${value.solutionTitle} · solution v${value.solutionRevision} · target decision ${value.targetRevision}. ${value.assumptions}` }} />}
@@ -261,8 +263,9 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
   )
   if (data?.parametricRecipe && !loading && !error && edit) return <StorageBoxEditor projectId={projectId} areaId={data.areaId ?? ''}
     target={target} value={data} onClose={onClose} onSaved={onSaved} />
-  if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
-  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.parametricRecipe || data?.hasRoomLayout || data?.hasStairStudy || data?.hasMultifloorPlan)} onClose={onClose}>
+  if (data && !data.cad && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
+  return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.cad || data?.parametricRecipe || data?.hasRoomLayout || data?.hasStairStudy || data?.hasMultifloorPlan)} onClose={onClose}>
+    {data?.cad && edit && <p>Ask Bob to revise this drawing. Include its title and the changes you want so the CAD assistant can update the construction and its views together.</p>}
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <VersionDetails value={data} target={target} />}
   </Modal>
 }

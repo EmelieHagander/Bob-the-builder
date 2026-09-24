@@ -1,3 +1,4 @@
+import { EXPERT_TOOLS, parseExpertWrite } from './project-expert-tools.ts'
 import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
 import { PLAN_WRITE_TOOLS, parsePlanWrite } from './project-plan.ts'
 import { STAIR_WRITE_TOOL, parseStairWrite } from './project-stair.ts'
@@ -20,6 +21,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  ...EXPERT_TOOLS,
   CATALOG_WRITE_TOOL,
   ...PLAN_WRITE_TOOLS,
   STAIR_WRITE_TOOL,
@@ -49,7 +51,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task'
+  kind: 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -75,6 +77,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (EXPERT_TOOLS.some(t => t.function.name === name)) return parseExpertWrite(name, v)
   if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
   if (PLAN_WRITE_TOOLS.some(t => t.function.name === name)) return parsePlanWrite(name, v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
@@ -131,7 +134,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   let settled = false
   const receipts: WriteReadback[] = []
   const remember = (r: WriteReadback) => {
-    if (!receipts.some(old => old.dataset === r.dataset && old.recordId === r.recordId)) receipts.push(r)
+    const i=receipts.findIndex(old=>old.dataset===r.dataset&&old.recordId===r.recordId)
+    if(i<0)receipts.push(r);else receipts[i]=r
   }
   return {
     receipts,
@@ -154,11 +158,13 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       return result.generation
     },
     async write(name: string, value: unknown): Promise<WriteResult> {
+      return this.commit(parseProjectWrite(name, value, projectId, userMessage))
+    },
+    async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
       if (++used > 8) return { status: 'budget_exhausted' }
-      const payload = parseProjectWrite(name, value, projectId, userMessage)
-      if (!payload) return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' }
+      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' }
       try {
         const { data, error } = await transport(payload)
         if (error) {

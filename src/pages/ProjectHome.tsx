@@ -1,3 +1,4 @@
+import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
@@ -127,6 +128,7 @@ export function ProjectHome() {
     </section>}
 
     <section className="card" style={{ marginTop: 20, padding: 16 }}>
+      {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
     </section>
 

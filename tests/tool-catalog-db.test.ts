@@ -32,7 +32,7 @@ test('exact SQL installs the complete bootstrap catalog with RLS, no replacement
   const rows=(await as('select * from bob.tool_catalog order by name')).rows
   assert.equal(rows.length,15)
   const sort=(a:any,b:any)=>a.name<b.name?-1:a.name>b.name?1:0
-  assert.deepEqual(rows,[...seed].sort(sort),'Migration and offline bootstrap must remain lock-step at installation')
+  assert.deepEqual(rows,seed.filter(s=>rows.some((r:any)=>r.name===s.name)).sort(sort),'Original bootstrap rows retain their offline contracts; later migrations add tools separately')
   assert.equal(checkedToolSnapshot({phase:'concept',tools:rows}).tools.length,15)
   assert.equal((await pg.query("select relrowsecurity from pg_class where oid='bob.tool_catalog'::regclass")).rows[0].relrowsecurity,true)
   assert.doesNotMatch(ddl,/disable row level security|security definer|create extension|alter table bob.projects/i)

@@ -46,4 +46,31 @@ class CadWorkerTest(unittest.TestCase):
         bad=fixture(); bad["instances"][0]["definition_id"]="missing"
         with self.assertRaisesRegex(CadContractError,"instance"): validate_request(bad)
 
+class CadTransportTest(unittest.TestCase):
+    def test_authenticated_transport_returns_actual_matching_files(self):
+        import base64, hashlib, json, os, threading, urllib.request, urllib.error
+        from http.server import HTTPServer
+        from unittest.mock import patch
+        from bob_cad.server import Handler
+        with patch.dict(os.environ, {"BOB_CAD_TOKEN": "fixture-token-" + "x" * 32}):
+            server = HTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            endpoint = f"http://127.0.0.1:{server.server_port}/render"
+            try:
+                bad = urllib.request.Request(endpoint, data=b'{}', method="POST")
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(bad, timeout=5)
+                self.assertEqual(error.exception.code, 401)
+                request = urllib.request.Request(endpoint, data=json.dumps(fixture()).encode(), method="POST", headers={"Authorization": "Bearer " + os.environ["BOB_CAD_TOKEN"], "Content-Type": "application/json"})
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    packet = json.load(response)
+                self.assertEqual(set(packet["files"]), {"step", "front", "right", "top", "isometric"})
+                for key, encoded in packet["files"].items():
+                    self.assertEqual(hashlib.sha256(base64.b64decode(encoded)).hexdigest(), packet["manifest"]["exports"][key]["sha256"])
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
 if __name__=="__main__": unittest.main()

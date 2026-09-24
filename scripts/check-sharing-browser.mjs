@@ -53,6 +53,7 @@ async function fixture(viewport, fresh = false) {
     const request = route.request(), url = new URL(request.url()), path = url.pathname, method = request.method()
     const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' } })
     if (method === 'OPTIONS') return respond({ status: 204 })
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
     if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
     if (path === '/auth/v1/user') return respond({ json: user })
     if (path === '/auth/v1/logout') return respond({ json: {} })

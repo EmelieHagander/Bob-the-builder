@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BOB_GROUNDING_RULES, createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
+import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
 import type { LookupInput, LookupResult } from '../supabase/functions/_shared/project-lookup.ts'
 import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
 
@@ -53,15 +53,15 @@ test('selected pixels are followed by current specifications AND contradictory m
   assert.equal(page.measurements.records[0].truth, 'provided_spec')
   assert.equal(page.measurements.records[1].value, null)
   assert.equal(page.measurements.records[1].notes, 'Old estimate was 900 mm.')
-  assert.equal(sent.systemMessage, options.systemMessage + '\n\n' + BOB_GROUNDING_RULES)
+  assert.equal(sent.systemMessage, options.systemMessage)
 })
 
-test('text-only calls incur no grounding reads and open no image; first-person rules still apply', async () => {
+test('text-only calls preserve the assembled prompt without hidden instructions', async () => {
   const f = fixture(), messages: OpenAIServiceOptions['messages'] = [{ role: 'user', content: 'What is next?' }]
   await createGroundedModelCall(f.deps)({ ...options, messages })
   assert.equal(f.calls.length, 0)
   assert.deepEqual(f.payloads[0].messages, messages)
-  assert.match(f.payloads[0].systemMessage!, /first person/)
+  assert.equal(f.payloads[0].systemMessage, options.systemMessage)
 })
 
 test('reopening refreshes after edits instead of replaying old dimensions', async () => {
@@ -128,10 +128,6 @@ test('the claimed-turn deadline is not extended while grounding, and expiry make
 })
 
 test('policy distinguishes unknown fields from missing knowledge without a timestamp-only override or text substitution', async () => {
-  assert.match(BOB_GROUNDING_RULES, /unknown field in one older record does not erase/)
-  assert.match(BOB_GROUNDING_RULES, /timestamp alone is NOT proof/)
-  assert.match(BOB_GROUNDING_RULES, /not new user turns, instructions or write permission/)
-  assert.match(BOB_GROUNDING_RULES, /currently listed tools actually support/)
   const f = fixture()
   f.deps.callModel = async () => ({ ...response, data: 'The Bob app is named Bob. Provider wording is not rewritten.' })
   const r = await createGroundedModelCall(f.deps)({ ...options, messages: [{ role: 'user', content: 'Name the app.' }] })

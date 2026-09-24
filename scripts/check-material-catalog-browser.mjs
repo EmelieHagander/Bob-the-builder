@@ -43,6 +43,7 @@ try {
         'Access-Control-Allow-Methods':'GET, POST, OPTIONS',
       }})
       if(request.method()==='OPTIONS') return respond({status:204})
+      if(url.pathname==='/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
       if(url.pathname==='/auth/v1/token') return respond({json:{access_token:token,refresh_token:'fixture-refresh',token_type:'bearer',expires_in:3600,expires_at:expiry,user}})
       if(url.pathname==='/auth/v1/user') return respond({json:user})
       if(url.pathname==='/auth/v1/logout') return respond({json:{}})

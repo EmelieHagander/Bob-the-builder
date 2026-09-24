@@ -37,7 +37,7 @@ try {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = [], assets = new Map(), objects = new Map(), steps = []
     let imageBytes, failUpload = false, slowDownload = null
-    let clock = 0
+    let clock = 0, currentPlan = null
     const timestamp = () => new Date(Date.UTC(2026, 8, 9, 12, 0, ++clock)).toISOString()
     const facts = createFactsFixture(timestamp, assets)
     const solutions = createSolutionsFixture(timestamp, assets, facts)
@@ -57,6 +57,7 @@ try {
       const fail = message => respond({ status: 409, json: { message } })
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
+      if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
@@ -112,7 +113,7 @@ try {
       if (path === '/rest/v1/media_assets') {
         let rows = [...assets.values()].filter(a => a.project_id === eq('project_id'))
         if (eq('id')) return respond({ json: rows.find(a => a.id === eq('id')) ?? null })
-        for (const field of ['area_id', 'task_id', 'step_id']) {
+        for (const field of ['area_id', 'task_id', 'step_id', 'plan_step_id']) {
           const id = eq('target.' + field)
           if (id) rows = rows.filter(a => a.media_links.some(link => link[field] === id))
         }
@@ -246,6 +247,35 @@ try {
     await verifyRoomLayoutBrowser(page, base, roomLayout, artifacts, viewport.width)
     await verifyMultifloorBrowser(page, base, multifloor, viewport.width)
     await verifyStairBrowser(page, base, stair, artifacts, viewport.width)
+    // Real app component/data adapter, with a persisted CAD response fixture.
+    const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
+    const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[]}
+    artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:{definitions:[{id:'shelf.panel',primitive:'box',x_mm:800,y_mm:400,z_mm:18}]},manifest:{},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByText('Parts and dimensions',{exact:true}).click()
+    await page.getByRole('cell',{name:'800 × 400 × 18',exact:true}).waitFor()
+    await page.reload()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),1)
+    await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
+    // A saved plan step reopens its exact construction and scoped images.
+    const planStepId=randomUUID()
+    currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
+    artifacts.cad.get(`${cadId}:1`).step_id=planStepId
+    await page.goto(base)
+    const workspace=page.getByRole('region',{name:'Project steps',exact:true})
+    await workspace.getByText('Check the saved drawing before assembly.',{exact:true}).waitFor()
+    await workspace.getByRole('region',{name:'Images for this step',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
+    await workspace.getByRole('link',{name:'Open drawing · v1',exact:true}).click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByRole('button',{name:'Revise',exact:true}).click()
+    await page.getByText('Ask Bob to revise this drawing.',{exact:false}).waitFor()
+    assert.equal(await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).count(),0)
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    currentPlan=null
     await page.goto(base)
     failUpload = true
     const failed = await uploadImage('Interrupted upload')

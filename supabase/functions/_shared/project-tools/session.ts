@@ -78,7 +78,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     return { state: def.gate(), def }
   }
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => ({
-    type: 'function', function: { name: row.name, description: row.description, parameters: structuredClone(def.spec.function.parameters) },
+    type: 'function', function: { name: row.name, description: [...new Set([row.description, def.spec.function.description, row.how_to].filter(Boolean))].join('\n\n'), parameters: structuredClone(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
   return {
