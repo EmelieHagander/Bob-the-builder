@@ -28,11 +28,52 @@ jobs:
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         shell: python
         run: |
-          import os, subprocess
-          missing = [name for name in ("MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET") if not os.environ.get(name)]
+          import os, subprocess, sys
+          names = ("MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET")
+          missing = [name for name in names if not os.environ.get(name)]
           if missing:
               raise SystemExit("Missing environment secrets: " + ", ".join(missing))
-          result = subprocess.run(["python", "-m", "modal", "token", "info"], capture_output=True, timeout=90)
+          for name, prefix in zip(names, ("ak-", "as-")):
+              value = os.environ[name]
+              print(name + ": present; expected prefix=" + str(value.startswith(prefix)) + "; surrounding whitespace=" + str(value != value.strip()), flush=True)
+          probe = """
+          import asyncio
+          from modal.client import _Client
+          from modal_proto import api_pb2
+          async def main():
+              stage = "connect"
+              try:
+                  client = await _Client.from_env()
+                  await client.hello()
+                  print("PROBE:authenticated", flush=True)
+                  stage = "token-info"
+                  await client.stub.TokenInfoGet(api_pb2.TokenInfoGetRequest())
+                  print("PROBE:passed", flush=True)
+              except Exception as exc:
+                  allowed = {"AuthError", "ConnectionError", "TimeoutError", "GRPCError", "InvalidError", "PermissionError", "SSLError", "gaierror", "ImportError", "ModuleNotFoundError", "AttributeError"}
+                  kind = type(exc).__name__
+                  print("PROBE:" + stage + ":" + (kind if kind in allowed else "other-error"), flush=True)
+                  status = getattr(getattr(exc, "status", None), "name", "")
+                  if status in {"UNAUTHENTICATED", "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "INVALID_ARGUMENT", "UNIMPLEMENTED"}:
+                      print("PROBE:status:" + status, flush=True)
+                  raise SystemExit(1)
+          asyncio.run(main())
+          """
+          try:
+              result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=90)
+          except subprocess.TimeoutExpired:
+              raise SystemExit("Modal connection timed out after 90 seconds.")
+          allowed = {"PROBE:authenticated", "PROBE:passed"}
+          for stage in ("connect", "token-info"):
+              for kind in ("AuthError", "ConnectionError", "TimeoutError", "GRPCError", "InvalidError", "PermissionError", "SSLError", "gaierror", "ImportError", "ModuleNotFoundError", "AttributeError", "other-error"):
+                  allowed.add("PROBE:" + stage + ":" + kind)
+          for status in ("UNAUTHENTICATED", "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "INVALID_ARGUMENT", "UNIMPLEMENTED"):
+              allowed.add("PROBE:status:" + status)
+          lines = [line for line in result.stdout.splitlines() if line in allowed]
+          for line in lines:
+              print(line)
           if result.returncode:
-              raise SystemExit("Modal authentication failed. Check the token pair and whether it is active.")
-          print("Modal authentication passed. Both environment secrets are available.")
+              raise SystemExit("Modal diagnostic failed; only safe diagnostic codes are shown.")
+          if "PROBE:passed" not in lines:
+              raise SystemExit("Modal probe returned no recognized result.")
+          print("Modal authentication passed.")
