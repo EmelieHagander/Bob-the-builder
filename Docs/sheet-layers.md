@@ -1,6 +1,6 @@
 # Drawing-derived sheet layers
 
-**Status:** PR #76 is being integrated against September 24 main on `feat/sheet-layer-integration`. The existing [material planning contract](material-planning.md) remains the owner of requirements, stock allocation, Shopping handoff and arithmetic. This document specifies its narrow sheet-layer method extension, not a parallel material model. Hosted release evidence belongs in the integration PR.
+**Status:** merged and deployed through [PR #131](https://github.com/EmelieHagander/Bob-the-builder/pull/131) on September 24; supersedes closed #76. The existing [material planning contract](material-planning.md) remains the owner of requirements, stock allocation, Shopping handoff and arithmetic. This document specifies its narrow sheet-layer method extension, not a parallel material model.
 
 ## User goal and reachable workflow
 
@@ -80,4 +80,13 @@ The existing foundation browser harness composes `scripts/sheet-layer-browser.mj
 
 `scripts/check-live-sheet-layers.mjs` is wired into the ordinary authenticated foundation runner after material planning and before later fixture changes. It rejects non-fixture projects, preserves prior drawings, and uses no service key or AI calls. The live release workflow watches this helper and its migration; ordinary CI syntax-checks it. The operator's exact-project cleanup includes its task, stock, requirements and Shopping rows.
 
-Source migration: `20260915183904_sheet_layer_material_quantities.sql`, scaffolded by the installed Supabase CLI in an isolated directory. Before release: finish full CI/browser verification, review and merge, apply this new migration once after reviewing hosted history and the affected view prefix, wire and execute the ordinary hosted proof, run the normal security/performance advisors, verify Pages, and record exact fixture cleanup. Do not replay old migrations or call this live based on a green branch build alone.
+Source migration: `20260915183904_sheet_layer_material_quantities.sql`, scaffolded by the installed Supabase CLI. Applied once as hosted `20260924105931_bob_sheet_layer_material_quantities`; do not replay it under its source timestamp.
+
+Release evidence for merged runtime `8be361351f97797331ba82f1a457612b12e6c1e6`:
+- CI [35990213727](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/35990213727): 460/460 tests; Edge/build/PWA and all browser gates pass, including sheet layers at 320/390/1280 px.
+- Live foundation [35991026203](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/35991026203): ordinary Auth/PostgREST sheet/pack arithmetic, stock, explicit Shopping, delivery preservation, history, archive/restore, deletion recovery and access-denial checks pass.
+- Pages [35991026206](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/35991026206): successful; public bundle `index-B0zJNeeZ.js` contains the new UI/method.
+- Readback confirms the appended view column, invoker security, recipe RLS and denied raw writes. Before/after security/performance advisors show no new findings; unrelated shared-database findings remain.
+- Exact fixture `p_99a46022a552412686960c052b684626` was checked against its nonce/name/type/description and zero media before deletion. Follow-up counts for project, requirements, Shopping, stock and people are all zero. No real project was used.
+
+This verifies the deterministic material-planning flow, not new AI material-selection behavior, cut optimization or product suitability.

@@ -77,7 +77,7 @@ A detail selection uses exact instance IDs from a pinned source assembly. Defini
 
 Build `cad-worker/Dockerfile` and run behind HTTPS with a secret `BOB_CAD_TOKEN` of at least 32 characters. Set matching Edge secrets `BOB_CAD_URL=https://<host>/render` and `BOB_CAD_TOKEN`. The service accepts only authenticated POST `/render`, limits input to 256 KiB, runs geometry in a killable child process for at most 40 seconds and returns at most 6 MiB. It writes only a temporary directory, accepts no paths/code/URLs and logs no recipes or credentials. The transport checks engine/assembly identity, definitions, instance identity, bounds and every export hash. Configure provider resource/rate limits at deployment.
 
-Modal deployment credentials are verified through the `Modal connection` workflow (September 24). The service is **not yet verified deployed**. Until both Edge secrets are supplied, Bob gets `cad_engine unavailable` before any designer model call. This is infrastructure, never an invitation to ask the user for another design approval.
+Modal deployment credentials and the deployed service are verified (September 24). PR #126/#127 deployed `https://emeliehagander--bob-cad-render.modal.run/render`; workflow [35988647873](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/35988647873) passed real STEP/four-SVG, dimension/hash and authorization checks. First authenticated request took 14.47 seconds. The owner reports both Edge secrets saved; named-member Bob/CAD save acceptance is still a separate in-progress check. If either Edge secret is missing, Bob gets `cad_engine unavailable` before any designer call; this is infrastructure, not a request for another design approval.
 
 ### On-demand Modal deployment
 
