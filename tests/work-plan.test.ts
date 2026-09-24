@@ -84,9 +84,10 @@ test('a blocker-free task stays unreviewed until a person confirms readiness', a
   assert.ok(row.reviewed_at)
 
   const design = await readiness('design-task')
-  assert.equal(design.readiness_state, 'blocked')
-  assert.match(JSON.stringify(design.blockers), /Area is in Design/)
-  await assert.rejects(work('design-task', 'confirm_readiness', null, 0, {}), /Resolve named blockers/)
+  assert.equal(design.readiness_state, 'unreviewed')
+  assert.equal(design.blocker_count, 0)
+  await work('design-task', 'confirm_readiness', null, 0, {})
+  assert.equal((await readiness('design-task')).readiness_state, 'ready')
 })
 
 test('tools and required information are named blockers and edits invalidate confirmation', async () => {

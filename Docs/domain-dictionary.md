@@ -54,7 +54,7 @@ Version: `2026-09-24.1`. Generated from [vocabulary.ts](../src/domain/vocabulary
 | plan_step | Step | Steg | Coherent work/result under Project or Area; not a Task instruction. |
 | task | Task | Uppgift | Assignable action with one primary Step; other links are references. |
 | task_instruction | Instruction / checkpoint | Instruktion / kontrollpunkt | Guidance/check within a Task (task_steps); distinct from plan Steps. |
-| phase | Phase | Fas | Lifecycle: idea/design/planning/build/complete; not a parent. |
+| phase | Phase | Fas | Lifecycle: concept/design/planning/build/complete; not a parent. |
 | status | Status | Status | Execution state; parallel active Steps are allowed. Bob focus is separate. |
 | completion_requirement | Finish criterion | Färdigvillkor | Evidence-backed condition for finishing a Step. |
 | dependency | Dependency | Beroende | Prerequisite; display order alone is not one. |

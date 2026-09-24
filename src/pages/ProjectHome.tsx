@@ -83,7 +83,10 @@ export function ProjectHome() {
       <PhaseRail phase={project.phase} />
     </section>
 
-    {db.authEnabled() && <ProjectDrawings key={project.id} projectId={project.id} />}
+    {db.authEnabled() && <>
+      <div className="foundation-actions" style={{ marginTop: 18 }}><button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button></div>
+      <ProjectDrawings key={project.id} projectId={project.id} />
+    </>}
 
     <section style={{ marginTop: 18 }}>
       <NextActionCard
@@ -116,7 +119,7 @@ export function ProjectHome() {
             </Link>
             <div className="card" style={{ padding: 18 }}>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
-              <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>{missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'No measurement blockers'}</h2>
+              <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>{missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'No recorded measurement blockers'}</h2>
               {missingMeasurements.length ? <div style={{ display: 'grid', gap: 8 }}>
                 {missingMeasurements.slice(0, 3).map(measurement => <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
@@ -125,7 +128,7 @@ export function ProjectHome() {
                     <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div></div>
                   <Icon name="arrow-right" size={14} color="var(--ink-faint)" />
                 </Link>)}
-              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>Required unknown or estimated measurements are clear at Project scope. Individual Areas can still have their own readiness gaps.</p>}
+              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>No required unknown or estimated measurements are recorded at Project scope. This does not confirm that every needed measurement has been identified.</p>}
             </div>
           </div>}
     </section>}
@@ -172,7 +175,7 @@ export function ProjectHome() {
       <div className="cluster" style={{ gap: 8 }}>
         <Link className="btn" to="/facts"><Icon name="ruler" size={15} /> Measurements &amp; existing parts</Link>
         <Link className="btn" to="/solutions"><Icon name="path" size={15} /> Solutions &amp; target</Link>
-        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Plans &amp; drawings</Link>
+        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Drawings</Link>
         <Link className="btn" to="/material-plan"><Icon name="package" size={15} /> Material plan</Link>
       </div>
       <p className="foundation-hint" style={{ marginBottom: 0 }}>These stay available across phases. The current phase changes emphasis, not access to project truth.</p>

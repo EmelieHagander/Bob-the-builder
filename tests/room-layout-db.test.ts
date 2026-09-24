@@ -163,6 +163,7 @@ test('research returns scoped physical sources and the exact saved package, not 
 test('changed furniture cannot be silently adopted; explicit refresh changes its pinned version but not the old package', async () => {
   await box(300,drawing({area_id:undefined,change_note:'Lower box',recipe:{...recipe,height_mm:300}}),'regenerate',1)
   const old=await layout(310,4)
+  assert.equal((await as(one,'select source_state from bob.artifact_source_status where artifact_id=$1 and revision=4',[id(310)])).rows[0].source_state,'changed')
   assert(roomLayoutStale(old));assert.equal(old.furniture_revision,1);assert.equal(old.furniture_recipe.height_mm,350)
   await assert.rejects(plan(310,'move_wall',4,move(3300)),/Furniture drawing changed/)
   assert.equal(await layout(310,5),undefined)

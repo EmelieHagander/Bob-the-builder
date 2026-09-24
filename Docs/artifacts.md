@@ -51,10 +51,10 @@ A delayed response after project/auth switching is rejected by the same frontend
 
 ## Reachable manual workflow
 
-Dashboard and Area link to **Plans & drawings**. A connected user can:
+Project and Area link to **Drawings**. A connected user can:
 
 1. choose a project target in **Solutions & target**;
-2. open **Plans & drawings**;
+2. open **Drawings**;
 3. create a plan/elevation/section/detail for the project or current area;
 4. record title, explanation, assumptions and concept/measured/build-ready status;
 5. choose/upload an authorised project image;
@@ -131,7 +131,7 @@ A generated drawing whose selected target, physical target, or measurements have
 
 ### UI contract
 
-`Plans & drawings` remains the owning surface. Add a secondary **Generate wall elevation** path rather than new global navigation.
+`Drawings` remains the owning surface. Add a secondary **Generate wall elevation** path rather than new global navigation.
 
 The generation flow should:
 
@@ -213,7 +213,7 @@ recipe that happens to become current during a concurrent save.
 
 ### Reachable UI and Bob tool
 
-`Plans & drawings → Draw storage box` uses the selected target for the current
+`Drawings → Draw storage box` uses the selected target for the current
 Project/Area. The initial numbers in the form are explicitly editable examples,
 not measurements from the user's project. Width, height, depth and thickness are
 editable with live preview. Saving reads back and opens the saved drawing.
@@ -319,7 +319,7 @@ furniture geometry and shared-app tables are never rewritten by this pilot.
 
 ### Reading the result in Bob
 
-A verified chat receipt opens the exact saved revision in **Plans & drawings**.
+A verified chat receipt opens the exact saved revision in **Drawings**.
 The linked viewer has both-room overview, individual room views, zoom/contained
 scroll, readable dimensions, placement explanation, source identities/versions,
 and a furniture-construction tab using the pinned existing box viewer. Its link
@@ -424,7 +424,7 @@ unsolicited edits. Current source warnings and estimate labels remain in the
 result. Saved research returns compact derived summaries; the inspection tool
 returns the full bounded intersections for one area.
 
-The existing receipt opens its exact revision in **Plans & drawings**. The viewer
+The existing receipt opens its exact revision in **Drawings**. The viewer
 has floor/height tabs, a full-width overview, contained zoom, readable coordinate
 and dimension tables, source versions, explicit conflicts and revision-stamped
 SVG export. There is no manual coordinate-plan form. Height comparison is labelled
@@ -497,7 +497,7 @@ using computed results and the user's goal, not infer unmodelled circulation.
 `save_project_stair` saves/revises a Concept study on request. The Project/Area and
 selected-target lineage are inherited server-side from the source plan. Bob
 proposes reasonable reversible dimensions and states their basis. After readback,
-the normal receipt opens that exact stair revision in Plans & drawings. Lower and
+the normal receipt opens that exact stair revision in Drawings. Lower and
 upper floor views, a developed walking section, numeric results, source links,
 zoom and SVG export all derive from the same versioned recipe. No manual stair
 editor is introduced; the user's role is to describe/correct, not draw.
@@ -621,3 +621,28 @@ Saved, non-archived drawings appear on Project home below the phase rail. The th
 Bob uses `link_project_drawing` to add/remove a work link without re-rendering. It goes through the normal named-member, claimed-turn, current-request quote, revision check and receipt path (`bob_project_write_v11`). Existing links are readable through `read_project_record_section`, dataset `drawing`, Artifact UUID and exact current revision. Steps describe the work; Planning is a phase, so a drawing remains attached when work moves into Build. A project-wide drawing can remain unlinked while still appearing on Project home. Removing a Step from the current plan hides its live link without deleting the drawing/history.
 
 Verification: `tests/project-drawing-workspace.test.ts` checks actual SQL/RLS, Bob tool discovery/writes/readback, retries, multiple Steps, archive/restore, unchanged geometry and cross-project denial. The foundations browser flow covers phone/desktop previews, exact-version opening, Step navigation, reload and preview failure. These controlled tests do not claim that an unconstrained live model has created the owner's bunk-bed drawing. Production release evidence belongs in the implementing PR.
+
+
+## Source freshness corrections — September 24, pending release
+
+`artifact_source_status` assesses each exact revision under the caller's RLS.
+It compares the effective Project/Area target, linked measurement revisions and
+archive state, physical sources/proposals and source drawing revisions. CAD
+details also follow their pinned source chain and its measurements, so a parent
+does not appear current merely because its geometry was not re-saved. An
+unreadable source or a chain beyond the bounded depth is unavailable. Physical
+sources that are no longer accessible produce `unavailable`, not an unchanged
+result. `current_drawing_overview`, `current_drawing_steps` and the detail reader
+consume this same assessment. Bob’s `read_project_record_section` drawing
+metadata also includes `source_state` and `source_reasons`. Preview data is withheld when sources are
+unavailable. Saved classifications and history are never rewritten: a recorded
+**Build ready** version whose sources changed shows a review warning. A
+`current` source assessment is not proof that all required inputs were recorded.
+
+Intentional CAD revisions can reattach a previously unlinked Step. The guarded
+save writes the relationship and reads back `step_ids` into the durable receipt;
+archive/restore do not recreate links. Area drawing links carry their scope into
+the exact-version viewer. Regression coverage is in
+`tests/review-workflow.test.ts`, the drawing workspace and physical-source tests,
+and the foundations browser's navigation/reload/changed/unavailable cases.
+These are source changes until their migration and frontend release are applied.

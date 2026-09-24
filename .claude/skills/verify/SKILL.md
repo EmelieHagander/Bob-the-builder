@@ -5,40 +5,52 @@ description: Build, launch and drive bob to verify changes end-to-end in the bro
 
 # Verifying bob
 
-React + Vite SPA, no test suite — verification is driving the running app.
+React + Vite SPA with automated Node/TypeScript tests, full-schema PGlite
+fixtures, Edge type checks and Playwright browser flows. Use the relevant tests
+for a change, then the required CI gates in `.github/workflows/ci.yml`.
 
-## Build & launch
+## Automated checks
 
 ```bash
-npm install
-npm run build        # tsc -b && vite build — must stay clean
-npm run dev          # http://localhost:5173, mock mode (no env = demo data)
+npm ci
+npm run check:vocabulary
+npm test
+npm run check:edge
+npm run build
 ```
 
-Mock mode serves the in-memory Skogsstuga sample (src/data/mockData.ts) —
-writes mutate it in-memory, so created areas/tasks persist across navigation
-but reset on reload. Live mode needs VITE_SUPABASE_URL/ANON_KEY and real
-sign-in; mock mode has no auth gate and is what you want for UI verification.
+SQL tests apply both migration directories in an isolated database. They do not
+apply migrations to the hosted project. For a focused iteration, run
+`node --import tsx --test tests/<relevant-file>.test.ts`.
 
-## Driving it
+## Browser verification
 
-Playwright with the pre-installed browser (do NOT `playwright install`):
+The in-memory demo (`npm run dev`, no Supabase environment variables) is useful
+for legacy collaboration screens. Writes reset on reload. The current Project
+Plan and other connected-only surfaces require live-mode fixtures; demo mode
+is not evidence for their rendering, persistence or authority.
 
-```js
-chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
+Use the installed Chrome/Chromium through `CHROME_PATH` (for example
+`command -v google-chrome`). Do not run `playwright install`. If no browser is
+installed, run the PR workflow and inspect its screenshots and failures; report
+that distinction rather than claiming a local browser pass.
+
+For the shared Plan, drawings and participant flows, follow CI:
+
+```bash
+VITE_SUPABASE_URL=https://pwa-proof.invalid VITE_SUPABASE_ANON_KEY=installation-test-only npm run build
+CHROME_PATH=/path/to/chrome node scripts/check-project-work-browser.mjs
+CHROME_PATH=/path/to/chrome node scripts/check-volunteer-browser.mjs
 ```
 
-Routes are hash-based: `/#/areas`, `/#/areas/:slug`, `/#/events`, `/#/shopping`…
+These scripts intercept requests with deterministic fixtures. They do not use a
+real account or write to production. Pick other affected scripts from CI, run
+scripts sharing a preview port sequentially, and inspect 320/390 px and desktop
+screenshots in `test-results/`. Test success, empty/loading/error, retry,
+navigation and reload where the changed feature promises them.
 
-Flows worth driving after a change: Add area (Areas), Add task / Add material /
-Assign / status-cycle (AreaDetail), "I'm coming!" (Events + EventDetail),
-Post update (Announcements), tick + Add material (Shopping), Invite (People).
-
-## Gotchas
-
-- The floating **Ask bob** button (bottom right) and its drawer intercept
-  clicks — close the drawer (X in its header) before clicking elsewhere.
-- Checkboxes are hidden inputs inside `<label>`s — click the label.
-- After a modal submit, wait for `.modal` to detach AND for the list to
-  refetch (~120ms mock latency) before counting cards.
-- Avatar `title` attributes are people's initials (Astrid Berg = "AS").
+Routes are hash-based: `/#/`, `/#/areas`, `/#/tasks/:id`, `/#/artifacts`.
+Close the Ask bob drawer before interacting with obscured controls. After a
+modal submit, wait for it to close and for the refreshed data before asserting.
+Real model/CAD generation and named participant acceptance are separate from
+intercepted browser fixtures; use the owning release contract for those checks.

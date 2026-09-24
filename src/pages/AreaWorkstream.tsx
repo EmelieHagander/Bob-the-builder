@@ -112,7 +112,7 @@ export function AreaWorkstream() {
           <div className="card" style={{ position: 'absolute', right: 0, zIndex: 10, width: 220, padding: 9, marginTop: 6, display: 'grid', gap: 4 }}>
             <Link className="btn" to={`/facts?area=${encodeURIComponent(area.id)}`}><Icon name="ruler" size={15} /> Measurements &amp; parts</Link>
             <Link className="btn" to={`/solutions?area=${encodeURIComponent(area.id)}`}><Icon name="path" size={15} /> Solutions &amp; target</Link>
-            <Link className="btn" to={`/artifacts?area=${encodeURIComponent(area.id)}`}><Icon name="blueprint" size={15} /> Plans &amp; drawings</Link>
+            <Link className="btn" to={`/artifacts?area=${encodeURIComponent(area.id)}`}><Icon name="blueprint" size={15} /> Drawings</Link>
             <Link className="btn" to={`/material-plan?area=${encodeURIComponent(area.id)}`}><Icon name="package" size={15} /> Material plan</Link>
             <button className="btn" onClick={() => setModal({ kind: 'area' })}><Icon name="pencil-simple" size={15} /> Edit Area</button>
           </div>
@@ -207,7 +207,7 @@ export function AreaWorkstream() {
           <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
             <Link to={`/facts?area=${encodeURIComponent(area.id)}`}>Measurements &amp; existing parts</Link>
             <Link to={`/solutions?area=${encodeURIComponent(area.id)}`}>Solutions &amp; target</Link>
-            <Link to={`/artifacts?area=${encodeURIComponent(area.id)}`}>Plans &amp; drawings</Link>
+            <Link to={`/artifacts?area=${encodeURIComponent(area.id)}`}>Drawings</Link>
             <Link to={`/material-plan?area=${encodeURIComponent(area.id)}`}>Material plan</Link>
           </div>
         </div>

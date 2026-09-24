@@ -1,16 +1,29 @@
 # Foundation verification and rollout
 
-## Household and project sharing — prepared source
+## Household and project sharing — deployed foundation
 
-**Status:** implemented on the sharing feature branch on 2026-09-13, extended with
-name-only volunteer participation on 2026-09-14. The three
-new migrations have not been applied to the shared database, and this frontend
-has not been deployed. The [building model](building-model.md#111a-household-sharing-extension)
-and [database contract](../db/README.md) own the sharing behavior.
+**Read-only status check, 2026-09-24:** the sharing, account boundary and volunteer
+migrations are present in the hosted ledger. They are also in `main`. This
+supersedes the September 13–14 “prepared source, not deployed” status; it does not
+claim a newly performed real household/friend/volunteer acceptance journey.
+The [building model](building-model.md#111a-household-sharing-extension) and
+[database contract](../db/README.md) own behavior.
 
-### Local evidence
+| Source migration | Confirmed hosted migration |
+|---|---|
+| `20260913213712_household_project_sharing.sql` | `20260914172539_bob_household_project_sharing` |
+| `20260913214355_household_account_sharing.sql` | `20260914172603_bob_household_account_sharing` |
+| `20260914052752_volunteer_project_links.sql` | `20260914172820_bob_volunteer_project_links` |
 
-- All 98 local tests pass after integrating the current material-planning main.
+The existing [CI run 36032936034](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36032936034)
+passed the sharing and volunteer browser flows for the code merged into the
+reviewed `main` (`6ee5405`). The new review corrections are tracked in
+[PR 137](https://github.com/EmelieHagander/Bob-the-builder/pull/137); their source
+migration files are not yet applied. Real participant acceptance remains separate.
+
+### Original implementation evidence — September 13–14
+
+- All 98 tests passed at that implementation checkpoint after integrating the current material-planning main.
   Eleven new sharing/account groups
   replay the actual migrations in PGlite/Postgres with the shared household and
   Hearth friendship schema represented by fixtures. They cover opt-in building
@@ -42,34 +55,31 @@ and [database contract](../db/README.md) own the sharing behavior.
 - Local manual browser preview is blocked by this environment. The new
   `scripts/check-sharing-browser.mjs` and `scripts/check-volunteer-browser.mjs` are included in CI for production React and
   Supabase-client flows at 320, 390 and 1280px against HTTP fixtures.
-  [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52) owns the current
-  CI/browser evidence for this source. Its latest full CI run must pass before
-  merge. Household/friend browser checks pass in the run linked above; the
+  [PR 52](https://github.com/EmelieHagander/Bob-the-builder/pull/52) records the
+  original CI/browser evidence. The current baseline is linked above. Household/friend browser checks pass in the run linked above; the
   volunteer check also waits for the refreshed server profile before asserting
   that removed food hides allergies. Screenshots accompany the workflow runs.
 
-### Rollout boundary
+### Rollout and remaining live acceptance
 
-Apply the new source migrations in order only as part of an approved rollout:
+For a new database, the original source sequence is:
 `20260913213712_household_project_sharing.sql`, then
 `20260913214355_household_account_sharing.sql`, then
-`20260914052752_volunteer_project_links.sql`. Do not rewrite any after it has
-been applied. Read-only preflight found a pristine legacy account with no notes;
+`20260914052752_volunteer_project_links.sql`. These are already applied to the
+hosted database under the identities above; do not replay or rewrite them. Read-only preflight found a pristine legacy account with no notes;
 the migration rechecks this under a lock and never guesses its household. If
 content appears before rollout, the account migration stops until an explicit
 reviewed mapping is supplied. Normal Settings setup can bind only a pristine,
 unbound account to a household the caller already actively belongs to.
 
-Deploy the separate `volunteer-media` Edge function after its migration and before
-the frontend. Its intentional `verify_jwt = false` route requires a valid,
+A new environment needs the separate `volunteer-media` Edge function after its
+migration and before the frontend. Its intentional `verify_jwt = false` route requires a valid,
 unexpired volunteer capability for each request; no anonymous-Auth enablement or
 new user registration is required. A hosted disposable volunteer check must show
 unchanged Auth user counts, correct person/optional allergy persistence, original
 image read-back, task/attendance/check behavior and denied access after revocation.
-Such live fixture mutations have not been performed in this session.
-
-This session has not created household grants, sent real project invitations,
-or changed hosted records. Fixture proof does not establish live cross-app Auth,
+The September 24 review did not perform those live fixture mutations, create
+household grants, send real project invitations or change hosted records. Fixture proof does not establish live cross-app Auth,
 PostgREST, Storage or realtime behavior. After migration and frontend deployment,
 verify with separately authorized household and friend identities that one
 accepted project is visible, unrelated projects/account notes stay hidden, family

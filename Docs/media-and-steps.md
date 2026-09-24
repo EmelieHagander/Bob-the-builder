@@ -250,3 +250,20 @@ Implementation branch adds `media_links.plan_step_id` alongside the existing Tas
 `generate_project_image` uses the shared configured image-generation path, then reserves a canonical media record, uploads through the caller's Storage authority and finalizes against actual object metadata. Only proposal/instruction purposes are generated; provenance is `ai_generated`. A reservation is visibly pending. Failed upload retains its ID; failed finalization can use `finalize_project_image` without another generation/upload. `attach_project_image` reuses existing ready media. Every database action uses the claimed-turn write ledger; a final success requires real bytes and the saved attachment. The model never receives storage credentials or arbitrary destinations.
 
 Apply `20260924084046_bob_cad_and_project_tools.sql` then `20260924084937_bob_step_media.sql` and `20260924092456_preserve_cad_artifact_revisions.sql` before deploying matching Edge/frontend code. These are additive changes to Bob's shared-database objects and scoped AI settings; no other app settings or project records are migrated.
+
+
+### Primary-Step volunteer images — September 24 review correction
+
+Source implementation, pending release: a name-only volunteer opening a Task can
+read its current primary Step's ready images as well as the existing Task, Area
+and instruction images. Both the Task response and the media capability check
+validate that current relationship; a stale image ID grants no access after a
+Task move or revocation. The UI calls Task-level checks “instructions”, reserving
+“Step” for project work. Volunteer consumption of saved drawings remains a
+separate gap in `Docs/user-stories.md`; Step images alone do not complete it.
+
+The same correction fixes volunteer image response handling: the app fetches the
+existing capability endpoint as binary and keeps its original MIME type. The
+Functions client parses `image/*` as text, so it is not used to decode these
+responses. The endpoint still checks the capability before and after download;
+no Auth session or general Storage access is added.

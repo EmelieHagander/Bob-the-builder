@@ -103,11 +103,11 @@ Denna precisering ersätter äldre formuleringar som kräver ett nytt godkännan
 
 | Use case | Viktig kvarvarande lucka | Ansvarig kontraktsyta |
 |---|---|---|
-| UC-001 | CAD-hosting och verifierat genomförandeflöde; arkivering och generell CAD-integration finns på korrigeringsbranchen | `ask-bob-conversations.md`, `project-facts.md`, `living-project-plan.md`, `material-assembly-use-case.md`, `cad-adapter.md` |
+| UC-001 | Verifierat genomförandeflöde med verklig modell och deltagare; CAD-hosting, arkivering och generell CAD-integration finns i main och driftsatta backenddelar | `ask-bob-conversations.md`, `project-facts.md`, `living-project-plan.md`, `material-assembly-use-case.md`, `cad-adapter.md` |
 | UC-002 | Sammanhängande planering/omplanering av personer och dagar via Bob samt verifierad deltagarkedja | stories 038–048, `living-project-plan.md` |
-| UC-003 | Enhetlig konsumtion av rätt underlag vid både projektplanens steg och uppgifternas instruktioner | `media-and-steps.md`, `living-project-plan.md` |
+| UC-003 | Volontärens ritningsläsare och verifierad deltagarkedja. Rättning för primärstegets bilder finns i källkod, ännu inte driftsatt | `media-and-steps.md`, `living-project-plan.md` |
 | UC-004 | Komplett hantering av text/media/länkar i de avsedda stegytorna | `media-and-steps.md` |
-| UC-005 | Generering → lagring → steglänk implementerat på korrigeringsbranchen; verklig modell-/deltagaracceptans återstår | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
+| UC-005 | Generering → lagring → steglänk finns i main; verklig modell-/deltagaracceptans återstår; gemensam aktualitetsvarning finns som rättning i källkod, ännu inte driftsatt | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
 
 En implementation ska ange vilket UC och vilket observerbart delresultat den levererar. Ett helt UC får markeras BUILT först efter dokumenterat test av huvudflöde, viktig felväg, återbesök och rätt användarroll. Databasfixturer bevisar mekanik; verkliga modellkörningar och användarflöden behövs för beteende och slutnytta. En specialgenerator, schemaändring eller lyckad API-körning ensam stänger inget UC.
 

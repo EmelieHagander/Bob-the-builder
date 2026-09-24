@@ -285,7 +285,7 @@ export function Dashboard() {
           <p className="foundation-hint">Keep alternatives, their evidence and the selected project version.</p></div><Icon name="arrow-right" size={20} />
       </Link>
       <Link to="/artifacts" className="card foundation-section facts-entry">
-        <Icon name="blueprint" size={24} /><div><h3>Plans & drawings</h3>
+        <Icon name="blueprint" size={24} /><div><h3>Drawings</h3>
           <p className="foundation-hint">Keep the exact drawing version, selected target and measurements the crew is building from.</p></div><Icon name="arrow-right" size={20} />
       </Link>
       <Link to="/facts" className="card foundation-section facts-entry">

@@ -57,12 +57,13 @@ test('Bob discovers, loads and writes reusable links; overview and Step reads ag
  assert.equal((await tools.execute('link_project_drawing',{...args,step_id:steps[1]})).status,'saved')
  const rows=(await query(owner,'select * from bob.current_drawing_steps where project_id=$1',[project])).rows as any[]
  assert.equal(rows.length,2);assert(rows.every(r=>r.artifact_id===drawing&&r.artifact_revision===1&&r.title==='Shelf drawing'))
- const overview:any=(await query(owner,'select id,revision,steps from bob.current_drawing_overview where project_id=$1',[project])).rows[0]
+ const overview:any=(await query(owner,'select id,revision,steps,source_state,source_reasons from bob.current_drawing_overview where project_id=$1',[project])).rows[0]
  assert.equal(overview.revision,1);assert.deepEqual(overview.steps.map((s:any)=>s.id).sort(),[...steps].sort())
  const reader=createRecordDetailReader(async(dataset,id,revision)=>{
   assert.equal(dataset,'drawing');assert.equal(id,drawing);assert.equal(revision,1);return overview
  },async()=>true)
  assert.deepEqual((await reader.execute({dataset:'drawing',record_id:drawing,revision:1,path:['steps']})).data,overview.steps)
+ assert.equal((await reader.execute({dataset:'drawing',record_id:drawing,revision:1,path:['source_state']})).data,'current')
  await c.finish()
 })
 
@@ -96,11 +97,15 @@ test('current links follow revisions, hide archived drawings, and unlinking leav
 })
 
 test('CAD save scope enters the same work links; archive copies do not resurrect an unlinked Step',async()=>{
+ const measurement=randomUUID(),fact={subject:'Panel width',value:'800',unit:'mm',truth:'measured',source:'Tape',required:true}
+ await call(owner,'bob.evidence_command',[project,'measurement','create',measurement,0,JSON.stringify(fact)])
  const recipe={contract_version:1,units:'mm',assembly_id:'shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:400,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
  const c=await claimed()
- const saved=await c.rpc({kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
-  title:'CAD shelf',description:'Generic construction',assumptions:'Concept only',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:steps[0],artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}})
+ const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
+  title:'CAD shelf',description:'Generic construction',assumptions:'Concept only',target_revision:1,measurements:[{id:measurement,revision:1}],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:steps[0],artifact_id:null,expected_revision:0,
+  packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}}
+ const saved=await c.rpc(payload)
+ assert.deepEqual(saved.record.step_ids,[steps[0]])
  const preview:any=(await query(owner,'select * from bob.current_drawing_overview where id=$1',[saved.recordId])).rows[0]
  assert.equal(preview.steps[0].id,steps[0]);assert.equal(preview.preview_svg,'PHN2Zz48L3N2Zz4=')
  assert(!JSON.stringify(preview).includes('PRIVATE_LARGE_STEP_EXPORT'))
@@ -109,5 +114,23 @@ test('CAD save scope enters the same work links; archive copies do not resurrect
  await call(owner,'bob.artifact_command',[project,'restore',saved.recordId,2,'{}'])
  assert.equal((await query(owner,'select * from bob.current_drawing_steps where artifact_id=$1',[saved.recordId])).rows.length,0)
  assert.equal((await query(owner,'select * from bob.artifact_cad_revisions where artifact_id=$1',[saved.recordId])).rows.length,3)
+ const reconnect={...payload,record_id:saved.recordId,expected_revision:3,data:{...payload.data,artifact_id:saved.recordId,expected_revision:3}}
+ const revision=await c.rpc(reconnect)
+ assert.equal(revision.revision,4)
+ assert.deepEqual(revision.record.step_ids,[steps[0]],'Explicit reconnect is read back from the saved live relationship')
+ assert.deepEqual((await query(owner,'select step_id from bob.current_drawing_steps where artifact_id=$1',[saved.recordId])).rows.map(r=>r.step_id),[steps[0]])
+ assert.deepEqual(await c.rpc(reconnect),revision,'A retry does not create another revision or link')
+ const child=await c.rpc({...payload,data:{...payload.data,title:'Shelf detail',measurements:[],source_artifact_id:saved.recordId,source_revision:4}})
+ assert.equal((await query(owner,'select source_state from bob.artifact_source_status where artifact_id=$1',[child.recordId])).rows[0].source_state,'current')
+ const grandchild=await c.rpc({...payload,data:{...payload.data,title:'Shelf connection detail',measurements:[],source_artifact_id:child.recordId,source_revision:1}})
+ await call(owner,'bob.evidence_command',[project,'measurement','revise',measurement,1,JSON.stringify({...fact,value:'810',change_note:'Remeasured'})])
+ for(const id of [child.recordId,grandchild.recordId]) {
+  const status=(await query(owner,'select source_state,source_reasons from bob.current_drawing_overview where id=$1',[id])).rows[0]
+  assert.equal(status.source_state,'changed');assert.deepEqual(status.source_reasons,['drawing_source_changed'])
+ }
+ assert.equal((await query(owner,'select current_revision from bob.artifacts where id=$1',[saved.recordId])).rows[0].current_revision,4,'Freshness follows source evidence without a geometry rewrite')
+ await call(owner,'bob.artifact_command',[project,'archive',saved.recordId,4,'{}'])
+ const changed=(await query(owner,'select source_state,source_reasons from bob.artifact_source_status where artifact_id=$1',[child.recordId])).rows[0]
+ assert.equal(changed.source_state,'changed');assert.deepEqual(changed.source_reasons,['drawing_source_changed'])
  await c.finish()
 })

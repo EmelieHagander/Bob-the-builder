@@ -155,7 +155,7 @@ export async function answerWithOpenAi(opts: {
   const recordReader=createRecordDetailReader(async(dataset,id,revision)=>{
     if(dataset==='drawing') {
       const {data,error}=await client.from('current_drawing_overview')
-        .select('id,project_id,revision,title,status,area_id,steps').eq('project_id',opts.projectId)
+        .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons').eq('project_id',opts.projectId)
         .eq('id',id).eq('revision',revision).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
       if(error)throw new Error('record_unavailable');return data
     }

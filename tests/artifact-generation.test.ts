@@ -154,6 +154,10 @@ test('old generation stays pinned after measurements and accepted physical state
   await node(u(2),'revise',u(3),1,{name:'Children room revised',kind:'bedroom',truth:'unknown',measurements:[],change_note:'Rename room'})
   const old=(await as(one,'select space_revision,current_space_revision from bob.artifact_generation_details where artifact_id=$1 and artifact_revision=1',[u(30)])).rows[0] as any
   assert.equal(old.space_revision,1); assert.equal(old.current_space_revision,2)
+  const freshness=(await as(one,'select * from bob.artifact_source_status where artifact_id=$1 and revision=1',[u(30)])).rows[0] as any
+  assert.equal(freshness.source_state,'changed')
+  assert(freshness.source_reasons.includes('physical_source_changed'))
+  assert(freshness.source_reasons.includes('measurements_changed'))
   const width=(await as(one,"select measurement_revision,value,latest_revision from bob.artifact_geometry_input_details where artifact_id=$1 and artifact_revision=1 and role='opening_width'",[u(30)])).rows[0] as any
   assert.equal(width.measurement_revision,1); assert.equal(width.value,'1200'); assert.equal(width.latest_revision,2)
 })

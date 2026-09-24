@@ -49,12 +49,12 @@ export function areaNextAction(area: Pick<Area, 'id' | 'slug' | 'phase'>): Phase
 }
 
 export function projectFocus(phase: ProjectPhase | null | undefined, areas: Pick<Area, 'phase'>[]): { title: string; text: string; icon: string } {
-  const mix = areaPhaseSummary(areas)
+  const mix = areas.length ? areaPhaseSummary(areas) : 'Use the Plan to organise Steps directly in the Project; Areas are optional'
   switch (phase) {
     case 'concept': return { title: 'Make the project understandable', text: `Describe the intended work and current state. ${mix}.`, icon: 'lightbulb' }
     case 'design': return { title: 'Converge on the right solution', text: `Keep evidence and decisions explicit. ${mix}.`, icon: 'pencil-ruler' }
     case 'planning': return { title: 'Make the selected work buildable', text: `Drawings, materials and readiness should now become executable. ${mix}.`, icon: 'blueprint' }
-    case 'build': return { title: 'Keep building while other work takes shape', text: `${mix}. Each Area keeps its own next action.`, icon: 'hammer' }
+    case 'build': return { title: 'Keep building while other work takes shape', text: `${mix}. Each Step keeps its own next action.`, icon: 'hammer' }
     case 'complete': return { title: 'Close against reality', text: 'Confirm as-built evidence and leave the Building better known for next time.', icon: 'check-circle' }
     default: return { title: 'Set the Project phase', text: 'Existing projects stay unclassified until a person chooses where the project really is.', icon: 'signpost' }
   }

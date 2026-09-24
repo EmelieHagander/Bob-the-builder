@@ -29,9 +29,20 @@ export function volunteerSecret(): string {
 }
 export const validVolunteerSecret = (value: string) => /^[0-9a-f]{64}$/.test(value)
 
+type MediaRequest = { session: string; taskId: string; mediaId: string }
+/** Keep binary responses intact. FunctionsClient.invoke parses image/* as text. */
+export function createVolunteerMediaTransport(url: string, anonKey: string, fetcher: typeof fetch = fetch) {
+  const endpoint = `${url.replace(/\/$/, '')}/functions/v1/volunteer-media`
+  return (body: MediaRequest) => fetcher(endpoint, {
+    method: 'POST', cache: 'no-store', credentials: 'omit',
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 /** The guest client has no persisted Auth session and never signs a person up.
  * Only the narrowly scoped capability RPCs are available through this adapter. */
-export function createVolunteers(manager: SupabaseClient<any, any, any> | null, guest: SupabaseClient<any, any, any> | null, capture: () => () => void) {
+export function createVolunteers(manager: SupabaseClient<any, any, any> | null, guest: SupabaseClient<any, any, any> | null, capture: () => () => void, media?: (body: MediaRequest) => Promise<Response>) {
   async function request<T>(name: string, args: Record<string, unknown>, projectId?: string, management = false): Promise<T> {
     const client = management ? manager : guest
     const guard = management ? capture() : () => {}
@@ -61,10 +72,13 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
     task: (secret: string, projectId: string, taskId: string) => request<VolunteerTask>('volunteer_task', { p_secret: secret, p_task: taskId }, projectId),
     taskAction: (secret: string, projectId: string, taskId: string, action: 'claim' | 'release' | 'status' | 'check', data: Record<string, unknown> = {}) => request<VolunteerTask>('volunteer_task_action', { p_secret: secret, p_task: taskId, p_action: action, p_data: data }, projectId),
     async image(secret: string, taskId: string, mediaId: string): Promise<Blob> {
-      if (!guest) throw new Error('Images need the connected app.')
-      const result = await guest.functions.invoke('volunteer-media', { body: { session: secret, taskId, mediaId } })
-      if (result.error || !(result.data instanceof Blob) || !['image/png', 'image/jpeg', 'image/webp'].includes(result.data.type)) throw new Error('The image could not be loaded. Your access may have changed; refresh the project and try again.')
-      return result.data
+      if (!guest || !media) throw new Error('Images need the connected app.')
+      const response = await media({ session: secret, taskId, mediaId })
+      const type = response.headers.get('Content-Type')?.split(';')[0].trim()
+      if (!response.ok || !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)) throw new Error('The image could not be loaded. Your access may have changed; refresh the project and try again.')
+      const blob = await response.blob()
+      if (!blob.size || blob.size > 6291456) throw new Error('The image response was incomplete or too large. Refresh the task and try again.')
+      return blob
     },
   }
 }
