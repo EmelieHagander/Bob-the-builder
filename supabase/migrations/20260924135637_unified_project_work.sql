@@ -33,6 +33,7 @@ alter table bob.project_plan_steps add column phase bob.project_phase;
 alter table bob.project_plans add column focus_step_id uuid;
 alter table bob.project_plans add constraint project_plans_focus_fk foreign key(project_id,focus_step_id)
   references bob.project_plan_step_identities(project_id,step_id) deferrable initially deferred;
+create index project_plans_focus_idx on bob.project_plans(project_id,focus_step_id);
 update bob.project_plans p set focus_step_id=s.step_id from bob.project_plan_steps s
  where s.project_id=p.project_id and s.plan_revision=p.current_revision and s.state='active';
 drop index bob.project_plan_one_active_idx;
@@ -1915,7 +1916,8 @@ begin
     step_pos:=step_pos+1;
     -- Step execution state is independent from the single Bob focus.
     insert into bob.project_plan_steps values(p_project,new_rev,sid,step_pos,btrim(step->>'title'),btrim(step->>'goal'),step->>'state',
-      nullif(step->>'area_id',''),step->>'responsible_kind',nullif(step->>'responsible_person_id',''),step->>'notes',(step->>'phase')::bob.project_phase);
+      nullif(step->>'area_id',''),step->>'responsible_kind',nullif(step->>'responsible_person_id',''),step->>'notes',case when step ? 'phase' then (step->>'phase')::bob.project_phase else
+        (select phase from bob.project_plan_steps where project_id=p_project and plan_revision=current_rev and step_id=sid) end);
 
     req_pos:=0;
     for req in select value from jsonb_array_elements(step->'requirements') loop

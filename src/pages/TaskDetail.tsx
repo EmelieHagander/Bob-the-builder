@@ -102,7 +102,7 @@ export function TaskDetail() {
       <div className="foundation-actions"><SkillPill level={task.skill} /><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div></div>
       <button className="btn" onClick={() => setDialog({ kind: 'task' })}>Edit task</button>
     </div>
-    {!editable && <p className="foundation-hint">This demo shows the task layout. Saved instructions, steps and images are available in connected projects.</p>}
+    {!editable && <p className="foundation-hint">This demo shows the task layout. Saved instructions, checks and images are available in connected projects.</p>}
     {error && <div role="alert"><FormError>{error}</FormError><button className="btn" onClick={reload}>Reload task</button></div>}
     {busy && <p role="status">Saving changes…</p>}
     <div className="task-state"><Field label="Task status"><select aria-label="Task status" style={inputStyle} value={task.status} disabled={busy || loading}
@@ -117,7 +117,7 @@ export function TaskDetail() {
     <section className="foundation-section" aria-label="Instructions and checks">
       <div className="foundation-heading"><h2>Instructions and checks <span className="foundation-hint">{steps.filter(s => s.completedAt).length} / {steps.length}</span></h2>
         <button className="btn btn-primary" disabled={!editable || busy} onClick={() => setDialog({ kind: 'step' })}><Icon name="plus" size={16} /> Add instruction</button></div>
-      {!steps.length && <p className="foundation-hint">Add the work in order. Each step can have its own instructions and images.</p>}
+      {!steps.length && <p className="foundation-hint">Add instructions and checkpoints in order. Each can have its own text and images.</p>}
       <ol className="task-step-list">
         {steps.map((step, index) => <li className="card task-step" key={step.id} data-step-id={step.id}>
           <div className="foundation-heading">
@@ -130,7 +130,7 @@ export function TaskDetail() {
               <button className="btn" aria-label={'Move ' + step.title + ' down'} disabled={!editable || busy || index === steps.length - 1}
                 onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'move', step.id, { revision: step.revision, direction: 'down' }))}><Icon name="arrow-down" size={17} /></button>
               <button className="btn" disabled={!editable || busy} onClick={() => setDialog({ kind: 'step', step })}>Edit instruction</button>
-              <button className="btn" aria-label={'Remove step: ' + step.title} disabled={!editable || busy} onClick={() => setDialog({ kind: 'delete', step })}><Icon name="trash" size={16} /></button>
+              <button className="btn" aria-label={'Remove instruction: ' + step.title} disabled={!editable || busy} onClick={() => setDialog({ kind: 'delete', step })}><Icon name="trash" size={16} /></button>
             </div>
           </div>
           {step.isCheckpoint && <p className="checkpoint-label">{step.required ? 'Required completion check' : 'Optional check'}</p>}
@@ -144,11 +144,11 @@ export function TaskDetail() {
     {dialog?.kind === 'step' && <StepEditor projectId={projectId} taskId={task.id} step={dialog.step} onClose={() => setDialog(null)} onSaved={reload} />}
     {dialog?.kind === 'instructions' && <InstructionsEditor projectId={projectId} detail={detail} onClose={() => setDialog(null)} onSaved={reload} />}
     {dialog?.kind === 'task' && <TaskModal task={task} areas={areas ?? []} onClose={() => setDialog(null)} onDone={reload} />}
-    {dialog?.kind === 'delete' && dialog.step && <Modal title="Remove step?" onClose={() => { if (!busy) setDialog(null) }}>
+    {dialog?.kind === 'delete' && dialog.step && <Modal title="Remove instruction?" onClose={() => { if (!busy) setDialog(null) }}>
       <p>Remove “{dialog.step.title}”? Its original images stay in the project image collection.</p>
       {error && <FormError>{error}</FormError>}
       <div className="foundation-actions"><button className="btn" disabled={busy} onClick={() => setDialog(null)}>Cancel</button>
-        <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'delete', dialog.step!.id, { revision: dialog.step!.revision }))}>Remove step</button></div>
+        <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'delete', dialog.step!.id, { revision: dialog.step!.revision }))}>Remove instruction</button></div>
     </Modal>}
   </div>
 }
