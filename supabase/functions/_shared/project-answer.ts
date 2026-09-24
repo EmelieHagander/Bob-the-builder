@@ -8,6 +8,7 @@ import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import { BOB_PERSONA, BOB_CURRENT_TURN, buildBobHands } from './bob-prompt.ts'
+import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
@@ -39,7 +40,7 @@ When proposal_ready is true and the proposal is sound, carry out the requested s
 } as const
 export const BOB_TRUTH_RULES = Object.values(BOB_SYSTEM_SECTIONS).join('\n\n')
 export function buildBobSystemMessage(tools: OpenAIServiceOptions['tools'] = []): string {
-  return [BOB_PERSONA, buildBobHands(tools), BOB_TRUTH_RULES].join('\n\n')
+  return [BOB_PERSONA, buildBobHands(tools), domainVocabulary('bob'), BOB_TRUTH_RULES].join('\n\n')
 }
 function buildTurnFrame(projectId: string, briefing: unknown, context?: WorkingContext): string {
   return [BOB_CURRENT_TURN, `Project binding: ${projectId}`,

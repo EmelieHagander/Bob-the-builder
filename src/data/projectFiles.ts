@@ -115,12 +115,12 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     async getTaskDetail(projectId: string, taskId: string): Promise<TaskDetail> {
       const { db, assertCurrent } = connection(projectId)
       const row = value(await db.from('tasks')
-        .select('*,task_assignees(person_id),areas!inner(project_id)')
-        .eq('id', taskId).eq('areas.project_id', projectId).single()) as Row
+        .select('*,task_assignees(person_id)')
+        .eq('id', taskId).eq('project_id', projectId).single()) as Row
       const steps = value(await db.from('task_steps').select('*').eq('project_id', projectId).eq('task_id', taskId).order('position')) as Row[]
       assertCurrent()
       return {
-        task: { id: row.id, areaId: row.area_id, name: row.name, skill: row.skill as SkillLevel,
+        task: { id: row.id, areaId: row.area_id, primaryStepId:row.primary_step_id, name: row.name, skill: row.skill as SkillLevel,
           hours: row.hours, status: row.status as TaskStatus, materials: row.materials,
           assigneeIds: row.task_assignees.map((p: Row) => p.person_id) },
         instructions: row.instructions, updatedAt: row.updated_at, steps: steps.map(mapStep),

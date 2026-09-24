@@ -152,3 +152,9 @@ SVG and explicit conflict/unknown states. No manual stair drawing form is requir
 The full-view preview fits phone width; readable numbers remain below it. Source
 revocation hides geometry but retains the artifact and an honest unavailable state.
 See the [stair contract](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+
+## Unified work vocabulary (September 2026)
+
+[Domain dictionary](domain-dictionary.md) owns **Project → optional Area → Step → Task**. In connected projects, `ProjectStepWorkspace` renders one Plan from `project_work_read`: root Steps, Areas with Steps, and saved Tasks still awaiting a primary Step. Task ownership controls counts; related-work links are separate. `TaskDetail` returns to its primary Step and calls its internal `task_steps` instructions/checkpoints. Step phase, execution state and Bob focus are distinct. Areas remain a management surface, not a second plan. Mock data retains its legacy Area view.
+
+Browser coverage: `scripts/check-project-work-browser.mjs` and the existing foundations/phase checks. SQL/RLS and migration coverage: `tests/unified-project-work.test.ts`.

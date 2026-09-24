@@ -60,6 +60,7 @@ try {
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
@@ -203,12 +204,12 @@ try {
     await instructions.getByRole('button', { name: 'Save instructions', exact: true }).click()
     await instructions.waitFor({ state: 'hidden' })
     for (const [title, required] of [['Remove trim', false], ['Check opening', true]]) {
-      await page.getByRole('button', { name: 'Add step', exact: true }).click()
-      const modal = page.getByRole('dialog', { name: 'Add step', exact: true })
-      await modal.getByLabel('Step title', { exact: true }).fill(title)
+      await page.getByRole('button', { name: 'Add instruction', exact: true }).click()
+      const modal = page.getByRole('dialog', { name: 'Add instruction', exact: true })
+      await modal.getByLabel('Instruction title', { exact: true }).fill(title)
       await modal.getByLabel('Instructions', { exact: true }).fill('Keep reusable pieces and record the result.')
       if (required) { await modal.getByLabel('This is a completion check').check(); await modal.getByLabel('Required before the task is done').check() }
-      await modal.getByRole('button', { name: 'Save step', exact: true }).click()
+      await modal.getByRole('button', { name: 'Save instruction', exact: true }).click()
       await modal.waitFor({ state: 'hidden' })
     }
     await page.getByRole('button', { name: 'Move Check opening up', exact: true }).click()
@@ -268,9 +269,9 @@ try {
     currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
     artifacts.cad.get(`${cadId}:1`).step_id=planStepId
     await page.goto(base)
-    const workspace=page.getByRole('region',{name:'Project steps',exact:true})
-    await workspace.getByText('Check the saved drawing before assembly.',{exact:true}).waitFor()
-    await workspace.getByRole('region',{name:'Images for this step',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
+    const workspace=page.getByRole('region',{name:'Project plan',exact:true})
+    await workspace.getByText('Join the panel to its supports',{exact:true}).waitFor()
+    await workspace.getByRole('region',{name:'Step images',exact:true}).getByText('No images here yet.',{exact:true}).waitFor()
     await workspace.getByRole('link',{name:'Open drawing · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()

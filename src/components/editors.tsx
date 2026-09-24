@@ -146,7 +146,7 @@ export function AreaModal({ people, area, onClose, onDone }: { people: Person[];
         </Field>
         {area && (
           <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', margin: 0 }}>
-            Deleting an area removes its tasks and materials too.
+            Tasks stay in the project. Area materials are removed. Move any plan steps out of this area before deleting it.
           </p>
         )}
         {error && <FormError>{error}</FormError>}
@@ -173,18 +173,20 @@ const SKILLS: { level: SkillLevel; label: string }[] = [
 export function TaskModal({
   areas,
   areaId: fixedAreaId,
+  stepId,
   task,
   onClose,
   onDone,
 }: {
-  areas: Area[]
+  areas: Pick<Area,'id'|'name'>[]
+  stepId?: string
   /** lock the task to this area (area detail); omit to let the user pick */
   areaId?: string
   task?: Task
   onClose: () => void
   onDone: () => void
 }) {
-  const [areaId, setAreaId] = useState(task?.areaId ?? fixedAreaId ?? areas[0]?.id ?? '')
+  const [areaId, setAreaId] = useState(task?.areaId ?? fixedAreaId ?? (stepId ? '' : areas[0]?.id ?? ''))
   const [name, setName] = useState(task?.name ?? '')
   const [skill, setSkill] = useState<SkillLevel>(task?.skill ?? 'novice')
   const [hours, setHours] = useState(task?.hours ?? '')
@@ -192,14 +194,14 @@ export function TaskModal({
     () =>
       task
         ? db.updateTask(task.id, { name: name.trim(), skill, hours: hours.trim() || '1h' })
-        : db.createTask({ areaId, name: name.trim(), skill, hours: hours.trim() || '1h' }),
+        : db.createTask({ areaId:areaId||null, primaryStepId:stepId??null, name: name.trim(), skill, hours: hours.trim() || '1h' }),
     onDone,
   )
 
   return (
     <Modal title={task ? 'Edit task' : 'Add task'} onClose={onClose}>
       <FormShell onSubmit={submit}>
-        {!fixedAreaId && !task && (
+        {!fixedAreaId && !stepId && !task && (
           <Field label="Area *">
             <select style={{ ...inputStyle, appearance: 'auto' }} value={areaId} onChange={(e) => setAreaId(e.target.value)} required>
               {areas.map((a) => (

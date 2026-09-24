@@ -1,3 +1,4 @@
+import {domainVocabulary} from '../src/domain/vocabulary.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL, SAVE_COMPILED_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
@@ -89,6 +90,7 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
   assert.equal(result.status,'ok');assert.equal(result.saved,false);assert.equal(result.current_revision,0)
   assert.equal(result.proposal_ready,true);assert.equal(assistant.canSave,true)
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
+  for(const call of calls)assert(call.systemMessage!.includes(domainVocabulary('planner')))
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
   assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low')
   const prompt=JSON.parse(String(calls[0].prompt))
@@ -102,7 +104,7 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
   assert.equal(result.review.ready_to_save,true)
   assert.equal(result.task_candidates[0].task_id,taskId)
   assert.equal(result.task_links_saved,false)
-  assert.match(result.note,/NOT saved Step↔Task links/)
+  assert.match(result.note,/applied atomically on approval/)
   assert(assistant.sources.some(s=>s.recordId===measurementId))
   assert(assistant.sources.some(s=>s.recordId===taskId))
 })
@@ -225,7 +227,7 @@ test('reviewed compilation is saved verbatim through one-field bridge instead of
   assert.equal(savedResult.status,'saved')
   assert.equal(saved.name,'propose_project_plan')
   assert.deepEqual(saved.value,{...expected,request_quote:'rätta till planen'})
-  assert.equal(Object.keys(saved.value).length,5,'bridge supplies the exact write schema without model-copying nested JSON')
+  assert.equal(Object.keys(saved.value).length,6,'bridge supplies the exact write schema without model-copying nested JSON')
 })
 
 test('nano objections return to Bob without vetoing a structurally valid proposal',async()=>{
@@ -363,7 +365,7 @@ test('reviewer receives the canonical identity contract and new null identities 
       assert.equal(input.server_validation.proposal_shape_valid,true)
       assert.equal(input.server_validation.new_identity_value,null)
       assert.deepEqual(input.local_validation_issues,[],'two new null ids are not missing or duplicated ids')
-      assert.match(o.systemMessage!,/Null is valid and is not a missing\/invalid id/)
+      assert.match(o.systemMessage!,/New identities may be null/)
       assert.equal(input.compiled_plan.steps[0].requirements[1].evidence_selector.kind,'none')
       return response(cleanReview,'nano')
     },

@@ -34,8 +34,9 @@ export const WRITE_TOOLS = [
     description: { ...text, description: 'Full replacement description, at most 12000 characters.' },
     expected_updated_at: text, request_quote: quote,
   }),
+  tool('save_project_area','Create or revise an optional Area grouping of Steps, not a physical room. Read and reuse current Areas before creating.', {record_id:nullableText,name:text,description:text,expected_updated_at:nullableText,request_quote:quote}),
   tool('save_project_task', 'Create a todo task or revise its name/instructions in this project. Read Areas/tasks to resolve exact IDs. Does not assign people, change status, certify readiness or complete checks.', {
-    record_id: { ...nullableText, description: 'Existing task ID; null to create.' }, area_id: text,
+    record_id: { ...nullableText, description: 'Existing task ID; null to create.' }, area_id: {...nullableText,description:'Optional Area; derived from the primary Step when step_id is supplied.'}, step_id:{...nullableText,description:'Exact current Plan Step UUID. Creates/updates primary ownership in the same save; null preserves existing ownership or creates legacy Area work.'},
     name: text, instructions: { ...text, description: 'Practical task instructions, at most 12000 characters. Preserve existing content unless asked to replace it.' },
     expected_updated_at: { ...nullableText, description: 'Current task timestamp when editing; null when creating.' }, request_quote: quote,
   }),
@@ -52,7 +53,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task'
+  kind: 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -74,7 +75,9 @@ const isTime = (x: unknown) => isText(x, 60) && /^\d{4}-\d\d-\d\dT/.test(x) && N
 export function parseProjectWrite(name: string, value: unknown, projectId: string, userMessage: string): WritePayload | null {
   const definition = WRITE_TOOLS.find(t => t.function.name === name)
   if (!definition || !value || typeof value !== 'object' || Array.isArray(value)) return null
-  const v = value as Record<string, unknown>
+  const v = {...value} as Record<string, unknown>
+  if(name==='propose_project_plan'&&!Object.hasOwn(v,'task_links'))v.task_links=[]
+  if(name==='save_project_task'&&!Object.hasOwn(v,'step_id'))v.step_id=null
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
@@ -93,11 +96,15 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   }
   if (v.record_id !== null && !isText(v.record_id, 200)) return null
   base.record_id = v.record_id as string | null
+  if(name==='save_project_area'){
+    if(!isText(v.name,200)||!isText(v.description,4000,true)||(v.record_id===null?v.expected_updated_at!==null:!isTime(v.expected_updated_at)))return null
+    return {...base,kind:'area',expected_updated_at:v.expected_updated_at as string|null,data:{name:v.name,description:v.description}}
+  }
   if (name === 'save_project_task') {
-    if (!isText(v.area_id, 200) || !isText(v.name, 300) || !isText(v.instructions, 12000, true)
+    if ((v.area_id!==null&&!isText(v.area_id, 200)) || (v.step_id!==null&&(typeof v.step_id!=='string'||!uuid.test(v.step_id))) || (v.record_id===null&&v.area_id===null&&v.step_id===null) || !isText(v.name, 300) || !isText(v.instructions, 12000, true)
       || (v.record_id === null ? v.expected_updated_at !== null : !isTime(v.expected_updated_at))) return null
     return { ...base, kind: 'task', expected_updated_at: v.expected_updated_at as string | null,
-      data: { area_id: v.area_id, name: v.name, instructions: v.instructions } }
+      data: { area_id: v.area_id, ...(v.step_id!==null?{step_id:v.step_id}:{}), name: v.name, instructions: v.instructions } }
   }
   if (name === 'save_project_drawing') return parseDrawingWrite(v)
   if (v.record_id !== null && !uuid.test(v.record_id as string)) return null

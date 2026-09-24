@@ -256,6 +256,7 @@ test('Bob sees nano feedback, requests repair, rejects a mistaken veto and saves
       if(mainCalls===1)return call('compile_project_plan',{plan_intent:'Kontrollera dörrens centrering.'})
       const toolResult=JSON.parse(String(o.messages?.find(m=>m.role==='tool')?.content))
       if(mainCalls===2){
+        assert.ok(toolResult.review,JSON.stringify(toolResult))
         assert.equal(toolResult.review.issues[0].code,'evidence_mismatch')
         assert.equal(compilerCalls,1,'Bob must see the review before another compiler call')
         assert.equal(writer.receipts.length,0)

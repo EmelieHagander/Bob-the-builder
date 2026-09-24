@@ -84,7 +84,7 @@ function NeedEditor({ projectId, taskId, kind, onClose, onSaved }: {
 }
 
 export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }: {
-  projectId: string; taskId: string; areaId: string; refreshKey?: number
+  projectId: string; taskId: string; areaId: string | null; refreshKey?: number
 }) {
   const [version, setVersion] = useState(0)
   const [dialog, setDialog] = useState<'dependency' | TaskNeedKind | null>(null)

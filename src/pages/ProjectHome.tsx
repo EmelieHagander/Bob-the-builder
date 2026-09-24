@@ -58,7 +58,7 @@ export function ProjectHome() {
       ? { to: '/solutions', icon: 'path', title: 'Choose the Project target', text: 'Compare alternatives and explicitly choose the Project-level target when the shared direction is clear.' }
       : !hasCurrentDrawing
         ? { to: '/artifacts', icon: 'blueprint', title: 'Turn the Project target into a drawing', text: `“${selectedTarget.title}” is selected. Keep the next Project-level plan tied to that exact version and its evidence.` }
-        : { to: '/areas', icon: 'check-circle', title: 'Review the workstreams', text: 'The Project-level planning foundation is recorded. Review each Area for its local phase, target and next action.' }
+        : { to: '/areas', icon: 'check-circle', title: 'Review the areas', text: 'The Project-level planning foundation is recorded. Review each Area for its local phase, target and next action.' }
 
   return <div className="page">
     <div className="page-head">
@@ -132,13 +132,13 @@ export function ProjectHome() {
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
     </section>
 
-    <section style={{ marginTop: 24 }}>
+    {!db.authEnabled() && <section style={{ marginTop: 24 }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
-        Workstreams <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areaPhaseSummary(areaItems)}</span>
+        Areas <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areaPhaseSummary(areaItems)}</span>
       </SectionTitle>
       {areasLoading ? <Loading label="Loading Areas…" /> : areasError ? <div className="card" role="status" style={{ padding: 16 }}>Area phase status is unavailable. Your saved project data is unchanged.</div>
         : !areaItems.length ? <div className="card" style={{ padding: 18 }}>
-          <strong>No Areas yet</strong><p className="foundation-hint">Create workstreams for coherent parts of the project. They can later move through phases independently.</p>
+          <strong>No Areas yet</strong><p className="foundation-hint">Group related steps into Areas when the project needs them. Each Area can progress through phases independently.</p>
           <Link to="/areas" className="btn btn-primary">Add the first Area</Link>
         </div> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
           {areaItems.map(area => {
@@ -162,7 +162,7 @@ export function ProjectHome() {
             </article>
           })}
         </div>}
-    </section>
+    </section>}
 
     <section style={{ marginTop: 24 }} aria-label="Project tools">
       <SectionTitle>Project tools</SectionTitle>

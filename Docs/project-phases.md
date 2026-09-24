@@ -1,6 +1,6 @@
 # bob — project phases
 
-> **Status:** specified product direction / pre-implementation.  
+> **Status:** Project/Area phase and scoped-target foundation implemented; broader phase behavior remains product direction. Nullable Step phase is implemented in the unified-work migration (deployment evidence: [PR #135](https://github.com/EmelieHagander/Bob-the-builder/pull/135)).
 > **Owns:** the lifecycle vocabulary for a Project and its Areas/workstreams: which phase they are in, what happens in each phase, what Bob should help with, what the human owns, and the readiness criteria for moving forward.  
 > **Does not own:** physical Building truth (`Docs/building-model.md`), detailed Bob context architecture, or rendered UI composition. Phase-aware UI composition is owned by `Docs/project-phase-ui.md`.
 
@@ -10,25 +10,13 @@ A Project should not be a flat bag of Areas, tasks, images, drawings and materia
 
 The same is true inside a larger Project: different coherent workstreams can mature at different speeds.
 
-The target product model is therefore:
+The work hierarchy is owned by [domain-dictionary.md](domain-dictionary.md): **Project → optional Area → Step → Task**. This supersedes the older conceptual Project → Area → Task tree with explicit Task Project/primary-Step ownership. Phase is a lifecycle lens on work, not another container in that hierarchy.
 
-```text
-Project
-  = shared collaboration / goal / schedule container
-  = one overall ProjectPhase
+Project, Area and nullable Step phase use the same lifecycle vocabulary. Step phase is versioned with the plan, independently of execution state and Bob focus:
 
-Area
-  = project-scoped workstream / work zone
-  = may have its own AreaPhase
+`Concept → Design → Planning → Build → Complete`
 
-Task
-  = executable unit of work inside an Area
-  = has task status, not a project phase
-```
-
-Both `ProjectPhase` and planned `AreaPhase` use the same lifecycle vocabulary where useful:
-
-`Concept → Design → Planning → Build → Complete / As-built`
+As-built is evidence of the resulting physical state, not an automatic synonym for Complete.
 
 This lets the product answer:
 
@@ -77,15 +65,11 @@ So do **not** introduce a parallel `Workstream` object merely to model phase unl
 
 Area remains a Project work zone/workstream; it must not be redefined as a persistent physical Space.
 
-## Important current limitation — selected target is project-global
+## Selected-target scope — implemented foundation and remaining gap
 
-The current runtime allows Area-scoped Solutions but stores one selected target for the whole Project. Artifacts and material requirements then pin that project target.
+Project- and Area-scoped selected targets are implemented by `20260914164000_project_area_phases_and_scoped_targets.sql`. The earlier statement that all target selection is project-global is superseded. Step-scoped target selection is not implied by that implementation.
 
-That is insufficient for independently maturing Areas.
-
-Example: Bedroom can be Build-ready against one selected design while Guestroom is still comparing alternatives. Selecting a Guestroom solution must not make Bedroom drawings/material requirements appear stale merely because a global project target changed.
-
-**Implementation implication:** selected target needs an Area-safe scope model (for example Project-level or Area-level target ownership, or an equivalent invariant) before independent Area phases can be considered complete. The exact schema/API is not decided here.
+Selecting a design for one independently progressing scope must not invalidate another scope merely because both belong to the same Project. The vocabulary migration must preserve selected-target lineage when an existing Area is reclassified as a Step; renaming a card does not provide that migration.
 
 `Docs/project-phase-ui.md` owns how this prerequisite must appear in the UI and which existing surfaces/scripts are affected.
 

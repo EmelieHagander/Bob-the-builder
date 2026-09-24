@@ -1,3 +1,4 @@
+import {domainVocabulary} from '../src/domain/vocabulary.ts'
 import { LIST_TOOLS, LOAD_TOOL } from '../supabase/functions/_shared/project-tools/session.ts'
 import catalogSeed from '../supabase/functions/_shared/project-tools/catalog-seed.json' with { type: 'json' }
 import { test } from 'node:test'
@@ -35,6 +36,7 @@ function fixtureLookup(name = 'Current project') {
   }))
 }
 function assertCallContract(call: OpenAIServiceOptions) {
+  assert(call.systemMessage?.includes(domainVocabulary('bob')))
   assert.equal(call.useHardcodedPrompt, true)
   assert.equal(call.systemMessage, buildBobSystemMessage(call.tools))
   assert(call.systemMessage!.startsWith(`${BOB_PERSONA}\n\n${BOB_HANDS}\n\n`))

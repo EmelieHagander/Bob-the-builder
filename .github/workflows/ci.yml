@@ -14,6 +14,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run check:vocabulary
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-plan-assistant.mjs
@@ -40,7 +41,14 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify Project and Area phase UI
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
+      - name: Verify unified Project, Area, Step and Task work
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-work-browser.mjs
       - name: Verify Bob conversation reset and recovery
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
       - name: Verify household sharing and friend invitation UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
@@ -49,15 +57,17 @@ jobs:
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-volunteer-browser.mjs
       - name: Verify public installation before login
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install -- --public-only
       - name: Verify Ask bob project isolation and mobile source disclosure
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:project
       - name: Verify images, steps, measurements, parts, solutions and drawings
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:foundations
       - name: Verify persistent building context UI
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
-      - name: Verify Project and Area phase UI
-        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

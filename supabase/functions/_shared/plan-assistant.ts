@@ -1,3 +1,4 @@
+import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { PLAN_PROPOSAL_TOOL, parsePlanWrite, isPlanIdentity } from './project-plan.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -100,30 +101,26 @@ const reviewSchema={
   required:['ready_to_save','summary','issues'],
 }
 
-const COMPILER_SYSTEM=`You keep the plan desk in order. Bob is the project manager: he brings the intent, you turn it into the supplied structured representation. The authorised PROJECT SNAPSHOT is your evidence. You neither write project data nor take over his strategy.
+const COMPILER_SYSTEM=`You keep the plan desk in order. Bob is the project manager; turn his intent into the supplied schema using the authorised PROJECT SNAPSHOT. You cannot write data or replace his strategy.
 
-Preserve Bob's sequence and goals. In audit_plan mode, preserve the current strategy and repair only representation or grounding. When repair_feedback arrives, follow Bob's revised intent; the feedback is advice, not authority.
+Preserve sequence, goals and known identities/parents; new identities are null. Omit completed Steps; their history is preserved. Independent Steps may be active together. Unknown people remain unassigned. In audit mode preserve strategy; repair feedback is advice.
 
-Use exact current identities and relationships. Existing step_id and requirement_id retain their identity and parent; new ones are null. Omit completed Steps, whose history the server preserves. An unfinished plan has one active Step; later Steps are planned or blocked, with detail appropriate to what is known. Use only supplied person IDs, otherwise bob or unassigned.
+Finish criteria are atomic and require matching evidence; briefs and Task existence prove nothing. Expose uncertainty and conflicts. Missing evidence stays open; Task selectors cannot prove completion.
 
-A Step brief explains the work. Tasks are actions. Completion Requirements are atomic finish criteria, each supported by evidence that proves the whole condition. Preserve evidence truth and expose conflicts; neither contextual prose nor a Task's existence proves completion. Missing evidence leaves work open: use kind=none unless the intent identifies a future measurement subject. Honest unfinished work belongs in a plan.
+Return only the structured compilation. task_candidates select one primary Step per existing Task, staged with the proposal and applied on approval.`
 
-Return only the structured compilation. task_candidates suggest links to exact existing Tasks; they do not save links or prove completion. Task evidence selectors are unsupported by the current resolver.`
+const REVIEWER_SYSTEM=`You check the plan at Bob's desk. Bob remains the project manager. Compare the compilation, his intent and authorised snapshot against the supplied schema and server validation.
 
-const REVIEWER_SYSTEM=`You check the plan at Bob's desk. Bob remains the project manager; your job is to notice where its representation misleads him, not to redesign his project or grant permission.
+Check identity/parent preservation, altered strategy, conflicting evidence, bundled criteria and false completion. New identities may be null. Open work is valid; Step briefs and Task existence are not completion evidence. Parallel active Steps are valid.
 
-Compare the COMPILED PLAN with Bob's intent and the authorised PROJECT SNAPSHOT. Use the supplied proposal_steps_schema and server_validation as the contract. New step_id and requirement_id values are null; persisted identities must match the snapshot and parent. Null is valid and is not a missing/invalid id.
-
-Look for unsupported strategy changes, conflicting or mismatched evidence, bundled finish criteria, false completion claims and invalid identity or active-Step representation. A Step brief gives context; it is not completion evidence. Open requirements honestly describe work still to do. Judge whether the plan is truthful, not whether construction is finished.
-
-Return only the structured review with concise corrections. Known semantic errors make ready_to_save=false. Incomplete coverage or reasonable uncertainty merits warnings. Your recommendation is advisory; Bob assesses it and decides the next action.`
+Return the structured review with concise corrections. Errors make ready_to_save=false; uncertainty merits warnings. Your advice does not grant permission or veto Bob's judgement.`
 
 const pick=(row:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))
 function compact(dataset:string,row:Record<string,unknown>){
   const keys:Record<string,string[]>={
     project:['id','name','description','phase','working_plan','updated_at'],
     areas:['id','name','phase','updated_at'],
-    tasks:['id','name','status','area_id','instructions','updated_at'],
+    tasks:['id','name','status','area_id','project_id','primary_step_id','instructions','updated_at'],
     measurements:['id','subject','value','unit','truth','area_id','revision','source','notes','recorded_at','updated_at'],
     components:['id','name','type','area_id','truth','notes','updated_at'],
     solutions:['id','title','revision','area_id','status','description','assumptions','updated_at'],
@@ -169,8 +166,6 @@ async function buildSnapshot(lookup:Lookup,deadline:number){
 function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<string,unknown>){
   const issues:Array<Record<string,unknown>>=[]
   if(compiled.expected_revision!==expected) issues.push({severity:'error',code:'revision_mismatch',step_position:null,requirement_position:null,evidence_id:null,message:'Compiler changed the expected plan revision.',suggestion:'Keep the exact current approved revision.'})
-  const active=(Array.isArray(compiled.steps)?compiled.steps:[]).filter((s:any)=>s?.state==='active').length
-  if((Array.isArray(compiled.steps)?compiled.steps:[]).length>0&&active!==1) issues.push({severity:'error',code:'active_step_count',step_position:null,requirement_position:null,evidence_id:null,message:'An unfinished compiled plan must have exactly one active Step.',suggestion:'Choose the current Step and mark exactly that Step active.'})
 
   const current=((snapshot.plan as any[])?.[0]??null)
   const knownSteps=new Set<string>(),knownReqs=new Map<string,string>()
@@ -205,7 +200,10 @@ function localValidation(mode:Mode,expected:number,compiled:any,snapshot:Record<
     }
   }
   const tasks=new Map(((snapshot.tasks as any[])??[]).map((t:any)=>[String(t.id),t]))
+  const candidateTasks=new Set<string>()
   for(const c of Array.isArray(compiled.task_candidates)?compiled.task_candidates:[]){
+    if(candidateTasks.has(String(c.task_id)))issues.push({severity:'error',code:'duplicate_task_owner',step_position:c.step_position,requirement_position:null,evidence_id:c.task_id,message:'A Task can have only one primary Step.',suggestion:'Choose one owning Step; use references for related work.'})
+    candidateTasks.add(String(c.task_id))
     if(!object(c)) continue
     const task=tasks.get(String(c?.task_id))
     if(!task) issues.push({severity:'error',code:'unknown_task_id',step_position:c.step_position,requirement_position:null,evidence_id:c.task_id,message:'Task candidate is absent from the authorised snapshot.',suggestion:'Use an exact existing Task id or omit the candidate.'})
@@ -231,7 +229,7 @@ export function createPlanAssistant(opts:{
   let used=0,partial=false
   let compilationAttempted=false
   let repairFeedback:null|{compiled_plan:unknown;review:unknown;server_validation:unknown}=null
-  let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[]}=null
+  let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[];task_links:{step_position:number;task_id:string}[]}=null
   const sources:ProjectSource[]=[]
   return {
     tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL],
@@ -276,7 +274,7 @@ export function createPlanAssistant(opts:{
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const compiler=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
-        userId:opts.userId,systemMessage:COMPILER_SYSTEM,useHardcodedPrompt:true,
+        userId:opts.userId,systemMessage:COMPILER_SYSTEM+'\n\n'+domainVocabulary('planner'),useHardcodedPrompt:true,
         prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           ...(mode==='compile_plan'&&repairFeedback?{repair_feedback:repairFeedback}:{})}),
         schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
@@ -286,14 +284,14 @@ export function createPlanAssistant(opts:{
       const compiled=compiler.data as any
       const dummy='assistant validation'
       const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
-        steps:compiled.steps,request_quote:dummy})
+        steps:compiled.steps,task_links:(compiled.task_candidates??[]).map((c:any)=>({step_position:c.step_position,task_id:c.task_id})),request_quote:dummy})
       const localIssues=localValidation(mode,expectedRevision,compiled,snapshot.data)
       if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
         message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const reviewer=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
-        userId:opts.userId,systemMessage:REVIEWER_SYSTEM,useHardcodedPrompt:true,
+        userId:opts.userId,systemMessage:REVIEWER_SYSTEM+'\n\n'+domainVocabulary('planner'),useHardcodedPrompt:true,
         prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           proposal_steps_schema:proposalSteps,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null,issues:localIssues},
           compiled_plan:compiled,local_validation_issues:localIssues}),
@@ -321,7 +319,7 @@ export function createPlanAssistant(opts:{
           requirement_position:logPosition(i.requirement_position,20),
         }))}))
       if(mode==='compile_plan'&&serverValidation.valid){
-        savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps)}
+        savableProposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:structuredClone(compiled.steps),task_links:(compiled.task_candidates??[]).map((c:any)=>({step_position:c.step_position,task_id:c.task_id}))}
       }
       if(!await opts.hasAccess()){savableProposal=null;return {status:'denied',saved:false}}
       if(mode==='compile_plan') repairFeedback={compiled_plan:structuredClone(compiled),review:structuredClone(review),server_validation:structuredClone(serverValidation)}
@@ -337,7 +335,7 @@ export function createPlanAssistant(opts:{
             ? 'Server validation passed. Save a sound, requested proposal with save_compiled_project_plan. Open work is not a defect; false evidence is. '
             : 'No savable proposal: resolve server errors, or leave an audit read-only. ')+
           (used>=MAX_CALLS?'No compilation attempts remain. Report any unresolved defect. ':'For corrections, call compile_project_plan with updated plan_intent; prior feedback is supplied. ')+
-          'task_candidates are NOT saved Step↔Task links.',
+          'Task ownership choices are included when saving this proposal and applied atomically on approval. Until then they are not current ownership.',
       }
     },
   }

@@ -39,9 +39,11 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,18)
-  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,18)
+  assert.equal(WRITE_TOOLS.length,20)
+  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,20)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_area'))
+  assert(WRITE_TOOLS.some(t=>t.function.name==='set_project_plan_focus'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_catalog_definition'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='propose_project_plan'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='decide_project_plan'))
@@ -176,7 +178,8 @@ test('living-plan parser keeps proposal, approval and evidence shapes bounded an
   const proposal={expected_revision:0,summary:'Measure, then frame',reason:'Initial plan',steps:[step],request_quote:'Planera projektet'}
   const parsed=parseProjectWrite('propose_project_plan',proposal,'A','Planera projektet')!
   assert.equal(parsed.kind,'plan_proposal');assert.equal(parsed.expected_revision,0)
-  assert.equal(parseProjectWrite('propose_project_plan',{...proposal,steps:[step,{...step,title:'Second active'}]},'A','Planera projektet'),null)
+  assert(parseProjectWrite('propose_project_plan',{...proposal,steps:[step,{...step,title:'Second active'}]},'A','Planera projektet'))
+  assert.equal(parseProjectWrite('propose_project_plan',{...proposal,steps:[{...step,state:'imaginary'}]},'A','Planera projektet'),null)
   const decision=parseProjectWrite('decide_project_plan',{action:'approve',proposal_revision:1,expected_revision:0,decision_note:'Ser bra ut',request_quote:'Godkänn planen'},'A','Godkänn planen')!
   assert.equal(decision.kind,'plan_decision')
   const evidence=parseProjectWrite('link_project_plan_evidence',{plan_revision:1,requirement_id:'30000000-0000-4000-8000-000000000001',

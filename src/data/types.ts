@@ -86,7 +86,8 @@ export interface Area {
 
 export interface Task {
   id: string
-  areaId: string
+  areaId: string | null
+  primaryStepId?: string | null
   name: string
   skill: SkillLevel
   hours: string

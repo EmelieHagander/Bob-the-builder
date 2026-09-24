@@ -48,20 +48,22 @@ const stepSchema = {
     step_id:{ type:['string','null'],description:'Stable UUID from current plan when this is the same active/future Step; null for a new Step.' },
     title:{type:'string'}, goal:{type:'string'},
     state:{type:'string',enum:['planned','active','blocked','completed']},
-    area_id:nullableText,
+    area_id:{...nullableText,description:'Optional organisational Area. Null places the Step directly in the Project.'},
+    phase:{type:['string','null'],enum:['concept','design','planning','build','complete',null]},
     ...responsibilityProperties,
     notes:{type:'string',description:'Step Brief: Bob\'s concise self-prompt for this Step — purpose, focus, important constraints and what matters while working here. Keep it compact; project facts and Completion Requirements remain authoritative.'},
     requirements:{type:'array',maxItems:20,items:requirementSchema},
   },
-  required:['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'],
+  required:['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements','phase'],
 }
 
 export const PLAN_PROPOSAL_TOOL = tool('propose_project_plan',
-  'Create a reviewable living-plan proposal. It does not replace the approved project plan until a later explicit approval and it does NOT create Step↔Task links. Completed Steps from the approved plan are carried forward unchanged server-side; submit the active/future plan you now propose.', {
+  'Create a reviewable plan of work Steps. Task ownership links are staged with it and applied atomically on approval. Completed Steps retain their history. Independent Steps may be active together; Bob focus is separate.', {
     expected_revision:{type:'integer',description:'Current approved living-plan revision, or 0 when none exists.'},
     summary:{type:'string',description:'Compact description of the proposed working plan.'},
     reason:{type:'string',description:'Why this plan or replan is appropriate now, including material new evidence.'},
     steps:{type:'array',maxItems:30,items:stepSchema},
+    task_links:{type:'array',maxItems:200,items:{type:'object',additionalProperties:false,properties:{step_position:{type:'integer',minimum:1,maximum:30},task_id:{type:'string'}},required:['step_position','task_id']},description:'Primary ownership of existing Tasks by 1-based submitted Step position. Each Task occurs once. Empty preserves existing ownership.'},
     request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising planning/replanning.'},
   })
 
@@ -86,15 +88,17 @@ export const PLAN_EVIDENCE_TOOL = tool('link_project_plan_evidence',
   })
 
 export const PLAN_TASK_TOOL = tool('link_project_plan_task',
-  'Link or unlink one exact existing Task to a stable Step in the CURRENT approved living plan. Tasks are actions inside a Step; Completion Requirements are separate conditions for deciding whether the Step is complete.', {
-    action:{type:'string',enum:['link','unlink']},
+  'Organise a current Task and Step: link assigns an unowned Task or adds a reference; move changes its primary Step; unlink removes the association. References never duplicate progress.', {
+    action:{type:'string',enum:['link','unlink','move']},
     plan_revision:{type:'integer',description:'Current approved living-plan revision.'},
     step_id:{type:'string',description:'Exact stable Step UUID from the current approved plan.'},
     task_id:{type:'string',description:'Exact existing Task ID in this project.'},
     request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this task/plan organisation change.'},
   })
 
-export const PLAN_WRITE_TOOLS=[PLAN_PROPOSAL_TOOL,PLAN_DECISION_TOOL,PLAN_EVIDENCE_TOOL,PLAN_TASK_TOOL]
+export const PLAN_FOCUS_TOOL=tool('set_project_plan_focus','Choose Bob focus without changing parallel Step execution state.',{plan_revision:{type:'integer'},step_id:nullableText,request_quote:{type:'string'}})
+
+export const PLAN_WRITE_TOOLS=[PLAN_PROPOSAL_TOOL,PLAN_DECISION_TOOL,PLAN_EVIDENCE_TOOL,PLAN_TASK_TOOL,PLAN_FOCUS_TOOL]
 
 function responsibility(v:Record<string,unknown>) {
   if(!['bob','person','unassigned'].includes(String(v.responsible_kind))) return false
@@ -121,8 +125,8 @@ function requirement(v:unknown) {
     && responsibility(v)&&selector(v.evidence_selector)
 }
 function step(v:unknown) {
-  if(!object(v)||!exact(v,['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements'])) return false
-  return isPlanIdentity(v.step_id)
+  if(!object(v)||!exact(v,['step_id','title','goal','state','area_id','responsible_kind','responsible_person_id','notes','requirements',...(Object.hasOwn(v,'phase')?['phase']:[])])) return false
+  return (v.phase===undefined||v.phase===null||['concept','design','planning','build','complete'].includes(String(v.phase))) && isPlanIdentity(v.step_id)
     && text(v.title,240)&&text(v.goal,4000)&&['planned','active','blocked','completed'].includes(String(v.state))
     && (v.area_id===null||text(v.area_id,200))&&responsibility(v)&&text(v.notes,4000,true)
     && Array.isArray(v.requirements)&&v.requirements.length<=20&&v.requirements.every(requirement)
@@ -130,14 +134,19 @@ function step(v:unknown) {
 
 export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
   if(!object(value)) return null
-  const v=value
+  const v=name===PLAN_PROPOSAL_TOOL.function.name&&!Object.hasOwn(value,'task_links')?{...value,task_links:[]}:value
+  if(name===PLAN_FOCUS_TOOL.function.name){
+    if(!exact(v,['plan_revision','step_id','request_quote'])||!revision(v.plan_revision)||!isPlanIdentity(v.step_id)||!text(v.request_quote,500))return null
+    return {kind:'plan_focus',record_id:null,expected_updated_at:null,expected_revision:v.plan_revision as number,request_quote:v.request_quote as string,data:{step_id:v.step_id}}
+  }
   if(name===PLAN_PROPOSAL_TOOL.function.name) {
+    const steps=v.steps
     if(!exact(v,PLAN_PROPOSAL_TOOL.function.parameters.required)||!revision(v.expected_revision,true)
       ||!text(v.summary,4000)||!text(v.reason,4000)||!text(v.request_quote,500)
-      ||!Array.isArray(v.steps)||v.steps.length<1||v.steps.length>30||!v.steps.every(step)
-      ||v.steps.filter(s=>object(s)&&s.state==='active').length>1) return null
+      ||!Array.isArray(steps)||steps.length<1||steps.length>30||!steps.every(step)
+      ||!Array.isArray(v.task_links)||v.task_links.length>200||!v.task_links.every(l=>object(l)&&exact(l,['step_position','task_id'])&&Number.isInteger(l.step_position)&&Number(l.step_position)>=1&&Number(l.step_position)<=steps.length&&text(l.task_id,200))) return null
     return {kind:'plan_proposal',record_id:null,expected_updated_at:null,expected_revision:v.expected_revision as number,
-      request_quote:v.request_quote as string,data:{summary:v.summary,reason:v.reason,steps:v.steps}}
+      request_quote:v.request_quote as string,data:{summary:v.summary,reason:v.reason,steps:v.steps,...(v.task_links.length?{task_links:v.task_links}:{})}}
   }
   if(name===PLAN_DECISION_TOOL.function.name) {
     if(!exact(v,PLAN_DECISION_TOOL.function.parameters.required)||!['approve','reject'].includes(String(v.action))
@@ -158,7 +167,7 @@ export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
         evidence_id:v.evidence_id,evidence_revision:v.evidence_revision}}
   }
   if(name===PLAN_TASK_TOOL.function.name) {
-    if(!exact(v,PLAN_TASK_TOOL.function.parameters.required)||!['link','unlink'].includes(String(v.action))
+    if(!exact(v,PLAN_TASK_TOOL.function.parameters.required)||!['link','unlink','move'].includes(String(v.action))
       ||!revision(v.plan_revision)||typeof v.step_id!=='string'||!uuid.test(v.step_id)
       ||!text(v.task_id,200)||!text(v.request_quote,500)) return null
     return {kind:'plan_task',record_id:null,expected_updated_at:null,expected_revision:v.plan_revision as number,
