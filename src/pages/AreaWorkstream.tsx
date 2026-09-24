@@ -123,7 +123,7 @@ export function AreaWorkstream() {
     <div style={{ marginTop: 16 }}><PhaseRail phase={area.phase} compact /></div>
 
     <section style={{ marginTop: 16 }}>
-      <NextActionCard eyebrow="This workstream" title={primary.title} text={primary.text} icon={primary.icon}
+      <NextActionCard eyebrow="This Area" title={primary.title} text={primary.text} icon={primary.icon}
         action={<Link className="btn btn-primary" to={primary.to}>Open next step <Icon name="arrow-right" size={14} /></Link>} />
     </section>
 

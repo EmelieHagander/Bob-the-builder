@@ -34,7 +34,7 @@ export type PhaseAction = { title: string; text: string; to: string; icon: strin
 export function areaNextAction(area: Pick<Area, 'id' | 'slug' | 'phase'>): PhaseAction {
   switch (area.phase) {
     case 'concept':
-      return { title: 'Capture the current state', text: 'Clarify this workstream and collect the evidence that matters.', to: `/areas/${area.slug}?tab=images`, icon: 'camera' }
+      return { title: 'Capture the current state', text: 'Clarify this Area and collect the evidence that matters.', to: `/areas/${area.slug}?tab=images`, icon: 'camera' }
     case 'design':
       return { title: 'Check evidence and choose a target', text: 'Resolve important unknowns before committing to one solution.', to: `/facts?area=${encodeURIComponent(area.id)}`, icon: 'ruler' }
     case 'planning':
@@ -44,17 +44,17 @@ export function areaNextAction(area: Pick<Area, 'id' | 'slug' | 'phase'>): Phase
     case 'complete':
       return { title: 'Review final evidence', text: 'Keep the as-built outcome and remaining follow-up clear.', to: `/areas/${area.slug}?tab=images`, icon: 'check-circle' }
     default:
-      return { title: 'Set the Area phase', text: 'Classify this workstream before Bob starts prioritising phase-specific actions.', to: `/areas/${area.slug}`, icon: 'signpost' }
+      return { title: 'Set the Area phase', text: 'Classify this Area before Bob starts prioritising phase-specific actions.', to: `/areas/${area.slug}`, icon: 'signpost' }
   }
 }
 
 export function projectFocus(phase: ProjectPhase | null | undefined, areas: Pick<Area, 'phase'>[]): { title: string; text: string; icon: string } {
   const mix = areaPhaseSummary(areas)
   switch (phase) {
-    case 'concept': return { title: 'Make the project understandable', text: `Define the workstreams and current state. ${mix}.`, icon: 'lightbulb' }
+    case 'concept': return { title: 'Make the project understandable', text: `Describe the intended work and current state. ${mix}.`, icon: 'lightbulb' }
     case 'design': return { title: 'Converge on the right solution', text: `Keep evidence and decisions explicit. ${mix}.`, icon: 'pencil-ruler' }
     case 'planning': return { title: 'Make the selected work buildable', text: `Drawings, materials and readiness should now become executable. ${mix}.`, icon: 'blueprint' }
-    case 'build': return { title: 'Keep building without losing the lagging workstreams', text: `${mix}. Each Area keeps its own next action.`, icon: 'hammer' }
+    case 'build': return { title: 'Keep building while other work takes shape', text: `${mix}. Each Area keeps its own next action.`, icon: 'hammer' }
     case 'complete': return { title: 'Close against reality', text: 'Confirm as-built evidence and leave the Building better known for next time.', icon: 'check-circle' }
     default: return { title: 'Set the Project phase', text: 'Existing projects stay unclassified until a person chooses where the project really is.', icon: 'signpost' }
   }

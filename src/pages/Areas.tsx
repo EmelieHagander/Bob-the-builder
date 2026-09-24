@@ -20,7 +20,7 @@ export function Areas() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Areas</h1>
-          <p className="page-sub">Workstreams can move through the project lifecycle at different speeds.</p>
+          <p className="page-sub">Areas group related steps and can progress at different speeds.</p>
           {areas && areas.length > 0 && <p className="foundation-hint" style={{ marginTop: 5 }}>{areaPhaseSummary(areas)}</p>}
         </div>
         <button className="btn btn-primary no-print" onClick={() => setAdding(true)}>
@@ -32,7 +32,7 @@ export function Areas() {
         <Loading />
       ) : areas.length === 0 ? (
         <div style={{ marginTop: 22 }}>
-          <EmptyState icon="squares-four" title="No Areas yet" hint="Split the project into coherent workstreams — a room, roof, porch or another useful scope." />
+          <EmptyState icon="squares-four" title="No Areas yet" hint="Add Areas when the project needs larger groups of related steps. Smaller projects can keep steps directly in the Plan." />
         </div>
       ) : (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginTop: 22 }}>

@@ -191,8 +191,11 @@ try {
 
     await page.getByRole('link', { name: 'Areas', exact: true }).first().click()
     await page.getByRole('heading', { name: 'Areas', exact: true }).waitFor()
-    assert.equal(await page.getByText('50% done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
-    assert.equal(await page.getByText('0% done', { exact: true }).count(), 0, 'Design Area must not show build completion as primary meaning')
+    const office = page.locator('article').filter({ hasText: 'Office' })
+    await office.getByText('Done', { exact: true }).waitFor()
+    await office.getByText('50%', { exact: true }).waitFor()
+    assert.equal(await page.locator('article').getByText('Done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
+    assert.equal(await page.locator('article').filter({hasText:'Guestroom'}).getByText('Done', { exact: true }).count(), 0, 'Design Area keeps its phase-specific next action')
     const guest = page.locator('article').filter({ hasText: 'Guestroom' })
     await guest.getByLabel('phase: Design').waitFor()
     await guest.getByRole('button', { name: 'Review phase', exact: true }).click()
@@ -205,7 +208,7 @@ try {
     await page.screenshot({ path: `test-results/project-phases-${viewport.width}.png`, fullPage: true })
     assert.deepEqual(errors, [], 'No runtime exceptions or unexpected API calls')
     await context.close()
-    console.log(`Project phases ${viewport.width}px: account summary, mixed workstreams, Today/Task field context, explicit transitions and reload: OK`)
+    console.log(`Project phases ${viewport.width}px: account summary, mixed Areas, Today/Task field context, explicit transitions and reload: OK`)
   }
 } finally {
   if (browser) await browser.close()
