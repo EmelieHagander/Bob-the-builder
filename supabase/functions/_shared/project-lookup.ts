@@ -75,7 +75,8 @@ export const SEARCH_TOOL = {
 }
 
 /** One instance per question; the model cannot change its project or budget. */
-export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups) {
+export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups, byteLimit: number = LIMITS.bytes) {
+  if(!Number.isSafeInteger(byteLimit)||byteLimit<1024||byteLimit>512*1024)throw new Error('invalid_lookup_budget')
   let used = 0
   const sources: ProjectSource[] = []
   let incomplete = false
@@ -157,7 +158,7 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
               inside_depth: g.innerDepthMm, finished_parts: g.parts, limits: BOX_LIMITS } }
           } catch { return { ...row, drawing_error: 'Unsupported or invalid recipe. Do not infer geometry or overwrite this drawing.' } }
         })
-        while (new TextEncoder().encode(JSON.stringify(result)).length > LIMITS.bytes) {
+        while (new TextEncoder().encode(JSON.stringify(result)).length > byteLimit) {
           result.truncated = true
           if (result.related.length) result.related.pop()
           else {

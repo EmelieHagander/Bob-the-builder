@@ -2039,10 +2039,10 @@ export async function getFoodSummary(): Promise<string> {
 export async function getProjectStepWorkspace(projectId:string):Promise<{steps:any[];drawings:any[]}|null>{
  const guard=captureFileContext(projectId);guard()
  if(!db)return null
- const [plan,drawings]=await Promise.all([
-  db.rpc('project_plan_read',{p_project:projectId,p_revision:null}),
-  db.from('artifact_cad_revisions').select('artifact_id,artifact_revision,step_id,artifacts!inner(current_revision)').eq('project_id',projectId).not('step_id','is',null),
- ])
- guard();if(plan.error||drawings.error)throw new Error('Project step information could not be loaded.')
+ const plan=await db.rpc('project_plan_read',{p_project:projectId,p_revision:null})
+ guard();if(plan.error)throw new Error('Project step information could not be loaded.')
+ if(!plan.data?.record?.steps?.length)return {steps:[],drawings:[]}
+ const drawings=await db.from('artifact_cad_revisions').select('artifact_id,artifact_revision,step_id,artifacts!inner(current_revision)').eq('project_id',projectId).not('step_id','is',null)
+ guard();if(drawings.error)throw new Error('Project step drawings could not be loaded.')
  return {steps:plan.data?.record?.steps??[],drawings:(drawings.data??[]).filter((r:any)=>r.artifact_revision===r.artifacts.current_revision)}
 }

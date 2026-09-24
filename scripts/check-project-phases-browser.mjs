@@ -44,6 +44,7 @@ try {
         'Content-Type': 'application/json',
       } })
       if (request.method() === 'OPTIONS') return respond({ status: 204, body: '' })
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
       if (url.pathname === '/auth/v1/user') return respond({ json: user })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })

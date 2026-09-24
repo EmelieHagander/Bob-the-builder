@@ -80,7 +80,11 @@ export async function answerWithOpenAi(opts: {
     hasAccess, lookup.sources)
   const planAssistant = createPlanAssistant({
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
-    makeLookup: () => createProjectLookup(opts.projectId, lookupTransport, 10_000, 128),
+    makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
+      if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
+      const {data,error}=await client.rpc('project_plan_read',{p_project:projectId,p_revision:null}).abortSignal(signal)
+      return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
+    }, 10_000, 128, 512*1024),
     callModel: options => callOpenAIResponses(options),
   })
   const cadAssistant = createCadAssistant({
