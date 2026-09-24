@@ -98,11 +98,20 @@ test('living-plan tools stay available without a Project lifecycle phase, with r
 })
 
 test('shared measurement satisfies a living-plan requirement for every authorised member',async()=>{
+  assert.equal((await briefing()).pending_proposal,null)
+  assert.equal((await briefing()).plan_needed,true)
   const proposed=await propose(0,plan())
   assert.equal(proposed.record.status,'proposed')
-  assert.equal((await briefing()).status,'not_initialized')
+  const pending=await briefing()
+  assert.equal(pending.status,'not_initialized')
+  assert.equal(pending.plan_needed,false,'a saved proposal needs a decision, not another plan')
+  assert.equal(pending.pending_proposal.revision,1)
+  assert.equal(pending.pending_proposal.record_id,'1')
+  assert.equal(pending.pending_proposal.based_on_revision,0)
+  await assert.rejects(briefing(outsider),/project_denied|permission denied/)
   await decide(0,1)
   let b=await briefing()
+  assert.equal(b.pending_proposal,null,'an approved proposal is no longer pending')
   assert.equal(b.status,'ok');assert.equal(b.current_revision,1)
   assert.equal(b.plan_spine.length,1);assert.equal(b.plan_spine[0].title,'Verify opening')
   assert.match(b.current_step.brief,/Lock the opening geometry/)
@@ -146,6 +155,10 @@ test('replanning carries completed history and rejects invented stable IDs',asyn
   const future={step_id:null,title:'Frame opening',goal:'Build from verified dimensions',state:'active',area_id:'areaA',
     responsible_kind:'person',responsible_person_id:'ownerA',notes:'',requirements:[]}
   const p2=await propose(1,{summary:'Measured opening, now frame',reason:'Opening width is known',steps:[completed,future]})
+  const awaiting=await briefing()
+  assert.equal(awaiting.current_revision,1,'a pending replan does not replace the approved plan')
+  assert.equal(awaiting.pending_proposal.revision,2)
+  assert.equal(awaiting.pending_proposal.based_on_revision,1)
   await decide(1,2)
   const approved=(await as(owner,"select bob.project_plan_read('A',2) result")).rows[0].result.record as any
   assert.equal(approved.steps[0].id,currentStep.id)
@@ -268,4 +281,78 @@ test('Bob sees nano feedback, requests repair, rejects a mistaken veto and saves
   assert.match(saved.record.steps[0].requirements[0].id,/^[0-9a-f-]{36}$/,'database assigns the new null identity')
   assert.equal(((await as(owner,'select bob.project_plan_briefing($1) result',[project])).rows[0].result as any).status,'not_initialized','save never approves the plan')
   assert.equal(((await as(owner,'select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding)).rows[0].result as any[]).length,1)
+})
+
+test('a claimed turn discovers and approves the saved proposal then performs two further writes without recompiling',async()=>{
+  const project='continuation-fixture',area='continuation-area',turn=id(901)
+  await pg.query('insert into bob.projects(id,slug,name) values($1,$1,$2)',[project,'Continuation fixture'])
+  await pg.query('insert into bob.people(id,project_id,name,initials,auth_user_id) values($1,$2,$3,$4,$5)',[project,project,'Owner','OW',owner])
+  await pg.query('insert into bob.areas(id,project_id,slug,name,phase) values($1,$2,$1,$3,$4)',[area,project,'Work area','planning'])
+  await server(owner,'select bob_private.project_plan_propose($1,0,$2)',[project,JSON.stringify(plan([
+    step('active',{area_id:area,requirements:[]})
+  ]))])
+  const message='Godkänn förslaget och fortsätt med arbetsuppgifterna.'
+  const claim=(await as(null,'select bob.bob_claim_turn($1,$2,$3,$4) result',[project,owner,turn,message],'service_role')).rows[0].result as any
+  assert.equal(claim.status,'claimed')
+  const binding=[project,claim.thread_id,turn,claim.generation]
+  const query=async(sql:string,params:unknown[])=>({data:(await as(owner,sql,params)).rows[0].result,error:null})
+  const writer=createProjectWriter(project,message,
+    payload=>query('select bob.bob_project_write_v8($1,$2,$3,$4,$5) result',[...binding,JSON.stringify(payload)]),
+    ()=>query('select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding),
+    ()=>query('select bob.bob_settle_project_writes($1,$2,$3,$4) result',binding))
+  const lookup=()=>createProjectLookup(project,async(_project,input)=>query(
+    'select bob.search_bob_project_data_v8($1,$2,$3,$4,$5,$6,$7) result',
+    [project,input.dataset,input.query,input.status,input.area_id,input.record_id,input.after_id]),10000,12)
+  const assistant=createPlanAssistant({projectId:project,userId:owner,hasAccess:async()=>true,makeLookup:lookup,
+    callModel:async()=>{throw new Error('Approval of an existing proposal must not require compilation')}})
+  const usage={input_tokens:1,output_tokens:1,total_tokens:2}
+  let calls=0,proposalRevision=0
+  const result=await runProjectAnswer({projectId:project,userId:owner,message,lookup:lookup(),writer,planAssistant:assistant,hasAccess:async()=>true,
+    readToolPolicy:async()=>({phase:'planning',tools:(await as(owner,'select * from bob.tool_catalog')).rows as any}),
+    callModel:async o=>{
+      calls++
+      const base={success:true,model:'fixture',usage,responseId:'continue_'+calls}
+      const tool=(name:string,args:any,index=0)=>({id:'call_'+calls+'_'+index,type:'function' as const,function:{name,arguments:JSON.stringify(args)}})
+      if(calls===1){
+        const frame=String(o.messages![0].content)
+        const fresh=JSON.parse(frame.split('Fresh project briefing:\n\n')[1])
+        const desk=fresh.records[0].working_plan
+        assert.equal(desk.current_revision,null)
+        assert.equal(desk.plan_needed,false)
+        proposalRevision=desk.pending_proposal.revision
+        return {...base,data:null,toolCalls:[tool('search_project_data',{
+          dataset:'plan',query:null,status:null,area_id:null,record_id:desk.pending_proposal.record_id,after_id:null
+        })]}
+      }
+      const outputs=o.messages!.filter(m=>m.role==='tool').map(m=>JSON.parse(String(m.content)))
+      if(calls===2){
+        assert.equal(outputs[0].records[0].revision,proposalRevision)
+        assert.equal(outputs[0].records[0].status,'proposed')
+        return {...base,data:null,toolCalls:[tool('decide_project_plan',{
+          action:'approve',proposal_revision:proposalRevision,expected_revision:0,decision_note:'User approved the saved proposal.',request_quote:message
+        })]}
+      }
+      if(calls===3){
+        assert.equal(outputs[0].status,'saved')
+        assert.equal(outputs[0].receipt.record.status,'approved')
+        assert(o.tools?.some(t=>t.function.name==='save_project_task'),'a successful write leaves the next tools available')
+        return {...base,data:null,toolCalls:['Control measure','Prepare layout'].map((name,i)=>tool('save_project_task',{
+          record_id:null,area_id:area,name,instructions:'Prepare the next work from the approved plan.',expected_updated_at:null,request_quote:message
+        },i))}
+      }
+      assert.equal(calls,4)
+      assert.equal(outputs.length,2,'both calls from one model response receive independent receipts')
+      assert(outputs.every(r=>r.status==='saved'))
+      return {...base,data:'Planen är godkänd och arbetsuppgifterna är sparade.'}
+    }})
+  assert.equal(result.ok,true)
+  assert.equal(calls,4)
+  assert.equal(writer.receipts.length,3)
+  const desk=(await as(owner,'select bob.project_plan_briefing($1) result',[project])).rows[0].result as any
+  assert.equal(desk.current_revision,1)
+  assert.equal(desk.pending_proposal,null)
+  assert.equal((await as(owner,'select name from bob.tasks where area_id=$1',[area])).rows.length,2)
+  assert.equal((await as(owner,'select revision from bob.project_plan_revisions where project_id=$1',[project])).rows.length,1,'no replacement proposal was made')
+  assert.equal(((await as(owner,'select bob.bob_read_write_receipts($1,$2,$3,$4) result',binding)).rows[0].result as any[]).length,3)
+  await assert.rejects(as(outsider,'select bob.project_plan_briefing($1)',[project]),/project_denied|permission denied/)
 })

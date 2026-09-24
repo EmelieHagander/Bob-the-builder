@@ -67,7 +67,7 @@ export const SEARCH_TOOL = {
         status: { type: ['string', 'null'], description: 'Task, material or event status only; otherwise null.' },
         area_id: { type: ['string', 'null'], description: 'Exact area id for task/design datasets; otherwise null. For target: an empty area result inherits record_id=project; an explicit row with null solution_id means cleared, not inherited.' },
         after_id: { type: ['string', 'null'], description: 'Pagination: copy next_cursor from the previous result, keep filters unchanged. Start with null.' },
-        record_id: { type: ['string', 'null'], description: 'Exact record id, or null.' },
+        record_id: { type: ['string', 'null'], description: 'Exact record id, or null. For plan, use the revision as a string to read a saved proposal or historical plan; null reads only the approved plan. The pending proposal record_id is in the project working_plan briefing. Other plan filters must be null.' },
       },
       required: ['dataset', 'query', 'status', 'area_id', 'record_id', 'after_id'],
     },
