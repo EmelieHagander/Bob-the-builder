@@ -1,0 +1,60 @@
+name: Deploy CAD to Modal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'cad-worker/**'
+      - '.github/workflows/modal-cad.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modal-cad-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: github-pages
+    steps:
+      - name: Check deployment secrets
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+        shell: python
+        run: |
+          import os
+          for name in ('MODAL_TOKEN_ID', 'MODAL_TOKEN_SECRET', 'BOB_CAD_TOKEN'):
+              if not os.environ.get(name):
+                  raise SystemExit('Add environment secret ' + name + ' in github-pages, then re-run this job.')
+          token = os.environ['BOB_CAD_TOKEN']
+          if len(token) < 32 or not token.isascii() or any(c.isspace() for c in token):
+              raise SystemExit('BOB_CAD_TOKEN must be at least 32 ASCII characters without whitespace.')
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: cad-worker/requirements.txt
+      - run: python -m pip install modal==1.5.5 -r cad-worker/requirements.txt
+      - name: Verify the real CAD engine before deployment
+        env:
+          PYTHONPATH: cad-worker
+        run: python -m unittest cad-worker/test_worker.py
+      - name: Deploy on-demand CAD service
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+        run: python -m modal deploy --env main cad-worker/modal_app.py
+      - name: Verify live geometry and bearer authorization
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+        run: python cad-worker/modal_smoke.py
