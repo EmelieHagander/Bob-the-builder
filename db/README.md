@@ -562,3 +562,21 @@ Recovery snapshots contain private data and must never be committed to this repo
 ## Bob working-context extension (September 2026)
 
 `20260918194106_ask_bob_context_memory.sql` adds a private thread-cascaded summary and service-only claimed-turn load/save/search commands. `20260918194147_ask_bob_research_pages.sql` adds the caller-RLS paged research RPC without altering legacy callers. No cross-app tables or project-content migrations. Current semantics and release gates: [Ask bob conversations](../Docs/ask-bob-conversations.md). Hosted registry timestamps can differ; apply only the reviewed new SQL and record the mapping in the release PR.
+
+## Unified work ownership (September 2026)
+
+`20260924135637_unified_project_work.sql` aligns the [domain dictionary](../Docs/domain-dictionary.md) with persistence. Deployment evidence and the hosted migration mapping are recorded in [PR #135](https://github.com/EmelieHagander/Bob-the-builder/pull/135).
+
+| Concept | Persistence / API |
+|---|---|
+| Task Project ownership and access | Required `tasks.project_id`; caller RLS uses this directly |
+| Primary Step | Nullable `tasks.primary_step_id`, same-Project stable identity FK |
+| Optional Area | Nullable `tasks.area_id`, derived from the primary Step when present |
+| Related work | `project_plan_step_tasks`; never a second Task owner |
+| Step phase / parallel execution | Nullable revisioned `project_plan_steps.phase`; multiple `active` Steps allowed |
+| Bob focus | `project_plans.focus_step_id`, independent of Step state |
+| Common Plan read | `project_work_read`, including unorganised Tasks |
+| Manual Task creation | Caller-authorised `create_work_task`, with plan/Task ownership validation |
+| Staged Task ownership | `project_plan_revisions.task_links`; atomic approval checks Task timestamps |
+
+The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks; a referenced plan Area must be moved first. No other app's schemas or access policies change.

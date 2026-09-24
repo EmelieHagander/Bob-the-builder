@@ -1,6 +1,6 @@
 # bob — project phases
 
-> **Status:** Project/Area phase and scoped-target foundation implemented; broader phase behavior remains product direction. Nullable Step phase is implemented in the unified-work migration (release verification pending).
+> **Status:** Project/Area phase and scoped-target foundation implemented; broader phase behavior remains product direction. Nullable Step phase is implemented in the unified-work migration (deployment evidence: [PR #135](https://github.com/EmelieHagander/Bob-the-builder/pull/135)).
 > **Owns:** the lifecycle vocabulary for a Project and its Areas/workstreams: which phase they are in, what happens in each phase, what Bob should help with, what the human owns, and the readiness criteria for moving forward.  
 > **Does not own:** physical Building truth (`Docs/building-model.md`), detailed Bob context architecture, or rendered UI composition. Phase-aware UI composition is owned by `Docs/project-phase-ui.md`.
 

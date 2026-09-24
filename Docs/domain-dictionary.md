@@ -1,6 +1,6 @@
 # bob — domain dictionary
 
-> **Status:** implementation prepared 2026-09-24; release verification pending. **Project → optional Area → Step → Task** is the shared vocabulary and work model. The baseline audit below describes `1d4c984`; the implementation section supersedes its listed gaps. Existing Areas are not automatically reclassified.
+> **Status:** implemented 2026-09-24; deployment evidence is tracked in [PR #135](https://github.com/EmelieHagander/Bob-the-builder/pull/135). **Project → optional Area → Step → Task** is the shared vocabulary and work model. The baseline audit below describes `1d4c984`; the implementation section supersedes its listed gaps. Existing Areas are not automatically reclassified.
 > **Owns:** the canonical product meaning of Bob's core nouns and how those nouns relate to each other.  
 > **Does not own:** database column/table names, RLS, page composition, or detailed domain behavior already owned by a specialist contract.
 
@@ -458,7 +458,7 @@ These cases test whether the vocabulary scales. They are organisational examples
 
 **Remaining boundaries:** this does not reclassify the owner’s existing project automatically, introduce recursive Areas, add a Step dependency graph, or add universal Step-scoped physical targets. Existing targets, measurements and attachments retain their supported scopes. The four SQL fixtures prove data paths, not unconstrained live-model planning quality across all construction projects.
 
-**Verification:** `tests/unified-project-work.test.ts` exercises all four project shapes, ordinary-member writes, staged approval, migration backfill, project isolation and registration-free volunteers. Main/planner/reviewer/CAD tests observe the vocabulary on actual mocked model calls. `scripts/check-project-work-browser.mjs` checks live-config React/data paths using HTTP fixtures, creation and reload at phone/desktop sizes. Production verification must be recorded separately after release.
+**Verification:** `tests/unified-project-work.test.ts` exercises all four project shapes, ordinary-member writes, staged approval, migration backfill, project isolation and registration-free volunteers. Main/planner/reviewer/CAD tests observe the vocabulary on actual mocked model calls. `scripts/check-project-work-browser.mjs` checks live-config React/data paths using HTTP fixtures, creation and reload at phone/desktop sizes. Production verification is recorded separately in [PR #135](https://github.com/EmelieHagander/Bob-the-builder/pull/135).
 
 ---
 
