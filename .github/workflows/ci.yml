@@ -41,6 +41,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: https://pwa-proof.invalid
           VITE_SUPABASE_ANON_KEY: installation-test-only
+      - name: Verify Project and Area phase UI
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
       - name: Verify unified Project, Area, Step and Task work
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-work-browser.mjs
@@ -65,9 +68,6 @@ jobs:
       - name: Verify persistent building context UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
-      - name: Verify Project and Area phase UI
-        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
-        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-project-phases-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

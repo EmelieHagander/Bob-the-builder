@@ -193,7 +193,7 @@ try {
     await page.getByRole('heading', { name: 'Areas', exact: true }).waitFor()
     const office = page.locator('article').filter({ hasText: 'Office' })
     await office.getByText('Done', { exact: true }).waitFor()
-    await office.getByText('50%', { exact: true }).waitFor()
+    await office.getByText('Done', { exact: true }).locator('..').getByText('50%', { exact: true }).waitFor()
     assert.equal(await page.locator('article').getByText('Done', { exact: true }).count(), 1, 'Only Build Area should foreground build progress')
     assert.equal(await page.locator('article').filter({hasText:'Guestroom'}).getByText('Done', { exact: true }).count(), 0, 'Design Area keeps its phase-specific next action')
     const guest = page.locator('article').filter({ hasText: 'Guestroom' })
