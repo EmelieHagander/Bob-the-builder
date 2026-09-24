@@ -719,7 +719,8 @@ select {
 .volunteer-item .btn { margin-top: 10px; }
 .volunteer-empty { padding: 22px; }
 .volunteer-steps { display: grid; gap: 12px; }
-.volunteer-step { padding: 16px; }
+.volunteer-step { padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.volunteer-drawing { min-width: 0; overflow-wrap: anywhere; }
 .volunteer-step h4 { margin: 0; }
 .volunteer-image { margin: 0; display: grid; gap: 8px; }
 .volunteer-image img { display: block; max-width: 100%; height: auto; border-radius: var(--r); }

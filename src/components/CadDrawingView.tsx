@@ -1,7 +1,7 @@
 import type { CadDrawing } from '../data/artifacts'
 
 /** SVG is an image document, never injected into the page's DOM. */
-export function CadDrawingView({value,title}:{value:CadDrawing;title:string}){
+export function CadDrawingView({value,title}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'>;title:string}){
  const names:Record<string,string>={front:'Front',right:'Right',top:'Top',isometric:'Overview'}
  return <section aria-label={`${title} CAD drawings`}>
   <p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>

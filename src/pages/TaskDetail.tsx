@@ -76,7 +76,7 @@ export function TaskDetail() {
   const projectId = db.getActiveProjectId() ?? ''
   const [version, setVersion] = useState(0)
   const { data: detail, loading, error: loadError } = useAsync(() => db.getTaskDetail(projectId, taskId), [projectId, taskId, version])
-  const { data: areas } = useAsync(() => db.getAreas(), [projectId])
+  const { data: areas } = useAsync(() => db.getAreas({ includeArchived: true }), [projectId])
   const { data: work } = useAsync(() => db.getProjectWork(projectId), [projectId, version])
   const [dialog, setDialog] = useState<{ kind: 'step' | 'delete'; step?: TaskStep } | { kind: 'instructions' | 'task' } | null>(null)
   const [busy, setBusy] = useState(false)

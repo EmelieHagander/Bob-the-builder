@@ -7,9 +7,11 @@ const url = Deno.env.get('SUPABASE_URL')
 const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const client = url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null
 Deno.serve(createVolunteerMediaHandler({
-  authorize: async (session, taskId, mediaId) => {
+  authorize: async (session, taskId, mediaId, drawing) => {
     if (!client) return null
-    const result = await client.schema('bob').rpc('volunteer_media', { p_secret: session, p_task: taskId, p_media: mediaId })
+    const result = drawing
+      ? await client.schema('bob').rpc('volunteer_drawing_media', { p_secret: session, p_task: taskId, p_media: mediaId, p_drawing: drawing.id, p_revision: drawing.revision })
+      : await client.schema('bob').rpc('volunteer_media', { p_secret: session, p_task: taskId, p_media: mediaId })
     return result.error ? null : result.data as VolunteerImage
   },
   download: async image => {

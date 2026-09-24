@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Area } from '../data/types'
-import { EmptyState, Icon, Loading, ProgressBar, Ring, useAsync } from '../components/ui'
+import { EmptyState, Icon, Loading, ProgressBar, Ring, useAsync, useProjectVersion } from '../components/ui'
 import { AreaModal } from '../components/editors'
 import { PhasePill, PhaseTransitionDialog } from '../components/PhaseUI'
 import { areaNextAction, areaPhaseSummary } from '../lib/projectPhase'
 
 export function Areas() {
   const [version, setVersion] = useState(0)
-  const { data: areas } = useAsync(() => db.getAreas(), [version])
+  const projectVersion = useProjectVersion()
+  const [params, setParams] = useSearchParams()
+  const archived = params.get('view') === 'archived'
+  const { data: allAreas, error } = useAsync(() => db.getAreas({ includeArchived: true }), [version, projectVersion])
+  const areas = allAreas?.filter(area => !!area.archivedAt === archived)
   const { data: people } = useAsync(() => db.getPeople(), [])
   const [adding, setAdding] = useState(false)
   const [phaseArea, setPhaseArea] = useState<Area | null>(null)
@@ -28,11 +32,16 @@ export function Areas() {
         </button>
       </div>
 
-      {!areas ? (
+      <div className="foundation-actions" aria-label="Area filters">
+        <button className="btn" aria-pressed={!archived} onClick={() => setParams({})}>Active Areas</button>
+        <button className="btn" aria-pressed={archived} onClick={() => setParams({ view: 'archived' })}>Archived Areas{allAreas ? ` · ${allAreas.filter(area => area.archivedAt).length}` : ''}</button>
+      </div>
+
+      {error ? <p role="alert">Areas could not be loaded. <button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></p> : !areas ? (
         <Loading />
       ) : areas.length === 0 ? (
         <div style={{ marginTop: 22 }}>
-          <EmptyState icon="squares-four" title="No Areas yet" hint="Add Areas when the project needs larger groups of related steps. Smaller projects can keep steps directly in the Plan." />
+          <EmptyState icon="squares-four" title={archived ? 'No archived Areas' : 'No active Areas'} hint={archived ? 'Archived Areas keep their saved work and can be restored.' : 'Add Areas when the project needs larger groups of related steps. Smaller projects can keep steps directly in the Plan.'} />
         </div>
       ) : (
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginTop: 22 }}>
@@ -48,14 +57,14 @@ export function Areas() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Link to={`/areas/${area.slug}`} style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)' }}>{area.name}</Link>
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>{byId.get(area.leadId ?? '')?.name.split(' ')[0] ?? 'Unassigned'} leads</div>
-                    <div style={{ marginTop: 7 }}><PhasePill phase={area.phase} /></div>
+                    <div style={{ marginTop: 7 }}>{archived ? <span className="badge">Archived</span> : <PhasePill phase={area.phase} />}</div>
                   </div>
                   {area.phase === 'build' && <Ring value={overall} size={50} />}
                 </div>
 
                 <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '12px 0 0', lineHeight: 1.4 }}>{area.description}</p>
 
-                {area.phase === 'build' ? (
+                {archived ? <p className="foundation-hint">Saved work and history are kept. Open this Area to view its records or restore it.</p> : area.phase === 'build' ? (
                   <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 7 }}>
                     <ProgressBar label="Assigned" value={area.assignedPct} />
                     <ProgressBar label="Materials ready" value={area.materialsPct} />
@@ -75,8 +84,8 @@ export function Areas() {
                 </div>
 
                 <div className="foundation-actions no-print" style={{ marginTop: 13 }}>
-                  <Link to={next.to} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>{area.phase ? next.title : 'Open Area'}</Link>
-                  <button className="btn" onClick={() => setPhaseArea(area)}>{area.phase ? 'Review phase' : 'Set phase'}</button>
+                  <Link to={archived ? `/areas/${area.slug}` : next.to} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>{archived || !area.phase ? 'Open Area' : next.title}</Link>
+                  {!archived && <button className="btn" onClick={() => setPhaseArea(area)}>{area.phase ? 'Review phase' : 'Set phase'}</button>}
                 </div>
               </article>
             )

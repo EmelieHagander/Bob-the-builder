@@ -5,7 +5,7 @@ import { formatDrawingMm } from '../lib/storageBox'
 import { StorageBoxDrawing } from './StorageBoxDrawing'
 import './StorageBoxDrawing.css'
 
-export function RoomLayoutDrawing({ value, title, source, lineageChanged = false }: { value: RoomLayoutDetails | null; title: string; source: string; lineageChanged?: boolean }) {
+export function RoomLayoutDrawing({ value, title, source, lineageChanged = false, participant = false }: { value: RoomLayoutDetails | null; title: string; source: string; lineageChanged?: boolean; participant?: boolean }) {
   const [view, setView] = useState<RoomLayoutView | 'furniture'>('overview')
   const [zoom, setZoom] = useState(1)
   const result = useMemo(() => {
@@ -23,8 +23,8 @@ export function RoomLayoutDrawing({ value, title, source, lineageChanged = false
   const svg = view === 'furniture' ? '' : roomLayoutSvg(d, view, title, source, lineageChanged)
   const drawingUrl = `/artifacts?drawing=${encodeURIComponent(d.furniture_artifact_id)}&revision=${d.furniture_revision}${d.furniture_area_id ? `&area=${encodeURIComponent(d.furniture_area_id)}` : ''}`
   return <section className="box-drawing" aria-label="Linked room plan">
-    <p className="foundation-hint">One proposed plan, two rooms, one shared wall. Ask Bob to move the wall or reposition the furniture; you do not need to redraw the views.</p>
-    {stale && <p role="status" className="solution-attention">Sources changed after this plan was saved. The displayed geometry still uses the pinned versions. Ask Bob to review and explicitly refresh the sources before making further changes.</p>}
+    <p className="foundation-hint">{participant ? 'Saved proposed plan: two rooms, one shared wall. Ask the organiser about changes.' : 'One proposed plan, two rooms, one shared wall. Ask Bob to move the wall or reposition the furniture; you do not need to redraw the views.'}</p>
+    {stale && <p role="status" className="solution-attention">Sources changed after this plan was saved. The displayed geometry still uses the pinned versions. {participant ? 'Ask the organiser to review the sources before using this plan.' : 'Ask Bob to review and explicitly refresh the sources before making further changes.'}</p>}
     {d.physical_pending && <p className="solution-attention">There are pending physical proposals. This plan retains its accepted source versions, not those proposals.</p>}
     <p role="status" className={g.fit === 'outside_room' ? 'solution-attention' : 'foundation-hint'}>
       {g.fit === 'outside_room'
@@ -66,7 +66,7 @@ export function RoomLayoutDrawing({ value, title, source, lineageChanged = false
         {d.right_name}: {d.right_space_id} · v{d.right_space_revision}<br />{d.wall_name}: {d.wall_element_id} · v{d.wall_element_revision}<br />
         Furniture instance: {d.instance_id}<br />{source}</p>
     </details>
-    <p><Link className="btn" to={drawingUrl}>Open furniture drawing · v{d.furniture_revision}</Link></p>
+    {!participant && <p><Link className="btn" to={drawingUrl}>Open furniture drawing · v{d.furniture_revision}</Link></p>}
     <p className="foundation-hint">Furniture part sizes come from that single pinned drawing. Viewing it in several plans does not create another physical copy or add material purchases.</p>
     <p className="solution-attention">{ROOM_LAYOUT_LIMITS}</p>
   </section>

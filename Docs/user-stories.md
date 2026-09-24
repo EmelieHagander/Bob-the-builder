@@ -105,7 +105,7 @@ Denna precisering ersätter äldre formuleringar som kräver ett nytt godkännan
 |---|---|---|
 | UC-001 | Verifierat genomförandeflöde med verklig modell och deltagare; CAD-hosting, arkivering och generell CAD-integration finns i main och driftsatta backenddelar | `ask-bob-conversations.md`, `project-facts.md`, `living-project-plan.md`, `material-assembly-use-case.md`, `cad-adapter.md` |
 | UC-002 | Sammanhängande planering/omplanering av personer och dagar via Bob samt verifierad deltagarkedja | stories 038–048, `living-project-plan.md` |
-| UC-003 | Volontärens ritningsläsare och verifierad deltagarkedja. Rättning för primärstegets bilder finns i källkod, ännu inte driftsatt | `media-and-steps.md`, `living-project-plan.md` |
+| UC-003 | Driftsättning och verklig deltagaracceptans återstår. Begränsad ritningsläsare samt primärstegets bilder finns i källkod och verifieras med testdeltagare; inga verkliga volontärer finns tillgängliga | `artifacts.md`, `media-and-steps.md`, `living-project-plan.md` |
 | UC-004 | Komplett hantering av text/media/länkar i de avsedda stegytorna | `media-and-steps.md` |
 | UC-005 | Generering → lagring → steglänk finns i main; verklig modell-/deltagaracceptans återstår; gemensam aktualitetsvarning finns som rättning i källkod, ännu inte driftsatt | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
 
@@ -682,7 +682,7 @@ As an organiser, I want to invite family, friends and skilled helpers into the p
 - Ordinary project URLs grant no access. A separately issued volunteer invitation is an explicit, revocable grant for a limited project participant view.
 - A volunteer opens that invitation link and enters only their name. They need no email address, password, registration or Auth account. Their name is recorded as a person in this project, not as a shared household/app identity.
 - If and only if the project has food planned, the volunteer may optionally enter allergies. Blank means not supplied, not a claim of no allergies. The signed-in project crew can see these notes for food planning; other name-only volunteer sessions cannot.
-- The volunteer can see project tasks/instructions, linked task/area images, build days, updates and meal plans. They can manage their own attendance and task participation/progress. They cannot administer project sharing, create household access or edit other participants' profiles.
+- The volunteer can see project tasks/instructions, linked task/primary-Step/area images and current primary-Step drawings, build days, updates and meal plans. They can manage their own attendance and task participation/progress. They cannot administer project sharing, create household access or edit other participants' profiles.
 - The same browser can return to the same participant. Names are not verified and a matching name does not recover an old session. The organiser can revoke a link and all its sessions, or one participant's browser access.
 - A project member can choose an existing accepted friend from the shared friend directory and create an in-app invitation to this project.
 - The recipient can accept or decline. A pending invitation does not grant project content access, and creating it does not send an email or message.

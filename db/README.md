@@ -579,7 +579,7 @@ Recovery snapshots contain private data and must never be committed to this repo
 | Manual Task creation | Caller-authorised `create_work_task`, with plan/Task ownership validation |
 | Staged Task ownership | `project_plan_revisions.task_links`; atomic approval checks Task timestamps |
 
-The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks, but current **and historical** plan references prevent deletion. Moving current Steps does not remove historical references; Area archival is not implemented. No other app's schemas or access policies change.
+The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks, but current **and historical** plan references prevent deletion. Moving current Steps does not remove historical references. The Area archive extension below provides a reversible alternative to deletion. No other app's schemas or access policies change.
 
 
 ### September 24 review corrections — source changes, pending release
@@ -594,8 +594,8 @@ no blockers stays unreviewed until readiness is explicitly confirmed.
 The volunteer task and media capability functions now include images on the
 Task's **current primary Step**. Moving that Task, removing the current Step,
 removing media or revoking the capability removes that access. No raw-table or
-cross-project volunteer access is granted. A volunteer drawing reader remains
-unimplemented; this change does not close the complete participant journey.
+cross-project volunteer access is granted. The bounded drawing reader below extends
+this same capability boundary; real participant acceptance remains separate.
 
 `20260924183913_drawing_source_status.sql` adds the caller/RLS-bound exact-revision
 source assessment consumed by Project cards, Steps and the drawing detail. Its
@@ -606,3 +606,44 @@ in timestamp order, deploy the updated `ask-bob` and `bob-worker` bundles (share
 vocabulary and drawing reader), then release the frontend. Check ordinary-member
 reads and volunteer revocation after deployment. No migration should classify
 existing unorganised Tasks or rewrite saved drawing history automatically.
+
+
+## Area archive and volunteer drawing reader — September 24, pending release
+
+`20260924194300_area_archiving.sql` adds `areas.archived_at`, the guarded
+`area_lifecycle_command` and project-scoped `area_lifecycle_events`. Archive/restore
+compares the Area timestamp and records the named member. Archiving preserves the
+Area identity, phase, completed Tasks, media and all current/historical plan references.
+Unfinished Tasks, unfinished current Steps and pending proposals using the Area block
+archiving. New/moved/reopened unfinished work cannot enter an archived Area; restore
+it first. The database serialises competing plan/task and lifecycle changes. Archived
+Areas no longer block Project phase completion. Permanent deletion keeps its older
+history guards; archive never deletes evidence.
+
+`project_work_read` and Bob's Area lookup include archive metadata. The Areas page
+has active/archived filters; the Plan puts archived Areas in a separate group.
+Historical Area and Task URLs remain readable. Active selectors exclude archives.
+
+`20260924195744_volunteer_task_drawings.sql` adds the following capability endpoints:
+
+| Endpoint | Boundary |
+|---|---|
+| `volunteer_drawings` | Active session + same-project Task; at most 20 current, non-archived drawings linked to its **current primary Step**, with an opaque UUID cursor. No geometry in the list. |
+| `volunteer_drawing` | Same boundary plus exact current drawing revision; returns allowlisted metadata/render inputs and saved status/source warnings. No history browsing, raw-table grants or writes. |
+| `volunteer_drawing_media` | Service-only byte-proxy authorisation for that Task, drawing revision and exact ready source image. Rechecked after download. No signed URL. |
+
+The definer also checks explicit Project physical scope before releasing coordinate
+or stair geometry; household/direct Building membership is not assumed or impersonated.
+Room/wall and generated-wall sources retain the Project source checks. Unavailable
+sources return metadata and `content: null`. CAD output includes only saved SVG views
+and part dimensions, excluding manifests and STEP files. The render contract is owned
+by [Artifacts](../Docs/artifacts.md#volunteer-task-drawings--september-24-pending-release).
+Ordinary guest image access is not widened. Anonymous callers still cannot query
+Artifact, physical-model or Storage tables, or edit drawings.
+
+Apply the review migrations first, then these two migrations in timestamp order;
+deploy the updated `volunteer-media` function before releasing this frontend. The
+prior review's `ask-bob`/`bob-worker` deployment requirements still apply. Repository
+checks do not deploy these changes. SQL tests use isolated test participants; browser
+fixtures use the real frontend and guest transport at 320/390/1280 px. No real volunteer
+acceptance has been claimed; the owner currently has no volunteers available.

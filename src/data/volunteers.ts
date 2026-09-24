@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TaskStatus, ThemeName } from './types'
+import type { ArtifactGeneration, ArtifactKind, ArtifactStatus, CadDrawing } from './artifacts'
+import type { StorageBoxRecipe } from '../lib/storageBox'
+import type { RoomLayoutDetails } from '../lib/roomLayout'
+import type { BuildingPlanDetails } from '../lib/buildingPlan'
+import type { StairDetails } from '../lib/stairStudy'
 
 export interface VolunteerPreview { linkId: string; projectId: string; projectName: string; hasFood: boolean; expiresAt: string }
 export interface VolunteerState {
@@ -13,6 +18,19 @@ export interface VolunteerTask extends VolunteerTaskSummary {
   steps: { id: string; title: string; instructions: string; required: boolean; isCheckpoint: boolean; completedAt: string | null; revision: number }[]
   images: { id: string; title: string }[]
 }
+export interface VolunteerDrawingSummary {
+  id: string; revision: number; title: string; status: ArtifactStatus; stepId: string; stepTitle: string
+  sourceState: 'current' | 'changed' | 'unavailable'; sourceReasons: string[]
+}
+export interface VolunteerDrawing extends VolunteerDrawingSummary {
+  projectId: string; taskId: string; kind: ArtifactKind; description: string; assumptions: string
+  content: null | {
+    imageId: string | null; cad: Pick<CadDrawing, 'recipe' | 'files' | 'source_changed'> | null
+    parametricRecipe: StorageBoxRecipe | null; generation: ArtifactGeneration | null
+    roomLayout: RoomLayoutDetails | null; multifloorPlan: BuildingPlanDetails | null; stairStudy: StairDetails | null
+  }
+}
+export interface VolunteerDrawings { projectId: string; taskId: string; items: VolunteerDrawingSummary[]; nextCursor: string | null }
 export interface VolunteerEvent { id: string; title: string; day: string; time: string; place: string; food: string; going: boolean }
 export interface VolunteerUpdate { id: string; text: string; pinned: boolean; createdAt: string }
 export interface VolunteerMeal { id: string; meal: string; time: string; dish: string; notes: string }
@@ -29,7 +47,7 @@ export function volunteerSecret(): string {
 }
 export const validVolunteerSecret = (value: string) => /^[0-9a-f]{64}$/.test(value)
 
-type MediaRequest = { session: string; taskId: string; mediaId: string }
+type MediaRequest = { session: string; taskId: string; mediaId: string; drawingId?: string; revision?: number }
 /** Keep binary responses intact. FunctionsClient.invoke parses image/* as text. */
 export function createVolunteerMediaTransport(url: string, anonKey: string, fetcher: typeof fetch = fetch) {
   const endpoint = `${url.replace(/\/$/, '')}/functions/v1/volunteer-media`
@@ -70,10 +88,20 @@ export function createVolunteers(manager: SupabaseClient<any, any, any> | null, 
     feed: <T>(secret: string, projectId: string, section: 'tasks' | 'events' | 'updates' | 'meals', after: string | null = null) => request<VolunteerFeed<T>>('volunteer_feed', { p_secret: secret, p_section: section, p_after: after, p_limit: 30 }, projectId),
     rsvp: (secret: string, projectId: string, eventId: string, going: boolean) => request<{ projectId: string; eventId: string; going: boolean }>('volunteer_rsvp', { p_secret: secret, p_event: eventId, p_going: going }, projectId),
     task: (secret: string, projectId: string, taskId: string) => request<VolunteerTask>('volunteer_task', { p_secret: secret, p_task: taskId }, projectId),
+    async drawings(secret: string, projectId: string, taskId: string, after: string | null = null) {
+      const result = await request<VolunteerDrawings>('volunteer_drawings', { p_secret: secret, p_task: taskId, p_after: after }, projectId)
+      if (result.taskId !== taskId) throw new Error('Task could not be confirmed. Refresh before continuing.')
+      return result
+    },
+    async drawing(secret: string, projectId: string, taskId: string, id: string, revision: number) {
+      const result = await request<VolunteerDrawing>('volunteer_drawing', { p_secret: secret, p_task: taskId, p_drawing: id, p_revision: revision }, projectId)
+      if (result.taskId !== taskId || result.id !== id || result.revision !== revision) throw new Error('Drawing could not be confirmed. Refresh the task.')
+      return result
+    },
     taskAction: (secret: string, projectId: string, taskId: string, action: 'claim' | 'release' | 'status' | 'check', data: Record<string, unknown> = {}) => request<VolunteerTask>('volunteer_task_action', { p_secret: secret, p_task: taskId, p_action: action, p_data: data }, projectId),
-    async image(secret: string, taskId: string, mediaId: string): Promise<Blob> {
+    async image(secret: string, taskId: string, mediaId: string, drawing?: { id: string; revision: number }): Promise<Blob> {
       if (!guest || !media) throw new Error('Images need the connected app.')
-      const response = await media({ session: secret, taskId, mediaId })
+      const response = await media({ session: secret, taskId, mediaId, ...(drawing ? { drawingId: drawing.id, revision: drawing.revision } : {}) })
       const type = response.headers.get('Content-Type')?.split(';')[0].trim()
       if (!response.ok || !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)) throw new Error('The image could not be loaded. Your access may have changed; refresh the project and try again.')
       const blob = await response.blob()

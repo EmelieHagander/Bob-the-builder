@@ -855,3 +855,29 @@ from a single model response in the same turn. It checks three persisted receipt
 one plan revision and project isolation. Controlled model responses prove the
 mechanism, not live model compliance. Explicit plan approval and physical
 measurement evidence retain their existing meanings.
+
+
+## Older work organisation and Area lifecycle — September 24
+
+The owner requested deliberate organisation of the existing Tasks before Area archive
+and participant drawing work. The operation read the existing plans, measurements,
+Task instructions and ownership, then rehearsed the exact change in a rolled-back
+transaction before committing through the guarded plan/link commands. All 56 Tasks
+now have a current primary Step (54 were previously unorganised). The two pre-existing
+links, Task identities, content, status, assignments and evidence history were retained.
+One plan kept its current revision and pending proposal; the other received a new
+approved revision with the existing Step identities plus six new work groups. Two
+outdated size descriptions in the new plan were aligned with recorded supplied
+specifications; no new measurements or build-readiness claims were created. The
+production `project_work_read` readback confirmed zero unorganised Tasks. The private
+recovery snapshot stays outside the public repository.
+
+This was an explicitly requested data operation, not an automatic migration or a
+standing permission to reorganise future work. Other/new ambiguous Tasks remain
+visible until deliberately linked. Plan reasons distinguish organisation from approval
+of physical facts or construction.
+
+Area archive/restore is now implemented in source, pending release. Historical plan
+references remain intact; unfinished current work or a pending proposal prevents
+archiving. The owning persistence/UI contract and release order are in
+[Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-pending-release).
