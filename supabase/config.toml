@@ -15,3 +15,7 @@ verify_jwt = true
 # task image request, including a second check before bytes leave the server.
 [functions.volunteer-media]
 verify_jwt = false
+
+# Per-job random capability validated by the service-only atomic claim RPC.
+[functions.bob-worker]
+verify_jwt = false

@@ -85,6 +85,7 @@ try {
         const h=[...histories.values()].find(h=>h.thread===id)
         return respond({json:h?.messages??[]})
       }
+      if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if(url.pathname==='/rest/v1/rpc/claim_project_invites') return respond({json:0})
       if(url.pathname==='/rest/v1/rpc/project_invitations') return respond({json:[]})
       if(url.pathname==='/rest/v1/projects') return respond({json:projects})

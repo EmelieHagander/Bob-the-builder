@@ -1,3 +1,4 @@
+import { rethrowContinuation } from '../bob-job-journal.ts'
 /** Tool loading is not authorization. All four surfaces use the same fresh policy
  * and the same server-owned handler gates; a model never supplies either one. */
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
@@ -163,7 +164,8 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         const result = await def.execute(args)
         record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
         return result
-      } catch {
+      } catch (error) {
+        rethrowContinuation(error)
         partial = true
         record('execute', name, 'tool_execution_unavailable')
         // Stop and settle possible writes. An unexpected handler failure is not

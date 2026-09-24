@@ -38,6 +38,11 @@ try {
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
       if (url.pathname === '/auth/v1/user') return authMode === 'failure' ? respond({ status: 503, json: { message: 'Offline fixture' } }) : respond({ json: who })
+      if (url.pathname === '/rest/v1/rpc/bob_job_status') {
+        const body = req.postDataJSON()
+        const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
+        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
+      }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
@@ -79,10 +84,15 @@ try {
         h.id ??= crypto.randomUUID()
         if (sendMode !== 'normal') {
           const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
+          if (sendMode === 'background') { pending.background = true; pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
           h.messages.push(pending)
           const finish = () => {
             pending.delivery_state = 'completed'
             h.messages.push({ role: 'assistant', text: 'RECOVERED ANSWER', turn_id: body.clientTurnId, delivery_state: 'completed', seq: h.next_seq++, evidence: { kind: 'ai_assessment', sources: [], partial: false } })
+          }
+          if (sendMode === 'background') {
+            releaseAnswer = finish
+            return respond({ status: 202, json: { ok: true, status: 'accepted', projectId: body.projectId, jobId: crypto.randomUUID(), expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } })
           }
           if (sendMode === 'lost' || sendMode === 'busy') {
             releaseAnswer = finish
@@ -193,7 +203,7 @@ try {
     await other.close()
     // An in-flight HTTP call survives closing the drawer; lost/busy responses
     // recover by reading the transcript, never by calling the model again.
-    for (const mode of ['delayed', 'lost', 'busy']) {
+    for (const mode of ['delayed', 'lost', 'busy', 'background']) {
       sendMode = mode
       const before = answerCalls
       await drawer.getByRole('textbox').fill(`Pending ${mode}`)
@@ -214,9 +224,14 @@ try {
       await page.emulateMedia({ reducedMotion: 'no-preference' })
       // Wait for the fixture request to arrive before completing the server turn.
       for (let n = 0; answerCalls === before; n++) { assert(n < 40); await new Promise(r => setTimeout(r, 50)) }
+      if (mode === 'background') {
+        await page.reload(); drawer = await open()
+        await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
+        assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+      }
       releaseAnswer()
       await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
-      assert.equal(await drawer.getByText('RECOVERED ANSWER', { exact: true }).count(), ['delayed','lost','busy'].indexOf(mode) + 1)
+      assert.equal(await drawer.getByText('RECOVERED ANSWER', { exact: true }).count(), ['delayed','lost','busy','background'].indexOf(mode) + 1)
       assert.equal(answerCalls, before + 1)
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     }

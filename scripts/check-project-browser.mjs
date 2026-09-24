@@ -117,6 +117,7 @@ try {
         const history = [...histories.values()].find(item => item.thread === threadId)
         return respond({ json: history ? history.messages.filter(row => row.delivery_state === 'completed') : [] })
       }
+      if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })

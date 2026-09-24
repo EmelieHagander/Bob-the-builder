@@ -1,3 +1,4 @@
+import { enqueueBobTurn } from './bob-background.ts'
 /** Bob's authenticated OpenAI entry point. Project reads use the caller JWT;
  * model configuration and billing stay in the shared OpenAI service. */
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
@@ -18,5 +19,6 @@ export function serveBob() {
       return error ? null : data.user?.id ?? null
     },
     answer: answerWithOpenAi,
+    enqueue: enqueueBobTurn,
   })
 }

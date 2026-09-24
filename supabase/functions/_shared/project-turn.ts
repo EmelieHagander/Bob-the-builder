@@ -1,3 +1,4 @@
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { RecordDetailReader } from './project-record-detail.ts'
 import type { ProjectImageTools } from './project-image-tools.ts'
 import { type CadAssistant } from './cad-assistant.ts'
@@ -20,7 +21,7 @@ export async function runClaimedProjectTurn(opts: {
   recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
-  deadline?: number;
+  deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
 }): Promise<ProjectAnswer> {
@@ -30,14 +31,16 @@ export async function runClaimedProjectTurn(opts: {
   let recovered = false
   try {
     if (opts.writer) recovered = (await opts.writer.recover()).length > 0
-    if (!recovered) {
+    if (!recovered || opts.resume) {
       const context = opts.prepareContext ? await opts.prepareContext() : undefined
       result = await runProjectAnswer({ ...opts, context })
     }
   } catch (error) {
+    rethrowContinuation(error)
     const code = error instanceof Error ? error.message : ''
     result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied', 'tool_catalog_unavailable'].includes(code) ? code : 'ai_unavailable' }
   }
+  opts.beforeSettle?.()
   if (opts.writer) {
     const uncertain = opts.writer.uncertain
     try { generation = await opts.writer.settle() }
@@ -50,7 +53,7 @@ export async function runClaimedProjectTurn(opts: {
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
       partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
-    if (opts.writer.receipts.length && (recovered || uncertain || !result.ok || !result.providerResponseId)) {
+    if (opts.writer.receipts.length && ((recovered && !opts.resume) || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }
     else if (result.ok) result = { ...result, evidence }

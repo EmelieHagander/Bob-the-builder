@@ -1,3 +1,4 @@
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriter } from './project-write.ts'
 const str={type:'string'}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
@@ -7,7 +8,7 @@ export const IMAGE_TOOLS=[
  tool('attach_project_image','Attach an existing ready project image to an Area, Task, instruction step or living-plan Step. Reuses the original file.',{media_id:str,target_kind:target,target_id:str,request_quote:str}),
  tool('finalize_project_image','Recover a pending image whose bytes were uploaded successfully. Makes no new generation or upload; storage metadata is checked before ready status.',{media_id:str,request_quote:str}),
 ]
-export function createProjectImageTools(opts:{projectId:string;message:string;writer:ProjectWriter;hasAccess:()=>Promise<boolean>;deadline:number;generate:(prompt:string)=>Promise<{ok:true;image:Uint8Array}|{ok:false;error:string}>;upload:(id:string,bytes:Uint8Array)=>Promise<void>}){
+export function createProjectImageTools(opts:{projectId:string;message:string;writer:ProjectWriter;hasAccess:()=>Promise<boolean>;deadline:number;newId?:()=>Promise<string>;generate:(prompt:string)=>Promise<{ok:true;image:Uint8Array}|{ok:false;error:string}>;upload:(id:string,bytes:Uint8Array)=>Promise<void>}){
  let generated=false
  return {tools:IMAGE_TOOLS,get remaining(){return opts.writer.remaining},async execute(name:string,raw:unknown){
   const spec=IMAGE_TOOLS.find(t=>t.function.name===name)
@@ -28,10 +29,10 @@ export function createProjectImageTools(opts:{projectId:string;message:string;wr
   const header=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),width=header.getUint32(16),height=header.getUint32(20)
   if(!width||!height||width>20000||height>20000||width*height>48000000)return {status:'unavailable',stage:'image_dimensions',saved:false}
   if(!await opts.hasAccess())throw new Error('project_denied')
-  const id=crypto.randomUUID(),payload={record_id:id,expected_updated_at:null,expected_revision:null,request_quote:v.request_quote}
+  const id=opts.newId?await opts.newId():crypto.randomUUID(),payload={record_id:id,expected_updated_at:null,expected_revision:null,request_quote:v.request_quote}
   const reserved=await opts.writer.commit({...payload,kind:'image_reserve',data:{title:v.title,purpose:v.purpose,byte_size:bytes.length,width,height,target_kind:v.target_kind,target_id:v.target_id}})
   if(reserved.status!=='saved')return reserved
-  try{await opts.upload(id,bytes)}catch{return {status:'partial',stage:'upload',saved:false,media_id:id,message:'A pending entry exists. Inspect it before another generation; do not claim the image is ready.'}}
+  try{await opts.upload(id,bytes)}catch(error){rethrowContinuation(error);return {status:'partial',stage:'upload',saved:false,media_id:id,message:'A pending entry exists. Inspect it before another generation; do not claim the image is ready.'}}
   const finalized=await opts.writer.commit({...payload,kind:'image_finalize',data:{}})
   return {...finalized,saved:finalized.status==='saved',media_id:id,...(finalized.status!=='saved'?{recovery:'Use finalize_project_image with this media_id; never generate a replacement blindly.'}:{})}
  }}

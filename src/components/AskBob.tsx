@@ -326,7 +326,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }
 
   // Reopening/reloading never resends a pending question. Read until the server
-  // commits the answer, reports failure, or its existing five-minute lease ends.
+  // commits the answer or reports failure. Durable jobs own their expiry; legacy
+  // synchronous requests retain the existing five-minute lease.
   useEffect(() => {
     if (!recovering) return
     let cancelled = false
@@ -417,6 +418,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setWorking(true)
     const result = await db.askBob(project.id, text, clientTurnId)
     if (!isCurrent()) return
+    if ('pending' in result) {
+      setRecovering({ text, turnId: clientTurnId, expiresAt: result.expiresAt })
+      return
+    }
     // A disconnected HTTP response does not mean the server stopped working.
     if ('unavailable' in result && ['turn_in_flight', 'seam_unreachable'].includes(result.unavailable)) {
       try {

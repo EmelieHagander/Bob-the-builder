@@ -1,3 +1,4 @@
+import { rethrowContinuation } from './bob-job-journal.ts'
 import { EXPERT_TOOLS, parseExpertWrite } from './project-expert-tools.ts'
 import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
 import { PLAN_WRITE_TOOLS, parsePlanWrite } from './project-plan.ts'
@@ -180,7 +181,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         const receipt = checkedReceipt(data, projectId)
         remember(receipt)
         return { status: 'saved', receipt }
-      } catch {
+      } catch (error) {
+        rethrowContinuation(error)
         uncertain = true
         return { status: 'unknown', message: 'Could not verify whether the write committed. Do not repeat it. Recovery is required.' }
       }
