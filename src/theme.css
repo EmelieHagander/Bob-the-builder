@@ -748,3 +748,9 @@ select {
 .bob-composer textarea:focus-visible, .bob-drawer button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .bob-composer .btn:disabled { opacity: .55; }
 @media (min-width: 480px) { .bob-composer-actions { flex-direction: row; } }
+
+.bob-saved-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; }
+.bob-working { display: flex; align-items: center; flex-shrink: 0; gap: 10px; padding: 12px; font-size: 13.5px; color: var(--ink-soft); }
+.bob-hammer { display: inline-flex; transform-origin: 75% 80%; animation: bob-hammering 1s ease-in-out infinite; }
+@keyframes bob-hammering { 0%, 60%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-35deg); } 40% { transform: rotate(12deg); } }
+@media (prefers-reduced-motion: reduce) { .bob-hammer { animation: none; } }

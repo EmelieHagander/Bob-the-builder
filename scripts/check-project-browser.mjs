@@ -245,17 +245,12 @@ try {
 
     await send('Save chosen plan')
     const writeTurnId = requests.at(-1).clientTurnId
-    await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
-    const replay = page.waitForRequest(request => request.url() === `${api}/functions/v1/ask-bob` && request.method() === 'POST')
-    await drawer.getByRole('button', { name: 'Retry request', exact: true }).click()
-    await replay
     await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
-    assert.equal(requests.at(-1).clientTurnId, writeTurnId, 'Retry must reuse the original mutation turn id')
+    assert.equal(requests.at(-1).clientTurnId, writeTurnId)
+    assert.equal(requests.filter(r => r.clientTurnId === writeTurnId).length, 1, 'Recover the committed answer without another model call')
     assert.equal(writeCommits, 1, 'Lost response must not lead to a second write')
-    const saved = drawer.getByLabel('Saved project changes')
-    await saved.getByText('Build 70 × 160 frame', { exact: true }).waitFor()
-    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Save receipts must fit a phone drawer')
-    await saved.scrollIntoViewIfNeeded()
+    assert.equal(await drawer.getByLabel('Saved project changes').count(), 0, 'Save diagnostics are not rendered in live chat')
+    assert(await drawer.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Chat must fit a phone drawer')
     // Open real evidence disclosures so even a tall desktop has scrollable history.
     // Compact mode can legitimately fit this short transcript without a jump button.
     while (await drawer.locator('details:not([open]) > summary').count()) await drawer.locator('details:not([open]) > summary').first().click()
@@ -270,10 +265,10 @@ try {
     await page.getByRole('button', { name: 'Close Ask bob' }).click()
     await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()
     drawer = await openBob('A')
-    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
     await page.reload()
     drawer = await openBob('A')
-    await drawer.getByLabel('Saved project changes').getByText('Build 70 × 160 frame', { exact: true }).waitFor()
+    await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
 
     // Production source disclosure and persistence; HTTP fixture, not vision proof.
     await send('Inspect project photo')

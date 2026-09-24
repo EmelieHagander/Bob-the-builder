@@ -33,6 +33,8 @@ export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
   retry?: { text: string; turnId: string }
+  pending?: { text: string; turnId: string; expiresAt: number }
+  lastCompletedTurnId?: string
 }
 
 /**
@@ -52,26 +54,37 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (!threadResult.data) return { mode: 'server', messages: [] }
 
   const rows = await bobDb.from('bob_messages')
-    .select('role,text,evidence,delivery_state,seq,turn_id')
+    .select('role,text,evidence,delivery_state,seq,turn_id,updated_at')
     .eq('thread_id', threadResult.data.id)
     .order('seq')
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
 
   const messages: ChatMessage[] = []
   let retry: BobConversationHistory['retry']
+  let pending: BobConversationHistory['pending']
+  let lastCompletedTurnId: string | undefined
   for (const row of rows.data ?? []) {
     if (row.delivery_state !== 'completed') {
-      if (row.role === 'user' && typeof row.text === 'string' && typeof row.turn_id === 'string') retry = { text: row.text, turnId: row.turn_id }
+      if (row.role === 'user' && typeof row.text === 'string' && typeof row.turn_id === 'string') {
+        // bob_claim_turn leases a pending turn for five minutes, refreshing
+        // updated_at on a retry. A pending row is not a failed request.
+        const expiresAt = Date.parse(row.updated_at) + 5 * 60_000
+        const turn = { text: row.text, turnId: row.turn_id }
+        pending = row.delivery_state === 'pending' && expiresAt > Date.now() ? { ...turn, expiresAt } : undefined
+        retry = pending ? undefined : turn
+      }
       continue
     }
     retry = undefined
+    pending = undefined
     if (row.role === 'user' && typeof row.text === 'string') {
       messages.push({ from: 'user', text: row.text })
     } else if (row.role === 'assistant' && typeof row.text === 'string') {
+      lastCompletedTurnId = row.turn_id
       messages.push({ from: 'bob', text: row.text, ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
     }
   }
-  return { mode: 'server', messages, ...(retry ? { retry } : {}) }
+  return { mode: 'server', messages, retry, pending, lastCompletedTurnId }
 }
 
 async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {

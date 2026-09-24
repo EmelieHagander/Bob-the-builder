@@ -27,6 +27,7 @@ try {
     const histories = new Map(['A', 'B'].map(id => [id, { id: crypto.randomUUID(), next_seq: 3, messages: [{ role: 'user', text: `OLD CHAT ${id}`, delivery_state: 'completed', seq: 1 }, { role: 'assistant', text: `OLD ANSWER ${id}`, delivery_state: 'completed', seq: 2 }] }]))
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
+    let sendMode = 'normal', answerCalls = 0, releaseAnswer
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
@@ -74,7 +75,22 @@ try {
       }
       if (url.pathname === '/functions/v1/ask-bob') {
         const body = req.postDataJSON(), h = histories.get(body.projectId)
+        answerCalls++
         h.id ??= crypto.randomUUID()
+        if (sendMode !== 'normal') {
+          const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
+          h.messages.push(pending)
+          const finish = () => {
+            pending.delivery_state = 'completed'
+            h.messages.push({ role: 'assistant', text: 'RECOVERED ANSWER', turn_id: body.clientTurnId, delivery_state: 'completed', seq: h.next_seq++, evidence: { kind: 'ai_assessment', sources: [], partial: false } })
+          }
+          if (sendMode === 'lost' || sendMode === 'busy') {
+            releaseAnswer = finish
+            return sendMode === 'busy' ? respond({ status: 409, json: { error: 'turn_in_flight' } }) : route.abort('failed')
+          }
+          await new Promise(resolve => { releaseAnswer = () => { finish(); resolve() } })
+          return respond({ json: { ok: true, status: 'completed', projectId: body.projectId, summary: 'RECOVERED ANSWER', evidence: { kind: 'ai_assessment', sources: [], partial: false } } })
+        }
         const response = { ok: true, status: 'completed', projectId: body.projectId, summary: 'FRESH ANSWER', evidence: { kind: 'ai_assessment', sources: [], partial: false } }
         h.messages.push({ role: 'user', text: body.message, delivery_state: 'completed', seq: h.next_seq++ }, { role: 'assistant', text: response.summary, evidence: response.evidence, delivery_state: 'completed', seq: h.next_seq++ })
         return respond({ json: response })
@@ -175,6 +191,59 @@ try {
     }
     assert.equal(await drawer.getByText('FRESH ANSWER', { exact: true }).count(), 0)
     await other.close()
+    // An in-flight HTTP call survives closing the drawer; lost/busy responses
+    // recover by reading the transcript, never by calling the model again.
+    for (const mode of ['delayed', 'lost', 'busy']) {
+      sendMode = mode
+      const before = answerCalls
+      await drawer.getByRole('textbox').fill(`Pending ${mode}`)
+      await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+      await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
+      await page.waitForFunction(() => !!document.querySelector('.bob-hammer'))
+      const closeButton = drawer.getByRole('button', { name: 'Close Ask bob', exact: true })
+      const bounds = await closeButton.boundingBox()
+      assert(bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width && bounds.y + bounds.height <= viewport.height && bounds.height >= 44)
+      await closeButton.click()
+      drawer = await open()
+      await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
+      assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+      assert(await drawer.getByRole('button', { name: 'New conversation', exact: true }).isDisabled())
+      assert.equal(await drawer.locator('.bob-hammer').evaluate(el => getComputedStyle(el).animationName), 'bob-hammering')
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      assert.equal(await drawer.locator('.bob-hammer').evaluate(el => getComputedStyle(el).animationName), 'none')
+      await page.emulateMedia({ reducedMotion: 'no-preference' })
+      // Wait for the fixture request to arrive before completing the server turn.
+      for (let n = 0; answerCalls === before; n++) { assert(n < 40); await new Promise(r => setTimeout(r, 50)) }
+      releaseAnswer()
+      await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
+      assert.equal(await drawer.getByText('RECOVERED ANSWER', { exact: true }).count(), ['delayed','lost','busy'].indexOf(mode) + 1)
+      assert.equal(answerCalls, before + 1)
+      assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+    }
+    sendMode = 'normal'
+    // Full page reload while another device's turn is pending.
+    const h = histories.get('A'), recoveringTurn = crypto.randomUUID()
+    const pending = { role: 'user', text: 'Resume after reload', turn_id: recoveringTurn, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
+    h.messages.push(pending)
+    const callsBeforeReload = answerCalls
+    await page.reload(); drawer = await open()
+    await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
+    assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+    await page.screenshot({ path: `test-results/bob-working-${viewport.width}.png` })
+    pending.delivery_state = 'completed'
+    h.messages.push({ role: 'assistant', text: 'FINISHED AFTER RELOAD', turn_id: recoveringTurn, delivery_state: 'completed', seq: h.next_seq++ })
+    await drawer.getByText('FINISHED AFTER RELOAD', { exact: true }).waitFor()
+    assert.equal(answerCalls, callsBeforeReload)
+    // Real failures and expired leases still offer recovery; no endless spinner.
+    for (const state of ['failed', 'pending']) {
+      h.messages.push({ role: 'user', text: `Interrupted ${state}`, turn_id: crypto.randomUUID(), delivery_state: state, updated_at: new Date(Date.now() - 6 * 60_000).toISOString(), seq: h.next_seq++ })
+      await page.reload(); drawer = await open()
+      await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
+      assert.equal(await drawer.getByText('Bob is working on the project…', { exact: true }).count(), 0)
+    }
+    await page.keyboard.press('Escape')
+    await drawer.waitFor({ state: 'hidden' })
+    drawer = await open()
     // Shared guest must clear only this device; an auth failure is never guest mode.
     const beforeGuest = resetCalls
     authMode = 'guest'
