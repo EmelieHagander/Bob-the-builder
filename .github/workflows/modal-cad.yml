@@ -25,7 +25,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN || secrets.BOB_CAD_TOKE }}
         shell: python
         run: |
           import os
@@ -50,11 +50,11 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN || secrets.BOB_CAD_TOKE }}
         run: python -m modal deploy --env main cad-worker/modal_app.py
       - name: Verify live geometry and bearer authorization
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN }}
+          BOB_CAD_TOKEN: ${{ secrets.BOB_CAD_TOKEN || secrets.BOB_CAD_TOKE }}
         run: python cad-worker/modal_smoke.py
