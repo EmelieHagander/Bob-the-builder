@@ -65,6 +65,8 @@ try{
   await page.getByRole('button',{name:'Open',exact:true}).click()
   const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('.work-step').filter({hasText:'Complete drawers'})
   await drawers.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Go to Plan',exact:true}).click()
+  assert.equal(await plan.evaluate(el=>el===document.activeElement),true)
   assert.equal(await page.getByRole('heading',{name:'Workstreams',exact:true}).count(),0)
   assert.equal(await drawers.getByText('Bob’s focus',{exact:true}).count(),0)
   await plan.locator('.work-step').filter({hasText:'Complete floor'}).getByText('Bob’s focus',{exact:true}).waitFor()

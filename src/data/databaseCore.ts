@@ -1,3 +1,4 @@
+import type { DrawingSourceStatus } from './drawingSources'
 /*
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │  database.ts — THE database layer.                                          │
@@ -1014,6 +1015,7 @@ export async function deleteArea(id: string): Promise<void> {
   }
   const area = (await fetchAreas()).find((a) => a.id === id)
   const res = await db.from('areas').delete().eq('id', id)
+  if (res.error?.code === '23503') throw new Error('This Area is still referenced by saved project records or plan history and cannot be deleted. Moving current steps does not remove historical references.')
   if (res.error) throw new Error(`database: ${res.error.message}`)
   if (area) {
     const pid = await activeProjectId()
@@ -2045,12 +2047,12 @@ export async function getProjectStepWorkspace(projectId:string):Promise<import('
  const guard=captureFileContext(projectId);guard()
  const work=await getProjectWork(projectId)
  if(!work||!db)return null
- const drawings=await db.from('current_drawing_steps').select('artifact_id,artifact_revision,step_id,title,status').eq('project_id',projectId)
+ const drawings=await db.from('current_drawing_steps').select('artifact_id,artifact_revision,step_id,title,status,area_id,source_state,source_reasons').eq('project_id',projectId)
  guard();if(drawings.error)throw new Error('Project step drawings could not be loaded.')
  return {...work,drawings:drawings.data??[]}
 }
 
-export interface ProjectDrawingCard {
+export interface ProjectDrawingCard extends DrawingSourceStatus {
  id:string; project_id:string; revision:number; title:string; status:'concept'|'measured'|'build_ready';
  area_id:string|null; steps:{id:string;title:string}[];
 }
@@ -2058,7 +2060,7 @@ export async function getProjectDrawingCards(projectId:string):Promise<ProjectDr
  const guard=captureFileContext(projectId);guard()
  if(!db)return []
  const result=await db.from('current_drawing_overview')
-  .select('id,project_id,revision,title,status,area_id,steps').eq('project_id',projectId)
+  .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons').eq('project_id',projectId)
   .order('recorded_at',{ascending:false}).order('id').limit(4)
  guard();if(result.error)throw new Error('Project drawings could not be loaded.')
  return result.data??[]

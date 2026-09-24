@@ -1,4 +1,5 @@
 import type { ProjectPhase, TaskStatus } from './types'
+import type { DrawingSourceStatus } from './drawingSources'
 export interface WorkTask {
   id: string
   name: string
@@ -33,5 +34,5 @@ export interface ProjectWork {
   unorganised_tasks: WorkTask[]
 }
 export interface ProjectStepWorkspace extends ProjectWork {
-  drawings: { artifact_id: string; artifact_revision: number; step_id: string; title: string; status: string }[]
+  drawings: (DrawingSourceStatus & { artifact_id: string; artifact_revision: number; step_id: string; title: string; status: string; area_id: string | null })[]
 }

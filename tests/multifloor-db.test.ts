@@ -221,6 +221,8 @@ test('target changes invalidate the saved study without rewriting it',async()=>{
 test('physical scope revocation hides raw geometry as well as view data, but keeps the Artifact marker',async()=>{
  await as(both,'select bob.physical_scope_command($1,$2,$3,$4,$5)',['A','project','unlink',id(205),'{}'])
  assert.equal(await detail(400,1,both),undefined)
+ const freshness=(await as(both,'select source_state,preview_svg,parametric_recipe from bob.current_drawing_overview where id=$1',[id(400)])).rows[0]
+ assert.equal(freshness.source_state,'unavailable');assert.equal(freshness.preview_svg,null);assert.equal(freshness.parametric_recipe,null)
  assert.equal((await as(both,'select * from bob.artifact_multifloor_plans where artifact_id=$1',[id(400)])).rows.length,0)
  const r=(await as(both,"select bob.search_bob_project_data_v6('A','artifacts',null,null,null,$1,null) result",[id(400)])).rows[0].result
  assert.equal(r.records[0].has_multifloor_plan,true);assert.equal(r.records[0].multifloor_plan,null)

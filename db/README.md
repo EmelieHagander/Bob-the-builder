@@ -579,4 +579,30 @@ Recovery snapshots contain private data and must never be committed to this repo
 | Manual Task creation | Caller-authorised `create_work_task`, with plan/Task ownership validation |
 | Staged Task ownership | `project_plan_revisions.task_links`; atomic approval checks Task timestamps |
 
-The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks; a referenced plan Area must be moved first. No other app's schemas or access policies change.
+The migration preserves Task identities and dependent records. Only a unique current same-Area link is backfilled as primary; ambiguous work remains visible for deliberate organisation. Existing Area-only inserts remain compatible. Task research, readiness, Today, evidence/media/materials and volunteer paths no longer depend on a non-null Area. Area deletion preserves Tasks, but current **and historical** plan references prevent deletion. Moving current Steps does not remove historical references; Area archival is not implemented. No other app's schemas or access policies change.
+
+
+### September 24 review corrections — source changes, pending release
+
+`20260924183706_review_workflow_integrity.sql` makes intentional CAD saves update
+`artifact_step_links` in the guarded writer, and records the actual current
+`step_ids` in the receipt. Archive/restore carry provenance without recreating
+removed links. Task readiness uses named dependencies, materials, tools,
+information and manual blockers; phase alone never blocks a Task. A Task with
+no blockers stays unreviewed until readiness is explicitly confirmed.
+
+The volunteer task and media capability functions now include images on the
+Task's **current primary Step**. Moving that Task, removing the current Step,
+removing media or revoking the capability removes that access. No raw-table or
+cross-project volunteer access is granted. A volunteer drawing reader remains
+unimplemented; this change does not close the complete participant journey.
+
+`20260924183913_drawing_source_status.sql` adds the caller/RLS-bound exact-revision
+source assessment consumed by Project cards, Steps and the drawing detail. Its
+source and preview behavior is owned by `Docs/artifacts.md`.
+
+Release order for these corrections: double-check and apply both new migrations
+in timestamp order, deploy the updated `ask-bob` and `bob-worker` bundles (shared
+vocabulary and drawing reader), then release the frontend. Check ordinary-member
+reads and volunteer revocation after deployment. No migration should classify
+existing unorganised Tasks or rewrite saved drawing history automatically.

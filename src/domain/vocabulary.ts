@@ -7,7 +7,7 @@ export const DOMAIN_TERMS = {
   plan_step: { en: 'Step', sv: 'Steg', meaning: 'Coherent work/result under Project or Area; not a Task instruction.' },
   task: { en: 'Task', sv: 'Uppgift', meaning: 'Assignable action with one primary Step; other links are references.' },
   task_instruction: { en: 'Instruction / checkpoint', sv: 'Instruktion / kontrollpunkt', meaning: 'Guidance/check within a Task (task_steps); distinct from plan Steps.' },
-  phase: { en: 'Phase', sv: 'Fas', meaning: 'Lifecycle: idea/design/planning/build/complete; not a parent.' },
+  phase: { en: 'Phase', sv: 'Fas', meaning: 'Lifecycle: concept/design/planning/build/complete; not a parent.' },
   status: { en: 'Status', sv: 'Status', meaning: 'Execution state; parallel active Steps are allowed. Bob focus is separate.' },
   completion_requirement: { en: 'Finish criterion', sv: 'Färdigvillkor', meaning: 'Evidence-backed condition for finishing a Step.' },
   dependency: { en: 'Dependency', sv: 'Beroende', meaning: 'Prerequisite; display order alone is not one.' },

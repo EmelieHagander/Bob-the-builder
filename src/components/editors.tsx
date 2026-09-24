@@ -146,7 +146,7 @@ export function AreaModal({ people, area, onClose, onDone }: { people: Person[];
         </Field>
         {area && (
           <p style={{ fontSize: 12.5, color: 'var(--ink-faint)', margin: 0 }}>
-            Tasks stay in the project. Area materials are removed. Move any plan steps out of this area before deleting it.
+            Tasks stay in the project. Area materials are removed. Areas referenced by a current or historical plan cannot be deleted. Moving the current steps does not remove those historical references.
           </p>
         )}
         {error && <FormError>{error}</FormError>}

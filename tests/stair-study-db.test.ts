@@ -120,6 +120,7 @@ test('source revision changes block ordinary edits; explicit refresh preserves p
  const p=makePlan();p.levels[1].floor_z_mm=3000
  await save(400,data({recipe:p,area_id:undefined}),'revise',1)
  assert.equal((await stairDetail(500,2)).sources_changed,true)
+ assert.equal((await as(one,'select source_state from bob.artifact_source_status where artifact_id=$1 and revision=2',[id(500)])).rows[0].source_state,'changed')
  await assert.rejects(stair(500,stairData(),'revise',2),/Source plan changed/)
  await assert.rejects(stair(500,stairData({plan_revision:2}),'revise',2),/refresh source first/)
  await assert.rejects(stair(500,stairData({plan_revision:2}),'refresh_source',2),/without changing stair/)
@@ -172,6 +173,7 @@ test('read research exposes exact source and derived result only with current sc
  assert.equal(r.records[0].stair_study.plan_revision,2);assert.equal(r.records[0].revision,5)
  await as(both,'select bob.physical_scope_command($1,$2,$3,$4,$5)',['A','project','unlink',id(205),'{}'])
  assert.equal(await stairDetail(500,5),undefined)
+ assert.equal((await as(one,'select source_state from bob.current_drawing_overview where id=$1',[id(500)])).rows[0].source_state,'unavailable')
  const denied=(await as(both,"select bob.search_bob_project_data_v7('A','artifacts',null,null,null,$1,null) result",[id(500)])).rows[0].result
  assert.equal(denied.records[0].has_stair_study,true);assert.equal(denied.records[0].stair_study,null)
  await assert.rejects(stair(502,stairData({plan_revision:2})),/unavailable/)

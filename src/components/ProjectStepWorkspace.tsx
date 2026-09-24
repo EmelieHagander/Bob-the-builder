@@ -6,6 +6,8 @@ import { useAsync, useProjectVersion } from './ui'
 import { ProjectImages } from './ProjectImages'
 import { PhasePill } from './PhaseUI'
 import { TaskModal } from './editors'
+import { drawingUrl } from './ProjectDrawings'
+import { DrawingSourceNotice } from './DrawingSourceNotice'
 
 const taskState={todo:'To do',doing:'In progress',blocked:'Blocked',done:'Done'}
 const stepState={planned:'Planned',active:'In progress',blocked:'Blocked',completed:'Complete'}
@@ -40,8 +42,9 @@ function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspac
    </details>}
    {!!step.related_tasks.length&&<details><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people}/></details>}
    {!!drawings.length&&<ul className="work-task-list" aria-label="Step drawings">{drawings.map(d=><li key={d.artifact_id}>
-    <Link to={`/artifacts?drawing=${encodeURIComponent(d.artifact_id)}&revision=${d.artifact_revision}`}>{d.title} · v{d.artifact_revision}</Link>
+    <Link to={drawingUrl({id:d.artifact_id,revision:d.artifact_revision,area_id:d.area_id})}>{d.title} · v{d.artifact_revision}</Link>
     <span className="foundation-hint">{d.status==='concept'?'Concept':d.status==='measured'?'Measured':'Build ready'}</span>
+    <DrawingSourceNotice source={d} />
    </li>)}</ul>}
    {db.authEnabled()&&<ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
   </div>}
@@ -52,7 +55,7 @@ export function ProjectPlanContent({work,selected=null,people=new Map(),onAdd}:{
  const renderStep=(step:WorkStep)=><StepCard key={step.id} step={step} work={work} selected={selected} people={people} onAdd={onAdd}/>
  const unorganised=(tasks:WorkTask[])=>tasks.length?<details className="work-unorganised"><summary>Tasks to organise · {tasks.length}</summary>
   <p className="foundation-hint">These saved tasks do not yet have a primary step.</p><TaskLinks tasks={tasks} people={people}/></details>:null
- return <section className="card foundation-section" aria-label="Project plan">
+ return <section className="card foundation-section" id="project-plan" tabIndex={-1} aria-label="Project plan">
   <div className="foundation-heading"><h2>Plan</h2><Link to="/areas">Manage areas</Link></div>
   {!work.steps.length&&<p className="foundation-hint">No current plan yet. Bob can organise the project’s work into steps.</p>}
   {work.steps.filter(s=>!s.area_id).map(renderStep)}

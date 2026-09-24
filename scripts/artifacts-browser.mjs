@@ -17,11 +17,13 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       change_note: 'Fixture room', actor_label: 'Fixture member', recorded_at: timestamp(),
     }],
   }
-  const fixture = { records, histories, generations, parametric, cad, workLinks, physical, rejectNext: false, rejectPreview: false,
+  const sources = new Map()
+  const sourceStatus = id => sources.get(id) ?? {source_state:'current',source_reasons:[]}
+  const fixture = { records, histories, generations, parametric, cad, workLinks, sources, physical, rejectNext: false, rejectPreview: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
-        'current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
+        'artifact_source_status','current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
         'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions','current_drawing_overview','current_drawing_steps',
       ]
@@ -30,8 +32,9 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
 
+      if(table==='artifact_source_status') return reply({json:sourceStatus(eq('artifact_id'))})
       if(table==='current_drawing_steps') return reply({json:[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
-        .flatMap(r=>(workLinks.get(r.id)??[]).map(s=>({project_id:r.project_id,artifact_id:r.id,artifact_revision:r.revision,title:r.title,status:r.status,step_id:s.id,step_title:s.title})))})
+        .flatMap(r=>(workLinks.get(r.id)??[]).map(s=>({project_id:r.project_id,artifact_id:r.id,artifact_revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),step_id:s.id,step_title:s.title})))})
       if(table==='current_drawing_overview') {
         const rows=[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
           .sort((a,b)=>b.recorded_at.localeCompare(a.recorded_at)||a.id.localeCompare(b.id))
@@ -43,7 +46,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
           return reply({json:{preview_svg:c?.files?.isometric??c?.files?.front??null,parametric_recipe:parametric.get(generationKey(row.id,row.revision))?.recipe??null,source_media_id:row.source_media_id}})
         }
         assert(!url.searchParams.get('select').includes('preview_svg'),'Overview does not fetch geometry or export bytes')
-        return reply({json:rows.slice(0,4).map(r=>({id:r.id,project_id:r.project_id,revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,steps:workLinks.get(r.id)??[]}))})
+        return reply({json:rows.slice(0,4).map(r=>({id:r.id,project_id:r.project_id,revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),steps:workLinks.get(r.id)??[]}))})
       }
 
       if (table === 'artifact_cad_revisions') {
@@ -243,7 +246,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   })
 
   await page.goto(base + '#/artifacts')
-  await page.getByRole('heading', { name: 'Plans & drawings', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Drawings', exact: true }).waitFor()
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
   await page.getByLabel('Drawing scope', { exact: true }).selectOption('areaA')
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
@@ -399,7 +402,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
 
   await page.locator('.project-artifacts').evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)) })
-  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Plans & drawings must fit phone width')
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Drawings must fit phone width')
   for (const button of await page.locator('.project-artifacts').getByRole('button').all()) {
     const box = await button.boundingBox()
     assert(!box || box.width >= 44 && box.height >= 44, 'Drawing actions need 44px targets: ' + await button.textContent())

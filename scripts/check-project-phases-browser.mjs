@@ -115,7 +115,7 @@ try {
           { task_id: 't1', project_id: 'P', area_id: 'bedroom', area_phase: areaPhase.get('bedroom'), task_status: 'done', readiness_state: 'complete', blocker_count: 0, blockers: [], reviewed_at: null, reviewed_by: '', review_note: '' },
           { task_id: 't2', project_id: 'P', area_id: 'office', area_phase: areaPhase.get('office'), task_status: 'doing', readiness_state: !toolReady ? 'blocked' : readinessReviewed.has('t2') ? 'ready' : 'unreviewed', blocker_count: toolReady ? 0 : 1, blockers: toolReady ? [] : [{ kind: 'tool', id: '96000000-0000-0000-0000-000000000100', label: 'Tool needed: Circular saw' }], reviewed_at: readinessReviewed.has('t2') ? '2026-09-15T05:00:00Z' : null, reviewed_by: readinessReviewed.has('t2') ? 'Fixture member' : '', review_note: '' },
           { task_id: 't3', project_id: 'P', area_id: 'office', area_phase: areaPhase.get('office'), task_status: 'done', readiness_state: 'complete', blocker_count: 0, blockers: [], reviewed_at: null, reviewed_by: '', review_note: '' },
-          { task_id: 't4', project_id: 'P', area_id: 'guestroom', area_phase: areaPhase.get('guestroom'), task_status: 'todo', readiness_state: 'blocked', blocker_count: 1, blockers: [{ kind: 'phase', id: 'guestroom', label: 'Area is in Design; move to Build when work is actually ready' }], reviewed_at: null, reviewed_by: '', review_note: '' },
+          { task_id: 't4', project_id: 'P', area_id: 'guestroom', area_phase: areaPhase.get('guestroom'), task_status: 'todo', readiness_state: 'unreviewed', blocker_count: 0, blockers: [], reviewed_at: null, reviewed_by: '', review_note: '' },
         ]
         const taskId = url.searchParams.get('task_id')?.replace(/^eq\./, '')
         const selected = taskId ? rows.filter(row => row.task_id === taskId) : rows
@@ -167,9 +167,9 @@ try {
     // The heading is synchronous; wait for both task and readiness data before
     // allTextContents(), which snapshots immediately rather than waiting.
     await page.getByText('Tool needed: Circular saw', { exact: true }).waitFor()
-    await page.getByText('Area is in Design; move to Build when work is actually ready', { exact: true }).waitFor()
-    assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Frame wall', 'Mark proposed opening'],
-      'Build-phase Today work should be foregrounded without hiding other scheduled work')
+    await page.getByText('Readiness has not been confirmed yet.', { exact: true }).waitFor()
+    assert.deepEqual(await page.locator('.task-title-link').allTextContents(), ['Mark proposed opening', 'Frame wall'],
+      'Readiness takes priority over lifecycle phase; Design work is not hidden or blocked by its phase')
     await page.getByRole('link', { name: 'Frame wall', exact: true }).click()
     await page.getByRole('heading', { name: 'Frame wall', exact: true }).waitFor()
     await page.getByLabel('Area phase: Build').waitFor()

@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, SkillPill, StatusPill, statusCheck, useAsync } from '../components/ui'
 import { PhasePill } from '../components/PhaseUI'
-import { phaseLabel } from '../lib/projectPhase'
 
 export function Today() {
   const projectId = db.getActiveProjectId() ?? ''
@@ -35,7 +34,6 @@ export function Today() {
           {orderedTasks.map((t) => {
             const chk = statusCheck(t.status)
             const taskPlan = readinessById.get(t.id)
-            const phaseNeedsReview = !taskPlan && Boolean(t.areaPhase && t.areaPhase !== 'build')
             return (
               <div key={t.id} className="card" style={{ padding: 15 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
@@ -52,7 +50,7 @@ export function Today() {
                     </div>
                     {taskPlan?.state === 'blocked' && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>{taskPlan.blockers[0]?.label}</p>}
                     {taskPlan?.state === 'unreviewed' && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Readiness has not been confirmed yet.</p>}
-                    {phaseNeedsReview && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Check readiness before starting — this Area is in {phaseLabel(t.areaPhase)}, not Build.</p>}
+                    {!taskPlan && <p className="foundation-hint" style={{ margin: '9px 0 0' }}>Readiness is unavailable. Open the task to check its prerequisites before starting.</p>}
                   </div>
                 </div>
               </div>

@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import type { StudWallRole } from '../lib/artifactGeometry'
 import type { StorageBoxRecipe } from '../lib/storageBox'
+import type { DrawingSourceStatus } from './drawingSources'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
@@ -72,6 +73,7 @@ export interface ProjectArtifact {
 export interface CadDrawing { recipe: Record<string, any>; manifest: Record<string, any>; files: Record<string, string>; step_id: string | null; source_artifact_id: string | null; source_revision: number | null; source_changed?: boolean }
 
 export interface ArtifactVersion extends ProjectArtifact {
+  sourceStatus?: DrawingSourceStatus
   cad?: CadDrawing | null
   measurements: ArtifactMeasurement[]
   generation: ArtifactGeneration | null
@@ -198,6 +200,9 @@ export function createArtifacts(
     guard()
     if (!r) throw new Error('Drawing version unavailable. Reload to check access.')
     scoped([r], projectId)
+    const sourceStatus = checked(await db.from('artifact_source_status').select('source_state,source_reasons')
+      .eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).maybeSingle()) as DrawingSourceStatus | null
+    guard()
     const refs = checked(await db.from('artifact_measurement_details').select('*')
       .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision)
       .order('measurement_id').limit(20)) as Row[]
@@ -232,6 +237,7 @@ export function createArtifacts(
     }
     guard()
     return {
+      sourceStatus: sourceStatus ?? { source_state: 'unavailable', source_reasons: ['source_unavailable'] },
       cad,
       multifloorPlan,
       stairStudy,

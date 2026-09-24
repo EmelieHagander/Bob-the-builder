@@ -1,4 +1,5 @@
 import { CadDrawingView } from '../components/CadDrawingView'
+import { DrawingSourceNotice } from '../components/DrawingSourceNotice'
 import { StairStudyDrawing } from '../components/StairStudyDrawing'
 import { BuildingPlanDrawing } from '../components/BuildingPlanDrawing'
 import { useEffect, useState } from 'react'
@@ -99,6 +100,7 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
       {value.generator && <span className="image-purpose">Generated</span>}
     </div>
     <p>{value.description}</p>
+    <DrawingSourceNotice source={value.sourceStatus} />
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
@@ -390,7 +392,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/'}>{selectedArea ? `← ${selectedArea.name}` : '← Project'}</Link>
     <div className="page-head"><div>
       {selectedArea && <div style={{ marginBottom: 6 }}><PhasePill phase={selectedArea.phase} prefix="Area" /></div>}
-      <h1 className="page-title">Plans & drawings</h1>
+      <h1 className="page-title">Drawings</h1>
       <p className="page-sub">Keep the exact plan for {selectedArea ? selectedArea.name : 'the Project'}, with its measurements and target version.</p></div>
       <div className="foundation-actions">
         <button className="btn" title={!area ? 'Choose an Area first so deterministic geometry uses the correct Area target and physical scope.' : undefined}
@@ -481,7 +483,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
 
 export function Artifacts() {
   const id = db.getActiveProjectId()
-  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Plans & drawings</h1>
+  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Drawings</h1>
     <p>This demo does not save plans and drawings. Open a connected project to use them.</p><Link className="btn" to="/">Project</Link></div>
   return <ConnectedArtifacts key={id} projectId={id} />
 }

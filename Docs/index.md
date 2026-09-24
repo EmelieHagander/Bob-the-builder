@@ -30,14 +30,14 @@
 | project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| plans/drawings, Project-home previews, work-Step links, shared coordinates and exact lineage | `Docs/artifacts.md` |
+| drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob core/on-demand tools, phase preloads, exact schema loading and authority | `Docs/ask-bob-tools.md` |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` + `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
-| how to verify a change | `.claude/skills/verify/SKILL.md` |
+| how to verify a change | `.claude/skills/verify/SKILL.md` — automated tests, build and connected-mode browser fixtures |
 | session-wide invariants | `CLAUDE.md` |
 
 ## Product
@@ -88,7 +88,7 @@ Current collaboration behavior is primarily expressed in runtime code plus the c
 - `Docs/function-inventory.md` — current implementation coverage and known gaps.
 - `Docs/user-stories.md` — current desired journeys and acceptance intent.
 - `Docs/material-assembly-use-case.md` — specified Bob-driven material → assembly → drawing/list → stock/pick/Shopping journey and change/recovery acceptance; no whole-runtime implementation claim.
-- `db/README.md` → Household and friend sharing — specified/in-progress shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; no deployed sharing claim until its release evidence is recorded.
+- `db/README.md` → Household and friend sharing — deployed shared household/friend dependencies, explicit project access sources, invitation lifecycle, revocation and legacy account isolation; real participant acceptance is tracked separately.
 - `Docs/building-model.md` — deployed persistent physical context that project/Area flows may target, with broader geometry/import/AI fidelity still planned.
 - `Docs/function-scope.md` — function prioritisation and selected first vertical slice.
 - `src/pages/People.tsx` — crew, skills and dietary context.
@@ -123,7 +123,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `src/data/types.ts` — current frontend domain types.
 - `src/data/database.ts` — single UI data-access seam, live/mock behavior and app-facing commands.
 - `src/data/sharing.ts` — guarded household/project/friend-sharing adapter behind `database.ts`; its presence does not establish hosted RPC availability.
-- `src/data/volunteers.ts` + `src/pages/VolunteerProject.tsx` — prepared project-only guest capability adapter and name-only participant view; no Auth account registration.
+- `src/data/volunteers.ts` + `src/pages/VolunteerProject.tsx` — deployed project-only guest capability adapter and name-only participant view; no Auth account registration.
 
 ## AI / Ask bob
 

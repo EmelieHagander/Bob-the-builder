@@ -26,9 +26,10 @@ A React + TypeScript single-page app built with Vite. Screens:
 | --- | --- |
 | `/install` | Public Swedish home-screen installation guide, available before sign-in |
 | `/account/settings` | Account details and a prominent **Installera appen** entry |
-| `/` | Dashboard — status at a glance, areas, next build day, what needs attention |
+| `/` | Project — shared Plan, Steps and Tasks, drawing previews, evidence and next build day; Areas are optional |
 | `/areas`, `/areas/:slug` | Areas list and area detail (tasks / materials / reference images) |
-| `/facts` | Measurements and existing parts — sources, dimensions and retained history, reached from Dashboard or an Area |
+| `/facts` | Measurements and existing parts — sources, dimensions and retained history, reached from Project or an Area |
+| `/artifacts` | Drawings — versioned outputs, exact source lineage and links to the work Steps that use them |
 | `/solutions` | Solution alternatives and an explicitly selected target version, with evidence and decision history |
 | `/people` | People, their skills and dietary needs |
 | `/events`, `/events/:slug` | Build events and event detail with sign-up + day plan |
@@ -37,7 +38,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 | `/shopping` | Materials shopping list, grouped by category (checkable, printable) |
 | `/announcements` | Announcement board |
 | `/today` | Day-of "what needs doing today" view |
-| — | **Ask bob** assistant drawer. Slice 0 binds OpenAI and read-only lookups to the active authorised project, with source disclosure. OpenAI is Bob's permanent AI integration. [Setup](supabase/README.md) · [verification and rollout gates](Docs/slice-0-verification.md) |
+| — | **Ask bob** assistant drawer — project-scoped reads and writes with saved receipts, plan and CAD assistants, and durable background turns. [Setup](supabase/README.md) · [write contract](Docs/ask-bob-writes.md) · [continuity](Docs/ask-bob-conversations.md) |
 
 ## Running it
 
@@ -124,13 +125,14 @@ mock data directly — they only ever call `database` functions like
 - **Mock** — with no env config, the app serves the in-memory Skogsstuga sample
   data in `mockData.ts`, exactly as before. Zero setup, great for dev and demos.
 
-The function signatures are identical in both modes, so no UI code knows or
-cares which one is active.
+Both modes use this data-access seam. Some features, including the shared Plan,
+require live mode; the in-memory demo does not prove their persistence or access rules.
 
 ### Running against the real database
 
-1. Apply the migrations in [`db/migrations/`](./db/migrations) and optionally
-   the sample data in `db/seed.sql` — see [`db/README.md`](./db/README.md).
+1. Apply the legacy bootstrap in [`db/migrations/`](./db/migrations), then
+   [`supabase/migrations/`](./supabase/migrations), in order. Use the migration
+   and optional sample-data guidance in [`db/README.md`](./db/README.md).
    API exposure is part of the migrations (`0003` appends `bob` to the
    exposed schemas in SQL and reloads PostgREST — no dashboard step).
 2. Copy `.env.example` to `.env.local` and fill in the URL + anon key.
@@ -149,7 +151,7 @@ Demo mode skips auth entirely — the first organiser plays "you".
 
 ### Volunteers without an account
 
-**Prepared source; not yet deployed.** An organiser can choose **Volunteer link**
+**Deployed foundation, checked 2026-09-24.** An organiser can choose **Volunteer link**
 under **Invite people**. The recipient opens `/#/volunteer/:token` and enters
 their name, without email, password or an Auth account. They can read project
 tasks/instructions, task and area images, build days, updates and food plans, and
@@ -164,7 +166,7 @@ exact boundary and [release evidence](./Docs/foundation-verification.md) for sta
 
 ### Household and project sharing
 
-**Implementation in progress; deployment and runtime verification are pending.**
+**Deployed foundation, checked 2026-09-24; real participant acceptance remains separate.**
 The sharing extension reuses the existing households from Maidin / Hearth & Larder
 and the accepted Hearth friend graph. A Building can be shared with its household
 for collaborative editing. Each project explicitly chooses its household audience

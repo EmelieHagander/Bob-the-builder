@@ -510,7 +510,11 @@ Task links are operational children of a stable Step identity rather than part o
 
 ## 13. Relationship to current readiness
 
-Current task readiness remains the shipped execution-safety/readiness mechanism.
+Task readiness remains separate from phase, execution status and Step completion.
+The September 24 review correction (source, pending release) removes the universal
+Build-phase blocker: design, measurement and CAD Tasks can be reviewed in their
+actual phase. Named prerequisites still block, and no blockers does not imply
+confirmed readiness. `db/README.md` owns the implemented readiness boundary.
 
 Future Step completion is broader.
 
@@ -634,16 +638,19 @@ These are product acceptance scenarios, **not passing-test claims**.
 
 ## 17. What is explicitly not decided yet
 
-This document intentionally does not decide:
+The original proposal's open questions about Step/Task ownership and the first
+migration are resolved: `Docs/domain-dictionary.md` owns the hierarchy, and
+`db/README.md` maps the implemented schema. A Task has one primary Step and may
+be referenced from other Steps. The Project Plan UI is implemented; its current
+surfaces are indexed in `Docs/ui-index.md`. OpenAI is the runtime provider;
+model routing is owned by `supabase/README.md`, not this proposal.
 
-- exact SQL table/function names;
-- whether Step replaces or contains current Task;
-- the first database migration shape;
-- exact UI presentation;
+The remaining product decisions include:
+
+- further UI presentation beyond the implemented work surfaces;
 - automatic versus explicit evidence-matching thresholds;
 - how broad semantic matching may be before human confirmation is required;
 - whether plan approval can be delegated and at what authority levels;
-- exact AI model/provider;
 - construction-specific phase templates;
 - code/permit/regulatory completion requirements.
 
