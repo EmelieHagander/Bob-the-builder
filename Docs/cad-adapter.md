@@ -77,7 +77,20 @@ A detail selection uses exact instance IDs from a pinned source assembly. Defini
 
 Build `cad-worker/Dockerfile` and run behind HTTPS with a secret `BOB_CAD_TOKEN` of at least 32 characters. Set matching Edge secrets `BOB_CAD_URL=https://<host>/render` and `BOB_CAD_TOKEN`. The service accepts only authenticated POST `/render`, limits input to 256 KiB, runs geometry in a killable child process for at most 40 seconds and returns at most 6 MiB. It writes only a temporary directory, accepts no paths/code/URLs and logs no recipes or credentials. The transport checks engine/assembly identity, definitions, instance identity, bounds and every export hash. Configure provider resource/rate limits at deployment.
 
-No compatible container host or credentials are connected in this session. The Dockerfile and integration are reviewable; the service is **not deployed**. Until both secrets are supplied, Bob gets `cad_engine unavailable` before any designer model call. This is infrastructure, never an invitation to ask the user for another design approval.
+Modal deployment credentials are verified through the `Modal connection` workflow (September 24). The service is **not yet verified deployed**. Until both Edge secrets are supplied, Bob gets `cad_engine unavailable` before any designer model call. This is infrastructure, never an invitation to ask the user for another design approval.
+
+### On-demand Modal deployment
+
+`cad-worker/modal_app.py` hosts the existing HTTP server as the `bob-cad` Modal app in the `main` Modal environment. It uses Python 3.13 and the pinned worker requirements, one CPU and 2 GiB memory per container, zero minimum/buffer containers and a 60-second idle window. It has no scheduled calls, GPU, persistent volume, application spend cap or global container-count cap. The existing request/geometry bounds remain in place. The worker subprocess runs as UID 10001 with only its runtime bearer secret; GitHub's Modal account credentials are never injected into it.
+
+The `Deploy CAD to Modal` workflow uses GitHub environment `github-pages`. Setup:
+
+1. Keep the verified `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET` there. Add a distinct `BOB_CAD_TOKEN`: a password-manager-generated random value of 64 ASCII letters/digits (minimum 32, no whitespace). Keep the value in the password manager for the next step; never put it in chat, source or logs.
+2. Run the workflow from main, or re-run its job after adding a missing secret. It checks secrets, runs the real engine tests, deploys the Modal app, then tests the live HTTPS endpoint using synthetic geometry. Runtime secret injection uses Modal's secret mechanism; no separate manual Modal secret is required.
+3. Read `BOB_CAD_URL` from the successful workflow summary. In the existing Supabase project's **Edge Functions → Secrets**, set this URL (including `/render`) and the same `BOB_CAD_TOKEN`. Keep both out of the frontend/Vite environment. New Edge invocations read these secrets without a function redeploy.
+4. Verify a named member's full Bob drawing-and-save journey. Deployment smoke tests establish hosted geometry and bearer authorization, not AI design quality, user permissions or project-save acceptance.
+
+The live smoke test checks STEP plus all four SVG views, engine identity, dimensions, file hashes, missing/wrong bearer rejection and malformed recipe rejection. Its first authenticated render must complete within the existing 45-second Edge transport deadline; a slower cold start is a deployment failure, not an assumed success. The workflow outputs only the nonsecret endpoint and synthetic-test results. If rendering fails after deploy, investigate before connecting Bob; a failed smoke test does not automatically roll back the deployed app. Runtime-key rotation requires updating the GitHub secret, redeploying, and updating the matching Edge secret.
 
 ### Verification boundaries
 
