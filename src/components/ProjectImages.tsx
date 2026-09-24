@@ -12,7 +12,7 @@ export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
 const message = (err: unknown) => err instanceof Error ? err.message : String(err)
 
 /** URLs last only as long as this view; an open original performs a new authorised read. */
-export function StoredImage({ projectId, image, original = false }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean }) {
+export function StoredImage({ projectId, image, original = false, allowRetry = true }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean }) {
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -27,7 +27,7 @@ export function StoredImage({ projectId, image, original = false }: { projectId:
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [projectId, image.id, attempt])
   if (error) return <span className="image-failure" role="alert">{error}
-    <button type="button" className="btn" onClick={e => { e.stopPropagation(); setAttempt(n => n + 1) }}>Retry image</button>
+    {allowRetry && <button type="button" className="btn" onClick={e => { e.stopPropagation(); setAttempt(n => n + 1) }}>Retry image</button>}
   </span>
   if (!url) return <span className="image-loading" role="status">Loading image…</span>
   return <img src={url} alt={image.title} className={original ? 'project-image-original' : 'project-image-thumbnail'}

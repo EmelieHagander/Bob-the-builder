@@ -26,7 +26,7 @@ function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
     } catch { /* The canonical viewer explains unsupported recipes. */ }
   }
   if (src) return <img src={src} alt={`${drawing.title} — drawing preview`} loading="lazy" />
-  if (data.source_media_id) return <StoredImage projectId={drawing.project_id} image={{ id: data.source_media_id, title: drawing.title }} />
+  if (data.source_media_id) return <StoredImage projectId={drawing.project_id} image={{ id: data.source_media_id, title: drawing.title }} allowRetry={false} />
   return <p className="foundation-hint">Open drawing for its views and project evidence.</p>
 }
 
