@@ -1,4 +1,5 @@
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
+import { ProjectDrawings } from '../components/ProjectDrawings'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
@@ -81,6 +82,8 @@ export function ProjectHome() {
     <section aria-label="Project lifecycle" style={{ marginTop: 18 }}>
       <PhaseRail phase={project.phase} />
     </section>
+
+    {db.authEnabled() && <ProjectDrawings key={project.id} projectId={project.id} />}
 
     <section style={{ marginTop: 18 }}>
       <NextActionCard

@@ -13,7 +13,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a construction/drawing job to the CAD assistant. It has its own project, material, image and geometry tools and can inspect, render and repair repeatedly. Returns a checked candidate, not a saved drawing. Specify intent and relevant object IDs; the assistant can fetch wider dependencies.',
-  {brief:{type:'string'},area_id:nullable,component_id:nullable,step_id:nullable,artifact_id:nullable})
+  {brief:{type:'string'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:nullable})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 export const READ_CAD_TOOL=tool('read_cad_artifact','Read an exact saved CAD artifact revision, including its reusable assembly and pinned inputs. Null revision reads current. Use part_ids to select an existing subassembly when rendering; do not redesign it merely to obtain a detail view.',
@@ -43,7 +43,14 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   const lookup=opts.makeLookup(),until=Math.min(opts.deadline-20000,Date.now()+150000)
   let expected=0
-  if(raw.artifact_id){const old=await opts.readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'};expected=old.revision;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null;raw.step_id??=old.step_id??null}
+  if(raw.artifact_id){
+   const old=await opts.readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
+   expected=old.revision;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null
+   // Work links may have changed independently of the geometry revision.
+   raw.step_id??=Array.isArray(old.current_step_ids)
+    ?old.current_step_ids.length===1?old.current_step_ids[0]:null
+    :old.step_id??null
+  }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
   let previousResponseId:string|undefined, renders=0
   try{

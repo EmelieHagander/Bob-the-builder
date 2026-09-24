@@ -94,7 +94,7 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v10', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v11', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -122,7 +122,13 @@ export async function answerWithOpenAi(opts: {
     render:recipe=>memo('cad:render',recipe,()=>createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe),45000),
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
-      if(error)throw new Error('cad_read_unavailable');return data
+      if(error)throw new Error('cad_read_unavailable');if(!data)return null
+      const links=await memo('cad:work_scope',{id,revision},async()=>{
+        const result=await client.from('current_drawing_steps').select('step_id')
+          .eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))
+        if(result.error)throw new Error('drawing_links_unavailable');return result.data.map(row=>row.step_id)
+      })
+      return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
     context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
@@ -147,6 +153,12 @@ export async function answerWithOpenAi(opts: {
     })},
   }):undefined
   const recordReader=createRecordDetailReader(async(dataset,id,revision)=>{
+    if(dataset==='drawing') {
+      const {data,error}=await client.from('current_drawing_overview')
+        .select('id,project_id,revision,title,status,area_id,steps').eq('project_id',opts.projectId)
+        .eq('id',id).eq('revision',revision).abortSignal(AbortSignal.timeout(10000)).maybeSingle()
+      if(error)throw new Error('record_unavailable');return data
+    }
     const {data,error}=dataset==='plan'
       ?await rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)},AbortSignal.timeout(10000))
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));

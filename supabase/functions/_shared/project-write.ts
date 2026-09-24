@@ -30,6 +30,10 @@ export const WRITE_TOOLS = [
   BUILDING_INTAKE_TOOL,
   ...ROOM_LAYOUT_TOOLS,
   tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
+  tool('link_project_drawing', 'Link or unlink a saved drawing and a current work Step without redrawing. One drawing can support several Steps. Saved drawings appear on Project home automatically; Planning is a phase, not a mandatory Step.', {
+    record_id: text, expected_revision: { type: 'integer' }, step_id: text,
+    action: { type: 'string', enum: ['link', 'unlink'] }, request_quote: quote,
+  }),
   tool('save_project_description', 'Save the requested project description/plan. Read the current project first; preserve unrelated content. This does not select a SolutionVersion or certify a design.', {
     description: { ...text, description: 'Full replacement description, at most 12000 characters.' },
     expected_updated_at: text, request_quote: quote,
@@ -53,7 +57,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
+  kind: 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -81,6 +85,12 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (name === 'link_project_drawing') {
+    if (typeof v.record_id !== 'string' || !uuid.test(v.record_id) || typeof v.step_id !== 'string' || !uuid.test(v.step_id)
+      || !Number.isSafeInteger(v.expected_revision) || Number(v.expected_revision) < 1 || !['link', 'unlink'].includes(String(v.action))) return null
+    return { kind: 'drawing_link', record_id: v.record_id, expected_updated_at: null, expected_revision: v.expected_revision as number,
+      request_quote: v.request_quote, data: { step_id: v.step_id, action: v.action } }
+  }
   if (EXPERT_TOOLS.some(t => t.function.name === name)) return parseExpertWrite(name, v)
   if (name === CATALOG_WRITE_TOOL.function.name) return parseCatalogWrite(v)
   if (PLAN_WRITE_TOOLS.some(t => t.function.name === name)) return parsePlanWrite(name, v)
