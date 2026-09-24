@@ -140,10 +140,11 @@ export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
     return {kind:'plan_focus',record_id:null,expected_updated_at:null,expected_revision:v.plan_revision as number,request_quote:v.request_quote as string,data:{step_id:v.step_id}}
   }
   if(name===PLAN_PROPOSAL_TOOL.function.name) {
+    const steps=v.steps
     if(!exact(v,PLAN_PROPOSAL_TOOL.function.parameters.required)||!revision(v.expected_revision,true)
       ||!text(v.summary,4000)||!text(v.reason,4000)||!text(v.request_quote,500)
-      ||!Array.isArray(v.steps)||v.steps.length<1||v.steps.length>30||!v.steps.every(step)
-      ||!Array.isArray(v.task_links)||v.task_links.length>200||!v.task_links.every(l=>object(l)&&exact(l,['step_position','task_id'])&&Number.isInteger(l.step_position)&&Number(l.step_position)>=1&&Number(l.step_position)<=v.steps.length&&text(l.task_id,200))) return null
+      ||!Array.isArray(steps)||steps.length<1||steps.length>30||!steps.every(step)
+      ||!Array.isArray(v.task_links)||v.task_links.length>200||!v.task_links.every(l=>object(l)&&exact(l,['step_position','task_id'])&&Number.isInteger(l.step_position)&&Number(l.step_position)>=1&&Number(l.step_position)<=steps.length&&text(l.task_id,200))) return null
     return {kind:'plan_proposal',record_id:null,expected_updated_at:null,expected_revision:v.expected_revision as number,
       request_quote:v.request_quote as string,data:{summary:v.summary,reason:v.reason,steps:v.steps,...(v.task_links.length?{task_links:v.task_links}:{})}}
   }
