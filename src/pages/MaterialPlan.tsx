@@ -13,6 +13,8 @@ import type {
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { Loading, useAsync } from '../components/ui'
+import { SheetLayerFields, SheetLayerSummary } from '../components/SheetLayerFields'
+import { SHEET_LAYER_METHOD, sheetLayerForm, sheetLayerInput } from '../data/sheetLayers'
 
 const UNIT_LABELS: Record<QuantityUnit, string> = { pcs: 'pcs', m: 'm', m2: 'm²', m3: 'm³', kg: 'kg', l: 'l' }
 const STOCK_LABELS: Record<StockStatus, string> = { available: 'Available', inspect: 'Inspect first', unavailable: 'Unavailable' }
@@ -52,6 +54,7 @@ function Calculation({ value }: { value: MaterialRequirement }) {
     <div className="fact-source"><strong>Allowance</strong><span>{numberText(value.wastePercent)}%</span><p>Requirement with allowance: {formatQuantity(value.requiredWithWaste, value.unit)}</p></div>
     <div className="fact-source"><strong>Confirmed available</strong><span>{formatQuantity(String(available), value.unit)}</span><p>Material stock {formatQuantity(value.stockQuantity, value.unit)} · reusable components {formatQuantity(value.componentQuantity, value.unit)}</p></div>
     <div className="fact-source"><strong>Purchase need</strong><span>{formatQuantity(value.purchaseQuantity, value.unit)}</span><p>Rounded up in increments of {formatQuantity(value.purchaseIncrement, value.unit)}.</p></div>
+    {value.sheetLayer && <SheetLayerSummary value={value.sheetLayer} purchaseQuantity={value.purchaseQuantity} purchaseIncrement={value.purchaseIncrement} />}
   </div>
 }
 
@@ -241,6 +244,8 @@ function DeterministicRequirementEditor({ projectId, target, scopeArea, value, a
   const [task, setTask] = useState(value?.taskId ?? '')
   const [waste, setWaste] = useState(value?.wastePercent ?? '0')
   const [increment, setIncrement] = useState(value?.purchaseIncrement ?? '1')
+  const [method, setMethod] = useState<'net_area' | 'sheet_layer'>(value?.methodKey === SHEET_LAYER_METHOD ? 'sheet_layer' : 'net_area')
+  const [layer, setLayer] = useState(() => sheetLayerForm(value?.sheetLayer))
   const [assumptions, setAssumptions] = useState(value?.assumptions ?? '')
   const [artifactRef, setArtifactRef] = useState(defaultArtifact ? `${defaultArtifact.id}:${defaultArtifact.revision}` : '')
   const [stockQty, setStockQty] = useState<Record<string, string>>(() => Object.fromEntries((value?.stock ?? []).map(item => [item.id, item.quantity])))
@@ -260,7 +265,8 @@ function DeterministicRequirementEditor({ projectId, target, scopeArea, value, a
         const [artifactId, artifactRevision] = artifactRef.split(':')
         await db.editDeterministicMaterialRequirement(projectId, value ? 'revise' : 'create', id, value?.revision ?? 0, {
           name, category, area_id: area || null, task_id: task || null,
-          waste_percent: waste.trim().replace(',', '.'), purchase_increment: increment.trim().replace(',', '.'),
+          waste_percent: waste.trim().replace(',', '.'),
+          ...(method === 'sheet_layer' ? { sheet_layer: sheetLayerInput(layer) } : { purchase_increment: increment.trim().replace(',', '.') }),
           assumptions, artifact_id: artifactId, artifact_revision: Number(artifactRevision), target_revision: target.decision.revision,
           stock_allocations: stockOptions.flatMap(item => {
             const quantity = stockQty[item.id]?.trim().replace(',', '.')
@@ -273,7 +279,8 @@ function DeterministicRequirementEditor({ projectId, target, scopeArea, value, a
     }}>
       <fieldset className="foundation-form fact-fieldset" disabled={busy}>
         <div className="fact-source"><strong>{area ? `Selected target for ${scopeName}` : 'Selected Project target'}</strong><p>{selected ? `${selected.title} · Version ${selected.revision}` : 'No target selected'}</p><span>{target.inherited ? 'Inherited from Project · ' : ''}Target decision {target.decision.revision}. A changed target rejects this save.</span></div>
-        <p className="foundation-hint">Bob calculates net wall surface from the exact saved stud-wall recipe: wall area minus opening area. The server owns the base quantity, unit, formula and method identity; this form only adds the material meaning, allowance and confirmed stock.</p>
+        <Field label="Calculation method"><select style={inputStyle} value={method} disabled={Boolean(value)} onChange={event => { setMethod(event.target.value as 'net_area' | 'sheet_layer'); setStockQty({}); setError('') }}><option value="net_area">Net wall area</option><option value="sheet_layer">Sheet layer / whole sheets or packs</option></select></Field>
+        <p className="foundation-hint">Bob calculates net wall surface from the exact saved stud-wall recipe: wall area minus opening area. Choose a sheet layer to add explicit layers and sheet or pack coverage. The server owns the quantity and method; the material choice remains yours.</p>
         <Field label="Material / requirement"><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>
         <Field label="Category"><input style={inputStyle} required maxLength={120} value={category} onChange={event => setCategory(event.target.value)} /></Field>
         <div className="fact-filters">
@@ -281,10 +288,11 @@ function DeterministicRequirementEditor({ projectId, target, scopeArea, value, a
           <Field label="Task"><select style={inputStyle} value={task} onChange={event => setTask(event.target.value)}><option value="">No task yet</option>{taskOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
         </div>
         <Field label="Generated drawing"><select style={inputStyle} required value={artifactRef} onChange={event => setArtifactRef(event.target.value)}>{artifacts.map(item => <option key={item.id} value={`${item.id}:${item.revision}`}>{item.title} · Version {item.revision} · {item.status === 'concept' ? 'Concept' : item.status === 'build_ready' ? 'Build ready' : 'Measured'}</option>)}</select></Field>
+        {method === 'sheet_layer' && <SheetLayerFields value={layer} onChange={setLayer} />}
         <div className="fact-source"><strong>Calculated base</strong><span>m²</span><p>The exact value is calculated and read back on save. Estimated drawing inputs stay visibly Concept; calculation does not upgrade their certainty.</p></div>
         <div className="fact-filters">
           <Field label="Waste / allowance %"><input style={inputStyle} inputMode="decimal" required value={waste} onChange={event => setWaste(event.target.value)} /></Field>
-          <Field label="Purchase increment"><input style={inputStyle} inputMode="decimal" required value={increment} onChange={event => setIncrement(event.target.value)} /></Field>
+          {method === 'net_area' && <Field label="Purchase increment"><input style={inputStyle} inputMode="decimal" required value={increment} onChange={event => setIncrement(event.target.value)} /></Field>}
         </div>
         <Field label="Assumptions and limits"><textarea style={inputStyle} rows={2} maxLength={4000} value={assumptions} onChange={event => setAssumptions(event.target.value)} /></Field>
         <div className="fact-details"><h4>Use confirmed material stock</h4>{!stockOptions.length && <p>No Available stock uses m². Add stock outside this form first.</p>}{stockOptions.map(item => <AllocationInput key={item.id} label={item.name} max={item.quantity} value={stockQty[item.id] ?? ''} unit="m2" onChange={next => setStockQty(values => ({ ...values, [item.id]: next }))} />)}</div>

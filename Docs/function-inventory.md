@@ -7,9 +7,10 @@
 
 > **Acceptance correction, 2026-09-24:** use the five UC-001–005 outcome cases in
 > [user-stories.md](user-stories.md#product-mandate--2026-09-24) to assess completion.
-> No full case is yet end-to-end verified. The general CAD adapter exists but has
-> no Bob tool/hosted Artifact integration; AI-generated step media and measurement
-> archiving through Bob remain gaps. Manual support is not AI capability.
+> No full case is yet end-to-end verified. PR #123 added the CAD assistant and
+> immutable Artifact integration, AI-generated step media and measurement archive
+> tools. PR #126/#127 hosted CAD on Modal; the live geometry/auth smoke passed.
+> Named-member outcome acceptance remains separate. Manual support alone is not AI capability.
 
 > **Slice 0 release delta (2026-09-09):** project membership/RLS, explicit-project
 > read-only lookup, direct OpenAI tools and source disclosure are implemented with
@@ -21,7 +22,7 @@
 
 ## Multi-floor coordinate branch delta — 2026-09-19
 
-**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #85, this adds a
+**MERGED AND DEPLOYED through release #88.** Originally stacked after #85, this adds a
 chat-authored Concept study tied to canonical Building/Level/Space versions. Floor
 views share one explicit x/y/z datum, outside/inside envelopes, room footprints,
 and known/unknown elevations. A read-only tool projects a study area between floors
@@ -36,7 +37,7 @@ owns the bounded contract; the exact PR/head owns test and release evidence.
 
 ## Chat Building-intake branch delta — 2026-09-19
 
-**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** Stacked after #84, this adds
+**MERGED AND DEPLOYED through release #88.** Originally stacked after #84, this adds
 `save_building_context`: chat-driven capture into the existing Building, Level,
 Space/zone, Element, Relationship and Measurement records. New root creation and
 linking, source-quoted bounded batches, patch preservation, separate proposals,
@@ -49,7 +50,7 @@ owns this scope and its verification boundary; the PR owns results for its head.
 
 ## 2D drawing and linked-room branch delta — 2026-09-19
 
-**IMPLEMENTED ON BRANCH; NOT MERGED/DEPLOYED.** The linked-room pilot is stacked
+**MERGED AND DEPLOYED through release #88.** The linked-room pilot was stacked
 on #83. It adds chat-created proposed plans using two existing accepted Spaces,
 one common wall and a separately versioned storage-box construction. A wall move
 updates both room widths and anchored placement; a placement change does not

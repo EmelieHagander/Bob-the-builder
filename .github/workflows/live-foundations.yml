@@ -11,6 +11,8 @@ on:
       - scripts/check-live-artifacts.mjs
       - scripts/check-live-artifact-geometry.mjs
       - scripts/check-live-material-planning.mjs
+      - scripts/check-live-sheet-layers.mjs
+      - supabase/migrations/20260915183904_sheet_layer_material_quantities.sql
       - scripts/check-live-building-context.mjs
       - scripts/check-live-project-phases.mjs
       - scripts/check-live-volunteers.mjs

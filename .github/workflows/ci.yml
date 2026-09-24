@@ -22,6 +22,7 @@ jobs:
       - run: node --check scripts/check-live-solutions.mjs
       - run: node --check scripts/check-live-artifacts.mjs
       - run: node --check scripts/check-live-material-planning.mjs
+      - run: node --check scripts/check-live-sheet-layers.mjs
       - run: node --check scripts/check-live-building-context.mjs
       - run: node --check scripts/check-live-project-phases.mjs
       - run: node --check scripts/check-live-volunteers.mjs
