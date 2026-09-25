@@ -48,11 +48,15 @@ a disabled row or a mismatched schema version never becomes callable. Exact
 schemas are sourced from the executable contract, not a separately editable JSON
 copy in a database. Adding a new handler does not require editing the model loop.
 
-`catalog-seed.json` is the version-controlled installation seed and an explicit
+`catalog-seed.json` is a version-controlled historical bootstrap/offline subset,
+not the full catalog after all subsequent migrations. It is an explicit
 fallback ONLY for injected/offline test callers. Production always supplies
 `createToolPolicyReader(client, projectId)`. A live policy failure never uses the
 seed, stale cross-user cache or an invented empty catalog. The SQL installation
-and seed are tested for equality; later operator edits live in the database.
+test compares the original bootstrap rows with their seed counterparts; it does
+not establish equality with the current migrated/live loadout. Later migrations
+and operator edits live in the database. The dated [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md)
+records the verified difference and its effect on runtime tests.
 Already committed migrations are never edited to change a live loadout.
 
 There is no new grant editor in this slice. Eligibility reuses the actual
@@ -114,9 +118,12 @@ preflight of every possible argument before the model supplies it.
 The directory/loading budget is independent of project lookup, image and write
 budgets; loading never resets one. Bounds are 128 registered policy rows, 12 rows
 per directory page, 16 management operations and 24 distinct loaded names per
-turn. The normal eight-model-call/time bounds remain. No extra AI router is
-called just to choose tools. This is reduced initial schema/guide payload, NOT a
-measured end-to-end latency improvement claim.
+turn. The execution loop allows twelve model rounds, with a tool-free final
+round and elapsed-time fencing. List/load themselves make no model call; sessions
+with a writer and CAD assistant also have the separate drawing-intent call owned
+by the [conversation contract](ask-bob-conversations.md#drawing-delivery).
+Lazy loading limits the initial schema/guide payload; no measured end-to-end
+latency improvement is claimed.
 
 Tool guides are server-owned interface documentation, not user permission or
 project facts. They never become measurement/image/project sources. Actual reads

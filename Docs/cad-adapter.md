@@ -76,6 +76,13 @@ Bob delegates an intent plus optional Area, component, plan Step and Artifact id
 
 Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. September 25 adds a three-round research stage, then a render/repair stage and a final inspection call; exact measurement verification has its own bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
+Current inspection is numerical: a render returns bounds, part metadata, checks
+and view names to the designer. Generated SVG content or raster previews are
+not supplied to the model. Reference-image delivery below does not constitute
+visual inspection of the generated drawing. Research tools also disappear after
+three research rounds even when their independent lookup budget remains. These
+limits and their acceptance implications are recorded in the [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md).
+
 Images Bob has opened during the current turn are handed over by exact image ref
 and reopened through the designer's caller-scoped adapter before its first call.
 An unavailable selected reference stops that design attempt explicitly. A text
