@@ -1,6 +1,6 @@
 {
-  "release": "bob-cad-reference-2026-09-25",
-  "feature_source_commit": "595fcb6eafaad1344eb81020e467540feb299cb9",
+  "release": "bob-memory-recovery-2026-09-25",
+  "feature_source_commit": "73e9e232a1a0e1d4d10091eb8a504d1e494efcca",
   "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "main_and_cad_fresh_project_and_measurement_context",
@@ -10,5 +10,6 @@
   "material_catalog": "versioned_definitions_mm_and_inch_input",
   "general_drawing": "bounded_cad_assemblies",
   "plan_updates": "focused_edits_with_evidence_continuity",
-  "background_retries": "durable_bounded"
+  "background_retries": "durable_bounded",
+  "conversation_memory": "bounded_validated_fold_repair"
 }
