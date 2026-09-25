@@ -163,7 +163,7 @@ export async function runProjectAnswer(opts: {
     const saved=(name:string)=>toolbox.events.some(e=>e.operation==='execute'&&e.name===name&&e.status==='saved')
     const unfinishedAssistant=opts.planAssistant?.compilationAttempted&&!saved('save_compiled_project_plan')
       ||toolbox.events.some(e=>e.operation==='execute'&&e.name==='design_project_cad')&&!saved('save_cad_design')
-    if(answerText&&opts.writer&&unfinishedAssistant&&!completionReviewed&&response.responseId&&tools.length&&round<rounds-2&&Date.now()+40000<deadline){
+    if(answerText&&opts.writer&&(unfinishedAssistant||opts.writer.needsRepair)&&!completionReviewed&&response.responseId&&tools.length&&round<rounds-2&&Date.now()+40000<deadline){
       completionReviewed=true;previousResponseId=response.responseId
       messages=[{role:'system',content:'Before finalising, compare the owner’s current request with the actual tool results. Continue any authorised unfinished work that remains possible, including saving prepared results through their tools. A failure in one subtask does not cancel independent subtasks. Do not offer already delegated work for a later reply or ask again for ordinary prerequisites. Do not expand scope or bypass an approval, physical check, uncertainty or exhausted budget. If the request is complete or truly blocked, give the concise result and precise remaining blocker.'}]
       continue
@@ -172,7 +172,7 @@ export async function runProjectAnswer(opts: {
     if (!answerText) return { ok: false, error: 'empty_response' }
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain,
+        partial: !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

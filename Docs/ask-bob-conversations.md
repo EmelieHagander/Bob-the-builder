@@ -83,8 +83,10 @@ third failure becomes `provider_retry_exhausted`, allowing the parent to explain
 the actual failure and continue independent work. Previously the same failed
 provider call could consume the entire twenty-minute job. Earlier successful
 reads/writes still replay; changed substantive inputs still stop continuation.
-A single completion review checks unfinished plan/CAD work before a premature
-final answer. It adds no permissions and leaves genuinely blocked work explicit.
+A single completion review checks unfinished plan/CAD work and rejected project
+writes before a premature final answer. It adds no permissions and leaves genuinely
+blocked work explicit; [bounded writes](ask-bob-writes.md#retry-failure-and-reset)
+owns field diagnostics, correction tracking and partial-success evidence.
 
 Named members opt in with `background: true` on the existing authenticated `send` request. `ask-bob` validates the caller and project, atomically claims the turn and enqueues a private job, then returns HTTP 202 with job id and expiry. Old clients and the shared guest retain their synchronous path. There is still one transcript and one domain-write ledger.
 

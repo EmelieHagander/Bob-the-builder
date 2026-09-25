@@ -1,6 +1,6 @@
 # Ask Bob — bounded project writes
 
-Status: implementation branch; not a claim of hosted deployment. Apply `20260917205126_ask_bob_project_writes.sql` before deploying its `ask-bob` Edge Function. No existing project content is changed by the migration.
+This document owns the source/runtime contract for bounded project writes. Hosted release evidence belongs in the merged release PR and [foundation verification](foundation-verification.md). Dated extension sections below retain their original rollout context; current tool availability comes from the live catalog and handlers.
 
 ## First scope
 
@@ -9,7 +9,7 @@ The exact approved persona remains unchanged. Its separate server authority laye
 | Tool | Persistent effect | Exclusions |
 | --- | --- | --- |
 | `save_project_description` | Replace the current description/plan with a timestamp precondition; preserve unrelated content | Not SolutionVersion selection, Building facts, or design approval |
-| `save_project_task` | Create a todo task or revise its name/instructions in one existing Area | No assignment, status changes, completion or readiness |
+| `save_project_task` | Create a todo Task or revise its name/instructions and primary Step ownership; Area is optional when the Step supplies it | No assignment, status changes, completion or readiness |
 | `save_project_measurement` | Create/revise the existing canonical measurement record and append revision history | No invented measured evidence, parent moves, source-image removal, archive or deletion |
 | `save_project_drawing` | Create/revise the supported parametric 2D storage-box Artifact and read it back with an exact revision receipt | No arbitrary CAD/SVG/code, target selection, measured-site assertion, approval, purchases or parent move |
 | `create_project_room_layout` | Create one linked two-room Concept plan with existing physical source identities and a pinned furniture drawing | No new/accepted physical records, arbitrary house geometry, furniture resizing or target selection |
@@ -110,7 +110,11 @@ There is no generic SQL, table-name, status, actor, readiness, purchase or delet
 
 ## Retry, failure and reset
 
-There are at most eight writes per turn. Exact retries return the original receipt; a differently worded second create for the same named target in that turn conflicts instead of producing a duplicate. A claimed retry with existing receipts skips the model and reports what was saved.
+There are at most eight write attempts per turn. Exact retries return the original receipt; a differently worded second create for the same named target in that turn conflicts instead of producing a duplicate. A legacy synchronous retry with existing receipts skips the model and reports what was saved. Durable background continuation instead replays completed operations and continues unfinished work as described in [conversation recovery](ask-bob-conversations.md).
+
+Rejected tool arguments distinguish schema shape, exact-current-request quote and Task field errors. A valid quote must not be blamed for a bad Step UUID or missing edit timestamp. The tool names the field and correction needed, without rewriting the quote, inventing current IDs or making a database call for invalid input. Other domain validators retain their existing rejection boundary. Diagnostic logs contain only the tool, validation category and schema field names, never arguments or conversation text.
+
+Invalid/conflicting writes remain tracked per tool and target until a successful correction. Saving one Task does not clear another Task's rejection. The existing single completion review also considers these unfinished writes while time and write budget remain. It adds no owner instruction, permission or automatic replay. Uncertain transport, exhausted budgets and the closing deadline still stop further work. An unresolved rejection marks the answer evidence partial, even when another requested change has a valid receipt.
 
 Before finishing, settlement obtains the same advisory/thread/provider locks as writes, advances the generation and reads committed receipts. A delayed tool request carrying the earlier generation cannot commit afterward. The new commit/failure commands also fence generations, including retries of the same turn UUID.
 
@@ -128,6 +132,7 @@ The drawer shows **Saved to project** only from validated, same-project server r
 
 - `tests/bob-project-writes.test.ts`: actual migrated PGlite database, authenticated roles, read-back, atomic rollback, history, image preservation, stale edits/generations, dual-project boundaries, guest/revocation, reset survival and idempotency.
 - `tests/bob-write-runtime.test.ts`: production tool parser/orchestration with injected provider/transport fixtures; approved-option execution, retry without another model call, lost HTTP results, model failure and receipt validation.
+- `tests/bob-write-recovery.test.ts`: field diagnostics, exact quote preservation, independent Task targets, bounded completion review, partial evidence and worker replay.
 - Existing independent literal persona fixture remains unchanged.
 - Existing project browser gate adds phone/desktop receipt display, wrong-project rejection, lost-answer retry with the same turn id, close/reopen and reload. Existing reset gate is retained.
 
