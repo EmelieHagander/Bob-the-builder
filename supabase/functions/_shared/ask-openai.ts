@@ -141,6 +141,7 @@ export async function answerWithOpenAi(opts: {
     },
     catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
     context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
+    referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),

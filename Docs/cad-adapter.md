@@ -76,6 +76,21 @@ Bob delegates an intent plus optional Area, component, plan Step and Artifact id
 
 Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. September 25 adds a three-round research stage, then a render/repair stage and a final inspection call; exact measurement verification has its own bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
+Images Bob has opened during the current turn are handed over by exact image ref
+and reopened through the designer's caller-scoped adapter before its first call.
+An unavailable selected reference stops that design attempt explicitly. A text
+brief is not a substitute for the selected pixels. Images independently opened
+by the designer use the same current-project/measurement grounding as Bob;
+visual references do not override newer specifications. Existing image count,
+byte and operation limits apply. Image authority/version is rechecked before
+each designer call and after delivery. No project-wide automatic image scan or
+new image store is introduced. The brief should make coordinate and viewing
+directions explicit so that visual left/right is not confused with room axes.
+
+Regression tests establish pixel handoff, fresh facts, unavailable-reference
+failure and revocation before a later provider call. They do not establish
+real-model fidelity to a particular reference or a finished construction drawing.
+
 A detail selection uses exact instance IDs from a pinned source assembly. Definitions and placements are reused; the database rejects a changed/stale source and the UI flags later source changes. Changing the parent never silently rewrites a saved detail. Arbitrary construction revisions remain possible via a new bounded recipe.
 
 `artifact_cad_revisions` stores recipe, verified export packet, source revision and optional component/plan-Step identity under the existing Artifact revision. Saves remain Concept and pass canonical target/measurement checks. A successful render does not certify structure, joints, site fit or measured truth. SVGs are displayed as image documents, not injected DOM; STEP is downloadable. Project-home previews and reusable work links are owned by [artifacts](artifacts.md#project-home-drawings-and-work-links--september-24-2026); Step links reopen an exact saved revision. Historical views survive a new turn and reload. Canonical archive/restore copies the exact CAD packet to the new revision. Generic Artifact revisions are rejected for CAD identities; only the guarded CAD save can replace their construction.

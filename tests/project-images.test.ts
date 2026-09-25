@@ -92,6 +92,7 @@ test('partial batches identify only the images actually prepared; failures are n
   assert.equal(r.status, 'ok'); assert('items' in r)
   assert.equal((r.items[0] as any).status, 'prepared'); assert.equal((r.items[1] as any).status, 'unavailable')
   assert.equal(f.ctx.partial, true); f.ctx.confirmDelivery(); assert.equal(f.sources.length, 1)
+  assert.deepEqual(f.ctx.openedImageRefs(),[ref()],'failed selections cannot enter a specialist handoff')
   f.transport.list = async () => { throw new Error('private backend internals') }
   const fail = await f.ctx.execute('list_project_category', list)
   assert.equal(fail.status, 'unavailable'); assert.doesNotMatch(JSON.stringify(fail), /private backend/)

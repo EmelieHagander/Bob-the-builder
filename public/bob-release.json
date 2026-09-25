@@ -1,9 +1,10 @@
 {
-  "release": "bob-plan-autonomy-2026-09-25",
-  "feature_source_commit": "ea200dcf9b31eb36dc5553d247181f0c55537957",
+  "release": "bob-cad-reference-2026-09-25",
+  "feature_source_commit": "595fcb6eafaad1344eb81020e467540feb299cb9",
   "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
-  "image_grounding": "fresh_project_and_measurement_context",
+  "image_grounding": "main_and_cad_fresh_project_and_measurement_context",
+  "cad_reference_images": "caller_scoped_original_handoff",
   "answer_voice": "first_person",
   "tool_loading": "core_phase_preload_exact_on_demand",
   "material_catalog": "versioned_definitions_mm_and_inch_input",

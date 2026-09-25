@@ -245,6 +245,11 @@ the owner's actual project data and images are not used as model-test fixtures.
 
 ## Generated media and living-plan Step links — September 24 integration
 
+The CAD specialist's selected-image handoff and matching current-fact grounding
+are owned by [the CAD assistant contract](cad-adapter.md#cad-assistant-integration--2026-09-24).
+The handoff carries refs; the specialist reopens authorised originals. It does
+not turn metadata or a parent caption into a viewed-image receipt.
+
 Implementation branch adds `media_links.plan_step_id` alongside the existing Task instruction `step_id`. Exactly one target is present. Linking validates the current project plan; a stable Step retains its links across ordinary replanning. Project-home Step workspaces show descriptions, linked current CAD revisions and the existing project-image controls. User uploads and Bob-created images use the same private media store. The broader guest/volunteer Step view remains unverified; this change does not declare all five outcome use cases complete.
 
 `generate_project_image` uses the shared configured image-generation path, then reserves a canonical media record, uploads through the caller's Storage authority and finalizes against actual object metadata. Only proposal/instruction purposes are generated; provenance is `ai_generated`. A reservation is visibly pending. Failed upload retains its ID; failed finalization can use `finalize_project_image` without another generation/upload. `attach_project_image` reuses existing ready media. Every database action uses the claimed-turn write ledger; a final success requires real bytes and the saved attachment. The model never receives storage credentials or arbitrary destinations.
