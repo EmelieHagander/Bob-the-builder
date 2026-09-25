@@ -99,15 +99,15 @@ Denna precisering ersätter äldre formuleringar som kräver ett nytt godkännan
 
 ### Release acceptance and current gaps
 
-**Status 2026-09-24:** alla fem är **PARTIAL**, inte slutverifierade. Manuella delytor och backendgrunder finns, men hela kedjan och AI-handlingsytan saknas på flera ställen. Den daterade [kontextauditen](bob-context-audit-2026-09-24.md) är en baslinje före korrigeringarna, inte en levande statuslista.
+**Status 2026-09-25:** alla fem är **PARTIAL**, inte slutverifierade. Manuella delytor och backendgrunder finns, men hela kedjan och AI-handlingsytan saknas på flera ställen. Den daterade [kontextauditen](bob-context-audit-2026-09-24.md) är en baslinje före korrigeringarna, inte en levande statuslista.
 
 | Use case | Viktig kvarvarande lucka | Ansvarig kontraktsyta |
 |---|---|---|
 | UC-001 | Verifierat genomförandeflöde med verklig modell och deltagare; CAD-hosting, arkivering och generell CAD-integration finns i main och driftsatta backenddelar | `ask-bob-conversations.md`, `project-facts.md`, `living-project-plan.md`, `material-assembly-use-case.md`, `cad-adapter.md` |
-| UC-002 | Sammanhängande planering/omplanering av personer och dagar via Bob samt verifierad deltagarkedja | stories 038–048, `living-project-plan.md` |
-| UC-003 | Driftsättning och verklig deltagaracceptans återstår. Begränsad ritningsläsare samt primärstegets bilder finns i källkod och verifieras med testdeltagare; inga verkliga volontärer finns tillgängliga | `artifacts.md`, `media-and-steps.md`, `living-project-plan.md` |
+| UC-002 | September 25-ändringen kopplar Bob och byggdagar till befintliga uppgifter. Verifierad planering av faktisk tillgänglighet och deltagarkedja återstår | stories 038–048, `living-project-plan.md` |
+| UC-003 | Begränsad ritningsläsare och primärstegets bilder levererades i September 24-releasen. Verklig deltagaracceptans återstår; verifiering använder testdeltagare eftersom inga verkliga volontärer finns tillgängliga | `artifacts.md`, `media-and-steps.md`, `living-project-plan.md` |
 | UC-004 | Komplett hantering av text/media/länkar i de avsedda stegytorna | `media-and-steps.md` |
-| UC-005 | Generering → lagring → steglänk finns i main; verklig modell-/deltagaracceptans återstår; gemensam aktualitetsvarning finns som rättning i källkod, ännu inte driftsatt | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
+| UC-005 | Generering → lagring → steglänk finns i main; verklig modell-/deltagaracceptans återstår; gemensam aktualitetsvarning levererades i September 24-releasen | `media-and-steps.md`, `artifacts.md`, `cad-adapter.md` |
 
 En implementation ska ange vilket UC och vilket observerbart delresultat den levererar. Ett helt UC får markeras BUILT först efter dokumenterat test av huvudflöde, viktig felväg, återbesök och rätt användarroll. Databasfixturer bevisar mekanik; verkliga modellkörningar och användarflöden behövs för beteende och slutnytta. En specialgenerator, schemaändring eller lyckad API-körning ensam stänger inget UC.
 

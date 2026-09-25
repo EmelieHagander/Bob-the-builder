@@ -21,7 +21,7 @@ export function EventDetail() {
   const [error, setError] = useState<string | null>(null)
   const { data: event, loading } = useAsync(() => db.getEvent(slug), [slug, version])
   const { data: people } = useAsync(() => db.getPeople(), [])
-  const { data: dayTasks } = useAsync(() => db.getTodayTasks(), [])
+  const { data: dayTasks, loading: tasksLoading, error: tasksError } = useAsync(() => event ? db.getEventTasks(event.id) : Promise.resolve([]), [event?.id, version])
   const { data: me } = useAsync(() => db.getCurrentUser(), [])
   const navigate = useNavigate()
 
@@ -42,7 +42,7 @@ export function EventDetail() {
 
   const going = db.isAttending(event, me?.id)
   const full = db.isFull(event)
-  const tasks = going ? dayTasks ?? [] : []
+  const tasks = dayTasks ?? []
 
   return (
     <div className="page">
@@ -81,8 +81,8 @@ export function EventDetail() {
 
           <div style={{ marginTop: 20 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{going ? 'The plan for the day' : 'Tasks open this day'}</h3>
-            {tasks.length === 0 ? (
-              <EmptyState icon="list-checks" title="No tasks scheduled yet" hint="Sign up and the organiser will line up jobs for the day." />
+            {tasksLoading ? <Loading /> : tasksError ? <p role="alert">Could not load this day's tasks. <button className="btn" onClick={()=>setVersion(v=>v+1)}>Try again</button></p> : tasks.length === 0 ? (
+              <EmptyState icon="list-checks" title="No tasks scheduled yet" hint="The organiser can ask Bob to schedule existing tasks for this build day." />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {tasks.map((t) => {
@@ -92,7 +92,7 @@ export function EventDetail() {
                       <Icon name={chk.icon} size={22} color={chk.color} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>{t.areaName}</div>
-                        <div style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</div>
+                        <Link to={`/tasks/${encodeURIComponent(t.id)}`} style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</Link>
                         <div style={{ marginTop: 6 }}><SkillPill level={t.skill} /></div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="task-right">

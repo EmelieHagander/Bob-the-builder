@@ -199,6 +199,10 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
           {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
           <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {source.dataset}<br />Record {source.recordId}<br />Retrieved {new Date(source.retrievedAt).toLocaleString()}{source.updatedAt ? ` · updated ${new Date(source.updatedAt).toLocaleString()}` : ' · update time unknown'}</li>)}</ul>
         </details>}
+        {!!msg.evidence?.references?.length && <details className="bob-evidence">
+          <summary>Building references ({msg.evidence.references.length})</summary>
+          <ul>{msg.evidence.references.map(r=><li key={r.id}><a href={r.url} target="_blank" rel="noopener noreferrer">{r.title}</a> · {r.version}<br />Reviewed {r.reviewedAt}. General guidance; project conditions need their own evidence.</li>)}</ul>
+        </details>}
         <BobWriteReceipts receipts={msg.evidence?.writes} onOpenDrawing={onOpenDrawing} />
         {msg.report && <div style={{ marginTop: 10, background: 'var(--canvas)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{msg.report}</div>}
         {msg.list && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>{msg.list.map((it, i) => <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}><span style={{ width: 24, height: 24, borderRadius: 7, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: toneColor[it.tone].bg }}><Icon name={it.icon} weight="fill" size={13} color={toneColor[it.tone].c} /></span><span style={{ fontSize: 13.5, lineHeight: 1.4 }}>{it.text}</span></div>)}</div>}

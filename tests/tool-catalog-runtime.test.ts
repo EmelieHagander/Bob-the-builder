@@ -32,7 +32,7 @@ test('real claimed loop lists, loads an exact initially absent tool, executes an
     const task=o.tools?.find(t=>t.function.name==='save_project_task')
     if(calls===1){assert(!task);return response('list_tools',{query:'task',after_name:null},calls)}
     const output=JSON.parse(String(o.messages![0].content))
-    if(calls===2){assert.equal(output.items[0].name,'save_project_task');assert.equal(output.items[0].loaded,false);assert(!task);assert.equal(f.writes,0);return response('load_tool',{name:'save_project_task'},calls)}
+    if(calls===2){const listed=output.items.find((t:any)=>t.name==='save_project_task');assert(listed);assert.equal(listed.loaded,false);assert(!task);assert.equal(f.writes,0);return response('load_tool',{name:'save_project_task'},calls)}
     if(calls===3){assert.equal(output.status,'loaded');assert.deepEqual(task?.function.parameters,WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters);assert.equal(f.writes,0);return response('save_project_task',args,calls)}
     assert.equal(output.status,'saved');assert.equal(output.receipt.recordId,'taskNew');return final()
   }})

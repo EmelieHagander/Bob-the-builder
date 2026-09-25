@@ -17,6 +17,7 @@ jobs:
       - run: npm run check:vocabulary
       - run: npm test
       - run: node --check scripts/check-live-bob.mjs
+      - run: node --check scripts/check-live-project-scenarios.mjs
       - run: node --check scripts/check-live-plan-assistant.mjs
       - run: node --check scripts/check-live-foundations.mjs
       - run: node --check scripts/check-live-project-facts.mjs

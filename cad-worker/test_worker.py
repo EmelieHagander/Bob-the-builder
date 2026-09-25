@@ -1,6 +1,8 @@
 import tempfile, unittest
 from pathlib import Path
-from bob_cad.worker import CadContractError, render_assembly, validate_request
+from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks
+from unittest.mock import patch
+import math
 
 def fixture():
     return {
@@ -20,6 +22,38 @@ def fixture():
     }
 
 class CadWorkerTest(unittest.TestCase):
+    def test_real_hole_and_notch_preserve_blank_but_remove_exact_volume(self):
+        d={"id":"block","primitive":"box","material_ref":None,"x_mm":100,"y_mm":100,"z_mm":20,"cuts":[
+            {"primitive":"cylinder","diameter_mm":10,"length_mm":22,"placement":{"x":50,"y":50,"z":-1,"rx":0,"ry":0,"rz":0}},
+            {"primitive":"box","x_mm":10,"y_mm":20,"z_mm":22,"placement":{"x":0,"y":0,"z":-1,"rx":0,"ry":0,"rz":0}}]}
+        self.assertAlmostEqual(_shape(d).volume,200000-math.pi*25*20-4000,places=4)
+        d["cuts"][0]["placement"]["x"]=500
+        with self.assertRaisesRegex(CadContractError,"does_not_intersect"): _shape(d)
+
+    def test_collision_clearance_and_travel_envelope_are_reported(self):
+        r=fixture();r["views"]=["front"]
+        r["definitions"]=[{"id":"block","primitive":"box","material_ref":None,"x_mm":10,"y_mm":10,"z_mm":10}]
+        r["instances"]=[{"id":name,"definition_id":"block","placement":{"x":x,"y":0,"z":0,"rx":0,"ry":0,"rz":0}} for name,x in (("moving",0),("overlap",5),("stop",30))]
+        r["clearances"]=[{"id":"gap","first_id":"moving","second_id":"stop","min_mm":25}]
+        r["motions"]=[{"id":"open","moving_ids":["moving"],"obstacle_ids":["stop"],"delta":{"x":40,"y":0,"z":0}}]
+        with tempfile.TemporaryDirectory() as tmp:
+            checks=render_assembly(r,tmp)["checks"]
+        self.assertEqual(checks["collisions"]["status"],"complete")
+        self.assertAlmostEqual(checks["collisions"]["overlaps"][0]["volume_mm3"],500)
+        self.assertEqual(checks["clearances"][0]["distance_mm"],20)
+        self.assertEqual(checks["clearances"][0]["status"],"insufficient")
+        self.assertEqual(checks["motions"][0]["status"],"potential_obstruction")
+        with patch('bob_cad.worker.COLLISION_PAIR_LIMIT',0),tempfile.TemporaryDirectory() as tmp:
+            checks=render_assembly(r,tmp)["checks"]
+        self.assertEqual(checks["collisions"]["status"],"partial")
+        self.assertEqual(checks["collisions"]["skipped_pairs"],1)
+
+    def test_nested_cuts_and_self_motion_fail_contract(self):
+        r=fixture();r["definitions"][0]["cuts"]=[{"primitive":"box","x_mm":1,"y_mm":1,"z_mm":1,"cuts":[],"placement":r["instances"][0]["placement"]}]
+        with self.assertRaises(CadContractError): validate_request(r)
+        r=fixture();r["motions"]=[{"id":"motion","moving_ids":["post.left"],"obstacle_ids":["post.left"],"delta":{"x":10,"y":0,"z":0}}]
+        with self.assertRaises(CadContractError): validate_request(r)
+
     def test_real_engine_generates_step_svg_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             result=render_assembly(fixture(),tmp)

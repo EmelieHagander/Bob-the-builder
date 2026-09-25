@@ -6,11 +6,18 @@ Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. 
 
 ## First contract
 
-Contract v1 uses canonical millimetres and supports only:
+Contract v1 uses canonical millimetres. The September 25 extension adds cylinder blanks, local subtractive cuts and explicit geometry checks while retaining old box/tube recipes:
 - reusable box definitions;
 - reusable tube definitions;
+- solid cylinders and up to 16 local box/cylinder cuts per definition (256 total), for holes and notches;
 - placed/rotated instances;
 - front, right, top and isometric projections.
+
+The worker rejects cuts that miss the part, erase it or split it into disconnected solids. Each reusable definition is constructed once. Blank dimensions remain the original definition dimensions, not a smaller post-cut bounding box.
+
+Every new manifest reports exact solid overlap volumes after a bounding-box broad phase. At most 256 candidate pairs receive the exact check; skipped pairs produce **partial**, never an all-clear. Optional `clearances` request up to 16 actual minimum surface distances for named instance pairs. Optional `motions` request up to 16 conservative envelopes for straight translations of up to eight moving parts against up to 32 named obstacles. A clear envelope establishes no overlap for that specified translation; a possible obstruction needs inspection. Rotating hinges, deformation, fastener strength and loads are outside these checks. Intentional joint overlaps remain visible for review. Old manifests explicitly show that no check was recorded.
+
+The drawing viewer counts actual instances, shows blank dimensions and cut counts, and exports a CSV cutting list from the exact displayed recipe. The material tool derives quantities from the current saved Artifact revision; [material-planning.md](material-planning.md) owns allowance, compatible stock/reuse and Shopping. A part's opaque `material_ref` is not a pinned product specification. Board/sheet nesting, grain direction and saw-kerf optimization remain distinct work; the list does not claim these were solved.
 
 A bed, shelf or cabinet is therefore content assembled from the same generic definitions and instances, not a new server-side object type.
 

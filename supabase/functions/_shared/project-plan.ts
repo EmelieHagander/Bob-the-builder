@@ -62,8 +62,8 @@ export const PLAN_PROPOSAL_TOOL = tool('propose_project_plan',
     expected_revision:{type:'integer',description:'Current approved living-plan revision, or 0 when none exists.'},
     summary:{type:'string',description:'Compact description of the proposed working plan.'},
     reason:{type:'string',description:'Why this plan or replan is appropriate now, including material new evidence.'},
-    steps:{type:'array',maxItems:30,items:stepSchema},
-    task_links:{type:'array',maxItems:200,items:{type:'object',additionalProperties:false,properties:{step_position:{type:'integer',minimum:1,maximum:30},task_id:{type:'string'}},required:['step_position','task_id']},description:'Primary ownership of existing Tasks by 1-based submitted Step position. Each Task occurs once. Empty preserves existing ownership.'},
+    steps:{type:'array',maxItems:100,items:stepSchema},
+    task_links:{type:'array',maxItems:200,items:{type:'object',additionalProperties:false,properties:{step_position:{type:'integer',minimum:1,maximum:100},task_id:{type:'string'}},required:['step_position','task_id']},description:'Primary ownership of existing Tasks by 1-based submitted Step position. Each Task occurs once. Empty preserves existing ownership.'},
     request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising planning/replanning.'},
   })
 
@@ -143,7 +143,7 @@ export function parsePlanWrite(name:string,value:unknown):WritePayload|null {
     const steps=v.steps
     if(!exact(v,PLAN_PROPOSAL_TOOL.function.parameters.required)||!revision(v.expected_revision,true)
       ||!text(v.summary,4000)||!text(v.reason,4000)||!text(v.request_quote,500)
-      ||!Array.isArray(steps)||steps.length<1||steps.length>30||!steps.every(step)
+      ||!Array.isArray(steps)||steps.length<1||steps.length>100||!steps.every(step)
       ||!Array.isArray(v.task_links)||v.task_links.length>200||!v.task_links.every(l=>object(l)&&exact(l,['step_position','task_id'])&&Number.isInteger(l.step_position)&&Number(l.step_position)>=1&&Number(l.step_position)<=steps.length&&text(l.task_id,200))) return null
     return {kind:'plan_proposal',record_id:null,expected_updated_at:null,expected_revision:v.expected_revision as number,
       request_quote:v.request_quote as string,data:{summary:v.summary,reason:v.reason,steps:v.steps,...(v.task_links.length?{task_links:v.task_links}:{})}}

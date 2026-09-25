@@ -1,14 +1,18 @@
-# Building Knowledge Library — next-work plan
+# Building Knowledge Library — curated seed and expansion
 
-**Status: planned / not seeded, 2026-09-20.** The owner's September 20 decision supersedes the older "Building Knowledge Library — planned later" priority in `v1-plan.md`. First coordinate deployment of the existing Bob tools (#83–#87) and verify actual runtime identity and real-model execution. Next deliver a curated knowledge seed and retrieval before adding more construction-specific generators. Historical V1 slice scope is not rewritten by this priority update.
+**Status: first bounded seed and retrieval implemented, 2026-09-25; deployment and live-model evidence are recorded in the release PR.** The owner's September 20 decision supersedes the older "planned later" priority. Eight short original reference notes cover timber moisture, fastenings, renovation survey, distinct hen/rabbit requirements, electrical work planning, cutting quantities and drawer travel. They are a starting corpus, not a complete construction handbook.
 
-No book import, embeddings, knowledge tables or retrieval service is claimed live. This document owns the knowledge ingestion plan; deployment evidence belongs in the release PR. A committed feature or a green fixture test alone does not establish deployed capability or real-model behaviour.
+`building-knowledge-seed.json` is the versioned source register and seed. Each note records publisher, edition/section, URL, jurisdiction, source kind, content hash, review date/due date and publication status. The rights mode is `original_summary_links_only`: original brief summaries and links, with no third-party passages, drawings or book text stored. This does not grant permission to ingest the linked publications. Bob-authored geometric workflow notes are labeled separately from official and industry guidance.
+
+`search_building_knowledge` performs bounded term/prefix retrieval with Swedish/English keywords and returns at most four notes per call. Both Bob and the CAD assistant can consult it. Private, withdrawn, unapproved, not-yet-reviewed, expired and incompatible-jurisdiction notes are excluded. Unknown queries return `no_match`, not invented coverage. General reference citations appear separately from project records in the conversation. Changing a seed revision/withdrawal requires review, commit and Edge deployment; the application never auto-imports project uploads into this public seed.
+
+No embeddings, copied handbook, global private-document store or live regulatory search is implemented. Current legal/product-sensitive decisions need the applicable current original source and actual project inputs. The 2019 fastener reference supplies conceptual orientation only, with no copied dimensioning tables or assumption that an old product/standard edition is current.
 
 ## Product contract
 
 Bob should be a knowledgeable builder with reusable tools, not a menu of hardcoded construction recipes. General construction knowledge informs choices, materials, assembly methods, checks and explanations. Private project/building records describe this particular place. Deterministic geometry/calculations produce reproducible dimensions. None of these truth classes substitutes for the others. An embedding index retrieves material at runtime; it is not model training and cannot by itself add unsupported CAD operations.
 
-## Planned delivery
+## Remaining corpus expansion
 
 1. **Rights and source register.** Select a manageable initial construction corpus, then VVS/wet-room and electrical sources. Record permission to ingest, store, embed, show excerpts and share within the intended audience. Public web access or purchase of one copy is not assumed to license a shared corpus. Candidate sources are not approved imports until this review is complete.
 2. **Curated seed.** Start with a coherent basic building handbook that we have permission to use, complemented by approved official guidance and manufacturer instructions. Evaluate Svenskt Trä/TräGuiden for timber/building, Säker Vatten and GVK for VVS/wet rooms, and Elsäkerhetsverket for electrical safety/roles. Distinguish law/regulation, industry rule, product instruction and general advice. Do not seed all available sources indiscriminately.

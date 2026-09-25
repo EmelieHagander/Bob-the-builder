@@ -1,3 +1,5 @@
+import { createKnowledgeReader } from './building-knowledge.ts'
+import { createOperationalReader } from './project-operations.ts'
 import { BobContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
@@ -94,7 +96,7 @@ export async function answerWithOpenAi(opts: {
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v11', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v12', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -102,6 +104,8 @@ export async function answerWithOpenAi(opts: {
     adapters: [mediaAdapter()],
     hasAccess, sources: lookup.sources,
   })
+  const knowledgeReader = createKnowledgeReader(hasAccess)
+  const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
     hasAccess, lookup.sources)
@@ -115,7 +119,7 @@ export async function answerWithOpenAi(opts: {
     callModel,
   })
   const cadAssistant = createCadAssistant({
-    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,
+    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
@@ -168,7 +172,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

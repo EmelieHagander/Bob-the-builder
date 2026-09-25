@@ -1,3 +1,5 @@
+import type { KnowledgeReader } from './building-knowledge.ts'
+import type { OperationalReader } from './project-operations.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { RecordDetailReader } from './project-record-detail.ts'
 import type { ProjectImageTools } from './project-image-tools.ts'
@@ -18,7 +20,7 @@ export async function runClaimedProjectTurn(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
-  recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number;
@@ -48,11 +50,11 @@ export async function runClaimedProjectTurn(opts: {
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       return { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts, true),
-        evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
+        evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
     }
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
-    const evidence: AnswerEvidence = { kind: 'ai_assessment', sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-      partial: opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
+    const evidence: AnswerEvidence = { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+      partial: !!opts.operationalReader?.partial || opts.lookup.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !result.ok || (result.ok && result.evidence.partial), writes: compactReceipts(opts.writer.receipts) }
     if (opts.writer.receipts.length && ((recovered && !opts.resume) || uncertain || !result.ok || !result.providerResponseId)) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }
@@ -63,7 +65,7 @@ export async function runClaimedProjectTurn(opts: {
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     if (opts.writer?.receipts.length) {
       result = { ok: true, projectId: opts.projectId, answer: savedWriteSummary(opts.writer.receipts),
-        evidence: { kind: 'ai_assessment', sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
+        evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [], partial: true, writes: compactReceipts(opts.writer.receipts) } }
     } else { await fail(); return { ok: false, error: 'context_unavailable' } }
   }
   if (opts.commit) {
