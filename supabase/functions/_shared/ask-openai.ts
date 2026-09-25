@@ -54,7 +54,9 @@ export async function answerWithOpenAi(opts: {
   }
   const callModel = async (options: OpenAIServiceOptions) => {
    try{return await memo('model:' + options.functionName, options, async () => {
+    const started = performance.now()
     const result = await callOpenAIResponses<string>(options)
+    console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
    }, options.timeoutMs ?? 120000)}catch(error){
@@ -76,7 +78,9 @@ export async function answerWithOpenAi(opts: {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }, signal)
-  const lookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 12)
+  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32)
+  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48)
+  const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, get sources() { return [...projectLookup.sources, ...groundingLookup.sources] } }
   const hasAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -181,6 +185,7 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
+    initialWriteReceipts: () => memo('delivery:initial-receipts', {}, async () => structuredClone(writer?.receipts ?? [])),
     initialDrawingDelivery: () => memo('delivery:initial', {}, async () => hasSavedDrawingReceipt(writer?.receipts ?? [])),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
@@ -206,7 +211,7 @@ export async function answerWithOpenAi(opts: {
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
-      projectId: opts.projectId, message: opts.message, lookup, hasAccess, deadline,
+      projectId: opts.projectId, message: opts.message, lookup: groundingLookup, hasAccess, deadline,
       validateImages: () => projectContext.validate(),
       callModel,
     }),

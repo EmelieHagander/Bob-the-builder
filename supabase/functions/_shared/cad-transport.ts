@@ -22,6 +22,17 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
    if(digest!==manifest.exports[k].sha256)throw new Error('cad_hash_mismatch')
   }
-  return {recipe:structuredClone(recipe),manifest,files:packet.files}
+  if(!packet.previews || typeof packet.previews!=='object' || Object.keys(packet.previews).sort().join(',')!==[...recipe.views].sort().join(','))throw new Error('cad_previews_missing')
+  for(const view of recipe.views){
+   const encoded=packet.previews[view], metadata=packet.manifest.previews?.[view]
+   if(typeof encoded!=='string'||encoded.length>700000||!metadata||metadata.source_sha256!==manifest.exports[view].sha256)throw new Error('invalid_cad_preview')
+   const raw=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))
+   if(![137,80,78,71,13,10,26,10].every((n,i)=>raw[i]===n)||raw.length<24)throw new Error('invalid_cad_preview')
+   const header=new DataView(raw.buffer),width=header.getUint32(16),height=header.getUint32(20)
+   if(!width||!height||width>1024||height>1024)throw new Error('invalid_cad_preview')
+   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
+   if(digest!==metadata.sha256)throw new Error('cad_preview_hash_mismatch')
+  }
+  return {recipe:structuredClone(recipe),manifest,files:packet.files,previews:packet.previews}
  }
 }

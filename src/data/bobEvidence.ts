@@ -1,5 +1,7 @@
 import type { AnswerEvidence, ProjectWriteReceipt } from './provenance.ts'
 
+export const BOB_WRITE_LIMIT = 32
+
 export function isProjectWriteReceipt(value: unknown, projectId: string): value is ProjectWriteReceipt {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const r = value as Partial<ProjectWriteReceipt>
@@ -22,7 +24,7 @@ export function isBobAnswerEvidence(value: unknown, projectId: string): value is
   return evidence.kind === 'ai_assessment' && typeof evidence.partial === 'boolean'
     && Array.isArray(evidence.sources) && evidence.sources.every(s => s && s.projectId === projectId
       && typeof s.recordId === 'string' && typeof s.label === 'string' && typeof s.dataset === 'string')
-    && (evidence.writes === undefined || (Array.isArray(evidence.writes) && evidence.writes.length <= 8
+    && (evidence.writes === undefined || (Array.isArray(evidence.writes) && evidence.writes.length <= BOB_WRITE_LIMIT
       && evidence.writes.every(r => isProjectWriteReceipt(r, projectId))))
     && (evidence.references === undefined || (Array.isArray(evidence.references) && evidence.references.length<=32
       && evidence.references.every(r=>r&&typeof r.id==='string'&&typeof r.title==='string'&&typeof r.version==='string'

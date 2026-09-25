@@ -4,7 +4,7 @@ import catalogSeed from '../supabase/functions/_shared/project-tools/catalog-see
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { BOB_PERSONA, BOB_HANDS, BOB_CURRENT_TURN, buildBobHands } from '../supabase/functions/_shared/bob-prompt.ts'
-import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from './support/bob-model-routing.ts'
 import { createProjectLookup, SEARCH_TOOL } from '../supabase/functions/_shared/project-lookup.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
@@ -140,13 +140,13 @@ test('the round limit removes tools even if a lookup implementation reports spar
   const lookup = { ...fixtureLookup(), get remaining() { return 10 } }
   const result = await runProjectAnswer({
     projectId: 'A', userId, message: 'Find tasks', lookup, hasAccess: async () => true,
-    callModel: async call => { calls.push(call); return calls.length < 12 ? toolResponse() : finalResponse() },
+    callModel: async call => { calls.push(call); return calls.length < 24 ? toolResponse() : finalResponse() },
   })
   assert.equal(result.ok, true)
-  assert.equal(calls.length, 12)
+  assert.equal(calls.length, 24)
   calls.forEach(assertCallContract)
-  assert.equal(calls[11].tools, undefined)
-  assert(calls[11].systemMessage!.includes(buildBobHands([])))
+  assert.equal(calls[23].tools, undefined)
+  assert(calls[23].systemMessage!.includes(buildBobHands([])))
 })
 
 test('an exhausted domain tool is rejected without dispatch while the directory remains callable', async () => {

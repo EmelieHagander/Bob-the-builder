@@ -1,1 +1,2 @@
 build123d==0.13.0
+CairoSVG==2.9.1

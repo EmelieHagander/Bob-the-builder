@@ -74,14 +74,20 @@ Constraints and formulas need a declarative vocabulary. They must never be execu
 
 Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. A separate `cad-designer/cad` standard/high setting uses the shared Responses service. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
 
-Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. September 25 adds a three-round research stage, then a render/repair stage and a final inspection call; exact measurement verification has its own bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
+Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. Research remains available throughout rendering/repair while each reader has budget; there is no three-round cutoff. Exact measurement verification and image grounding have separate bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
-Current inspection is numerical: a render returns bounds, part metadata, checks
-and view names to the designer. Generated SVG content or raster previews are
-not supplied to the model. Reference-image delivery below does not constitute
-visual inspection of the generated drawing. Research tools also disappear after
-three research rounds even when their independent lookup budget remains. These
-limits and their acceptance implications are recorded in the [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md).
+Each render returns bounds, part metadata and geometry checks plus PNG views
+rasterized from the **same exported SVGs** using pinned CairoSVG 2.9.1. The
+transport verifies PNG dimensions/signature/hash and their source-SVG hashes.
+The designer receives these pixels on the next model call to compare orientation,
+construction and reference intent, then can research and repair. Max dimension
+is 1024 px, 512 KiB decoded per view, within the existing 6 MiB response bound.
+This is visual feedback, not proof of physical fit or semantic correctness.
+
+The rendering tool exposes a structured bounded recipe schema. Invalid input
+reports paths such as `recipe.definitions[0].y_mm` and expected constraints.
+Eight input corrections are separate from the four actual render attempts.
+Unknown cross-record relationships remain errors; no validation is relaxed.
 
 Images Bob has opened during the current turn are handed over by exact image ref
 and reopened through the designer's caller-scoped adapter before its first call.

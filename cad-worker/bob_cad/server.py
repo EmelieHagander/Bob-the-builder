@@ -22,7 +22,13 @@ def render_to_pipe(recipe, connection):
                 if path.stat().st_size > 3 * 1024 * 1024:
                     raise ValueError('output_too_large')
                 files[key] = base64.b64encode(path.read_bytes()).decode('ascii')
-            body = json.dumps({'manifest': manifest, 'files': files}).encode()
+            previews = {}
+            for key, preview in manifest['previews'].items():
+                raw = (Path(directory) / preview['file']).read_bytes()
+                if len(raw) > 512 * 1024:
+                    raise ValueError('preview_too_large')
+                previews[key] = base64.b64encode(raw).decode('ascii')
+            body = json.dumps({'manifest': manifest, 'files': files, 'previews': previews}).encode()
             if len(body) > MAX_RESPONSE:
                 raise ValueError('output_too_large')
             connection.send_bytes(body)

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createProjectWriter, parseProjectWrite, WRITE_TOOLS, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { BOB_PERSONA } from '../supabase/functions/_shared/bob-prompt.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
 
@@ -168,7 +168,7 @@ test('browser evidence rejects wrong-project, malformed and oversize receipt set
   const evidence={kind:'ai_assessment',sources:[],partial:false,writes:[receipt]}
   assert(isBobAnswerEvidence(evidence,'A'))
   assert(!isBobAnswerEvidence(evidence,'B'))
-  for(const writes of [[{...receipt,recordId:''}],[{...receipt,savedAt:'not a date'}],[{...receipt,dataset:'auth.users'}],Array(9).fill(receipt),{}])assert(!isBobAnswerEvidence({...evidence,writes},'A'))
+  for(const writes of [[{...receipt,recordId:''}],[{...receipt,savedAt:'not a date'}],[{...receipt,dataset:'auth.users'}],Array(33).fill(receipt),{}])assert(!isBobAnswerEvidence({...evidence,writes},'A'))
 })
 
 test('deployed wiring uses caller-JWT writes and fenced commit, not service-role project writes',async()=>{

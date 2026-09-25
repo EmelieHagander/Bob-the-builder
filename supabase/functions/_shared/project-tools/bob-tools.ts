@@ -11,7 +11,7 @@ import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
 import type { ProjectContext } from '../project-context/dispatcher.ts'
 import type { MaterialCatalogReader } from '../material-catalog.ts'
 import { SAVE_COMPILED_PLAN_TOOL, type createPlanAssistant } from '../plan-assistant.ts'
-import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
+import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader, type CapabilitySearch } from './session.ts'
 
 /** Sole handler-registration seam. Catalog names/forms/profiles are data; loading
  * never grants authority. New handlers register here, not in the model loop. */
@@ -19,7 +19,7 @@ export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
-  drawingRequested?: () => boolean;
+  drawingRequested?: () => boolean; searchCapabilities?: CapabilitySearch;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
@@ -72,5 +72,5 @@ export function createBobToolSession(opts: {
       },
     }] : []),
   ]
-  return createToolSession({ definitions, readPolicy: opts.readPolicy })
+  return createToolSession({ definitions, readPolicy: opts.readPolicy, searchCapabilities: opts.searchCapabilities })
 }

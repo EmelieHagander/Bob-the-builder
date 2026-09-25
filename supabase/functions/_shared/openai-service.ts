@@ -139,6 +139,8 @@ export interface OpenAIServiceOptions {
   userId?: string;
   model?: string; // Override model selection (e.g., 'gpt-5-mini')
   maxOutputTokens?: number;
+  /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
+  outputTokenLimit?: number;
   timeoutMs?: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
@@ -397,7 +399,8 @@ export async function callOpenAIResponses<T = unknown>(
   const dbMaxTokens = settings?.max_output_tokens || 0;
   const configuredMaxTokens = Math.min(
     Math.max(dbMaxTokens, maxOutputTokens),
-    modelRow.max_output_tokens
+    modelRow.max_output_tokens,
+    options.outputTokenLimit && options.outputTokenLimit > 0 ? options.outputTokenLimit : Number.POSITIVE_INFINITY
   );
 
   // Determine effective system message

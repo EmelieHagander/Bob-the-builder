@@ -32,7 +32,7 @@ const response = (data: unknown, name?: string, args?: unknown): any => ({ succe
   responseId: 'synthetic-response', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
   ...(name ? { toolCalls: [{ id: 'synthetic-call', type: 'function', function: { name, arguments: JSON.stringify(args) } }] } : {}) })
 const noIO = async (): Promise<any> => { throw new Error('Audit unexpectedly attempted external I/O') }
-function lookup(budget = 12) {
+function lookup(budget = 32) {
   return createProjectLookup('synthetic', async (_p, q) => ({ error: null, data: { records: q.dataset === 'project'
     ? [{ id: 'synthetic', name: 'Synthetic audit project', phase: 'planning' }]
     : q.dataset === 'target' ? [{ id: 'synthetic', revision: 1, solution_id: id }] : [], related: [], truncated: false } }), 1000, budget)
@@ -78,25 +78,25 @@ const discovery = []
 for (const query of ['ritning', 'drawing', 'CAD', 'draw bed', 'ändra planen', 'edit plan', 'archive area']) {
   const s = fixture('planning').session(); await s.prepare()
   const result = await s.execute('list_tools', { query, after_name: null })
-  discovery.push({ query, status: result.status, names: result.items.map((t: any) => t.name), next_cursor: result.next_cursor })
+  discovery.push({ query, status: result.status, search: result.search, names: result.items.map((t: any) => t.name), next_cursor: result.next_cursor })
 }
 const premature = []
-for (const message of ['Skapa en uppgift för att mäta öppningen.', 'Ändra planen och flytta uppgiften till rätt steg.', 'Ta fram och spara materiallistan.']) {
+for (const [message,kind] of [['Skapa en uppgift för att mäta öppningen.','task'], ['Ändra planen och flytta uppgiften till rätt steg.','plan'], ['Ta fram och spara materiallistan.','material']]) {
   const f = fixture('planning', message); let calls = 0
   const result = await runProjectAnswer({ ...f.opts, callModel: async o => {
     calls++
-    return o.schemaName ? response({ drawing: 'none', description: '', request_quote: null }) : response('Jag kan göra det i nästa svar.')
+    return o.schemaName ? response({goals:[{kind,description:message,count:1,record_id:null}],request_quote:message}) : response('Jag kan göra det i nästa svar.')
   } } as any)
   premature.push({ message, model_calls: calls, writes: f.receipts.length, ok: result.ok, ...(result.ok ? { partial: result.evidence.partial, answer: result.answer } : { error: result.error }) })
 }
 const f = fixture('planning'); let classificationCalls = 0
-const classificationFailure = await runProjectAnswer({ ...f.opts, callModel: async () => { classificationCalls++; return { ...response(null), success: false, error: 'synthetic-classifier-failure' } } } as any)
+const classificationFailure = await runProjectAnswer({ ...f.opts, callModel: async o => { classificationCalls++; return o.schemaName ? { ...response(null), success: false, error: 'synthetic-classifier-failure' } : response('The informational answer remains available.') } } as any)
 
 const readProbe = lookup()
 const readInput = { dataset: 'project', query: null, status: null, area_id: null, record_id: null }
-for (let i = 0; i < 12; i++) await readProbe.search(readInput)
+for (let i = 0; i < 32; i++) await readProbe.search(readInput)
 let grounding: any
-await createGroundedModelCall({ projectId: 'synthetic', message: 'Compare the reference.', lookup: readProbe, hasAccess: async () => true,
+await createGroundedModelCall({ projectId: 'synthetic', message: 'Compare the reference.', lookup: lookup(48), hasAccess: async () => true,
   validateImages: async () => true, deadline: Date.now() + 30000, callModel: async o => { grounding = o.messages?.at(-1)?.content; return response('Synthetic answer') } })({
   messages: [{ role: 'user', content: [{ type: 'image_url', image_url: 'data:image/png;base64,c3ludGhldGlj' }] }],
 } as any)
@@ -114,7 +114,7 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
   render: async r => { renders++; const bounds = { min: [0, 0, 0], max: [600, 250, 18], size: [600, 250, 18] }
     return { recipe: r, manifest: { bounding_box_mm: bounds,
       instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
-    files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' } } },
+    files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES'} } },
   callModel: async o => { cadCalls.push(o); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') },
 })
@@ -137,12 +137,12 @@ for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_
   record_id: null, area_id: 'synthetic-area', step_id: null, name: `Synthetic task ${i + 1}`, instructions: 'Synthetic work',
   expected_updated_at: null, request_quote: w.opts.message,
 })).status)
-assert.equal(writeStatuses.filter(s => s === 'saved').length, 8)
+assert.equal(writeStatuses.filter(s => s === 'saved').length, 9)
 
 emit(JSON.stringify({ evidence_class: 'controlled runtime mechanics; model and I/O are synthetic',
   catalog_source: useSeed ? 'repository seed' : 'dated public metadata snapshot', active_catalog_tools: catalog.filter(r => r.active).length,
   surfaces, discovery, premature, classification_failure: { calls: classificationCalls, result: classificationFailure },
-  exhausted_image_grounding: { remaining: readProbe.remaining, project: groundingData.project.status, measurements: groundingData.measurements.status, provider_still_called: true },
+  reserved_image_grounding: { remaining: readProbe.remaining, project: groundingData.project.status, measurements: groundingData.measurements.status, provider_still_called: true },
   cad: { status: cadResult.status, calls: cadCalls.length, renders, returned_to_designer: cadReturns,
     generated_pixels_delivered: cadCalls.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.type === 'image_url'))),
     svg_bytes_delivered: JSON.stringify(cadCalls).includes('SYNTHETIC_SVG_BYTES'),

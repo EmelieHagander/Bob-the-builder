@@ -4,6 +4,20 @@
 
 Granskningen följer de fem användarfallen i [user-stories.md](user-stories.md). Kontraktens ägare förblir [verktyg](ask-bob-tools.md), [genomförande och samtal](ask-bob-conversations.md), [skrivningar](ask-bob-writes.md), [plan](living-project-plan.md) och [CAD](cad-adapter.md). Den [tidigare auditen](bob-context-audit-2026-09-24.md) beskriver ett äldre läge.
 
+## Implementation follow-up — PR #147
+
+The dated findings below describe the pre-fix baseline. PR #147 implements general
+receipt-backed work continuation, model-interpreted capability search (no language
+keyword tables), separate correction/commit and image-grounding budgets, CAD
+recipe diagnostics and rendered PNG feedback, and full migrated/offline catalog
+parity. Canonical current contracts remain in `ask-bob-conversations.md`,
+`ask-bob-tools.md`, `ask-bob-writes.md` and `cad-adapter.md`.
+
+Controlled tests are not real-model acceptance. Full private writer acceptance,
+semantic drawing fidelity, more detailed domain rejection messages and the
+remaining unsupported capabilities in A9 are not declared complete by this patch.
+Release/deployment evidence is recorded in PR #147.
+
 ## Bedömning av de tre hypoteserna
 
 | Hypotes | Vad beläggen visar | Bedömning |

@@ -28,7 +28,7 @@ The 2026-09-18 2D extension requires
 `20260918204949_parametric_storage_box_drawings.sql` before its frontend/Edge
 rollout; it is not yet a hosted-release claim. `bob_project_write_v2` handles the
 new drawing kind and delegates existing kinds to the established writer. It uses
-the **same** claimed turn, eight-write budget, semantic retry keys, private audit
+the **same** claimed turn, 32-operation budget, semantic retry keys, private audit
 receipts and generation-fenced settlement. No service-role domain write is added.
 
 Read the exact current target and drawing before an edit. Full explicit design
@@ -56,7 +56,7 @@ selected target are prerequisites, not records the tools may invent or approve.
 source details. Derived geometry, outline conflicts and furniture parts use the
 same `roomLayout.ts` engine as the browser. The new `bob_project_write_v3` handles
 `room_layout` and delegates old write kinds to v2, preserving the existing claimed
-turn, caller JWT, eight-write budget, audit quotes, atomic receipts, retries and
+turn, caller JWT, 32-operation budget, audit quotes, atomic receipts, retries and
 fenced settlement. No generic SQL or service-role domain writes are added.
 
 Source changes reject normal edits. `refresh_sources` is a separate, explicit
@@ -70,7 +70,7 @@ construction/placement contract and rollout dependencies are owned by
 
 `save_building_context` is wired through caller-JWT `bob_project_write_v4`;
 older kinds delegate unchanged to v3. It uses the same claimed-turn ownership,
-eight-write budget, private before-state audit, idempotent receipt and fenced
+32-operation budget, private before-state audit, idempotent receipt and fenced
 settlement. `search_bob_project_data_v5` supplies scoped current physical records,
 measurement snapshots and separate proposals. The model's output allowance on a
 write-capable call is raised to 8,000 tokens to accommodate the bounded multi-node
@@ -85,7 +85,7 @@ multi-floor plan or a claim of computed staircase geometry.
 ## Multi-floor coordinates (implementation branch after #85)
 
 `save_project_building_plan` uses caller-JWT writer v5 (older kinds delegate to v4)
-and the existing eight-write claimed-turn/receipt/settlement boundary. Research v6
+and the existing 32-operation claimed-turn/receipt/settlement boundary. Research v6
 adds a non-geometric marker in artifact lists and full source-authorised details
 only on exact record lookup. Partial/stale/unavailable source states are explicit.
 
@@ -110,9 +110,9 @@ There is no generic SQL, table-name, status, actor, readiness, purchase or delet
 
 ## Retry, failure and reset
 
-There are at most eight write attempts per turn. Exact retries return the original receipt; a differently worded second create for the same named target in that turn conflicts instead of producing a duplicate. A legacy synchronous retry with existing receipts skips the model and reports what was saved. Durable background continuation instead replays completed operations and continues unfinished work as described in [conversation recovery](ask-bob-conversations.md).
+There are at most 32 committed operations per turn, enforced in every routed writer version and in frontend receipt validation. Rejected/invalid attempts have a separate bound of 12; correcting an input does not consume a successful-save slot. An uncertain result still stops all writes. Exact retries return the original receipt; a differently worded second create for the same named target in that turn conflicts instead of producing a duplicate. A legacy synchronous retry with existing receipts skips the model and reports what was saved. Durable background continuation instead replays completed operations and continues unfinished work as described in [conversation recovery](ask-bob-conversations.md).
 
-Rejected tool arguments distinguish schema shape, exact-current-request quote and Task field errors. A valid quote must not be blamed for a bad Step UUID or missing edit timestamp. The tool names the field and correction needed, without rewriting the quote, inventing current IDs or making a database call for invalid input. Other domain validators retain their existing rejection boundary. Diagnostic logs contain only the tool, validation category and schema field names, never arguments or conversation text.
+Rejected tool arguments distinguish schema shape, exact-current-request quote and Task field errors. A valid quote must not be blamed for a bad Step UUID or missing edit timestamp. The tool names the field and correction needed, without rewriting the quote, inventing current IDs or making a database call for invalid input. Schema diagnostics include bounded field paths and expected types/constraints without echoing private argument values. Domain validators retain their stricter rejection boundary; not every cross-record rejection has a field-level explanation. Diagnostic logs contain only the tool, validation category and schema field names, never arguments or conversation text.
 
 Invalid/conflicting writes remain tracked per tool and target until a successful correction. Saving one Task does not clear another Task's rejection. The existing single completion review also considers these unfinished writes while time and write budget remain. It adds no owner instruction, permission or automatic replay. Uncertain transport, exhausted budgets and the closing deadline still stop further work. An unresolved rejection marks the answer evidence partial, even when another requested change has a valid receipt.
 

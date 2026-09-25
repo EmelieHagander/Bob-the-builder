@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { sealCredential, openCredential } from '../supabase/functions/_shared/bob-job-credentials.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 

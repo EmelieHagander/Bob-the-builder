@@ -1,3 +1,5 @@
+import { schemaIssues } from './schema-issues.ts'
+import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { OPERATION_WRITE_TOOLS, parseOperationalWrite } from './project-operations.ts'
 import { EXPERT_TOOLS, parseExpertWrite } from './project-expert-tools.ts'
@@ -163,7 +165,7 @@ export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[
   return receipts.map(({ record: _record, ...receipt }) => receipt)
 }
 export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport) {
-  let used = 0
+  let used = 0, invalidAttempts = 0
   let uncertain = false
   let settled = false
   const receipts: WriteReadback[] = []
@@ -174,13 +176,14 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   }
   return {
     receipts,
-    get remaining() { return uncertain || settled ? 0 : Math.max(0, 8 - used) },
+    get remaining() { return uncertain || settled ? 0 : invalidAttempts >= 12 ? 0 : Math.max(0, BOB_WRITE_LIMIT - used) },
+    get correctionsRemaining() { return Math.max(0, 12 - invalidAttempts) },
     get uncertain() { return uncertain },
     get hasUnresolvedWrites() { return corrections.size > 0 },
-    get needsRepair() { return !uncertain && !settled && used < 8 && corrections.size > 0 },
+    get needsRepair() { return !uncertain && !settled && used < BOB_WRITE_LIMIT && invalidAttempts < 12 && corrections.size > 0 },
     async recover(): Promise<WriteReadback[]> {
       const { data, error } = await read()
-      if (error || !Array.isArray(data) || data.length > 8) throw new Error('Write recovery unavailable')
+      if (error || !Array.isArray(data) || data.length > BOB_WRITE_LIMIT) throw new Error('Write recovery unavailable')
       data.map(r => checkedReceipt(r, projectId)).forEach(remember)
       return receipts
     },
@@ -188,7 +191,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       const { data, error } = await settle()
       const result = data as { generation: number; receipts: unknown[] }
       if (error || !result || !Number.isSafeInteger(result.generation) || result.generation < 1
-        || !Array.isArray(result.receipts) || result.receipts.length > 8) throw new Error('Write settlement unavailable')
+        || !Array.isArray(result.receipts) || result.receipts.length > BOB_WRITE_LIMIT) throw new Error('Write settlement unavailable')
       const confirmed = result.receipts.map(r => checkedReceipt(r, projectId))
       receipts.splice(0, receipts.length, ...confirmed)
       settled = true
@@ -199,8 +202,9 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       const payload = parseProjectWrite(name, value, projectId, userMessage, detail => { issue = detail })
       let result = await this.commit(payload)
       if (!payload && result.status === 'invalid') {
-        issue ??= { code: 'domain_fields', fields: [], message: 'The command has invalid domain fields. Re-read this tool schema and the current target records; the request quote passed validation.' }
-        result = { ...result, validation: { code: issue.code, fields: issue.fields }, message: `No change made. ${issue.message} Correct this call within the remaining write budget if the action is authorised.` }
+        const issues = schemaIssues(WRITE_TOOLS.find(t => t.function.name === name)?.function.parameters ?? {}, value)
+        issue ??= { code: 'domain_fields', fields: issues.map(i => i.path), message: 'The command has invalid domain fields. Re-read this tool schema and the current target records; the request quote passed validation.' }
+        result = { ...result, validation: { code: issue.code, fields: issue.fields }, ...(issues.length ? { issues } : {}), message: `No change made. ${issue.message} Correct this call within the remaining write budget if the action is authorised.` }
         console.warn('[Bob write validation]', JSON.stringify({ tool: name, code: issue.code, fields: issue.fields }))
       }
       // Track individual targets: saving another Task must not hide a rejected
@@ -214,11 +218,12 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
     async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
-      if (++used > 8) return { status: 'budget_exhausted' }
-      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' }
+      if (used >= BOB_WRITE_LIMIT || invalidAttempts >= 12) return { status: 'budget_exhausted' }
+      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' } }
       try {
         const { data, error } = await transport(payload)
         if (error) {
+          invalidAttempts++
           if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
           if (error.code === '40001' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
@@ -229,7 +234,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)
-        remember(receipt)
+        used++; remember(receipt)
         return { status: 'saved', receipt }
       } catch (error) {
         rethrowContinuation(error)

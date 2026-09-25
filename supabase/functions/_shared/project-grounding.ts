@@ -17,7 +17,8 @@ function packet(result: LookupResult) {
 }
 
 /** Keep the normal metadata-first path. Re-anchor only calls containing selected pixels.
- * Two bounded, parallel reads use the EXISTING caller-JWT dispatcher and read budget.
+ * Two bounded, parallel reads use the existing caller-JWT dispatcher with a reserved
+ * grounding pool. User-directed reads cannot silently consume this reserve.
  * No keyword router, duplicate store, automatic image open or construction-specific constants.
  */
 export function createGroundedModelCall(opts: {

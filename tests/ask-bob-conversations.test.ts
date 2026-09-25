@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from './support/bob-model-routing.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
 
 const pg = new PGlite()

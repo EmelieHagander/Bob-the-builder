@@ -48,15 +48,12 @@ a disabled row or a mismatched schema version never becomes callable. Exact
 schemas are sourced from the executable contract, not a separately editable JSON
 copy in a database. Adding a new handler does not require editing the model loop.
 
-`catalog-seed.json` is a version-controlled historical bootstrap/offline subset,
-not the full catalog after all subsequent migrations. It is an explicit
-fallback ONLY for injected/offline test callers. Production always supplies
-`createToolPolicyReader(client, projectId)`. A live policy failure never uses the
-seed, stale cross-user cache or an invented empty catalog. The SQL installation
-test compares the original bootstrap rows with their seed counterparts; it does
-not establish equality with the current migrated/live loadout. Later migrations
-and operator edits live in the database. The dated [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md)
-records the verified difference and its effect on runtime tests.
+`catalog-seed.json` is the complete migrated offline policy, including inactive
+rows and phase preloads. `tool-catalog-parity.test.ts` installs all migrations and
+compares every row/field. Production always supplies the caller-JWT reader;
+failed live reads never fall back to the seed. Operator edits must be recorded in
+a new migration and regenerated seed to retain parity. The dated
+[September 25 audit](bob-tool-autonomy-audit-2026-09-25.md) preserves the earlier drift.
 Already committed migrations are never edited to change a live loadout.
 
 There is no new grant editor in this slice. Eligibility reuses the actual
@@ -77,9 +74,13 @@ planned Current View. Future Area-aware hints must use a server-verified pointer
 
 `list_tools({query, after_name})` returns up to 12 permitted registered names and
 short descriptions, their loading/availability state, and a continuation cursor.
-A literal word filter is optional: `query:null` browses the full effective set.
-An empty filtered page never proves no suitable capability exists. The exact-name
-path does not depend on a ranker, embedding, or additional selection-model call.
+A query is interpreted by the governed `work-router` model against the eligible
+names, descriptions and guides. No Swedish/English keywords, object aliases or
+negated-description substring matches route the request. Exact returned names
+are intersected with eligible handlers; interpretation cannot register tools or
+grant authority. Rankings are cached only within this turn and exact policy
+snapshot for stable pagination. Search failure reports `browse_fallback` and
+returns browse pages. `query:null` and exact-name loading need no model call.
 
 `load_tool({name})` returns exactly one tool's full parameter schema, description,
 version, detailed catalog guide and implementation notes. It also records the
@@ -118,10 +119,12 @@ preflight of every possible argument before the model supplies it.
 The directory/loading budget is independent of project lookup, image and write
 budgets; loading never resets one. Bounds are 128 registered policy rows, 12 rows
 per directory page, 16 management operations and 24 distinct loaded names per
-turn. The execution loop allows twelve model rounds, with a tool-free final
-round and elapsed-time fencing. List/load themselves make no model call; sessions
-with a writer and CAD assistant also have the separate drawing-intent call owned
-by the [conversation contract](ask-bob-conversations.md#drawing-delivery).
+turn. The execution loop allows 24 model rounds, with a tool-free final round and
+elapsed-time fencing. Only queried discovery calls the routing model; browse and
+load do not. Claimed writers also use the general work-intent call owned by the
+[conversation contract](ask-bob-conversations.md#delegated-work-delivery). The
+routing configuration has low reasoning and explicit output ceilings, separate
+from Bob and the designer's high reasoning configuration.
 Lazy loading limits the initial schema/guide payload; no measured end-to-end
 latency improvement is claimed.
 
@@ -131,7 +134,7 @@ still produce their normal provenance; mutations still need a current-request
 quote and a verified canonical receipt. A catalog failure after a committed
 write must settle the write and retain receipt-only recovery rather than retry
 it or falsely report it undone. Image-context revocation behavior is unchanged.
-The operational trace records tool name/status, not arguments or project content.
+The operational trace records tool name/status and model role, latency and token counts, not arguments or project content. Model execution traces are emitted inside the journal operation, so replay does not appear as another model request. Tool outputs expose remaining execution/read/write/correction/CAD budgets.
 
 ## Original catalog-release scope (historical)
 

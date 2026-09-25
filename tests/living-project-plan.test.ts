@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { createPlanAssistant } from '../supabase/functions/_shared/plan-assistant.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer } from './support/bob-model-routing.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 
 const pg=new PGlite()

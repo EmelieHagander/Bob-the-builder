@@ -135,15 +135,15 @@ test('exact-current-request quote, raw privileges, project, owner, generation an
   await fail(c)
 })
 
-test('one create per semantic target/turn, bounded to eight writes, with idempotent readback', async () => {
+test('one create per semantic target/turn, bounded to 32 writes, with idempotent readback', async () => {
   const c=await claim()
   const payload=task('Unique task')
   const first=await write(c,payload)
   assert.deepEqual(await write(c,payload),first)
   await assert.rejects(write(c,task('Unique task',{instructions:'Different content'})),/operation_reused/)
-  for(let i=0;i<7;i++) await write(c,task('Bounded task '+i))
-  await assert.rejects(write(c,task('Ninth write')),/write_budget_exhausted/)
-  assert.equal((await receipts(c)).length,8)
+  for(let i=0;i<31;i++) await write(c,task('Bounded task '+i))
+  await assert.rejects(write(c,task('Thirty-third write')),/write_budget_exhausted/)
+  assert.equal((await receipts(c)).length,32)
   assert.equal((await pg.query("select * from bob.tasks where name='Unique task'")).rows.length,1)
   await fail(c)
 })

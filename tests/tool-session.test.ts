@@ -69,7 +69,7 @@ test('catalog has complete pagination, empty text search has an unfiltered brows
   const b = await f.session.execute('list_tools', { ...browse, after_name: a.next_cursor })
   const c = await f.session.execute('list_tools', { ...browse, after_name: b.next_cursor })
   assert.equal(new Set([...a.items, ...b.items, ...c.items].map((r: any) => r.name)).size, 27); assert.equal(c.next_cursor, null)
-  assert.equal((await f.session.execute('list_tools', { ...browse, query: 'no match' })).status, 'empty')
+  assert.equal((await f.session.execute('list_tools', { ...browse, query: 'no match' })).search, 'browse_fallback', 'Missing semantic search falls back to browsing, not a false absence')
   assert.equal((await f.session.execute('load_tool', { name: 'operation_26' })).status, 'loaded')
   assert.equal((await f.session.execute('list_tools', { ...browse, query: 'ritning' })).items.length, 12)
 })
