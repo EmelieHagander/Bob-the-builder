@@ -1,4 +1,5 @@
 import { parseStairInspection } from './project-stair.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
 import { stairSummary, withDerivedStair } from '../../../src/lib/stairStudy.ts'
 import { buildingPlanGeometry, checkedBuildingPlan, withDerivedBuildingPlan } from '../../../src/lib/buildingPlan.ts'
 import { parseProjection } from './project-building-plan.ts'
@@ -177,7 +178,8 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
           sources.push({ projectId, dataset, recordId: row.id, label, retrievedAt: result.retrievedAt, updatedAt: row.updated_at ?? null, truth: 'unknown' })
         }
         return result
-      } catch {
+      } catch (error) {
+        rethrowContinuation(error)
         incomplete = true
         return { ...base, status: 'unavailable' }
       } finally { clearTimeout(timer) }

@@ -1,4 +1,5 @@
 import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { PLAN_PROPOSAL_TOOL, parsePlanWrite, isPlanIdentity } from './project-plan.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -260,6 +261,7 @@ export function createPlanAssistant(opts:{
       const lookup=opts.makeLookup()
       let snapshot:{data:Record<string,unknown>;partial:boolean;sources:ProjectSource[]}
       try{snapshot=await buildSnapshot(lookup,deadline)}catch(e){
+        rethrowContinuation(e)
         partial=true
         return {status:e instanceof Error&&e.message==='project_denied'?'denied':'unavailable',saved:false,
           stage:'snapshot',reason:e instanceof Error?e.message:'snapshot_unavailable',

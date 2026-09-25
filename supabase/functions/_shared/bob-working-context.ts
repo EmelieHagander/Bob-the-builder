@@ -1,4 +1,5 @@
 import type { ModelCall } from './project-answer.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
 import { checkedBrief, readStoredBrief, CONVERSATION_BRIEF_SCHEMA, type ConversationBrief } from './bob-conversation-brief.ts'
@@ -109,7 +110,7 @@ Merge the previous gist with ONLY the older messages provided. Index every newly
             || result.messages.length > 5 || !result.messages.every(validMessage)) return { status: 'unavailable' }
           if (!await opts.hasAccess()) return { status: 'denied' }
           return { status: result.messages.length ? 'ok' : 'empty', ...result, truth: 'conversation_only' }
-        } catch { return { status: 'unavailable' } }
+        } catch (error) { rethrowContinuation(error); return { status: 'unavailable' } }
       },
     },
   }
