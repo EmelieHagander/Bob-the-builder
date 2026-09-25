@@ -64,6 +64,15 @@ continues unfinished work with its existing write receipts; the legacy
 synchronous path retains receipt-only recovery. The incident was reproduced at
 the compiler → reviewer boundary, with a regression covering JSONB key reorder.
 
+**September 25 retry bound:** a transient provider failure may retry twice for
+the same operation/input, with the count checkpointed across worker restarts. A
+third failure becomes `provider_retry_exhausted`, allowing the parent to explain
+the actual failure and continue independent work. Previously the same failed
+provider call could consume the entire twenty-minute job. Earlier successful
+reads/writes still replay; changed substantive inputs still stop continuation.
+A single completion review checks unfinished plan/CAD work before a premature
+final answer. It adds no permissions and leaves genuinely blocked work explicit.
+
 Named members opt in with `background: true` on the existing authenticated `send` request. `ask-bob` validates the caller and project, atomically claims the turn and enqueues a private job, then returns HTTP 202 with job id and expiry. Old clients and the shared guest retain their synchronous path. There is still one transcript and one domain-write ledger.
 
 The pattern follows Launchpad's async dispatch, continuation driver and resume paths inspected at `cd2decea3aa3c661e86ef66af54bd00c3fa0ba82`. Bob owns its implementation: `bob-background.ts`, `bob-job-journal.ts` and the two September 24 background migrations. No Launchpad runtime dependency or separate AI provider is introduced.

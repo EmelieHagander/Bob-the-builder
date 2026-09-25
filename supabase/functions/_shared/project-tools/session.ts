@@ -7,6 +7,9 @@ export interface ToolDefinition {
   spec: ToolSpec
   version: number
   gate(): ToolGate
+  /** A server-owned follow-up becomes visible once its prerequisite exists.
+   * Catalog policy, version, gate and per-call execution fences still apply. */
+  offerWhenReady?(): boolean
   execute(args: unknown): Promise<unknown>
 }
 export interface ToolPolicy {
@@ -97,7 +100,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         const { state, def } = resolve(row)
         if (state !== 'available' || !def) { loaded.delete(row.name); continue }
         if (loaded.has(row.name) && loaded.get(row.name) !== row.schema_version) loaded.delete(row.name)
-        if (row.always_load || loaded.get(row.name) === row.schema_version) {
+        if (row.always_load || loaded.get(row.name) === row.schema_version || def.offerWhenReady?.()) {
           specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version)
         }
       }

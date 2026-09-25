@@ -332,5 +332,14 @@
       "build"
     ],
     "active": true
+  },
+  {
+    "name": "edit_project_plan",
+    "description": "Prepare focused edits to the current plan while preserving unrelated Steps, criteria and Task ownership exactly.",
+    "how_to": "Use exact current IDs and a bounded changes list. Read-only: creates an exact candidate for save_compiled_project_plan. Remove obsolete work explicitly instead of falsely marking a physical check complete. Save the proposal, then use decide_project_plan when the current owner request explicitly instructs applying this exact edit. A request for suggestions alone does not approve a change.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
   }
 ]

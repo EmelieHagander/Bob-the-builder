@@ -119,7 +119,7 @@ write must settle the write and retain receipt-only recovery rather than retry
 it or falsely report it undone. Image-context revocation behavior is unchanged.
 The operational trace records tool name/status, not arguments or project content.
 
-## Drawing scope: this is not the geometry engine
+## Original catalog-release scope (historical)
 
 This release makes existing tools discoverable and accurately described. It does
 not turn `storage_box_v1`, `room_pair_v1` or the bounded stair generator into
@@ -184,3 +184,16 @@ New generic tools cover measurement archive/restore, solution create/revise, sco
 `read_project_record_section` navigates exact large plan/CAD records with JSON paths and bounded responses. A size limit cannot masquerade as an empty successful record. It does not increase project access or make partial evidence complete.
 
 Image generation, attachment and finalization use [the media contract](media-and-steps.md). These tools are catalog-discovered, not a new permanent list of incident-specific prompt instructions.
+
+## Focused edits and ready dependencies — September 25
+
+`edit_project_plan` is a core read-only preparation tool; its exact changes and
+evidence continuity are owned by [the living plan](living-project-plan.md#focused-plan-edits-and-evidence-continuity--september-25).
+Prepared plan/CAD saves and missing CAD prerequisites may be offered by server
+state on the next round without another discovery call. This never bypasses
+active catalog/version checks, per-call authorization, writer budget or the
+current round's offered-tool fence. A disabled tool remains disabled. The live
+compile/save/decision guides now agree that Task links are staged and applied
+atomically on approval, and distinguish a specific apply instruction from a
+request for proposals. The September 24/25 generic CAD integration supersedes
+the original catalog release's future-tense geometry section above.

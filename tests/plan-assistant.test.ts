@@ -144,7 +144,7 @@ test('server derives current approved revision for compile and audit; Bob cannot
     callModel:async (o:OpenAIServiceOptions)=>{
       calls.push(o)
       return o.functionName==='plan-compiler'
-        ? response({...compiled,expected_revision:7},'gpt-5.4-mini')
+        ? response({...compiled,expected_revision:999},'gpt-5.4-mini')
         : response(cleanReview,'gpt-5.4-nano')
     },
   })
@@ -153,6 +153,7 @@ test('server derives current approved revision for compile and audit; Bob cannot
   }) as any).status,'invalid','legacy revision plumbing is rejected rather than trusted')
   const audit:any=await assistant.consult(AUDIT_PLAN_TOOL.function.name,{})
   assert.equal(audit.status,'ok');assert.equal(audit.current_revision,7);assert.equal(audit.mode,'audit_plan')
+  assert.equal(audit.compiled_plan.expected_revision,7,'the compiler cannot override the server-read revision')
   const compilerPrompt=JSON.parse(String(calls[0].prompt))
   assert.equal(compilerPrompt.expected_revision,7)
   assert.equal(compilerPrompt.plan_intent,null)
@@ -457,7 +458,7 @@ test('a failed second compilation clears an older candidate and hard errors cann
   let compilerCalls=0
   const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,makeLookup,
     callModel:async o=>o.functionName==='plan-compiler'
-      ? response(++compilerCalls===1?compiled:{...compiled,expected_revision:99},'mini') :response(cleanReview,'nano')})
+      ? response(++compilerCalls===1?compiled:{...compiled,steps:[{...compiled.steps[0],step_id:'invented'}]},'mini') :response(cleanReview,'nano')})
   const rows=[COMPILE_PLAN_TOOL,SAVE_COMPILED_PLAN_TOOL,PLAN_PROPOSAL_TOOL].map(spec=>({
     name:spec.function.name,description:spec.function.description,how_to:'Fixture',schema_version:1,always_load:true,preload_phases:[],active:true}))
   const session=createBobToolSession({lookup:makeLookup(),planAssistant:assistant,

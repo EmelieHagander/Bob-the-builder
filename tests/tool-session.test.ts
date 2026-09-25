@@ -114,6 +114,21 @@ test('catalog edits take effect at execution, not only at preload', async () => 
   assert.equal(f.writes, 0)
 })
 
+test('a server-ready dependency is offered next round while catalog, authority and offered fences remain enforced',async()=>{
+ const f=fixture();let ready=false
+ f.definitions[1].offerWhenReady=()=>ready
+ const session=f.make();await session.prepare()
+ ready=true
+ assert.equal((await session.execute('draw_shape',{})).status,'not_loaded')
+ assert(names(await session.prepare()).includes('draw_shape'))
+ assert.equal((await session.execute('draw_shape',{})).status,'saved')
+ f.setGate('not_allowed')
+ assert.equal((await session.execute('draw_shape',{})).status,'not_allowed')
+ f.setGate('available');f.rows[1].active=false
+ assert(!names(await session.prepare()).includes('draw_shape'))
+ assert.equal(f.writes,1)
+})
+
 test('strict discovery inputs reject project, privilege, SQL, URL and wildcard payloads', async () => {
   const f = fixture(); await f.session.prepare()
   for (const input of [{ name: 'draw_shape', projectId: 'B' }, { name: 'draw_shape', role: 'admin' }, { name: '../evil' }, { name: '*' }, { name: 'https://evil.example' }, null]) {
