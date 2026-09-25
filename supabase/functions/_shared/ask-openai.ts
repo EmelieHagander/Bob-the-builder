@@ -80,7 +80,12 @@ export async function answerWithOpenAi(opts: {
     }, signal)
   const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32)
   const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48)
-  const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, get sources() { return [...projectLookup.sources, ...groundingLookup.sources] } }
+  const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
+  const imageGrounding = { async search(input: LookupInput) {
+    const result = await groundingLookup.search(input)
+    for (const source of groundingLookup.sources) if (!lookup.sources.some(s => s.dataset===source.dataset && s.recordId===source.recordId)) lookup.sources.push(source)
+    return result
+  } }
   const hasAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -129,7 +134,7 @@ export async function answerWithOpenAi(opts: {
     callModel,
   })
   const cadAssistant = createCadAssistant({
-    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,
+    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
@@ -211,7 +216,7 @@ export async function answerWithOpenAi(opts: {
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
-      projectId: opts.projectId, message: opts.message, lookup: groundingLookup, hasAccess, deadline,
+      projectId: opts.projectId, message: opts.message, lookup: imageGrounding, hasAccess, deadline,
       validateImages: () => projectContext.validate(),
       callModel,
     }),

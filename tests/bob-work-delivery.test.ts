@@ -57,3 +57,14 @@ test('semantic discovery uses actual contracts, caches pagination, and never exp
  for(let i=0;i<2;i++){const result=await session.execute('list_tools',{query:'キャビネットを設計',after_name:null});assert.deepEqual(result.items.map((r:any)=>r.name),['design_project_cad'])}
  assert.equal(queries.length,1);assert.equal((await session.execute('load_tool',{name:'forbidden'})).status,'not_allowed')
 })
+test('capability routing accepts the parsed structured object returned by the real Responses adapter',async()=>{
+ const f=fixture();let calls=0
+ const result=await f.run(async o=>{
+  if(o.schemaName==='bob_work_delivery')return reply({goals:[],request_quote:null})
+  if(o.schemaName==='bob_capability_search')return {...reply(''),data:{names:['save_project_task']}} as any
+  if(++calls===1)return call('list_tools',{query:'作業を追加する',after_name:null})
+  const output=JSON.parse(String(o.messages![0].content));assert.equal(output.search,'capability_match');assert.deepEqual(output.items.map((i:any)=>i.name),['save_project_task'])
+  return reply('The available capability was found.')
+ })
+ assert(result.ok);assert.equal(calls,2);assert.equal(f.writes.length,0)
+})
