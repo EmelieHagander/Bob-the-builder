@@ -51,11 +51,16 @@ export async function answerWithOpenAi(opts: {
       return { data, error }
     })
   }
-  const callModel = (options: OpenAIServiceOptions) => memo('model:' + options.functionName, options, async () => {
+  const callModel = async (options: OpenAIServiceOptions) => {
+   try{return await memo('model:' + options.functionName, options, async () => {
     const result = await callOpenAIResponses<string>(options)
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
-  }, options.timeoutMs ?? 120000)
+   }, options.timeoutMs ?? 120000)}catch(error){
+    if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
+    throw error
+   }
+  }
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, createMediaTransport(client, { ...opts, url, key }))
     return { ...adapter,

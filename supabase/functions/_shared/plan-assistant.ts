@@ -2,6 +2,7 @@ import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { PLAN_PROPOSAL_TOOL, parsePlanWrite, isPlanIdentity } from './project-plan.ts'
+import { EDIT_PLAN_TOOL, editPlanSnapshot } from './plan-edit.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
@@ -42,7 +43,7 @@ export const SAVE_COMPILED_PLAN_TOOL={
   type:'function' as const,
   function:{
     name:'save_compiled_project_plan',
-    description:'Save the exact current-turn plan compilation that passed server validation and that Bob has assessed using the advisory nano review. This creates only a reviewable proposal, never approval. Do not reconstruct the plan JSON yourself.',
+    description:'Save the exact current-turn compilation or focused edit that passed server validation. For compilations, assess the advisory nano review. This creates only a reviewable proposal, never approval. Do not reconstruct the plan JSON yourself.',
     parameters:{
       type:'object',additionalProperties:false,
       properties:{request_quote:{type:'string',description:'Exact quote from the CURRENT user request authorising this plan proposal.'}},
@@ -55,7 +56,6 @@ const proposalSteps=(PLAN_PROPOSAL_TOOL.function.parameters.properties as Record
 const compilationSchema={
   type:'object',additionalProperties:false,
   properties:{
-    expected_revision:{type:'integer',minimum:0},
     summary:{type:'string'},
     reason:{type:'string'},
     steps:proposalSteps,
@@ -73,7 +73,7 @@ const compilationSchema={
     },
     observations:{type:'array',maxItems:30,items:{type:'string'}},
   },
-  required:['expected_revision','summary','reason','steps','task_candidates','observations'],
+  required:['summary','reason','steps','task_candidates','observations'],
 }
 
 const REVIEW_CODES=['active_step_count','bundled_requirement','evidence_mismatch','unresolved_conflict',
@@ -104,11 +104,11 @@ const reviewSchema={
 
 const COMPILER_SYSTEM=`You keep the plan desk in order. Bob is the project manager; turn his intent into the supplied schema using the authorised PROJECT SNAPSHOT. You cannot write data or replace his strategy.
 
-Preserve sequence, goals and known identities/parents; new identities are null. Omit completed Steps; their history is preserved. Independent Steps may be active together. Unknown people remain unassigned. In audit mode preserve strategy; repair feedback is advice.
+Preserve sequence, goals and known identities/parents; copy exact Step/Requirement UUIDs from the snapshot, and use null for new identities. Task IDs are not Requirement IDs. Omit completed Steps; their history is preserved. Independent Steps may be active together. Unknown people remain unassigned. In audit mode preserve strategy; repair feedback is advice. The server binds the current revision.
 
 Finish criteria are atomic and require matching evidence; briefs and Task existence prove nothing. Expose uncertainty and conflicts. Missing evidence stays open; Task selectors cannot prove completion.
 
-Return only the structured compilation. task_candidates select one primary Step per existing Task, staged with the proposal and applied on approval.`
+Return only the structured compilation. task_candidates contain only requested ownership changes, each Task once. Existing primary ownership is preserved automatically; related_tasks are references, not additional owners.`
 
 const REVIEWER_SYSTEM=`You check the plan at Bob's desk. Bob remains the project manager. Compare the compilation, his intent and authorised snapshot against the supplied schema and server validation.
 
@@ -227,20 +227,43 @@ export function createPlanAssistant(opts:{
   projectId:string;userId:string;hasAccess:()=>Promise<boolean>;
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
-  let used=0,partial=false
+  let used=0,editUsed=0,partial=false
   let compilationAttempted=false
   let repairFeedback:null|{compiled_plan:unknown;review:unknown;server_validation:unknown}=null
   let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[];task_links:{step_position:number;task_id:string}[]}=null
   const sources:ProjectSource[]=[]
   return {
-    tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL],
+    tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL,EDIT_PLAN_TOOL],
     get canSave(){return savableProposal!==null},
     get compilationAttempted(){return compilationAttempted},
     get compiledProposal(){return savableProposal?structuredClone(savableProposal):null},
     get remaining(){return Math.max(0,MAX_CALLS-used)},
+    get editRemaining(){return Math.max(0,4-editUsed)},
     get partial(){return partial},
     get sources(){return sources.slice()},
     async consult(name:string,value:unknown){
+      if(name===EDIT_PLAN_TOOL.function.name){
+        if(editUsed++>=4)return {status:'budget_exhausted',saved:false}
+        savableProposal=null;compilationAttempted=true
+        if(!await opts.hasAccess())return {status:'denied',saved:false}
+        let snapshot:Awaited<ReturnType<typeof buildSnapshot>>
+        try{snapshot=await buildSnapshot(opts.makeLookup(),opts.deadline??Date.now()+90000)}
+        catch(error){rethrowContinuation(error);partial=true;return {status:'unavailable',stage:'snapshot',saved:false,reason:'The complete current plan context could not be read.'}}
+        let compiled:ReturnType<typeof editPlanSnapshot>
+        try{compiled=editPlanSnapshot(snapshot.data,value)}
+        catch(error){return {status:'invalid',saved:false,reason:error instanceof Error?error.message:'Invalid edit.'}}
+        const proposal={expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
+          task_links:compiled.task_candidates.map(c=>({step_position:c.step_position,task_id:c.task_id}))}
+        const issues=localValidation('compile_plan',compiled.expected_revision,compiled,snapshot.data)
+        if(!parsePlanWrite('propose_project_plan',{...proposal,request_quote:'edit validation'}))issues.push({severity:'error',code:'invalid_plan_shape',message:'Use the advertised field types, lengths and unfinished Step states; retain at least one Step.'})
+        if(!await opts.hasAccess())return {status:'denied',saved:false}
+        const valid=!issues.some(i=>i.severity==='error')
+        if(valid)savableProposal=structuredClone(proposal)
+        for(const s of snapshot.sources)if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId))sources.push(s)
+        return {status:valid?'ok':'invalid',saved:false,mode:'edit_plan',current_revision:compiled.expected_revision,proposal_ready:valid,
+          server_validation:{valid,issues},compiled_plan:proposal,
+          note:'Unchanged work was copied from the current plan. Save the exact proposal with save_compiled_project_plan; only a successful decide_project_plan receipt makes it current. An explicit instruction to apply this exact edit may authorise that decision; a request for options does not.'}
+      }
       const mode=name===COMPILE_PLAN_TOOL.function.name?'compile_plan' as const
         :name===AUDIT_PLAN_TOOL.function.name?'audit_plan' as const
         :null
@@ -283,7 +306,8 @@ export function createPlanAssistant(opts:{
         timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
       })
       if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
-      const compiled=compiler.data as any
+      // Revision is transport/concurrency state, never a model-authored fact.
+      const compiled={...compiler.data as any,expected_revision:expectedRevision}
       const dummy='assistant validation'
       const parsed=parsePlanWrite('propose_project_plan',{expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,
         steps:compiled.steps,task_links:(compiled.task_candidates??[]).map((c:any)=>({step_position:c.step_position,task_id:c.task_id})),request_quote:dummy})

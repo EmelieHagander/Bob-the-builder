@@ -33,7 +33,7 @@ const selectorSchema = {
 const requirementSchema = {
   type:'object',additionalProperties:false,
   properties:{
-    requirement_id:{ type:['string','null'],description:'Stable UUID from the current plan when preserving identity; null for a new requirement.' },
+    requirement_id:{ type:['string','null'],pattern:uuid.source,description:'Exact Requirement UUID from the current plan, never a Task ID; null for a new requirement.' },
     type:{ type:'string',enum:['measurement','photo','decision','drawing','material_requirement','material_delivery','task','approval','check','other'] },
     title:{ type:'string' }, description:{ type:'string' },
     resolution:{ type:'string',enum:['open','waived','not_applicable'] },
@@ -45,7 +45,7 @@ const requirementSchema = {
 const stepSchema = {
   type:'object',additionalProperties:false,
   properties:{
-    step_id:{ type:['string','null'],description:'Stable UUID from current plan when this is the same active/future Step; null for a new Step.' },
+    step_id:{ type:['string','null'],pattern:uuid.source,description:'Stable UUID from current plan when this is the same active/future Step; null for a new Step.' },
     title:{type:'string'}, goal:{type:'string'},
     state:{type:'string',enum:['planned','active','blocked','completed']},
     area_id:{...nullableText,description:'Optional organisational Area. Null places the Step directly in the Project.'},
@@ -73,7 +73,7 @@ export const PLAN_DECISION_TOOL = tool('decide_project_plan',
     proposal_revision:{type:'integer'},
     expected_revision:{type:'integer',description:'Current approved revision, or 0 when approving the first plan.'},
     decision_note:{type:'string'},
-    request_quote:{type:'string',description:'Exact quote from the CURRENT user request that clearly approves or rejects this proposal.'},
+    request_quote:{type:'string',description:'Exact current request approving/rejecting the proposal or explicitly directing this exact plan edit to be applied. A request for suggestions alone is not approval.'},
   })
 
 export const PLAN_EVIDENCE_TOOL = tool('link_project_plan_evidence',

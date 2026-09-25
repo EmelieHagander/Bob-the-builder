@@ -1,5 +1,20 @@
 # bob — current capability & gap inventory
 
+## Plan/CAD autonomy correction — September 25, 2026
+
+A real conversation exposed three remaining orchestration failures: a small plan
+edit rebuilt the whole plan and failed identity/Task-owner validation; drawing
+research exhausted its rounds without a render or selected target; Bob ended
+with an offer to continue already delegated work. Source now includes focused
+plan edits, server-bound revisions, evidence continuity, target prerequisites,
+staged CAD research/rendering and one bounded completion review. Durable provider
+retries are checkpointed and limited. The owning contracts are
+[living plan](living-project-plan.md#focused-plan-edits-and-evidence-continuity--september-25),
+[CAD](cad-adapter.md#drawing-prerequisites-and-completion--september-25) and
+[conversation recovery](ask-bob-conversations.md#durable-background-turns).
+The release PR records tests and deployment. The incident's text draft was not a
+saved CAD drawing; named-member model-to-save acceptance remains a distinct gate.
+
 ## Project-scenario gap closure — September 25, 2026
 
 Implementation and tests now connect saved generic CAD parts to versioned deterministic blank quantities, stock/reuse allocation and explicit Shopping handoff. Bob also gains dependency/need/readiness operations and build days with exact Task schedules; Event detail reads those schedules. Whole-project plans support 100 Steps. Generic CAD adds cylinders, holes/notches, bounded exact overlap checks, requested surface clearances and conservative straight-travel envelopes. Eight curated reference notes have bounded, attributable retrieval and separate reference disclosure. The release PR owns CI, deployment and real-model outcomes; source presence is not a production claim.

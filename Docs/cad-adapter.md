@@ -50,7 +50,7 @@ The integration registers `design_project_cad` and `save_cad_design`. The first 
 
 The dedicated `CAD adapter` workflow installs Python 3.13 and build123d 0.13.0 on GitHub Actions and runs both layers. PR #96 and the post-merge main run both passed: the real engine generated STEP/SVG and the TypeScript contract tests passed. This proves the adapter/engine seam, not hosted CAD availability in Bob, model behavior, structural engineering or BOM/Shopping completion.
 
-## Next
+## Historical integration sequence (superseded by the integration below)
 
 The September 24 product mandate makes this integration a delivery gap for
 [UC-001 and UC-005](user-stories.md#product-mandate--2026-09-24), not an optional
@@ -74,7 +74,7 @@ Constraints and formulas need a declarative vocabulary. They must never be execu
 
 Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. A separate `cad-designer/cad` standard/high setting uses the shared Responses service. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
 
-Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
+Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. September 25 adds a three-round research stage, then a render/repair stage and a final inspection call; exact measurement verification has its own bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
 A detail selection uses exact instance IDs from a pinned source assembly. Definitions and placements are reused; the database rejects a changed/stale source and the UI flags later source changes. Changing the parent never silently rewrites a saved detail. Arbitrary construction revisions remain possible via a new bounded recipe.
 
@@ -104,3 +104,21 @@ The live smoke test checks STEP plus all four SVG views, engine identity, dimens
 ### Verification boundaries
 
 Automated tests cover the assistant loop, source-part reuse, failed-repair invalidation, stale measurements, revoked access, canonical saves/retries, other-project denial, image recovery and navigable large records. CAD-worker CI runs the real pinned build123d engine. The foundations browser scenario includes saved CAD views, part dimensions, reload, project-Step navigation and protection from geometry loss through the generic editor at mobile/desktop widths. Controlled model responses establish orchestration, not real-model design quality. Whole-bed, drawer-detail and changed-parent named-member live acceptance remain separate gates; the worker is now hosted.
+
+### Drawing prerequisites and completion — September 25
+
+Before invoking the designer, the server reads the exact scoped selected target.
+An absent Area target may inherit the Project target; an explicitly cleared Area
+target cannot. No target returns an actionable prerequisite to Bob before spending
+a design attempt. Bob can reuse/save the justified solution, select its revision,
+and resume the drawing in the same delegated job. Target-read failure remains a
+retrieval failure, not a missing design choice. Candidates must cite that exact
+server-read target revision; the save rechecks canonical versions.
+
+Prerequisite tools and an exact candidate's save tool become offered on the next
+model round when their runtime conditions hold. Catalog activation, registration,
+caller authority, budgets and the offered-tool fence remain mandatory. The parent
+loop makes at most one completion review when a plan/CAD attempt is left unfinished.
+It compares the original request with real results; it creates no new user request
+or automatic approval. Provider retry bounds are owned by
+[conversation recovery](ask-bob-conversations.md#durable-background-turns).

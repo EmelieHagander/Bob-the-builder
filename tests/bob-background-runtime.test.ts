@@ -49,6 +49,22 @@ test('changed replay inputs stop instead of dispatching another operation', asyn
   assert.throws(() => replay.check(), /continuation_changed/)
 })
 
+test('provider retry count survives workers and stops the failing call without losing earlier work',async()=>{
+  const entries:JournalEntry[]=[],store={entries,save:async(e:JournalEntry)=>{entries.push(structuredClone(e))}}
+  let saved=0,attempts=0
+  const run=async(input='same')=>{
+    const journal=createBobJournal(store,Infinity)
+    assert.equal(await journal.run('write',{},async()=>{saved++;return 'receipt'}),'receipt')
+    return journal.run('model:cad',{input},async()=>{attempts++;throw new BobContinuation('yield','provider_retry')})
+  }
+  for(let i=0;i<2;i++)await assert.rejects(run(),e=>e instanceof BobContinuation&&e.kind==='yield')
+  await assert.rejects(run('changed'),/continuation_changed/)
+  assert.equal(attempts,2)
+  await assert.rejects(run(),/provider_retry_exhausted/)
+  await assert.rejects(run(),/provider_retry_exhausted/)
+  assert.equal(attempts,3);assert.equal(saved,1)
+})
+
 test('checkpoint delivery cannot be changed by a caller mutating its nested result', async () => {
   const entries:JournalEntry[]=[]
   const store={entries,save:async(e:JournalEntry)=>{entries.push(e)}}

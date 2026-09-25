@@ -38,6 +38,7 @@ Image metadata is not visual evidence. open_project_item delivers selected pixel
   planContract: `# Plan desk
 The plan_spine orients you; current_step is your working desk. Its brief holds intent and constraints, Tasks hold actions, and Completion Requirements hold independently verifiable finish criteria. Neither a brief nor a Task's existence proves completion. Keep actual Step–Task links current through their tool and receipt. Preserve completed history.
 You own strategy. Send plan_intent to compile_project_plan; mini represents your plan and nano advises on its evidence. Assess that advice yourself. Correct real defects with another compilation when available; server_validation errors must be resolved. Open requirements represent unfinished work honestly and need not prevent a useful proposal.
+For a focused change, use edit_project_plan to preserve the unrelated plan exactly. An explicit instruction to apply a specific edit can authorise its approval; a request for proposals alone cannot. A plan error does not block other delegated work.
 When proposal_ready is true and the proposal is sound, carry out the requested save with save_compiled_project_plan and the current request_quote. This saves the exact compilation; do not reconstruct it through propose_project_plan. Use remaining_attempts to manage corrections. audit_project_plan is read-only. Saving a proposal does not approve it; making it the current plan requires explicit authorised approval.`,
 } as const
 export const BOB_TRUTH_RULES = Object.values(BOB_SYSTEM_SECTIONS).join('\n\n')
@@ -105,6 +106,7 @@ export async function runProjectAnswer(opts: {
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
   const rounds = 12, deadline = opts.deadline ?? Date.now() + 220_000
+  let completionReviewed=false
   for (let round = 0; round < rounds; round++) {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
@@ -155,6 +157,17 @@ export async function runProjectAnswer(opts: {
     // read-only load_tool recovery above is interpreted; printed domain/write
     // calls fail closed rather than executing text that merely resembles a call.
     if (answerText && hasPrintedToolProtocol(answerText)) return { ok: false, error: 'unsupported_tool_response' }
+    // A bounded review of the actual request/results, not a new user request or
+    // automatic write. Technical failure in one subtask must not silently end
+    // another authorised subtask. Pure research answers incur no extra call.
+    const saved=(name:string)=>toolbox.events.some(e=>e.operation==='execute'&&e.name===name&&e.status==='saved')
+    const unfinishedAssistant=opts.planAssistant?.compilationAttempted&&!saved('save_compiled_project_plan')
+      ||toolbox.events.some(e=>e.operation==='execute'&&e.name==='design_project_cad')&&!saved('save_cad_design')
+    if(answerText&&opts.writer&&unfinishedAssistant&&!completionReviewed&&response.responseId&&tools.length&&round<rounds-2&&Date.now()+40000<deadline){
+      completionReviewed=true;previousResponseId=response.responseId
+      messages=[{role:'system',content:'Before finalising, compare the owner’s current request with the actual tool results. Continue any authorised unfinished work that remains possible, including saving prepared results through their tools. A failure in one subtask does not cancel independent subtasks. Do not offer already delegated work for a later reply or ask again for ordinary prerequisites. Do not expand scope or bypass an approval, physical check, uncertainty or exhausted budget. If the request is complete or truly blocked, give the concise result and precise remaining blocker.'}]
+      continue
+    }
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (!answerText) return { ok: false, error: 'empty_response' }
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,

@@ -29,6 +29,7 @@ export function createBobToolSession(opts: {
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
     ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
+      offerWhenReady:()=>opts.cadAssistant?.requiredTools?.includes(spec.function.name)??false,
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
         : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
@@ -48,19 +49,20 @@ export function createBobToolSession(opts: {
     ...(opts.imageTools?.tools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.imageTools!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.imageTools!.execute(spec.function.name,v)})),
     ...(opts.cadAssistant ? [
       ...opts.cadAssistant.tools.map(spec => ({spec,version:1,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
-      {spec:SAVE_CAD_TOOL,version:1,gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
+      {spec:SAVE_CAD_TOOL,version:1,offerWhenReady:()=>!!opts.cadAssistant!.candidate,gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
         const c=opts.cadAssistant!.candidate;if(!c)return {status:'missing_context'}
         return opts.writer!.commit({kind:'cad',record_id:c.artifact_id,expected_updated_at:null,expected_revision:c.expected_revision,request_quote:(v as any).request_quote,data:c})
       }},
     ]:[]),
     ...(opts.planAssistant?.tools ?? []).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => opts.planAssistant!.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => (spec.function.name==='edit_project_plan'?opts.planAssistant!.editRemaining:opts.planAssistant!.remaining) > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.planAssistant!.consult(spec.function.name, v),
     })),
     ...(opts.planAssistant ? [{
       spec:SAVE_COMPILED_PLAN_TOOL,version:1,
-      gate:():ToolGate=>!opts.writer?'not_allowed':opts.planAssistant!.canSave?'available':'missing_context',
+      offerWhenReady:()=>opts.planAssistant!.canSave,
+      gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.planAssistant!.canSave?'available':'missing_context',
       execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
         const proposal=opts.planAssistant!.compiledProposal

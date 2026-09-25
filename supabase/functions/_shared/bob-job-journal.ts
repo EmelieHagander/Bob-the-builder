@@ -51,6 +51,10 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
       const key = `${stream}:${position}`, hash = await fingerprint(input)
+      const retries=[...entries.values()].filter(e=>e.key.startsWith(key+':retry:'))
+      if(retries.some(e=>e.fingerprint!==hash)){
+        stopped=new BobContinuation('stop','continuation_changed');throw stopped
+      }
       const prior = entries.get(key)
       if (prior) {
         if (prior.fingerprint !== hash) {
@@ -73,9 +77,21 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       let value: T | undefined, failure: string | undefined
       try { value = await operation() }
       catch (error) {
+        if(error instanceof BobContinuation&&error.kind==='yield'&&error.message==='provider_retry'){
+          // A durable queue must not retry the same failing model call until
+          // the twenty-minute turn expires. Keep the retry count with its
+          // exact input, across workers, then return an honest failure.
+          if(retries.length<2){
+            const marker={key:key+':retry:'+(retries.length+1),fingerprint:hash,value:{reason:'provider_retry'}}
+            try{await store.save(marker)}catch{stopped=new BobContinuation('yield','checkpoint_unavailable');throw stopped}
+            entries.set(marker.key,marker);stopped=error;throw stopped
+          }
+          failure='provider_retry_exhausted'
+        }else{
         rethrowContinuation(error)
         if (stream === 'image:generate') throw error
         failure = error instanceof Error ? error.message.slice(0,500) : 'operation_failed'
+        }
       }
       // Save before the caller can dispatch another operation. A lost response
       // at a domain-write boundary is reconciled by the existing SQL ledger.

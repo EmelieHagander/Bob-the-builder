@@ -12,7 +12,7 @@ const candidate={recipe,source_artifact_id:null,source_revision:null,part_ids:[]
 const response=(name?:string,args?:unknown)=>({success:true,data:name?null:'Ritningen är klar.',model:'fixture',responseId:'resp',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'call',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
 function fixture(){let calls=0;const seen:any[]=[];let allowed=true
  const opts={projectId:'A',userId:'u',hasAccess:async()=>allowed,deadline:Date.now()+200000,available:true,
-  makeLookup:()=>createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null}),1000,40),
+  makeLookup:()=>createProjectLookup('A',async(_p,input)=>({data:{records:input.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:[],related:[],truncated:false},error:null}),1000,40),
   callModel:async(o:any)=>{seen.push(o);return calls++===0?response('render_cad_candidate',candidate):response()},
   render:async(r:CadAssemblyRequest)=>({recipe:r,manifest:{bounding_box_mm:{size:[800,600,1800]},instances:r.instances},files:{front:'Zml4dHVyZQ=='}}),
   readArtifact:async()=>({revision:2,recipe:structuredClone(recipe)})}
@@ -51,4 +51,39 @@ test('CAD restart restores the rendered candidate without rendering or asking th
  assert.equal((await resumed.consult(structuredClone(request))).status,'ready')
  assert.deepEqual(resumed.candidate!.packet.recipe,recipe)
  assert.equal(renders,1);assert.equal(f.seen.length,2)
+})
+
+test('missing or explicitly cleared targets return actionable prerequisites before spending CAD attempts',async()=>{
+ for(const cleared of [false,true]){
+  const f=fixture();let reads=0
+  f.opts.makeLookup=()=>createProjectLookup('A',async()=>{reads++;return {data:{records:cleared?[{id:'area',revision:2,solution_id:null}]:[],related:[],truncated:false},error:null}},1000,40)
+  const a=createCadAssistant(f.opts)
+  assert.equal((await a.consult({...request,area_id:cleared?'area':null})).status,'prerequisite_required')
+  assert.equal(reads,1,'a cleared area target must not silently fall back to the project target')
+  assert.equal(a.remaining,2);assert.equal(f.seen.length,0)
+  assert.deepEqual(a.requiredTools,['save_project_solution','select_project_target'])
+ }
+})
+
+test('CAD research has a bounded stage and exact measurement verification remains available after it',async()=>{
+ const f=fixture();let calls=0,renders=0
+ f.opts.makeLookup=()=>createProjectLookup('A',async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:i.dataset==='measurements'?[{id,revision:1}]:[],related:[],truncated:false},error:null}),1000,4)
+ f.opts.callModel=async(o:any)=>{
+  calls++
+  if(calls<=3)return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
+  assert(!o.tools.some((t:any)=>t.function.name==='search_project_data'))
+  return calls===4?response('render_cad_candidate',{...candidate,measurements:[{id,revision:1}]}):response()
+ }
+ f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1);assert.equal(calls,5)
+ assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
+})
+
+test('CAD cannot render against an invented target revision',async()=>{
+ const f=fixture();let calls=0,renders=0
+ f.opts.callModel=async()=>calls++===0?response('render_cad_candidate',{...candidate,target_revision:9}):response()
+ f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult(request)).status,'incomplete');assert.equal(renders,0)
 })

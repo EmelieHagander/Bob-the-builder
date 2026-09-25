@@ -12,5 +12,6 @@ test('published release marker and authenticated HTTP handler identify the same 
     assert.equal(response.headers.get('Access-Control-Expose-Headers'), 'X-Bob-Release')
     assert.equal(response.status, method === 'POST' ? 401 : 204)
   }
-  assert.equal(manifest.knowledge_library, 'planned_not_seeded')
+  assert.equal(manifest.knowledge_library, 'curated_reference_notes')
+  assert.equal(manifest.general_drawing, 'bounded_cad_assemblies')
 })
