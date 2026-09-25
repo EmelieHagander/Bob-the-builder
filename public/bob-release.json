@@ -1,11 +1,13 @@
 {
-  "release": "bob-material-catalog-2026-09-21",
-  "feature_source_commit": "13f695cdeda10b4ef1ca34c318c3b4148f37fd4c",
-  "knowledge_library": "planned_not_seeded",
+  "release": "bob-plan-autonomy-2026-09-25",
+  "feature_source_commit": "ea200dcf9b31eb36dc5553d247181f0c55537957",
+  "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "fresh_project_and_measurement_context",
   "answer_voice": "first_person",
   "tool_loading": "core_phase_preload_exact_on_demand",
   "material_catalog": "versioned_definitions_mm_and_inch_input",
-  "general_drawing": "not_implemented"
+  "general_drawing": "bounded_cad_assemblies",
+  "plan_updates": "focused_edits_with_evidence_continuity",
+  "background_retries": "durable_bounded"
 }
