@@ -165,7 +165,10 @@ export async function answerWithOpenAi(opts: {
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
   },hasAccess)
   return runClaimedProjectTurn({
-    ...opts, resume: opts.background?.replay, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    // A fresh explicit retry of a failed durable job has receipts but no old
+    // journal. Continue from current records as well as during journal replay;
+    // receipt-only recovery would abandon the unfinished part of the request.
+    ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

@@ -49,6 +49,17 @@ test('changed replay inputs stop instead of dispatching another operation', asyn
   assert.throws(() => replay.check(), /continuation_changed/)
 })
 
+test('checkpoint delivery cannot be changed by a caller mutating its nested result', async () => {
+  const entries:JournalEntry[]=[]
+  const store={entries,save:async(e:JournalEntry)=>{entries.push(e)}}
+  const original={z:{label:'Saved',revision:1},a:[{y:2,x:1}]}
+  const first=await createBobJournal(store,Infinity).run('read',{},async()=>original)
+  first.z.revision=999
+  const replay=await createBobJournal(store,Infinity).run('read',{},async()=>{throw new Error('must replay')})
+  assert.deepEqual(replay,original)
+  assert.equal(original.z.revision,1)
+})
+
 test('unknown paid-image outcome is never blindly generated a second time', async () => {
   const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(e) } }
   let calls = 0

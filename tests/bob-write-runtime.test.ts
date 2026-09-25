@@ -105,6 +105,20 @@ test('retry with existing receipts runs no model and no writes, commits a recove
   assert.equal(committed.g,2)
 })
 
+test('durable retry continues unfinished work from current state and retains existing receipts',async()=>{
+  const f=writerFixture({recovered:[receipt]})
+  let calls=0,committed:any
+  const result=await runClaimedProjectTurn({...base(),resume:true,writer:f.writer,
+    callModel:async()=>{calls++;return {...final(),data:'Fortsatt med ritningen; den tidigare uppgiften är sparad.'}},
+    commit:async r=>{committed=r},
+  })
+  assert.equal(result.ok,true)
+  assert.equal(calls,1)
+  assert.equal(f.writes,0)
+  assert.equal(committed.evidence.writes.length,1)
+  assert.match(committed.answer,/Fortsatt med ritningen/)
+})
+
 test('timeout after database commit stops further writes and settlement returns the actual saved change',async()=>{
   const f=writerFixture({throwWrite:true})
   let calls=0

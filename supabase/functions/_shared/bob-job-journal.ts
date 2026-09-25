@@ -15,6 +15,18 @@ export interface BobJournal {
   run<T>(stream: string, input: unknown, operation: () => Promise<T>, reserveMs?: number): Promise<T>
   check(): void
 }
+/** JSONB checkpoints reorder object keys. Return the same JSON representation
+ * both before and after persistence, including nested structured model output.
+ * Keep every field/value: only object order changes, never array order or truth.
+ * Clone on delivery so a caller cannot mutate the journal's recorded result. */
+function stableResult<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(stableResult) as T
+  if (value && typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+      .map(([key, v]) => [key, stableResult(v)]),
+  ) as T
+  return value
+}
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
@@ -46,7 +58,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         }
         const outcome = prior.value as { ok: boolean; result?: T; error?: string }
         if (!outcome.ok) throw new Error(outcome.error ?? 'operation_failed')
-        return structuredClone(outcome.result) as T
+        return stableResult(outcome.result) as T
       }
       if (reserveMs && now() + reserveMs + 8000 > segmentDeadline) {
         stopped = new BobContinuation('yield'); throw stopped
@@ -72,7 +84,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       catch { stopped = new BobContinuation('yield', 'checkpoint_unavailable'); throw stopped }
       entries.set(key, entry)
       if (failure) throw new Error(failure)
-      return value as T
+      return stableResult(value) as T
     },
   }
 }

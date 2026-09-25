@@ -1,4 +1,5 @@
 import type { WritePayload } from './project-write.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
 /** Generic catalog API: material/form/profile are DATA, never object-name handlers. */
@@ -158,7 +159,7 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
             label: `${r.name} · v${r.revision}`, retrievedAt: new Date().toISOString(), updatedAt: r.recorded_at, truth: catalogSourceTruth(r) })
         } else if (data.status === 'ok' && !isObject(data.record)) throw new Error('invalid_result')
         return data
-      } catch { partial = true; return { status: 'unavailable', message: 'Catalog read failed; this is not proof a definition is missing.' } }
+      } catch (error) { rethrowContinuation(error); partial = true; return { status: 'unavailable', message: 'Catalog read failed; this is not proof a definition is missing.' } }
       finally { if (timer) clearTimeout(timer) }
     },
   }

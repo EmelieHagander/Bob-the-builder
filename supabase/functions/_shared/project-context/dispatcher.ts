@@ -1,4 +1,5 @@
 import type { ProjectSource } from '../../../../src/data/provenance.ts'
+import { rethrowContinuation } from '../bob-job-journal.ts'
 
 /** Provider-neutral application content. Provider shaping belongs to the AI service. */
 export type ImagePart = { type: 'image_url'; image_url: string }
@@ -64,7 +65,7 @@ export function createProjectContext(opts: {
           const count = await bounded(signal => a.count(signal))
           if (!Number.isSafeInteger(count) || count < 0) throw new Error('unavailable')
           return { category: a.category, count, status: 'ok', canList: true, canOpen: true }
-        } catch { partial = true; return { category: a.category, count: null, status: 'unavailable', canList: true, canOpen: true } }
+        } catch (error) { rethrowContinuation(error); partial = true; return { category: a.category, count: null, status: 'unavailable', canList: true, canOpen: true } }
       })), note: 'Metadata availability only. No image has been viewed. Legacy project datasets remain available through search_project_data.' }
     },
     async execute(name: string, value: unknown) {
@@ -80,7 +81,7 @@ export function createProjectContext(opts: {
           const page = await bounded(signal => registry.get(v.category as string)!.list(v as ListRequest, signal))
           if (!await opts.hasAccess()) return { status: 'denied', saved: false }
           return { status: page.items.length ? 'ok' : 'empty', mode: 'metadata', saved: false, ...page, truncated: page.next_cursor !== null }
-        } catch { partial = true; return { status: 'unavailable', mode: 'metadata', saved: false } }
+        } catch (error) { rethrowContinuation(error); partial = true; return { status: 'unavailable', mode: 'metadata', saved: false } }
       }
       if (name !== 'open_project_item' || Object.keys(v).some(k => k !== 'refs') || !Array.isArray(v.refs) || !v.refs.length || v.refs.length > CONTEXT_LIMITS.batch || new Set(v.refs).size !== v.refs.length) return invalid()
       if (v.refs.some(r => typeof r !== 'string' || r.length > 220 || !byRef(r))) return invalid()
@@ -90,7 +91,7 @@ export function createProjectContext(opts: {
       // Each member fails independently; a partial batch never claims all images opened.
       const results = await Promise.all(refs.map(async ref => {
         try { return { ref, opened: await bounded(signal => byRef(ref)!.open(ref, signal)) } }
-        catch { partial = true; return { ref, opened: null } }
+        catch (error) { rethrowContinuation(error); partial = true; return { ref, opened: null } }
       }))
       const items: Record<string, unknown>[] = []
       if (!await opts.hasAccess()) { pending = []; return { status: 'denied', saved: false } }

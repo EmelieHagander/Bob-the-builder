@@ -7,6 +7,7 @@ import { createBobToolSession } from '../supabase/functions/_shared/project-tool
 import { PLAN_PROPOSAL_TOOL } from '../supabase/functions/_shared/project-plan.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
+import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 
 const usage={input_tokens:10,output_tokens:5,total_tokens:15}
 const measurementId='30000000-0000-4000-8000-000000000001'
@@ -41,6 +42,31 @@ const compiled={
   observations:['Existing measured width can satisfy the atomic width criterion.'],
 }
 const cleanReview={ready_to_save:true,summary:'Compilation is semantically grounded.',issues:[]}
+
+test('a plan audit replays across a JSONB checkpoint without repeating compiler or reviewer',async()=>{
+  // PostgreSQL JSONB does not preserve JavaScript object property order. The
+  // reviewer embeds the compiler's object in a JSON string in its prompt.
+  const jsonb=(v:any):any=>Array.isArray(v)?v.map(jsonb):v&&typeof v==='object'
+    ?Object.fromEntries(Object.keys(v).sort().reverse().map(k=>[k,jsonb(v[k])])):v
+  const entries:JournalEntry[]=[]
+  let calls=0
+  const run=async()=>{
+    const journal=createBobJournal({entries,save:async e=>{entries.push(jsonb(e))}},Infinity)
+    const assistant=createPlanAssistant({projectId:'A',userId:'user-a',hasAccess:async()=>true,
+      makeLookup:makeLookupFor({...projectData,plan:[{id:'A',revision:1,steps:[]}]}),
+      callModel:o=>journal.run('model:'+o.functionName,o,async()=>{
+        calls++
+        return o.functionName==='plan-compiler'
+          ?response({...compiled,expected_revision:1},'compiler')
+          :response(cleanReview,'reviewer')
+      }),
+    })
+    return assistant.consult(AUDIT_PLAN_TOOL.function.name,{})
+  }
+  assert.equal((await run() as any).status,'ok')
+  assert.equal((await run() as any).status,'ok')
+  assert.equal(calls,2,'Both recorded model results must be reused after restart')
+})
 
 test('compiler receives every measurement page and can reference a record beyond the old fifty-row limit',async()=>{
   const rows=Array.from({length:101},(_,i)=>({...projectData.measurements[0],id:`30000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`}))

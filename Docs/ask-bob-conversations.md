@@ -53,6 +53,17 @@ Write permissions, exact-current-request quotes, optimistic revisions, settlemen
 
 ## Durable background turns
 
+**September 25 recovery correction (implementation):** checkpoint results are
+delivered with a stable recursive object-key order before their first use and
+after JSONB reload. Array order and every field/value are retained. This prevents
+a saved compiler/CAD result from changing the next model prompt solely through
+database serialization. Changed substantive inputs still stop replay. Read
+adapters propagate scheduling signals instead of treating them as missing data.
+A fresh explicit retry of a failed durable job reads current project state and
+continues unfinished work with its existing write receipts; the legacy
+synchronous path retains receipt-only recovery. The incident was reproduced at
+the compiler → reviewer boundary, with a regression covering JSONB key reorder.
+
 Named members opt in with `background: true` on the existing authenticated `send` request. `ask-bob` validates the caller and project, atomically claims the turn and enqueues a private job, then returns HTTP 202 with job id and expiry. Old clients and the shared guest retain their synchronous path. There is still one transcript and one domain-write ledger.
 
 The pattern follows Launchpad's async dispatch, continuation driver and resume paths inspected at `cd2decea3aa3c661e86ef66af54bd00c3fa0ba82`. Bob owns its implementation: `bob-background.ts`, `bob-job-journal.ts` and the two September 24 background migrations. No Launchpad runtime dependency or separate AI provider is introduced.
