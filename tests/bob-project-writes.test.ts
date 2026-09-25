@@ -273,6 +273,94 @@ test('generated image reserves an honest pending record, checks stored bytes, an
  await fail(c)
 })
 
+const operational=(resource:string,action:string,fields:any,record_id:string|null=null,expected_revision=0,extra:any={})=>({
+ kind:'operational',record_id,expected_revision,expected_updated_at:null,request_quote:'Spara',data:{resource,action,fields,...extra},
+})
+const operationalWrite=async(c:Claim,payload:any)=>(await as(c.user,'select bob.bob_project_write_v12($1,$2,$3,$4,$5) result',[c.project,c.thread,c.turn,c.generation,JSON.stringify(payload)])).rows[0].result
+
+test('Bob operational tools persist dependencies and needs, reject cycles and keep readiness honest',async()=>{
+ await pg.exec("insert into bob.tasks(id,project_id,area_id,name) values('prerequisite','A','areaA','Prepare stock')")
+ const c=await claim()
+ const need=await operationalWrite(c,operational('task_work','add_need',{kind:'tool',label:'Verified saw',notes:'Check availability'},null,0,{task_id:'taskA'}))
+ assert.equal(need.dataset,'tasks');assert.equal(need.record.needs[0].ready,false)
+ const dep=operational('task_work','add_dependency',{prerequisite_task_id:'prerequisite',prerequisite_step_id:null,note:'Prepare before assembly'},null,0,{task_id:'taskA'})
+ const saved=await operationalWrite(c,dep)
+ assert.deepEqual(await operationalWrite(c,dep),saved)
+ assert.equal(saved.record.dependencies.length,1)
+ assert(saved.record.readiness.blockers.some((b:any)=>b.kind==='dependency'))
+ await assert.rejects(operationalWrite(c,operational('task_work','add_dependency',{prerequisite_task_id:'taskA',prerequisite_step_id:null,note:'Cycle'},null,0,{task_id:'prerequisite'})),/cycl/i)
+ await assert.rejects(operationalWrite(c,operational('task_work','confirm_readiness',{note:'Ignore blocker'},null,0,{task_id:'taskA'})),/blocker/)
+ await assert.rejects(as(two,'select bob.read_project_work($1,$2)',['A',JSON.stringify({resource:'task_work',record_id:'taskA',after_id:null})]),/project_denied/)
+ await fail(c)
+})
+
+test('Bob build days retain exact task schedules across revisions and never invent attendance',async()=>{
+ const c=await claim(both)
+ const fields={title:'Saturday frame',day:'2026-10-03',time:'09:00–16:00',place:'Workshop',food:'Bring lunch',task_ids:['taskA']}
+ const payload=operational('build_day','create',fields)
+ const event=await operationalWrite(c,payload)
+ assert.equal(event.dataset,'events');assert.deepEqual(event.record.task_ids,['taskA'])
+ assert.deepEqual(await operationalWrite(c,payload),event)
+ assert.equal((await as(one,'select * from bob.event_tasks where event_id=$1',[event.recordId])).rows.length,1)
+ assert.equal((await pg.query('select * from bob.event_attendees where event_id=$1',[event.recordId])).rows.length,0)
+ await assert.rejects(operationalWrite(c,operational('build_day','create',{...fields,title:'Foreign',task_ids:['taskB']})),/project_denied/)
+ const revised={...operational('build_day','revise',{...fields,task_ids:[]},event.recordId),expected_updated_at:event.record.updated_at}
+ const edit=await operationalWrite(c,revised)
+ assert.deepEqual(edit.record.task_ids,[])
+ assert.equal((await as(two,'select * from bob.event_tasks where project_id=$1',['A'])).rows.length,0)
+ await fail(c)
+})
+
+test('Bob stock → requirement → Shopping uses canonical arithmetic and blocks stale allocations',async()=>{
+ const c=await claim()
+ const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'Material flow',description:'Fixture',assumptions:'Concept',tradeoffs:'Fixture',measurements:[],area_id:null}})
+ const before:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
+ const target=await expertWrite(c,{kind:'target',record_id:sol.recordId,expected_updated_at:null,expected_revision:before.current_revision,request_quote:'Spara',data:{solution_revision:sol.revision,reason:'Fixture'}})
+ const fields={name:'Boards',specification:'Fixture stock',quantity:'4',unit:'pcs',status:'available',area_id:null,notes:'User reported',change_note:'Fixture'}
+ const stock=await operationalWrite(c,operational('stock','create',fields))
+ const req=await operationalWrite(c,operational('requirement','create',{name:'Frame boards',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'10',waste_percent:'0',purchase_increment:'2',basis:'Explicit list',assumptions:'No strength claim',artifact_id:null,artifact_revision:null,target_revision:target.revision,stock_allocations:[{id:stock.recordId,revision:1,quantity:'4'}],component_allocations:[],change_note:'Fixture'}))
+ assert.equal(Number(req.record.purchase_quantity),6)
+ const published=await operationalWrite(c,operational('requirement','publish',{},req.recordId,1))
+ const shopping:any=(await as(one,'select * from bob.materials where id=$1',[published.record.shopping.material_id])).rows[0]
+ assert.equal(shopping.qty,'6 pcs');assert.equal(shopping.status,'needed')
+ await operationalWrite(c,operational('stock','revise',{...fields,quantity:'3'},stock.recordId,1))
+ await fail(c)
+ const next=await claim()
+ await assert.rejects(operationalWrite(next,operational('requirement','publish',{},req.recordId,1)),/Stock changed/)
+ await assert.rejects(operationalWrite(next,operational('stock','revise',fields,stock.recordId,1)),/changed/)
+ await fail(next)
+})
+
+test('CAD recipe → counted blanks → versioned requirement → stock → Shopping rejects stale or invented quantities',async()=>{
+ const c=await claim()
+ const target:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
+ const recipe={contract_version:1,units:'mm',assembly_id:'cut.test',definitions:[{id:'panel',primitive:'box',material_ref:'plywood',x_mm:800,y_mm:400,z_mm:18}],instances:['left','right'].map((id,i)=>({id,definition_id:'panel',placement:{x:i*900,y:0,z:0,rx:0,ry:0,rz:0}})),views:['front']}
+ const data={title:'Cut list fixture',description:'Two identical panels',assumptions:'Concept',target_revision:target.current_revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='}}}
+ const drawing=await expertWrite(c,{kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data})
+ const stock=await operationalWrite(c,operational('stock','create',{name:'Confirmed panel',specification:'800 × 400 × 18 plywood; fits blank',quantity:'1',unit:'pcs',status:'available',area_id:null,notes:'Fixture confirmation',change_note:'Fixture'}))
+ const fields={name:'Cut panels',category:'Sheet',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Stock blank dimensions and specification confirmed',artifact_id:drawing.recordId,artifact_revision:1,target_revision:target.current_revision,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[{id:stock.recordId,revision:1,quantity:'1'}],component_allocations:[]}
+ const payload=operational('cad_requirement','create',fields)
+ const requirement=await operationalWrite(c,payload)
+ assert.equal(requirement.record.required_quantity,2);assert.equal(requirement.record.purchase_quantity,1)
+ assert.equal(requirement.record.source_kind,'deterministic');assert.equal(requirement.record.method_key,'cad_blank_pieces')
+ assert.equal(requirement.record.artifact_revision,1);assert.deepEqual(await operationalWrite(c,payload),requirement)
+ const purchase=await operationalWrite(c,operational('requirement','publish',{},requirement.recordId,1))
+ assert.equal(purchase.record.shopping.revision,1)
+ const shopping:any=(await pg.query('select * from bob.materials where id=$1',[purchase.record.shopping.material_id])).rows[0]
+ assert.equal(shopping.qty,'1 pcs');assert.equal(shopping.status,'needed')
+ const area=await operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Panel surface',quantity_mode:'area_xy',stock_allocations:[],purchase_increment:'0.1'}))
+ assert.equal(area.record.required_quantity,0.64);assert.equal(area.record.purchase_quantity,0.7)
+ await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Forged arithmetic',required_quantity:'999'})),/invalid_cad_requirement/)
+ await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Unknown part',definition_id:'missing'})),/used CAD part/)
+ await fail(c)
+ await as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A','archive',drawing.recordId,1,'{}'])
+ const next=await claim()
+ await assert.rejects(operationalWrite(next,operational('requirement','publish',{},requirement.recordId,1)),/drawing|artifact|Artifact|Drawing|changed/)
+ await assert.rejects(operationalWrite(next,operational('cad_requirement','revise',{...fields,change_note:'Recalculate'},requirement.recordId,1)),/current saved CAD/)
+ await fail(next)
+ await assert.rejects(as(two,'select bob.material_requirement_cad_command($1,$2,$3,$4,$5)',['A','create',newId(),0,JSON.stringify(fields)]),/project_denied/)
+})
+
 test('shared guest has no writable claimed thread; revoked membership denies receipt access and mutations', async () => {
   const guestClaim=(await as(null,'select bob.bob_claim_turn($1,$2,$3,$4) result',['A',guest,newId(),message],'service_role')).rows[0].result
   assert.equal(guestClaim.mode,'local_only')

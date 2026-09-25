@@ -1,5 +1,11 @@
 # bob — current capability & gap inventory
 
+## Project-scenario gap closure — September 25, 2026
+
+Implementation and tests now connect saved generic CAD parts to versioned deterministic blank quantities, stock/reuse allocation and explicit Shopping handoff. Bob also gains dependency/need/readiness operations and build days with exact Task schedules; Event detail reads those schedules. Whole-project plans support 100 Steps. Generic CAD adds cylinders, holes/notches, bounded exact overlap checks, requested surface clearances and conservative straight-travel envelopes. Eight curated reference notes have bounded, attributable retrieval and separate reference disclosure. The release PR owns CI, deployment and real-model outcomes; source presence is not a production claim.
+
+Remaining boundaries are explicit: stock cutting/nesting optimization and grain/kerf planning; automatic material specification/grade compatibility; rotating mechanisms and structural verification; a broader licensed handbook corpus; real participant acceptance (the owner has no volunteers yet). Four synthetic project/model checks are separate from field validation. Earlier inventory sections remain dated baseline evidence, not a claim that the new operational tools or generic CAD are absent.
+
 > **Status:** current implementation audit  
 > **Source of truth for:** what bob materially supports today vs what is partial or missing  
 > **Audited against:** current `main` runtime/schema/code after the user-story contract was added  

@@ -14,7 +14,15 @@ After choosing a project target and recording the drawing the crew intends to us
 - which exact project target and optional drawing version this material decision belongs to;
 - whether the existing Shopping item is current, out of date or has been edited independently.
 
-4B2a is intentionally manual-first: a person enters the base required quantity and its basis. 4B2b adds one deliberately narrow server-owned calculation from an already-persisted 4B1 drawing. Bob / AI still does not choose materials, infer structural member sizes, or mutate Shopping. The server derives the supported base quantity and then reuses the same transparent allowance, confirmed-allocation and purchase-increment arithmetic.
+4B2a began with manually entered quantities; 4B2b added a narrow saved-wall calculation. The September 25 Bob integration uses those canonical commands for stock, requirements, deliberate allocations and explicit Shopping handoff. AI-supplied quantities retain manual provenance. The new CAD path derives blank quantities on the server from an exact current saved assembly and then reuses the same allowance, confirmed-allocation and purchase-increment arithmetic.
+
+## Bob and saved CAD quantities — September 25, 2026
+
+`read_project_work` exposes paged stock, current requirements and their exact allocations, and Shopping. `manage_project_material` creates/revises/archives/restores stock or requirements and publishes reviewed requirements to Shopping. `derive_cad_material_requirement` derives one definition's used instance count (`pieces`), explicit blank-axis length, or explicit box face area. Tube/cylinder length uses local z. Unused definitions, unsupported quantity modes, stale/archived drawings and caller-supplied quantities/method fields fail. `cad_blank_<mode>` v1 records the Artifact version, definition and instance count in the immutable basis.
+
+Revising keeps the requirement identity. Old quantities do not silently follow new geometry: drawing, target, stock and reused-component changes remain visible and block stale publication. Ordinary requirement edits change provenance back to manual. Stock/reuse specification and fit must be confirmed before allocation; matching units alone does not establish suitability. Publishing creates/updates a planned Shopping item; it never reports a purchase, delivery or task completion. Canonical reservation rules prevent double allocation.
+
+Bob operations use the claimed-turn receipt ledger, exact current-request quote, eight-write budget and optimistic version checks. SQL tests cover the actual CAD → requirement → stock → Shopping chain, idempotency and stale-input failures. Release/deployment and real-model outcomes belong in the release PR; these tests do not establish design quality.
 
 ## Truth classes in 4B2a
 

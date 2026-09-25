@@ -63,7 +63,7 @@ const compilationSchema={
       type:'array',maxItems:40,items:{
         type:'object',additionalProperties:false,
         properties:{
-          step_position:{type:'integer',minimum:1,maximum:30},
+          step_position:{type:'integer',minimum:1,maximum:100},
           task_id:{type:'string'},
           task_name:{type:'string'},
           reason:{type:'string'},
@@ -279,7 +279,7 @@ export function createPlanAssistant(opts:{
         userId:opts.userId,systemMessage:COMPILER_SYSTEM+'\n\n'+domainVocabulary('planner'),useHardcodedPrompt:true,
         prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           ...(mode==='compile_plan'&&repairFeedback?{repair_feedback:repairFeedback}:{})}),
-        schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:8000,reasoningEffort:'low',
+        schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:24000,reasoningEffort:'low',
         timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
       })
       if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
@@ -312,12 +312,12 @@ export function createPlanAssistant(opts:{
       // reviewer prose or raw model-selected issue codes.
       console.log('[Bob plan review]',JSON.stringify({mode,attempt:used,shape_valid:parsed!==null,server_valid:serverValidation.valid,
         reviewer_available:reviewer.success&&!!reviewer.data,ready_to_save:review.ready_to_save===true,
-        local_issues:localIssues.map(i=>({code:i.code,step_position:logPosition(i.step_position,30),requirement_position:logPosition(i.requirement_position,20)})),
+        local_issues:localIssues.map(i=>({code:i.code,step_position:logPosition(i.step_position,100),requirement_position:logPosition(i.requirement_position,20)})),
         review_error_count:semanticIssues.filter((i:any)=>i.severity==='error').length,
         review_issues:semanticIssues.slice(0,40).map((i:any)=>({
           code:REVIEW_CODES.includes(i.code)?i.code:'unclassified',
           severity:['info','warning','error'].includes(i.severity)?i.severity:'unclassified',
-          step_position:logPosition(i.step_position,30),
+          step_position:logPosition(i.step_position,100),
           requirement_position:logPosition(i.requirement_position,20),
         }))}))
       if(mode==='compile_plan'&&serverValidation.valid){

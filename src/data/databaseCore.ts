@@ -1374,6 +1374,25 @@ export async function getEvent(slug: string): Promise<BuildEvent | undefined> {
   return (await getEvents()).find((e) => e.slug === slug)
 }
 
+/** Explicit build-day scheduling, independent of attendance and task status. */
+export async function getEventTasks(eventId: string): Promise<TodayTask[]> {
+  if (!db || !eventId) return []
+  const pid=await activeProjectId()
+  if (!pid) return []
+  const guard=captureFileContext(pid)
+  const [links,tasks,areas]=await Promise.all([
+    db.from('event_tasks').select('task_id').eq('project_id',pid).eq('event_id',eventId),
+    getTasks(),getAreas(),
+  ])
+  guard()
+  const ids=new Set(unwrap<{task_id:string}[]>(links).map(x=>x.task_id))
+  return tasks.filter(t=>ids.has(t.id)).map(t=>{
+    const area=areas.find(a=>a.id===t.areaId)
+    return {id:t.id,areaId:t.areaId,areaName:area?.name??'Project',areaPhase:area?.phase??null,
+      name:t.name,skill:t.skill,status:t.status,assigneeIds:t.assigneeIds}
+  })
+}
+
 /** The soonest upcoming event — drives the dashboard "next build day" card. */
 export async function getNextEvent(): Promise<BuildEvent | undefined> {
   return (await getEvents())[0]

@@ -77,6 +77,16 @@ before(async()=>{
 })
 after(()=>pg.close())
 
+test('a whole-house plan accepts 100 Steps while rejecting 101 without changing saved state',async()=>{
+ await pg.exec("insert into bob.projects(id,slug,name) values('large','large','Whole-house renovation')")
+ await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('largeOwner','large','Owner','OW',$1)",[owner])
+ const steps=Array.from({length:100},(_,i)=>step(i===0?'active':'planned',{title:`Renovation step ${i+1}`,area_id:null,phase:'planning',requirements:[]}))
+ const payload={...plan(steps),task_links:[]}
+ const saved:any=(await server(owner,'select bob_private.project_plan_propose($1,$2,$3) result',['large',0,JSON.stringify(payload)])).rows[0].result
+ assert.equal(saved.record.steps.length,100)
+ await assert.rejects(server(owner,'select bob_private.project_plan_propose($1,$2,$3)',['large',0,JSON.stringify({...payload,steps:[...steps,step('planned',{area_id:null})]})]),/plan_invalid_proposal/)
+})
+
 test('living-plan tools stay available without a Project lifecycle phase, with reviewed compilation as the core proposal path',async()=>{
   const project=(await as(owner,"select phase from bob.projects where id='A'")).rows[0]
   assert.equal(project.phase,null,'Legacy/unclassified projects reproduce the production null-phase case')

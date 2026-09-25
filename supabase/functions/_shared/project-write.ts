@@ -1,4 +1,5 @@
 import { rethrowContinuation } from './bob-job-journal.ts'
+import { OPERATION_WRITE_TOOLS, parseOperationalWrite } from './project-operations.ts'
 import { EXPERT_TOOLS, parseExpertWrite } from './project-expert-tools.ts'
 import { CATALOG_WRITE_TOOL, parseCatalogWrite } from './material-catalog.ts'
 import { PLAN_WRITE_TOOLS, parsePlanWrite } from './project-plan.ts'
@@ -22,6 +23,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const WRITE_TOOLS = [
+  ...OPERATION_WRITE_TOOLS,
   ...EXPERT_TOOLS,
   CATALOG_WRITE_TOOL,
   ...PLAN_WRITE_TOOLS,
@@ -57,7 +59,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
+  kind: 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -85,6 +87,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v)
   if (name === 'link_project_drawing') {
     if (typeof v.record_id !== 'string' || !uuid.test(v.record_id) || typeof v.step_id !== 'string' || !uuid.test(v.step_id)
       || !Number.isSafeInteger(v.expected_revision) || Number(v.expected_revision) < 1 || !['link', 'unlink'].includes(String(v.action))) return null

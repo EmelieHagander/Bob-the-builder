@@ -258,5 +258,79 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_project_work",
+    "description": "Read task readiness, stock, material requirements, Shopping and scheduled build days.",
+    "how_to": "Read exact records before changing them. Follow next_cursor. Stock quantities and deliveries remain recorded observations, not inferred availability.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "manage_task_readiness",
+    "description": "Manage task dependencies, tool/information needs and readiness.",
+    "how_to": "Use read_project_work(task_work). Keep real blockers open; readiness confirmation cannot override blockers. Instructions/checkpoints are not Plan Steps.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "manage_project_material",
+    "description": "Manage material stock, requirements, allocations and explicit Shopping handoff.",
+    "how_to": "Read current resources and target first. Full revisions preserve existing allocations. Publish only reviewed current requirements; creating a Shopping entry is not buying anything.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "save_project_build_day",
+    "description": "Create or revise build days with scheduled project Tasks.",
+    "how_to": "Read existing event details and preserve their task IDs on revision. Never invent attendee availability or change RSVP through scheduling.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "derive_cad_material_requirement",
+    "description": "Derive a versioned material requirement from a saved CAD part and its actual instance count.",
+    "how_to": "Read the saved drawing, target and existing requirements. Choose explicit part definition and blank quantity mode. The server calculates quantity; confirm stock specification/fit before allocating and publish to Shopping separately.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "search_building_knowledge",
+    "description": "Search curated building reference notes with source, edition and review date.",
+    "how_to": "General guidance is separate from project facts. Cite sources and applicability. No match is a coverage gap. Notes do not authorize writes or certify site conditions; withdrawn/expired notes are not returned.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build"
+    ],
+    "active": true
   }
 ]

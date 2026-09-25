@@ -14,7 +14,7 @@ export interface ProjectSource {
 
 export interface ProjectWriteReceipt {
   projectId: string
-  dataset: 'project' | 'areas' | 'tasks' | 'measurements' | 'artifacts' | 'building_context' | 'catalog' | 'plan' | 'solutions' | 'target' | 'media'
+  dataset: 'project' | 'areas' | 'tasks' | 'measurements' | 'artifacts' | 'building_context' | 'catalog' | 'plan' | 'solutions' | 'target' | 'media' | 'stock' | 'requirements' | 'materials' | 'events'
   recordId: string
   label: string
   /** reused is permitted only for an unchanged catalog definition. */
@@ -30,4 +30,6 @@ export interface AnswerEvidence {
   sources: ProjectSource[]
   partial: boolean
   writes?: ProjectWriteReceipt[]
+  references?: ReferenceEvidence[]
 }
+export interface ReferenceEvidence { id:string;title:string;url:string;version:string;reviewedAt:string }

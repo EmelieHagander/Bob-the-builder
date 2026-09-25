@@ -5,6 +5,8 @@ Bob's tool surface and loading contract. The PR records the exact tested commit,
 managed migration, merge, deployed Edge version, Pages and live-check evidence;
 source presence alone is not a deployment claim.
 
+September 25 adds six registered on-demand capabilities: `read_project_work`, `manage_task_readiness`, `manage_project_material`, `derive_cad_material_requirement`, `save_project_build_day`, and `search_building_knowledge`. The first reads scoped operational records; four use the existing bounded writer and canonical domain commands; knowledge retrieval is read-only general reference material. Planning/Build preloads do not change permission. Detailed contracts belong in `living-project-plan.md`, `material-planning.md` and `building-knowledge.md`. `bob_project_write_v12` delegates earlier operations unchanged and adds atomic operational receipts.
+
 This supersedes the fixed tool-array loading described in older backend/context
 plans. It does not supersede domain write rules, Artifact lineage, private media,
 conversation compaction or the selected-image grounding repair. See
