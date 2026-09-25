@@ -5,6 +5,9 @@ import assert from 'node:assert/strict'
 import {createCadAssistant} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
+import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
+import {hasImageContent} from '../supabase/functions/_shared/openai-content.ts'
 const id='30000000-0000-4000-8000-000000000001'
 const recipe:CadAssemblyRequest={contract_version:1,units:'mm',assembly_id:'bed',definitions:[{id:'post',primitive:'box',material_ref:null,x_mm:45,y_mm:70,z_mm:1800},{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:600,z_mm:18}],instances:[{id:'bed.post',definition_id:'post',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}},{id:'drawer.base',definition_id:'panel',placement:{x:100,y:0,z:30,rx:0,ry:0,rz:0}}],views:['front','top']}
 const request={brief:'Rita lådorna och behåll deras mått.',area_id:null,component_id:null,step_id:null,artifact_id:null}
@@ -86,4 +89,69 @@ test('CAD cannot render against an invented target revision',async()=>{
  f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
  const a=createCadAssistant(f.opts)
  assert.equal((await a.consult(request)).status,'incomplete');assert.equal(renders,0)
+})
+
+function imageFixture(){
+ const f=fixture(),reads:string[]=[],sources:any[]=[];let downloads=0
+ const row:MediaRow={id,project_id:'A',title:'Earlier cabinet concept',purpose:'reference',state:'ready',content_type:'image/png',
+  byte_size:8,width:2,height:2,bucket_id:'bob-project-media',object_path:`A/${id}`,created_at:'2026-09-01T00:00:00Z',updated_at:'2026-09-01T00:00:00Z'}
+ const context=()=>createProjectContext({hasAccess:f.opts.hasAccess,sources,adapters:[createMediaAdapter('A',{
+  count:async()=>1,list:async()=>[row],read:async key=>key===id?{...row}:null,
+  download:async()=>{downloads++;return Uint8Array.from([137,80,78,71,13,10,26,10])},
+ })]})
+ f.opts.makeLookup=()=>createProjectLookup('A',async(_p,input)=>{
+  reads.push(input.dataset)
+  return {data:{records:input.dataset==='target'?[{id:'project',revision:1,solution_id:id}]
+   :input.dataset==='project'?[{id:'A',description:'Current design: 1320 mm wide; access opening on the room-facing edge.'}]
+   :input.dataset==='measurements'?[{id,revision:2,subject:'Current width',value:'1320',unit:'mm',truth:'provided_spec'}]:[],related:[],truncated:false},error:null}
+ },1000,40)
+ return {...f,row,reads,sources,context,get downloads(){return downloads}}
+}
+
+test('CAD receives Bob-selected original pixels beside fresh project facts after Bob has consumed the carrier',async()=>{
+ const f=imageFixture(),parent=f.context(),child=f.context()
+ await parent.execute('open_project_item',{refs:[`image:${id}`]})
+ parent.confirmDelivery()
+ assert.deepEqual(parent.carrier(),[])
+ const a=createCadAssistant({...f.opts,context:child,referenceImageRefs:()=>parent.openedImageRefs()})
+ assert.equal((await a.consult(request)).status,'ready')
+ assert.equal(f.downloads,2,'the specialist reopens through its own authorised adapter')
+ assert(hasImageContent(f.seen[0].messages),'a parent caption/brief is not a substitute for actual pixels')
+ const reminder=String(f.seen[0].messages.at(-1).content)
+ assert.match(reminder,/1320/);assert.match(reminder,/room-facing edge/);assert.match(reminder,/provided_spec/)
+ assert.deepEqual(f.reads,['target','project','measurements'])
+ assert(!hasImageContent(f.seen[1].messages));assert.equal(f.seen[1].previousResponseId,'resp')
+ assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
+})
+
+test('an unavailable selected reference stops CAD instead of silently inventing the missing layout',async()=>{
+ const f=imageFixture(),parent=f.context()
+ await parent.execute('open_project_item',{refs:[`image:${id}`]});parent.confirmDelivery()
+ f.row.state='deleting'
+ const a=createCadAssistant({...f.opts,context:f.context(),referenceImageRefs:()=>parent.openedImageRefs()})
+ const result=await a.consult(request)
+ assert.equal(result.status,'unavailable');assert.equal(result.stage,'reference_images')
+ assert.equal(f.seen.length,0);assert.equal(f.downloads,1);assert.equal(a.candidate,null)
+})
+
+test('images independently opened by CAD also get current measurements on their delivery call',async()=>{
+ const f=imageFixture();let calls=0
+ f.opts.callModel=async o=>{
+  f.seen.push(o);calls++
+  if(calls===1)return response('open_project_item',{refs:[`image:${id}`]})
+  if(calls===2){assert(hasImageContent(o.messages));assert.match(String(o.messages!.at(-1)!.content),/1320/);return response('render_cad_candidate',candidate)}
+  return response()
+ }
+ const a=createCadAssistant({...f.opts,context:f.context()})
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(f.downloads,1)
+ assert.deepEqual(f.reads,['target','project','measurements'])
+})
+
+test('revoked reference evidence blocks the next CAD model call and invalidates the candidate',async()=>{
+ const f=imageFixture()
+ f.opts.render=async recipe=>{f.row.state='deleting';return {recipe,manifest:{},files:{}}}
+ const a=createCadAssistant({...f.opts,context:f.context(),referenceImageRefs:()=>[`image:${id}`]})
+ await assert.rejects(a.consult(request),/project_denied/)
+ assert.equal(f.seen.length,1,'do not send another provider call against revoked evidence')
+ assert.equal(a.candidate,null)
 })

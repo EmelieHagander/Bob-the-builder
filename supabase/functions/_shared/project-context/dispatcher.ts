@@ -56,6 +56,11 @@ export function createProjectContext(opts: {
   ]
   return {
     tools,
+    /** Selection metadata for a specialist handoff, not a viewed-image receipt.
+     * The receiver must reopen with its own caller-scoped adapter before use. */
+    openedImageRefs(): string[] {
+      return [...new Set([...delivered.keys(), ...pending.map(r => r.item.ref)])]
+    },
     get remaining() { return Math.max(0, CONTEXT_LIMITS.calls - used) },
     get partial() { return partial },
     async catalog() {
