@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createToolSession } from '../supabase/functions/_shared/project-tools/session.ts'
-import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer } from './support/bob-model-routing.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 
 test('unexpected handler errors stop the turn, are redacted and remain distinct from catalog failures',async()=>{

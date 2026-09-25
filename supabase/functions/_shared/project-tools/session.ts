@@ -22,13 +22,13 @@ export interface ToolPolicy {
   active: boolean
 }
 export interface ToolSnapshot { phase: string | null; tools: ToolPolicy[] }
+export type CapabilitySearch = (query:string, catalog:Pick<ToolPolicy,'name'|'description'|'how_to'>[]) => Promise<string[] | null>
 export type ToolPolicyReader = () => Promise<ToolSnapshot>
 export const TOOL_LIMITS = { catalogRows: 128, page: 12, managementCalls: 16, loaded: 24 } as const
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
 const PHASES = new Set(['concept', 'design', 'planning', 'build', 'complete'])
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const text = (v: unknown, n: number): v is string => typeof v === 'string' && v.length <= n
-const normal = (v: string) => v.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 export function checkedToolSnapshot(value: unknown): ToolSnapshot {
   if (!object(value) || !(value.phase === null || text(value.phase, 64)) || !Array.isArray(value.tools) || value.tools.length > TOOL_LIMITS.catalogRows) throw new Error('tool_catalog_unavailable')
   const names = new Set<string>()
@@ -47,8 +47,8 @@ const managementSpec = (name: string, description: string, properties: Record<st
   type: 'function', function: { name, description, parameters: { type: 'object', additionalProperties: false, properties, required: Object.keys(properties) } },
 })
 export const LIST_TOOLS = managementSpec('list_tools',
-  'Find available tools by name/short description, or browse with query=null. This is a tool directory, not project data. Results contain no large parameter schemas. Follow next_cursor with after_name. No results is not proof that a differently worded tool does not exist.', {
-    query: { type: ['string', 'null'], description: 'Literal words in the name or short description; null browses every permitted registered tool.' },
+  'Find available tools by their capability in the language of the request, or browse with query=null. This is a tool directory, not project data. Results contain no large parameter schemas. Follow next_cursor with after_name. No results is not proof that a differently worded tool does not exist.', {
+    query: { type: ['string', 'null'], description: 'Describe the needed capability in any language. Search interprets the registered contracts, including their limits. Null browses every permitted registered tool.' },
     after_name: { type: ['string', 'null'], description: 'Exact next_cursor from the previous page, or null.' },
   })
 export const LOAD_TOOL = managementSpec('load_tool',
@@ -57,13 +57,14 @@ export const LOAD_TOOL = managementSpec('load_tool',
   })
 const MANAGEMENT = [LIST_TOOLS, LOAD_TOOL]
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; searchCapabilities?: CapabilitySearch }) {
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
     if (!NAME.test(name) || handlers.has(name) || MANAGEMENT.some(t => t.function.name === name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
     handlers.set(name, def)
   }
+  const searchCache = new Map<string, string[] | null>()
   const loaded = new Map<string, number>()
   let used = 0, partial = false, seeded = false
   let snapshot: ToolSnapshot | null = null
@@ -131,20 +132,31 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (name === 'list_tools') {
           if (Object.keys(args).length !== 2 || !Object.hasOwn(args, 'query') || !Object.hasOwn(args, 'after_name')
             || !(args.query === null || text(args.query, 200)) || !(args.after_name === null || (text(args.after_name, 64) && NAME.test(args.after_name)))) return safeStatus('invalid')
-          const terms = args.query ? normal(args.query as string).split(/\s+/).filter(Boolean) : []
           const eligible = current.tools.filter(row => {
             const { state } = resolve(row)
             return row.active && state !== 'not_allowed' && state !== 'unavailable'
           }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-          const matches = eligible.filter(r => (!args.after_name || r.name > String(args.after_name))
-            && terms.every(t => normal(r.name + ' ' + r.description).includes(t)))
+          // The model interprets capability contracts; no language keywords,
+          // object-specific aliases or negated-description substring matching.
+          const catalog = eligible.map(({name,description,how_to})=>({name,description,how_to}))
+          const searchKey = JSON.stringify([args.query,catalog])
+          if (args.query && opts.searchCapabilities && !searchCache.has(searchKey)) {
+            try { searchCache.set(searchKey, await opts.searchCapabilities(String(args.query), catalog)) }
+            catch (error) { rethrowContinuation(error); searchCache.set(searchKey, null) }
+          }
+          const selected = searchCache.get(searchKey) ?? null
+          const names = selected === null ? null : new Set(selected)
+          const ranked = names ? eligible.filter(row=>names.has(row.name)) : eligible
+          const cursor = args.after_name === null ? -1 : ranked.findIndex(x => x.name === args.after_name)
+          if (args.after_name !== null && cursor < 0) return safeStatus('invalid', 'The cursor is no longer in these results. Restart the same query with after_name=null.')
+          const matches = ranked.slice(cursor + 1)
           const page = matches.slice(0, TOOL_LIMITS.page)
           const items = page.map(row => ({ name: row.name, description: row.description,
             tier: row.always_load ? 'core' : 'on_demand', loaded: offered.get(row.name) === row.schema_version,
             availability: resolve(row).state }))
           record('list', '', items.length ? 'ok' : 'empty')
           return { status: items.length ? 'ok' : 'empty', items, next_cursor: matches.length > page.length ? page[page.length - 1].name : null,
-            phase: current.phase, scope: 'permitted_registered_tools', note: 'Phase selects preloads only. Read/list/load never authorizes a project change. Browse query=null if a word search misses.' }
+            search: args.query && selected === null ? 'browse_fallback' : args.query ? 'capability_match' : 'browse', phase: current.phase, scope: 'permitted_registered_tools', note: 'Phase selects preloads only. Read/list/load never authorizes a project change. Browse query=null if a word search misses.' }
         }
         if (Object.keys(args).length !== 1 || !text(args.name, 64) || !NAME.test(args.name)) return safeStatus('invalid')
         const row = current.tools.find(r => r.name === args.name)

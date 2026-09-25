@@ -11,7 +11,7 @@ if len(token) < 32 or not token.isascii() or any(c.isspace() for c in token):
 
 image = (
     modal.Image.debian_slim(python_version="3.13")
-    .apt_install("libgl1", "libglu1-mesa", "libgomp1")
+    .apt_install("libgl1", "libglu1-mesa", "libgomp1", "libcairo2")
     .pip_install_from_requirements(str(ROOT / "requirements.txt"))
     .run_commands("useradd --uid 10001 --create-home cad")
     .add_local_dir(ROOT / "bob_cad", "/app/bob_cad", copy=True, ignore=["**/__pycache__/**", "**/*.pyc"])

@@ -16,7 +16,7 @@ const time = '2026-09-25T10:00:00Z'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const response = (data: string | null, name?: string, args?: unknown) => ({ success: true, data, model: 'fixture', responseId: 'resp', usage,
   ...(name ? { toolCalls: [{ id: 'call', type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
-const intent = (drawing: 'none' | 'create' | 'revise' = 'create', quote = message) => response(JSON.stringify({ drawing, description: drawing === 'none' ? '' : 'A concept drawing of the cabinet', request_quote: drawing === 'none' ? null : quote }))
+const intent = (drawing: 'none' | 'create' | 'revise' = 'create', quote = message) => response(JSON.stringify({ goals: drawing === 'none' ? [] : [{kind:'drawing',description:'A concept drawing of the cabinet',count:1,record_id:null}], request_quote: drawing === 'none' ? null : quote }))
 const recipe: CadAssemblyRequest = { contract_version: 1, units: 'mm', assembly_id: 'cabinet',
   definitions: [{ id: 'side', primitive: 'box', x_mm: 18, y_mm: 360, z_mm: 840, material_ref: null }],
   instances: [{ id: 'cabinet.side', definition_id: 'side', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front', 'top'] }
@@ -60,7 +60,8 @@ test('a drawing order survives prose, missing target, prerequisite writes and an
     if (calls === 6) return response(null, 'design_project_cad', cadRequest)
     if (calls === 7) return response('The design is ready; shall I save it?')
     if (calls === 8) { assert.deepEqual(o.tool_choice, { type: 'function', function: { name: 'save_cad_design' } }); return response(null, 'save_cad_design', { request_quote: message }) }
-    assert.equal(JSON.parse(String(o.messages![0].content)).receipt.recordId, artifact)
+    if(calls===9)assert.equal(JSON.parse(String(o.messages![0].content)).receipt.recordId, artifact)
+    else assert.equal(JSON.parse(String(o.messages!.at(-1)!.content)).actual_results.at(-1).receipt.recordId,artifact)
     return response('The drawing is saved.')
   }, async o => {
     if (++cadCalls === 1) return response('I will render that next time.')
@@ -69,7 +70,7 @@ test('a drawing order survives prose, missing target, prerequisite writes and an
   })
   assert(result.ok); assert.equal(result.answer, 'The drawing is saved.'); assert.equal(result.evidence.partial, false)
   assert.deepEqual(f.writes.map(w => w.kind), ['solution', 'target', 'cad']); assert.equal(f.renders, 1)
-  assert.equal(result.evidence.writes?.at(-1)?.recordId, artifact); assert.equal(calls, 9); assert.equal(cadCalls, 3)
+  assert.equal(result.evidence.writes?.at(-1)?.recordId, artifact); assert.equal(calls, 10); assert.equal(cadCalls, 3)
 })
 
 test('saving Task instructions and promising a drawing cannot pass the drawing delivery check', async () => {
@@ -161,7 +162,7 @@ test('a worker yield replays intent and preparation, then renders and saves the 
   }
   await assert.rejects(resume(), e => e instanceof BobContinuation); now = 0
   const result = await resume()
-  assert(result.ok); assert.equal(result.evidence.partial, false); assert.equal(providerCalls, 6); assert.equal(renders, 1); assert.equal(writes, 1)
+  assert(result.ok); assert.equal(result.evidence.partial, false); assert.equal(providerCalls, 7); assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
 test('a yield after CAD saving replays the original incomplete branch despite newly recovered receipts', async () => {
@@ -188,13 +189,14 @@ test('a yield after CAD saving replays the original incomplete branch despite ne
     }, 10000)
     const cadAssistant = createCadAssistant({ ...f.cadOptions, callModel, render: r => journal.run('cad:render', r, async () => { renders++; return f.cadOptions.render(r) }) })
     return runProjectAnswer({ projectId: 'A', userId: 'u', message, lookup: f.makeLookup(), writer, hasAccess: async () => true, cadAssistant, callModel,
+      initialWriteReceipts: () => journal.run('delivery:initial-receipts', {}, async () => structuredClone(writer.receipts)),
       initialDrawingDelivery: () => journal.run('delivery:initial', {}, async () => hasSavedDrawingReceipt(writer.receipts)) })
   }
   await assert.rejects(resume(), e => e instanceof BobContinuation && e.kind === 'yield')
   assert.equal(writes, 1); assert.equal(persisted.length, 1); now = 0
   const result = await resume()
   assert(result.ok); assert.equal(result.answer, 'The drawing is saved.'); assert.equal(result.evidence.partial, false)
-  assert.equal(providerCalls, 8); assert.equal(renders, 1); assert.equal(writes, 1)
+  assert.equal(providerCalls, 9); assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
 test('a rendering result or unrelated Artifact link alone is not a saved drawing', () => {
@@ -221,9 +223,9 @@ test('a recovered drawing is not generated twice and an exhausted writer cannot 
   for (const mode of ['recovered', 'exhausted']) {
     const f = fixture(); let calls = 0
     if (mode === 'recovered') await f.writer.commit({ kind: 'cad', record_id: null, expected_updated_at: null, expected_revision: 0, request_quote: message, data: {} })
-    else for (let i = 0; i < 8; i++) await f.writer.commit(null)
+    else for (let i = 0; i < 32; i++) await f.writer.commit(null)
     const result = await f.run(async o => { if (o.schemaName) return intent(); calls++; assert.equal(o.tool_choice, undefined); return response('Turn result.') })
-    assert(result.ok); assert.equal(calls, 1); assert.equal(f.renders, 0)
+    assert(result.ok); assert.equal(calls, mode === 'recovered' ? 2 : 1); assert.equal(f.renders, 0)
     assert.equal(result.evidence.partial, mode === 'exhausted'); assert.equal(f.writes.length, mode === 'recovered' ? 1 : 0)
   }
 })

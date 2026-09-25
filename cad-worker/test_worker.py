@@ -2,7 +2,7 @@ import tempfile, unittest
 from pathlib import Path
 from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks
 from unittest.mock import patch
-import math
+import math, hashlib, struct
 
 def fixture():
     return {
@@ -59,6 +59,13 @@ class CadWorkerTest(unittest.TestCase):
             result=render_assembly(fixture(),tmp)
             self.assertEqual(result["engine"],{"name":"build123d","version":"0.13.0","units":"mm"})
             self.assertEqual(len(result["instances"]),4)
+            for view in fixture()["views"]:
+                png=Path(tmp,view+".png").read_bytes()
+                self.assertEqual(png[:8],b"\x89PNG\r\n\x1a\n")
+                width,height=struct.unpack(">II",png[16:24])
+                self.assertTrue(1<=width<=1024 and 1<=height<=1024)
+                self.assertEqual(hashlib.sha256(png).hexdigest(),result["previews"][view]["sha256"])
+                self.assertEqual(result["previews"][view]["source_sha256"],result["exports"][view]["sha256"])
             for name in ("assembly.step","front.svg","right.svg","top.svg","isometric.svg","manifest.json"):
                 path=Path(tmp,name); self.assertTrue(path.exists()); self.assertGreater(path.stat().st_size,20)
             self.assertIn("ISO-10303-21",Path(tmp,"assembly.step").read_text(encoding="utf-8",errors="ignore"))

@@ -5,10 +5,10 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import { createMediaAdapter, type MediaRow } from '../supabase/functions/_shared/project-context/media.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
 import { hasImageContent } from '../supabase/functions/_shared/openai-content.ts'
-import type { ModelCall } from '../supabase/functions/_shared/project-answer.ts'
+import type { ModelCall } from './support/bob-model-routing.ts'
 
 const id = '10000000-0000-4000-8000-000000000001', time = '2026-09-21T00:00:00Z'
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }

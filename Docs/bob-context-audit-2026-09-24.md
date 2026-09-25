@@ -2,6 +2,8 @@
 
 Datum: 2026-09-24. Granskad kod: `aa9188b0be2bce209faa7fa93a892fa7726adf65`, Ask Bob v28. Produktionsinställningar och verktygskatalog lästes under granskningen. Inga produktionsinställningar eller projektposter ändrades.
 
+Senare granskning: [generell verktygs- och autonomiaudit efter PR #146](bob-tool-autonomy-audit-2026-09-25.md). Modellnamn, verktygsantal och kvarvarande fynd nedan är den historiska baslinjen, inte aktuell driftstatus.
+
 ## Uppföljning — korrigeringsbranch 2026-09-24
 
 Baslinjen nedan beskriver v28 och är historisk. #122 rättade modellval, minnessammanfattning, hela planassistentens paginering, storleksfel och tidigare skrivkvitton. Följande integration rättar återstående promptlager och guideleverans samt tillför generella mått-/lösnings-/target-/uppgiftsverktyg, CAD-assistent, bildflöde och detaljläsning av stora plan/CAD-poster.

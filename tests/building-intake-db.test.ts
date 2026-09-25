@@ -6,7 +6,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { parseProjectWrite, createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 
 const pg = new PGlite()
 const one = '00000000-0000-4000-8000-000000000001'

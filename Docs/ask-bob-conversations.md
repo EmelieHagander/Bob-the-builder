@@ -60,12 +60,39 @@ The original approved persona remains byte-for-byte unchanged. Separate server r
 
 `search_bob_project_data_v2` keeps static caller-RLS projections and adds components, solutions, the selected target, artifacts and material requirements alongside existing datasets. It returns selected-target **exact solution-version** details and relevant saved measurement snapshots; the newest unselected solution is not substituted for the chosen version.
 
-At most 12 project lookups (including the initial briefing), four conversation-history searches, twelve execution model rounds and the existing eight project writes are allowed. Turns with both a claimed writer and CAD assistant first make one structured drawing-intent call through the same governed main-model configuration and durable journal. This also applies to informational requests in those sessions; guests do not incur that call. The final execution round is tool-free; elapsed-time fencing reserves time to settle and commit within the existing lease. The model can follow `next_cursor`/`after_id` across project pages rather than assume the first page is complete. Related rows remain separately bounded; truncation is explicit. Oversized single project records return an error rather than an empty success or a stuck cursor.
+At most 32 user-directed project lookups (including the briefing), four history
+searches and 24 execution rounds are allowed. Image grounding uses a separate
+48-read reserve through the same caller-JWT dispatcher; it cannot be starved by
+ordinary project searches, and its sources remain in provenance. The final round
+is tool-free and elapsed-time fences reserve settlement time. Write limits belong
+to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
+
+### Delegated work delivery
+
+`work-delivery.ts` interprets delegated results before execution using the
+`work-router/global` governed configuration. It sees current/recent messages and
+labelled older context, validates an exact current-request quote, and distinguishes
+information, cancellation, continued work and separate deliverables. This is
+language interpretation, not a keyword table, permission or project fact.
+
+Structural completion matches result type, distinct record count and an exact
+target ID when known against actual successful receipts observed at that point.
+Up to three bounded continuations recover premature prose without another owner
+request. Bob then compares the requested object, edit, views, revision and work
+links with actual results before finalizing. Missing results replace a premature
+success claim and retain partial evidence. These checks do not prove semantic
+fidelity by themselves; model acceptance remains necessary.
+
+Initial receipts are checkpointed before execution. Later recovered receipts
+cannot change earlier prompts during replay. Failed intent interpretation does
+not abort an unrelated turn: execution and one final review remain available,
+with partial evidence. Guests have no writer and skip work-intent classification.
+Queried tool search is separately logged as `bob-tool-discovery`; intent uses
+`bob-work-intent`. Both route through `work-router`, with bounded output tokens.
 
 ### Drawing delivery
 
-`project-delivery.ts` records whether the current request calls for a new or
-revised drawing before intermediate saves occur. The model sees the original
+`project-delivery.ts` specializes the general work-delivery check for drawings before intermediate saves occur. The model sees the original
 recent messages and labelled older context, including continued work, corrections,
 cancellation and information-only questions. Classification is validated against
 an exact current-message quote. It is interpretation, not authority, a physical

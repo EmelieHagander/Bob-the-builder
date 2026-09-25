@@ -25,6 +25,7 @@ export async function runClaimedProjectTurn(opts: {
   prepareContext?: () => Promise<WorkingContext>;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number;
   initialDrawingDelivery?: () => Promise<boolean>;
+  initialWriteReceipts?: () => Promise<import('./project-write.ts').WriteReadback[]>;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
 }): Promise<ProjectAnswer> {

@@ -1,17 +1,20 @@
 {
-  "release": "bob-drawing-delivery-2026-09-25",
-  "feature_source_commit": "9ca76b5607caa1de5a8d9fc700e83aaabb0cbae7",
+  "release": "bob-behavior-2026-09-25",
   "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "main_and_cad_fresh_project_and_measurement_context",
   "cad_reference_images": "caller_scoped_original_handoff",
   "answer_voice": "first_person",
-  "tool_loading": "core_phase_preload_exact_on_demand",
+  "tool_loading": "model_interpreted_discovery_exact_contract_loading",
   "material_catalog": "versioned_definitions_mm_and_inch_input",
   "general_drawing": "bounded_cad_assemblies",
   "plan_updates": "focused_edits_with_evidence_continuity",
   "background_retries": "durable_bounded",
   "conversation_memory": "bounded_validated_fold_repair",
   "write_recovery": "field_feedback_and_bounded_completion_review",
-  "drawing_delivery": "intent_to_pinned_artifact_receipt"
+  "drawing_delivery": "intent_to_pinned_artifact_receipt",
+  "source_pull_request": "https://github.com/EmelieHagander/Bob-the-builder/pull/147",
+  "work_delivery": "general_goals_receipts_and_completion_review",
+  "cad_visual_review": "source_bound_svg_png_feedback",
+  "execution_budget": "separate_commits_corrections_and_grounding"
 }

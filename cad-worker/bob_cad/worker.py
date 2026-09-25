@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib, json, math, re
+import xml.etree.ElementTree as ET
+from cairosvg import svg2png
 from pathlib import Path
 from typing import Any
 from build123d import Align, Box, Compound, Cylinder, ExportSVG, LineType, Location, Unit, export_step
@@ -142,11 +144,21 @@ def render_assembly(raw:Any,output_dir:str|Path)->dict[str,Any]:
     assembly=Compound(children=children); bb=assembly.bounding_box(); size=_vec(bb.size)
     center=[(bb.min.X+bb.max.X)/2,(bb.min.Y+bb.max.Y)/2,(bb.min.Z+bb.max.Z)/2]; distance=max(max(size)*4,1000)
     out=Path(output_dir); out.mkdir(parents=True,exist_ok=True); step=out/"assembly.step"; export_step(assembly,str(step))
+    previews={}
     exports={"step":{"file":step.name,"sha256":_hash(step)}}
     for view in req["views"]:
         origin,up=_camera(view,center,distance); visible,hidden=assembly.project_to_viewport(origin,viewport_up=up,look_at=center)
         path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
         exports[view]={"file":path.name,"sha256":_hash(path)}
-    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"checks":_checks(req,children,rows)}
+        # Rasterize the exact exported SVG, never an independently generated image.
+        root=ET.fromstring(path.read_bytes())
+        viewbox=[float(n) for n in root.attrib["viewBox"].replace(","," ").split()]
+        width,height=viewbox[2:]
+        factor=1024/max(width,height)
+        preview=out/f"{view}.png"
+        svg2png(bytestring=path.read_bytes(),write_to=str(preview),background_color="white",
+                output_width=max(1,round(width*factor)),output_height=max(1,round(height*factor)))
+        previews[view]={"file":preview.name,"sha256":_hash(preview),"source_sha256":exports[view]["sha256"]}
+    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows)}
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     return manifest

@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { roomLayoutGeometry, roomLayoutStale } from '../src/lib/roomLayout.ts'
 import { parseProjectWrite, createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { storageBoxGeometry } from '../src/lib/storageBox.ts'
 
 const pg = new PGlite()

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createProjectWriter, type WritePayload, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
-import { runProjectAnswer, type ModelCall } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer, type ModelCall } from './support/bob-model-routing.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 
@@ -101,7 +101,7 @@ test('an unrepaired rejection stays partial and cannot cause an unbounded comple
 test('completion review respects exhausted write budget, closing deadline and uncertain transport', async () => {
   for (const limit of ['budget', 'deadline', 'uncertain'] as const) {
     const f = fixture(limit === 'uncertain')
-    for (let i = 0; i < (limit === 'budget' ? 8 : 1); i++) await f.writer.write('save_project_task', { ...task(), step_id: 'bad' })
+    for (let i = 0; i < (limit === 'budget' ? 12 : 1); i++) await f.writer.write('save_project_task', { ...task(), step_id: 'bad' })
     if (limit === 'uncertain') assert.equal((await f.writer.write('save_project_task', task())).status, 'unknown')
     let calls = 0
     const result = await run(f.writer, async () => { calls++; return response('The edit remains incomplete.') }, limit === 'deadline' ? Date.now() + 30000 : undefined)

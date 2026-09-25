@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {runProjectAnswer} from '../supabase/functions/_shared/project-answer.ts'
+import {runProjectAnswer} from './support/bob-model-routing.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createPlanAssistant} from '../supabase/functions/_shared/plan-assistant.ts'

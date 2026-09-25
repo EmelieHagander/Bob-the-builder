@@ -63,6 +63,13 @@ def main():
             raise RuntimeError("CAD export hash mismatch")
         if (b"ISO-10303-21" if key == "step" else b"<svg") not in raw:
             raise RuntimeError("Invalid CAD file format")
+    if set(packet.get("previews",{})) != set(recipe["views"]):
+        raise RuntimeError("Missing CAD PNG previews")
+    for view in recipe["views"]:
+        raw=base64.b64decode(packet["previews"][view],validate=True)
+        preview=manifest["previews"][view]
+        if raw[:8] != b"\x89PNG\r\n\x1a\n" or hashlib.sha256(raw).hexdigest()!=preview["sha256"] or preview["source_sha256"]!=manifest["exports"][view]["sha256"]:
+            raise RuntimeError("Preview is not bound to its exported SVG")
     for body, token, status in [({}, "", 401), ({}, "invalid-smoke-token", 401),
                                 ({}, os.environ["BOB_CAD_TOKEN"], 422)]:
         try:
@@ -72,7 +79,7 @@ def main():
                 raise RuntimeError("Unexpected CAD rejection status") from None
         else:
             raise RuntimeError("CAD accepted an unauthorized or invalid request")
-    summary = (f"CAD smoke test passed: STEP + four SVGs, hashes, dimensions and authorization.\n\n"
+    summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, hashes, dimensions and authorization.\n\n"
                f"First authenticated request: {elapsed:.2f} seconds.\n\n"
                f"Set Supabase Edge secret `BOB_CAD_URL` to `{endpoint}`.\n"
                "Set `BOB_CAD_TOKEN` to the same runtime secret stored in GitHub.\n"

@@ -5,8 +5,8 @@ import { readFile, readdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { prepareWorkingContext, type ContextStore, type ContextFrame } from '../supabase/functions/_shared/bob-working-context.ts'
-import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runProjectAnswer } from './support/bob-model-routing.ts'
+import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 
 const pg = new PGlite()

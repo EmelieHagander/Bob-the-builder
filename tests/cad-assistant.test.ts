@@ -155,3 +155,27 @@ test('revoked reference evidence blocks the next CAD model call and invalidates 
  assert.equal(f.seen.length,1,'do not send another provider call against revoked evidence')
  assert.equal(a.candidate,null)
 })
+
+test('invalid geometry reports the exact missing field without spending a render; designer sees the corrected render pixels',async()=>{
+ const f=fixture();let calls=0,renders=0
+ const broken=structuredClone(candidate);delete (broken.recipe.definitions[0] as any).y_mm
+ f.opts.render=async r=>{renders++;return {recipe:r,manifest:{bounding_box_mm:{size:[800,600,1800]},instances:r.instances},files:{front:'fixture'},previews:{front:'cGl4ZWxz'}}}
+ f.opts.callModel=async(o:any)=>{
+  if(++calls===1)return response('render_cad_candidate',broken)
+  if(calls===2){const result=JSON.parse(o.messages[0].content);assert.equal(result.status,'invalid');assert(result.issues.some((i:any)=>i.path==='recipe.definitions[0].y_mm'));assert.equal(result.renders_remaining,4);return response('render_cad_candidate',candidate)}
+  assert(hasImageContent(o.messages));assert(o.messages.some((m:any)=>Array.isArray(m.content)&&m.content.some((p:any)=>p.type==='image_url'&&p.image_url.url==='data:image/png;base64,cGl4ZWxz')))
+  return response()
+ }
+ const result=await createCadAssistant(f.opts).consult(request)
+ assert.equal(result.status,'ready');assert.equal(renders,1);assert.equal(calls,3)
+})
+test('designer retains research tools beyond three calls and can investigate a problem after rendering',async()=>{
+ const f=fixture();let calls=0
+ f.opts.callModel=async(o:any)=>{
+  calls++
+  if(calls<=4||calls===6){assert(o.tools.some((t:any)=>t.function.name==='search_project_data'));return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})}
+  if(calls===5)return response('render_cad_candidate',candidate)
+  return response()
+ }
+ assert.equal((await createCadAssistant(f.opts).consult(request)).status,'ready');assert.equal(calls,7)
+})
