@@ -71,6 +71,12 @@ export interface WriteResult {
   status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
   receipt?: WriteReadback
   message?: string
+  validation?: Pick<WriteValidationIssue, 'code' | 'fields'>
+}
+export interface WriteValidationIssue {
+  code: 'tool_shape' | 'request_quote' | 'field_value' | 'task_location' | 'domain_fields'
+  fields: string[]
+  message: string
 }
 export type WriteTransport = (payload: WritePayload) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
 export type ReceiptTransport = () => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
@@ -78,15 +84,18 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const isText = (x: unknown, max: number, empty = false): x is string => typeof x === 'string' && x.length <= max && (empty || x.trim().length > 0)
 const isTime = (x: unknown) => isText(x, 60) && /^\d{4}-\d\d-\d\dT/.test(x) && Number.isFinite(Date.parse(x))
 
-export function parseProjectWrite(name: string, value: unknown, projectId: string, userMessage: string): WritePayload | null {
+export function parseProjectWrite(name: string, value: unknown, projectId: string, userMessage: string, report?: (issue: WriteValidationIssue) => void): WritePayload | null {
+  const invalid = (code: WriteValidationIssue['code'], fields: string[], message: string) => {
+    report?.({ code, fields, message }); return null
+  }
   const definition = WRITE_TOOLS.find(t => t.function.name === name)
-  if (!definition || !value || typeof value !== 'object' || Array.isArray(value)) return null
+  if (!definition || !value || typeof value !== 'object' || Array.isArray(value)) return invalid('tool_shape', [], 'Use the offered tool with one JSON object matching its schema.')
   const v = {...value} as Record<string, unknown>
   if(name==='propose_project_plan'&&!Object.hasOwn(v,'task_links'))v.task_links=[]
   if(name==='save_project_task'&&!Object.hasOwn(v,'step_id'))v.step_id=null
   const keys = definition.function.parameters.required
-  if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return null
-  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return null
+  if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', keys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
+  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'Copy an exact 1–500 character span from the CURRENT user message, preserving its spelling and whitespace. Do not rewrite it or quote an earlier turn. This is not a request for new permission.')
   if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v)
   if (name === 'link_project_drawing') {
     if (typeof v.record_id !== 'string' || !uuid.test(v.record_id) || typeof v.step_id !== 'string' || !uuid.test(v.step_id)
@@ -107,15 +116,19 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
     if (!isText(v.description, 12000, true) || !isTime(v.expected_updated_at)) return null
     return { ...base, expected_updated_at: v.expected_updated_at as string, data: { description: v.description } }
   }
-  if (v.record_id !== null && !isText(v.record_id, 200)) return null
+  if (v.record_id !== null && !isText(v.record_id, 200)) return invalid('field_value', ['record_id'], 'Use the exact current record ID when editing, or null when creating.')
   base.record_id = v.record_id as string | null
   if(name==='save_project_area'){
     if(!isText(v.name,200)||!isText(v.description,4000,true)||(v.record_id===null?v.expected_updated_at!==null:!isTime(v.expected_updated_at)))return null
     return {...base,kind:'area',expected_updated_at:v.expected_updated_at as string|null,data:{name:v.name,description:v.description}}
   }
   if (name === 'save_project_task') {
-    if ((v.area_id!==null&&!isText(v.area_id, 200)) || (v.step_id!==null&&(typeof v.step_id!=='string'||!uuid.test(v.step_id))) || (v.record_id===null&&v.area_id===null&&v.step_id===null) || !isText(v.name, 300) || !isText(v.instructions, 12000, true)
-      || (v.record_id === null ? v.expected_updated_at !== null : !isTime(v.expected_updated_at))) return null
+    if (v.area_id !== null && !isText(v.area_id, 200)) return invalid('field_value', ['area_id'], 'Use an exact Area ID from current project records, or null.')
+    if (v.step_id !== null && (typeof v.step_id !== 'string' || !uuid.test(v.step_id))) return invalid('field_value', ['step_id'], 'Use an exact current Plan Step UUID. Null preserves existing ownership; a Step title or Task ID is not a Step UUID.')
+    if (v.record_id === null && v.area_id === null && v.step_id === null) return invalid('task_location', ['area_id', 'step_id'], 'A new Task needs an existing Area or current Plan Step. Read the project and supply its exact ID.')
+    if (!isText(v.name, 300)) return invalid('field_value', ['name'], 'Supply a non-empty Task name of at most 300 characters.')
+    if (!isText(v.instructions, 12000, true)) return invalid('field_value', ['instructions'], 'Supply Task instructions as a string of at most 12000 characters, preserving unrelated content.')
+    if (v.record_id === null ? v.expected_updated_at !== null : !isTime(v.expected_updated_at)) return invalid('field_value', ['expected_updated_at'], 'For an edit, read and copy the current Task timestamp exactly. For a new Task, use null. Do not invent a timestamp.')
     return { ...base, kind: 'task', expected_updated_at: v.expected_updated_at as string | null,
       data: { area_id: v.area_id, ...(v.step_id!==null?{step_id:v.step_id}:{}), name: v.name, instructions: v.instructions } }
   }
@@ -154,6 +167,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   let uncertain = false
   let settled = false
   const receipts: WriteReadback[] = []
+  const corrections = new Set<string>()
   const remember = (r: WriteReadback) => {
     const i=receipts.findIndex(old=>old.dataset===r.dataset&&old.recordId===r.recordId)
     if(i<0)receipts.push(r);else receipts[i]=r
@@ -162,6 +176,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
     receipts,
     get remaining() { return uncertain || settled ? 0 : Math.max(0, 8 - used) },
     get uncertain() { return uncertain },
+    get hasUnresolvedWrites() { return corrections.size > 0 },
+    get needsRepair() { return !uncertain && !settled && used < 8 && corrections.size > 0 },
     async recover(): Promise<WriteReadback[]> {
       const { data, error } = await read()
       if (error || !Array.isArray(data) || data.length > 8) throw new Error('Write recovery unavailable')
@@ -179,7 +195,21 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       return result.generation
     },
     async write(name: string, value: unknown): Promise<WriteResult> {
-      return this.commit(parseProjectWrite(name, value, projectId, userMessage))
+      let issue: WriteValidationIssue | undefined
+      const payload = parseProjectWrite(name, value, projectId, userMessage, detail => { issue = detail })
+      let result = await this.commit(payload)
+      if (!payload && result.status === 'invalid') {
+        issue ??= { code: 'domain_fields', fields: [], message: 'The command has invalid domain fields. Re-read this tool schema and the current target records; the request quote passed validation.' }
+        result = { ...result, validation: { code: issue.code, fields: issue.fields }, message: `No change made. ${issue.message} Correct this call within the remaining write budget if the action is authorised.` }
+        console.warn('[Bob write validation]', JSON.stringify({ tool: name, code: issue.code, fields: issue.fields }))
+      }
+      // Track individual targets: saving another Task must not hide a rejected
+      // edit. This is review bookkeeping, never authority to replay a write.
+      const v = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+      const key = JSON.stringify([name, v.record_id ?? null, v.action ?? null, v.record_id ? null : v.name ?? v.subject ?? v.key ?? null])
+      if (result.status === 'invalid' || result.status === 'conflict') corrections.add(key)
+      else if (result.status === 'saved') corrections.delete(key)
+      return result
     },
     async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }

@@ -1,6 +1,6 @@
 {
-  "release": "bob-memory-recovery-2026-09-25",
-  "feature_source_commit": "73e9e232a1a0e1d4d10091eb8a504d1e494efcca",
+  "release": "bob-write-recovery-2026-09-25",
+  "feature_source_commit": "22524bd32a5eeef3b88d63d946a8cbd744072d45",
   "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "main_and_cad_fresh_project_and_measurement_context",
@@ -11,5 +11,6 @@
   "general_drawing": "bounded_cad_assemblies",
   "plan_updates": "focused_edits_with_evidence_continuity",
   "background_retries": "durable_bounded",
-  "conversation_memory": "bounded_validated_fold_repair"
+  "conversation_memory": "bounded_validated_fold_repair",
+  "write_recovery": "field_feedback_and_bounded_completion_review"
 }
