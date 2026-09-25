@@ -79,7 +79,10 @@ that check. Up to three continuations within the existing round/time/write bound
 require native action: an unattempted CAD consultation, saving a ready candidate,
 or continuing its prerequisites. An explicit CAD blocker, uncertain write or
 exhausted budget stops that recovery. Recovered geometry receipts from the same
-claimed turn prevent duplicate generation. A remaining missing drawing replaces
+claimed turn prevent duplicate generation. Initial delivery state is checkpointed
+separately: newly recovered receipts after a later worker yield must not change
+an earlier prompt or continuation branch. The actual current user message remains
+last after routing data. A remaining missing drawing replaces
 the premature answer with an explicit incomplete result and actual saved
 subresults; evidence stays partial. Job completion alone is not drawing delivery.
 

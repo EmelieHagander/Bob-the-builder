@@ -17,7 +17,7 @@ import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { createBobToolSession } from './project-tools/bob-tools.ts'
 import { type ToolPolicyReader, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
-import { DRAWING_INTENT_PROMPT, DRAWING_INTENT_SCHEMA, DRAWING_CONTINUATION, parseDrawingIntent, drawingSaved, drawingToolChoice, missingDrawingAnswer, type DrawingIntent } from './project-delivery.ts'
+import { DRAWING_INTENT_PROMPT, DRAWING_INTENT_SCHEMA, DRAWING_CONTINUATION, parseDrawingIntent, drawingSaved, hasSavedDrawingReceipt, drawingToolChoice, missingDrawingAnswer, type DrawingIntent } from './project-delivery.ts'
 
 /** Only cross-tool safeguards live in the permanent prompt. Detailed tool usage
  * lives in the owning catalog row and is fetched through load_tool. */
@@ -93,6 +93,7 @@ export async function runProjectAnswer(opts: {
   lookup: ReturnType<typeof createProjectLookup>; callModel: ModelCall;
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number;
+  initialDrawingDelivery?: () => Promise<boolean>;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
@@ -101,6 +102,8 @@ export async function runProjectAnswer(opts: {
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
   let drawingIntent: DrawingIntent | null = null
+  const initiallySaved = opts.writer && opts.cadAssistant
+    ? await (opts.initialDrawingDelivery?.() ?? Promise.resolve(hasSavedDrawingReceipt(opts.writer.receipts))) : false
   const toolbox = createBobToolSession({ ...opts, readPolicy: opts.readToolPolicy ?? seedToolPolicy,
     drawingRequested: () => !!drawingIntent && drawingIntent.drawing !== 'none' })
   let previousResponseId = opts.context ? undefined : opts.previousResponseId
@@ -138,8 +141,13 @@ export async function runProjectAnswer(opts: {
       if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
       console.log('[Bob delivery]', drawingIntent.drawing)
       if (drawingIntent.drawing !== 'none') {
-        messages.push({ role: 'system', content: DRAWING_CONTINUATION })
-        messages.push({ role: 'user', content: JSON.stringify({ requested_drawing: drawingIntent, saved_in_this_turn: compactReceipts(opts.writer.receipts), notice: 'Interpretation of the existing request, not a new permission or measured project fact. Reuse a recovered saved drawing; do not create it again.' }) })
+        // Keep the real current user message last. Mutable recovered receipts
+        // cannot enter a replayed prompt: later saves would change its hash.
+        messages = [
+          { role: 'system', content: DRAWING_CONTINUATION },
+          { role: 'user', content: JSON.stringify({ requested_drawing: drawingIntent, notice: 'Interpretation of the existing request, not a new permission or measured project fact. Read current records and reuse an already saved drawing.' }) },
+          ...messages,
+        ]
         try {
           if (Date.now() + 40000 < deadline) tools = await toolbox.prepare()
           else { tools = []; toolbox.closeSurface() }
@@ -201,7 +209,7 @@ export async function runProjectAnswer(opts: {
     const saved=(name:string)=>toolbox.events.some(e=>e.operation==='execute'&&e.name===name&&e.status==='saved')
     const unfinishedAssistant=opts.planAssistant?.compilationAttempted&&!saved('save_compiled_project_plan')
       ||toolbox.events.some(e=>e.operation==='execute'&&e.name==='design_project_cad')&&!saved('save_cad_design')
-    const missingDrawing = !!drawingIntent && drawingIntent.drawing !== 'none' && !drawingSaved(opts.writer?.receipts ?? [], toolbox.events)
+    const missingDrawing = !!drawingIntent && drawingIntent.drawing !== 'none' && !drawingSaved(opts.writer?.receipts ?? [], toolbox.events, initiallySaved)
     if (answerText && missingDrawing && opts.writer && opts.writer.remaining > 0 && !cadBlocked && drawingReviews < 3
       && response.responseId && tools.length && round < rounds - 2 && Date.now() + 40000 < deadline) {
       drawingReviews++; forceDrawingAction = true; previousResponseId = response.responseId

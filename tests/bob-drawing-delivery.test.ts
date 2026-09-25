@@ -4,7 +4,7 @@ import { runProjectAnswer, seedToolPolicy, type ModelCall } from '../supabase/fu
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter, type WritePayload, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
 import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
-import { parseDrawingIntent, drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
+import { parseDrawingIntent, drawingSaved, hasSavedDrawingReceipt } from '../supabase/functions/_shared/project-delivery.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
@@ -48,7 +48,7 @@ test('a drawing order survives prose, missing target, prerequisite writes and an
   const result = await f.run(async o => {
     if (o.schemaName) return intent()
     calls++
-    if (calls === 1) return response('I can draw it next time.')
+    if (calls === 1) { assert.equal(o.messages!.at(-1)!.content, message, 'routing data must not displace the current user request'); return response('I can draw it next time.') }
     if (calls === 2) { assert.deepEqual(o.tool_choice, { type: 'function', function: { name: 'design_project_cad' } }); return response(null, 'design_project_cad', cadRequest) }
     if (calls === 3) {
       assert.equal(JSON.parse(String(o.messages![0].content)).status, 'prerequisite_required')
@@ -164,13 +164,47 @@ test('a worker yield replays intent and preparation, then renders and saves the 
   assert(result.ok); assert.equal(result.evidence.partial, false); assert.equal(providerCalls, 6); assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
+test('a yield after CAD saving replays the original incomplete branch despite newly recovered receipts', async () => {
+  const entries: JournalEntry[] = [], persisted: WriteReadback[] = []
+  let now = 0, providerCalls = 0, renders = 0, writes = 0
+  const resume = async () => {
+    const f = fixture(), journal = createBobJournal({ entries, save: async e => { entries.push(structuredClone(e)) } }, 20000, () => now)
+    const writer = createProjectWriter('A', message, p => journal.run('write', p, async () => {
+      writes++; now = 15000
+      const receipt: WriteReadback = { projectId: 'A', dataset: 'artifacts', recordId: artifact, revision: 1, areaId: null, label: 'Cabinet concept', operation: 'created', savedAt: time, record: { id: artifact, revision: 1, area_id: null, cad: true } }
+      persisted.push(receipt); return { data: receipt, error: null }
+    }), async () => ({ data: persisted, error: null }), async () => ({ data: { generation: 2, receipts: persisted }, error: null }))
+    await writer.recover()
+    const callModel: ModelCall = o => journal.run('model', o, async () => {
+      providerCalls++
+      if (o.schemaName) return intent()
+      if (providerCalls === 2) return response('I can draw it next time.')
+      if (providerCalls === 3) return response(null, 'design_project_cad', cadRequest)
+      if (providerCalls === 4) return response(null, 'render_cad_candidate', candidate)
+      if (providerCalls === 5) return response('Inspected.')
+      if (providerCalls === 6) return response('Shall I save it?')
+      if (providerCalls === 7) return response(null, 'save_cad_design', { request_quote: message })
+      return response('The drawing is saved.')
+    }, 10000)
+    const cadAssistant = createCadAssistant({ ...f.cadOptions, callModel, render: r => journal.run('cad:render', r, async () => { renders++; return f.cadOptions.render(r) }) })
+    return runProjectAnswer({ projectId: 'A', userId: 'u', message, lookup: f.makeLookup(), writer, hasAccess: async () => true, cadAssistant, callModel,
+      initialDrawingDelivery: () => journal.run('delivery:initial', {}, async () => hasSavedDrawingReceipt(writer.receipts)) })
+  }
+  await assert.rejects(resume(), e => e instanceof BobContinuation && e.kind === 'yield')
+  assert.equal(writes, 1); assert.equal(persisted.length, 1); now = 0
+  const result = await resume()
+  assert(result.ok); assert.equal(result.answer, 'The drawing is saved.'); assert.equal(result.evidence.partial, false)
+  assert.equal(providerCalls, 8); assert.equal(renders, 1); assert.equal(writes, 1)
+})
+
 test('a rendering result or unrelated Artifact link alone is not a saved drawing', () => {
   const f = fixture()
   assert.equal(drawingSaved([], [{ operation: 'execute', name: 'design_project_cad', status: 'ready' }]), false)
   f.receipts.push({ projectId: 'A', dataset: 'artifacts', recordId: artifact, revision: 1, areaId: null, label: 'Linked drawing', operation: 'updated', savedAt: time, record: { id: artifact } })
   assert.equal(drawingSaved(f.receipts, [{ operation: 'execute', name: 'link_project_drawing', status: 'saved' }]), false)
   f.receipts[0].record.cad = true
-  assert.equal(drawingSaved(f.receipts, []), true, 'a recovered geometry receipt must prevent duplicate CAD generation')
+  assert.equal(drawingSaved(f.receipts, []), false, 'later recovered receipts must not change an earlier replay branch')
+  assert.equal(drawingSaved(f.receipts, [], true), true, 'initially recovered geometry must prevent duplicate generation')
 })
 
 test('settling and committing a private turn preserves an incomplete drawing result', async () => {

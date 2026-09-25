@@ -31,13 +31,17 @@ export function parseDrawingIntent(value: unknown, currentMessage: string): Draw
 // All drawing writers return a pinned Artifact receipt. A Task, measurement,
 // selected solution, rendered-but-unsaved candidate or prose is not delivery.
 export const DRAWING_SAVE_TOOLS = new Set(['save_cad_design', 'save_project_drawing', 'save_project_building_plan', 'save_project_stair', 'create_project_room_layout', 'edit_project_room_layout'])
-export function drawingSaved(receipts: WriteReadback[], events: { operation: string; name: string; status: string }[]): boolean {
+export function hasSavedDrawingReceipt(receipts: WriteReadback[]): boolean {
+  // Geometry writers supply these readback fields; link/metadata writers don't.
+  return receipts.some(r => r.dataset === 'artifacts' && Number.isSafeInteger(r.revision) && Number(r.revision) > 0
+    && !!(r.record.cad === true || r.record.recipe || r.record.multifloor_plan || r.record.stair_study || r.record.room_layout))
+}
+export function drawingSaved(receipts: WriteReadback[], events: { operation: string; name: string; status: string }[], initiallySaved = false): boolean {
   return receipts.some(r => r.dataset === 'artifacts' && Number.isSafeInteger(r.revision) && Number(r.revision) > 0)
     && (events.some(e => e.operation === 'execute' && DRAWING_SAVE_TOOLS.has(e.name) && e.status === 'saved')
-      // These fields are read back by the geometry writers, not link/metadata
-      // writers. Recovered receipts from this same claimed turn also count;
-      // forcing a second drawing after a committed save would duplicate work.
-      || receipts.some(r => r.dataset === 'artifacts' && (r.record.cad === true || r.record.recipe || r.record.multifloor_plan || r.record.stair_study || r.record.room_layout)))
+      // Initial recovery is checkpointed: receipts discovered on a later worker
+      // must not change an earlier continuation branch during journal replay.
+      || initiallySaved && hasSavedDrawingReceipt(receipts))
 }
 
 export const DRAWING_CONTINUATION = 'The requested drawing has no successful saved-drawing receipt. Continue that existing request now, using the available drawing tools and their ordinary prerequisites. Saving measurements, instructions, a solution or a target is preparation, not this deliverable. Reuse current records and exact revisions. Do not ask the owner to repeat the request or replace the drawing with a future offer, ASCII sketch or measurement list. A concept may preserve explicit assumptions and open physical checks. Do not invent indispensable facts or bypass authority, exhausted budgets or uncertain writes.'
