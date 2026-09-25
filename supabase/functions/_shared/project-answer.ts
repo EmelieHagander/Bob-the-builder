@@ -17,6 +17,7 @@ import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { createBobToolSession } from './project-tools/bob-tools.ts'
 import { type ToolPolicyReader, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
+import { DRAWING_INTENT_PROMPT, DRAWING_INTENT_SCHEMA, DRAWING_CONTINUATION, parseDrawingIntent, drawingSaved, drawingToolChoice, missingDrawingAnswer, type DrawingIntent } from './project-delivery.ts'
 
 /** Only cross-tool safeguards live in the permanent prompt. Detailed tool usage
  * lives in the owning catalog row and is fetched through load_tool. */
@@ -99,14 +100,19 @@ export async function runProjectAnswer(opts: {
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
-  const toolbox = createBobToolSession({ ...opts, readPolicy: opts.readToolPolicy ?? seedToolPolicy })
+  let drawingIntent: DrawingIntent | null = null
+  const toolbox = createBobToolSession({ ...opts, readPolicy: opts.readToolPolicy ?? seedToolPolicy,
+    drawingRequested: () => !!drawingIntent && drawingIntent.drawing !== 'none' })
   let previousResponseId = opts.context ? undefined : opts.previousResponseId
   let messages: OpenAIServiceOptions['messages'] = [
     { role: 'user', content: buildTurnFrame(opts.projectId, briefing, opts.context) + (catalog ? '\n\nProject Catalog (metadata only):\n' + JSON.stringify(catalog) : '') },
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
   const rounds = 12, deadline = opts.deadline ?? Date.now() + 220_000
-  let completionReviewed=false
+  let completionReviewed=false, drawingReviews=0, forceDrawingAction=false
+  let drawingBlocker: 'unavailable' | 'prerequisite' | 'incomplete' = 'incomplete'
+  let drawingBlockerDetail: string | undefined
+  let cadBlocked=false
   for (let round = 0; round < rounds; round++) {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
@@ -116,13 +122,39 @@ export async function runProjectAnswer(opts: {
       if (round < rounds - 1 && Date.now() + 40000 < deadline) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
+    if (round === 0 && opts.writer && opts.cadAssistant) {
+      // Capture the deliverable before intermediate writes can be mistaken for
+      // finishing it. The same governed main model/journal owns this read-only
+      // classification; no independent provider or client-supplied intent.
+      const intent = await opts.callModel({
+        app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
+        userId: opts.userId, systemMessage: DRAWING_INTENT_PROMPT, useHardcodedPrompt: true,
+        messages, schemaName: 'bob_drawing_delivery', schema: DRAWING_INTENT_SCHEMA,
+        maxOutputTokens: 4000, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
+      })
+      if (!intent.success || !(drawingIntent = parseDrawingIntent(intent.data, opts.message))) return { ok: false, error: 'ai_unavailable' }
+      if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
+      if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
+      if (Date.now() >= deadline) return { ok: false, error: 'turn_timeout' }
+      console.log('[Bob delivery]', drawingIntent.drawing)
+      if (drawingIntent.drawing !== 'none') {
+        messages.push({ role: 'system', content: DRAWING_CONTINUATION })
+        messages.push({ role: 'user', content: JSON.stringify({ requested_drawing: drawingIntent, saved_in_this_turn: compactReceipts(opts.writer.receipts), notice: 'Interpretation of the existing request, not a new permission or measured project fact. Reuse a recovered saved drawing; do not create it again.' }) })
+        try {
+          if (Date.now() + 40000 < deadline) tools = await toolbox.prepare()
+          else { tools = []; toolbox.closeSurface() }
+        } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
+      }
+    }
     console.log('[Bob context]', JSON.stringify({round,system_chars:buildBobSystemMessage(tools).length,tool_schema_bytes:new TextEncoder().encode(JSON.stringify(tools)).length,message_bytes:new TextEncoder().encode(JSON.stringify(messages)).length,remaining_ms:Math.max(0,deadline-Date.now())}))
     const response = await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage: buildBobSystemMessage(tools), useHardcodedPrompt: true,
       messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
+      ...(forceDrawingAction && tools.length ? { tool_choice: drawingToolChoice(tools, !!opts.cadAssistant?.candidate, toolbox.events.some(e => e.operation === 'execute' && e.name === 'design_project_cad')) } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
+    forceDrawingAction = false
     if (!response.success) return { ok: false, error: 'ai_unavailable' }
     opts.projectContext?.confirmDelivery()
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
@@ -137,6 +169,11 @@ export async function runProjectAnswer(opts: {
         try { result = await toolbox.execute(call.function.name, args) }
         catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
         if (result?.status === 'denied') return { ok: false, error: 'project_denied' }
+        if (call.function.name === 'design_project_cad') {
+          cadBlocked = ['unavailable', 'blocked', 'budget_exhausted'].includes(result?.status)
+          drawingBlocker = result?.status === 'prerequisite_required' ? 'prerequisite' : cadBlocked ? 'unavailable' : 'incomplete'
+          drawingBlockerDetail = result?.status === 'blocked' && typeof result.summary === 'string' && result.summary.length <= 2000 ? result.summary : undefined
+        }
         const loggedName = tools.some(t => t.function.name === call.function.name) ? call.function.name : 'unoffered'
         console.log('[Bob tool]', loggedName, result?.status ?? 'returned')
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) })
@@ -159,20 +196,30 @@ export async function runProjectAnswer(opts: {
     if (answerText && hasPrintedToolProtocol(answerText)) return { ok: false, error: 'unsupported_tool_response' }
     // A bounded review of the actual request/results, not a new user request or
     // automatic write. Technical failure in one subtask must not silently end
-    // another authorised subtask. Pure research answers incur no extra call.
+    // another authorised subtask. Separate drawing routing above also catches
+    // requested work that the main loop never attempted.
     const saved=(name:string)=>toolbox.events.some(e=>e.operation==='execute'&&e.name===name&&e.status==='saved')
     const unfinishedAssistant=opts.planAssistant?.compilationAttempted&&!saved('save_compiled_project_plan')
       ||toolbox.events.some(e=>e.operation==='execute'&&e.name==='design_project_cad')&&!saved('save_cad_design')
-    if(answerText&&opts.writer&&(unfinishedAssistant||opts.writer.needsRepair)&&!completionReviewed&&response.responseId&&tools.length&&round<rounds-2&&Date.now()+40000<deadline){
+    const missingDrawing = !!drawingIntent && drawingIntent.drawing !== 'none' && !drawingSaved(opts.writer?.receipts ?? [], toolbox.events)
+    if (answerText && missingDrawing && opts.writer && opts.writer.remaining > 0 && !cadBlocked && drawingReviews < 3
+      && response.responseId && tools.length && round < rounds - 2 && Date.now() + 40000 < deadline) {
+      drawingReviews++; forceDrawingAction = true; previousResponseId = response.responseId
+      messages = [{ role: 'system', content: DRAWING_CONTINUATION }]
+      console.log('[Bob delivery] continuing', JSON.stringify({ review: drawingReviews, candidate: !!opts.cadAssistant?.candidate }))
+      continue
+    }
+    if(answerText&&opts.writer&&!missingDrawing&&(unfinishedAssistant||opts.writer.needsRepair)&&!completionReviewed&&response.responseId&&tools.length&&round<rounds-2&&Date.now()+40000<deadline){
       completionReviewed=true;previousResponseId=response.responseId
       messages=[{role:'system',content:'Before finalising, compare the owner’s current request with the actual tool results. Continue any authorised unfinished work that remains possible, including saving prepared results through their tools. A failure in one subtask does not cancel independent subtasks. Do not offer already delegated work for a later reply or ask again for ordinary prerequisites. Do not expand scope or bypass an approval, physical check, uncertainty or exhausted budget. If the request is complete or truly blocked, give the concise result and precise remaining blocker.'}]
       continue
     }
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (!answerText) return { ok: false, error: 'empty_response' }
-    return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
+    if (missingDrawing) console.warn('[Bob delivery] incomplete', opts.writer?.uncertain ? 'uncertain' : drawingBlocker)
+    return { ok: true, answer: missingDrawing ? missingDrawingAnswer(opts.writer?.receipts ?? [], opts.writer?.uncertain ? 'uncertain' : drawingBlocker, drawingBlockerDetail) : answerText, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        partial: missingDrawing || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

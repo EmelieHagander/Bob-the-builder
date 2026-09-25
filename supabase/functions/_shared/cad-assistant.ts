@@ -19,6 +19,8 @@ export const DESIGN_CAD_TOOL=tool('design_project_cad',
   {brief:{type:'string'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:nullable})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
+const CAD_BLOCKER_TOOL=tool('report_cad_blocker','Report an indispensable constraint or unsupported geometry that prevents this requested concept from being drawn. Ordinary reversible design choices and later physical verification are not blockers. Do not replace a feasible render with an offer to do it later.',
+  {reason:{type:'string',enum:['missing_constraint','conflicting_sources','unsupported_geometry']},explanation:{type:'string',maxLength:2000}})
 export const READ_CAD_TOOL=tool('read_cad_artifact','Read an exact saved CAD artifact revision, including its reusable assembly and pinned inputs. Null revision reads current. Use part_ids to select an existing subassembly when rendering; do not redesign it merely to obtain a detail view.',
   {artifact_id:{type:'string'},revision:{type:['integer','null']}})
 // A JSON object is deliberately validated by the same bounded engine contract.
@@ -55,7 +57,7 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
     :old.step_id??null
   }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
-  let previousResponseId:string|undefined, renders=0,researchRounds=0
+  let previousResponseId:string|undefined, renders=0,researchRounds=0,renderReviewed=false,requireAction=false
   try{
    if(!await opts.hasAccess())throw new Error('project_denied')
    let target=await lookup.search({dataset:'target',query:null,status:null,area_id:raw.area_id,record_id:raw.area_id===null?'project':null,after_id:null})
@@ -89,14 +91,23 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
     if(!await opts.hasAccess())throw new Error('project_denied')
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
     const researching=researchRounds<3,final=round===9
-    const tools=final?[]:[...(researching?[SEARCH_TOOL,READ_CAD_TOOL,...(opts.knowledgeReader?.tools??[]),...(opts.catalog?.tools??[]),...(opts.context?.tools??[])]:[]),...(renders<4?[RENDER_CAD_TOOL]:[])]
+    const tools=final?[]:[...(researching?[SEARCH_TOOL,READ_CAD_TOOL,...(opts.knowledgeReader?.tools??[]),...(opts.catalog?.tools??[]),...(opts.context?.tools??[])]:[]),...(renders<4?[RENDER_CAD_TOOL]:[]),...(!candidate?[CAD_BLOCKER_TOOL]:[])]
     const stage=final?'final review':candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
-    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} model calls remain, ${Math.max(0,3-researchRounds)} research rounds and ${4-renders} renders. Reserve the final call for inspection. When research is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...(opts.context?.carrier()??[])],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
+    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} model calls remain, ${Math.max(0,3-researchRounds)} research rounds and ${4-renders} renders. Reserve the final call for inspection. When research is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...(opts.context?.carrier()??[])],tools,previousResponseId,...(requireAction&&tools.length?{tool_choice:'required' as const}:{}),maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
+    requireAction=false
     if(!result.success||!result.responseId)throw new Error(result.error==='provider_retry_exhausted'?'provider_retry_exhausted':'model_unavailable')
     opts.context?.confirmDelivery()
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
     previousResponseId=result.responseId
-    if(!result.toolCalls?.length)return {status:candidate?'ready':'incomplete',saved:false,summary:result.data,candidate:candidate?{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}:null}
+    if(!result.toolCalls?.length){
+     if(!candidate&&!renderReviewed&&round<8&&renders<4&&Date.now()+40000<until){
+      renderReviewed=true;requireAction=true
+      messages=[{role:'system',content:'There is no rendered candidate. The drawing request is still unfinished. Use render_cad_candidate to create the supported concept from the evidence, keeping assumptions explicit. If an indispensable constraint or unsupported geometry truly prevents it, call report_cad_blocker with the exact reason. Do not finish with another offer, specification or ASCII sketch.'}]
+      continue
+     }
+     if(!candidate)partial=true
+     return {status:candidate?'ready':'incomplete',saved:false,summary:result.data,candidate:candidate?{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}:null}
+    }
     messages=[]
     if(result.toolCalls.length>8)throw new Error('too_many_tool_calls')
     if(result.toolCalls.some(c=>c.function.name!=='render_cad_candidate'))researchRounds++
@@ -107,7 +118,12 @@ export function createCadAssistant(opts:{projectId:string;userId:string;hasAcces
      try{
       const args=JSON.parse(call.function.arguments)
       if(!tools.some(t=>t.function.name===call.function.name))throw new Error('tool_not_offered')
-      if(call.function.name==='search_project_data')out=await lookup.search(args)
+      if(call.function.name==='report_cad_blocker'){
+       if(!object(args)||Object.keys(args).sort().join(',')!=='explanation,reason'||!['missing_constraint','conflicting_sources','unsupported_geometry'].includes(args.reason)||!text(args.explanation,2000))throw new Error('invalid_blocker')
+       partial=true;candidate=null
+       return {status:'blocked',stage:'design',saved:false,reason:args.reason,summary:args.explanation}
+      }
+      else if(call.function.name==='search_project_data')out=await lookup.search(args)
       else if(call.function.name==='search_building_knowledge'&&opts.knowledgeReader)out=await opts.knowledgeReader.execute(args)
       else if(call.function.name==='read_cad_artifact'&&object(args)&&uuid(args.artifact_id)&&(args.revision===null||Number.isSafeInteger(args.revision)&&args.revision>0))out=await opts.readArtifact(args.artifact_id,args.revision)??{status:'not_found'}
       else if(opts.catalog?.tools.some(t=>t.function.name===call.function.name))out=await opts.catalog.read(call.function.name,args)

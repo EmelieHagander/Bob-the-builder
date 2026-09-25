@@ -95,6 +95,13 @@ Loaded tools remain in the same turn until disabled, ineligible, version-changed
 or the normal finalization boundary. A fresh turn derives its own starting set;
 load state is not an enduring grant. The same schema can be loaded again then.
 
+A drawing request identified by the server's per-turn delivery routing also
+offers `design_project_cad` through this same policy/version/budget intersection.
+It does not change project phase or grant write permission. Missing CAD target
+prerequisites expose the existing solution/target tools; a rendered candidate
+exposes its exact save tool. The [conversation contract](ask-bob-conversations.md#drawing-delivery)
+owns routing cost, continuation bounds and the saved-Artifact completion check.
+
 ## Failure, cost and evidence
 
 Keep separate results for `not_loaded`, `not_allowed`, `missing_context`,
