@@ -60,7 +60,39 @@ The original approved persona remains byte-for-byte unchanged. Separate server r
 
 `search_bob_project_data_v2` keeps static caller-RLS projections and adds components, solutions, the selected target, artifacts and material requirements alongside existing datasets. It returns selected-target **exact solution-version** details and relevant saved measurement snapshots; the newest unselected solution is not substituted for the chosen version.
 
-At most 12 project lookups (including the initial briefing), four conversation-history searches, twelve model rounds and the existing eight project writes are allowed. The final round is tool-free; elapsed-time fencing reserves time to settle and commit within the existing lease. The model can follow `next_cursor`/`after_id` across project pages rather than assume the first page is complete. Related rows remain separately bounded; truncation is explicit. Oversized single project records return an error rather than an empty success or a stuck cursor.
+At most 12 project lookups (including the initial briefing), four conversation-history searches, twelve execution model rounds and the existing eight project writes are allowed. Turns with both a claimed writer and CAD assistant first make one structured drawing-intent call through the same governed main-model configuration and durable journal. This also applies to informational requests in those sessions; guests do not incur that call. The final execution round is tool-free; elapsed-time fencing reserves time to settle and commit within the existing lease. The model can follow `next_cursor`/`after_id` across project pages rather than assume the first page is complete. Related rows remain separately bounded; truncation is explicit. Oversized single project records return an error rather than an empty success or a stuck cursor.
+
+### Drawing delivery
+
+`project-delivery.ts` records whether the current request calls for a new or
+revised drawing before intermediate saves occur. The model sees the original
+recent messages and labelled older context, including continued work, corrections,
+cancellation and information-only questions. Classification is validated against
+an exact current-message quote. It is interpretation, not authority, a physical
+fact or proof of completion; normal caller RLS and domain commands still apply.
+
+A drawing request makes the eligible CAD tool visible through the existing
+catalog gates, regardless of phase. At a premature prose ending, the runtime
+checks for a pinned, successful drawing Artifact receipt. Task instructions,
+measurements, solution/target selection and an unsaved CAD candidate do not meet
+that check. Up to three continuations within the existing round/time/write bounds
+require native action: an unattempted CAD consultation, saving a ready candidate,
+or continuing its prerequisites. An explicit CAD blocker, uncertain write or
+exhausted budget stops that recovery. Recovered geometry receipts from the same
+claimed turn prevent duplicate generation. Initial delivery state is checkpointed
+separately: newly recovered receipts after a later worker yield must not change
+an earlier prompt or continuation branch. The actual current user message remains
+last after routing data. A remaining missing drawing replaces
+the premature answer with an explicit incomplete result and actual saved
+subresults; evidence stays partial. Job completion alone is not drawing delivery.
+
+The CAD specialist also gets one bounded recovery when it tries to end without a
+rendered candidate. It can render with labelled working assumptions or use
+`report_cad_blocker` to identify an indispensable missing/conflicting constraint
+or unsupported geometry. Its explanation reaches the incomplete result. Neither
+this check nor a saved drawing verifies construction strength, physical fit,
+visual fidelity, or every requested view. Model-assisted intent and design quality
+still need real-model acceptance; mocked protocol tests are not that evidence.
 
 Write permissions, exact-current-request quotes, optimistic revisions, settlement generation fencing and receipt-only recovery are owned by [ask-bob-writes.md](ask-bob-writes.md). Summary/history retrieval never counts as fresh project evidence or permission to write.
 
@@ -83,9 +115,10 @@ third failure becomes `provider_retry_exhausted`, allowing the parent to explain
 the actual failure and continue independent work. Previously the same failed
 provider call could consume the entire twenty-minute job. Earlier successful
 reads/writes still replay; changed substantive inputs still stop continuation.
-A single completion review checks unfinished plan/CAD work and rejected project
-writes before a premature final answer. It adds no permissions and leaves genuinely
-blocked work explicit; [bounded writes](ask-bob-writes.md#retry-failure-and-reset)
+A single completion review checks attempted unfinished plan/CAD work and rejected
+project writes before a premature final answer. Drawing orders additionally use
+the delivery check above, including when CAD was never attempted. Neither adds
+permissions; [bounded writes](ask-bob-writes.md#retry-failure-and-reset)
 owns field diagnostics, correction tracking and partial-success evidence.
 
 Named members opt in with `background: true` on the existing authenticated `send` request. `ask-bob` validates the caller and project, atomically claims the turn and enqueues a private job, then returns HTTP 202 with job id and expiry. Old clients and the shared guest retain their synchronous path. There is still one transcript and one domain-write ledger.
