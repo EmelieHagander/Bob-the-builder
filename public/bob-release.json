@@ -1,6 +1,6 @@
 {
   "release": "bob-drawing-delivery-2026-09-25",
-  "feature_source_commit": "bec3e3d3b65195d8b4cae5a3ae68fcf2402a4246",
+  "feature_source_commit": "9ca76b5607caa1de5a8d9fc700e83aaabb0cbae7",
   "knowledge_library": "curated_reference_notes",
   "project_images": "metadata_then_on_demand_pixels",
   "image_grounding": "main_and_cad_fresh_project_and_measurement_context",
