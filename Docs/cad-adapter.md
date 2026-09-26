@@ -138,7 +138,12 @@ source/target/work pins. The verdict is current-turn evidence, not a persistent
 certification attached to every historical Artifact revision.
 
 The reviewer is configured independently using the governed vision-capable mini
-model at high reasoning with a 5,000-token ceiling. This follows Launchpad's
+model at high reasoning. The initial 5,000-token setting was exhausted by two
+live reviews without a usable verdict, including one with the corrected schema.
+The September 26 release raises only the reviewer's governed output setting to
+12,000 tokens (reasoning and verdict together). The call respects that setting
+instead of silently clipping it at 5,000, with a 90-second call deadline bounded
+by the existing consultation/worker deadline. This follows Launchpad's
 separate producer/quality-gate pattern, inspected at `97b0b30e2aa08ef6770c03b1bb80a98edd995378`;
 its HTML flag-and-ship policy is not used for a Bob candidate with unresolved
 review errors. No Launchpad service integration is introduced.

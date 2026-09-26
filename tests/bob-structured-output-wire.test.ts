@@ -16,9 +16,10 @@ test('CAD review and recovery language send strict response schemas and no tools
     supports_image_output: false, is_default: true, max_output_tokens: 16000,
     input_cost_per_1m_tokens: 1, output_cost_per_1m_tokens: 1, cached_input_cost_per_1m_tokens: null }
   g.__bobStructuredWireClient = () => ({ from: (table: string) => {
-    const query: any = { select: () => query, eq: () => query, in: () => query,
+    let functionName = ''
+    const query: any = { select: () => query, eq: (key: string, value: string) => { if (key === 'function_name') functionName = value; return query }, in: () => query,
       insert: async () => ({ error: null }),
-      then: (yes: any, no: any) => Promise.resolve({ data: table === 'ai_models' ? [model] : [], error: null }).then(yes, no) }
+      then: (yes: any, no: any) => Promise.resolve({ data: table === 'ai_models' ? [model] : functionName === 'cad-reviewer' ? [{ model: model.model_name, module_id: 'cad', max_output_tokens: 12000, reasoning_effort: 'high', is_enabled: true }] : [], error: null }).then(yes, no) }
     return query
   } })
   g.Deno = { env: { get: (name: string) => ({ SUPABASE_URL: 'https://fixture.invalid',
@@ -62,5 +63,8 @@ test('CAD review and recovery language send strict response schemas and no tools
     }
     assert(requests[0].input.some((m: any) => m.content?.some((p: any) => p.type === 'input_image')))
     assert.deepEqual(requests[0].text.format.schema.required, ['verdict', 'summary', 'requirements', 'issues'])
+    assert.equal(requests[0].max_output_tokens, 12000, 'The governed reviewer budget must not be silently clipped to 5k')
+    assert.deepEqual(requests[0].reasoning, { effort: 'high' })
+    assert.equal(requests[1].max_output_tokens, 2000, 'Recovery language retains its separate bounded budget')
   } finally { g.fetch = oldFetch; g.Deno = oldDeno; delete g.__bobStructuredWireClient }
 })
