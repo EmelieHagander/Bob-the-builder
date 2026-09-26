@@ -1,3 +1,5 @@
+import { createExecutionMetrics } from './execution-metrics.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
 import { BobContinuation, type BobJournal } from './bob-job-journal.ts'
@@ -24,7 +26,7 @@ import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
- * config/accounting plus Bob's private transcript/provider-state commands. */
+ * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   background?: { claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean };
@@ -52,10 +54,12 @@ export async function answerWithOpenAi(opts: {
       return { data, error }
     })
   }
+  let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const callModel = async (options: OpenAIServiceOptions) => {
    try{return await memo('model:' + options.functionName, options, async () => {
     const started = performance.now()
     const result = await callOpenAIResponses<string>(options)
+    await metrics?.model(options,result,performance.now()-started)
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
@@ -107,6 +111,11 @@ export async function answerWithOpenAi(opts: {
   }
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
   const deadline = opts.background?.deadline ?? Date.now() + 215000
+  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now()}))
+  metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
+    const {error}=await internal.from('execution_events').upsert(event,{onConflict:'run_id,event_key'}).abortSignal(AbortSignal.timeout(3000))
+    if(error)throw new Error('metrics_unavailable')
+  }})
   const threadId = claimedServer?.thread_id ?? null
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
@@ -184,7 +193,9 @@ export async function answerWithOpenAi(opts: {
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
   },hasAccess)
-  return runClaimedProjectTurn({
+  try {
+  const result=await runClaimedProjectTurn({
+    observeDelivery:value=>metrics!.observe(value),
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
@@ -229,4 +240,12 @@ export async function answerWithOpenAi(opts: {
         providerResponseId: result.providerResponseId ?? null, generation })
     } } : {}),
   })
+  await metrics.finish({ok:result.ok,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
+    recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
+  return result
+  }catch(error){
+    rethrowContinuation(error)
+    await metrics.finish({ok:false,writes:writer?.receipts.length??0,uncertain:writer?.uncertain,cad:cadAssistant.metrics})
+    throw error
+  }
 }

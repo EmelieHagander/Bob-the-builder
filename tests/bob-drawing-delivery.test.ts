@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { runProjectAnswer, seedToolPolicy, type ModelCall } from '../supabase/functions/_shared/project-answer.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter, type WritePayload, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
-import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
+import { createCadAssistant, handoff } from './support/cad-review-fixture.ts'
 import { parseDrawingIntent, drawingSaved, hasSavedDrawingReceipt } from '../supabase/functions/_shared/project-delivery.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
@@ -21,7 +21,7 @@ const recipe: CadAssemblyRequest = { contract_version: 1, units: 'mm', assembly_
   definitions: [{ id: 'side', primitive: 'box', x_mm: 18, y_mm: 360, z_mm: 840, material_ref: null }],
   instances: [{ id: 'cabinet.side', definition_id: 'side', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front', 'top'] }
 const candidate = { recipe, source_artifact_id: null, source_revision: null, part_ids: [], title: 'Cabinet concept', description: 'Synthetic geometry fixture', assumptions: 'Working dimensions, not measured fit or strength.', target_revision: 1, measurements: [] }
-const cadRequest = { brief: 'Draw the cabinet concept with explicit assumptions.', area_id: null, component_id: null, step_id: null, artifact_id: null }
+const cadRequest = { handoff, brief: 'Draw the cabinet concept with explicit assumptions.', area_id: null, component_id: null, step_id: null, artifact_id: null }
 function fixture(selected = true, available = true) {
   let target = selected, renders = 0
   const writes: WritePayload[] = [], receipts: WriteReadback[] = []
@@ -81,7 +81,7 @@ test('saving Task instructions and promising a drawing cannot pass the drawing d
     return response('Drawing 1 is complete. I can make the actual file next time.')
   })
   assert(result.ok); assert.equal(f.writes.length, 1); assert.equal(f.renders, 0); assert.equal(calls, 5)
-  assert.equal(result.evidence.partial, true); assert.match(result.answer, /Ritningen är inte klar/)
+  assert.equal(result.evidence.partial, true); assert.match(result.answer, /⚠/)
   assert.doesNotMatch(result.answer, /Drawing 1 is complete|next time/)
 })
 
@@ -118,7 +118,7 @@ test('disabled catalog policy and unavailable CAD cannot be overridden by intent
       if (disabled) { assert(!o.tools?.some(t => t.function.name === 'design_project_cad')); assert.notDeepEqual(o.tool_choice, { type: 'function', function: { name: 'design_project_cad' } }) }
       return response('I made the drawing.')
     }, undefined, { readToolPolicy: async () => { const policy = await seedToolPolicy(); return { ...policy, tools: policy.tools.map(t => t.name === 'design_project_cad' && disabled ? { ...t, active: false } : t) } } })
-    assert(result.ok); assert(result.evidence.partial); assert.match(result.answer, /Ritningen är inte klar/)
+    assert(result.ok); assert(result.evidence.partial); assert.match(result.answer, /⚠/)
     assert.equal(f.renders, 0); assert.equal(f.writes.length, 0); assert(calls <= 4)
   }
 })
@@ -128,7 +128,7 @@ test('an explicit indispensable CAD blocker ends honestly without consuming repe
   const result = await f.run(async o => o.schemaName ? intent() : ++calls === 1 ? response(null, 'design_project_cad', cadRequest) : response('It is complete.'),
     async () => { cadCalls++; return response(null, 'report_cad_blocker', { reason: 'unsupported_geometry', explanation: 'The requested freeform surface is unsupported.' }) })
   assert(result.ok); assert.equal(result.evidence.partial, true); assert.equal(cadCalls, 1); assert.equal(calls, 2)
-  assert.equal(f.renders, 0); assert.equal(f.writes.length, 0); assert.match(result.answer, /Ritningen är inte klar/)
+  assert.equal(f.renders, 0); assert.equal(f.writes.length, 0); assert.match(result.answer, /⚠/)
   assert.match(result.answer, /freeform surface is unsupported/)
 })
 
@@ -215,7 +215,7 @@ test('settling and committing a private turn preserves an incomplete drawing res
     lookup: f.makeLookup(), writer: f.writer, hasAccess: async () => true, fail: async () => { throw new Error('not a transport failure') },
     commit: async value => { committed = value }, cadAssistant: createCadAssistant({ ...f.cadOptions, callModel: async () => { throw new Error('unavailable engine must not call a model') } }),
     callModel: async o => o.schemaName ? intent() : ++calls === 1 ? response(null, 'design_project_cad', cadRequest) : response('The drawing is ready.') })
-  assert(result.ok); assert.equal(result.evidence.partial, true); assert.match(result.answer, /Ritningen är inte klar/)
+  assert(result.ok); assert.equal(result.evidence.partial, true); assert.match(result.answer, /⚠/)
   assert.deepEqual(committed, result); assert.equal(f.writes.length, 0)
 })
 

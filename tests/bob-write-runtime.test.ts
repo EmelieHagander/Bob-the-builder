@@ -131,7 +131,7 @@ test('timeout after database commit stops further writes and settlement returns 
     return {success:false,data:null,model:'fixture',usage}
   }})
   assert.equal(result.ok,true);assert.equal(f.writes,1)
-  if(result.ok){assert.equal(result.evidence.writes!.length,1);assert.match(result.answer,/verifierade/)}
+  if(result.ok){assert.equal(result.evidence.writes!.length,1);assert.match(result.answer,/✓ Chosen plan/)}
 })
 
 test('model exception after a successful save returns receipts; lost transcript commit never asks to repeat writes',async()=>{
@@ -142,14 +142,14 @@ test('model exception after a successful save returns receipts; lost transcript 
     return {success:true,data:null,model:'fixture',responseId:'resp_tool',usage,toolCalls:[{id:'call_1',type:'function',function:{name:'save_project_task',arguments:JSON.stringify(args)}}]}
   },commit:async()=>{throw new Error('lost transcript')}})
   assert.equal(result.ok,true)
-  if(result.ok){assert.match(result.answer,/Upprepa inte ändringarna/);assert.equal(result.evidence.writes!.length,1)}
+  if(result.ok){assert.match(result.answer,/⚠/);assert.equal(result.evidence.writes!.length,1)}
 })
 
 test('unverifiable settlement is explicit; access revocation suppresses both answer and receipts',async()=>{
   const f=writerFixture({recovered:[receipt],settlementFails:true})
   const result=await runClaimedProjectTurn({...base(),writer:f.writer,callModel:async()=>final()})
   assert.equal(result.ok,true)
-  if(result.ok){assert.match(result.answer,/kunde inte verifieras/);assert.equal(result.evidence.partial,true)}
+  if(result.ok){assert.match(result.answer,/⚠/);assert.equal(result.evidence.partial,true)}
   const denied=await runClaimedProjectTurn({...base(),writer:writerFixture({recovered:[receipt]}).writer,hasAccess:async()=>false,callModel:async()=>final()})
   assert.deepEqual(denied,{ok:false,error:'project_denied'})
 })

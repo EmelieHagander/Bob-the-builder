@@ -17,9 +17,11 @@ import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { createBobToolSession } from './project-tools/bob-tools.ts'
 import { type ToolPolicyReader, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
-import { DRAWING_CONTINUATION, drawingSaved, hasSavedDrawingReceipt, drawingToolChoice, missingDrawingAnswer, type DrawingIntent } from './project-delivery.ts'
+import { DRAWING_CONTINUATION, drawingSaved, hasSavedDrawingReceipt, drawingToolChoice, type DrawingIntent } from './project-delivery.ts'
 
-import { WORK_INTENT_PROMPT, WORK_INTENT_SCHEMA, WORK_CONTINUATION, parseWorkIntent, missingWork, incompleteWorkAnswer, type WorkIntent, type DeliveryEvent } from './work-delivery.ts'
+import { WORK_INTENT_PROMPT, WORK_INTENT_SCHEMA, WORK_CONTINUATION, parseWorkIntent, missingWork, type WorkIntent, type DeliveryEvent } from './work-delivery.ts'
+import { createDeliveryLanguage, type DeliveryFormatter } from './delivery-language.ts'
+import type { DeliveryObservation } from './execution-metrics.ts'
 
 /** Only cross-tool safeguards live in the permanent prompt. Detailed tool usage
  * lives in the owning catalog row and is fetched through load_tool. */
@@ -98,6 +100,7 @@ export async function runProjectAnswer(opts: {
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number;
   initialDrawingDelivery?: () => Promise<boolean>;
   initialWriteReceipts?: () => Promise<import('./project-write.ts').WriteReadback[]>;
+  formatNotice?: DeliveryFormatter; observeDelivery?: (value: DeliveryObservation) => void;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
@@ -126,6 +129,7 @@ export async function runProjectAnswer(opts: {
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
   const rounds = 24, deadline = opts.deadline ?? Date.now() + 220_000
+  const formatNotice=opts.formatNotice??createDeliveryLanguage({...opts,deadline,context:opts.context?.recent.map(m=>m.text).join('\n')})
   let completionReviewed=false, drawingReviews=0, workReviews=0, forceWorkAction=false, forceDrawingAction=false
   let drawingBlocker: 'unavailable' | 'prerequisite' | 'incomplete' = 'incomplete'
   let drawingBlockerDetail: string | undefined
@@ -147,9 +151,10 @@ export async function runProjectAnswer(opts: {
         app: 'bob', coworkerId: 'bob', functionName: 'work-router', aiFunction: 'bob-work-intent', module: 'global',
         userId: opts.userId, systemMessage: WORK_INTENT_PROMPT, useHardcodedPrompt: true,
         messages, schemaName: 'bob_work_delivery', schema: WORK_INTENT_SCHEMA,
-        maxOutputTokens: 4000, outputTokenLimit: 4000, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
+        maxOutputTokens: 6000, outputTokenLimit: 6000, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
       })
       workIntent = intent.success ? parseWorkIntent(intent.data, opts.message) : null
+      formatNotice.seed(workIntent?.delivery_language)
       intentUnavailable = !workIntent
       const drawing = workIntent?.goals.find(g => g.kind === 'drawing')
       drawingIntent = drawing ? { drawing: 'create', description: drawing.description, request_quote: workIntent!.request_quote } : null
@@ -172,6 +177,7 @@ export async function runProjectAnswer(opts: {
         } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
       }
     }
+    opts.observeDelivery?.({requested:workIntent?.goals.length??0,missing:missingWork(workIntent,deliveryEvents).length,rounds:round+1,continuations:workReviews+drawingReviews,intent_available:!intentUnavailable,kinds:workIntent?.goals.map(g=>g.kind)??[]})
     console.log('[Bob context]', JSON.stringify({round,system_chars:buildBobSystemMessage(tools).length,tool_schema_bytes:new TextEncoder().encode(JSON.stringify(tools)).length,message_bytes:new TextEncoder().encode(JSON.stringify(messages)).length,remaining_ms:Math.max(0,deadline-Date.now())}))
     const response = await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
@@ -250,7 +256,9 @@ export async function runProjectAnswer(opts: {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (!answerText) return { ok: false, error: 'empty_response' }
     if (missingDrawing) console.warn('[Bob delivery] incomplete', opts.writer?.uncertain ? 'uncertain' : drawingBlocker)
-    return { ok: true, answer: missingDrawing ? missingDrawingAnswer(opts.writer?.receipts ?? [], opts.writer?.uncertain ? 'uncertain' : drawingBlocker, drawingBlockerDetail) : outstanding.length ? incompleteWorkAnswer(outstanding, opts.writer?.receipts ?? [], opts.writer?.uncertain) : answerText, projectId: opts.projectId, providerResponseId: response.responseId,
+    opts.observeDelivery?.({requested:workIntent?.goals.length??0,missing:outstanding.length,rounds:round+1,continuations:workReviews+drawingReviews,intent_available:!intentUnavailable,kinds:workIntent?.goals.map(g=>g.kind)??[]})
+    const answer=missingDrawing||outstanding.length?await formatNotice({notice:opts.writer?.uncertain?'uncertain':missingDrawing?`drawing_${drawingBlocker}`:'incomplete',missing:outstanding.map(g=>g.description),receipts:opts.writer?.receipts??[],detail:drawingBlockerDetail}):answerText
+    return { ok: true, answer, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
         partial: missingDrawing || outstanding.length > 0 || intentUnavailable || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },

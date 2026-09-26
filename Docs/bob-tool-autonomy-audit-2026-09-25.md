@@ -18,6 +18,15 @@ semantic drawing fidelity, more detailed domain rejection messages and the
 remaining unsupported capabilities in A9 are not declared complete by this patch.
 Release/deployment evidence is recorded in PR #147.
 
+## Follow-up — structured design review
+
+The next implementation adds structured requirements/coordinate/view handoff,
+an independent CAD reviewer with bounded repair, service-only actual-call/outcome
+metrics, and model-localised terminal notices. Current contracts are owned by
+`cad-adapter.md` and `ask-bob-conversations.md`. This closes the identified local
+mechanics, not named-member drawing fidelity or every unsupported A9 capability.
+Real-model deployment acceptance is recorded separately in its PR.
+
 ## Bedömning av de tre hypoteserna
 
 | Hypotes | Vad beläggen visar | Bedömning |

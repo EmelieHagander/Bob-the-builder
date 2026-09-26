@@ -108,6 +108,41 @@ A detail selection uses exact instance IDs from a pinned source assembly. Defini
 
 `artifact_cad_revisions` stores recipe, verified export packet, source revision and optional component/plan-Step identity under the existing Artifact revision. Saves remain Concept and pass canonical target/measurement checks. A successful render does not certify structure, joints, site fit or measured truth. SVGs are displayed as image documents, not injected DOM; STEP is downloadable. Project-home previews and reusable work links are owned by [artifacts](artifacts.md#project-home-drawings-and-work-links--september-24-2026); Step links reopen an exact saved revision. Historical views survive a new turn and reload. Canonical archive/restore copies the exact CAD packet to the new revision. Generic Artifact revisions are rejected for CAD identities; only the guarded CAD save can replace their construction.
 
+### Structured handoff and independent review — September 25
+
+`design_project_cad` schema version 2 requires `handoff`: desired deliverable,
+individually identified requirements with their basis/source refs, coordinate
+origin and positive axes (unknown stays null), requested views, and open checks.
+Bob carries relevant earlier corrections into these fields. The original current
+owner request, caller-scoped reference pixels and server-read target accompany
+that handoff. This is semantic intent, never a measured fact or new permission.
+Source detail renders keep exact geometry/part identities and use the requested
+views. No object names or language keyword tables select the workflow.
+
+After the designer inspects its candidate, a separate `cad-reviewer/cad` model
+conversation gets the same original request/handoff, exact recipe, engine checks,
+generated previews, retained reference pixels and bounded research evidence.
+Fresh project/measurement grounding and retained-image revocation checks apply
+again. The reviewer has no tools, writer or designer response cursor. It returns
+coverage for every requirement and explicit issues. Code rejects missing preview
+pixels, omitted requested views, malformed/incomplete reviews and contradictory
+passes with failed requirements/errors. Open site checks may remain warnings.
+
+A rejected candidate returns to the designer with concrete feedback. At most
+three reviews (initial plus two repair checks), four renders and ten designer
+rounds fit the existing consultation deadline. A missing reviewer is an honest
+technical blocker, not a request for owner approval. Only a passing review exposes
+the exact candidate to Bob's save tool; a new render invalidates the old review.
+The review fingerprint covers geometry, exports/previews, descriptions and scoped
+source/target/work pins. The verdict is current-turn evidence, not a persistent
+certification attached to every historical Artifact revision.
+
+The reviewer is configured independently using the governed vision-capable mini
+model at high reasoning with a 5,000-token ceiling. This follows Launchpad's
+separate producer/quality-gate pattern, inspected at `97b0b30e2aa08ef6770c03b1bb80a98edd995378`;
+its HTML flag-and-ship policy is not used for a Bob candidate with unresolved
+review errors. No Launchpad service integration is introduced.
+
 ### Hosting boundary
 
 Build `cad-worker/Dockerfile` and run behind HTTPS with a secret `BOB_CAD_TOKEN` of at least 32 characters. Set matching Edge secrets `BOB_CAD_URL=https://<host>/render` and `BOB_CAD_TOKEN`. The service accepts only authenticated POST `/render`, limits input to 256 KiB, runs geometry in a killable child process for at most 40 seconds and returns at most 6 MiB. It writes only a temporary directory, accepts no paths/code/URLs and logs no recipes or credentials. The transport checks engine/assembly identity, definitions, instance identity, bounds and every export hash. Configure provider resource/rate limits at deployment.

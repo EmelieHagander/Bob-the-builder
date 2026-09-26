@@ -26,6 +26,7 @@ import { drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
 const useSeed = process.argv[2] === '--seed'
 const catalog = checkedToolSnapshot({ phase: null, tools: useSeed ? seed
   : JSON.parse(await readFile(process.argv[2] ?? new URL('./fixtures/bob-tool-catalog-2026-09-25.json', import.meta.url), 'utf8')) }).tools
+const handoff={deliverable:'Synthetic shelf concept',requirements:[{id:'shape',requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null}],coordinates:{origin:null,positive_x:null,positive_y:null,positive_z:'up'},views:['front','top'],unresolved:['Site fit']}
 const id = '50000000-0000-4000-8000-000000000001'
 const stamp = '2026-09-25T00:00:00Z'
 const response = (data: unknown, name?: string, args?: unknown): any => ({ success: true, data, model: 'controlled-fixture',
@@ -114,11 +115,11 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
   render: async r => { renders++; const bounds = { min: [0, 0, 0], max: [600, 250, 18], size: [600, 250, 18] }
     return { recipe: r, manifest: { bounding_box_mm: bounds,
       instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
-    files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES'} } },
-  callModel: async o => { cadCalls.push(o); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
+    files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES',top:'SYNTHETIC_TOP_PNG_BYTES'} } },
+  callModel: async o => { if(o.schemaName==='bob_cad_review')return response({verdict:'pass',summary:'Synthetic review',requirements:[{id:'shape',status:'met',evidence:'Synthetic geometry'}],issues:[]});cadCalls.push(o); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') },
 })
-const cadResult = await cad.consult({ brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: null })
+const cadResult = await cad.consult({ handoff, brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: null })
 const cadReturns = cadCalls.flatMap(o => o.messages ?? []).filter(m => m.role === 'tool').map(m => JSON.parse(m.content))
 assert.equal(renders, 1, 'Valid geometry must reach the synthetic transport once; invalid geometry must not.')
 
@@ -130,7 +131,7 @@ const research = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic
     fourthTools = (o.tools ?? []).map(t => t.function.name)
     return response(null, 'report_cad_blocker', { reason: 'missing_constraint', explanation: 'Synthetic stopping condition for the audit.' }) },
 })
-await research.consult({ brief: 'Read four needed records before drawing.', area_id: null, component_id: null, step_id: null, artifact_id: null })
+await research.consult({ handoff, brief: 'Read four needed records before drawing.', area_id: null, component_id: null, step_id: null, artifact_id: null })
 
 const w = fixture('planning'), writeStatuses: string[] = []
 for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_project_task', {
