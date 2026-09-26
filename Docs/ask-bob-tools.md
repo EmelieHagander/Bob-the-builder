@@ -100,6 +100,8 @@ Loaded tools remain in the same turn until disabled, ineligible, version-changed
 or the normal finalization boundary. A fresh turn derives its own starting set;
 load state is not an enduring grant. The same schema can be loaded again then.
 
+The CAD delegation tool now uses schema version 2 with the structured handoff and independent review owned by [CAD](cad-adapter.md#structured-handoff-and-independent-review--september-25). Register/deploy that handler before the catalog version flip; mismatched versions stay uncallable.
+
 A drawing request identified by the server's per-turn delivery routing also
 offers `design_project_cad` through this same policy/version/budget intersection.
 It does not change project phase or grant write permission. Missing CAD target

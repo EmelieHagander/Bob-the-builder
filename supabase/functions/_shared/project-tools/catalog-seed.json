@@ -81,9 +81,9 @@
   },
   {
     "name": "design_project_cad",
-    "description": "Delegate a construction or drawing to the CAD assistant with its own research and rendering tools.",
-    "how_to": "Provide the object, brief and known Area/component/Step/Artifact IDs; null means unspecified. It can fetch wider dependencies. A detail reuses the source assembly. Rendering returns a candidate, not a save. Missing CAD infrastructure is a technical blocker, not a request for approval.",
-    "schema_version": 1,
+    "description": "Delegate construction to a CAD designer with structured requirements and independent visual review.",
+    "how_to": "Open relevant reference images, then supply brief plus handoff: deliverable, requirements with stable IDs/basis/source refs, coordinate mapping, requested views and unresolved checks. Carry earlier owner corrections forward; never invent a known compass direction. The server passes the original request, reopens selected pixels and pins the current target. The designer researches and renders, then a separate reviewer compares exact geometry and pixels to the request. Rejected designs get bounded repair. Only ready results expose save_cad_design. Bob saves the exact candidate and remains responsible for the requested outcome.",
+    "schema_version": 2,
     "always_load": false,
     "preload_phases": [
       "design"

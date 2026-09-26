@@ -123,6 +123,45 @@ still need real-model acceptance; mocked protocol tests are not that evidence.
 
 Write permissions, exact-current-request quotes, optimistic revisions, settlement generation fencing and receipt-only recovery are owned by [ask-bob-writes.md](ask-bob-writes.md). Summary/history retrieval never counts as fresh project evidence or permission to write.
 
+## Delivery language and outcome measurement — September 25
+
+The existing work-intent call also prepares a bounded set of terminal notices in
+the owner's requested conversational language. There is no locale keyword map,
+language allowlist or Swedish user-facing fallback in the executor. Code owns
+which notice applies and appends exact missing-result labels/verified receipts;
+the model localises the meanings and cannot select completion state. The notices
+survive until settlement/commit so a late chat failure needs no new model call.
+A receipt-only recovery with no prepared notices can use one small read-only
+localisation call before settlement. Complete provider failure or no remaining
+budget uses language-neutral warning/open/saved marks and original labels.
+That path preserves partial evidence and never re-executes writes.
+
+`bob.execution_events` is service-only with RLS and no anon/authenticated grants.
+It stores random run/turn correlation IDs, role/status, time, tokens, known cost
+and bounded numeric/enum counters. No user IDs, project IDs, prompts, record
+labels/IDs, images, arguments or provider error text are recorded. The same
+journal pins the run identity. Model events are written **inside** actual model
+operations, including observed retry failures; replay creates no second event.
+The terminal delivery event upserts once per run. Diagnostics fail softly and
+cannot overturn a successful project save.
+
+Outcomes distinguish `receipt_matched`, `candidate_ready`, `partial`, `uncertain`,
+`recovered`, `read_only` and `failed`. Counts include requested/missing goal groups,
+verified saved records, main rounds/continuations, CAD renders/input corrections,
+independent reviews and rejected reviews. Receipt matching proves kind/count/known
+record identity; it does not certify all task semantics. CAD review is a separate
+concept-quality signal. Unknown intent/cost remains unknown. Actual user follow-up
+frequency and construction correctness are not inferred from these counters.
+
+Elapsed time runs from first admitted execution through the final result, including
+worker waits but excluding initial queue delay. `scripts/report-bob-execution.sql`
+reports outcome distribution, p50/p95 time, retries/repairs and per-role usage/cost.
+Runs with model events but no terminal event remain unfinished/unobserved. Events
+lost to a process kill before their insert are not an exactly-once billing ledger;
+shared AI accounting remains authoritative. Compare identical ordinary-language
+scenarios, actual saved readback and user acceptance before claiming a speed or
+quality improvement. Release evidence belongs in the implementation PR.
+
 ## Durable background turns
 
 **September 25 recovery correction (implementation):** checkpoint results are
@@ -156,7 +195,7 @@ The pattern follows Launchpad's async dispatch, continuation driver and resume p
 
 Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Main model calls allow 100 seconds within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
 
-The original short-lived caller JWT is encrypted with AES-GCM, bound to user/project/turn, and stored only in `bob_private`. The key derives from the existing server secret with a Bob-specific domain separator. No refresh tokens or synthetic named-user tokens are used. Every resumed worker revalidates the original Auth user; all domain operations keep that caller JWT and RLS. Project access, tool policy and retained image authority are checked live. Service access is limited to job/transcript metadata and existing shared AI configuration/accounting.
+The original short-lived caller JWT is encrypted with AES-GCM, bound to user/project/turn, and stored only in `bob_private`. The key derives from the existing server secret with a Bob-specific domain separator. No refresh tokens or synthetic named-user tokens are used. Every resumed worker revalidates the original Auth user; all domain operations keep that caller JWT and RLS. Project access, tool policy and retained image authority are checked live. Service access is limited to job/transcript metadata, content-free Bob execution diagnostics and existing shared AI configuration/accounting.
 
 Jobs end by the earlier of caller-token expiry or 20 minutes, and at most 12 worker claims. Terminal handling clears the encrypted token and operation journal immediately; terminal job metadata expires after seven days. A paid image generation whose outcome was lost after dispatch is stopped explicitly rather than silently generated a second time. Provider requests interrupted before a response/checkpoint may be billed and retried; this is not an exactly-once provider-billing guarantee. Domain writes retain their existing idempotency guarantee.
 

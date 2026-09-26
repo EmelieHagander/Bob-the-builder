@@ -245,11 +245,3 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   }
 }
 export type ProjectWriter = ReturnType<typeof createProjectWriter>
-
-/** Receipt-only recovery: no second model run or accidental repeated edits. */
-export function savedWriteSummary(receipts: WriteReadback[], uncertain = false): string {
-  const saved = receipts.length ? `Sparat eller återanvänt i projektet:\n${receipts.map(r => `• ${r.label} (${r.operation === 'created' ? 'skapad' : r.operation === 'reused' ? 'återanvänd, oförändrad' : 'uppdaterad'}).`).join('\n')}\n\n` : ''
-  return saved + (uncertain
-    ? 'En skrivning kunde inte verifieras. Jag har stoppat fler ändringar; kontrollera uppgifterna innan du försöker igen.'
-    : 'Åtgärderna ovan är verifierade. Svaret kunde inte slutföras normalt, så jag visar kvittot i stället. Jag har inte upprepat ändringarna.')
-}

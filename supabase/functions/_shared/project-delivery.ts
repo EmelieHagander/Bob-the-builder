@@ -50,16 +50,3 @@ export function drawingToolChoice(tools: NonNullable<OpenAIServiceOptions['tools
   const name = candidate ? 'save_cad_design' : !attempted ? 'design_project_cad' : undefined
   return name && tools.some(t => t.function.name === name) ? { type: 'function', function: { name } } : 'required'
 }
-
-/** Safe terminal result when the bounded executor could not deliver. Never
- * return a model's "done/started/next time" assertion in place of the file. */
-export function missingDrawingAnswer(receipts: WriteReadback[], reason: 'unavailable' | 'prerequisite' | 'incomplete' | 'uncertain', detail?: string): string {
-  const why = {
-    unavailable: 'Ritningsverktyget kunde inte slutföra körningen.',
-    prerequisite: 'Lösningsförslaget som ritningen ska utgå från blev inte valt.',
-    incomplete: 'Bob avslutade bearbetningen utan att leverera en sparad ritning.',
-    uncertain: 'Det gick inte att verifiera om ritningen sparades. Inga fler skrivningar görs innan resultatet har kontrollerats.',
-  }
-  const saved = receipts.length ? '\n\nSparade delresultat:\n' + receipts.map(r => `• ${r.label}`).join('\n') : ''
-  return (reason === 'uncertain' ? 'Ritningen är inte verifierad.' : 'Ritningen är inte klar.') + ' ' + why[reason] + (detail ? '\n\n' + detail : '') + saved
-}
