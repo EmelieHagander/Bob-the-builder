@@ -11,7 +11,7 @@ const receipt={projectId:'A',dataset:'tasks',recordId:'task',label:'Étagère',o
 test('localisation uses conversational language intent, preserves exact receipts and caches all failure notices',async()=>{
  let calls=0
  const format=createDeliveryLanguage({userId:'u',message:'Fortsätt, men svara på franska.',hasAccess:async()=>true,callModel:async o=>{
-  calls++;assert(String(o.messages![0].content).includes('franska'));assert.deepEqual(o.tools,[]);assert.equal(o.previousResponseId,undefined);return response(lexicon)
+  calls++;assert(String(o.messages![0].content).includes('franska'));assert.equal(o.tools,undefined);assert.equal(o.previousResponseId,undefined);return response(lexicon)
  }})
  const answer=await format({notice:'incomplete',missing:['Une vue de dessus'],receipts:[receipt]})
  assert.match(answer,/demande reste inachevée/);assert.match(answer,/• Étagère/)

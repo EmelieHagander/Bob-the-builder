@@ -143,6 +143,14 @@ separate producer/quality-gate pattern, inspected at `97b0b30e2aa08ef6770c03b1bb
 its HTML flag-and-ship policy is not used for a Bob candidate with unresolved
 review errors. No Launchpad service integration is introduced.
 
+Schema-only reviewer/localisation calls must omit `tools` entirely: the canonical
+shared adapter suppresses structured response formatting when even an empty tools
+array is present. The September 26 release probe exposed this integration gap;
+`bob-structured-output-wire.test.ts` now exercises both production call sites
+through the actual adapter and asserts strict `text.format` at the HTTP boundary.
+The shared cross-app adapter itself is unchanged. Live acceptance is recorded in
+the follow-up PR, separately from the initial merged implementation.
+
 ### Hosting boundary
 
 Build `cad-worker/Dockerfile` and run behind HTTPS with a secret `BOB_CAD_TOKEN` of at least 32 characters. Set matching Edge secrets `BOB_CAD_URL=https://<host>/render` and `BOB_CAD_TOKEN`. The service accepts only authenticated POST `/render`, limits input to 256 KiB, runs geometry in a killable child process for at most 40 seconds and returns at most 6 MiB. It writes only a temporary directory, accepts no paths/code/URLs and logs no recipes or credentials. The transport checks engine/assembly identity, definitions, instance identity, bounds and every export hash. Configure provider resource/rate limits at deployment.
