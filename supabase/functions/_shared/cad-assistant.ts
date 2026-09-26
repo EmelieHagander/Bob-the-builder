@@ -134,7 +134,10 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
        source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:'Exact candidate view: '+view},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
-      tools:[],maxOutputTokens:5000,outputTokenLimit:5000,timeoutMs:Math.min(60000,until-Date.now())})
+      // Omit tools: even an empty array suppresses text.format in the shared adapter.
+      // The governed setting includes reasoning tokens as well as the verdict.
+      // Do not silently cap it at the former 5k value; two live reviews exhausted it.
+      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())})
      if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
      const review=checked.success?parseCadReview(checked.data,handoff):null
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}

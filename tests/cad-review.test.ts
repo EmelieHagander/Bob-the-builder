@@ -26,7 +26,7 @@ test('original request and structured directions reach a separate, tool-free rev
  const f=fixture(),a=createCadAssistant(f.opts)
  assert.equal((await a.consult(request)).status,'ready')
  const review=f.seen.find(o=>o.functionName==='cad-reviewer')
- assert.equal(review.previousResponseId,undefined);assert.deepEqual(review.tools,[])
+ assert.equal(review.previousResponseId,undefined);assert.equal(review.tools,undefined)
  const data=JSON.parse(review.messages[0].content)
  assert.equal(data.owner_request,f.opts.ownerRequest);assert.equal(data.handoff.coordinates.positive_x,'east')
  assert.deepEqual(data.candidate.recipe,recipe)
