@@ -70,28 +70,25 @@ const surfaces = []
 for (const phase of [null, 'concept', 'design', 'planning', 'build', 'complete']) {
   const f = fixture(phase), tools = await f.session().prepare()
   const descriptions = tools.map(t => ({ name: t.function.name, bytes: Buffer.byteLength(JSON.stringify(t)) })).sort((a, b) => b.bytes - a.bytes)
-  surfaces.push({ phase, offered: tools.length, domain_tools: tools.length - 2,
-    system_chars: buildBobSystemMessage(tools).length, schema_bytes: Buffer.byteLength(JSON.stringify(tools)),
+  const session = f.session(); await session.prepare()
+  surfaces.push({ phase, offered: tools.length, domain_tools: tools.length,
+    system_chars: buildBobSystemMessage(tools, session.toolbox).length, schema_bytes: Buffer.byteLength(JSON.stringify(tools)),
     cad_initially_offered: tools.some(t => t.function.name === 'design_project_cad'), largest: descriptions.slice(0, 5),
     names: tools.map(t => t.function.name) })
 }
-const discovery = []
-for (const query of ['ritning', 'drawing', 'CAD', 'draw bed', 'ändra planen', 'edit plan', 'archive area']) {
-  const s = fixture('planning').session(); await s.prepare()
-  const result = await s.execute('list_tools', { query, after_name: null })
-  discovery.push({ query, status: result.status, search: result.search, names: result.items.map((t: any) => t.name), next_cursor: result.next_cursor })
-}
+// Since 2026-09-27 there is no discovery round: report the shelves Bob sees instead.
+const shelfSession = fixture('planning').session(); await shelfSession.prepare()
+const discovery = shelfSession.toolbox.reduce((acc: Record<string, string[]>, e) => { (acc[e.group] ??= []).push(e.state === 'offered' ? e.name : `${e.name} (${e.state})`); return acc }, {})
 const premature = []
 for (const [message,kind] of [['Skapa en uppgift för att mäta öppningen.','task'], ['Ändra planen och flytta uppgiften till rätt steg.','plan'], ['Ta fram och spara materiallistan.','material']]) {
   const f = fixture('planning', message); let calls = 0
   const result = await runProjectAnswer({ ...f.opts, callModel: async o => {
     calls++
-    return o.schemaName ? response({goals:[{kind,description:message,count:1,record_id:null}],request_quote:message}) : response('Jag kan göra det i nästa svar.')
+    assert.equal(o.tool_choice, undefined, 'no forced tool choice'); assert.equal(o.schemaName, undefined, 'no classifier call')
+    return response('Jag kan göra det i nästa svar.')
   } } as any)
   premature.push({ message, model_calls: calls, writes: f.receipts.length, ok: result.ok, ...(result.ok ? { partial: result.evidence.partial, answer: result.answer } : { error: result.error }) })
 }
-const f = fixture('planning'); let classificationCalls = 0
-const classificationFailure = await runProjectAnswer({ ...f.opts, callModel: async o => { classificationCalls++; return o.schemaName ? { ...response(null), success: false, error: 'synthetic-classifier-failure' } : response('The informational answer remains available.') } } as any)
 
 const readProbe = lookup()
 const readInput = { dataset: 'project', query: null, status: null, area_id: null, record_id: null }
@@ -142,7 +139,7 @@ assert.equal(writeStatuses.filter(s => s === 'saved').length, 9)
 
 emit(JSON.stringify({ evidence_class: 'controlled runtime mechanics; model and I/O are synthetic',
   catalog_source: useSeed ? 'repository seed' : 'dated public metadata snapshot', active_catalog_tools: catalog.filter(r => r.active).length,
-  surfaces, discovery, premature, classification_failure: { calls: classificationCalls, result: classificationFailure },
+  surfaces, toolbox_shelves: discovery, premature,
   reserved_image_grounding: { remaining: readProbe.remaining, project: groundingData.project.status, measurements: groundingData.measurements.status, provider_still_called: true },
   cad: { status: cadResult.status, calls: cadCalls.length, renders, returned_to_designer: cadReturns,
     generated_pixels_delivered: cadCalls.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.type === 'image_url'))),

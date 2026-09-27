@@ -15,7 +15,22 @@ conversation compaction or the selected-image grounding repair. See
 The wider Current View/router/Librarian design remains in
 [the context plan](ask-bob-context.md), not implicitly implemented here.
 
+## Current toolbox contract — 2026-09-27
+
+**Supersedes the two-tier core/on-demand loading, `list_tools`/`load_tool` discovery and phase preloads described in [Product rule](#product-rule) and [Prepare, discover, load, execute](#prepare-discover-load-execute).** Those sections remain as history of the September 21–26 design. The dated [runtime review](bob-ai-runtime-review-2026-09-27.md) records why.
+
+- **One bench.** Every catalog row that is active, has a registered handler with a matching schema version and passes its server gate is offered on every tool-enabled model step. Its description joins the catalog description, the code description and the full `how_to` guide. There is no discovery round and no model-interpreted capability search.
+- **Shelves.** The system prompt lists the bench on fixed shelves (`TOOLBOX_SHELVES` in `project-tools/bob-tools.ts`): records, project/phases/Areas, living plan, Tasks and build days, measurements and design decisions, drawings and CAD, materials, images, building, knowledge. A test requires every active catalog row to sit on a shelf.
+- **Waiting and used up.** A tool whose prerequisite does not exist yet (for example `save_cad_design` before a reviewed candidate) or whose budget is used is not offered, but its shelf entry says so. A caller who may not use a tool (for example a guest and any write) sees neither the tool nor its shelf entry.
+- **Bob chooses.** The server never sets `tool_choice` for Bob or the CAD designer. Phase is no longer a loading hint; `always_load` and `preload_phases` stay in the catalog as data but do not change the bench.
+- **No quote parameters.** Change provenance is filled by the server from the owner's current message ([writes](ask-bob-writes.md#server-owned-change-provenance--2026-09-27)); offered schemas never contain `request_quote`.
+- **Authority is unchanged.** Offering is not authorization. Every execution re-reads policy, re-checks the gate and version, and runs the handler's own validation. The set offered to one step remains a fence: a tool that becomes available during a batch returns `not_offered` and is callable from the next step.
+
+Size, measured with `scripts/audit-bob-runtime.ts --seed`: 50 tools, about 106 KB of schemas and an 8 KB system prompt per step for a named member. The prefix is stable across steps, so provider prompt caching applies.
+
 ## Product rule
+
+> Historical (2026-09-21 to 2026-09-26). Superseded by the current toolbox contract above.
 
 The starting toolbox is not the complete toolbox. Bob must be able to find an
 implemented permitted capability, load its exact contract, and continue the same
@@ -64,6 +79,8 @@ exact records, physical edits, selected targets and permitted fields. A loaded
 write tool does not imply that every Building or record is writable.
 
 ## Prepare, discover, load, execute
+
+> Historical (2026-09-21 to 2026-09-26). Superseded by the current toolbox contract above; `list_tools`, `load_tool` and the `bob-tool-discovery` call no longer exist.
 
 The per-turn `project-tools/session.ts` resolves a fresh caller-JWT policy for
 prepare and again for execution. The initial load combines eligible core rows

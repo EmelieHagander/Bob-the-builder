@@ -1,5 +1,14 @@
 [
   {
+    "name": "archive_project_area",
+    "description": "Archive an Area that is finished or no longer used, or restore an archived Area.",
+    "how_to": "Archiving keeps the Area, its history and completed work, and takes it out of active planning. Unfinished Tasks must be moved or finished first, and a pending plan proposal that uses the Area must be resolved; the server refuses otherwise. Read the Area and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "archive_project_measurement",
     "description": "Archive or restore an existing project measurement.",
     "how_to": "Read its current revision. Archive preserves history and exposes stale evidence to dependent drawings. Do not create a replacement measurement just to remove an obsolete one.",
@@ -47,7 +56,7 @@
   {
     "name": "create_project_room_layout",
     "description": "Create the existing two-rectangular-room layout with one shared wall and one linked storage-box drawing. Not a general house or furniture layout.",
-    "how_to": "Reuse exact Building/Space/element identities, one selected target and a pinned furniture artifact. Room footprint checks do not check doors, circulation or height. This tool cannot create additional arbitrary rooms/furniture. Keep source revisions and measurements. Every write needs the current request and a successful receipt.",
+    "how_to": "Reuse exact Building/Space/element identities, one selected target and a pinned furniture artifact. Room footprint checks do not check doors, circulation or height. This tool cannot create additional arbitrary rooms/furniture. Keep source revisions and measurements. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -65,6 +74,33 @@
       "planning",
       "build"
     ],
+    "active": true
+  },
+  {
+    "name": "delete_project_build_day",
+    "description": "Delete a build day that will not happen.",
+    "how_to": "Removes the day, its sign-ups and its scheduled Task links; the Tasks themselves stay. Mention it to the owner when people had signed up. Read the build day with read_project_work(build_day) and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "delete_project_task",
+    "description": "Delete a Task that no longer belongs to the project.",
+    "how_to": "Deletes the Task with its checkpoints, assignments, dependencies, needs, build-day scheduling and image attachments. Completed Tasks are project history and are kept. Prefer revising a Task over deleting and recreating it. Read the Task and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "delete_shopping_item",
+    "description": "Remove an item from the Shopping list.",
+    "how_to": "For items no longer needed or added by mistake. A linked material requirement stays and only loses its Shopping link. Read Shopping with read_project_work(shopping) first.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
     "active": true
   },
   {
@@ -91,6 +127,15 @@
     "active": true
   },
   {
+    "name": "detach_project_image",
+    "description": "Detach an image from an Area, Task, instruction step or plan Step.",
+    "how_to": "The image stays in the project library; only this attachment goes. Use the exact image ID and the target_kind and target_id it is attached to.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "edit_project_plan",
     "description": "Prepare focused edits to the current plan while preserving unrelated Steps, criteria and Task ownership exactly.",
     "how_to": "Use exact current IDs and a bounded changes list. Read-only: creates an exact candidate for save_compiled_project_plan. Remove obsolete work explicitly instead of falsely marking a physical check complete. Save the proposal, then use decide_project_plan when the current owner request explicitly instructs applying this exact edit. A request for suggestions alone does not approve a change.",
@@ -102,7 +147,7 @@
   {
     "name": "edit_project_room_layout",
     "description": "Move the shared wall, place the linked furniture, or explicitly refresh sources in an existing two-room layout. Does not change the furniture construction.",
-    "how_to": "Read the exact layout and dependencies. A wall move derives both room widths from the fixed span. place_furniture changes placement only. refresh_sources adopts current source versions without changing geometry parameters. Preserve unused fields as null and report out-of-room/stale conflicts. Every write needs the current request and a successful receipt.",
+    "how_to": "Read the exact layout and dependencies. A wall move derives both room widths from the fixed span. place_furniture changes placement only. refresh_sources adopts current source versions without changing geometry parameters. Preserve unused fields as null and report out-of-room/stale conflicts. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -223,7 +268,7 @@
   {
     "name": "propose_project_plan",
     "description": "Create a reviewable living Project Plan proposal with dynamic Steps, Completion Requirements, responsibility and evidence selectors. It is not current until explicitly approved.",
-    "how_to": "Low-level manual proposal write. Normally do NOT use this after compile_project_plan: save_compiled_project_plan owns that path and preserves the exact reviewed compilation. Load this only when an authorised manual proposal genuinely cannot originate from the compiler. It still requires the exact current revision, full strict Step/Requirement schema and exact request_quote.",
+    "how_to": "Low-level manual proposal write. Normally do NOT use this after compile_project_plan: save_compiled_project_plan owns that path and preserves the exact reviewed compilation. Use this only when a manual proposal genuinely cannot come from the compiler. It still requires the exact current revision and the full strict Step/Requirement schema.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -267,7 +312,7 @@
   {
     "name": "save_building_context",
     "description": "Record a narrated house as linked Building, Level, Space and element observations or proposals. This records context; it does not calculate a drawing.",
-    "how_to": "Read existing physical identities before creating nodes. Use batch-local @keys only for new dependencies. Above/below does not imply matching footprints. An open kitchen/dining connection is not an invented wall. Keep current observations separate from remodel proposals. Use notes_append for Building additions. Existing unscoped Buildings require explicit manual linking; Project membership does not grant physical-edit authority. Every write needs the current request and a successful receipt.",
+    "how_to": "Read existing physical identities before creating nodes. Use batch-local @keys only for new dependencies. Above/below does not imply matching footprints. An open kitchen/dining connection is not an invented wall. Keep current observations separate from remodel proposals. Use notes_append for Building additions. Existing unscoped Buildings require explicit manual linking; Project membership does not grant physical-edit authority. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [
@@ -278,7 +323,7 @@
   {
     "name": "save_cad_design",
     "description": "Save the exact rendered CAD candidate and its project Step link.",
-    "how_to": "Use after design_project_cad returned ready. Saves a concept Artifact, immutable geometry and exact inputs. Use the current request quote. The receipt proves persistence, not structural certification.",
+    "how_to": "Use after design_project_cad returned ready. Saves a concept Artifact, immutable geometry and exact inputs. The receipt proves persistence, not structural certification.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -287,7 +332,7 @@
   {
     "name": "save_catalog_definition",
     "description": "Find or create a reusable project material/part definition, or revise an exact existing project definition. No new stock, drawing, Shopping purchase or global publication.",
-    "how_to": "Search and read the profile first. Ensure atomically reuses a complete exact equivalent or creates a project definition. Incomplete definitions are not automatically equivalent; read an existing ID to reuse it. Revise requires its current revision and preserves identity/history. Material and form are separate categories. A part must reference an accessible material ID/revision and retain its known properties. Parameter placeholders are allowed only for parts. Use design_choice for ordinary delegated choices, not measured or manufacturer-verified claims. Current request_quote authorizes the write; source_quote/source_seq retain a real user message and source_kind distinguishes instructions from design choices. Use one stable operation key per intended definition in this turn. Returned reused means no definition was changed. No geometry, order, inventory or global-library side effects. Modern inch/tum input uses unit=in and a separate value string such as 0.75, 3/4, 1 1/2 or ¾. Do not calculate a rounded mm value yourself: SQL normalizes search and saves exactly to mm. Unit suffixes belong in unit, not value. Non-terminating or overprecise results are rejected, not rounded. A nominal trade size such as 2x4 or R 1/2 is text, not a physical dimension: use nominal_size/aliases and separately sourced working dimensions. Never infer actual timber dimensions, pipe bore or historic Swedish inches from a trade name. Missing working dimensions remain unknown until specified; a design assumption is not measured evidence. For a PART, read the exact material revision and the exact part profile. Put each user-specified part dimension in the matching required profile property (for example length/width); never hide dimensions only in notes. Compatible properties already present on the pinned material revision are inherited by the server when the part profile uses the same property key, so do not invent or retype them unless checking an exact supplied value. If an exact current definition already satisfies the request, do not revise merely to restate a unit conversion, rewrite explanatory notes, or drop aliases; reuse it unchanged. An exact no-op revise is returned as reused. On revise, use aliases=null and notes=null when the user did not ask to change that metadata; this preserves the current values exactly. Use [] only when the user explicitly wants aliases cleared, and a concrete notes string only when notes are intentionally changed. Preserve unrelated metadata on every edit.",
+    "how_to": "Search and read the profile first. Ensure atomically reuses a complete exact equivalent or creates a project definition. Incomplete definitions are not automatically equivalent; read an existing ID to reuse it. Revise requires its current revision and preserves identity/history. Material and form are separate categories. A part must reference an accessible material ID/revision and retain its known properties. Parameter placeholders are allowed only for parts. Use design_choice for ordinary delegated choices, not measured or manufacturer-verified claims. source_quote/source_seq retain a real user message and source_kind distinguishes instructions from design choices. Use one stable operation key per intended definition in this turn. Returned reused means no definition was changed. No geometry, order, inventory or global-library side effects. Modern inch/tum input uses unit=in and a separate value string such as 0.75, 3/4, 1 1/2 or ¾. Do not calculate a rounded mm value yourself: SQL normalizes search and saves exactly to mm. Unit suffixes belong in unit, not value. Non-terminating or overprecise results are rejected, not rounded. A nominal trade size such as 2x4 or R 1/2 is text, not a physical dimension: use nominal_size/aliases and separately sourced working dimensions. Never infer actual timber dimensions, pipe bore or historic Swedish inches from a trade name. Missing working dimensions remain unknown until specified; a design assumption is not measured evidence. For a PART, read the exact material revision and the exact part profile. Put each user-specified part dimension in the matching required profile property (for example length/width); never hide dimensions only in notes. Compatible properties already present on the pinned material revision are inherited by the server when the part profile uses the same property key, so do not invent or retype them unless checking an exact supplied value. If an exact current definition already satisfies the request, do not revise merely to restate a unit conversion, rewrite explanatory notes, or drop aliases; reuse it unchanged. An exact no-op revise is returned as reused. On revise, use aliases=null and notes=null when the user did not ask to change that metadata; this preserves the current values exactly. Use [] only when the user explicitly wants aliases cleared, and a concrete notes string only when notes are intentionally changed. Preserve unrelated metadata on every edit.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [
@@ -301,7 +346,7 @@
   {
     "name": "save_compiled_project_plan",
     "description": "Save the exact server-valid compilation after Bob assesses the advisory review. Bob decides; nano does not veto. Creates a proposal only, never approval.",
-    "how_to": "Save the exact server-valid compilation or focused edit after assessing its result. Pass only the current request_quote. This saves a proposal and stages Task ownership changes; it does not approve it. Use decide_project_plan separately when the owner has explicitly authorised applying that exact plan or edit. Never reconstruct the nested plan JSON.",
+    "how_to": "Save the exact server-valid compilation or focused edit after assessing its result. It takes no arguments. This saves a proposal and stages Task ownership changes; it does not approve it. Use decide_project_plan separately when the owner has explicitly authorised applying that exact plan or edit. Never reconstruct the nested plan JSON.",
     "schema_version": 1,
     "always_load": true,
     "preload_phases": [],
@@ -331,7 +376,7 @@
   {
     "name": "save_project_building_plan",
     "description": "Create or revise a multi-floor coordinate study using existing Building/Level/Space identities, explicit room bounds and floor heights.",
-    "how_to": "Read exact current physical sources, measurements, target and prior plan. All levels share east +x, north +y, up +z and one explicit origin. Envelope dimensions are outside dimensions; inside dimensions derive from explicit wall thickness. Unknown bounds/heights remain null; above/below prose never creates numeric placement. Explicit source refresh cannot simultaneously move geometry. Saved Concept does not rewrite accepted Building facts. Every write needs the current request and a successful receipt.",
+    "how_to": "Read exact current physical sources, measurements, target and prior plan. All levels share east +x, north +y, up +z and one explicit origin. Envelope dimensions are outside dimensions; inside dimensions derive from explicit wall thickness. Unknown bounds/heights remain null; above/below prose never creates numeric placement. Explicit source refresh cannot simultaneously move geometry. Saved Concept does not rewrite accepted Building facts. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [
@@ -342,7 +387,7 @@
   {
     "name": "save_project_description",
     "description": "Save the requested project description while preserving unrelated information. Does not select a target, accept a Building proposal or certify a design.",
-    "how_to": "Read the exact current project timestamp first; this field is a full replacement, not an append patch. Preserve unrelated content. Every write needs an exact quote from the current user request and a successful receipt. Loading is not write permission.",
+    "how_to": "Read the exact current project timestamp first; this field is a full replacement, not an append patch. Preserve unrelated content. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": true,
     "preload_phases": [],
@@ -351,7 +396,7 @@
   {
     "name": "save_project_drawing",
     "description": "Create or revise the existing rectangular, open-top storage-box drawing from four dimensions. This specific legacy tool cannot draw a bed or an arbitrary assembly.",
-    "how_to": "Supported recipe: storage_box_v1 only. Width, height, depth and uniform sheet thickness are millimetres. Read the selected target and current artifact first. Preserve exact measurement/target links. No lid, joinery, runners, load rating or generic furniture assembly. Do not substitute a box for a different requested object. A genuine general drawing engine is separate work, not an alias for this tool. Every write needs the current request and a successful receipt.",
+    "how_to": "Supported recipe: storage_box_v1 only. Width, height, depth and uniform sheet thickness are millimetres. Read the selected target and current artifact first. Preserve exact measurement/target links. No lid, joinery, runners, load rating or generic furniture assembly. Do not substitute a box for a different requested object. A genuine general drawing engine is separate work, not an alias for this tool. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -360,7 +405,7 @@
   {
     "name": "save_project_measurement",
     "description": "Record or correct a project measurement with source and revision history. Design choices are specifications, not measurements.",
-    "how_to": "Search existing measurements before creating another. A newer explicit user statement is evidence even when an older record disagrees: disclose the discrepancy and preserve provenance. Unknown values stay null. Change the same measurement, not a duplicate. Every write needs the current request and a successful receipt; loading is not write permission.",
+    "how_to": "Search existing measurements before creating another. A newer explicit user statement is evidence even when an older record disagrees: disclose the discrepancy and preserve provenance. Unknown values stay null. Change the same measurement, not a duplicate. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": true,
     "preload_phases": [],
@@ -378,7 +423,7 @@
   {
     "name": "save_project_stair",
     "description": "Save or revise a straight or square-landing quarter-turn stair study linked to an exact house-plan revision. Does not support rounded/winder/spiral stairs.",
-    "how_to": "Read the exact parent plan and current stair. Changes affect only the stair artifact. Explicit refresh keeps stair parameters but may change derived height and context; explain the result. Openings are conservative geometric suggestions, not cutting instructions. Never equate a projected rectangle or modelled_checks_only with a safe buildable stair. Preserve exact source/target/measurement revisions. Every write needs the current request and a successful receipt.",
+    "how_to": "Read the exact parent plan and current stair. Changes affect only the stair artifact. Explicit refresh keeps stair parameters but may change derived height and context; explain the result. Openings are conservative geometric suggestions, not cutting instructions. Never equate a projected rectangle or modelled_checks_only with a safe buildable stair. Preserve exact source/target/measurement revisions. A change is saved only with a successful receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -449,11 +494,29 @@
     "active": true
   },
   {
+    "name": "set_project_phase",
+    "description": "Move the project or one Area to another lifecycle phase: concept, design, planning, build or complete.",
+    "how_to": "Give a short reason; it is kept in the phase history. Completing the project requires every Area to be complete. Phase is lifecycle, not a work Step.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "set_project_plan_focus",
     "description": "Choose Bob's focus in the current plan without stopping parallel work.",
     "how_to": "Read the current plan revision and exact Step identity. This changes attention only, not work state, phase or readiness. Use a saved write receipt.",
     "schema_version": 1,
     "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "update_project_schedule",
+    "description": "Set or clear the project's build window.",
+    "how_to": "Give both dates as YYYY-MM-DD with start not after end, or both null to clear the window. Read the project and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
     "preload_phases": [],
     "active": true
   },

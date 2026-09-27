@@ -23,19 +23,19 @@ test('invalid/localisation-down responses cannot reuse a false completion or ins
  const answer=await format({notice:'uncertain',receipts:[{...receipt,label:'棚'}]})
  assert.equal(answer,'⚠\n✓ 棚');assert.equal(parseDeliveryLanguage({ ...lexicon, completed:'invented' }),null)
 })
-test('language is prepared in ordinary routing and remains available after a failed transcript commit, without another model call',async()=>{
+test('a failed transcript commit keeps Bob\'s reply and adds a notice localised on demand',async()=>{
  let executionCalls=0,languageCalls=0
  const message='Enregistre cette tâche.',receipts:WriteReadback[]=[]
  const writer=createProjectWriter('A',message,async()=>{receipts.push(receipt);return {data:receipt,error:null}},async()=>({data:receipts,error:null}),async()=>({data:{generation:2,receipts},error:null}))
  const result=await runClaimedProjectTurn({projectId:'A',userId:'u',message,writer,generation:1,hasAccess:async()=>true,
   lookup:createProjectLookup('A',async()=>({data:{records:[{id:'A'}],related:[],truncated:false},error:null})),
   callModel:async o=>{
-   if(o.schemaName==='bob_work_delivery')return response({goals:[{kind:'task',description:'La tâche',count:1,record_id:null}],request_quote:message,delivery_language:lexicon})
-   if(o.schemaName==='bob_delivery_language'){languageCalls++;throw new Error('No late provider call allowed')}
+   if(o.schemaName==='bob_delivery_language'){languageCalls++;assert.equal(o.tools,undefined);return response(lexicon)}
+   assert.equal(o.schemaName,undefined,'no routing classifier call')
    if(++executionCalls===1)return {...response(null),toolCalls:[{id:'write',type:'function',function:{name:'save_project_task',arguments:JSON.stringify({record_id:null,area_id:'area',step_id:null,name:'Étagère',instructions:'Mesurer',expected_updated_at:null,request_quote:message})}}]}
    return response('La tâche est enregistrée.')
   },fail:async()=>{},commit:async()=>{throw new Error('transport')}})
- assert(result.ok);assert.match(result.answer,/conversation n’a pas été synchronisée/);assert.equal(languageCalls,0);assert.equal(receipts.length,1);assert(result.evidence.partial)
+ assert(result.ok);assert.match(result.answer,/^La tâche est enregistrée\.\n\n/);assert.match(result.answer,/conversation n’a pas été synchronisée/);assert.equal(languageCalls,1);assert.equal(receipts.length,1);assert(result.evidence.partial)
 })
 test('server message meanings cover all terminal states without a language table',()=>{
  assert.equal(Object.keys(DELIVERY_MEANINGS).length,7)

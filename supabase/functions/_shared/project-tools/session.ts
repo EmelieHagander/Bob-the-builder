@@ -1,15 +1,18 @@
 import { rethrowContinuation } from '../bob-job-journal.ts'
-/** Tool loading is not authorization. All four surfaces use the same fresh policy
- * and the same server-owned handler gates; a model never supplies either one. */
+/** Bob's toolbox. Every registered, active and currently available tool is offered
+ * on every model step with its full guide; there is no discovery round. Offering
+ * is not authorization: the catalog policy, schema version and server-owned gate
+ * are checked again on every execution. A model never supplies policy. */
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
 export type ToolGate = 'available' | 'not_allowed' | 'missing_context' | 'budget_exhausted'
 export interface ToolDefinition {
   spec: ToolSpec
   version: number
+  /** Toolbox shelf used to present the tools in groups. */
+  group?: string
+  /** Shown when the tool is waiting for a prerequisite created earlier in the turn. */
+  waitingFor?: string
   gate(): ToolGate
-  /** A server-owned follow-up becomes visible once its prerequisite exists.
-   * Catalog policy, version, gate and per-call execution fences still apply. */
-  offerWhenReady?(): boolean
   execute(args: unknown): Promise<unknown>
 }
 export interface ToolPolicy {
@@ -22,9 +25,8 @@ export interface ToolPolicy {
   active: boolean
 }
 export interface ToolSnapshot { phase: string | null; tools: ToolPolicy[] }
-export type CapabilitySearch = (query:string, catalog:Pick<ToolPolicy,'name'|'description'|'how_to'>[]) => Promise<string[] | null>
 export type ToolPolicyReader = () => Promise<ToolSnapshot>
-export const TOOL_LIMITS = { catalogRows: 128, page: 12, managementCalls: 16, loaded: 24 } as const
+export const TOOL_LIMITS = { catalogRows: 128 } as const
 const NAME = /^[a-z][a-z0-9_]{0,63}$/
 const PHASES = new Set(['concept', 'design', 'planning', 'build', 'complete'])
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -43,36 +45,43 @@ export function checkedToolSnapshot(value: unknown): ToolSnapshot {
   }
   return { phase: PHASES.has(String(value.phase)) ? value.phase as string : null, tools: structuredClone(value.tools) as ToolPolicy[] }
 }
-const managementSpec = (name: string, description: string, properties: Record<string, unknown>): ToolSpec => ({
-  type: 'function', function: { name, description, parameters: { type: 'object', additionalProperties: false, properties, required: Object.keys(properties) } },
-})
-export const LIST_TOOLS = managementSpec('list_tools',
-  'Find available tools by their capability in the language of the request, or browse with query=null. This is a tool directory, not project data. Results contain no large parameter schemas. Follow next_cursor with after_name. No results is not proof that a differently worded tool does not exist.', {
-    query: { type: ['string', 'null'], description: 'Describe the needed capability in any language. Search interprets the registered contracts, including their limits. Null browses every permitted registered tool.' },
-    after_name: { type: ['string', 'null'], description: 'Exact next_cursor from the previous page, or null.' },
-  })
-export const LOAD_TOOL = managementSpec('load_tool',
-  'Load one exact tool by name. Returns its complete JSON parameter schema and usage guide and makes it callable on the NEXT model call in this turn. May be used again for a loaded tool. Does not execute it or grant new permissions. Do this before claiming a non-loaded capability is missing.', {
-    name: { type: 'string', description: 'Exact tool name from list_tools, a preloaded tool or an earlier conversation.' },
-  })
-const MANAGEMENT = [LIST_TOOLS, LOAD_TOOL]
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; searchCapabilities?: CapabilitySearch }) {
+/** Change provenance is server-owned: every write records the owner message of
+ * the turn it belongs to. Bob never sees, writes or is asked for a quote. */
+export const SERVER_QUOTE_FIELD = 'request_quote'
+export function modelParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+  const copy = structuredClone(parameters)
+  const properties = object(copy.properties) ? copy.properties : null
+  if (!properties || !Object.hasOwn(properties, SERVER_QUOTE_FIELD)) return copy
+  delete properties[SERVER_QUOTE_FIELD]
+  if (Array.isArray(copy.required)) copy.required = copy.required.filter(k => k !== SERVER_QUOTE_FIELD)
+  return copy
+}
+const takesQuote = (spec: ToolSpec) => object(spec.function.parameters.properties) && Object.hasOwn(spec.function.parameters.properties, SERVER_QUOTE_FIELD)
+/** The owner's message, trimmed to at most 500 UTF-16 units without splitting a
+ * character: always an exact substring, as every SQL writer checks. */
+export function serverRequestQuote(message: string): string {
+  let out = ''
+  for (const ch of message) { if (out.length + ch.length > 500) break; out += ch }
+  return out
+}
+
+export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
+
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string }) {
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
-    if (!NAME.test(name) || handlers.has(name) || MANAGEMENT.some(t => t.function.name === name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
+    if (!NAME.test(name) || handlers.has(name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
     handlers.set(name, def)
   }
-  const searchCache = new Map<string, string[] | null>()
-  const loaded = new Map<string, number>()
-  let used = 0, partial = false, seeded = false
+  const quote = opts.message?.trim() ? serverRequestQuote(opts.message) : undefined
+  let partial = false
   let snapshot: ToolSnapshot | null = null
-  // A packet offered to one model call is a fence. Loading a tool later in that
-  // call's batch does not retroactively authorize a guessed call from the batch.
   let offered = new Map<string, number>()
+  let shelf: ToolboxEntry[] = []
   const events: { operation: string; name: string; status: string }[] = []
-  const record = (operation: string, name: string, status: string) => { if (events.length < 100) events.push({ operation, name, status }) }
+  const record = (operation: string, name: string, status: string) => { if (events.length < 200) events.push({ operation, name, status }) }
   async function refresh() {
     try { snapshot = checkedToolSnapshot(await opts.readPolicy()); return snapshot }
     catch (error) { partial = true; snapshot = null; if (error instanceof Error && error.message === 'project_denied') throw error; throw new Error('tool_catalog_unavailable') }
@@ -83,100 +92,48 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     return { state: def.gate(), def }
   }
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => ({
-    type: 'function', function: { name: row.name, description: [...new Set([row.description, def.spec.function.description, row.how_to].filter(Boolean))].join('\n\n'), parameters: structuredClone(def.spec.function.parameters) },
+    type: 'function', function: { name: row.name,
+      description: [...new Set([row.description, def.spec.function.description, row.how_to].map(s => s?.trim()).filter(Boolean))].join('\n\n'),
+      parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
   return {
     get partial() { return partial },
     get events() { return events.slice() },
-    /** Called once per provider iteration; not cached across callers/projects. */
+    get phase() { return snapshot?.phase ?? null },
+    /** The whole shelf as last prepared, including tools waiting for a prerequisite. */
+    get toolbox() { return shelf.slice() },
+    /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
       const current = await refresh(), specs: ToolSpec[] = []
-      if (!seeded) {
-        for (const row of current.tools) if (current.phase !== null && row.preload_phases.includes(current.phase) && resolve(row).state === 'available') loaded.set(row.name, row.schema_version)
-        seeded = true
-      }
-      offered = new Map()
+      offered = new Map(); shelf = []
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
-        if (state !== 'available' || !def) { loaded.delete(row.name); continue }
-        if (loaded.has(row.name) && loaded.get(row.name) !== row.schema_version) loaded.delete(row.name)
-        if (row.always_load || loaded.get(row.name) === row.schema_version || def.offerWhenReady?.()) {
-          specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version)
-        }
-      }
-      // Discovery is independent of domain eligibility/budgets. Even an empty
-      // or exhausted domain surface must remain diagnosable. Only management's
-      // own bound and the final tool-free call can remove this path.
-      if (used < TOOL_LIMITS.managementCalls) for (const spec of MANAGEMENT) {
-        specs.push(spec); offered.set(spec.function.name, 1)
+        if (!def || state === 'unavailable' || state === 'not_allowed') continue
+        const group = def.group ?? 'Other tools'
+        if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version); shelf.push({ name: row.name, group, state: 'offered' }) }
+        else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       return specs
     },
-    /** The final, tool-free answer call cannot use an earlier offered fence. */
+    /** A final text-only step: nothing from an earlier step remains callable. */
     closeSurface() { offered.clear() },
     async execute(name: string, args: unknown): Promise<any> {
       const current = await refresh()
-      if (!offered.has(name)) {
-        const row = current.tools.find(r => r.name === name)
-        if (row) {
-          const { state } = resolve(row)
-          if (state === 'available') return safeStatus('not_loaded', 'Use load_tool with the exact name; then invoke it on the next model call.')
-          return safeStatus(state)
-        }
-        return safeStatus('invalid', 'No offered tool has that name. Browse list_tools rather than inventing a call.')
-      }
-      if (name === 'list_tools' || name === 'load_tool') {
-        if (++used > TOOL_LIMITS.managementCalls) return safeStatus('budget_exhausted')
-        if (!object(args)) return safeStatus('invalid')
-        if (name === 'list_tools') {
-          if (Object.keys(args).length !== 2 || !Object.hasOwn(args, 'query') || !Object.hasOwn(args, 'after_name')
-            || !(args.query === null || text(args.query, 200)) || !(args.after_name === null || (text(args.after_name, 64) && NAME.test(args.after_name)))) return safeStatus('invalid')
-          const eligible = current.tools.filter(row => {
-            const { state } = resolve(row)
-            return row.active && state !== 'not_allowed' && state !== 'unavailable'
-          }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-          // The model interprets capability contracts; no language keywords,
-          // object-specific aliases or negated-description substring matching.
-          const catalog = eligible.map(({name,description,how_to})=>({name,description,how_to}))
-          const searchKey = JSON.stringify([args.query,catalog])
-          if (args.query && opts.searchCapabilities && !searchCache.has(searchKey)) {
-            try { searchCache.set(searchKey, await opts.searchCapabilities(String(args.query), catalog)) }
-            catch (error) { rethrowContinuation(error); searchCache.set(searchKey, null) }
-          }
-          const selected = searchCache.get(searchKey) ?? null
-          const names = selected === null ? null : new Set(selected)
-          const ranked = names ? eligible.filter(row=>names.has(row.name)) : eligible
-          const cursor = args.after_name === null ? -1 : ranked.findIndex(x => x.name === args.after_name)
-          if (args.after_name !== null && cursor < 0) return safeStatus('invalid', 'The cursor is no longer in these results. Restart the same query with after_name=null.')
-          const matches = ranked.slice(cursor + 1)
-          const page = matches.slice(0, TOOL_LIMITS.page)
-          const items = page.map(row => ({ name: row.name, description: row.description,
-            tier: row.always_load ? 'core' : 'on_demand', loaded: offered.get(row.name) === row.schema_version,
-            availability: resolve(row).state }))
-          record('list', '', items.length ? 'ok' : 'empty')
-          return { status: items.length ? 'ok' : 'empty', items, next_cursor: matches.length > page.length ? page[page.length - 1].name : null,
-            search: args.query && selected === null ? 'browse_fallback' : args.query ? 'capability_match' : 'browse', phase: current.phase, scope: 'permitted_registered_tools', note: 'Phase selects preloads only. Read/list/load never authorizes a project change. Browse query=null if a word search misses.' }
-        }
-        if (Object.keys(args).length !== 1 || !text(args.name, 64) || !NAME.test(args.name)) return safeStatus('invalid')
-        const row = current.tools.find(r => r.name === args.name)
-        if (!row) return safeStatus('not_found')
-        const { state, def } = resolve(row)
-        if (state !== 'available' || !def) { record('load', row.name, state); return safeStatus(state) }
-        if (!loaded.has(row.name) && loaded.size >= TOOL_LIMITS.loaded) return safeStatus('budget_exhausted', 'This turn has reached its distinct-tool loading limit.')
-        loaded.set(row.name, row.schema_version)
-        record('load', row.name, 'loaded')
-        return { status: 'loaded', name: row.name, schema_version: row.schema_version,
-          tool: surfaceSpec(row, def), how_to: row.how_to, implementation_notes: def.spec.function.description,
-          next: 'Use this actual tool on the next model call. Loading is read-only; execute only when the current request authorizes its effect.' }
-      }
       const row = current.tools.find(r => r.name === name)
-      if (!row) return safeStatus('unavailable')
+      if (!row) { record('execute', name, 'invalid'); return safeStatus('invalid', 'There is no tool with that name. Use a tool from your toolbox.') }
       const { state, def } = resolve(row)
-      if (state !== 'available' || !def) { record('execute', name, state); return safeStatus(state) }
-      if (row.schema_version !== offered.get(name)) return safeStatus('contract_changed', 'Reload the exact tool before retrying.')
+      if (state !== 'available' || !def) {
+        record('execute', name, state)
+        return safeStatus(state, state === 'missing_context' && def?.waitingFor ? `Not available yet: ${def.waitingFor}` : undefined)
+      }
+      // The set offered to one model step is a fence: a tool that became available
+      // later in the same batch is callable from the next step, not retroactively.
+      if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', 'This tool became available after this step began. Call it again in your next step.') }
+      if (offered.get(name) !== row.schema_version) return safeStatus('contract_changed', 'This tool changed during the turn. Use the version offered on your next step.')
+      const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
       try {
-        const result = await def.execute(args)
+        const result = await def.execute(input)
         record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
         return result
       } catch (error) {

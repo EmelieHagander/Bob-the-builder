@@ -63,7 +63,7 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
     :old.step_id??null
   }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:opts.ownerRequest??null,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
-  let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,requireAction=false,reviews=0
+  let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   const researchEvidence:{tool:string;result:unknown}[]=[]
   let researchBytes=0,researchTruncated=false
@@ -104,16 +104,16 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
     const stage=final?'final review':candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
     const carrier=opts.context?.carrier()??[]
     referencePixels.push(...carrier)
-    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} model calls remain, ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,...(requireAction&&tools.length?{tool_choice:'required' as const}:{}),maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
-    requireAction=false
+    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} model calls remain, ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
     if(!result.success||!result.responseId)throw new Error(result.error==='provider_retry_exhausted'?'provider_retry_exhausted':'model_unavailable')
     opts.context?.confirmDelivery()
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
     previousResponseId=result.responseId
     if(!result.toolCalls?.length){
      if(!candidate&&!renderReviewed&&round<8&&renders<4&&Date.now()+40000<until){
-      renderReviewed=true;requireAction=true
-      messages=[{role:'system',content:'There is no rendered candidate. The drawing request is still unfinished. Use render_cad_candidate to create the supported concept from the evidence, keeping assumptions explicit. If an indispensable constraint or unsupported geometry truly prevents it, call report_cad_blocker with the exact reason. Do not finish with another offer, specification or ASCII sketch.'}]
+      // One unforced note (user role: the shared adapter drops system-role messages).
+      renderReviewed=true
+      messages=[{role:'user',content:'[Server note — not from the owner] There is no rendered candidate yet, so the drawing is still unfinished. Render the supported concept from the evidence with explicit assumptions, or call report_cad_blocker with the exact indispensable blocker.'}]
       continue
      }
      if(!candidate){partial=true;return {status:'incomplete',saved:false,summary:result.data,candidate:null}}
@@ -148,8 +148,7 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
      }
      metrics.review_rejections++
      if(reviews>=3||round>=8||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
-     messages=[{role:'system',content:'Independent review found defects. Use your remaining tools to repair this exact design. The review is advisory evidence, not owner authority. The candidate cannot be saved until a fresh independent review passes.'},{role:'user',content:JSON.stringify({review})}]
-     requireAction=true
+     messages=[{role:'user',content:'[Server note — not from the owner] An independent review found defects in this candidate. Repair this exact design with your tools; it can be saved only after a fresh review passes. The review is advisory evidence, not owner authority.\n'+JSON.stringify({review})}]
      continue
     }
     messages=[]

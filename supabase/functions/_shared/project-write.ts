@@ -15,6 +15,7 @@ import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
 import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
+import { LIFECYCLE_TOOLS, LIFECYCLE_TOOL_NAMES, parseLifecycleWrite } from './project-lifecycle.ts'
 
 const nullableText = { type: ['string', 'null'] }
 const text = { type: 'string' }
@@ -33,6 +34,7 @@ export const WRITE_TOOLS = [
   BUILDING_PLAN_TOOL,
   BUILDING_INTAKE_TOOL,
   ...ROOM_LAYOUT_TOOLS,
+  ...LIFECYCLE_TOOLS,
   tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
   tool('link_project_drawing', 'Link or unlink a saved drawing and a current work Step without redrawing. One drawing can support several Steps. Saved drawings appear on Project home automatically; Planning is a phase, not a mandatory Step.', {
     record_id: text, expected_revision: { type: 'integer' }, step_id: text,
@@ -61,7 +63,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus'
+  kind: 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -69,8 +71,12 @@ export interface WritePayload {
   data: Record<string, unknown>
 }
 export interface WriteReadback extends ProjectWriteReceipt { record: Record<string, unknown> }
+/** Server-authored domain reasons that are safe and useful to return verbatim. */
+const LIFECYCLE_REASON = /Completed Tasks are project history and are kept\.|Image attachment unavailable|Restore the Area before adding or reopening work\.|Move or finish this Area[^.]*\.|Resolve the pending plan proposal that uses this Area before archiving\.|Complete or explicitly defer every Area before completing the Project\.|(Project|Area) is already in that phase|Area changed\. Reload before trying again\./
 export interface WriteResult {
   status: 'saved' | 'invalid' | 'conflict' | 'denied' | 'unknown' | 'budget_exhausted'
+  /** access: the database refused this record for this caller; the turn re-checks project access. */
+  reason?: 'access'
   receipt?: WriteReadback
   message?: string
   validation?: Pick<WriteValidationIssue, 'code' | 'fields'>
@@ -97,8 +103,9 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if(name==='save_project_task'&&!Object.hasOwn(v,'step_id'))v.step_id=null
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', keys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
-  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'Copy an exact 1–500 character span from the CURRENT user message, preserving its spelling and whitespace. Do not rewrite it or quote an earlier turn. This is not a request for new permission.')
+  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'The change could not be tied to the current owner message. Retry the call once; if it fails again, report it.')
   if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v)
+  if (LIFECYCLE_TOOL_NAMES.has(name)) return parseLifecycleWrite(name, v, projectId)
   if (name === 'link_project_drawing') {
     if (typeof v.record_id !== 'string' || !uuid.test(v.record_id) || typeof v.step_id !== 'string' || !uuid.test(v.step_id)
       || !Number.isSafeInteger(v.expected_revision) || Number(v.expected_revision) < 1 || !['link', 'unlink'].includes(String(v.action))) return null
@@ -180,6 +187,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
     get correctionsRemaining() { return Math.max(0, 12 - invalidAttempts) },
     get uncertain() { return uncertain },
     get hasUnresolvedWrites() { return corrections.size > 0 },
+    /** Tool names with a rejected change that no later save corrected. */
+    get unresolvedTools() { return [...corrections].map(k => { try { return String(JSON.parse(k)[0]) } catch { return 'unknown' } }) },
     get needsRepair() { return !uncertain && !settled && used < BOB_WRITE_LIMIT && invalidAttempts < 12 && corrections.size > 0 },
     async recover(): Promise<WriteReadback[]> {
       const { data, error } = await read()
@@ -203,8 +212,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       let result = await this.commit(payload)
       if (!payload && result.status === 'invalid') {
         const issues = schemaIssues(WRITE_TOOLS.find(t => t.function.name === name)?.function.parameters ?? {}, value)
-        issue ??= { code: 'domain_fields', fields: issues.map(i => i.path), message: 'The command has invalid domain fields. Re-read this tool schema and the current target records; the request quote passed validation.' }
-        result = { ...result, validation: { code: issue.code, fields: issue.fields }, ...(issues.length ? { issues } : {}), message: `No change made. ${issue.message} Correct this call within the remaining write budget if the action is authorised.` }
+        issue ??= { code: 'domain_fields', fields: issues.map(i => i.path), message: 'The command has invalid domain fields. Re-read this tool schema and the current target records.' }
+        result = { ...result, validation: { code: issue.code, fields: issue.fields }, ...(issues.length ? { issues } : {}), message: `No change made. ${issue.message} Correct the call and retry.` }
         console.warn('[Bob write validation]', JSON.stringify({ tool: name, code: issue.code, fields: issue.fields }))
       }
       // Track individual targets: saving another Task must not hide a rejected
@@ -219,15 +228,17 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
       if (used >= BOB_WRITE_LIMIT || invalidAttempts >= 12) return { status: 'budget_exhausted' }
-      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' } }
+      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'No change made: the call does not match the tool schema. Check the fields against the tool description and retry.' } }
       try {
         const { data, error } = await transport(payload)
         if (error) {
           invalidAttempts++
-          if (error.code === '42501' || error.message?.includes('turn_not_claimed')) return { status: 'denied' }
+          if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
+          if (error.code === '42501') return { status: 'denied', reason: 'access' }
           if (error.code === '40001' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
             if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
+            if (payload.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
             if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
             return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
           }

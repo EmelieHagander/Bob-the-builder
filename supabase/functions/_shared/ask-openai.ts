@@ -3,7 +3,6 @@ import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
 import { BobContinuation, type BobJournal } from './bob-job-journal.ts'
-import { hasSavedDrawingReceipt } from './project-delivery.ts'
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
@@ -20,7 +19,7 @@ import { callOpenAIResponses, generateImage } from './openai-service.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
-import type { ProjectAnswer } from './project-answer.ts'
+import type { ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
@@ -29,7 +28,7 @@ import { runClaimedProjectTurn } from './project-turn.ts'
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
-  background?: { claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean };
+  background?: { claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -55,15 +54,23 @@ export async function answerWithOpenAi(opts: {
     })
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
+  // Background workers live ~150 s. Reserve a realistic duration per role, not the
+  // full timeout, so several calls share one segment; a call cut off at the segment
+  // wall yields and restarts in a fresh segment instead of counting as a provider error.
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
   const callModel = async (options: OpenAIServiceOptions) => {
+   const timeout = options.timeoutMs ?? 120000
    try{return await memo('model:' + options.functionName, options, async () => {
     const started = performance.now()
-    const result = await callOpenAIResponses<string>(options)
+    const wall = journal ? journal.remaining() + 8000 : Infinity
+    const allowed = Math.max(1000, Math.min(timeout, wall))
+    const result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed })
     await metrics?.model(options,result,performance.now()-started)
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
+    if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
-   }, options.timeoutMs ?? 120000)}catch(error){
+   }, Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
@@ -118,9 +125,9 @@ export async function answerWithOpenAi(opts: {
   }})
   const threadId = claimedServer?.thread_id ?? null
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
-  // The v8 wrapper preserves all older write kinds and the same claimed-turn ledger.
+  // The v13 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v12', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v13', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -195,14 +202,12 @@ export async function answerWithOpenAi(opts: {
   },hasAccess)
   try {
   const result=await runClaimedProjectTurn({
-    observeDelivery:value=>metrics!.observe(value),
+    observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
-    initialWriteReceipts: () => memo('delivery:initial-receipts', {}, async () => structuredClone(writer?.receipts ?? [])),
-    initialDrawingDelivery: () => memo('delivery:initial', {}, async () => hasSavedDrawingReceipt(writer?.receipts ?? [])),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       store: (() => {
@@ -240,7 +245,7 @@ export async function answerWithOpenAi(opts: {
         providerResponseId: result.providerResponseId ?? null, generation })
     } } : {}),
   })
-  await metrics.finish({ok:result.ok,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
+  await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
     recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
   return result
   }catch(error){

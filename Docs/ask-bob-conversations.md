@@ -67,7 +67,22 @@ ordinary project searches, and its sources remain in provenance. The final round
 is tool-free and elapsed-time fences reserve settlement time. Write limits belong
 to [bounded writes](ask-bob-writes.md). Pages and truncation remain explicit.
 
+### Bob-directed completion — 2026-09-27
+
+**Supersedes [Delegated work delivery](#delegated-work-delivery) and [Drawing delivery](#drawing-delivery) below**, which remain as history. The dated [runtime review](bob-ai-runtime-review-2026-09-27.md) records the reasons.
+
+- There is no intent classifier (`bob-work-intent`) and no forced continuation. Bob chooses tools from the whole bench ([tools](ask-bob-tools.md#current-toolbox-contract--2026-09-27)).
+- Bob's reply reaches the owner exactly as written. The server never replaces it with a notice. When settlement verifies saved changes after an uncertain write, or the transcript commit fails, the localised notice is appended after Bob's text.
+- One factual completion note, at most once per turn and never with a forced tool: when the server knows of a prepared but unsaved result (a validated plan proposal or a reviewed CAD candidate) or of rejected changes not yet corrected, it tells Bob before his reply is released. Bob decides. Such results keep the evidence partial.
+- Server notes are user-role messages labelled `[Server note — not from the owner]`. The shared adapter drops system-role messages from `messages`, so earlier continuation prompts in that role never reached the provider.
+- A reply that prints tool syntax gets up to two plain nudges and never reaches the owner. An empty reply gets one nudge.
+- The closing step (the last of 24 steps, or less than 40 seconds left) has no tools and a labelled note asking Bob to report what is saved and what remains. Up to eight tool calls run per step; extra calls in the same step return `deferred` instead of ending the turn.
+- Access is re-checked after every model reply, before any of its tool calls run.
+- The records Bob consulted in his previous reply (up to 24 pointers: dataset, ID, label) reach the next turn beside the recent saved actions. They are pointers only; current values must be read again.
+
 ### Delegated work delivery
+
+> Historical (2026-09-25 to 2026-09-26). Superseded by Bob-directed completion above; `work-delivery.ts` is removed.
 
 `work-delivery.ts` interprets delegated results before execution using the
 `work-router/global` governed configuration. It sees current/recent messages and
@@ -91,6 +106,8 @@ Queried tool search is separately logged as `bob-tool-discovery`; intent uses
 `bob-work-intent`. Both route through `work-router`, with bounded output tokens.
 
 ### Drawing delivery
+
+> Historical (2026-09-25 to 2026-09-26). Superseded by Bob-directed completion above. The receipt helpers in `project-delivery.ts` remain; the drawing intent, forced tool choice and continuation prompts are removed.
 
 `project-delivery.ts` specializes the general work-delivery check for drawings before intermediate saves occur. The model sees the original
 recent messages and labelled older context, including continued work, corrections,
@@ -202,6 +219,14 @@ Jobs end by the earlier of caller-token expiry or 20 minutes, and at most 12 wor
 The browser polls the owned transcript and `bob_job_status`; an authoritative queued/running job overrides the old five-minute message-age heuristic. Leaving/reopening/reloading the chat does not resend the request. Actual failure or expiry offers recovery using the same turn id. The working hammer stays active while the job is queued or running. Reset remains blocked by the active conversation lock, and deletion cascades private job state without undoing domain writes.
 
 Deploy `20260924120448_bob_background_jobs.sql` and `20260924120747_bob_background_driver.sql`, then the authenticated `ask-bob` and capability-authenticated `bob-worker`, before shipping the frontend opt-in. Both `pg_net` and `pg_cron` are prerequisites; enqueue fails closed when they are absent. Do not claim an ordinary-account CAD smoke from mocked browser/worker tests alone.
+
+### Progress, stall detection and segment time — 2026-09-27
+
+- **Stalls, not hops.** A claim whose previous segment saved at least one journal checkpoint resets the stall count. Five consecutive segments without a checkpoint fail the job as `background_stalled`. The 20-minute wall, the caller-token expiry and a hard ceiling of 60 claims remain; the former twelve-claim cap is gone.
+- **Several calls per segment.** The journal reserves a realistic duration per model role (main Bob and the CAD designer 75 seconds, reviewer 60, plan compiler 45, others 15–30) instead of the full 100-second timeout. A call is capped at the segment's remaining time plus 8 seconds; if the segment wall cuts it off, the worker yields and the call restarts in a fresh segment without counting as a provider retry.
+- **Live status.** Workers publish a content-free progress marker (stage, tool name, step, saved-change count) through the service-only `bob_job_progress`. `bob_job_status` returns it to the job owner while the job runs, and the chat shows a status line such as "Working on the drawings… · 2 changes saved".
+- **Token lifetime.** Before a background send, the browser refreshes an access token that would expire within 25 minutes, so a long turn is not cut short by the sender's token.
+- **Diagnostics.** `bob.execution_events` gains one `tool` row per executed tool call (tool name, status, step) and records `end_reason` on the delivery row (answered, asked, step or time budget, or the failure code). Rows stay content-free.
 
 ## Lifecycle and UI
 

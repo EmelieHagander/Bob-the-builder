@@ -2,6 +2,8 @@
 
 **Datum:** 2026-09-25, efter PR #146. **Baslinje:** main `e42bf8ea8e8035b4319bb6e1448036dec59304ca`, Ask Bob v44 och bob-worker v12. Samtliga 50 respektive 48 återlästa runtime-filer matchade baslinjen. Modellinställningar, aktuell verktygskatalog och avgränsade körspår lästes i drift. Detta är en daterad granskning, inte ett nytt runtime-kontrakt eller ett påstående att fynden är rättade.
 
+Senare granskning: [runtime-review och Launchpad-jämförelse 2026-09-27](bob-ai-runtime-review-2026-09-27.md).
+
 Granskningen följer de fem användarfallen i [user-stories.md](user-stories.md). Kontraktens ägare förblir [verktyg](ask-bob-tools.md), [genomförande och samtal](ask-bob-conversations.md), [skrivningar](ask-bob-writes.md), [plan](living-project-plan.md) och [CAD](cad-adapter.md). Den [tidigare auditen](bob-context-audit-2026-09-24.md) beskriver ett äldre läge.
 
 ## Implementation follow-up — PR #147

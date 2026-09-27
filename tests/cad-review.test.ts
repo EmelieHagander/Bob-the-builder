@@ -44,7 +44,7 @@ test('review rejection returns concrete feedback to the designer and requires a 
   }
   designers++
   if(designers===1)return call('render_cad_candidate',design)
-  if(designers===3){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,'required');return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
+  if(designers===3){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,undefined,'repair is requested, never forced');assert.equal(o.messages[0].role,'user');assert.match(String(o.messages[0].content),/^\[Server note — not from the owner\]/);return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
   return reply('Ready')
  }
  const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,2);assert.equal(a.metrics.review_rejections,1)

@@ -18,7 +18,7 @@ export interface ProjectWriteReceipt {
   recordId: string
   label: string
   /** reused is permitted only for an unchanged catalog definition. */
-  operation: 'created' | 'updated' | 'reused'
+  operation: 'created' | 'updated' | 'reused' | 'deleted'
   savedAt: string
   /** Drawing and catalog receipts pin an exact saved revision. */
   revision?: number

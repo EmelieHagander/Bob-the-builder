@@ -45,18 +45,17 @@ test('anonymous/no-identity callers cannot read catalog; authenticated users can
   }
 })
 
-test('same SQL policy drives prepare, exact load and execution; an operator revocation reaches an already-loaded tool',async()=>{
+test('same SQL policy drives offering and execution; an operator revocation reaches an already-offered tool',async()=>{
   const name='inspect_building_projection';let executions=0
   const def:ToolDefinition={version:1,spec:{type:'function',function:{name,description:'Implemented read',parameters:{type:'object',properties:{},additionalProperties:false}}},
     gate:()=> 'available',execute:async()=>{executions++;return{status:'ok'}}}
   const reader=async()=>checkedToolSnapshot({phase:'concept',tools:(await as('select * from bob.tool_catalog order by name')).rows})
   const session=createToolSession({definitions:[def],readPolicy:reader})
-  assert(!(await session.prepare()).some(t=>t.function.name===name))
-  assert.equal((await session.execute('load_tool',{name})).status,'loaded')
-  assert((await session.prepare()).some(t=>t.function.name===name))
+  assert((await session.prepare()).some(t=>t.function.name===name),'every active registered row is offered')
   assert.equal((await session.execute(name,{})).status,'ok');assert.equal(executions,1)
   await as('update bob.tool_catalog set active=false where name=$1',[name],'service_role')
-  try{assert.equal((await session.execute(name,{})).status,'unavailable');assert.equal(executions,1)}
+  try{assert.equal((await session.execute(name,{})).status,'unavailable');assert.equal(executions,1)
+    assert(!(await session.prepare()).some(t=>t.function.name===name),'a revoked row leaves the bench')}
   finally{await as('update bob.tool_catalog set active=true where name=$1',[name],'service_role')}
 })
 

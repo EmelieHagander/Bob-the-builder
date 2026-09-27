@@ -213,10 +213,10 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
   )
 }
 
-function WorkingBubble() {
-  return <div className="bob-working" role="status">
+function WorkingBubble({ label }: { label: string }) {
+  return <div className="bob-working" role="status" aria-live="polite">
     <span className="bob-hammer"><Icon name="hammer" weight="fill" size={20} color="var(--honey)" /></span>
-    <span>Bob is working on the project…</span>
+    <span>{label}</span>
   </div>
 }
 
@@ -258,6 +258,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
   const [recovering, setRecovering] = useState<{ text: string; turnId: string; expiresAt: number } | null>(null)
+  const [workingLabel, setWorkingLabel] = useState(db.describeBobProgress(undefined))
   // Keep this component alive when closed so a local request and draft survive.
   // A page reload recovers the same turn from the private server transcript.
   const close = () => {
@@ -325,6 +326,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setExtra(unfinished ? [...history.messages, { from: 'user', text: unfinished.text }] : history.messages)
     setRetry(history.retry ?? null)
     setRecovering(history.pending ?? null)
+    setWorkingLabel(db.describeBobProgress(history.pending?.progress))
     setWorking(!!history.pending)
     setHistoryNotice(history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
   }
@@ -419,7 +421,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
     setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
     if (appendUser) push({ from: 'user', text })
-    setWorking(true)
+    setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
     const result = await db.askBob(project.id, text, clientTurnId)
     if (!isCurrent()) return
     if ('pending' in result) {
@@ -499,7 +501,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
         </div>
 
-        {working && <WorkingBubble />}
+        {working && <WorkingBubble label={workingLabel} />}
 
         {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> Latest</button>}
 

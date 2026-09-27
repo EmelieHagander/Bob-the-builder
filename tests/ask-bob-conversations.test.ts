@@ -140,8 +140,11 @@ test('prompt assembly keeps durable persona separate from fresh turn context and
   assert.equal(result.providerResponseId, 'resp_final')
   assert.equal(calls[0].previousResponseId, 'resp_previous')
   assert.equal(calls[1].previousResponseId, 'resp_tool')
-  assert.equal(calls[0].systemMessage, buildBobSystemMessage(calls[0].tools))
-  assert.equal(calls[1].systemMessage, buildBobSystemMessage(calls[1].tools), 'persona, tools and safety rules are sent fresh on every provider call')
+  for (const call of calls) {
+    assert(call.systemMessage!.startsWith(buildBobSystemMessage().split('\n\nYour toolbox')[0]), 'persona is sent fresh on every provider call')
+    assert(call.systemMessage!.endsWith(BOB_TRUTH_RULES), 'safety rules are sent fresh on every provider call')
+    for (const tool of call.tools ?? []) assert(call.systemMessage!.includes(tool.function.name), 'the toolbox shelf lists every offered tool')
+  }
   for (const value of Object.values(BOB_SYSTEM_SECTIONS)) assert(BOB_TRUTH_RULES.includes(value))
   assert.match(calls[0].messages[0].content, /Current turn/)
   assert.match(calls[0].messages[0].content, /fetched for THIS turn/)

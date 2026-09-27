@@ -219,7 +219,7 @@ test('HTTP + model tool continuation uses real authorised SQL and server-only re
       callModel: async options => {
         modelCalls++
         if (!options.previousResponseId) {
-          assert.equal(options.tools?.[0].function.name, 'search_project_data')
+          assert(options.tools?.some(t => t.function.name === 'search_project_data'))
           return { success: true, data: null, model: 'fixture', usage: { input_tokens:0,output_tokens:0,total_tokens:0 }, responseId: 'server-response-A', toolCalls: [{ id:'call-A',type:'function',function:{name:'search_project_data',arguments:JSON.stringify(input('tasks',{record_id:'taskA'}))} }] }
         }
         assert.equal(options.previousResponseId, 'server-response-A')
