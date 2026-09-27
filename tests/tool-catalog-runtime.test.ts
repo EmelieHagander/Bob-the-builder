@@ -25,29 +25,27 @@ function fixture() {
     get writes(){return writes},breakPolicy(){broken=true}}
 }
 
-test('real claimed loop lists, loads an exact initially absent tool, executes and persists its receipt in the same turn',async()=>{
+test('real claimed loop offers the task tool with its guide from the first step, executes and persists its receipt',async()=>{
   const f=fixture();let calls=0,committed:any
   const result=await runClaimedProjectTurn({...f.opts,commit:async r=>{committed=r},callModel:async o=>{
     calls++
+    assert.equal(o.tool_choice,undefined)
     const task=o.tools?.find(t=>t.function.name==='save_project_task')
-    if(calls===1){assert(!task);return response('list_tools',{query:'task',after_name:null},calls)}
+    if(calls===1){assert(task,'no discovery round: the tool is on the bench');assert.deepEqual(task.function.parameters,WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters)
+      assert.match(task.function.description,/Read Areas\/tasks|Create or revise a Task/);assert.equal(f.writes,0);return response('save_project_task',args,calls)}
     const output=JSON.parse(String(o.messages![0].content))
-    if(calls===2){const listed=output.items.find((t:any)=>t.name==='save_project_task');assert(listed);assert.equal(listed.loaded,false);assert(!task);assert.equal(f.writes,0);return response('load_tool',{name:'save_project_task'},calls)}
-    if(calls===3){assert.equal(output.status,'loaded');assert.deepEqual(task?.function.parameters,WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters);assert.equal(f.writes,0);return response('save_project_task',args,calls)}
     assert.equal(output.status,'saved');assert.equal(output.receipt.recordId,'taskNew');return final()
   }})
-  assert(result.ok);assert.equal(calls,4);assert.equal(f.writes,1)
+  assert(result.ok);assert.equal(calls,2);assert.equal(f.writes,1)
   assert.equal(result.evidence.writes?.[0].recordId,'taskNew');assert(isBobAnswerEvidence(result.evidence,'A'))
   assert.deepEqual(committed.evidence,result.evidence)
-  assert(!result.evidence.sources.some(s=>/tool_catalog|load_tool/.test(s.dataset)),'Tool guidance is not a project observation')
+  assert(!result.evidence.sources.some(s=>/tool_catalog/.test(s.dataset)),'Tool guidance is not a project observation')
 })
 
-test('guest cannot list, load or invoke a write even when catalog labels it core',async()=>{
+test('guest has no write tools on the bench and a guessed write is refused',async()=>{
   const f=fixture(),toolbox=createBobToolSession({lookup:f.opts.lookup,readPolicy:seedToolPolicy})
-  assert(!(await toolbox.prepare()).some(t=>t.function.name==='save_project_task'))
-  const list=await toolbox.execute('list_tools',{query:null,after_name:null})
-  assert(!list.items.some((r:any)=>r.name.startsWith('save_')))
-  assert.equal((await toolbox.execute('load_tool',{name:'save_project_task'})).status,'not_allowed')
+  assert(!(await toolbox.prepare()).some(t=>t.function.name.startsWith('save_')))
+  assert(!toolbox.toolbox.some(e=>e.name.startsWith('save_')),'forbidden tools are not even listed')
   assert.equal((await toolbox.execute('save_project_task',args)).status,'not_allowed');assert.equal(f.writes,0)
 })
 
@@ -60,23 +58,24 @@ test('fresh live policy failure never falls back to the embedded seed or calls t
 test('policy failure after a successful mutation preserves the settled write without inventing a retry',async()=>{
   const f=fixture();let calls=0
   const result=await runClaimedProjectTurn({...f.opts,callModel:async()=>{
-    if(++calls===1)return response('load_tool',{name:'save_project_task'},calls)
-    if(calls===2)return response('save_project_task',args,calls)
-    f.breakPolicy();return response('list_tools',{query:null,after_name:null},calls)
+    if(++calls===1)return response('save_project_task',args,calls)
+    f.breakPolicy();return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null},calls)
   }})
   assert(result.ok);assert.equal(f.writes,1);assert.equal(result.evidence.writes?.[0].recordId,'taskNew')
   assert.equal(result.providerResponseId,undefined);assert(result.evidence.partial)
 })
 
-test('phase preloads real supported tools but never mandates use or expands authority',async()=>{
+test('phase never narrows or mandates the toolbox and never expands authority',async()=>{
   const f=fixture(),policy=await seedToolPolicy()
-  const result=await runProjectAnswer({...f.opts,readToolPolicy:async()=>({...policy,phase:'design'}),callModel:async o=>{
-    assert(o.tools?.some(t=>t.function.name==='inspect_building_projection'))
-    assert(o.tools?.some(t=>t.function.name==='save_project_building_plan'))
-    assert(!o.tools?.some(t=>t.function.name==='save_project_stair'))
+  for(const phase of ['design','build',null]){
+  const result=await runProjectAnswer({...f.opts,readToolPolicy:async()=>({...policy,phase}),callModel:async o=>{
+    for(const name of ['inspect_building_projection','save_project_building_plan','save_project_stair','design_project_cad','delete_project_task','set_project_phase'].filter(n=>n!=='design_project_cad'))
+      assert(o.tools?.some(t=>t.function.name===name),name+' offered in phase '+phase)
+    assert.equal(o.tool_choice,undefined)
     return final()
   }})
-  assert(result.ok);assert.equal(f.writes,0)
+  assert(result.ok)}
+  assert.equal(f.writes,0)
 })
 
 test('production binds its caller-JWT catalog reader and retains selected-image grounding',async()=>{
@@ -89,17 +88,14 @@ test('production binds its caller-JWT catalog reader and retains selected-image 
 })
 
 
-test('printed load_tool protocol is recovered internally and never reaches Bob prose',async()=>{
+test('printed tool protocol gets one plain nudge and never reaches Bob prose',async()=>{
   const f=fixture();let calls=0
   const result=await runProjectAnswer({...f.opts,callModel:async o=>{
     calls++
-    const task=o.tools?.find(t=>t.function.name==='save_project_task')
-    if(calls===1){
-      assert(!task)
-      return {success:true,data:'to=functions.load_tool 彩神争锋是不是json\n{"name":"save_project_task"}',model:'fixture',usage,responseId:'resp_printed'}
-    }
+    if(calls===1)return {success:true,data:'to=functions.save_project_task 彩神争锋是不是json\n{"name":"save_project_task"}',model:'fixture',usage,responseId:'resp_printed'}
     if(calls===2){
-      assert(task,'printed load_tool should activate the real schema for the next call')
+      assert.match(String(o.messages![0].content),/^\[Server note — not from the owner\] Your last message printed a tool call as text/)
+      assert.equal(o.messages![0].role,'user');assert.equal(o.tool_choice,undefined)
       return response('save_project_task',args,calls)
     }
     return final()
@@ -115,4 +111,11 @@ test('printed domain/write tool syntax fails closed instead of being shown or ex
   })})
   assert.deepEqual(result,{ok:false,error:'unsupported_tool_response'})
   assert.equal(f.writes,0)
+})
+
+test('every active catalog tool sits on a named shelf, and every shelf entry exists in the catalog',async()=>{
+  const {TOOLBOX_SHELVES}=await import('../supabase/functions/_shared/project-tools/bob-tools.ts')
+  const policy=await seedToolPolicy(),shelved=new Set(TOOLBOX_SHELVES.flatMap(s=>s.tools))
+  assert.deepEqual(policy.tools.filter(r=>r.active&&!shelved.has(r.name)).map(r=>r.name),[])
+  assert.deepEqual([...shelved].filter(n=>!policy.tools.some(r=>r.name===n)),[])
 })

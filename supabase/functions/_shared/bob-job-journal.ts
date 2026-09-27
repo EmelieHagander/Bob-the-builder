@@ -14,6 +14,8 @@ export interface JournalStore {
 export interface BobJournal {
   run<T>(stream: string, input: unknown, operation: () => Promise<T>, reserveMs?: number): Promise<T>
   check(): void
+  /** Milliseconds left in this worker's segment. */
+  remaining(): number
 }
 /** JSONB checkpoints reorder object keys. Return the same JSON representation
  * both before and after persistence, including nested structured model output.
@@ -46,6 +48,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
   let stopped: BobContinuation | undefined
   return {
     check() { if (stopped) throw stopped },
+    remaining() { return Math.max(0, segmentDeadline - now()) },
     async run<T>(stream: string, input: unknown, operation: () => Promise<T>, reserveMs = 0): Promise<T> {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0

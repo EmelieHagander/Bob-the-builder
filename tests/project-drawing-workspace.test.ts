@@ -44,13 +44,11 @@ async function claimed() {
  return {rpc,writer,get transportError(){return transportError},finish:()=>call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')}
 }
 
-test('Bob discovers, loads and writes reusable links; overview and Step reads agree without a geometry revision',async()=>{
+test('Bob has the link tool on the bench and writes reusable links; overview and Step reads agree without a geometry revision',async()=>{
  const c=await claimed()
  const tools=createBobToolSession({writer:c.writer,lookup:createProjectLookup(project,async()=>({data:{records:[],related:[],truncated:false},error:null})),readPolicy:seedToolPolicy})
- await tools.prepare()
  const args={record_id:drawing,expected_revision:1,step_id:steps[0],action:'link',request_quote:message}
- assert.equal((await tools.execute('load_tool',{name:'link_project_drawing'})).status,'loaded')
- assert((await tools.prepare()).some(t=>t.function.name==='link_project_drawing'))
+ assert((await tools.prepare()).some(t=>t.function.name==='link_project_drawing'),'no discovery round is needed')
  const saved=await tools.execute('link_project_drawing',args)
  assert.equal(saved.status,'saved',c.transportError);assert.deepEqual(saved.receipt.record.step_ids,[steps[0]])
  assert.deepEqual(await tools.execute('link_project_drawing',args),saved,'Retry returns the same receipt')

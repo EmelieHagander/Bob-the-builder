@@ -31,11 +31,44 @@ type AskBobResponse = {
   evidence?: AnswerEvidence
 }
 
+/** Content-free progress of a background turn: stage, tool name, step, saved count. */
+export interface BobProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
+function parseProgress(value: unknown): BobProgress | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const v = value as Record<string, unknown>
+  if (!['thinking', 'tool', 'finishing'].includes(String(v.stage)) || !Number.isSafeInteger(v.step) || !Number.isSafeInteger(v.saved)) return undefined
+  return { stage: v.stage as BobProgress['stage'], step: v.step as number, saved: v.saved as number,
+    ...(typeof v.tool === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v.tool) ? { tool: v.tool } : {}) }
+}
+const TOOL_ACTIVITY: [RegExp, string][] = [
+  [/^design_project_cad$/, 'Designing the drawing — this can take a few minutes'],
+  [/^save_cad_design$|drawing|room_layout|building_plan|stair|projection/, 'Working on the drawings'],
+  [/plan/, 'Working on the project plan'],
+  [/task|build_day|readiness/, 'Updating tasks and build days'],
+  [/material|catalog|shopping/, 'Working on materials'],
+  [/image|project_item|project_category/, 'Working with images'],
+  [/measurement|solution|target/, 'Recording measurements and design choices'],
+  [/building_context/, 'Recording the building'],
+  [/knowledge/, 'Checking building references'],
+  [/area|settings|description/, 'Updating the project'],
+  [/conversation_history/, 'Checking the earlier conversation'],
+  [/^search_|^read_/, 'Reading project records'],
+]
+/** A short, honest status line for the chat while Bob works. */
+export function describeBobProgress(progress: BobProgress | undefined): string {
+  if (!progress) return 'Bob is working on the project…'
+  const activity = progress.stage === 'finishing' ? 'Writing the reply'
+    : progress.stage === 'tool' && progress.tool ? TOOL_ACTIVITY.find(([pattern]) => pattern.test(progress.tool!))?.[1] ?? 'Working on the project'
+    : progress.step <= 1 ? 'Reading the project' : 'Thinking through the next step'
+  const saved = progress.saved === 1 ? ' · 1 change saved' : progress.saved > 1 ? ` · ${progress.saved} changes saved` : ''
+  return `${activity}…${saved}`
+}
+
 export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
   retry?: { text: string; turnId: string }
-  pending?: { text: string; turnId: string; expiresAt: number }
+  pending?: { text: string; turnId: string; expiresAt: number; progress?: BobProgress }
   lastCompletedTurnId?: string
 }
 
@@ -93,15 +126,27 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
     if (job.data && ['queued', 'running'].includes(job.data.status)) {
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
-      pending = { ...unfinished, expiresAt }; retry = undefined
+      pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress) }; retry = undefined
     } else if (job.data?.status === 'failed') { retry = unfinished; pending = undefined }
   }
   return { mode: 'server', messages, retry, pending, lastCompletedTurnId }
 }
 
+/** A background turn runs for up to twenty minutes on the sender's access token.
+ * Refresh a token that would expire first, so long work is not cut short. */
+async function ensureFreshSession(): Promise<void> {
+  if (!bobDb) return
+  try {
+    const { data } = await bobDb.auth.getSession()
+    const expiresAt = data.session?.expires_at
+    if (data.session && expiresAt && expiresAt * 1000 - Date.now() < 25 * 60_000) await bobDb.auth.refreshSession()
+  } catch { /* the request below reports a real auth failure */ }
+}
+
 async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {
   if (!bobDb) return { ok: false, error: 'not_configured' }
   try {
+    if (body.background === true) await ensureFreshSession()
     const { data, error } = await bobDb.functions.invoke('ask-bob', { body })
     if (error) {
       const response = (error as { context?: Response }).context

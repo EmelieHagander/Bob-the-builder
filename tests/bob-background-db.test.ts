@@ -117,3 +117,38 @@ test('killed worker resumes after lease expiry; expired job fails honestly and e
   assert.equal(retry.status,'accepted');assert.notEqual(retry.jobId,q.jobId)
   const c=await claimJob(retry.jobId);await service('bob_finish_job',[retry.jobId,c.claimToken,'fixture_done'])
 })
+
+test('segments that save a checkpoint never count toward the stall limit; five idle segments stop the job',async()=>{
+  const q=await enqueue()
+  const fp='f'.repeat(64)
+  for(let i=0;i<14;i++){
+    const job=await claimJob(q.jobId)
+    assert.equal(job.status,'claimed',`productive segment ${i+1} keeps running beyond the old twelve-claim cap`)
+    assert.equal(await service('bob_save_job_step',[q.jobId,job.claimToken,'model:ask-bob:'+i,fp,{ok:true,result:i}]),true)
+    assert.equal(await service('bob_yield_job',[q.jobId,job.claimToken]),true)
+  }
+  assert.equal((await secret(q.jobId)).attempts,1)
+  for(let i=0;i<5;i++){
+    const job=await claimJob(q.jobId);assert.equal(job.status,'claimed')
+    assert.equal(await service('bob_yield_job',[q.jobId,job.claimToken]),true)
+  }
+  const stalled=await claimJob(q.jobId)
+  assert.equal(stalled.status,'failed')
+  const row=await secret(q.jobId)
+  assert.equal(row.status,'failed');assert.equal(row.error_code,'background_stalled');assert.equal(row.credential,null)
+  assert.equal((await as(one,'select bob.bob_job_status($1,$2) s',['A',q.turn])).rows[0].s.error,'background_stalled')
+})
+
+test('progress is content-free, bound to the live claim and visible only to the job owner',async()=>{
+  const q=await enqueue(),job=await claimJob(q.jobId)
+  assert.equal(await service('bob_job_progress',[q.jobId,job.claimToken,{stage:'tool',tool:'save_project_task',step:3,saved:2}]),true)
+  const status=(await as(one,'select bob.bob_job_status($1,$2) s',['A',q.turn])).rows[0].s
+  assert.equal(status.status,'running');assert.equal(status.progress.tool,'save_project_task');assert.equal(status.progress.saved,2);assert(status.progress.at)
+  for(const bad of [{stage:'tool',tool:'save_project_task',step:3,saved:2,text:'private answer'},{stage:'typing',step:1,saved:0},{stage:'tool',tool:'Drop Table',step:1,saved:0},{stage:'thinking',step:'1',saved:0}])
+    await assert.rejects(service('bob_job_progress',[q.jobId,job.claimToken,bad]),/invalid_progress/)
+  assert.equal(await service('bob_job_progress',[q.jobId,newId(),{stage:'thinking',step:1,saved:0}]),false,'a stale worker cannot publish')
+  await assert.rejects(as(one,'select bob.bob_job_progress($1,$2,$3)',[q.jobId,job.claimToken,{stage:'thinking',step:1,saved:0}]),/permission denied/)
+  await assert.rejects(as(two,'select bob.bob_job_status($1,$2) s',['A',q.turn]),/project_denied/)
+  await service('bob_finish_job',[q.jobId,job.claimToken,'background_failed'])
+  assert.equal((await as(one,'select bob.bob_job_status($1,$2) s',['A',q.turn])).rows[0].s.progress,null,'terminal jobs expose no progress')
+})

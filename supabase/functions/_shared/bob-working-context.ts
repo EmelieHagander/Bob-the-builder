@@ -9,7 +9,12 @@ export interface ContextFrame {
   projectId: string; threadId: string; generation: number; summary: string;
   lastFoldedSeq: number; foldThroughSeq: number; recent: ContextMessage[]; older: ContextMessage[]; hasMore: boolean;
   recentWrites?: ProjectWriteReceipt[];
+  recentSources?: RecentSource[];
 }
+/** A record Bob consulted in his previous reply: a pointer, never current state. */
+export interface RecentSource { dataset: string; recordId: string; label: string }
+const validSource = (v: unknown): v is RecentSource => !!v && typeof v === 'object' && !Array.isArray(v)
+  && ['dataset', 'recordId', 'label'].every(k => typeof (v as Record<string, unknown>)[k] === 'string' && ((v as Record<string, string>)[k]).length > 0 && ((v as Record<string, string>)[k]).length <= 200)
 export interface ContextStore {
   load(): Promise<unknown>;
   save(expected: number, through: number, summary: string): Promise<unknown>;
@@ -19,6 +24,7 @@ export interface WorkingContext {
   summary: string; throughSeq: number; recent: ContextMessage[];
   historyIndex?: ConversationBrief['index'];
   recentWrites?: ProjectWriteReceipt[];
+  recentSources?: RecentSource[];
   history: { readonly remaining: number; search(value: unknown): Promise<{ status: string; [key: string]: unknown }> };
 }
 
@@ -50,7 +56,8 @@ function frame(value: unknown, binding: { projectId: string; threadId: string; g
     || !Array.isArray(v.recent) || v.recent.length < 1 || v.recent.length > 5 || !v.recent.every(validMessage)
     || !Array.isArray(v.older) || v.older.length > 16 || !v.older.every(validMessage) || typeof v.hasMore !== 'boolean'
     || (v.recentWrites !== undefined && (!Array.isArray(v.recentWrites) || v.recentWrites.length > 16
-      || !v.recentWrites.every(r => isProjectWriteReceipt(r, binding.projectId))))) throw new Error('context_unavailable')
+      || !v.recentWrites.every(r => isProjectWriteReceipt(r, binding.projectId))))
+    || (v.recentSources !== undefined && (!Array.isArray(v.recentSources) || v.recentSources.length > 24 || !v.recentSources.every(validSource)))) throw new Error('context_unavailable')
   const last = v.recent[v.recent.length - 1]
   if (last.role !== 'user' || last.text !== binding.message || last.state !== 'pending') throw new Error('context_unavailable')
   return v
@@ -109,7 +116,7 @@ Merge the previous gist with ONLY the older messages provided. Index every newly
   if (state.older.length || state.hasMore) throw new Error('context_preparing')
   let searches = 0
   const brief = readStoredBrief(state.summary, state.lastFoldedSeq)
-  return { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent, recentWrites: state.recentWrites ?? [],
+  return { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent, recentWrites: state.recentWrites ?? [], recentSources: state.recentSources ?? [],
     history: {
       get remaining() { return Math.max(0, 4 - searches) },
       async search(value: unknown) {

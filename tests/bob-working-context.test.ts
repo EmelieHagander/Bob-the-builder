@@ -257,3 +257,18 @@ test('paging is byte-bounded without silently dropping the first record or losin
   await pg.query("insert into bob.tasks(id,area_id,name,instructions) values('too_large','areaA','Oversized','x'||$1)",['🪵'.repeat(9000)])
   await assert.rejects(research('tasks','Oversized'),/lookup_record_too_large/)
 })
+
+test('the next turn receives the records Bob consulted in his previous reply, as pointers only',async()=>{
+  await clean()
+  const first=await claim('Läs uppgifterna')
+  const sources=[{projectId:'A',dataset:'tasks',recordId:'task-7',label:'Frame the wall',retrievedAt:'2026-09-27T05:00:00Z',updatedAt:null},{projectId:'A',dataset:'measurements',recordId:'m-1',label:'Opening width',retrievedAt:'2026-09-27T05:00:00Z',updatedAt:null}]
+  await as(null,'select bob.bob_commit_turn_v2($1,$2,$3,$4,$5,$6,$7,$8)',[first.projectId,first.userId,first.threadId,first.turn,first.generation,'Read them',JSON.stringify({kind:'ai_assessment',sources,partial:false}),null],'service_role')
+  const next=await claim('Fortsätt')
+  const frame=await store(next).load() as ContextFrame
+  assert.deepEqual(frame.recentSources,[{dataset:'tasks',recordId:'task-7',label:'Frame the wall'},{dataset:'measurements',recordId:'m-1',label:'Opening width'}])
+  assert(!JSON.stringify(frame.recentSources).includes('retrievedAt'),'pointers carry no stale state')
+  const prepared=await prepareWorkingContext({...next,store:store(next),hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>{throw new Error('No fold expected')}})
+  assert.equal(prepared.recentSources?.length,2)
+  await fail(next)
+  await assert.rejects(prepareWorkingContext({...next,store:{...store(next),load:async()=>({...frame,recentSources:[{dataset:'tasks',recordId:'',label:'x'}]})},hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>{throw new Error('No fold expected')}}),/context_unavailable/)
+})

@@ -73,8 +73,10 @@ test('partial Task success gets one completion review and repairs only the rejec
       return response('One edit was saved. The other failed, so I will stop here.')
     }
     if (calls === 3) {
-      assert.equal(options.messages![0].role, 'system', 'review must not fabricate owner approval')
-      assert.match(String(options.messages![0].content), /current request/)
+      assert.equal(options.messages![0].role, 'user')
+      assert.match(String(options.messages![0].content), /^\[Server note — not from the owner\]/, 'the note is labelled; it never poses as the owner')
+      assert.match(String(options.messages![0].content), /Rejected changes not yet corrected: save_project_task/)
+      assert.equal(options.tool_choice, undefined)
       return response(null, [call('repair-b', task('task-b'))])
     }
     return response('Both requested edits are saved.')

@@ -13,13 +13,9 @@ You cannot measure, inspect or build on site. A useful estimate is welcome; an e
 
 Speak as a practical colleague in the owner's language. Give the result, the reason that matters and the next useful move. Keep it short. A little dry humour is welcome; the project need not wait for the punchline.`
 
-export const BOB_HANDS = `Your hands
+export const BOB_HANDS = `Your toolbox
 
-You can act only through the tools the server gives you for this turn.
-
-Their names, descriptions, scope and permissions are authoritative. Use them when the work needs them. Do not invent capabilities you have not been given.
-
-Current tools:`
+Your whole toolbox is on the bench at every step, sorted onto shelves below. Each tool's description is its manual. Choose what the work needs; tools are the only way you change the project.`
 
 export const BOB_CURRENT_TURN = `Current turn
 
@@ -27,8 +23,22 @@ You are working in the project described below.
 
 This briefing is fresh. Earlier conversation helps you understand what the owner means; it does not make an old project fact current.`
 
-/** Render only the same server-owned definitions supplied to this model call. */
-export function buildBobHands(tools: OpenAIServiceOptions['tools'] = []): string {
-  const currentTools = tools.map(tool => tool.function.name).join(', ')
-  return `${BOB_HANDS}\n\n${currentTools || 'None. No tools are available for this model call.'}`
+type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
+
+/** Render only the server-owned toolbox prepared for this model call. */
+export function buildBobHands(tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
+  const offered = tools.map(tool => tool.function.name)
+  if (!offered.length && !shelf.length) return `${BOB_HANDS}\n\nThe bench is closed for this step. Reply to the owner in text.`
+  const entries: Shelf[] = shelf.length ? shelf : offered.map(name => ({ name, group: 'Tools', state: 'offered' as const }))
+  const lines: string[] = []
+  for (const group of [...new Set(entries.map(e => e.group))]) {
+    const here = entries.filter(e => e.group === group)
+    const ready = here.filter(e => e.state === 'offered' && offered.includes(e.name)).map(e => e.name)
+    const later = here.filter(e => e.state !== 'offered').map(e => e.state === 'budget_exhausted' ? `${e.name} (used up this turn)` : `${e.name} (${e.waitingFor ?? 'waiting for a prerequisite'})`)
+    if (ready.length || later.length) lines.push(`- ${group}: ${[...ready, ...later].join(', ')}`)
+  }
+  const unshelved = offered.filter(name => !entries.some(e => e.name === name))
+  if (unshelved.length) lines.push(`- Other tools: ${unshelved.join(', ')}`)
+  if (!offered.length) lines.push('Nothing on the bench can be used in this step. Reply to the owner in text.')
+  return `${BOB_HANDS}\n\n${lines.join('\n')}`
 }

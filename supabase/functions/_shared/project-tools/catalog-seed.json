@@ -1,5 +1,14 @@
 [
   {
+    "name": "archive_project_area",
+    "description": "Archive an Area that is finished or no longer used, or restore an archived Area.",
+    "how_to": "Archiving keeps the Area, its history and completed work, and takes it out of active planning. Unfinished Tasks must be moved or finished first, and a pending plan proposal that uses the Area must be resolved; the server refuses otherwise. Read the Area and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "archive_project_measurement",
     "description": "Archive or restore an existing project measurement.",
     "how_to": "Read its current revision. Archive preserves history and exposes stale evidence to dependent drawings. Do not create a replacement measurement just to remove an obsolete one.",
@@ -68,6 +77,33 @@
     "active": true
   },
   {
+    "name": "delete_project_build_day",
+    "description": "Delete a build day that will not happen.",
+    "how_to": "Removes the day, its sign-ups and its scheduled Task links; the Tasks themselves stay. Mention it to the owner when people had signed up. Read the build day with read_project_work(build_day) and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "delete_project_task",
+    "description": "Delete a Task that no longer belongs to the project.",
+    "how_to": "Deletes the Task with its checkpoints, assignments, dependencies, needs, build-day scheduling and image attachments. Completed Tasks are project history and are kept. Prefer revising a Task over deleting and recreating it. Read the Task and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "delete_shopping_item",
+    "description": "Remove an item from the Shopping list.",
+    "how_to": "For items no longer needed or added by mistake. A linked material requirement stays and only loses its Shopping link. Read Shopping with read_project_work(shopping) first.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "derive_cad_material_requirement",
     "description": "Derive a versioned material requirement from a saved CAD part and its actual instance count.",
     "how_to": "Read the saved drawing, target and existing requirements. Choose explicit part definition and blank quantity mode. The server calculates quantity; confirm stock specification/fit before allocating and publish to Shopping separately.",
@@ -88,6 +124,15 @@
     "preload_phases": [
       "design"
     ],
+    "active": true
+  },
+  {
+    "name": "detach_project_image",
+    "description": "Detach an image from an Area, Task, instruction step or plan Step.",
+    "how_to": "The image stays in the project library; only this attachment goes. Use the exact image ID and the target_kind and target_id it is attached to.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
     "active": true
   },
   {
@@ -449,11 +494,29 @@
     "active": true
   },
   {
+    "name": "set_project_phase",
+    "description": "Move the project or one Area to another lifecycle phase: concept, design, planning, build or complete.",
+    "how_to": "Give a short reason; it is kept in the phase history. Completing the project requires every Area to be complete. Phase is lifecycle, not a work Step.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "set_project_plan_focus",
     "description": "Choose Bob's focus in the current plan without stopping parallel work.",
     "how_to": "Read the current plan revision and exact Step identity. This changes attention only, not work state, phase or readiness. Use a saved write receipt.",
     "schema_version": 1,
     "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "update_project_schedule",
+    "description": "Set or clear the project's build window.",
+    "how_to": "Give both dates as YYYY-MM-DD with start not after end, or both null to clear the window. Read the project and pass its current updated_at.",
+    "schema_version": 1,
+    "always_load": false,
     "preload_phases": [],
     "active": true
   },

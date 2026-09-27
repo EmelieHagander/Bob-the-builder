@@ -70,9 +70,19 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         await s.rpc('bob_save_job_step', { ...args, p_key: entry.key, p_fingerprint: entry.fingerprint, p_value: entry.value })
       } }, started + 140000)
       phase = 'answer'
+      // Content-free progress for the owner's chat, at most every 1.5 s. Advisory:
+      // a lost update never affects the turn.
+      let lastProgress = 0
+      const progress = (value: { stage: string; tool?: string; step: number; saved: number }) => {
+        const now = Date.now()
+        if (now - lastProgress < 1500 && value.stage !== 'finishing') return
+        lastProgress = now
+        const payload = { stage: value.stage, step: Math.min(999, value.step), saved: Math.min(999, value.saved), ...(value.tool && /^[a-z][a-z0-9_]{0,63}$/.test(value.tool) ? { tool: value.tool } : {}) }
+        s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
+      }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId,
         background: { claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
-          deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0 } })
+          deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()
       const finished = await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: finished.status, error: result.ok ? undefined : result.error }))

@@ -239,14 +239,14 @@ test('actual chat discovers catalog tools, reads profiles, saves material/part a
  assert.doesNotMatch(JSON.stringify(result),/source_quote|source_thread|identity_hash/)
 })
 
-test('the read-only tool session can load catalog reads but cannot load definition writes without a claimed writer',async()=>{
+test('the read-only tool session offers catalog reads but no definition writes without a claimed writer',async()=>{
  const lookup=createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null}),1000,12)
  const catalogReader=createMaterialCatalogReader('A',async()=>({data:{status:'empty',projectId:'A',items:[],truncated:false,next_cursor:null},error:null}),async()=>true,lookup.sources)
  const session=createBobToolSession({lookup,catalogReader,readPolicy:async()=>checkedToolSnapshot({phase:'build',tools:(await as(one,'select * from bob.tool_catalog order by name')).rows})})
- await session.prepare()
- assert.equal((await session.execute('load_tool',{name:'save_catalog_definition'})).status,'not_allowed')
- assert.equal((await session.execute('load_tool',{name:'search_material_catalog'})).status,'loaded')
- await session.prepare()
+ const offered=(await session.prepare()).map(t=>t.function.name)
+ assert(!offered.includes('save_catalog_definition'));assert(!session.toolbox.some(e=>e.name==='save_catalog_definition'))
+ assert.equal((await session.execute('save_catalog_definition',{})).status,'not_allowed')
+ assert(offered.includes('search_material_catalog'))
  const result=await session.execute('search_material_catalog',{entity:'materials',query:null,categories:[],profile_code:null,profile_revision:null,properties:{},after:null})
  assert.equal(result.status,'empty')
 })
