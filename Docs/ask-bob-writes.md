@@ -100,9 +100,19 @@ lookup allowance. Coordinates and source text remain untrusted data.
 owns the study semantics, source refresh and release dependencies. Both tools are
 implementation-branch capabilities, not a hosted/live-model release claim.
 
+## Server-owned change provenance — 2026-09-27
+
+**Supersedes the model-supplied request quote described in [Authority and atomicity](#authority-and-atomicity) and [Retry, failure and reset](#retry-failure-and-reset).** Owner decision, 2026-09-27: Bob is no longer asked to quote the owner to make a change.
+
+- No tool offered to Bob has a `request_quote` parameter. The tool session removes it from the offered schema and, on execution, sets it to the owner's current message (at most 500 UTF-16 units, never splitting a character). A value the model supplies anyway is replaced.
+- Every SQL writer is unchanged and still checks that the value is an exact substring of the claimed turn's user message, so each receipt stays tied to the owner message it belongs to. The writer boundary still rejects any other quote.
+- The quote was an audit constraint, not consent; it now records provenance only. Real authority is unchanged: caller JWT, project access, claimed turn, generation fencing, revisions and each writer's own rules.
+- Plan approval still needs the owner's explicit approval or instruction (a prompt rule; [living plan](living-project-plan.md)). `source_quote` fields in building intake and the material catalog are unchanged: they record which owner words a fact came from.
+- Guide wording that asked Bob for a quote is removed by migration `20260927063000_bob_server_change_provenance.sql`.
+
 ## Lifecycle tools — 2026-09-27
 
-Bob keeps the project tidy as it changes, through `bob_project_write_v13` (kind `lifecycle`; older kinds delegate unchanged to v12). Every change keeps the claimed-turn ledger, the exact current-request quote, the 32-change turn budget, operation-key replay and a before-state receipt. Authority matches what a project member can do in the UI.
+Bob keeps the project tidy as it changes, through `bob_project_write_v13` (kind `lifecycle`; older kinds delegate unchanged to v12). Every change keeps the claimed-turn ledger, the server-filled current-message provenance, the 32-change turn budget, operation-key replay and a before-state receipt. Authority matches what a project member can do in the UI.
 
 | Tool | Effect | Refused |
 |---|---|---|
@@ -120,6 +130,8 @@ A record ID the database refuses (`42501`) no longer ends the turn by itself. Th
 
 ## Authority and atomicity
 
+> The model-supplied quote described here is superseded by [server-owned change provenance](#server-owned-change-provenance--2026-09-27); the SQL check itself is unchanged.
+
 The model cannot supply project, user, thread or generation authority. The Edge Function binds these from authenticated request and claimed server state. Domain calls use the **caller JWT**, not the service-role client. SQL independently checks current membership, thread ownership, active turn, generation, exact current-message request quote, allowed fields and same-project parents. A quote is an audit/reference constraint, not a semantic proof of consent; the model must distinguish requests from quotations, hypotheticals and suggestions.
 
 Updates require the current timestamp or canonical revision. Project/task changes and their audit receipt commit in one transaction. Measurement writes reuse `evidence_command` and preserve an existing source image. Drawing writes reuse `artifact_box_command` and the canonical Artifact command; new geometry never silently reuses an old illustration. Receipts contain the actual post-write record; browser/transcript evidence receives only compact metadata. The private ledger retains before-state and write provenance and is never a public raw-table API.
@@ -127,6 +139,8 @@ Updates require the current timestamp or canonical revision. Project/task change
 There is no generic SQL, table-name, status, actor, readiness, purchase or delete argument. The migration changes only Bob schemas and grants no new raw domain-table privilege.
 
 ## Retry, failure and reset
+
+> The model-supplied quote described here is superseded by [server-owned change provenance](#server-owned-change-provenance--2026-09-27); the SQL check itself is unchanged.
 
 There are at most 32 committed operations per turn, enforced in every routed writer version and in frontend receipt validation. Rejected/invalid attempts have a separate bound of 12; correcting an input does not consume a successful-save slot. An uncertain result still stops all writes. Exact retries return the original receipt; a differently worded second create for the same named target in that turn conflicts instead of producing a duplicate. A legacy synchronous retry with existing receipts skips the model and reports what was saved. Durable background continuation instead replays completed operations and continues unfinished work as described in [conversation recovery](ask-bob-conversations.md).
 

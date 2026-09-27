@@ -6,6 +6,7 @@ import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter, WRITE_TOOLS } from '../supabase/functions/_shared/project-write.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
+import { modelParameters } from '../supabase/functions/_shared/project-tools/session.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}, time='2026-09-21T08:00:00Z'
 const userId='00000000-0000-4000-8000-000000000001'
@@ -31,8 +32,14 @@ test('real claimed loop offers the task tool with its guide from the first step,
     calls++
     assert.equal(o.tool_choice,undefined)
     const task=o.tools?.find(t=>t.function.name==='save_project_task')
-    if(calls===1){assert(task,'no discovery round: the tool is on the bench');assert.deepEqual(task.function.parameters,WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters)
-      assert.match(task.function.description,/Read Areas\/tasks|Create or revise a Task/);assert.equal(f.writes,0);return response('save_project_task',args,calls)}
+    if(calls===1){
+      assert(task,'no discovery round: the tool is on the bench')
+      assert.deepEqual(task.function.parameters,modelParameters(WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters))
+      assert(!('request_quote' in (task.function.parameters.properties as object)),'Bob is never asked for a quote')
+      assert.match(task.function.description,/Create or revise a Task/);assert.equal(f.writes,0)
+      const {request_quote:_quote,...modelArgs}=args
+      return response('save_project_task',modelArgs,calls)
+    }
     const output=JSON.parse(String(o.messages![0].content))
     assert.equal(output.status,'saved');assert.equal(output.receipt.recordId,'taskNew');return final()
   }})
@@ -118,4 +125,14 @@ test('every active catalog tool sits on a named shelf, and every shelf entry exi
   const policy=await seedToolPolicy(),shelved=new Set(TOOLBOX_SHELVES.flatMap(s=>s.tools))
   assert.deepEqual(policy.tools.filter(r=>r.active&&!shelved.has(r.name)).map(r=>r.name),[])
   assert.deepEqual([...shelved].filter(n=>!policy.tools.some(r=>r.name===n)),[])
+})
+
+test('change provenance is the owner\'s current message: a model-supplied quote is replaced, the writer boundary is unchanged',async()=>{
+  const f=fixture();const payloads:any[]=[]
+  const writer=createProjectWriter('A',message,async p=>{payloads.push(p);return{data:{projectId:'A',dataset:'tasks',recordId:'taskNew',label:'x',operation:'created',savedAt:time,record:{id:'taskNew'}},error:null}},async()=>({data:[],error:null}))
+  const toolbox=createBobToolSession({lookup:f.opts.lookup,writer,readPolicy:seedToolPolicy,message})
+  await toolbox.prepare()
+  assert.equal((await toolbox.execute('save_project_task',{...args,request_quote:'fabricated approval from elsewhere'})).status,'saved')
+  assert.equal(payloads[0].request_quote,message,'the recorded provenance is the real current message')
+  assert.equal((await writer.write('save_project_task',{...args,request_quote:'fabricated approval'})).status,'invalid','the writer still rejects a quote that is not in the turn message')
 })

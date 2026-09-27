@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createToolSession, checkedToolSnapshot, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate } from '../supabase/functions/_shared/project-tools/session.ts'
+import { createToolSession, checkedToolSnapshot, serverRequestQuote, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate } from '../supabase/functions/_shared/project-tools/session.ts'
 
 /** The whole available toolbox is offered on every step with its guide. Offering
  * is never authority: policy, version and gate are re-checked on each execution. */
@@ -118,4 +118,25 @@ test('malformed/truncated policy fails rather than inventing an empty toolbox', 
   assert.throws(() => checkedToolSnapshot({ phase: null, tools: Array(129).fill(policy('a')) }))
   assert.throws(() => checkedToolSnapshot({ phase: null, tools: [{ ...policy('a'), active: 'yes' }] }))
   assert.throws(() => checkedToolSnapshot({ phase: null, tools: [{ ...policy('a'), preload_phases: ['admin'] }] }))
+})
+
+test('the server fills change provenance: hidden from the offered schema, injected on execution', async () => {
+  const seen: unknown[] = []
+  const quoted: ToolDefinition = { version: 1, spec: { type: 'function', function: { name: 'save_thing', description: 'Write',
+    parameters: { type: 'object', additionalProperties: false, properties: { value: { type: 'number' }, request_quote: { type: 'string' } }, required: ['value', 'request_quote'] } } },
+    gate: () => 'available', execute: async args => { seen.push(args); return { status: 'saved' } } }
+  const session = createToolSession({ definitions: [quoted], readPolicy: async () => ({ phase: null, tools: [policy('save_thing')] }), message: 'Spara det här, tack.' })
+  const [offered] = await session.prepare()
+  assert.deepEqual(offered.function.parameters, { type: 'object', additionalProperties: false, properties: { value: { type: 'number' } }, required: ['value'] })
+  assert.deepEqual((quoted.spec.function.parameters as any).required, ['value', 'request_quote'], 'the execution registry is unchanged')
+  await session.execute('save_thing', { value: 1 })
+  await session.execute('save_thing', { value: 2, request_quote: 'invented' })
+  assert.deepEqual(seen, [{ value: 1, request_quote: 'Spara det här, tack.' }, { value: 2, request_quote: 'Spara det här, tack.' }])
+})
+
+test('the provenance quote is an exact prefix of at most 500 units and never splits a character', () => {
+  const long = '🌲'.repeat(300)
+  const quote = serverRequestQuote(long)
+  assert(quote.length <= 500); assert(long.startsWith(quote)); assert.equal(quote, '🌲'.repeat(250))
+  assert.equal(serverRequestQuote('Kort.'), 'Kort.')
 })

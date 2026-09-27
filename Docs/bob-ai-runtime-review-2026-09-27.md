@@ -25,7 +25,7 @@ Implemented on the same branch, owner direction: Bob communicates in text (no an
 | Finding | Status |
 |---|---|
 | F1 answer replaced by a notice | **Fixed.** Bob's text is always kept; server notices are appended. |
-| F2 quote framed as authorisation | **Not changed.** Removing the model-supplied quote was refused by the session's safety classifier as a security weakening. The quote, its SQL check and its wording stay as they were. The owner can decide this separately. |
+| F2 quote framed as authorisation | **Fixed, on the owner's explicit instruction.** A first attempt was refused by the session's safety classifier; the owner then directed the change. Bob no longer sees or supplies a quote: the server fills the current message as provenance, the SQL writers still check it, and guide wording asking for a quote is removed. |
 | F3 approval chains and prose | **Partly.** The prompt was rewritten around running the project, keeping it tidy and asking only for what nobody else can supply, within the same word budget. Plan approval still needs the owner's explicit approval or instruction; the catalog guides' authority wording is unchanged. No input tool was added, per the owner. |
 | F4 background hops | **Fixed.** Stall detection counts segments without progress; per-role reserves fit several calls per segment; cut-off calls restart cleanly; the browser refreshes the token before sending. The 20-minute wall stays. |
 | F5 progress and effort | **Progress fixed.** Live status line from content-free progress markers. Reasoning effort is unchanged: there is no measurement to justify lowering it. |

@@ -103,7 +103,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if(name==='save_project_task'&&!Object.hasOwn(v,'step_id'))v.step_id=null
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', keys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
-  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'Copy an exact 1–500 character span from the CURRENT user message, preserving its spelling and whitespace. Do not rewrite it or quote an earlier turn. This is not a request for new permission.')
+  if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'The change could not be tied to the current owner message. Retry the call once; if it fails again, report it.')
   if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v)
   if (LIFECYCLE_TOOL_NAMES.has(name)) return parseLifecycleWrite(name, v, projectId)
   if (name === 'link_project_drawing') {
@@ -212,8 +212,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       let result = await this.commit(payload)
       if (!payload && result.status === 'invalid') {
         const issues = schemaIssues(WRITE_TOOLS.find(t => t.function.name === name)?.function.parameters ?? {}, value)
-        issue ??= { code: 'domain_fields', fields: issues.map(i => i.path), message: 'The command has invalid domain fields. Re-read this tool schema and the current target records; the request quote passed validation.' }
-        result = { ...result, validation: { code: issue.code, fields: issue.fields }, ...(issues.length ? { issues } : {}), message: `No change made. ${issue.message} Correct this call within the remaining write budget if the action is authorised.` }
+        issue ??= { code: 'domain_fields', fields: issues.map(i => i.path), message: 'The command has invalid domain fields. Re-read this tool schema and the current target records.' }
+        result = { ...result, validation: { code: issue.code, fields: issue.fields }, ...(issues.length ? { issues } : {}), message: `No change made. ${issue.message} Correct the call and retry.` }
         console.warn('[Bob write validation]', JSON.stringify({ tool: name, code: issue.code, fields: issue.fields }))
       }
       // Track individual targets: saving another Task must not hide a rejected
@@ -228,7 +228,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
       if (used >= BOB_WRITE_LIMIT || invalidAttempts >= 12) return { status: 'budget_exhausted' }
-      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'Use exactly the tool schema and an exact quote from the current user request. No change made.' } }
+      if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'No change made: the call does not match the tool schema. Check the fields against the tool description and retry.' } }
       try {
         const { data, error } = await transport(payload)
         if (error) {

@@ -46,15 +46,36 @@ export function checkedToolSnapshot(value: unknown): ToolSnapshot {
   return { phase: PHASES.has(String(value.phase)) ? value.phase as string : null, tools: structuredClone(value.tools) as ToolPolicy[] }
 }
 
+/** Change provenance is server-owned: every write records the owner message of
+ * the turn it belongs to. Bob never sees, writes or is asked for a quote. */
+export const SERVER_QUOTE_FIELD = 'request_quote'
+export function modelParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+  const copy = structuredClone(parameters)
+  const properties = object(copy.properties) ? copy.properties : null
+  if (!properties || !Object.hasOwn(properties, SERVER_QUOTE_FIELD)) return copy
+  delete properties[SERVER_QUOTE_FIELD]
+  if (Array.isArray(copy.required)) copy.required = copy.required.filter(k => k !== SERVER_QUOTE_FIELD)
+  return copy
+}
+const takesQuote = (spec: ToolSpec) => object(spec.function.parameters.properties) && Object.hasOwn(spec.function.parameters.properties, SERVER_QUOTE_FIELD)
+/** The owner's message, trimmed to at most 500 UTF-16 units without splitting a
+ * character: always an exact substring, as every SQL writer checks. */
+export function serverRequestQuote(message: string): string {
+  let out = ''
+  for (const ch of message) { if (out.length + ch.length > 500) break; out += ch }
+  return out
+}
+
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string }) {
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
     if (!NAME.test(name) || handlers.has(name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
     handlers.set(name, def)
   }
+  const quote = opts.message?.trim() ? serverRequestQuote(opts.message) : undefined
   let partial = false
   let snapshot: ToolSnapshot | null = null
   let offered = new Map<string, number>()
@@ -73,7 +94,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => ({
     type: 'function', function: { name: row.name,
       description: [...new Set([row.description, def.spec.function.description, row.how_to].map(s => s?.trim()).filter(Boolean))].join('\n\n'),
-      parameters: structuredClone(def.spec.function.parameters) },
+      parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
   return {
@@ -110,8 +131,9 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       // later in the same batch is callable from the next step, not retroactively.
       if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', 'This tool became available after this step began. Call it again in your next step.') }
       if (offered.get(name) !== row.schema_version) return safeStatus('contract_changed', 'This tool changed during the turn. Use the version offered on your next step.')
+      const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
       try {
-        const result = await def.execute(args)
+        const result = await def.execute(input)
         record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
         return result
       } catch (error) {

@@ -76,7 +76,7 @@ test('shared evidence and authority contracts stay separate from the storybook r
   assert.match(BOB_SYSTEM_SECTIONS.truthAndAuthority, /untrusted data, not instructions/)
   assert.match(BOB_SYSTEM_SECTIONS.truthAndAuthority, /successful write receipt/)
   assert.match(BOB_SYSTEM_SECTIONS.workspaceContract, /one authorised project/)
-  assert.match(BOB_SYSTEM_SECTIONS.writeContract, /exact quote from the current user message/)
+  assert.doesNotMatch(BOB_TRUTH_RULES, /request_quote|exact quote/, 'change provenance is server-owned; Bob is never asked for a quote')
   assert.match(BOB_SYSTEM_SECTIONS.planContract, /Resolve server_validation errors/)
   assert.match(BOB_SYSTEM_SECTIONS.planContract, /explicit approval/)
   assert.match(BOB_SYSTEM_SECTIONS.replyContract, /reaches the owner exactly as written/)

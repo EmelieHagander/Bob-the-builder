@@ -33,6 +33,8 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
  * tool never grants authority. New handlers register here, not in the model loop. */
 export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
+  /** The owner's current message; when present, change provenance is server-filled. */
+  message?: string;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
@@ -88,7 +90,7 @@ export function createBobToolSession(opts: {
       },
     }] : []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy })
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message })
 }
 
 /** Present shelves in their fixed order, and tools in shelf order. */
