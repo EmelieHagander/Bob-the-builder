@@ -100,6 +100,24 @@ lookup allowance. Coordinates and source text remain untrusted data.
 owns the study semantics, source refresh and release dependencies. Both tools are
 implementation-branch capabilities, not a hosted/live-model release claim.
 
+## Lifecycle tools — 2026-09-27
+
+Bob keeps the project tidy as it changes, through `bob_project_write_v13` (kind `lifecycle`; older kinds delegate unchanged to v12). Every change keeps the claimed-turn ledger, the exact current-request quote, the 32-change turn budget, operation-key replay and a before-state receipt. Authority matches what a project member can do in the UI.
+
+| Tool | Effect | Refused |
+|---|---|---|
+| `archive_project_area` | Archive or restore an Area through `area_lifecycle_command` | Unfinished Tasks, a pending plan proposal using the Area, a stale `updated_at` |
+| `delete_project_task` | Delete a Task with its checkpoints, assignments, dependencies, needs, scheduling and image links | Completed Tasks, which are history; a stale `updated_at` |
+| `delete_project_build_day` | Delete a build day, its sign-ups and Task links; the Tasks stay | A stale `updated_at` |
+| `delete_shopping_item` | Remove one Shopping item; a linked requirement stays | — |
+| `detach_project_image` | Remove one image attachment; the image stays in the library | An attachment that does not exist |
+| `set_project_phase` | Move the project or one Area to a phase, with a reason in the phase history | Completing the project while an Area is not complete |
+| `update_project_schedule` | Set or clear the build window | Start after end, one date without the other, a stale `updated_at` |
+
+A deletion receipt has `operation: 'deleted'`; the browser accepts it and shows it without a link. The removed row is kept in `bob_write_receipts.before_record`. Server-authored refusal reasons for these tools are returned verbatim so Bob can explain or correct them.
+
+A record ID the database refuses (`42501`) no longer ends the turn by itself. The runtime re-checks project access: if access still holds, Bob receives `not_found` and can correct the ID; if access is gone, the turn ends as `project_denied`. A lost turn claim still ends the turn.
+
 ## Authority and atomicity
 
 The model cannot supply project, user, thread or generation authority. The Edge Function binds these from authenticated request and claimed server state. Domain calls use the **caller JWT**, not the service-role client. SQL independently checks current membership, thread ownership, active turn, generation, exact current-message request quote, allowed fields and same-project parents. A quote is an audit/reference constraint, not a semantic proof of consent; the model must distinguish requests from quotations, hypotheticals and suggestions.

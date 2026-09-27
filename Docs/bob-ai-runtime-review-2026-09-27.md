@@ -18,6 +18,25 @@ Bob's runtime is careful about truth and authority and weak at finishing. Five m
 
 Launchpad's runtime has the same shape (one edge function, one loop, discovered tools, a fold of older history) but three design choices Bob lacks: a structured way for the model to ask, authority carried by the server binding rather than by a tool argument, and time limits that pause and resume an exact message envelope instead of re-executing the loop. Sections 5 and 6 say what to adopt and in which order.
 
+## Implementation status — 2026-09-27
+
+Implemented on the same branch, owner direction: Bob communicates in text (no answer/input tool), tools are never forced, and Bob gets the whole toolbox.
+
+| Finding | Status |
+|---|---|
+| F1 answer replaced by a notice | **Fixed.** Bob's text is always kept; server notices are appended. |
+| F2 quote framed as authorisation | **Not changed.** Removing the model-supplied quote was refused by the session's safety classifier as a security weakening. The quote, its SQL check and its wording stay as they were. The owner can decide this separately. |
+| F3 approval chains and prose | **Partly.** The prompt was rewritten around running the project, keeping it tidy and asking only for what nobody else can supply, within the same word budget. Plan approval still needs the owner's explicit approval or instruction; the catalog guides' authority wording is unchanged. No input tool was added, per the owner. |
+| F4 background hops | **Fixed.** Stall detection counts segments without progress; per-role reserves fit several calls per segment; cut-off calls restart cleanly; the browser refreshes the token before sending. The 20-minute wall stays. |
+| F5 progress and effort | **Progress fixed.** Live status line from content-free progress markers. Reasoning effort is unchanged: there is no measurement to justify lowering it. |
+| F6 tool surface | **Fixed.** The whole toolbox is offered every step on named shelves; waiting and used-up tools are listed with the reason. |
+| F7 forced continuation | **Fixed.** No `tool_choice` anywhere, classifier removed, one factual completion note at most. The CAD designer's nudges are unforced too. |
+| F8 missing lifecycle tools | **Fixed.** Seven tools: archive/restore Area, delete Task (not completed ones), delete build day, delete Shopping item, detach image, set phase, set build window. |
+| F9 per-turn amnesia | **Partly.** The records consulted in the previous reply now reach the next turn as pointers. A folded work-state was not built. |
+| F10 end reason | **Fixed.** Per-tool diagnostic rows and `end_reason`. |
+
+Also fixed while implementing: access is re-checked before a reply's tool calls run; a refused record ID no longer ends the turn while access holds; extra tool calls in one step are deferred instead of failing the turn; server notes are user-role, because the shared adapter silently drops system-role messages.
+
 ## 2. The path of one Bob request
 
 | Step | Where | What happens | Limits |
