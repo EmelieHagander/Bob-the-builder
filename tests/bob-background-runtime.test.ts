@@ -65,6 +65,43 @@ test('provider retry count survives workers and stops the failing call without l
   assert.equal(attempts,3);assert.equal(saved,1)
 })
 
+test('provider failures and segment timeouts share one retry budget across workers', async () => {
+  for (const reasons of [['segment_wall', 'segment_wall', 'segment_wall'], ['provider_retry', 'segment_wall', 'provider_retry']]) {
+    const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+    let attempts = 0
+    const run = () => createBobJournal(store, Infinity).run('model:cad', { input: 'same' }, async () => {
+      throw new BobContinuation('yield', reasons[attempts++])
+    })
+    for (let i = 0; i < 2; i++) await assert.rejects(run(), e => e instanceof BobContinuation && e.kind === 'yield')
+    await assert.rejects(run(), /provider_retry_exhausted/)
+    await assert.rejects(run(), /provider_retry_exhausted/)
+    assert.equal(attempts, 3, 'restarting the worker cannot reset the paid-call budget')
+    assert.deepEqual(entries.filter(e => e.key.includes(':retry:')).map(e => (e.value as any).reason), reasons.slice(0, 2))
+  }
+})
+
+test('waiting for an accepted AI job and yielding before dispatch do not spend retries', async () => {
+  const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+  let dispatches = 0
+  for (let i = 0; i < 5; i++) {
+    await assert.rejects(createBobJournal(store, 1000, () => 0).run('model:cad', {}, async () => { dispatches++; return 'unexpected' }, 1000), BobContinuation)
+    await assert.rejects(createBobJournal(store, Infinity).run('model:cad', {}, async () => {
+      throw new BobContinuation('yield', 'ai_wait', { id: 'existing-job', accepted: true, role: 'cad-designer' })
+    }), BobContinuation)
+  }
+  assert.equal(dispatches, 0)
+  assert.equal(entries.length, 0)
+  let attempts = 0
+  const run = () => createBobJournal(store, Infinity).run('model:cad', {}, async () => {
+    if (++attempts === 1) throw new BobContinuation('yield', 'provider_retry')
+    return 'recovered'
+  })
+  await assert.rejects(run(), BobContinuation)
+  assert.equal(await run(), 'recovered')
+  assert.equal(await run(), 'recovered')
+  assert.equal(attempts, 2, 'a genuine transient failure can still recover')
+})
+
 test('checkpoint delivery cannot be changed by a caller mutating its nested result', async () => {
   const entries:JournalEntry[]=[]
   const store={entries,save:async(e:JournalEntry)=>{entries.push(e)}}

@@ -198,6 +198,18 @@ third failure becomes `provider_retry_exhausted`, allowing the parent to explain
 the actual failure and continue independent work. Previously the same failed
 provider call could consume the entire twenty-minute job. Earlier successful
 reads/writes still replay; changed substantive inputs still stop continuation.
+**September 28 correction (pending deployment):** timeouts after a model request
+has been dispatched at the worker's segment wall now consume that same retry
+budget. Previously these yields could restart the same request without counting
+towards its limit. Provider errors and segment timeouts share one initial attempt
+plus at most two retries; switching error type does not reset the count. Waiting
+for an existing background response and yielding before dispatch do not consume
+retries. This bounds the legacy synchronous path; the durable Responses transport
+addresses the cause by preserving the running provider job instead of resending
+it when the worker releases its connection. It does not yet automatically
+reorder terminally failed durable provider jobs, and an uncertain submission is
+never treated as evidence that no work was accepted.
+
 A single completion review checks attempted unfinished plan/CAD work and rejected
 project writes before a premature final answer. Drawing orders additionally use
 the delivery check above, including when CAD was never attempted. Neither adds
