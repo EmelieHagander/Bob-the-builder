@@ -285,7 +285,7 @@ no Auth session or general Storage access is added.
 
 ### Compact image journal and optional descriptions — September 28 implementation
 
-Status: implemented on the image-journal branch; not yet deployed. A live CAD
+Status: deployed on 2026-09-28 in PR #154, alongside the retry cap from PR #153. A live CAD
 request accumulated about 13.9 MB of checkpoint JSON across repeated source-image
 opens. `bob_save_job_step` timed out while serializing every previous value for
 its cumulative size check, and subsequent job claims also timed out.
@@ -330,3 +330,27 @@ requires a bounded table rewrite; migration lock/statement timeouts fail the
 transaction rather than allowing a partial rollout. Roll back Edge code first if
 needed; the additive database schema is compatible with the old code. This
 change is independent of the bounded provider-retry correction in PR #153.
+
+
+Release verification (2026-09-28): main commit
+`9be9db83253512fee618dbd64a4781f1b2360324` includes both fixes. The
+[combined CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36436287680)
+passed all 610 tests, Edge checks, production builds and browser flows. CI first
+caught a missing offline tool-catalog seed row; that was corrected before release.
+
+The migration is recorded by the managed API as
+`20260928143632 / bob_compact_image_journal` (source timestamp `20260928141215`).
+Deployed `ask-bob` v53 with JWT verification and `bob-worker` v21 with its existing
+per-job capability check. Retrieved runtime files match the reviewed source;
+the type-only provenance module is omitted by the bundler. Deployment required
+rebuilding the relative import graph because an older file manifest omitted
+`ai-background.ts`; the failed bundle did not activate a version.
+
+A hosted rollback-only fixture passed caller-scoped cache reads, denial of
+browser writes and outsider reads, stale-image invalidation, idempotent compact
+checkpoints and byte accounting; no fixture project remains. HTTP probes return
+401 for an unauthenticated Ask Bob request and 403 for an invalid worker
+capability. The database advisor's private-table/no-policy and guarded
+SECURITY DEFINER reader notices are intentional and covered by those checks;
+see the [database advisor guidance](https://supabase.com/docs/guides/database/database-linter).
+The owner's fresh visual/CAD run and actual cost improvement remain to be tested.
