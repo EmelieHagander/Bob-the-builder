@@ -56,7 +56,7 @@ The active project's Ask bob button shows **New from Bob** for a new final answe
 5. Confirm signed event handling, the recovery scheduler and receiver callback before enabling `shared_private.ai_receivers` for Bob. New jobs then opt in; no running job is changed mid-replay.
 6. Verify a synthetic slow Responses/tool/review turn, duplicate event, missed webhook recovery, closed-chat badge/reload/read receipt, and revoked access. Full real-room drawing fidelity is separate acceptance.
 
-Disable a receiver to prevent new opt-in jobs. Drain already-pinned async jobs with their compatible code and registered receiver, or explicitly cancel and settle them; do not roll a synchronous-only worker over their journals. Stop scheduler/webhook only after pending provider work is reconciled. The schema can remain in place disabled.
+For a graceful rollback, let active app turns drain with the receiver enabled and their compatible workers still deployed; then disable the receiver. Disabling prevents every new model-operation reservation, including a later tool-loop call in an already-pinned turn. Already-submitted operations can still reconcile and deliver, but disabling is not a promise that a multi-call turn can finish. An emergency rollback should explicitly cancel and settle affected turns. Do not roll a synchronous-only worker over async journals. Stop scheduler/webhook only after pending provider work is reconciled. The schema can remain in place disabled.
 
 ## Evidence and sources
 
