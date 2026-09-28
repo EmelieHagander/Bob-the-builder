@@ -72,9 +72,9 @@ Constraints and formulas need a declarative vocabulary. They must never be execu
 
 ## CAD assistant integration — 2026-09-24
 
-Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. Read-only `cad-research/cad` mini/low collection precedes a separate `cad-designer/cad` standard/high constructor; both use the shared Responses service. See the September 28 correction below for release status. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
+Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. Read-only `cad-research/cad` mini/low collection precedes a separate `cad-designer/cad` standard/medium constructor; both use the shared Responses service. See the September 28 correction below for release status. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
 
-Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. Research remains available throughout rendering/repair while each reader has budget; there is no three-round cutoff. Exact measurement verification and image grounding have separate bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
+Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. After cheap source collection the constructor has one additional read batch before the first render or an indispensable blocker. Research reopens for inspection/repair while each reader has budget. Exact measurement verification and image grounding have separate bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
 Each render returns bounds, part metadata and geometry checks plus PNG views
 rasterized from the **same exported SVGs** using pinned CairoSVG 2.9.1. The
@@ -235,7 +235,7 @@ write or make design decisions. The constructor starts a fresh conversation with
 exact tool results (120 kB bound), the original brief and selected image pixels.
 Conflicts, revisions, units, unknowns and pagination remain in those results;
 truncation is explicit. It can retrieve further evidence during construction.
-The strong constructor and independent mini/high reviewer retain their settings.
+This release initially retained the strong constructor and independent mini/high reviewer settings; the follow-up below changes constructor reasoning after observed exhaustion.
 
 Renderer failure, an explicit unreadable-preview report or a diagnostic render
 request stops the consultation and further CAD consultations in the same turn.
@@ -279,3 +279,41 @@ both passed. The live CAD smoke test verified actual STEP/SVG/PNG generation,
 source hashes, visible preview pixels and bearer rejection. The published web
 bundle contains the budget-stop notice. A fresh owner request is still needed
 to establish full drawing fidelity and the cost per accepted drawing.
+
+
+### Designer exhaustion and charged failures — September 28 follow-up
+
+The post-release job `152e9afd-bfeb-48b9-b4d8-4c3d282c14fb` made no CAD
+render or review calls. Both failed designer responses were `incomplete` with
+`max_output_tokens`: 16,000 output tokens each, all reasoning. Bob restarted the
+consultation and incorrectly described a CAD outage. Total recorded model cost
+was $1.618131. The two failures cost $0.680891 but the adapter threw before
+returning their usage to Bob's threshold; the database ledger was correct.
+
+The shared adapter now accounts terminal responses before inspecting status,
+returns pinned cost and usage on failure, and discards partial tool calls.
+Reasoning-only and empty completed replies also retain their cost. SQL remains
+the sole ledger writer for background calls, so replay cannot bill twice.
+This is a generic correction to the shared adapter; other app deployments are
+not changed by the Bob rollout.
+
+A designer token/response failure is terminal within the current user turn,
+including a second consultation. Its server-generated failure notice names the
+design stage and states whether rendering was ever attempted. Bob delivers this
+known result without a paid explanatory model call or restarting research.
+Reviewer token exhaustion is reported separately and cannot approve a drawing.
+The existing cost-stop UI handles a shared budget exhaustion.
+
+The construction model remains GPT-5.4 with the same 16,000 output-token ceiling,
+while its governed reasoning effort changes from high to medium. The first
+step asks for compact whole-project layout geometry with required functional
+parts and orientations, deferring optional joinery and decoration. After cheap
+research only one additional source-read batch precedes rendering or a blocker;
+repair can read again. Exact sources, reference images, measurement validation
+and independent review remain required. No larger token ceiling is introduced.
+
+Regression tests cover charged incomplete/failed/cancelled responses, pinned
+prices, rejected partial tool calls, replayed failed spend, no second consultation,
+first-layout/read/repair stages and truthful delivery without another Bob call.
+Automated orchestration is not proof of real-model drawing quality; a new
+owner test is still needed after deployment. Release status is recorded below.

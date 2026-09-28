@@ -46,7 +46,7 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
  const metrics={research_calls:0,consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
- return {tools:[DESIGN_CAD_TOOL],sources,get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get remaining(){return Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
+ return {tools:[DESIGN_CAD_TOOL],sources,get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
  async consult(raw:unknown){
   if(terminalFailure)return terminalFailure
   candidate=null;acceptedReview=null;requiredTools=[]
@@ -67,6 +67,7 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
     :old.step_id??null
   }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:opts.ownerRequest??null,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
+  let preRenderReadRounds=0
   let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0,reviewPending=false
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   const researchEvidence:{tool:string;result:unknown}[]=[]
@@ -143,6 +144,12 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
       maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())})
      if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
+     if(!checked.success&&checked.error==='turn_budget_exhausted')throw new Error(checked.error)
+     if(!checked.success&&['model_output_limit','model_reasoning_only'].includes(checked.error??'')){
+      candidate=null;partial=true;metrics.review_unavailable++
+      return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
+       user_message:'Granskaren förbrukade sin svarsbudget utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
+     }
      const review=checked.success?parseCadReview(checked.data,handoff):null
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
      reviewPending=false
@@ -158,13 +165,15 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
    for(let round=0;round<10&&Date.now()<until;round++){
     if(!await opts.hasAccess())throw new Error('project_denied')
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
-    const researching=lookup.remaining>0
-    const tools=[...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL]:[]),CAD_BLOCKER_TOOL]
+    const firstLayout=renders===0
+    const canRead=!firstLayout||opts.research===false||preRenderReadRounds<1
+    const researching=lookup.remaining>0&&canRead
+    const tools=[...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(canRead&&opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(canRead&&opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL]:[]),CAD_BLOCKER_TOOL]
     const stage=candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
     const carrier=opts.context?.carrier()??[]
     referencePixels.push(...carrier)
-    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} designer calls remain; independent review is separate. ${candidate?'A rendered candidate exists.':'No geometry has been rendered yet; prioritise a small coherent first candidate over further detail research.'} ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
-    if(!result.success||!result.responseId)throw new Error(['provider_retry_exhausted','turn_budget_exhausted'].includes(result.error??'')?result.error:'model_unavailable')
+    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} designer calls remain; independent review is separate. ${firstLayout?'First deliverable: a compact layout of the WHOLE requested construction, with its main dimensions, orientation, required functional parts and relevant room openings. Reuse simple definitions and repeated instances. Defer optional joinery cuts, fasteners and decorative details until the layout is rendered. Do not drop owner requirements or replace it with a diagnostic. At most one additional batch of source reads is available before this first render; batch only indispensable gaps. If essential data remains unavailable, report the blocker.':'Inspect and repair the rendered construction against the brief and review.'} ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
+    if(!result.success||!result.responseId)throw new Error(['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only'].includes(result.error??'')?result.error:'model_unavailable')
     opts.context?.confirmDelivery()
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
     previousResponseId=result.responseId
@@ -182,6 +191,7 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
      continue
     }
     messages=[]
+    if(firstLayout&&result.toolCalls.some(c=>!['render_cad_candidate','report_cad_blocker','open_project_item'].includes(c.function.name)))preRenderReadRounds++
     if(result.toolCalls.length>8)throw new Error('too_many_tool_calls')
     for(const call of result.toolCalls){
      if(Date.now()>=until)throw new Error('deadline')
@@ -260,7 +270,21 @@ export function createCadAssistant(opts:{research?:boolean;durable?:boolean;owne
     candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review:checked.review}
    }
    candidate=null;partial=true;return {status:'budget_exhausted',saved:false}
-  }catch(error){rethrowContinuation(error);candidate=null;partial=true;if(error instanceof Error&&error.message==='project_denied')throw error;return {status:'unavailable',stage:'design',saved:false,reason:error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'}}
+  }catch(error){
+   rethrowContinuation(error);candidate=null;acceptedReview=null;partial=true
+   if(error instanceof Error&&error.message==='project_denied')throw error
+   const reason=error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
+   const failure={status:'unavailable',stage:'design',saved:false,reason,renders:metrics.renders}
+   if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
+    const message=reason==='turn_budget_exhausted'
+     ?'Ritförsöket stoppades av kostnadsgränsen.'
+     :['model_output_limit','model_reasoning_only'].includes(reason)
+      ?'Designern förbrukade sin svarsbudget utan att lämna ett användbart resultat.'
+      :'Designerns modellanrop misslyckades.'
+    return terminalFailure={...failure,user_message:message+' Ingen ny ritning sparades från det försöket. '+(metrics.renders===0?'CAD-motorn anropades aldrig. ':'')+'Jag stoppade försöket utan att starta om samma arbete.'}
+   }
+   return failure
+  }
   finally{sources.push(...lookup.sources,...groundingLookup.sources)}
  }}
 }

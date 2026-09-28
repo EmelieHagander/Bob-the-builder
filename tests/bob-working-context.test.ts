@@ -80,10 +80,10 @@ test('main Bob has standard/high settings while memory folding has its own mini/
   ])
 })
 
-test('CAD source collection has a separate mini/low setting without downgrading construction',async()=>{
+test('CAD source collection stays mini/low while construction uses standard/medium',async()=>{
  const rows=(await pg.query("select function_name,model,reasoning_effort,max_output_tokens from shared.ai_settings where app='bob' and function_name in ('cad-research','cad-designer') order by function_name")).rows
  assert.deepEqual(rows,[
-  {function_name:'cad-designer',model:'gpt-5.4',reasoning_effort:'high',max_output_tokens:16000},
+  {function_name:'cad-designer',model:'gpt-5.4',reasoning_effort:'medium',max_output_tokens:16000},
   {function_name:'cad-research',model:'gpt-5.4-mini',reasoning_effort:'low',max_output_tokens:3000},
  ])
 })

@@ -28,3 +28,14 @@ test('resuming the durable turn rebuilds prior spend without rebilling or resett
  now=0;run=segment();await run(0);await run(1)
  assert.equal((await run(2)).error,'turn_budget_exhausted');assert.equal(dispatches,2)
 })
+
+test('failed charged results rebuild the spending threshold across durable replay',async()=>{
+ const entries:JournalEntry[]=[];let calls=0
+ const run=async()=>{
+  const budget=createBobModelBudget(1),journal=createBobJournal({entries,save:async e=>{entries.push(e)}},Date.now()+10000)
+  const first=await budget.run(()=>journal.run('model:design',{},async()=>{calls++;return {...reply(1.01),success:false,data:null,error:'model_output_limit'}}))
+  assert.equal(first.error,'model_output_limit')
+  assert.equal((await budget.run(async()=>{throw new Error('must not retry')})).error,'turn_budget_exhausted')
+ }
+ await run();await run();assert.equal(calls,1)
+})
