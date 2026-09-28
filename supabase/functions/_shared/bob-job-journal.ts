@@ -1,7 +1,7 @@
 /** Durable operation results, private to one authenticated turn. Replay rebuilds
  * the existing assistants' local state; it never sends a made-up user message. */
 export class BobContinuation extends Error {
-  constructor(readonly kind: 'yield' | 'stop', message = 'background_continue') { super(message) }
+  constructor(readonly kind: 'yield' | 'stop', message = 'background_continue', readonly aiWait?: { id: string; accepted: boolean; role: string }) { super(message) }
 }
 export function rethrowContinuation(error: unknown): void {
   if (error instanceof BobContinuation) throw error
@@ -12,7 +12,7 @@ export interface JournalStore {
   save(entry: JournalEntry): Promise<void>
 }
 export interface BobJournal {
-  run<T>(stream: string, input: unknown, operation: () => Promise<T>, reserveMs?: number): Promise<T>
+  run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs?: number): Promise<T>
   check(): void
   /** Milliseconds left in this worker's segment. */
   remaining(): number
@@ -49,7 +49,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
   return {
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
-    async run<T>(stream: string, input: unknown, operation: () => Promise<T>, reserveMs = 0): Promise<T> {
+    async run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs = 0): Promise<T> {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
@@ -78,7 +78,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         entries.set(marker.key, marker)
       }
       let value: T | undefined, failure: string | undefined
-      try { value = await operation() }
+      try { value = await operation({ key, fingerprint: hash }) }
       catch (error) {
         if(error instanceof BobContinuation&&error.kind==='yield'&&error.message==='provider_retry'){
           // A durable queue must not retry the same failing model call until
@@ -91,6 +91,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
           }
           failure='provider_retry_exhausted'
         }else{
+        if (error instanceof BobContinuation) stopped = error
         rethrowContinuation(error)
         if (stream === 'image:generate') throw error
         failure = error instanceof Error ? error.message.slice(0,500) : 'operation_failed'

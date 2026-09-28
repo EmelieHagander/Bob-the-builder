@@ -45,6 +45,8 @@ try {
     }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
+      const inboxPath = new URL(route.request().url()).pathname
+      if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       const respond = options => route.fulfill({ ...options, headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile',

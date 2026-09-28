@@ -202,6 +202,25 @@ function MobileNav() {
 export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } }) {
   const [bobOpen, setBobOpen] = useState(false)
   const [bobStarted, setBobStarted] = useState(false)
+  const [bobUnread, setBobUnread] = useState(false)
+  const authTick = useAuthTick()
+  useEffect(() => {
+    let cancelled = false, checking = false
+    setBobUnread(false)
+    const check = async () => {
+      if (checking || document.visibilityState === 'hidden') return
+      checking = true
+      try { const inbox = await db.getBobInbox(project.id); if (!cancelled) setBobUnread(!!inbox?.unread) }
+      catch { /* Keep the last known state until reconnected. */ }
+      finally { checking = false }
+    }
+    void check()
+    const timer = setInterval(check, 10000)
+    window.addEventListener(db.BOB_INBOX_EVENT, check)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener(db.BOB_INBOX_EVENT, check); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) }
+  }, [project.id, authTick])
 
   return (
     <div className="app-shell">
@@ -210,6 +229,8 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
 
       <button
         className="no-print"
+        aria-label="Ask bob"
+        aria-describedby={bobUnread ? 'bob-unread-status' : undefined}
         onClick={() => { setBobStarted(true); setBobOpen(true) }}
         style={{
           position: 'fixed',
@@ -234,6 +255,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
           <Icon name="tree-evergreen" weight="fill" size={18} color="var(--accent)" />
         </span>
         Ask bob
+        {bobUnread && <span id="bob-unread-status" className="bob-unread-badge" role="status">New from Bob</span>}
       </button>
 
       <MobileNav />

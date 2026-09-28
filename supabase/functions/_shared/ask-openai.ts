@@ -1,4 +1,5 @@
 import { createExecutionMetrics } from './execution-metrics.ts'
+import { AIBackgroundPending } from './ai-background.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
@@ -28,7 +29,7 @@ import { runClaimedProjectTurn } from './project-turn.ts'
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
-  background?: { claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
+  background?: { jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -44,7 +45,7 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
-  const memo = async <T>(stream: string, input: unknown, work: () => Promise<T>, reserve = 0): Promise<T> =>
+  const memo = async <T>(stream: string, input: unknown, work: (identity?: { key: string; fingerprint: string }) => Promise<T>, reserve = 0): Promise<T> =>
     journal ? journal.run(stream, input, work, reserve) : work()
   const rpc = async (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
     const { p_generation: _generation, ...stable } = args
@@ -60,17 +61,30 @@ export async function answerWithOpenAi(opts: {
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
   const callModel = async (options: OpenAIServiceOptions) => {
    const timeout = options.timeoutMs ?? 120000
-   try{return await memo('model:' + options.functionName, options, async () => {
+   const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
+   try{return await memo('model:' + options.functionName, options, async identity => {
     const started = performance.now()
     const wall = journal ? journal.remaining() + 8000 : Infinity
     const allowed = Math.max(1000, Math.min(timeout, wall))
-    const result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed })
+    let result
+    try {
+      result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed,
+        ...(asyncModels && identity ? { background: {
+          key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
+          context: { jobId: opts.background!.jobId, role: options.aiFunction },
+          expiresAt: new Date(opts.background!.deadline).toISOString(),
+        } } : {}),
+      })
+    } catch (error) {
+      if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
+      throw error
+    }
     await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started)
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
-   }, Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
+   }, asyncModels ? 25000 : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
@@ -150,7 +164,7 @@ export async function answerWithOpenAi(opts: {
     callModel,
   })
   const cadAssistant = createCadAssistant({
-    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,
+    projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,

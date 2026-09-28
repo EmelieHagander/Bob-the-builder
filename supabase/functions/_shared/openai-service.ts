@@ -1,4 +1,5 @@
 import { responseMessageContent, hasImageContent, type OpenAIMessageContent } from './openai-content.ts';
+import { AIBackgroundPending, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -142,6 +143,8 @@ export interface OpenAIServiceOptions {
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
   outputTokenLimit?: number;
   timeoutMs?: number;
+  /** Opt in to durable provider work. Only trusted app servers choose the receiver/context. */
+  background?: BackgroundCall;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
     type: 'base64' | 'url';
@@ -392,7 +395,7 @@ export async function callOpenAIResponses<T = unknown>(
     };
   }
 
-  const currentModel = modelRow.model_name;
+  let currentModel = modelRow.model_name;
   console.log(`[OpenAI Service] Using model: ${currentModel}`);
 
   // Never ask for more than the model can actually produce.
@@ -607,7 +610,7 @@ export async function callOpenAIResponses<T = unknown>(
     console.log(`[OpenAI Service] Payload size: ${payloadSizeMB.toFixed(2)}MB`);
 
     // fetchWithRetry now handles timeout internally per attempt
-    const response = await fetchWithRetry(
+    const response = options.background ? null : await fetchWithRetry(
       'https://api.openai.com/v1/responses', 
       {
         method: 'POST',
@@ -619,11 +622,11 @@ export async function callOpenAIResponses<T = unknown>(
       },
       timeoutMs
     );
-    const responseText = await response.text();
+    const responseText = response ? await response.text() : '';
     
-    console.log(`[OpenAI Service] Response status: ${response.status}`);
+    if (response) console.log(`[OpenAI Service] Response status: ${response.status}`);
 
-    if (!response.ok) {
+    if (response && !response.ok) {
       // Provider errors may echo request content; never log inline images or URLs.
       console.error(`[OpenAI Service] API error status: ${response.status}`);
       return {
@@ -635,7 +638,23 @@ export async function callOpenAIResponses<T = unknown>(
       };
     }
 
-    const responseData = JSON.parse(responseText);
+    const responseData = options.background ? await backgroundResponse(async (name, args) => {
+      const { data, error } = await aiClient.rpc(name, args).abortSignal(AbortSignal.timeout(10000));
+      if (error) throw new Error('ai_background_storage_unavailable');
+      return data;
+    }, openAIApiKey, options.app, options.background, requestBody, {
+      user_id: userId ?? null, module, ai_function: aiFunction, model: currentModel,
+      input_price_per_1m: modelRow.input_cost_per_1m_tokens,
+      output_price_per_1m: modelRow.output_cost_per_1m_tokens,
+      cached_price_per_1m: modelRow.cached_input_cost_per_1m_tokens ?? modelRow.input_cost_per_1m_tokens,
+    }) : JSON.parse(responseText);
+    if (options.background && responseData.status !== 'completed') throw new Error('ai_background_' + responseData.status);
+    const pinned = options.background ? responseData._shared_accounting : undefined;
+    if (pinned) {
+      currentModel = pinned.model;
+      modelRow = { ...modelRow, input_cost_per_1m_tokens: pinned.input_price_per_1m,
+        output_cost_per_1m_tokens: pinned.output_price_per_1m, cached_input_cost_per_1m_tokens: pinned.cached_price_per_1m };
+    }
     
     // Debug: log response structure
     console.log('[OpenAI Service] Response keys:', Object.keys(responseData));
@@ -666,6 +685,7 @@ export async function callOpenAIResponses<T = unknown>(
 
     /** Everything the usage ledger needs that is constant for this call. */
     const usageBase = {
+      background: !!options.background,
       app: options.app,
       module,
       aiFunction,
@@ -960,6 +980,7 @@ export async function callOpenAIResponses<T = unknown>(
     }
 
   } catch (error: unknown) {
+    if (error instanceof AIBackgroundPending) throw error;
     const errorMessage = error instanceof Error ? error.message : 'Request failed';
     console.error(`[OpenAI Service] Request error:`, errorMessage);
     return {
@@ -967,7 +988,7 @@ export async function callOpenAIResponses<T = unknown>(
       data: null,
       usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
       model: currentModel,
-      error: `Network error: ${errorMessage}`
+      error: options.background ? 'ai_background_unavailable' : `Network error: ${errorMessage}`
     };
   }
 }
@@ -1010,8 +1031,11 @@ async function logAIUsage(
     inputPricePer1m: number;
     outputPricePer1m: number;
     success: boolean;
+    background?: boolean;
   }
 ): Promise<void> {
+  // Durable completions and usage are committed atomically by ai_job_accept.
+  if (params.background) return;
   const { error } = await aiClient.from('ai_usage_events').insert({
     app: params.app,
     user_id: params.userId || null,

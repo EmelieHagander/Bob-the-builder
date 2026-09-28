@@ -31,6 +31,8 @@ try {
     const completed = new Map(), requests = [], errors = []
     let definitions=0, revisions=0, currentRevision=0
     await context.route('**/*',async route=>{
+      const inboxPath = new URL(route.request().url()).pathname
+      if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       const request=route.request(), url=new URL(request.url())
       if(url.origin===new URL(base).origin) return route.continue()
       if(url.origin!==api) {

@@ -36,6 +36,12 @@ export async function setupSharedSocial(pg: PGlite) {
       updated_at timestamptz not null default clock_timestamp(),
       unique(app,coworker_id,function_name,module_id)
     );
+    create table shared.ai_usage_events(
+      id bigint generated always as identity primary key,app text not null,user_id uuid,module text not null,
+      ai_function text not null,model text not null,input_tokens integer not null default 0,cached_input_tokens integer not null default 0,
+      output_tokens integer not null default 0,reasoning_tokens integer not null default 0,total_tokens integer not null default 0,
+      input_price_per_1m numeric,output_price_per_1m numeric,cost_usd numeric,success boolean not null,created_at timestamptz default now()
+    );
     create table shared.households(id uuid primary key default gen_random_uuid(),name text not null);
     create table shared.members(id uuid primary key default gen_random_uuid(),household_id uuid not null references shared.households(id),display_name text not null,unique(id,household_id));
     create table shared.household_access(id uuid primary key default gen_random_uuid(),household_id uuid not null references shared.households(id),

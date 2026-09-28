@@ -68,8 +68,10 @@ export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
   retry?: { text: string; turnId: string }
-  pending?: { text: string; turnId: string; expiresAt: number; progress?: BobProgress }
+  pending?: { text: string; turnId: string; expiresAt: number; progress?: BobProgress; notice?: string }
   lastCompletedTurnId?: string
+  threadId?: string
+  latestSeq?: number
 }
 
 /**
@@ -95,10 +97,16 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
 
   const messages: ChatMessage[] = []
+  const notices = await bobDb.from('bob_delegation_notices').select('turn_id,text').eq('thread_id', threadResult.data.id)
+  // Older backends still support chat during the staged rollout.
+  const byTurn = new Map((notices.data ?? []).map(row => [row.turn_id, row.text]))
+  const appendNotice = (turn: string) => { const text = byTurn.get(turn); if (typeof text === 'string') messages.push({ from: 'bob', text }) }
+  let latestSeq = 0
   let retry: BobConversationHistory['retry']
   let pending: BobConversationHistory['pending']
   let lastCompletedTurnId: string | undefined
   for (const row of rows.data ?? []) {
+    if (row.role === 'user' && row.delivery_state === 'failed') latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
     if (row.delivery_state !== 'completed') {
       if (row.role === 'user' && typeof row.text === 'string' && typeof row.turn_id === 'string') {
         // bob_claim_turn leases a pending turn for five minutes, refreshing
@@ -114,7 +122,9 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
     pending = undefined
     if (row.role === 'user' && typeof row.text === 'string') {
       messages.push({ from: 'user', text: row.text })
+      appendNotice(row.turn_id)
     } else if (row.role === 'assistant' && typeof row.text === 'string') {
+      latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
       lastCompletedTurnId = row.turn_id
       messages.push({ from: 'bob', text: row.text, ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
     }
@@ -126,10 +136,27 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
     if (job.data && ['queued', 'running'].includes(job.data.status)) {
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
-      pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress) }; retry = undefined
+      pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
     } else if (job.data?.status === 'failed') { retry = unfinished; pending = undefined }
   }
-  return { mode: 'server', messages, retry, pending, lastCompletedTurnId }
+  return { mode: 'server', messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, latestSeq }
+}
+
+export interface BobInbox { threadId: string; latestSeq: number; readSeq: number; unread: boolean }
+export const BOB_INBOX_EVENT = 'bob:inbox-changed'
+export async function getBobInbox(projectId: string): Promise<BobInbox | null> {
+  if (!bobDb) return null
+  const { data: auth } = await bobDb.auth.getUser()
+  if (!auth.user || auth.user.email?.toLowerCase() === GUEST_EMAIL) return null
+  const { data, error } = await bobDb.rpc('bob_chat_inbox', { p_project: projectId })
+  if (error) throw new Error('Could not check new messages')
+  return data && typeof data.threadId === 'string' && Number.isSafeInteger(data.latestSeq) && typeof data.unread === 'boolean' ? data : null
+}
+export async function markBobChatRead(projectId: string, threadId: string, seq: number): Promise<void> {
+  if (!bobDb) return
+  const { error } = await bobDb.rpc('bob_mark_chat_read', { p_project: projectId, p_thread: threadId, p_seq: seq })
+  if (error) throw new Error('Could not mark the answer as read')
+  window.dispatchEvent(new Event(BOB_INBOX_EVENT))
 }
 
 /** A background turn runs for up to twenty minutes on the sender's access token.
