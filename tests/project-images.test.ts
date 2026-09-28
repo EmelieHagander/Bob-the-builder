@@ -4,6 +4,7 @@ import { createProjectContext } from '../supabase/functions/_shared/project-cont
 import { createMediaAdapter, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
 import { responseMessageContent, hasImageContent } from '../supabase/functions/_shared/openai-content.ts'
 import type { ProjectSource } from '../src/data/provenance.ts'
+import {DRAWING_REVIEW_INSTRUCTION} from '../supabase/functions/_shared/drawing-review.ts'
 
 const id = (n = 1) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const ref = (n = 1) => `image:${id(n)}`
@@ -27,6 +28,23 @@ function fixture(count = 1) {
   return { rows, sources, transport, make, ctx: make(), get downloads() { return downloads }, get reads() { return reads }, revoke() { allowed = false } }
 }
 const list = { category: 'images', query: null, area_id: null, after_id: null }
+
+test('generated drawing pixels retain project, plan Step and origin beside the review instruction',async()=>{
+ const f=fixture()
+ Object.assign(f.rows[0],{source_kind:'ai_generated',purpose:'instruction',media_links:[{area_id:null,task_id:null,step_id:null,plan_step_id:'plan-step-1'}]})
+ const manifest=await f.ctx.execute('list_project_category',list)
+ assert.match(JSON.stringify(manifest),/ai_generated/);assert.match(JSON.stringify(manifest),/plan-step-1/)
+ await f.ctx.execute('open_project_item',{refs:[ref()]})
+ const parts=responseMessageContent('user',f.ctx.carrier()[0].content)
+ assert(parts.some(p=>p.type==='input_text'&&String(p.text).includes(DRAWING_REVIEW_INSTRUCTION)))
+ const metadata=parts.find(p=>p.type==='input_text'&&String(p.text).includes('"project_id"'))!
+ const item=JSON.parse(String(metadata.text))
+ assert.equal(item.project_id,'A');assert.equal(item.source_kind,'ai_generated')
+ assert.equal(item.links[0].plan_step_id,'plan-step-1')
+ f.ctx.confirmDelivery()
+ f.rows[0].media_links![0].plan_step_id='changed-step'
+ assert.equal(await f.ctx.validate(),false,'changed review scope invalidates retained evidence')
+})
 
 test('catalog and paged manifests never fetch pixels or claim visual evidence', async () => {
   const f = fixture(15)

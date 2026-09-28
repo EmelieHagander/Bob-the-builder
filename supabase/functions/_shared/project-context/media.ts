@@ -3,11 +3,11 @@ import type { ContextAdapter, Item, ListRequest, Opened } from './dispatcher.ts'
 export const MEDIA_BUCKET = 'bob-project-media'
 export const MEDIA_MAX_BYTES = 6 * 1024 * 1024
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export const MEDIA_COLUMNS = 'id,project_id,title,purpose,content_type,byte_size,width,height,state,created_at,updated_at,bucket_id,object_path,media_links(area_id,task_id,step_id)'
+export const MEDIA_COLUMNS = 'id,project_id,title,purpose,source_kind,content_type,byte_size,width,height,state,created_at,updated_at,bucket_id,object_path,media_links(area_id,task_id,step_id,plan_step_id)'
 export type MediaRow = {
   id: string; project_id: string; title: string; purpose: string; content_type: string;
   byte_size: number; width: number; height: number; state: string; updated_at: string; created_at: string;
-  bucket_id: string; object_path: string; media_links?: { area_id: string | null; task_id: string | null; step_id: string | null }[];
+  bucket_id: string; object_path: string; source_kind?: string; media_links?: { area_id: string | null; task_id: string | null; step_id: string | null; plan_step_id?: string | null }[];
 }
 export interface MediaTransport {
   count(signal: AbortSignal): Promise<number>
@@ -28,12 +28,15 @@ function checked(row: MediaRow | null, projectId: string, id?: string): MediaRow
   return row
 }
 function item(row: MediaRow): Item {
-  return { ref: `image:${row.id}`, title: row.title, purpose: row.purpose,
+  return { ref: `image:${row.id}`, project_id: row.project_id, title: row.title, purpose: row.purpose, source_kind: row.source_kind ?? 'unknown',
     width: row.width, height: row.height, created_at: row.created_at, updated_at: row.updated_at,
-    links: (row.media_links ?? []).slice(0, 25).map(l => ({ area_id: l.area_id, task_id: l.task_id, step_id: l.step_id })),
+    links: (row.media_links ?? []).slice(0, 25).map(l => ({ area_id: l.area_id, task_id: l.task_id, step_id: l.step_id, plan_step_id: l.plan_step_id ?? null })),
     links_truncated: (row.media_links?.length ?? 0) > 25 }
 }
-function version(row: MediaRow): string { return `${row.updated_at}:${row.content_type}:${row.byte_size}:${row.width}x${row.height}` }
+function version(row: MediaRow): string {
+  const links = (row.media_links ?? []).map(l => JSON.stringify([l.area_id,l.task_id,l.step_id,l.plan_step_id??null])).sort()
+  return JSON.stringify([row.updated_at,row.content_type,row.byte_size,row.width,row.height,row.title,row.purpose,row.source_kind??'unknown',links])
+}
 export function validImageSignature(bytes: Uint8Array, mime: string): boolean {
   if (mime === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
   if (mime === 'image/png') return bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((n,i) => bytes[i] === n)

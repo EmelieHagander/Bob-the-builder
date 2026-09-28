@@ -8,6 +8,7 @@ import { drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
+import {createProjectImageTools} from '../supabase/functions/_shared/project-image-tools.ts'
 
 /** Bob chooses his own tools. The server offers the whole toolbox, never forces a
  * tool, never replaces Bob's reply, and points out only facts it knows. */
@@ -140,6 +141,25 @@ test('an explicit indispensable CAD blocker returns to Bob without repeated rend
   }, async () => { cadCalls++; return response(null, call('report_cad_blocker', { reason: 'unsupported_geometry', explanation: 'The requested freeform surface is unsupported.' })) })
   assert(result.ok); assert.equal(cadCalls, 1); assert.equal(calls, 2); assert.equal(f.renders, 0); assert.equal(f.writes.length, 0)
   assert.match(result.answer, /fria formen/)
+})
+
+test('a saved illustration after failed CAD prompts one factual correction and never establishes drawing delivery',async()=>{
+ const f=fixture();let calls=0,notes=0
+ const png=new Uint8Array(24);png.set([137,80,78,71,13,10,26,10]);const header=new DataView(png.buffer);header.setUint32(16,64);header.setUint32(20,64)
+ const images=createProjectImageTools({projectId:'A',message,writer:f.writer,hasAccess:async()=>true,deadline:Date.now()+300000,
+  generate:async()=>({ok:true,image:png}),upload:async()=>{}})
+ const result=await f.run(async o=>{
+  calls++;assert.equal(o.tool_choice,undefined)
+  if(calls===1)return response(null,call('design_project_cad',cadRequest))
+  if(calls===2)return response(null,call('generate_project_image',{prompt:'Illustrative concept only',title:'Illustration',purpose:'proposal',target_kind:'project',target_id:'A'}))
+  if(calls===3){assert.equal(JSON.parse(String(o.messages![0].content)).geometry_verified,false);return response('The drawing is done.')}
+  notes++;assert.match(String(note(o)?.content),/CAD attempt did not deliver a reviewed drawing/)
+  return response('CAD failed. The saved image is an illustration; the drawing is unfinished.')
+ },async()=>({success:false,data:null,model:'fixture',usage,error:'model_unavailable'}),{imageTools:images})
+ assert(result.ok);assert.equal(notes,1);assert.equal(calls,4)
+ assert.equal(result.evidence.partial,true);assert.equal(f.renders,0)
+ assert(!f.writes.some(w=>w.kind==='cad'))
+ assert.match(result.answer,/drawing is unfinished/)
 })
 
 test('revocation stops the turn, and a closing deadline gives a text-only step', async () => {

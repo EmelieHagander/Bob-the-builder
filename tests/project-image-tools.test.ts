@@ -8,3 +8,9 @@ test('an image is ready only after reserve, upload and finalize, using the same 
 test('interrupted upload retains recoverable identity and prevents blind duplicate generation',async()=>{const f=fixture();f.opts.upload=async()=>{throw new Error('offline')};const t=createProjectImageTools(f.opts);const r=await t.execute('generate_project_image',args);assert.equal(r.status,'partial');assert.equal(r.saved,false);assert(r.media_id);assert.equal(f.calls.length,1);assert.equal((await t.execute('generate_project_image',args)).status,'budget_exhausted');assert.equal(f.generations,1)})
 test('unauthorised quote and revoked membership never generate or reserve',async()=>{const f=fixture();const t=createProjectImageTools(f.opts);assert.equal((await t.execute('generate_project_image',{...args,request_quote:'invented'})).status,'invalid');f.opts.hasAccess=async()=>false;await assert.rejects(t.execute('generate_project_image',args),/project_denied/);assert.equal(f.generations,0);assert.equal(f.calls.length,0)})
 test('finalization recovery never regenerates or uploads an image',async()=>{const f=fixture();const t=createProjectImageTools(f.opts);await t.execute('finalize_project_image',{media_id:'pending',request_quote:'Gör bilden'});assert.equal(f.generations,0);assert.deepEqual(f.calls.map(p=>p.kind),['image_finalize'])})
+test('successful image generation discloses illustration provenance and review scope, never a CAD approval',async()=>{
+ const f=fixture(),r=await createProjectImageTools(f.opts).execute('generate_project_image',args)
+ assert.equal(r.saved,true);assert.equal(r.representation,'illustration');assert.equal(r.geometry_verified,false)
+ assert.equal(r.project_id,'A');assert.equal(r.target_kind,'plan_step');assert.equal(r.target_id,'step')
+ assert.match(r.review_instruction,/no CAD review/)
+})
