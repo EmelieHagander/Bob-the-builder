@@ -490,13 +490,15 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (result.evidence.writes?.length) setNeedsRefresh(true)
       push({ from: 'bob', text: result.answer, evidence: result.evidence })
     } else if (result.unavailable !== 'project_changed') {
-      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId })
+      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId })
       const message = result.unavailable === 'not_configured'
         ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
         : result.unavailable === 'unauthorized'
           ? 'Please sign in again before asking about this project.'
           : result.unavailable === 'project_denied'
             ? 'I could not access this project. Your membership may have changed.'
+            : result.unavailable === 'turn_budget_exhausted'
+              ? 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.'
             : result.unavailable === 'context_preparing'
               ? 'Bob is catching up on the older conversation. Retry the same request to continue; no new project changes were made.'
             : result.unavailable === 'context_unavailable'

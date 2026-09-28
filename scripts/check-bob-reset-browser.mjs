@@ -60,7 +60,7 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
-        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
+        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -306,6 +306,14 @@ try {
     await page.keyboard.press('Escape')
     await drawer.waitFor({ state: 'hidden' })
     drawer = await open()
+    // A spending stop survives reload and never offers the same expensive retry.
+    h.messages.push({role:'user',text:'Budget-limited drawing',turn_id:crypto.randomUUID(),delivery_state:'failed',background:true,error:'turn_budget_exhausted',updated_at:new Date().toISOString(),seq:h.next_seq++})
+    const beforeBudgetReload=answerCalls
+    await page.reload();drawer=await open()
+    await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
+    assert.equal(answerCalls,beforeBudgetReload)
+    await page.screenshot({path:`test-results/bob-budget-stop-${viewport.width}.png`})
     // Shared guest must clear only this device; an auth failure is never guest mode.
     const beforeGuest = resetCalls
     authMode = 'guest'

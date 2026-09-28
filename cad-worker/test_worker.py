@@ -1,6 +1,7 @@
 import tempfile, unittest
 from pathlib import Path
-from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks
+from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks, _render_preview
+from PIL import Image
 from unittest.mock import patch
 import math, hashlib, struct
 
@@ -22,6 +23,25 @@ def fixture():
     }
 
 class CadWorkerTest(unittest.TestCase):
+    def test_room_and_detail_scale_previews_have_visible_lines(self):
+        for size in (10,3970,100000):
+            r=fixture()
+            r['definitions']=[{'id':'room','primitive':'box','material_ref':None,'x_mm':size,'y_mm':size*.7,'z_mm':size*.5}]
+            r['instances']=[{'id':'room','definition_id':'room','placement':{'x':0,'y':0,'z':0,'rx':0,'ry':0,'rz':0}}]
+            with tempfile.TemporaryDirectory() as tmp:
+                result=render_assembly(r,tmp)
+                self.assertAlmostEqual(result['bounding_box_mm']['size'][0],size)
+                for view in r['views']:
+                    with Image.open(Path(tmp,view+'.png')) as image:
+                        self.assertGreater(sum(image.convert('L').histogram()[:200]),100,view)
+                    self.assertEqual(hashlib.sha256(Path(tmp,view+'.svg').read_bytes()).hexdigest(),result['previews'][view]['source_sha256'])
+
+    def test_blank_preview_is_a_renderer_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            svg=Path(tmp,'blank.svg');svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4000 2700"/>')
+            with self.assertRaisesRegex(CadContractError,'preview_unreadable'):
+                _render_preview(svg,Path(tmp,'blank.png'))
+
     def test_real_hole_and_notch_preserve_blank_but_remove_exact_volume(self):
         d={"id":"block","primitive":"box","material_ref":None,"x_mm":100,"y_mm":100,"z_mm":20,"cuts":[
             {"primitive":"cylinder","diameter_mm":10,"length_mm":22,"placement":{"x":50,"y":50,"z":-1,"rx":0,"ry":0,"rz":0}},

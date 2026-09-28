@@ -94,7 +94,7 @@ Merge the previous gist with ONLY the older messages provided. Index every newly
         messages: [{ role: 'user', content: JSON.stringify({ previousBrief, throughSeq: state.lastFoldedSeq, olderMessages: state.older, ...(validationFeedback ? { validationFeedback } : {}) }) }],
         maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()),
       })
-      if (!response.success || response.toolCalls?.length) throw new Error('context_unavailable')
+      if (!response.success || response.toolCalls?.length) throw new Error(response.error==='turn_budget_exhausted'?'turn_budget_exhausted':'context_unavailable')
       try {
         const candidate = checkedBrief(response.data, state.foldThroughSeq, BRIEF_LIMITS.gist)
         if (candidate.index.some(e => !known.has(e.seq)) || state.older.some(m => !candidate.index.some(e => e.seq === m.seq))) throw new InvalidConversationBrief('coverage')

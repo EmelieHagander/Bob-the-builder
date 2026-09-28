@@ -44,7 +44,7 @@ export async function runClaimedProjectTurn(opts: {
   } catch (error) {
     rethrowContinuation(error)
     const code = error instanceof Error ? error.message : ''
-    result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied', 'tool_catalog_unavailable'].includes(code) ? code : 'ai_unavailable' }
+    result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied', 'tool_catalog_unavailable', 'turn_budget_exhausted'].includes(code) ? code : 'ai_unavailable' }
   }
   let recoveryAnswer:string|undefined
   try {

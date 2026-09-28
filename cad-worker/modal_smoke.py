@@ -70,6 +70,11 @@ def main():
         preview=manifest["previews"][view]
         if raw[:8] != b"\x89PNG\r\n\x1a\n" or hashlib.sha256(raw).hexdigest()!=preview["sha256"] or preview["source_sha256"]!=manifest["exports"][view]["sha256"]:
             raise RuntimeError("Preview is not bound to its exported SVG")
+        from io import BytesIO
+        from PIL import Image
+        with Image.open(BytesIO(raw)) as image:
+            if sum(image.convert('L').histogram()[:200]) < 16:
+                raise RuntimeError("CAD returned an unreadable preview")
     for body, token, status in [({}, "", 401), ({}, "invalid-smoke-token", 401),
                                 ({}, os.environ["BOB_CAD_TOKEN"], 422)]:
         try:

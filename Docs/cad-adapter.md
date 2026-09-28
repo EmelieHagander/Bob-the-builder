@@ -72,7 +72,7 @@ Constraints and formulas need a declarative vocabulary. They must never be execu
 
 ## CAD assistant integration — 2026-09-24
 
-Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. A separate `cad-designer/cad` standard/high setting uses the shared Responses service. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
+Bob delegates an intent plus optional Area, component, plan Step and Artifact identities. Read-only `cad-research/cad` mini/low collection precedes a separate `cad-designer/cad` standard/high constructor; both use the shared Responses service. See the September 28 correction below for release status. Its short role describes a remote construction designer; there are no bed/drawer object-specific branches.
 
 Its own bounded loop can search current project/physical records, inspect materials, open project images, read an exact saved CAD assembly and render up to four candidates across ten model rounds. Research remains available throughout rendering/repair while each reader has budget; there is no three-round cutoff. Exact measurement verification and image grounding have separate bounded lookups. The designer budget is at most five minutes within the overall turn deadline, with at most 100 seconds per model call. Context starts with the brief and grows through reads. It can fetch wider constraints; object scope is not an artificial data-access blindfold. Bob retains the conversation, project decisions and final save authority.
 
@@ -190,7 +190,7 @@ The live smoke test checks STEP plus all four SVG views, engine identity, dimens
 
 ### Verification boundaries
 
-Automated tests cover the assistant loop, source-part reuse, failed-repair invalidation, stale measurements, revoked access, canonical saves/retries, other-project denial, image recovery and navigable large records. CAD-worker CI runs the real pinned build123d engine. The foundations browser scenario includes saved CAD views, part dimensions, reload, project-Step navigation and protection from geometry loss through the generic editor at mobile/desktop widths. Controlled model responses establish orchestration, not real-model design quality. Whole-bed, drawer-detail and changed-parent named-member live acceptance remain separate gates; the worker is now hosted.
+Automated tests cover the assistant loop, source-part reuse, failed-repair invalidation, terminal renderer blockers, exact research handoff, stale measurements, revoked access, canonical saves/retries, other-project denial, image recovery and navigable large records. CAD-worker CI runs the real pinned build123d engine. The foundations browser scenario includes saved CAD views, part dimensions, reload, project-Step navigation and protection from geometry loss through the generic editor at mobile/desktop widths. Controlled model responses establish orchestration, not real-model design quality. Whole-bed, drawer-detail and changed-parent named-member live acceptance remain separate gates; the worker is now hosted.
 
 ### Drawing prerequisites and completion — September 25
 
@@ -209,3 +209,49 @@ loop makes at most one completion review when a plan/CAD attempt is left unfinis
 It compares the original request with real results; it creates no new user request
 or automatic approval. Provider retry bounds are owned by
 [conversation recovery](ask-bob-conversations.md#durable-background-turns).
+
+
+### Blank previews, correction loops and model cost — September 28 correction
+
+Status: implemented and locally verified on the correction branch; deployment pending.
+The failed live job spent $3.058558 across 15 model calls, of which $2.659413
+was ten standard/high CAD-designer calls. It rendered two substantial assemblies,
+then substituted a three-part visibility test. The reviewer correctly rejected
+that test against the full project brief, causing more construction work.
+
+Replaying the first exact recipe with the pinned engine produced three entirely
+white PNGs. Its SVG geometry was present: the default 0.09 mm strokes disappeared
+when the 3970 mm scene was fitted to 1024 pixels. Exported SVG presentation now
+uses 1.25 px visible and 0.8 px hidden strokes at preview size, with readable
+hidden-line dashes. Geometry coordinates and STEP dimensions remain unchanged.
+PNG validation rejects fewer than 16 pixels darker than intensity 200. This is a
+visibility check, not geometric or semantic approval. Hashes bind each PNG to the
+final styled SVG. The same incident recipe now produces visible lines in all
+three views; remaining construction defects still require designer correction.
+
+A separate read-only mini/low collector has at most three calls of 3000 output
+tokens. It can search project records, saved CAD and materials, but cannot render,
+write or make design decisions. The constructor starts a fresh conversation with
+exact tool results (120 kB bound), the original brief and selected image pixels.
+Conflicts, revisions, units, unknowns and pagination remain in those results;
+truncation is explicit. It can retrieve further evidence during construction.
+The strong constructor and independent mini/high reviewer retain their settings.
+
+Renderer failure, an explicit unreadable-preview report or a diagnostic render
+request stops the consultation and further CAD consultations in the same turn.
+Diagnostics cannot replace a deliverable or be reviewed as project work. A
+rejected candidate that was not changed cannot trigger another paid review.
+Ordinary design corrections and input validation retain bounded repair attempts.
+
+All Responses model roles in one Bob turn share a $1 stop threshold and a
+24-call ceiling, rebuilt from replayed results on each worker segment. Unknown
+prices stop further calls. The last in-flight call can cross the dollar threshold;
+this is not an exact billing cap or daily account limit. Image generation is a
+separate endpoint and is not counted by this Responses guard. The UI reports a
+budget stop and does not offer automatic same-turn retry. A new owner request is
+a new budget. Already saved receipts retain the existing recovery behavior.
+
+Verification covers exact source handoff, tool authority, durable budget replay,
+terminal diagnostics, unchanged-review termination, real-engine visibility at
+10/3970/100000 mm and blank-output rejection. Real-model fidelity and savings for
+a fresh owner drawing request remain a live acceptance gate.
