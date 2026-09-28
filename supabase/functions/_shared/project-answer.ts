@@ -148,7 +148,7 @@ export async function runProjectAnswer(opts: {
       messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
-    if (!response.success) { observe('failed'); return { ok: false, error: 'ai_unavailable' } }
+    if (!response.success) { observe('failed'); return { ok: false, error: response.error === 'turn_budget_exhausted' ? response.error : 'ai_unavailable' } }
     opts.projectContext?.confirmDelivery()
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     if (response.toolCalls?.length) {

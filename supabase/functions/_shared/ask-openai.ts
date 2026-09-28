@@ -1,3 +1,4 @@
+import { createBobModelBudget } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { hasImageContent } from './openai-content.ts'
@@ -68,7 +69,8 @@ export async function answerWithOpenAi(opts: {
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
-  const callModel = async (options: OpenAIServiceOptions) => {
+  const modelBudget = createBobModelBudget()
+  const callModel = async (options: OpenAIServiceOptions) => modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
    try{return await memo('model:' + options.functionName, options, async identity => {
@@ -98,7 +100,7 @@ export async function answerWithOpenAi(opts: {
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  }
+  })
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
     return { ...adapter,

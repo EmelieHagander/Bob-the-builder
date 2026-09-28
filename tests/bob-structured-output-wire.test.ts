@@ -45,7 +45,7 @@ test('CAD review and recovery language send strict response schemas and no tools
       instances: [{ id: 'panel-1', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front' as const, 'top' as const] }
     const reply = { success: true, data: 'Inspect the rendered panel', responseId: 'designer-response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
     let designerCalls = 0
-    const cad = createCadAssistant({ projectId: 'A', userId: 'u', ownerRequest: 'Draw the panel', available: true,
+    const cad = createCadAssistant({ research:false, projectId: 'A', userId: 'u', ownerRequest: 'Draw the panel', available: true,
       deadline: Date.now() + 300000, hasAccess: async () => true, readArtifact: async () => null,
       makeLookup: () => createProjectLookup('A', async (_p, q) => ({ data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }), 1000, 40),
       render: async r => ({ recipe: r, manifest: {}, files: {}, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } }),

@@ -137,7 +137,13 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
       pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
-    } else if (job.data?.status === 'failed') { retry = unfinished; pending = undefined }
+    } else if (job.data?.status === 'failed') {
+      pending = undefined
+      if (job.data.error === 'turn_budget_exhausted') {
+        retry = undefined
+        messages.push({ from: 'user', text: unfinished.text }, { from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
+      } else retry = unfinished
+    }
   }
   return { mode: 'server', messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, latestSeq }
 }
@@ -183,7 +189,7 @@ async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse
         if (response.status === 409) return { ok: false, error: 'turn_in_flight' }
         if (response.status === 503) {
           const detail = await response.clone().json().catch(() => null)
-          if (['context_preparing', 'context_unavailable'].includes(detail?.error)) return { ok: false, error: detail.error }
+          if (['context_preparing', 'context_unavailable', 'turn_budget_exhausted'].includes(detail?.error)) return { ok: false, error: detail.error }
         }
       }
       return { ok: false, error: 'seam_unreachable' }

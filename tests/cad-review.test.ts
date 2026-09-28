@@ -15,7 +15,7 @@ const design={recipe,title:'Concept',description:'Requested concept',assumptions
 const request={brief:'Use the reference.',handoff:{...handoff,coordinates:{origin:'entry corner',positive_x:'east',positive_y:'north',positive_z:'up'}},area_id:null,component_id:null,step_id:null,artifact_id:null}
 function fixture(){let renderCount=0,designerCalls=0,reviewCalls=0
  const seen:any[]=[]
- const opts={ownerRequest:'The window faces east. Put access on the reference side.',projectId:'A',userId:'u',deadline:Date.now()+300000,available:true,hasAccess:async()=>true,
+ const opts={research:false,ownerRequest:'The window faces east. Put access on the reference side.',projectId:'A',userId:'u',deadline:Date.now()+300000,available:true,hasAccess:async()=>true,
   makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:'solution'}]:[],related:[],truncated:false},error:null}),1000,40),
   render:async(r:typeof recipe):Promise<CadPacket>=>{renderCount++;return {recipe:r,manifest:{engine:{name:'build123d'},instances:r.instances},files:{front:'exact-svg'},previews:Object.fromEntries(r.views.map(view=>[view,`render-${renderCount}-${view}`]))}},
   readArtifact:async()=>null,
@@ -65,7 +65,7 @@ test('requested view omissions override a permissive model review and bounded re
  const f=fixture(),model=f.opts.callModel
  f.opts.callModel=async o=>o.functionName==='cad-reviewer'?reviewReply():o.messages?.some((m:any)=>m.role==='system'&&String(m.content).includes('Independent review'))?call('render_cad_candidate',design):model(o)
  const a=createCadAssistant(f.opts),result=await a.consult({...request,handoff:{...request.handoff,views:['front','top','isometric']}})
- assert.equal(result.status,'incomplete');assert.equal(a.candidate,null);assert.equal(a.metrics.review_rejections,3)
+ assert.equal(result.status,'incomplete');assert.equal(a.candidate,null);assert.equal(a.metrics.review_rejections,1)
 })
 test('handoff rejects unknown shape, duplicate requirement identities and fabricated coordinate types',()=>{
  assert(parseDesignHandoff(handoff));assert.equal(parseDesignHandoff({...handoff,requirements:[handoff.requirements[0],handoff.requirements[0]]}),null)

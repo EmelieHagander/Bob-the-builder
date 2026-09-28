@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib, json, math, re
 import xml.etree.ElementTree as ET
 from cairosvg import svg2png
+from PIL import Image
 from pathlib import Path
 from typing import Any
 from build123d import Align, Box, Compound, Cylinder, ExportSVG, LineType, Location, Unit, export_step
@@ -102,6 +103,27 @@ def validate_request(raw:Any)->dict[str,Any]:
 def _vec(v): return [float(v.X),float(v.Y),float(v.Z)]
 def _hash(p:Path)->str: return hashlib.sha256(p.read_bytes()).hexdigest()
 
+def _render_preview(path:Path,preview:Path):
+    # Coordinates remain exact mm. Presentation strokes must survive fitting a
+    # whole room (or a tiny detail) into 1024 pixels. The old 0.09 mm stroke
+    # rasterized to entirely white images at room scale.
+    tree=ET.parse(path); root=tree.getroot()
+    width,height=[float(n) for n in root.attrib['viewBox'].replace(',',' ').split()][2:]
+    factor=1024/max(width,height)
+    for layer in root.iter():
+        if layer.attrib.get('id') in ('Visible','Hidden'):
+            hidden=layer.attrib['id']=='Hidden'
+            layer.set('stroke-width',str((0.8 if hidden else 1.25)/factor))
+            if hidden: layer.set('stroke-dasharray',f'{4/factor} {3/factor}')
+    ET.register_namespace('', 'http://www.w3.org/2000/svg')
+    tree.write(path,encoding='utf-8',xml_declaration=True)
+    svg2png(bytestring=path.read_bytes(),write_to=str(preview),background_color='white',
+            output_width=max(1,round(width*factor)),output_height=max(1,round(height*factor)))
+    with Image.open(preview) as image:
+        # Deliberately only a visibility gate, not semantic drawing approval.
+        dark=sum(image.convert('L').histogram()[:200])
+        if dark<16: raise CadContractError('preview_unreadable')
+
 def _camera(view,center,d):
     x,y,z=center
     return {"front":((x,y-d,z),(0,0,1)),"right":((x+d,y,z),(0,0,1)),"top":((x,y,z+d),(0,1,0)),"isometric":((x+d,y-d,z+d),(0,0,1))}[view]
@@ -149,15 +171,10 @@ def render_assembly(raw:Any,output_dir:str|Path)->dict[str,Any]:
     for view in req["views"]:
         origin,up=_camera(view,center,distance); visible,hidden=assembly.project_to_viewport(origin,viewport_up=up,look_at=center)
         path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
-        exports[view]={"file":path.name,"sha256":_hash(path)}
         # Rasterize the exact exported SVG, never an independently generated image.
-        root=ET.fromstring(path.read_bytes())
-        viewbox=[float(n) for n in root.attrib["viewBox"].replace(","," ").split()]
-        width,height=viewbox[2:]
-        factor=1024/max(width,height)
         preview=out/f"{view}.png"
-        svg2png(bytestring=path.read_bytes(),write_to=str(preview),background_color="white",
-                output_width=max(1,round(width*factor)),output_height=max(1,round(height*factor)))
+        _render_preview(path,preview)
+        exports[view]={"file":path.name,"sha256":_hash(path)}
         previews[view]={"file":preview.name,"sha256":_hash(preview),"source_sha256":exports[view]["sha256"]}
     manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows)}
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
