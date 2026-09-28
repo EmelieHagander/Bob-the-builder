@@ -642,7 +642,6 @@ export async function callOpenAIResponses<T = unknown>(
       output_price_per_1m: modelRow.output_cost_per_1m_tokens,
       cached_price_per_1m: modelRow.cached_input_cost_per_1m_tokens ?? modelRow.input_cost_per_1m_tokens,
     }, prepareRequest) : JSON.parse(responseText);
-    if (options.background && responseData.status !== 'completed') throw new Error('ai_background_' + responseData.status);
     const pinned = options.background ? responseData._shared_accounting : undefined;
     if (pinned) {
       currentModel = pinned.model;
@@ -694,6 +693,15 @@ export async function callOpenAIResponses<T = unknown>(
       inputPricePer1m: modelRow.input_cost_per_1m_tokens,
       outputPricePer1m: modelRow.output_cost_per_1m_tokens,
     };
+
+    // A terminal provider failure is still billable. Preserve the pinned usage
+    // before returning, and never execute partial function calls from it.
+    if (responseData.status && responseData.status !== 'completed') {
+      const error = responseData.status === 'incomplete' && responseData.incomplete_details?.reason === 'max_output_tokens'
+        ? 'model_output_limit' : 'model_response_' + responseData.status;
+      await logAIUsage(aiClient, { ...usageBase, success: false });
+      return { success: false, data: null, usage, model: currentModel, estimatedCostUsd, error };
+    }
 
     // Check for tool calls
     const functionCallItems = responseData?.output?.filter(
@@ -770,25 +778,24 @@ export async function callOpenAIResponses<T = unknown>(
       
       if (hasReasoningOnly) {
         console.log('[OpenAI Service] Model returned only reasoning tokens, no usable output');
+        await logAIUsage(aiClient, { ...usageBase, success: false });
         return {
           success: false,
           data: null,
-          usage: {
-            input_tokens: responseData?.usage?.input_tokens || 0,
-            output_tokens: responseData?.usage?.output_tokens || 0,
-            total_tokens: responseData?.usage?.total_tokens || 0,
-            reasoning_tokens: responseData?.usage?.reasoning_tokens || 0
-          },
+          usage: { ...usage, reasoning_tokens: reasoningTokens },
           model: currentModel,
-          error: 'Model returned only internal reasoning. Response too complex - try simplifying the request.'
+          estimatedCostUsd,
+          error: 'model_reasoning_only'
         };
       }
       
+      await logAIUsage(aiClient, { ...usageBase, success: false });
       return {
         success: false,
         data: null,
-        usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
+        usage,
         model: currentModel,
+        estimatedCostUsd,
         error: 'No content in OpenAI response'
       };
     }

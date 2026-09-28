@@ -142,14 +142,20 @@ export async function runProjectAnswer(opts: {
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
     console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: buildBobSystemMessage(tools, shelf).length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
-    const response = await opts.callModel({
+    // A terminal design failure has a known cause. Deliver it without another
+    // paid model call that can retry the same job or invent a renderer outage.
+    const cadFailure=opts.cadAssistant?.failure
+    if(cadFailure?.reason==='turn_budget_exhausted')return {ok:false,error:'turn_budget_exhausted'}
+    const response: OpenAIServiceResponse<string> = typeof cadFailure?.user_message==='string'
+      ? {success:true,data:cadFailure.user_message,model:'server',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
+      : await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage: buildBobSystemMessage(tools, shelf), useHardcodedPrompt: true,
       messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
     if (!response.success) { observe('failed'); return { ok: false, error: response.error === 'turn_budget_exhausted' ? response.error : 'ai_unavailable' } }
-    opts.projectContext?.confirmDelivery()
+    if(!cadFailure?.user_message)opts.projectContext?.confirmDelivery()
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     if (response.toolCalls?.length) {
       if (!tools.length || !response.responseId) { observe('failed'); return { ok: false, error: 'unsupported_tool_response' } }

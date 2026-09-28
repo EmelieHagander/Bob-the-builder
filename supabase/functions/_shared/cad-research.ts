@@ -27,6 +27,7 @@ export async function collectCadResearch(opts: {
    timeoutMs: Math.min(45000, opts.deadline - Date.now()) })
   calls++
   if (!await opts.hasAccess()) throw new Error('project_denied')
+  if (result.error === 'turn_budget_exhausted') throw new Error(result.error)
   if (!result.success || !result.responseId) { truncated = true; break }
   if (!result.toolCalls?.length) break
   if (result.toolCalls.length > 8) { truncated = true; break }

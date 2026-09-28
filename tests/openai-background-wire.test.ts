@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
+import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { AIBackgroundPending } from '../supabase/functions/_shared/ai-background.ts'
 
 test('actual shared AI service opts into background, resumes tools and preserves synchronous callers', async () => {
@@ -10,7 +11,7 @@ test('actual shared AI service opts into background, resumes tools and preserves
  const model={model_name:'fixture-model',supports_images:true,supports_reasoning:true,is_default:true,max_output_tokens:8000,input_cost_per_1m_tokens:2,output_cost_per_1m_tokens:10,cached_input_cost_per_1m_tokens:.5}
  const id='22222222-2222-4222-8222-222222222222'
  const client={from:(table:string)=>{const q:any={select:()=>q,eq:()=>q,in:()=>q,insert:async(row:any)=>{ledger.push(row);return {error:null}},then:(yes:any,no:any)=>Promise.resolve({data:table==='ai_models'?[model]:[],error:null}).then(yes,no)};return q},rpc:(name:string,args:any)=>({abortSignal:async()=>{
-  if(name==='ai_job_reserve'){const submit=!reserved;reserved=true;return {data:{id,submit,status:stored?'completed':'pending',response_id:submit?null:'resp_background',response:stored},error:null}}
+  if(name==='ai_job_reserve'){const submit=!reserved;reserved=true;return {data:{id,submit,status:stored?(stored.status==='completed'?'completed':'failed'):'pending',response_id:submit?null:'resp_background',response:stored,accounting:stored?{model:'fixture-model',input_price_per_1m:2,output_price_per_1m:10,cached_price_per_1m:.5}:undefined},error:null}}
   if(name==='ai_job_accept'){assert.equal(args.p_job,id);return {data:true,error:null}}
   throw new Error(name)
  }})}
@@ -45,5 +46,24 @@ test('actual shared AI service opts into background, resumes tools and preserves
   assert((await service.callOpenAIResponses(vision)).success)
   assert.equal(downloads,2,'fresh synchronous request hydrates images too')
   assert.equal(requests.length,2);assert.equal(requests[1].background,undefined);assert.equal(ledger.length,1)
+  // An incomplete response can contain a partial function call. It must be
+  // billed with its reservation prices but must never reach an app tool.
+  for(const status of ['incomplete','failed','cancelled']){
+   stored={id:'resp_failed',status,incomplete_details:{reason:'max_output_tokens'},
+    output:[{type:'function_call',call_id:'partial',name:'render_cad_candidate',arguments:'{"recipe":'}],
+    usage:{input_tokens:35258,input_tokens_details:{cached_tokens:10000},output_tokens:16000,total_tokens:51258,output_tokens_details:{reasoning_tokens:16000}}}
+   model.output_cost_per_1m_tokens=99 // catalogue changed after reservation
+   const budget=createBobModelBudget(.2)
+   const failed=await budget.run(()=>service.callOpenAIResponses({...vision,background}))
+   assert.equal(failed.success,false);assert.equal(failed.toolCalls,undefined)
+   assert.equal(failed.error,status==='incomplete'?'model_output_limit':'model_response_'+status)
+   assert.equal(failed.usage.output_tokens,16000);assert.equal(failed.estimatedCostUsd,.215516)
+   assert.equal((await budget.run(async()=>{throw new Error('must not submit another model call')})).error,'turn_budget_exhausted')
+   assert.equal(requests.length,2);assert.equal(downloads,2);assert.equal(ledger.length,1,'replayed failures cannot duplicate SQL billing')
+  }
+  stored={id:'resp_empty',status:'completed',output:[{type:'reasoning'}],usage:{input_tokens:100,output_tokens:200,total_tokens:300,output_tokens_details:{reasoning_tokens:200}}}
+  const empty=await service.callOpenAIResponses({...base,background})
+  assert.equal(empty.error,'model_reasoning_only');assert.equal(empty.estimatedCostUsd,.0022);assert.equal(empty.usage.reasoning_tokens,200)
+
  } finally {g.fetch=oldFetch;g.Deno=oldDeno;delete g.__backgroundClient}
 })

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { collectCadResearch } from '../supabase/functions/_shared/cad-research.ts'
 import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
 import { createProjectLookup, SEARCH_TOOL } from '../supabase/functions/_shared/project-lookup.ts'
@@ -51,4 +52,46 @@ test('actual renderer failure stops before another model call',async()=>{
  const f=fixture();let calls=0
  const a=createCadAssistant({...f.opts,research:false,render:async()=>{throw new Error('cad_unavailable')},callModel:async()=>{calls++;return reply('render_cad_candidate',candidate)}})
  assert.equal((await a.consult(request)).stage,'cad_engine');assert.equal(calls,1);assert.equal(a.candidate,null)
+})
+
+for(const error of ['model_output_limit','model_reasoning_only','model_unavailable','turn_budget_exhausted'])test(`terminal ${error} prevents repeated research, design and rendering`,async()=>{
+ const f=fixture();let calls=0
+ const a=createCadAssistant({...f.opts,callModel:async o=>{calls++;return o.functionName==='cad-research'?reply('finish_cad_research'):{...reply(),success:false,error}}})
+ const result=await a.consult(request)
+ assert.equal(result.stage,'design');assert.equal(result.reason,error);assert.equal(a.remaining,0);assert.equal(a.candidate,null)
+ assert.equal(f.renders,0);assert.equal(calls,2);assert.match(String(result.user_message),/CAD-motorn anropades aldrig/)
+ assert.deepEqual(await a.consult(request),result);assert.equal(calls,2)
+})
+test('first layout allows one targeted read batch then requires geometry or a blocker; repair restores research',async()=>{
+ const f=fixture();let design=0
+ const a=createCadAssistant({...f.opts,callModel:async o=>{
+  if(o.functionName==='cad-research')return reply('finish_cad_research')
+  if(o.functionName==='cad-reviewer')return reviewReply()
+  design++
+  const names=o.tools!.map(t=>t.function.name)
+  if(design===1){assert(names.includes('search_project_data'));return reply('search_project_data',read)}
+  if(design===2){assert(!names.includes('search_project_data'));assert(names.includes('report_cad_blocker'));return reply('render_cad_candidate',candidate)}
+  assert(names.includes('search_project_data'));return reply()
+ }})
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,1);assert.equal(design,3)
+})
+
+test('Bob delivers the true design failure without paying for an explanation or another consultation',async()=>{
+ const f=fixture();let bobCalls=0,designCalls=0
+ const a=createCadAssistant({...f.opts,research:false,callModel:async()=>{designCalls++;return {...reply(),success:false,error:'model_output_limit'}}})
+ const result=await runProjectAnswer({projectId:'A',userId:'u',message:'Draw the bed',lookup:f.opts.makeLookup(),hasAccess:async()=>true,cadAssistant:a,
+  callModel:async()=>{bobCalls++;assert.equal(bobCalls,1,'no paid explanation or restart');return reply('design_project_cad',request)}})
+ assert(result.ok);assert.match(result.answer,/Designern förbrukade sin svarsbudget/);assert.match(result.answer,/CAD-motorn anropades aldrig/)
+ assert.equal(result.providerResponseId,undefined,'do not reuse a cursor with unresolved tool outputs')
+ assert.equal(result.evidence.partial,true);assert.equal(designCalls,1);assert.equal(f.renders,0)
+})
+test('review token exhaustion preserves its own stage and cannot restart design',async()=>{
+ const f=fixture();let calls=0
+ const a=createCadAssistant({...f.opts,research:false,callModel:async o=>{
+  calls++;if(o.functionName==='cad-reviewer')return {...reply(),success:false,error:'model_output_limit'}
+  return calls===1?reply('render_cad_candidate',candidate):reply()
+ }})
+ const result=await a.consult(request)
+ assert.equal(result.stage,'review');assert.match(String(result.user_message),/Granskaren/);assert.equal(a.candidate,null)
+ assert.deepEqual(await a.consult(request),result);assert.equal(calls,3);assert.equal(f.renders,1)
 })

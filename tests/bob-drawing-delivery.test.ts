@@ -143,7 +143,7 @@ test('an explicit indispensable CAD blocker returns to Bob without repeated rend
   assert.match(result.answer, /fria formen/)
 })
 
-test('a saved illustration after failed CAD prompts one factual correction and never establishes drawing delivery',async()=>{
+test('a saved illustration after unsupported CAD geometry prompts one factual correction and never establishes drawing delivery',async()=>{
  const f=fixture();let calls=0,notes=0
  const png=new Uint8Array(24);png.set([137,80,78,71,13,10,26,10]);const header=new DataView(png.buffer);header.setUint32(16,64);header.setUint32(20,64)
  const images=createProjectImageTools({projectId:'A',message,writer:f.writer,hasAccess:async()=>true,deadline:Date.now()+300000,
@@ -155,7 +155,7 @@ test('a saved illustration after failed CAD prompts one factual correction and n
   if(calls===3){assert.equal(JSON.parse(String(o.messages![0].content)).geometry_verified,false);return response('The drawing is done.')}
   notes++;assert.match(String(note(o)?.content),/CAD attempt did not deliver a reviewed drawing/)
   return response('CAD failed. The saved image is an illustration; the drawing is unfinished.')
- },async()=>({success:false,data:null,model:'fixture',usage,error:'model_unavailable'}),{imageTools:images})
+ },async()=>response(null,call('report_cad_blocker',{reason:'unsupported_geometry',explanation:'The requested shape is unsupported.'})),{imageTools:images})
  assert(result.ok);assert.equal(notes,1);assert.equal(calls,4)
  assert.equal(result.evidence.partial,true);assert.equal(f.renders,0)
  assert(!f.writes.some(w=>w.kind==='cad'))
@@ -229,4 +229,16 @@ test('an exhausted writer takes write tools off the bench while reading stays po
     return response('Skrivbudgeten är slut för den här vändan.')
   })
   assert(result.ok); assert.equal(calls, 1); assert.equal(f.renders, 0)
+})
+
+for(const priorWrite of [false,true])test(`a CAD token failure is committed without a provider cursor (prior write: ${priorWrite})`,async()=>{
+ const f=fixture();let committed:any,calls=0,failures=0
+ if(priorWrite)await f.writer.commit({kind:'target',record_id:'A',expected_updated_at:null,expected_revision:0,request_quote:'Rita',data:{solution_id:id,solution_revision:1}})
+ const result=await runClaimedProjectTurn({projectId:'A',userId:'u',message,generation:1,resume:true,
+  lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{failures++},commit:async value=>{committed=value},
+  cadAssistant:createCadAssistant({...f.cadOptions,callModel:async()=>({success:false,data:null,model:'fixture',usage,error:'model_output_limit'})}),
+  callModel:async()=>{calls++;assert.equal(calls,1,'no paid explanation/localisation');return response(null,call('design_project_cad',cadRequest))}})
+ assert(result.ok);assert.match(result.answer,/Designern förbrukade sin svarsbudget/)
+ assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
+ assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
 })
