@@ -28,6 +28,7 @@ try {
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
     let sendMode = 'normal', answerCalls = 0, releaseAnswer
+    let pauseHistory = false, historyPaused, releaseHistory
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
@@ -76,7 +77,9 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_messages') {
         const h = [...histories.values()].find(h => h.id === url.searchParams.get('thread_id')?.replace('eq.', ''))
-        return respond({ json: h?.messages ?? [] })
+        const snapshot = structuredClone(h?.messages ?? [])
+        if (pauseHistory) { pauseHistory = false; historyPaused(); await new Promise(resolve => { releaseHistory = resolve }) }
+        return respond({ json: snapshot })
       }
       if (url.pathname === '/rest/v1/rpc/bob_reset_conversation') {
         resetCalls++
@@ -266,6 +269,20 @@ try {
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     }
     sendMode = 'normal'
+    // A slow read started by reopening must not overwrite a newly sent answer.
+    const freshBefore = await drawer.getByText('FRESH ANSWER', {exact:true}).count()
+    await drawer.getByRole('button', {name:'Close Ask bob',exact:true}).click()
+    const paused = new Promise(resolve => { historyPaused = resolve })
+    pauseHistory = true
+    drawer = await open(); await paused
+    await drawer.getByRole('textbox', {name:'Question for bob'}).fill('New question during history refresh')
+    await drawer.getByRole('button', {name:'Send',exact:true}).click()
+    await drawer.getByText('FRESH ANSWER', {exact:true}).nth(freshBefore).waitFor()
+    const delivered = page.waitForResponse(r => new URL(r.url()).pathname === '/rest/v1/bob_delegation_notices')
+    releaseHistory(); await (await delivered).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await drawer.getByText('FRESH ANSWER', {exact:true}).count(), freshBefore + 1)
+    assert.equal(await drawer.getByText('New question during history refresh', {exact:true}).count(), 1)
     // Full page reload while another device's turn is pending.
     const h = histories.get('A'), recoveringTurn = crypto.randomUUID()
     const pending = { role: 'user', text: 'Resume after reload', turn_id: recoveringTurn, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }

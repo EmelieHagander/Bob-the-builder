@@ -228,6 +228,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [showJump, setShowJump] = useState(false)
   const [readTarget, setReadTarget] = useState<{ threadId: string; seq: number } | null>(null)
   const readAck = useRef('')
+  const wasOpen = useRef(open)
+  const sendVersion = useRef(0)
   const [viewport, setViewport] = useState<{ height: number; top: number } | null>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const stickToEnd = useRef(true)
@@ -351,11 +353,14 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   // Opening an already-mounted drawer must see replies delivered while elsewhere.
   useEffect(() => {
-    if (!open || !historyReady || localHistory || recovering || working) return
+    const reopened = open && !wasOpen.current
+    wasOpen.current = open
+    if (!reopened || !historyReady || localHistory || recovering || working) return
     let cancelled = false
+    const version = sendVersion.current
     const isCurrent = scope.current.capture()
     void db.getAskBobConversation(project.id).then(history => {
-      if (!cancelled && isCurrent() && history.mode === 'server') applyServerHistory(history)
+      if (!cancelled && isCurrent() && version === sendVersion.current && history.mode === 'server') applyServerHistory(history)
     }).catch(() => { /* The existing transcript remains usable while offline. */ })
     return () => { cancelled = true }
   }, [open, project.id, historyReady, localHistory])
@@ -449,6 +454,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const send = async (retryRequest?: { text: string; turnId: string }, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
+    sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
     setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
