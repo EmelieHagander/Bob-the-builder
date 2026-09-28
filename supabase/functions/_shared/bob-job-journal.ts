@@ -7,6 +7,8 @@ export function rethrowContinuation(error: unknown): void {
   if (error instanceof BobContinuation) throw error
 }
 export type JournalEntry = { key: string; fingerprint: string; value: unknown }
+// Initial dispatch plus at most two retries of the same logical operation.
+const MAX_OPERATION_RETRIES = 2
 export interface JournalStore {
   entries: JournalEntry[]
   save(entry: JournalEntry): Promise<void>
@@ -80,12 +82,14 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       let value: T | undefined, failure: string | undefined
       try { value = await operation({ key, fingerprint: hash }) }
       catch (error) {
-        if(error instanceof BobContinuation&&error.kind==='yield'&&error.message==='provider_retry'){
+        if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','segment_wall'].includes(error.message)){
           // A durable queue must not retry the same failing model call until
           // the twenty-minute turn expires. Keep the retry count with its
-          // exact input, across workers, then return an honest failure.
-          if(retries.length<2){
-            const marker={key:key+':retry:'+(retries.length+1),fingerprint:hash,value:{reason:'provider_retry'}}
+          // exact input, across workers, then return an honest failure. A
+          // segment_wall happens AFTER dispatch and can cost money too.
+          // Pre-dispatch yields and waiting on the same AI job are excluded.
+          if(retries.length<MAX_OPERATION_RETRIES){
+            const marker={key:key+':retry:'+(retries.length+1),fingerprint:hash,value:{reason:error.message}}
             try{await store.save(marker)}catch{stopped=new BobContinuation('yield','checkpoint_unavailable');throw stopped}
             entries.set(marker.key,marker);stopped=error;throw stopped
           }

@@ -1,6 +1,6 @@
 # Shared AI background calls
 
-Status (2026-09-28): PR #152 is merged. Database migrations, Edge endpoints and the UI are deployed. The shared scheduler is running, but Bob’s receiver remains disabled pending OpenAI webhook registration, signing-secret configuration and signed-event acceptance. Existing model calls retain synchronous behavior; the unread UI is deployed. Other apps require separate opt-in.
+Status (2026-09-28): PR #152 is merged. Database migrations, Edge endpoints and the UI are deployed. Bob’s receiver is enabled after signed webhook acceptance and scheduler/callback checks. New authenticated background turns pin the durable Responses transport; existing turns and the shared guest keep their prior behavior. A real model/tool/drawing turn after activation still requires live acceptance. Other apps require separate opt-in.
 
 ## Ownership and contract
 
@@ -79,4 +79,10 @@ Release commit: `14a35873af67e759b2f131b733a878e441342992` ([PR #152](https://gi
 - Live unauthenticated POST probes return 401 for both workers and `ask-bob`. The webhook returns 503 because `OPENAI_WEBHOOK_SECRET` is not configured; no unsigned event is accepted.
 - Live privilege checks confirm shared reservation is service-only, inbox commands require authentication, and private job RLS is enabled. Advisors report the intended no-browser-policy private tables and guarded authenticated SECURITY DEFINER inbox commands; these boundaries are covered by the SQL authority tests. See [Supabase database advisors](https://supabase.com/docs/guides/database/database-linter).
 
-Remaining activation: in the OpenAI project used by the existing provider key, register `https://yuobtgoidmmmwfqenkau.supabase.co/functions/v1/ai-background-webhook`; save its signing secret as `OPENAI_WEBHOOK_SECRET` in Supabase Edge secrets; verify a signed completion and recovery; then enable Bob’s receiver. The available cloud browser currently requires OpenAI sign-in. Never paste the signing secret into chat, source code, a PR, or logs.
+### Activation — 2026-09-28, 15:43 Europe/Stockholm
+
+The user configured the signing secret and sent OpenAI's `response.completed` test. The endpoint returned HTTP 204 and the signed event was persisted at 13:41:22 UTC. Both background schedulers reported successful runs. A rollback-only terminal fixture exercised the registered Bob callback twice and confirmed delivery acknowledgement without retaining fixture rows or usage. This callback fixture had no live Bob turn; it does not prove the complete model/tool/chat flow.
+
+The sample event references `resp_abc123`, not a real model response. Its exact inbox row was marked finished after verifying receipt, preventing pointless retrieval retries against the sample ID. No real model job was marked complete.
+
+With zero active Bob jobs, `(bob,bob)` was enabled and read back as true. No other app receiver was enabled. New authenticated background turns now use the durable provider transport. Full real-model/CAD acceptance remains the next check; the signed sample proves webhook authentication and receipt only. PR #153's additional synchronous retry bound is separate and not yet deployed. Never paste the signing secret into chat, source code, a PR, or logs.

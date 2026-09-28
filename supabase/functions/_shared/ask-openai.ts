@@ -65,7 +65,8 @@ export async function answerWithOpenAi(opts: {
   }
   // Background workers live ~150 s. Reserve a realistic duration per role, not the
   // full timeout, so several calls share one segment; a call cut off at the segment
-  // wall yields and restarts in a fresh segment instead of counting as a provider error.
+  // wall yields into a fresh segment, consuming the same bounded retry budget
+  // as other dispatched failures. Durable AI waiting does not consume retries.
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
   const callModel = async (options: OpenAIServiceOptions) => {
    const timeout = options.timeoutMs ?? 120000
