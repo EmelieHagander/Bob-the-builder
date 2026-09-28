@@ -65,7 +65,7 @@ export async function answerWithOpenAi(opts: {
     const wall = journal ? journal.remaining() + 8000 : Infinity
     const allowed = Math.max(1000, Math.min(timeout, wall))
     const result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed })
-    await metrics?.model(options,result,performance.now()-started)
+    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started)
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')

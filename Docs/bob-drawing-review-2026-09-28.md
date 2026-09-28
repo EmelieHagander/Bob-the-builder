@@ -71,3 +71,48 @@ existing project images or owner records are changed by this patch. No schema,
 shared AI adapter or governed model configuration change is required. Live
 acceptance must inspect a new actual drawing against the owner's current facts;
 deployment status belongs in the PR release evidence.
+
+## Deeper CAD trace — follow-up
+
+The deployed worker source (v17) still has `final=round===9` and `tools=final?[]`.
+The provider request-key logs establish that this was reached in the reported
+incident: requests at 07:29:06, 07:31:04 and 07:32:52 UTC include the prior response
+cursor but omit `tools`. All three abort after approximately 100 seconds. The
+earlier request at 07:26:59 includes tools, aborts, and its retry succeeds. Thus
+one research-stage failure recovered, followed by three final-stage failures in
+which CAD rendering was impossible. This is direct evidence of lost tool access,
+not proof of what the provider was doing internally before the abort.
+
+The nine successful designer responses contain fifteen function-call items in
+total. No engine render or independent review occurs. Individual function names
+were not retained in these historical events, so we cannot distinguish repeated
+searches, image reads or other research calls precisely. The new model diagnostic
+fields preserve bounded offered/returned tool names, counts, effective timeout
+and a coarse failure category, excluding prompts, arguments, record IDs and
+provider error text. These events run inside the existing journal operation, so
+replay does not count a new model request.
+
+The follow-up's 22 focused CAD/replay/diagnostic tests pass, including the new
+late-retry and content-free diagnostic regressions. The original patch's full
+587-test run remains recorded above; final-head CI verifies the combined change.
+
+The governed designer configuration at inspection remains GPT-5.4/high with a
+16,000-token output ceiling. Successful calls used 48–1,966 output tokens,
+including reasoning; this does not establish output-budget exhaustion. Failed
+requests return no usage data. There is no evidence for changing model or
+reasoning settings as this repair.
+
+Worker logs show ordinary continuation and bounded provider retries, with the
+prior response cursor preserved; the job ultimately completes as partial. A
+regression now exercises eight completed research calls, a failing ninth call,
+worker replay, its successful retry, and a tenth call that renders and receives
+independent review exactly once. Earlier provider calls are not repeated.
+
+One remaining architectural limit is explicit: the five-minute consultation
+deadline is reconstructed from `Date.now()` on each worker replay. It does not
+bound total consultation wall time across workers; the outer job expiry remains
+the durable limit. This explains how this CAD attempt could occupy about ten
+minutes without a five-minute stop. Persisting that deadline alone would change
+replay branches and needs a separately designed, replay-safe budget; this patch
+does not silently change it or extend per-call timeouts. A real-model complex
+design acceptance run remains necessary after release.

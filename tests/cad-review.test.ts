@@ -6,6 +6,7 @@ import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from '../supabase/functions/_shared/drawing-review.ts'
+import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
 const reply=(data:any)=>({success:true,data,model:'fixture',responseId:'designer-cursor',usage})
 const call=(name:string,args:any)=>({...reply(null),toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
@@ -96,6 +97,28 @@ test('the last designer call can render and its exact output still receives inde
  assert.equal((await a.consult(request)).status,'ready')
  assert.equal(calls,10);assert.equal(f.renders,1);assert.equal(a.metrics.reviews,1)
  assert(JSON.stringify(f.seen.at(-1).messages).includes('render-1-front'))
+})
+test('retrying a late research call preserves prior work and keeps the final render available after replay',async()=>{
+ const f=fixture(),entries:JournalEntry[]=[],store={entries,save:async(e:JournalEntry)=>{entries.push(structuredClone(e))}}
+ let providerCalls=0,reviewCalls=0
+ const run=()=>{
+  const journal=createBobJournal(store,Infinity)
+  return createCadAssistant({...f.opts,
+   callModel:o=>journal.run('model:'+o.functionName,o,async()=>{
+    if(o.functionName==='cad-reviewer'){reviewCalls++;return reviewReply()}
+    providerCalls++
+    if(providerCalls===9)throw new BobContinuation('yield','provider_retry')
+    if(providerCalls<=10)return call('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
+    assert(o.tools?.some(t=>t.function.name==='render_cad_candidate'))
+    return call('render_cad_candidate',design)
+   }),
+   render:r=>journal.run('render',r,()=>f.opts.render(r as typeof recipe)),
+  })
+ }
+ await assert.rejects(run().consult(request),e=>e instanceof BobContinuation&&e.message==='provider_retry')
+ const resumed=run();assert.equal((await resumed.consult(request)).status,'ready')
+ assert.equal(providerCalls,11,'eight earlier calls replay; one failed request is retried, then the final call renders')
+ assert.equal(reviewCalls,1);assert.equal(f.renders,1)
 })
 
 test('a last-call render rejected by review remains unsavable without another designer attempt',async()=>{
