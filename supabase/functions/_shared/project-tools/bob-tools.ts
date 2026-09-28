@@ -23,7 +23,7 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
   { label: 'Drawings and CAD', tools: ['design_project_cad', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'delete_shopping_item'] },
-  { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
+  { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
   { label: 'Building and site', tools: ['save_building_context'] },
   { label: 'Building knowledge', tools: ['search_building_knowledge'] },
 ]

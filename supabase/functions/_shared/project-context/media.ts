@@ -14,6 +14,7 @@ export interface MediaTransport {
   list(request: ListRequest, signal: AbortSignal): Promise<MediaRow[]>
   read(id: string, signal: AbortSignal): Promise<MediaRow | null>
   download(row: MediaRow, signal: AbortSignal): Promise<Uint8Array>
+  descriptions?(ids: string[], signal: AbortSignal): Promise<{ media_id: string; source_version: string; description: string }[]>
 }
 function imageId(ref: string): string {
   const id = ref.startsWith('image:') ? ref.slice(6) : ''
@@ -48,18 +49,31 @@ function base64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i += 8192) value += String.fromCharCode(...bytes.subarray(i, i + 8192))
   return btoa(value)
 }
-/** Existing immutable-upload media model, caller-owned transport. No AI descriptions, database writes or persistent pixel cache. */
-export function createMediaAdapter(projectId: string, transport: MediaTransport): ContextAdapter {
+/** Metadata checkpoints can defer pixels until a fresh provider submission. */
+export function createMediaAdapter(projectId: string, transport: MediaTransport, deferred = false): ContextAdapter {
   return {
     category: 'images', prefix: 'image', count: transport.count,
     async list(request, signal) {
       if (request.after_id && !UUID.test(request.after_id)) throw new Error('invalid_cursor')
       const rows = await transport.list(request, signal)
       const safe = rows.slice(0, 13).map(r => checked(r, projectId))
-      return { items: safe.slice(0, 12).map(item), next_cursor: safe.length > 12 ? safe[11].id : null }
+      const descriptions = transport.descriptions && safe.length ? await transport.descriptions(safe.slice(0, 12).map(r => r.id), signal) : []
+      return { items: safe.slice(0, 12).map(row => {
+        const description = descriptions.find(d => d.media_id === row.id && d.source_version === version(row))
+        return { ...item(row), ...(description ? { description: { text: description.description, source: 'ai_visual_observation', verified: false,
+          note: 'Selection aid only. Open the image for visual detail; never treat this as a verified measurement.' } } : {}) }
+      }), next_cursor: safe.length > 12 ? safe[11].id : null }
     },
     async open(ref, signal): Promise<Opened> {
       const id = imageId(ref), row = checked(await transport.read(id, signal), projectId, id)
+      const source = { projectId, dataset: 'image_pixels' as const, recordId: id, label: `Bild öppnad: ${row.title}`,
+        retrievedAt: new Date().toISOString(), updatedAt: row.updated_at, truth: 'unknown' as const }
+      if (deferred) {
+        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(version(row))))
+        const revision = Array.from(digest, b => b.toString(16).padStart(2, '0')).join('')
+        return { item: item(row), bytes: row.byte_size, version: version(row), source,
+          image: { type: 'image_url', image_url: `private-image:${id}/${revision}` } }
+      }
       const bytes = await transport.download(row, signal)
       if (bytes.byteLength !== row.byte_size || !validImageSignature(bytes, row.content_type)) throw new Error('invalid_image')
       const current = checked(await transport.read(id, signal), projectId, id)
@@ -68,14 +82,21 @@ export function createMediaAdapter(projectId: string, transport: MediaTransport)
       const sha256 = Array.from(digest, b => b.toString(16).padStart(2, '0')).join('')
       return { item: { ...item(row), sha256 }, bytes: bytes.byteLength, version: version(row),
         image: { type: 'image_url', image_url: `data:${row.content_type};base64,${base64(bytes)}` },
-        source: { projectId, dataset: 'image_pixels', recordId: id, label: `Bild öppnad: ${row.title}`,
-          retrievedAt: new Date().toISOString(), updatedAt: row.updated_at, truth: 'unknown' } }
+        source }
     },
     async current(ref, expected, signal) {
       try { const id = imageId(ref); return version(checked(await transport.read(id, signal), projectId, id)) === expected }
       catch { return false }
     },
   }
+}
+/** Caller-scoped access and exact revision are checked before and after downloading. */
+export async function resolveMediaImage(projectId: string, transport: MediaTransport, record: Opened, signal: AbortSignal): Promise<string> {
+  const adapter = createMediaAdapter(projectId, transport)
+  if (!await adapter.current(record.item.ref, record.version, signal)) throw new Error('context_changed')
+  const opened = await adapter.open(record.item.ref, signal)
+  if (opened.version !== record.version) throw new Error('context_changed')
+  return opened.image.image_url
 }
 /** Bound the actual stream, not merely a mutable Content-Length / database size. */
 export async function readImageResponse(response: Response, expected: number, signal: AbortSignal): Promise<Uint8Array> {

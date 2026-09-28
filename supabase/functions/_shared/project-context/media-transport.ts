@@ -12,6 +12,9 @@ export function createMediaTransport(client: SupabaseClient<any, any, any>, opts
   const base = () => client.from('media_assets').select(MEDIA_COLUMNS)
     .eq('project_id', opts.projectId).eq('state', 'ready')
   return {
+    async descriptions(ids, signal) {
+      return value(await client.rpc('bob_image_descriptions', { p_project: opts.projectId, p_media: ids }).abortSignal(signal))
+    },
     async count(signal) {
       const r = await client.from('media_assets').select('id', { count: 'exact', head: true })
         .eq('project_id', opts.projectId).eq('state', 'ready').abortSignal(signal)
