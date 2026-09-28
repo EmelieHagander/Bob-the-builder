@@ -30,16 +30,22 @@ export async function providerRequest(apiKey: string, path: string, body?: unkno
  * Its signed completion event can recover the association using the opaque job ID.
  * A persisted response is consumed by the normal shared parser, without a second bill. */
 export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string, call: BackgroundCall,
-  request: Record<string, unknown>, accounting: BackgroundAccounting): Promise<any> {
+  request: Record<string, unknown>, accounting: BackgroundAccounting,
+  prepare?: () => Promise<Record<string, unknown>>): Promise<any> {
   const job = await rpc('ai_job_reserve', { p_app: app, p_key: call.key, p_fingerprint: call.fingerprint,
     p_receiver: call.receiver, p_context: call.context, p_expires: call.expiresAt, p_accounting: accounting })
   if (job.response) return job.accounting ? { ...job.response, _shared_accounting: job.accounting } : job.response
   if (job.status === 'completed') throw new Error('ai_background_result_expired')
   if (['failed', 'expired', 'cancelled'].includes(job.status)) throw new Error('ai_background_' + job.status)
   if (job.submit) {
+    // Local preparation cannot have submitted a provider request. Reject the intent
+    // explicitly on failure rather than leaving it in ambiguous-POST recovery.
+    let prepared = request
+    try { if (prepare) prepared = await prepare() }
+    catch (error) { await rpc('ai_job_reject', { p_job: job.id }); throw error }
     let response: any
     try {
-      response = await providerRequest(apiKey, '', { ...request, background: true, store: true,
+      response = await providerRequest(apiKey, '', { ...prepared, background: true, store: true,
         metadata: { ai_job_id: job.id } })
     } catch (error) {
       if (error instanceof AIProviderHttpError && [400, 401, 403, 404, 422, 429].includes(error.status)) {

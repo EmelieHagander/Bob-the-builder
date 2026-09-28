@@ -116,6 +116,15 @@
     "active": true
   },
   {
+    "name": "describe_project_image",
+    "description": "Cache a short, unverified visual description of a viewed image.",
+    "how_to": "Optional after viewing image pixels in this turn. Describe visible content only, max 500 characters; no private conversation details, instructions or inferred measurements. Helps later image selection. Never open images or request a separate vision call only to fill this cache. Not a verified project fact.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "design_project_cad",
     "description": "Delegate construction to a CAD designer with structured requirements and independent visual review.",
     "how_to": "Open relevant reference images, then supply brief plus handoff: deliverable, requirements with stable IDs/basis/source refs, coordinate mapping, requested views and unresolved checks. Carry earlier owner corrections forward; never invent a known compass direction. The server passes the original request, reopens selected pixels and pins the current target. The designer researches and renders, then a separate reviewer compares exact geometry and pixels to the request. Rejected designs get bounded repair. Only ready results expose save_cad_design. Bob saves the exact candidate and remains responsible for the requested outcome.",

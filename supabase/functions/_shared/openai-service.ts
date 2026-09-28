@@ -1,4 +1,4 @@
-import { responseMessageContent, hasImageContent, type OpenAIMessageContent } from './openai-content.ts';
+import { responseMessageContent, hasImageContent, prepareResponseImages, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
@@ -145,6 +145,8 @@ export interface OpenAIServiceOptions {
   timeoutMs?: number;
   /** Opt in to durable provider work. Only trusted app servers choose the receiver/context. */
   background?: BackgroundCall;
+  /** Trusted caller-scoped loader; invoked only for a fresh provider submission. */
+  resolveImage?: (ref: string) => Promise<string>;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   images?: Array<{
     type: 'base64' | 'url';
@@ -593,21 +595,13 @@ export async function callOpenAIResponses<T = unknown>(
 
     console.log(`[OpenAI Service] Request body keys:`, Object.keys(requestBody));
 
-    const requestBodyStr = JSON.stringify(requestBody);
-    const payloadSizeBytes = new TextEncoder().encode(requestBodyStr).length;
-    const payloadSizeMB = payloadSizeBytes / (1024 * 1024);
-    
-    if (payloadSizeMB > 25) {
-      return {
-        success: false,
-        data: null,
-        usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
-        model: currentModel,
-        error: `Payload size ${payloadSizeMB.toFixed(2)}MB exceeds 25MB limit. Try using a smaller or compressed image.`
-      };
-    }
-    
-    console.log(`[OpenAI Service] Payload size: ${payloadSizeMB.toFixed(2)}MB`);
+    const prepareRequest = async () => {
+      const prepared = await prepareResponseImages(requestBody, options.resolveImage);
+      const size = new TextEncoder().encode(JSON.stringify(prepared)).length;
+      if (size > 25 * 1024 * 1024) throw new Error('Payload exceeds 25MB limit. Try using a smaller or compressed image.');
+      console.log(`[OpenAI Service] Payload size: ${(size / (1024 * 1024)).toFixed(2)}MB`);
+      return prepared;
+    };
 
     // fetchWithRetry now handles timeout internally per attempt
     const response = options.background ? null : await fetchWithRetry(
@@ -618,7 +612,7 @@ export async function callOpenAIResponses<T = unknown>(
           'Authorization': `Bearer ${openAIApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: requestBodyStr,
+        body: JSON.stringify(await prepareRequest()),
       },
       timeoutMs
     );
@@ -647,7 +641,7 @@ export async function callOpenAIResponses<T = unknown>(
       input_price_per_1m: modelRow.input_cost_per_1m_tokens,
       output_price_per_1m: modelRow.output_cost_per_1m_tokens,
       cached_price_per_1m: modelRow.cached_input_cost_per_1m_tokens ?? modelRow.input_cost_per_1m_tokens,
-    }) : JSON.parse(responseText);
+    }, prepareRequest) : JSON.parse(responseText);
     if (options.background && responseData.status !== 'completed') throw new Error('ai_background_' + responseData.status);
     const pinned = options.background ? responseData._shared_accounting : undefined;
     if (pinned) {

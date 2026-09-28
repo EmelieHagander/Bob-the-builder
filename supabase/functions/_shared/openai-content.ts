@@ -21,3 +21,21 @@ export function responseMessageContent(role: 'user' | 'assistant', value: OpenAI
 export function hasImageContent(messages?: Array<{ content: OpenAIMessageContent }>): boolean {
   return !!messages?.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))
 }
+/** Hydrate only explicit private image references, just before a NEW submission.
+ * No mutation of journaled inputs. Deduplicate a repeated image within this request. */
+export async function prepareResponseImages(request: Record<string, unknown>, resolve?: (ref: string) => Promise<string>): Promise<Record<string, unknown>> {
+  const images = new Map<string, Promise<string>>()
+  const input = request.input
+  if (!Array.isArray(input)) return request
+  return { ...request, input: await Promise.all(input.map(async message => {
+    if (!Array.isArray(message.content)) return message
+    return { ...message, content: await Promise.all(message.content.map(async (part: Record<string, unknown>) => {
+      if (part.type !== 'input_image' || typeof part.image_url !== 'string' || !part.image_url.startsWith('private-image:')) return part
+      if (!resolve) throw new Error('private_image_resolver_missing')
+      if (!images.has(part.image_url)) images.set(part.image_url, resolve(part.image_url))
+      const url = await images.get(part.image_url)!
+      if (!/^data:image\/(png|jpeg|webp);base64,/.test(url)) throw new Error('invalid_resolved_image')
+      return { ...part, image_url: url }
+    })) }
+  })) }
+}

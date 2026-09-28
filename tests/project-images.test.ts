@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
-import { createMediaAdapter, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
-import { responseMessageContent, hasImageContent } from '../supabase/functions/_shared/openai-content.ts'
+import { createMediaAdapter, resolveMediaImage, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
+import { responseMessageContent, hasImageContent, prepareResponseImages } from '../supabase/functions/_shared/openai-content.ts'
 import type { ProjectSource } from '../src/data/provenance.ts'
 import {DRAWING_REVIEW_INSTRUCTION} from '../supabase/functions/_shared/drawing-review.ts'
 
@@ -153,4 +153,57 @@ test('generic Responses multimodal mapping supports flat/nested URLs and never s
   assert.deepEqual(responseMessageContent('assistant', 'Answer'), [{ type: 'output_text', text: 'Answer' }])
   assert.throws(() => responseMessageContent('assistant', [{ type: 'image_url', image_url: 'data:invalid' }]))
   assert.throws(() => responseMessageContent('user', [{ type: 'file' } as any]))
+})
+
+test('four large source images checkpoint as references; exact pixels load only at dispatch', async () => {
+  const f = fixture(4), signal = new AbortController().signal
+  const bytes = new Uint8Array(2_500_000); bytes.set(png)
+  f.rows.forEach(row => { row.byte_size = bytes.length })
+  let downloads = 0
+  f.transport.download = async () => { downloads++; return bytes }
+  const deferred = createMediaAdapter('A', f.transport, true)
+  const records = await Promise.all(f.rows.map(row => deferred.open(`image:${row.id}`, signal)))
+  const checkpoint = JSON.stringify(records)
+  assert(Buffer.byteLength(checkpoint) < 5000, '10MB of pixels must not enter the journal')
+  assert.doesNotMatch(checkpoint, /data:image|base64|sha256/)
+  assert.equal(downloads, 0)
+  const replay = JSON.parse(checkpoint)
+  const request = { input: [{ role: 'user', content: [...replay, replay[0]].map(r => ({ type: 'input_image', image_url: r.image.image_url, detail: 'high' })) }] }
+  const resolve = (url: string) => resolveMediaImage('A', f.transport, replay.find(r => r.image.image_url === url), signal)
+  const prepared: any = await prepareResponseImages(request, resolve)
+  assert.equal(downloads, 4, 'same reference is hydrated once per submission')
+  assert.equal(prepared.input[0].content[0].detail, 'high')
+  assert.deepEqual(Buffer.from(prepared.input[0].content[0].image_url.split(',')[1], 'base64'), Buffer.from(bytes))
+  assert(request.input[0].content[0].image_url.startsWith('private-image:'), 'provider shaping must not mutate journal inputs')
+  f.rows[0].updated_at = '2026-09-28T15:00:00Z'
+  await assert.rejects(resolve(replay[0].image.image_url), /context_changed/)
+  assert.equal(downloads, 4, 'stale reference is rejected before download')
+  f.rows[1].state = 'deleting'
+  await assert.rejects(resolve(replay[1].image.image_url), /context_changed/)
+  await assert.rejects(prepareResponseImages(request), /private_image_resolver_missing/)
+})
+
+test('descriptions require delivered current pixels and remain unverified, revision-bound selection aids', async () => {
+  const f = fixture(), saved: any[] = []
+  const adapter = createMediaAdapter('A', f.transport)
+  const ctx = createProjectContext({ adapters: [adapter], hasAccess: async () => true, sources: f.sources,
+    describe: async (record, description) => { saved.push({ media_id: record.source.recordId, source_version: record.version, description }) },
+  })
+  const describe = () => ctx.execute('describe_project_image', { ref: ref(), description: 'En trätrappa vid entrén.' })
+  assert.equal((await describe()).status, 'image_not_viewed')
+  await ctx.execute('open_project_item', { refs: [ref()] })
+  assert.equal((await describe()).status, 'image_not_viewed', 'prepared is not viewed')
+  ctx.confirmDelivery()
+  const result = await describe()
+  assert.equal(result.status, 'cached'); assert.equal(result.saved, false)
+  assert.equal(saved.length, 1)
+  f.transport.descriptions = async () => saved
+  const page = await adapter.list(list, new AbortController().signal)
+  assert.equal((page.items[0].description as any).source, 'ai_visual_observation')
+  assert.equal((page.items[0].description as any).verified, false)
+  assert.equal(f.downloads, 1, 'listing descriptions needs no new vision input')
+  f.rows[0].title = 'Changed metadata'
+  assert.equal((await adapter.list(list, new AbortController().signal)).items[0].description, undefined)
+  assert.equal((await describe()).status, 'context_changed')
+  assert.equal(saved.length, 1)
 })

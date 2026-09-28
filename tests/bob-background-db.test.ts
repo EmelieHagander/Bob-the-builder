@@ -152,3 +152,46 @@ test('progress is content-free, bound to the live claim and visible only to the 
   await service('bob_finish_job',[q.jobId,job.claimToken,'background_failed'])
   assert.equal((await as(one,'select bob.bob_job_status($1,$2) s',['A',q.turn])).rows[0].s.progress,null,'terminal jobs expose no progress')
 })
+
+test('checkpoint byte counts are stored and exact replay works at the entry limit', async () => {
+  const q = await enqueue(), c = await claimJob(q.jobId), fp = 'a'.repeat(64)
+  await service('bob_save_job_step', [q.jobId, c.claimToken, 'first', fp, { text: 'Trä 🪵' }])
+  const size = (await pg.query<any>('select value_bytes,octet_length(value::text) actual from bob_private.bob_job_steps where job_id=$1', [q.jobId])).rows[0]
+  assert.equal(size.value_bytes, size.actual)
+  await pg.query("insert into bob_private.bob_job_steps(job_id,key,fingerprint,value) select $1,'fixture:'||n,$2,'{}'::jsonb from generate_series(1,511) n", [q.jobId, fp])
+  assert.equal(await service('bob_save_job_step', [q.jobId, c.claimToken, 'first', fp, { text: 'Trä 🪵' }]), true)
+  await assert.rejects(service('bob_save_job_step', [q.jobId, c.claimToken, 'first', fp, {}]), /checkpoint_conflict/)
+  await assert.rejects(service('bob_save_job_step', [q.jobId, c.claimToken, 'overflow', fp, {}]), /journal_limit/)
+  await service('bob_finish_job', [q.jobId, c.claimToken, 'fixture_done'])
+})
+
+test('byte limits still reject oversized checkpoints and cumulative payloads', async () => {
+  const q = await enqueue(), c = await claimJob(q.jobId), fp = 'b'.repeat(64)
+  const save = (key: string, n: number) => as(null, 'select bob.bob_save_job_step($1,$2,$3,$4,to_jsonb(repeat(\'x\',$5::integer)))', [q.jobId,c.claimToken,key,fp,n], 'service_role')
+  await assert.rejects(save('oversized', 24_000_000), /journal_limit/)
+  await save('large:1',22_000_000); await save('large:2',22_000_000)
+  await assert.rejects(save('large:3',22_000_000), /journal_limit/)
+  await service('bob_finish_job', [q.jobId,c.claimToken,'fixture_done'])
+})
+
+test('image descriptions are private derived cache, claim-bound and hidden after image changes or access revocation', async () => {
+  const q = await enqueue(), c = await claimJob(q.jobId), media = newId()
+  const timestamp = '2026-09-28T12:00:00Z'
+  await pg.query("insert into bob.media_assets(id,project_id,original_name,title,purpose,content_type,byte_size,width,height,state,created_by,updated_at) values($1,'A','fixture.png','Entry','current_state','image/png',11,10,10,'ready',$2,$3)", [media,one,timestamp])
+  const args = ['A',one,c.threadId,q.turn,c.generation,media,'fixture-version',timestamp,'En trätrappa vid entrén.']
+  assert.equal(await service('bob_describe_image', args),true)
+  const read = async (user:string) => (await as(user,'select bob.bob_image_descriptions($1,$2) result',['A',[media]])).rows[0].result
+  assert.equal((await read(one))[0].description,'En trätrappa vid entrén.')
+  assert.deepEqual(await read(both),[], 'another project member cannot read the owner cache')
+  await assert.rejects(read(two),/project_denied/)
+  await assert.rejects(as(one,'select * from bob_private.image_descriptions'),/permission denied/)
+  await assert.rejects(as(one,'select bob.bob_describe_image($1,$2,$3,$4,$5,$6,$7,$8,$9)',args),/permission denied/)
+  await assert.rejects(service('bob_describe_image', [...args.slice(0,4),c.generation+1,...args.slice(5)]),/turn_not_claimed/)
+  await assert.rejects(service('bob_describe_image', [...args.slice(0,8),'x'.repeat(501)]),/check constraint/)
+  await pg.query("update bob.media_assets set updated_at=updated_at+interval '1 second' where id=$1",[media])
+  assert.deepEqual(await read(one),[])
+  await assert.rejects(service('bob_describe_image',args),/context_changed/)
+  await service('bob_finish_job',[q.jobId,c.claimToken,'fixture_done'])
+  await pg.query('delete from bob.media_assets where id=$1',[media])
+  assert.equal((await pg.query<any>('select count(*)::int n from bob_private.image_descriptions where media_id=$1',[media])).rows[0].n,0)
+})

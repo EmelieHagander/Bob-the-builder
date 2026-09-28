@@ -1,5 +1,6 @@
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
+import { hasImageContent } from './openai-content.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
@@ -12,8 +13,8 @@ import { createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { createProjectContext } from './project-context/dispatcher.ts'
-import { createMediaAdapter } from './project-context/media.ts'
+import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
+import { createMediaAdapter, resolveMediaImage } from './project-context/media.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, generateImage } from './openai-service.ts'
@@ -55,6 +56,13 @@ export async function answerWithOpenAi(opts: {
     })
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
+  const mediaTransport = createMediaTransport(client, { ...opts, url, key })
+  const imageRefs = new Map<string, Opened>()
+  const resolveImage = async (ref: string) => {
+    const record = imageRefs.get(ref)
+    if (!record) throw new Error('image_not_opened')
+    return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
+  }
   // Background workers live ~150 s. Reserve a realistic duration per role, not the
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
@@ -69,7 +77,7 @@ export async function answerWithOpenAi(opts: {
     const allowed = Math.max(1000, Math.min(timeout, wall))
     let result
     try {
-      result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed,
+      result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
@@ -85,17 +93,23 @@ export async function answerWithOpenAi(opts: {
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
     return result
-   }, asyncModels ? 25000 : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
+   }, asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
+     : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
   }
   const mediaAdapter = () => {
-    const adapter = createMediaAdapter(opts.projectId, createMediaTransport(client, { ...opts, url, key }))
+    const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
     return { ...adapter,
       count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal)),
       list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args)),
-      open: (...args: Parameters<typeof adapter.open>) => memo('media:open', args[0], () => adapter.open(...args)),
+      open: async (...args: Parameters<typeof adapter.open>) => {
+        const opened = await memo('media:open', args[0], () => adapter.open(...args))
+        // Rebuild the resolver registry from compact checkpoints on every resume.
+        if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
+        return opened
+      },
       // current() remains LIVE, including for already-replayed image evidence.
     }
   }
@@ -149,6 +163,13 @@ export async function answerWithOpenAi(opts: {
   const projectContext = createProjectContext({
     adapters: [mediaAdapter()],
     hasAccess, sources: lookup.sources,
+    ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
+      const { error } = await internal.rpc('bob_describe_image', { ...binding, p_user: opts.userId,
+        p_media: record.source.recordId, p_version: record.version, p_updated_at: record.source.updatedAt, p_description: description,
+      }).abortSignal(AbortSignal.timeout(10000))
+      if (error) throw new Error('description_unavailable')
+      return true
+    }) } : {}),
   })
   const knowledgeReader = createKnowledgeReader(hasAccess)
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
