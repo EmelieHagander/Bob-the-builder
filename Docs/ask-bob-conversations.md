@@ -252,6 +252,6 @@ Automated evidence covers exact five-message replay, incremental folding/CAS, fa
 Release checks: full CI/Edge build, hosted ordinary-role and service-guard tests on a rollback-only fixture, Pages success, then a post-deploy Auth→Edge→model smoke. The owner's ordinary-account conversation test remains the usability check for concise expert-like proposals, enough retrieval and faithful memory. Do not claim that a passing code suite proves construction advice is correct or that a guest read-only smoke proves signed-in summarization/writes.
 
 
-## Shared provider jobs and unread replies (feature branch)
+## Shared provider jobs and unread replies
 
-The opt-in provider background transport supersedes the synchronous model waiting described above for newly enrolled Bob jobs. It preserves the existing caller authority and journal. [Shared AI background calls](shared-ai-background.md) owns the lifecycle, confirmed delegation notice, read receipts and staged rollout. Existing in-flight jobs retain their pinned transport. This section documents branch implementation, not a deployment claim.
+The opt-in provider background transport supersedes the synchronous model waiting described above for newly enrolled Bob jobs. It preserves the existing caller authority and journal. [Shared AI background calls](shared-ai-background.md) owns the lifecycle, confirmed delegation notice, read receipts and staged rollout. Existing in-flight jobs retain their pinned transport. PR #152 deployed the schema, endpoints and unread UI on 2026-09-28; Bob’s receiver remains disabled until the signed OpenAI webhook is configured and verified. The linked owner records exact release evidence.

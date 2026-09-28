@@ -1,6 +1,6 @@
 # Shared AI background calls
 
-Status: implemented on the feature branch; migrations, Edge endpoints, provider webhook registration and live acceptance are not deployed. Bob is the first opt-in receiver. Other apps retain synchronous behavior until explicitly enrolled.
+Status (2026-09-28): PR #152 is merged. Database migrations, Edge endpoints and the UI are deployed. The shared scheduler is running, but Bob’s receiver remains disabled pending OpenAI webhook registration, signing-secret configuration and signed-event acceptance. Existing model calls retain synchronous behavior; the unread UI is deployed. Other apps require separate opt-in.
 
 ## Ownership and contract
 
@@ -66,3 +66,17 @@ Automated tests exercise reservation isolation and permissions, duplicate accoun
 - [OpenAI webhooks](https://developers.openai.com/api/docs/guides/webhooks)
 - [Supabase scheduled Edge Functions](https://supabase.com/docs/guides/functions/schedule-functions)
 - [Bob conversations](ask-bob-conversations.md)
+
+
+## Deployment record — 2026-09-28
+
+Release commit: `14a35873af67e759b2f131b733a878e441342992` ([PR #152](https://github.com/EmelieHagander/Bob-the-builder/pull/152)). The 602-test CI, Edge checks and browser flows passed before merge. [Pages deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36413212078) and [live Auth/RLS/OpenAI release check](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36413212076) both succeeded. The live check covered the existing transport, not signed background completion.
+
+- Source migration `20260928100626_shared_ai_background_jobs.sql` is recorded by the managed migration API as `20260928105942 / shared_ai_background_jobs`.
+- Source migration `20260928100953_bob_ai_background_notifications.sql` is recorded as `20260928105958 / bob_ai_background_notifications`. Do not reapply by comparing timestamps alone.
+- Deployed `ask-bob` v51 (JWT enabled), `bob-worker` v19 (private capability), and shared `ai-background-worker` / `ai-background-webhook` v1 (capability / signature authentication).
+- Worker URL configured for project `yuobtgoidmmmwfqenkau`; the `shared-ai-background` minute scheduler has successful runs. Receiver `(bob,bob)` is still disabled.
+- Live unauthenticated POST probes return 401 for both workers and `ask-bob`. The webhook returns 503 because `OPENAI_WEBHOOK_SECRET` is not configured; no unsigned event is accepted.
+- Live privilege checks confirm shared reservation is service-only, inbox commands require authentication, and private job RLS is enabled. Advisors report the intended no-browser-policy private tables and guarded authenticated SECURITY DEFINER inbox commands; these boundaries are covered by the SQL authority tests. See [Supabase database advisors](https://supabase.com/docs/guides/database/database-linter).
+
+Remaining activation: in the OpenAI project used by the existing provider key, register `https://yuobtgoidmmmwfqenkau.supabase.co/functions/v1/ai-background-webhook`; save its signing secret as `OPENAI_WEBHOOK_SECRET` in Supabase Edge secrets; verify a signed completion and recovery; then enable Bob’s receiver. The available cloud browser currently requires OpenAI sign-in. Never paste the signing secret into chat, source code, a PR, or logs.

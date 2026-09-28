@@ -47,7 +47,7 @@ arguments before a database call. No Bob-specific service logic is introduced.
 The new Deno gate exposed two pre-existing annotation errors: nullable cost and
 the async usage logger's Promise return. Both are corrected here. Carry these
 generic declaration fixes when synchronising the canonical service copies;
-other repositories/deployments were not rewritten as part of this Bob slice. The optional background transport also requires the companion `ai-background.ts`; its rollout prerequisites and current undeployed status are owned by [Shared AI background calls](../Docs/shared-ai-background.md).
+other repositories/deployments were not rewritten as part of this Bob slice. The optional background transport also requires the companion `ai-background.ts`; its rollout prerequisites and current activation status are owned by [Shared AI background calls](../Docs/shared-ai-background.md).
 
 ## Project lookup contract — Slice 0
 
