@@ -317,3 +317,21 @@ prices, rejected partial tool calls, replayed failed spend, no second consultati
 first-layout/read/repair stages and truthful delivery without another Bob call.
 Automated orchestration is not proof of real-model drawing quality; a new
 owner test is still needed after deployment. Release status is recorded below.
+
+
+Deployment verified: [PR #156](https://github.com/EmelieHagander/Bob-the-builder/pull/156)
+merged as `36c25bd99a664747fe72e571941985e30e2f4b55`, with reviewed head
+`33f638716406da8ea40bf2b8d126689e41edf370` and tested tree
+`a91a8e7b7dddb70cde559b180563b585fdcf96d0`. CI run `36472922510` passed all
+631 Node/SQL tests, Edge checks, builds and browser flows. CAD adapter run
+`36472922541` passed. Turn-settlement regressions prove the server failure notice
+is committed without a provider cursor and preserves earlier write receipts.
+
+The managed migration is `20260928194217 / bob_cad_designer_reasoning` (source
+`20260928192553`). Live readback confirms designer `gpt-5.4` / medium / 16000,
+research `gpt-5.4-mini` / low / 3000, reviewer `gpt-5.4-mini` / high / 12000;
+all remain enabled. There were no active Bob jobs before release. Deployed
+`ask-bob` v55 (JWT enabled) and `bob-worker` v23 (existing private capability).
+All 59/57 retrieved runtime modules match the tested source byte for byte; the
+bundler omits only the type-only `src/data/provenance.ts`. Unauthenticated POSTs
+return 401. No paid drawing attempt was started as part of this correction.
