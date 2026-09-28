@@ -250,3 +250,8 @@ The migrations are additive: `20260918194106_ask_bob_context_memory.sql` and `20
 Automated evidence covers exact five-message replay, incremental folding/CAS, failed summaries, private history, stale/revoked access, reset, selected-version provenance, query pagination/size limits and existing write retry guards. Browser evidence must cover 320/390/1280 widths, density, growing/expanded drafts, Enter semantics, scroll position, reset and saved-write receipts. Test fixtures are not live-model quality evidence.
 
 Release checks: full CI/Edge build, hosted ordinary-role and service-guard tests on a rollback-only fixture, Pages success, then a post-deploy Auth→Edge→model smoke. The owner's ordinary-account conversation test remains the usability check for concise expert-like proposals, enough retrieval and faithful memory. Do not claim that a passing code suite proves construction advice is correct or that a guest read-only smoke proves signed-in summarization/writes.
+
+
+## Shared provider jobs and unread replies (feature branch)
+
+The opt-in provider background transport supersedes the synchronous model waiting described above for newly enrolled Bob jobs. It preserves the existing caller authority and journal. [Shared AI background calls](shared-ai-background.md) owns the lifecycle, confirmed delegation notice, read receipts and staged rollout. Existing in-flight jobs retain their pinned transport. This section documents branch implementation, not a deployment claim.

@@ -4,6 +4,14 @@
  * `birch` is the default. Switch by setting data-theme on <html>.
  */
 
+.bob-unread-badge {
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font: 700 11px 'Hanken Grotesk', sans-serif;
+}
+
 :root,
 :root[data-theme='birch'] {
   --accent: #7e9b52;

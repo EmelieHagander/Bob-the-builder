@@ -226,6 +226,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('bob:chat-density') !== 'comfortable' } catch { return true } })
   const [expanded, setExpanded] = useState(false)
   const [showJump, setShowJump] = useState(false)
+  const [readTarget, setReadTarget] = useState<{ threadId: string; seq: number } | null>(null)
+  const readAck = useRef('')
+  const wasOpen = useRef(open)
+  const sendVersion = useRef(0)
   const [viewport, setViewport] = useState<{ height: number; top: number } | null>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const stickToEnd = useRef(true)
@@ -287,13 +291,27 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   useEffect(() => {
     if (open && historyScroll.current && stickToEnd.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
   }, [open, extra.length, working, viewport])
+  useEffect(() => {
+    const mark = () => {
+      if (!open || showJump || !stickToEnd.current || !readTarget || document.visibilityState !== 'visible') return
+      const target = `${project.id}/${readTarget.threadId}/${readTarget.seq}`
+      if (readAck.current === target) return
+      const el = historyScroll.current
+      if (!el || el.scrollHeight - el.scrollTop - el.clientHeight > 50) return
+      readAck.current = target
+      void db.markBobChatRead(project.id, readTarget.threadId, readTarget.seq).catch(() => { if (readAck.current === target) readAck.current = '' })
+    }
+    const frame = requestAnimationFrame(mark)
+    document.addEventListener('visibilitychange', mark)
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', mark) }
+  }, [open, showJump, readTarget, project.id, extra.length])
   useEffect(() => () => scope.current.invalidate(), [project.id])
 
   useEffect(() => {
     let cancelled = false
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent()
-    setExtra([]); setHistoryKey(null); setHistoryReady(false); setHistoryNotice('')
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('')
     void (async () => {
       const me = await db.getCurrentUser()
       if (!current()) return
@@ -323,13 +341,29 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
     const unfinished = history.pending ?? history.retry
     setLocalHistory(false)
-    setExtra(unfinished ? [...history.messages, { from: 'user', text: unfinished.text }] : history.messages)
+    setExtra(unfinished ? [...history.messages, { from: 'user', text: unfinished.text }, ...(history.pending?.notice ? [{ from: 'bob' as const, text: history.pending.notice }] : [])] : history.messages)
+    setReadTarget(history.threadId && history.latestSeq ? { threadId: history.threadId, seq: history.latestSeq } : null)
+    window.dispatchEvent(new Event(db.BOB_INBOX_EVENT))
     setRetry(history.retry ?? null)
     setRecovering(history.pending ?? null)
     setWorkingLabel(db.describeBobProgress(history.pending?.progress))
     setWorking(!!history.pending)
     setHistoryNotice(history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
   }
+
+  // Opening an already-mounted drawer must see replies delivered while elsewhere.
+  useEffect(() => {
+    const reopened = open && !wasOpen.current
+    wasOpen.current = open
+    if (!reopened || !historyReady || localHistory || recovering || working) return
+    let cancelled = false
+    const version = sendVersion.current
+    const isCurrent = scope.current.capture()
+    void db.getAskBobConversation(project.id).then(history => {
+      if (!cancelled && isCurrent() && version === sendVersion.current && history.mode === 'server') applyServerHistory(history)
+    }).catch(() => { /* The existing transcript remains usable while offline. */ })
+    return () => { cancelled = true }
+  }, [open, project.id, historyReady, localHistory])
 
   // Reopening/reloading never resends a pending question. Read until the server
   // commits the answer or reports failure. Durable jobs own their expiry; legacy
@@ -378,6 +412,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
+      setReadTarget(null); readAck.current = ''
       setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
@@ -399,6 +434,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
+      setReadTarget(null); readAck.current = ''
+      window.dispatchEvent(new Event('bob:inbox-changed'))
       setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
@@ -417,6 +454,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const send = async (retryRequest?: { text: string; turnId: string }, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
+    sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
     setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
@@ -503,7 +541,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
         {working && <WorkingBubble label={workingLabel} />}
 
-        {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> Latest</button>}
+        {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> {readTarget && readAck.current !== `${project.id}/${readTarget.threadId}/${readTarget.seq}` ? 'New message' : 'Latest'}</button>}
 
         {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
 

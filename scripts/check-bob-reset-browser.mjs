@@ -28,6 +28,7 @@ try {
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
     let sendMode = 'normal', answerCalls = 0, releaseAnswer
+    let pauseHistory = false, historyPaused, releaseHistory
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
@@ -39,6 +40,23 @@ try {
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:[],unorganised_tasks:[]}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
       if (url.pathname === '/auth/v1/user') return authMode === 'failure' ? respond({ status: 503, json: { message: 'Offline fixture' } }) : respond({ json: who })
+      if (url.pathname === '/rest/v1/rpc/bob_chat_inbox') {
+        const h = histories.get(req.postDataJSON().p_project)
+        const latestSeq = Math.max(0,...(h?.messages ?? []).filter(m=>m.role==='assistant' || m.delivery_state==='failed').map(m=>m.seq))
+        return respond({json:h?.id ? {threadId:h.id,latestSeq,readSeq:h.readSeq??0,unread:latestSeq>(h.readSeq??0)} : null})
+      }
+      if (url.pathname === '/rest/v1/rpc/bob_mark_chat_read') {
+        const body=req.postDataJSON(),h=histories.get(body.p_project)
+        assert.equal(h?.id,body.p_thread)
+        const latest=Math.max(0,...h.messages.filter(m=>m.role==='assistant'||m.delivery_state==='failed').map(m=>m.seq))
+        assert(body.p_seq<=latest)
+        h.readSeq=Math.max(h.readSeq??0,body.p_seq)
+        return respond({json:null})
+      }
+      if (url.pathname === '/rest/v1/bob_delegation_notices') {
+        const h=[...histories.values()].find(h=>h.id===url.searchParams.get('thread_id')?.replace('eq.',''))
+        return respond({json:(h?.messages??[]).filter(m=>m.background).map(m=>({turn_id:m.turn_id,text:'Jag har skickat ritningen till designern. Jag återkommer här när resultatet är granskat.'}))})
+      }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
@@ -59,7 +77,9 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_messages') {
         const h = [...histories.values()].find(h => h.id === url.searchParams.get('thread_id')?.replace('eq.', ''))
-        return respond({ json: h?.messages ?? [] })
+        const snapshot = structuredClone(h?.messages ?? [])
+        if (pauseHistory) { pauseHistory = false; historyPaused(); await new Promise(resolve => { releaseHistory = resolve }) }
+        return respond({ json: snapshot })
       }
       if (url.pathname === '/rest/v1/rpc/bob_reset_conversation') {
         resetCalls++
@@ -76,7 +96,7 @@ try {
         if (resetMode === 'busy') return respond({ status: 409, json: { code: '55000', message: 'turn_in_flight' } })
         if (resetMode === 'changed') return respond({ status: 409, json: { code: '40001', message: 'conversation_changed' } })
         if (resetMode === 'delayed') await new Promise(resolve => { releaseReset = resolve })
-        h.id = null; h.next_seq = 1; h.messages = []
+        h.id = null; h.next_seq = 1; h.messages = []; h.readSeq=0
         return respond({ json: { status: 'cleared', mode: 'server', projectId: body.p_project } })
       }
       if (url.pathname === '/functions/v1/ask-bob') {
@@ -230,13 +250,39 @@ try {
         await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor()
         assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
       }
-      releaseAnswer()
+      if (mode === 'background') {
+        await drawer.getByText('Jag har skickat ritningen till designern. Jag återkommer här när resultatet är granskat.', {exact:true}).waitFor()
+        await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
+        releaseAnswer()
+        await page.reload()
+        await page.getByText('New from Bob',{exact:true}).waitFor()
+        await page.screenshot({path:`test-results/bob-unread-${viewport.width}.png`})
+        const button=await page.getByRole('button',{name:'Ask bob',exact:true}).boundingBox()
+        assert(button && button.x>=0 && button.x+button.width<=viewport.width)
+        drawer=await open()
+        await drawer.getByText('RECOVERED ANSWER',{exact:true}).last().waitFor()
+        await page.getByText('New from Bob',{exact:true}).waitFor({state:'hidden'})
+      } else releaseAnswer()
       await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
       assert.equal(await drawer.getByText('RECOVERED ANSWER', { exact: true }).count(), ['delayed','lost','busy','background'].indexOf(mode) + 1)
       assert.equal(answerCalls, before + 1)
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     }
     sendMode = 'normal'
+    // A slow read started by reopening must not overwrite a newly sent answer.
+    const freshBefore = await drawer.getByText('FRESH ANSWER', {exact:true}).count()
+    await drawer.getByRole('button', {name:'Close Ask bob',exact:true}).click()
+    const paused = new Promise(resolve => { historyPaused = resolve })
+    pauseHistory = true
+    drawer = await open(); await paused
+    await drawer.getByRole('textbox', {name:'Question for bob'}).fill('New question during history refresh')
+    await drawer.getByRole('button', {name:'Send',exact:true}).click()
+    await drawer.getByText('FRESH ANSWER', {exact:true}).nth(freshBefore).waitFor()
+    const delivered = page.waitForResponse(r => new URL(r.url()).pathname === '/rest/v1/bob_delegation_notices')
+    releaseHistory(); await (await delivered).finished()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await drawer.getByText('FRESH ANSWER', {exact:true}).count(), freshBefore + 1)
+    assert.equal(await drawer.getByText('New question during history refresh', {exact:true}).count(), 1)
     // Full page reload while another device's turn is pending.
     const h = histories.get('A'), recoveringTurn = crypto.randomUUID()
     const pending = { role: 'user', text: 'Resume after reload', turn_id: recoveringTurn, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }

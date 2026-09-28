@@ -33,11 +33,11 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
 | `bob.search_bob_project_data_v2` | Current static paged research projections under caller RLS; original lookup kept compatible. |
 | `_shared/bob-working-context.ts` | Five verbatim messages, incremental older summary and claimed-thread history retrieval. |
-| `_shared/openai-service.ts` | Existing shared Responses service; two generic type annotations corrected, runtime behavior unchanged. |
+| `_shared/openai-service.ts` | Shared Responses service with optional durable transport; see [background calls](../Docs/shared-ai-background.md). |
 
 No browser or model has the service-role key. The shared service uses it only
-for `shared.ai_models`, `shared.ai_settings` and `shared.ai_usage_events`, plus the guarded private Bob conversation/context commands. Domain reads and writes still use the caller JWT.
-`OPENAI_API_KEY` is still read only there. Model choice, reasoning effort,
+for `shared.ai_models`, `shared.ai_settings`, `shared.ai_usage_events` and the service-only background-job commands, plus the guarded private Bob conversation/context commands. Domain reads and writes still use the caller JWT.
+`OPENAI_API_KEY` is read only by the shared service and its background worker. Model choice, reasoning effort,
 usage attribution and the kill switch retain their existing configuration.
 
 Bob uses the service's existing `useHardcodedPrompt` option so a settings prompt
@@ -47,7 +47,7 @@ arguments before a database call. No Bob-specific service logic is introduced.
 The new Deno gate exposed two pre-existing annotation errors: nullable cost and
 the async usage logger's Promise return. Both are corrected here. Carry these
 generic declaration fixes when synchronising the canonical service copies;
-other repositories/deployments were not rewritten as part of this Bob slice.
+other repositories/deployments were not rewritten as part of this Bob slice. The optional background transport also requires the companion `ai-background.ts`; its rollout prerequisites and current undeployed status are owned by [Shared AI background calls](../Docs/shared-ai-background.md).
 
 ## Project lookup contract — Slice 0
 

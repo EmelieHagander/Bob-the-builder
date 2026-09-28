@@ -19,3 +19,11 @@ verify_jwt = false
 # Per-job random capability validated by the service-only atomic claim RPC.
 [functions.bob-worker]
 verify_jwt = false
+
+# Raw-body Standard Webhooks signature and timestamp verification.
+[functions.ai-background-webhook]
+verify_jwt = false
+
+# One random capability per durable work item, validated by the atomic claim RPC.
+[functions.ai-background-worker]
+verify_jwt = false

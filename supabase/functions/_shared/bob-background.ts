@@ -81,7 +81,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
       }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId,
-        background: { claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
+        background: { jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()
       const finished = await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
@@ -90,7 +90,8 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase }))
       try {
-        if (error instanceof BobContinuation && error.kind === 'yield') await s.rpc('bob_yield_job', args)
+        if (error instanceof BobContinuation && error.aiWait) await s.rpc('bob_wait_for_ai', { ...args, p_ai_job: error.aiWait.id })
+        else if (error instanceof BobContinuation && error.kind === 'yield') await s.rpc('bob_yield_job', args)
         else await s.rpc('bob_finish_job', { ...args, p_error: reason })
       } catch { /* A stale worker cannot settle another lease. The driver recovers. */ }
     }
