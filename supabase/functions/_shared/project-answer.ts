@@ -91,6 +91,7 @@ function unfinishedFacts(opts: { writer?: ProjectWriter; cadAssistant?: CadAssis
   const facts: string[] = []
   if (opts.planAssistant?.canSave && !saved('save_compiled_project_plan')) facts.push('A validated plan proposal from this turn is ready but not saved (save_compiled_project_plan).')
   if (opts.cadAssistant?.candidate && !saved('save_cad_design')) facts.push('A reviewed drawing candidate from this turn is ready but not saved (save_cad_design).')
+  if (opts.cadAssistant?.partial && !opts.cadAssistant.candidate && saved('generate_project_image') && !saved('save_cad_design')) facts.push('The CAD attempt did not deliver a reviewed drawing. A saved illustration does not replace it. Report the drawing as unfinished and describe the actual blocker; do not call the illustration a checked drawing.')
   const rejected = opts.writer?.needsRepair ? opts.writer.unresolvedTools : []
   if (rejected.length) facts.push(`Rejected changes not yet corrected: ${[...new Set(rejected)].join(', ')}.`)
   return facts

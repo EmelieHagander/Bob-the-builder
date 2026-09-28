@@ -9,6 +9,12 @@ export type ExecutionEvent = {
 const roles=new Set(['ask-bob','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const number=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:0
 const code=(s:unknown,fallback:string)=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s)?s:fallback
+const toolNames=(tools:OpenAIServiceOptions['tools'])=>(tools??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name'))
+const failureKind=(result:OpenAIServiceResponse<unknown>)=>result.success?null
+  :/abort|timed?\s*out|timeout/i.test(result.error??'')?'request_aborted'
+  :/OpenAI API error: 429/.test(result.error??'')?'rate_limited'
+  :/OpenAI API error: 5[0-9]{2}/.test(result.error??'')?'provider_server_error'
+  :/Network error/.test(result.error??'')?'network_error':'model_error'
 /** No prompts, record labels, source IDs, images, arguments or provider errors.
  * Model calls are persisted INSIDE the journal operation, so replays cannot bill
  * or count twice. Tool and delivery events use deterministic keys and upsert. */
@@ -22,7 +28,10 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
     async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number){
       await write({...base(),event_key:'model:'+crypto.randomUUID(),kind:'model',role:roles.has(options.aiFunction)?options.aiFunction:'other',status:result.success?'ok':'failed',
         duration_ms:Math.round(number(elapsed)),input_tokens:number(result.usage?.input_tokens),output_tokens:number(result.usage?.output_tokens),
-        cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):null,counts:{}})
+        cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):null,
+        counts:{offered_tool_count:options.tools?.length??0,offered_tools:toolNames(options.tools),
+          returned_tool_count:result.toolCalls?.length??0,returned_tools:(result.toolCalls??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name')),
+          timeout_ms:number(options.timeoutMs),failure_kind:failureKind(result)}})
     },
     /** One row per executed tool call: which tool, its status and the step. */
     tool(input:{name:string;status:string;step:number;index:number;ms:number}){

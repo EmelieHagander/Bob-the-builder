@@ -31,6 +31,25 @@ test('metrics failures cannot abort a delivered result and provider success cann
  await metrics.model({aiFunction:'ask-bob'} as any,reply,100)
  await metrics.finish({ok:false,writes:0})
 })
+test('model diagnostics distinguish tool-free aborts from returned tools without retaining private input',async()=>{
+ const events:ExecutionEvent[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ await metrics.model({aiFunction:'cad-designer',timeoutMs:100000,tools:[],prompt:'PRIVATE request'} as any,
+  {...reply,success:false,error:'Network error: The signal has been aborted PRIVATE'},100100)
+ assert.equal(events[0].counts.offered_tool_count,0);assert.equal(events[0].counts.failure_kind,'request_aborted')
+ assert.equal(events[0].counts.timeout_ms,100000)
+ await metrics.model({aiFunction:'cad-designer',timeoutMs:82000,tools:[{function:{name:'render_cad_candidate',description:'PRIVATE brief'}}]} as any,
+  {...reply,toolCalls:[{id:'PRIVATE call id',type:'function',function:{name:'render_cad_candidate',arguments:'PRIVATE geometry'}}]},25)
+ assert.deepEqual(events[1].counts.offered_tools,['render_cad_candidate'])
+ assert.deepEqual(events[1].counts.returned_tools,['render_cad_candidate'])
+ assert.equal(events[1].counts.failure_kind,null)
+ assert(!JSON.stringify(events).includes('PRIVATE'))
+ await metrics.model({aiFunction:'cad-designer',tools:Array(100).fill({function:{name:'x'.repeat(40)}})} as any,
+  {...reply,toolCalls:Array(100).fill({function:{name:'x'.repeat(40)}})},1)
+ assert.equal(events[2].counts.offered_tool_count,100)
+ assert.equal((events[2].counts.offered_tools as string[]).length,32)
+ assert(Buffer.byteLength(JSON.stringify(events[2].counts))<4000,'bounded by the existing DB contract')
+})
 test('diagnostics stay service-only even when a normal user belongs to a project',async()=>{
  const pg=await projectSchema()
  try{

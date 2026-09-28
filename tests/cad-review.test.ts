@@ -5,6 +5,8 @@ import {parseDesignHandoff,parseCadReview,candidateFingerprint} from '../supabas
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from '../supabase/functions/_shared/drawing-review.ts'
+import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
 const reply=(data:any)=>({success:true,data,model:'fixture',responseId:'designer-cursor',usage})
 const call=(name:string,args:any)=>({...reply(null),toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
@@ -78,4 +80,90 @@ test('review gets original reference pixels and revocation during review prevent
  f.opts.callModel=async o=>{if(o.functionName==='cad-reviewer'){sawReference=JSON.stringify(o.messages).includes('original-reference');valid=false}return model(o)}
  const a=createCadAssistant({...f.opts,context:images,referenceImageRefs:()=>['image:ref']})
  await assert.rejects(a.consult(request),/project_denied/);assert(sawReference);assert.equal(a.candidate,null)
+})
+
+test('the last designer call can render and its exact output still receives independent review',async()=>{
+ const f=fixture();let calls=0
+ f.opts.callModel=async o=>{
+  f.seen.push(o)
+  if(o.functionName==='cad-reviewer')return reviewReply()
+  calls++
+  assert.equal(o.tool_choice,undefined)
+  if(calls<10)return call('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
+  assert(o.tools.some((t:any)=>t.function.name==='render_cad_candidate'),'the final call must retain construction tools')
+  return call('render_cad_candidate',design)
+ }
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult(request)).status,'ready')
+ assert.equal(calls,10);assert.equal(f.renders,1);assert.equal(a.metrics.reviews,1)
+ assert(JSON.stringify(f.seen.at(-1).messages).includes('render-1-front'))
+})
+test('retrying a late research call preserves prior work and keeps the final render available after replay',async()=>{
+ const f=fixture(),entries:JournalEntry[]=[],store={entries,save:async(e:JournalEntry)=>{entries.push(structuredClone(e))}}
+ let providerCalls=0,reviewCalls=0
+ const run=()=>{
+  const journal=createBobJournal(store,Infinity)
+  return createCadAssistant({...f.opts,
+   callModel:o=>journal.run('model:'+o.functionName,o,async()=>{
+    if(o.functionName==='cad-reviewer'){reviewCalls++;return reviewReply()}
+    providerCalls++
+    if(providerCalls===9)throw new BobContinuation('yield','provider_retry')
+    if(providerCalls<=10)return call('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
+    assert(o.tools?.some(t=>t.function.name==='render_cad_candidate'))
+    return call('render_cad_candidate',design)
+   }),
+   render:r=>journal.run('render',r,()=>f.opts.render(r as typeof recipe)),
+  })
+ }
+ await assert.rejects(run().consult(request),e=>e instanceof BobContinuation&&e.message==='provider_retry')
+ const resumed=run();assert.equal((await resumed.consult(request)).status,'ready')
+ assert.equal(providerCalls,11,'eight earlier calls replay; one failed request is retried, then the final call renders')
+ assert.equal(reviewCalls,1);assert.equal(f.renders,1)
+})
+
+test('a last-call render rejected by review remains unsavable without another designer attempt',async()=>{
+ const f=fixture();let calls=0,reviews=0
+ f.opts.callModel=async o=>{
+  if(o.functionName==='cad-reviewer'){reviews++;return reply(JSON.stringify({verdict:'revise',summary:'Door is on the wrong wall',requirements:[{id:'shape',status:'failed',evidence:'Wrong wall'}],issues:[]}))}
+  return ++calls<10?call('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null}):call('render_cad_candidate',design)
+ }
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult(request)).status,'incomplete')
+ assert.equal(a.candidate,null);assert.equal(reviews,1);assert.equal(calls,10)
+})
+
+test('review independently reads project, Step and paginated room facts omitted by the designer',async()=>{
+ const f=fixture(),reads:any[]=[]
+ f.opts.makeLookup=()=>createProjectLookup('A',async(_p,q)=>{
+  reads.push(q)
+  const records=q.dataset==='target'?[{id:'project',revision:1,solution_id:'solution'}]
+   :q.dataset==='project'?[{id:'A',name:'Synthetic workshop'}]
+   :q.dataset==='plan'?[{id:'plan',steps:[{id:'step-1',title:'Draw the room'}]}]
+   :q.dataset==='measurements'?[q.after_id?{id:'m2',subject:'East wall window offset',value:'1200',truth:'measured'}:{id:'m1',subject:'Door width',value:'850',truth:'measured'}]
+   :q.dataset==='physical_elements'?[{id:'door',wall:'south',offset_mm:700}]:[]
+  const more=q.dataset==='measurements'&&!q.after_id
+  return {data:{records,related:[],truncated:more,next_cursor:more?'m1':null},error:null}
+ },1000,40)
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult({...request,step_id:'step-1'})).status,'ready')
+ const review=f.seen.find(o=>o.functionName==='cad-reviewer'),data=JSON.parse(review.messages[0].content)
+ assert.equal(data.project_id,'A');assert.equal(data.step_id,'step-1')
+ assert.deepEqual(data.source_evidence,[],'the designer did not fetch these records')
+ assert(JSON.stringify(data.independent_evidence).includes('East wall window offset'))
+ assert(JSON.stringify(data.independent_evidence).includes('Draw the room'))
+ assert.deepEqual(data.independent_evidence.incomplete_datasets,[])
+ assert(reads.some(q=>q.dataset==='measurements'&&q.after_id==='m1'))
+ assert(review.systemMessage.includes(DRAWING_REVIEW_INSTRUCTION))
+ assert(a.sources.some(s=>s.recordId==='door'))
+})
+
+test('independent evidence flags truncated or failed reads and stops on denied access',async()=>{
+ const lookup=(code:string|null)=>createProjectLookup('A',async(_p,q)=>({
+  data:{records:[],related:[],truncated:q.dataset==='physical_spaces',next_cursor:null},
+  error:q.dataset==='physical_elements'?{code:code!}:null,
+ }),1000,40)
+ const evidence=await collectDrawingReviewEvidence(lookup('backend_error'),false)
+ assert(evidence.incomplete_datasets.includes('physical_spaces'))
+ assert(evidence.incomplete_datasets.includes('physical_elements'))
+ await assert.rejects(collectDrawingReviewEvidence(lookup('42501'),false),/project_denied/)
 })

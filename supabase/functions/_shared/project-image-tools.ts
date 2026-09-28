@@ -4,7 +4,7 @@ const str={type:'string'}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 const target={type:'string',enum:['project','area','task','step','plan_step']}
 export const IMAGE_TOOLS=[
- tool('generate_project_image','Create an illustrative proposal or instruction image, save it privately and attach it where needed. Read existing media first to avoid duplicate generations. Never use an illustration as measured geometry. plan_step is a living-plan Step; step is a Task instruction step.',{prompt:str,title:str,purpose:{type:'string',enum:['proposal','instruction']},target_kind:target,target_id:str,request_quote:str}),
+ tool('generate_project_image','Create an illustrative proposal or instruction image, save it privately and attach it where needed. Read existing media first to avoid duplicate generations. This is not a dimensioned drawing or a fallback for failed CAD. Use design_project_cad for consistent geometry and views. Open the saved illustration and review it against current project and Step facts before recommending it. Never use an illustration as measured geometry. plan_step is a living-plan Step; step is a Task instruction step.',{prompt:str,title:str,purpose:{type:'string',enum:['proposal','instruction']},target_kind:target,target_id:str,request_quote:str}),
  tool('attach_project_image','Attach an existing ready project image to an Area, Task, instruction step or living-plan Step. Reuses the original file.',{media_id:str,target_kind:target,target_id:str,request_quote:str}),
  tool('finalize_project_image','Recover a pending image whose bytes were uploaded successfully. Makes no new generation or upload; storage metadata is checked before ready status.',{media_id:str,request_quote:str}),
 ]
@@ -34,7 +34,10 @@ export function createProjectImageTools(opts:{projectId:string;message:string;wr
   if(reserved.status!=='saved')return reserved
   try{await opts.upload(id,bytes)}catch(error){rethrowContinuation(error);return {status:'partial',stage:'upload',saved:false,media_id:id,message:'A pending entry exists. Inspect it before another generation; do not claim the image is ready.'}}
   const finalized=await opts.writer.commit({...payload,kind:'image_finalize',data:{}})
-  return {...finalized,saved:finalized.status==='saved',media_id:id,...(finalized.status!=='saved'?{recovery:'Use finalize_project_image with this media_id; never generate a replacement blindly.'}:{})}
+  return {...finalized,saved:finalized.status==='saved',media_id:id,representation:'illustration',geometry_verified:false,
+   project_id:opts.projectId,target_kind:v.target_kind,target_id:v.target_id,
+   review_instruction:'Open this image and compare it with current project facts and its linked Step before recommending it. It has no CAD review and does not fulfill a dimensioned drawing request. Report any CAD failure separately.',
+   ...(finalized.status!=='saved'?{recovery:'Use finalize_project_image with this media_id; never generate a replacement blindly.'}:{})}
  }}
 }
 export type ProjectImageTools=ReturnType<typeof createProjectImageTools>

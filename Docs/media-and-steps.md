@@ -68,6 +68,16 @@ Removing a project image explains that all its attachments will disappear.
 Purposes are current state, reference, instruction, proposal, progress and as-built.
 These are user-provided classifications. A supplied instruction/proposal is not a
 verified drawing; a photo alone does not verify a measurement or professional check.
+
+AI-generated instruction/proposal images remain illustrations, including after
+visual inspection. They do not replace failed CAD or establish checked geometry.
+The image inspection carrier preserves project identity, purpose, source kind
+and attachments (including living-plan `plan_step_id`). Generated/design images
+receive the shared drawing-review instruction alongside their pixels so Bob
+checks the linked Step and current project facts before recommending the image.
+Changed provenance or attachments invalidate retained image context. A saved
+illustration after failed CAD produces one factual completion note; tools remain
+unforced and the owner-facing reply remains Bob's responsibility.
 AI consumption/generation is outside milestones 1A/1B. The image-on-demand slice
 below adds explicit vision reads; generation remains separate scope.
 

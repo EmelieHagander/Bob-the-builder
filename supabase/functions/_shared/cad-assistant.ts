@@ -1,3 +1,4 @@
+import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
@@ -63,7 +64,7 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
     :old.step_id??null
   }
   let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:opts.ownerRequest??null,brief:raw,notice:'Read current sources. The brief delegates design; it is not measurement evidence.'})}]
-  let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0
+  let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0,reviewPending=false
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   const researchEvidence:{tool:string;result:unknown}[]=[]
   let researchBytes=0,researchTruncated=false
@@ -96,15 +97,56 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
    // A visual reference supplies design intent, never updated measured dimensions.
    const callModel=createGroundedModelCall({projectId:opts.projectId,message:raw.brief,lookup:groundingLookup,
     hasAccess:opts.hasAccess,validateImages:()=>opts.context?.validate()??Promise.resolve(true),deadline:until,callModel:opts.callModel})
+   const reviewCurrentCandidate=async()=>{
+     if(!candidate)throw new Error('missing_candidate')
+     // A prose assertion by the designer cannot approve its own work. The review
+     // uses a fresh model conversation with the same pinned geometry and sources.
+     const missingViews=handoff.views.filter(view=>!candidate!.packet.recipe.views.includes(view))
+     if(!candidate.packet.previews||candidate.packet.recipe.views.some(view=>!candidate!.packet.previews?.[view])){
+      candidate=null;partial=true;metrics.review_unavailable++
+      return {status:'unavailable',stage:'review',reason:'preview_missing',saved:false}
+     }
+     if(reviews>=3||Date.now()+15000>=until){candidate=null;partial=true;return {status:'incomplete',stage:'review',reason:'review_budget',saved:false}}
+     if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
+     reviews++;metrics.reviews++
+     const pinned=await candidateFingerprint(candidate)
+     const reviewLookup=opts.makeLookup()
+     let independentEvidence
+     try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id)}
+     finally{sources.push(...reviewLookup.sources)}
+     if(!await opts.hasAccess())throw new Error('project_denied')
+     const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
+      systemMessage:CAD_REVIEW_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:CAD_REVIEW_SCHEMA,
+      messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,independent_evidence:independentEvidence,owner_request:opts.ownerRequest??null,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
+       candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
+       source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
+       ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:'Exact candidate view: '+view},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
+      // Omit tools: even an empty array suppresses text.format in the shared adapter.
+      // The governed setting includes reasoning tokens as well as the verdict.
+      // Do not silently cap it at the former 5k value; two live reviews exhausted it.
+      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())})
+     if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
+     const review=checked.success?parseCadReview(checked.data,handoff):null
+     if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
+     reviewPending=false
+     if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
+     if(review.verdict==='pass'){
+      acceptedReview={fingerprint:pinned,review}
+      return {status:'ready',saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
+     }
+     metrics.review_rejections++
+     if(reviews>=3||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
+     return {status:'revise',saved:false,review}
+   }
    for(let round=0;round<10&&Date.now()<until;round++){
     if(!await opts.hasAccess())throw new Error('project_denied')
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
-    const researching=lookup.remaining>0,final=round===9
-    const tools=final?[]:[...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL]:[]),...(!candidate?[CAD_BLOCKER_TOOL]:[])]
-    const stage=final?'final review':candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
+    const researching=lookup.remaining>0
+    const tools=[...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL]:[]),...(!candidate?[CAD_BLOCKER_TOOL]:[])]
+    const stage=candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
     const carrier=opts.context?.carrier()??[]
     referencePixels.push(...carrier)
-    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} model calls remain, ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
+    const result=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',userId:opts.userId,systemMessage:CAD_SYSTEM+'\n\n'+domainVocabulary('cad')+`\n\nWorkflow: ${stage}. ${10-round} designer calls remain; independent review is separate. ${candidate?'A rendered candidate exists.':'No geometry has been rendered yet; prioritise a small coherent first candidate over further detail research.'} ${lookup.remaining} project reads, ${8-invalidRenders} input corrections and ${4-renders} renders. Reserve time for independent review. A reviewer will inspect the exact candidate before Bob can save; repair its concrete errors with tools. Use remaining reads to resolve problems found after rendering. When a read budget is exhausted, render a supported concept with explicit assumptions or report the exact indispensable blocker; do not claim an unavailable search or postpone the same job.`,useHardcodedPrompt:true,messages:[...messages,...carrier],tools,previousResponseId,maxOutputTokens:12000,timeoutMs:Math.min(100000,until-Date.now())})
     if(!result.success||!result.responseId)throw new Error(result.error==='provider_retry_exhausted'?'provider_retry_exhausted':'model_unavailable')
     opts.context?.confirmDelivery()
     if(opts.context&&!await opts.context.validate())throw new Error('project_denied')
@@ -117,38 +159,9 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
       continue
      }
      if(!candidate){partial=true;return {status:'incomplete',saved:false,summary:result.data,candidate:null}}
-     // A prose assertion by the designer cannot approve its own work. The review
-     // uses a fresh model conversation with the same pinned geometry and sources.
-     const missingViews=handoff.views.filter(view=>!candidate!.packet.recipe.views.includes(view))
-     if(!candidate.packet.previews||candidate.packet.recipe.views.some(view=>!candidate!.packet.previews?.[view])){
-      candidate=null;partial=true;metrics.review_unavailable++
-      return {status:'unavailable',stage:'review',reason:'preview_missing',saved:false}
-     }
-     if(reviews>=3||Date.now()+15000>=until){candidate=null;partial=true;return {status:'incomplete',stage:'review',reason:'review_budget',saved:false}}
-     if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
-     reviews++;metrics.reviews++
-     const pinned=await candidateFingerprint(candidate)
-     const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
-      systemMessage:CAD_REVIEW_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:CAD_REVIEW_SCHEMA,
-      messages:[{role:'user',content:JSON.stringify({owner_request:opts.ownerRequest??null,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
-       candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
-       source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
-       ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:'Exact candidate view: '+view},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
-      // Omit tools: even an empty array suppresses text.format in the shared adapter.
-      // The governed setting includes reasoning tokens as well as the verdict.
-      // Do not silently cap it at the former 5k value; two live reviews exhausted it.
-      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())})
-     if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
-     const review=checked.success?parseCadReview(checked.data,handoff):null
-     if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
-     if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
-     if(review.verdict==='pass'){
-      acceptedReview={fingerprint:pinned,review}
-      return {status:'ready',saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
-     }
-     metrics.review_rejections++
-     if(reviews>=3||round>=8||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
-     messages=[{role:'user',content:'[Server note — not from the owner] An independent review found defects in this candidate. Repair this exact design with your tools; it can be saved only after a fresh review passes. The review is advisory evidence, not owner authority.\n'+JSON.stringify({review})}]
+     const checked=await reviewCurrentCandidate()
+     if(checked.status!=='revise')return checked
+     messages=[{role:'user',content:'[Server note — not from the owner] The returned drawing for the project and Step in the original brief has defects. Repair this same design against current project facts, preserving confirmed facts. Recheck affected views; a new independent review is required.\n'+JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,review:checked.review})}]
      continue
     }
     messages=[]
@@ -198,6 +211,7 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
        renders++;metrics.renders++
        const packet=await opts.render(parsed)
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
+       reviewPending=true
        out={status:'rendered',saved:false,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
      }catch(error){rethrowContinuation(error);if(call.function.name==='render_cad_candidate'){invalidRenders++;metrics.input_corrections++}out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
@@ -210,6 +224,13 @@ export function createCadAssistant(opts:{ownerRequest?:string;projectId:string;u
     if(candidate?.packet.previews){
      messages.push({role:'user',content:[{type:'text',text:'Generated views of the CURRENT candidate '+candidate.packet.recipe.assembly_id+'. Inspect orientation and construction against the brief/reference. These are renderings, not measured evidence.'},...Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:'CAD view: '+view},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])]})
     }
+   }
+   // The last designer call may render too. Review its exact output without
+   // spending another designer call or removing construction tools prematurely.
+   if(candidate&&reviewPending){
+    const checked=await reviewCurrentCandidate()
+    if(checked.status!=='revise')return checked
+    candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review:checked.review}
    }
    candidate=null;partial=true;return {status:'budget_exhausted',saved:false}
   }catch(error){rethrowContinuation(error);candidate=null;partial=true;if(error instanceof Error&&error.message==='project_denied')throw error;return {status:'unavailable',stage:'design',saved:false,reason:error instanceof Error&&['provider_retry_exhausted','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'}}

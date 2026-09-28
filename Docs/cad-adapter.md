@@ -133,6 +133,17 @@ three reviews (initial plus two repair checks), four renders and ten designer
 rounds fit the existing consultation deadline. A missing reviewer is an honest
 technical blocker, not a request for owner approval. Only a passing review exposes
 the exact candidate to Bob's save tool; a new render invalidates the old review.
+
+The final designer call retains construction tools. If it renders a candidate,
+the independent reviewer can inspect that exact output without another designer
+call. Reviewer input identifies the project and linked Step and includes its own
+bounded caller-scoped reads of project, approved plan, measurements and physical
+room/element/relationship records, with incomplete coverage explicitly marked.
+The shared review instruction treats previous drawing quality failures as a
+reason for careful source comparison, including room openings and dimension
+chains. [The September 28 investigation](bob-drawing-review-2026-09-28.md) records
+the incident evidence and the distinction between tested mechanics and live
+drawing fidelity.
 The review fingerprint covers geometry, exports/previews, descriptions and scoped
 source/target/work pins. The verdict is current-turn evidence, not a persistent
 certification attached to every historical Artifact revision.
