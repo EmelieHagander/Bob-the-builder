@@ -66,3 +66,24 @@ test('signed webhook is persisted before acknowledgement; forged, old and modifi
   assert.equal((await handler(new Request('https://fixture', { method: 'POST', body }))).status, 401)
   assert.equal((await aiWorkerHandler(async () => { throw new Error('must not call') }, 'key')(new Request('https://fixture', { method: 'POST', body: '{}' }))).status, 401)
 })
+
+
+test('an immediate terminal POST respects cancellation committed during submission', async () => {
+ const oldFetch=globalThis.fetch
+ try {
+  for (const terminal of ['cancelled','completed']) {
+   let reserved=false,posts=0,stored:any=null
+   const value={id:'resp_immediate',status:'completed',metadata:{ai_job_id:id},output_text:'Ready'}
+   const rpc=async(name:string)=>{
+    if(name==='ai_job_reserve'){const submit=!reserved;reserved=true;return {id,submit,status:submit?'submitting':terminal,response:stored}}
+    if(name==='ai_job_accept'){if(terminal==='completed')stored=value;return true}
+    throw new Error(name)
+   }
+   globalThis.fetch=async()=>{posts++;return Response.json(value)}
+   const run=()=>backgroundResponse(rpc,'key','appA',call,{},accounting)
+   if(terminal==='cancelled')await assert.rejects(run,/ai_background_cancelled/)
+   else assert.deepEqual(await run(),value)
+   assert.equal(posts,1)
+  }
+ } finally {globalThis.fetch=oldFetch}
+})

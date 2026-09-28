@@ -52,7 +52,8 @@ export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string
     }
     try { await rpc('ai_job_accept', { p_job: job.id, p_response: response }) }
     catch { throw new AIBackgroundPending(job.id, false) }
-    if (!['queued', 'in_progress'].includes(response.status)) return response
+    // Re-read the committed state: expiry/cancellation can win while POST is in flight.
+    if (!['queued', 'in_progress'].includes(response.status)) return backgroundResponse(rpc, apiKey, app, call, request, accounting)
     throw new AIBackgroundPending(job.id, true)
   }
   throw new AIBackgroundPending(job.id, !!job.response_id)
