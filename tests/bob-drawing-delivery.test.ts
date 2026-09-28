@@ -230,3 +230,15 @@ test('an exhausted writer takes write tools off the bench while reading stays po
   })
   assert(result.ok); assert.equal(calls, 1); assert.equal(f.renders, 0)
 })
+
+for(const priorWrite of [false,true])test(`a CAD token failure is committed without a provider cursor (prior write: ${priorWrite})`,async()=>{
+ const f=fixture();let committed:any,calls=0,failures=0
+ if(priorWrite)await f.writer.commit({kind:'target',record_id:'A',expected_updated_at:null,expected_revision:0,request_quote:'Rita',data:{solution_id:id,solution_revision:1}})
+ const result=await runClaimedProjectTurn({projectId:'A',userId:'u',message,generation:1,resume:true,
+  lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{failures++},commit:async value=>{committed=value},
+  cadAssistant:createCadAssistant({...f.cadOptions,callModel:async()=>({success:false,data:null,model:'fixture',usage,error:'model_output_limit'})}),
+  callModel:async()=>{calls++;assert.equal(calls,1,'no paid explanation/localisation');return response(null,call('design_project_cad',cadRequest))}})
+ assert(result.ok);assert.match(result.answer,/Designern förbrukade sin svarsbudget/)
+ assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
+ assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
+})

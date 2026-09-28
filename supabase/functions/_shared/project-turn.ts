@@ -46,9 +46,13 @@ export async function runClaimedProjectTurn(opts: {
     const code = error instanceof Error ? error.message : ''
     result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied', 'tool_catalog_unavailable', 'turn_budget_exhausted'].includes(code) ? code : 'ai_unavailable' }
   }
+  // A verified local failure notice needs no provider cursor. It must survive
+  // settlement/commit without replacing prior writes or buying a new reply.
+  const cadFailureNotice=result.ok&&typeof opts.cadAssistant?.failure?.user_message==='string'
+    &&result.answer===opts.cadAssistant.failure.user_message
   let recoveryAnswer:string|undefined
   try {
-    if(opts.writer?.receipts.length&&((recovered&&!opts.resume)||opts.writer.uncertain||!result.ok||!result.providerResponseId))
+    if(opts.writer?.receipts.length&&((recovered&&!opts.resume)||opts.writer.uncertain||!result.ok||(!result.providerResponseId&&!cadFailureNotice)))
       recoveryAnswer=await formatNotice({notice:opts.writer.uncertain?'uncertain':'recovered',receipts:opts.writer.receipts})
   } catch(error) {
     rethrowContinuation(error)
@@ -74,7 +78,7 @@ export async function runClaimedProjectTurn(opts: {
       try { notice = await formatNotice({ notice: 'uncertain', receipts: opts.writer.receipts }) }
       catch (error) { rethrowContinuation(error); notice = formatNotice.fallback({ notice: 'uncertain', receipts: opts.writer.receipts }) }
       result = { ...result, answer: result.answer + '\n\n' + notice, evidence }
-    } else if (opts.writer.receipts.length && ((recovered && !opts.resume) || uncertain || !result.ok || !result.providerResponseId)) {
+    } else if (opts.writer.receipts.length && ((recovered && !opts.resume) || uncertain || !result.ok || (!result.providerResponseId&&!cadFailureNotice))) {
       result = { ok: true, projectId: opts.projectId, answer: recoveryAnswer??formatNotice.fallback({notice:'recovered',receipts:opts.writer.receipts}), evidence }
     } else if (uncertain && !opts.writer.receipts.length) result = { ok: false, error: 'write_not_saved' }
     else if (result.ok) result = { ...result, evidence }
@@ -88,7 +92,7 @@ export async function runClaimedProjectTurn(opts: {
     } else { await fail(); return { ok: false, error: 'context_unavailable' } }
   }
   if (opts.commit) {
-    if (!result.providerResponseId && !result.evidence.writes?.length) { await fail(); return { ok: false, error: 'provider_state_unavailable' } }
+    if (!result.providerResponseId && !result.evidence.writes?.length && !cadFailureNotice) { await fail(); return { ok: false, error: 'provider_state_unavailable' } }
     try { await opts.commit(result, generation) }
     catch {
       await fail()
