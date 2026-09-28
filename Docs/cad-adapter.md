@@ -213,7 +213,7 @@ or automatic approval. Provider retry bounds are owned by
 
 ### Blank previews, correction loops and model cost — September 28 correction
 
-Status: implemented and locally verified on the correction branch; deployment pending.
+Status: deployed on 2026-09-28 in PR #155; release verification below.
 The failed live job spent $3.058558 across 15 model calls, of which $2.659413
 was ten standard/high CAD-designer calls. It rendered two substantial assemblies,
 then substituted a three-part visibility test. The reviewer correctly rejected
@@ -255,3 +255,27 @@ Verification covers exact source handoff, tool authority, durable budget replay,
 terminal diagnostics, unchanged-review termination, real-engine visibility at
 10/3970/100000 mm and blank-output rejection. Real-model fidelity and savings for
 a fresh owner drawing request remain a live acceptance gate.
+
+
+Release verification (2026-09-28): PR #155 merged as
+`18ee7b7bdbe0eb6f1ad509a3e44a40b56ef64095`, with the tested tree
+`9cf0050c526a1481e1e3a2874b72c6ae30ae3f5f`. All 621 tests, 11 real-engine tests,
+Edge checks, builds and browser flows passed before deployment.
+
+The Bob-only setting migration is recorded by the managed API as
+`20260928174503 / bob_cad_research_model` (source timestamp `20260928153803`).
+Readback confirms `cad-research` uses `gpt-5.4-mini`, low reasoning and 3000
+output tokens. Existing constructor/reviewer settings were not changed.
+
+Deployed `ask-bob` v54 and `bob-worker` v22. Retrieved runtime source matches
+all 59/57 bundled modules; only the type-only provenance module is omitted by
+the bundler. Ask Bob retains JWT verification; the worker retains its per-job
+capability check. Unauthenticated/invalid-capability probes return 401/403.
+There were no active jobs at rollout.
+
+[Pages deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36460335091)
+and [CAD deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36460335073)
+both passed. The live CAD smoke test verified actual STEP/SVG/PNG generation,
+source hashes, visible preview pixels and bearer rejection. The published web
+bundle contains the budget-stop notice. A fresh owner request is still needed
+to establish full drawing fidelity and the cost per accepted drawing.
