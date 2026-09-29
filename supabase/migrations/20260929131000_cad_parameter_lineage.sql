@@ -10,15 +10,11 @@ declare l jsonb:=new.manifest->'bob_lineage'; b jsonb; s jsonb; definition jsonb
  m bob.measurement_revisions; seen text[]:='{}'; key text; original jsonb; inherited jsonb;
  previous bob.artifact_cad_revisions; lifecycle_copy boolean:=false;
 begin
- if not(new.manifest?'bob_lineage') then return new; end if;
- if jsonb_typeof(l) is distinct from 'object'
-  or l-array['version','coverage','project_id','coordinates','inherited_from','bindings']::text[]<>'{}'
-  or (select count(*) from jsonb_object_keys(l))<>6
-  or l->'version' is distinct from '1'::jsonb or l->>'coverage' is distinct from 'partial'
-  or l->>'project_id' is distinct from new.project_id
-  or jsonb_typeof(l->'bindings') is distinct from 'array' then
-  raise exception 'invalid_cad_lineage' using errcode='22023'; end if;
- if jsonb_array_length(l->'bindings')>32 then raise exception 'invalid_cad_lineage' using errcode='22023'; end if;
+ -- Historical rows are immutable. Archive/restore creates a new revision.
+ if tg_op='UPDATE' then
+  if new is distinct from old then raise exception 'cad_revision_immutable' using errcode='22023'; end if;
+  return new;
+ end if;
  -- Only a byte-identical canonical archive/restore copy may retain stale pins.
  -- Newly generated geometry must lock and recheck current source heads at save.
  select c.* into previous from bob.artifact_cad_revisions c
@@ -41,11 +37,31 @@ begin
    raise exception 'cad_lineage_source_changed' using errcode='40001'; end if;
  end if;
 
+ -- Compatibility for genuinely untracked inputs must not become a bypass for
+ -- freshness or for stripping a tracked parent / previously traced revision.
+ if not(new.manifest?'bob_lineage') then
+  if coalesce(previous.manifest?'bob_lineage',false)
+   or exists(select 1 from bob.artifact_cad_revisions c
+    where c.project_id=new.project_id and c.artifact_id=new.source_artifact_id
+     and c.artifact_revision=new.source_revision and c.manifest?'bob_lineage') then
+   raise exception 'cad_lineage_required' using errcode='22023';
+  end if;
+  return new;
+ end if;
+ if jsonb_typeof(l) is distinct from 'object'
+  or l-array['version','coverage','project_id','coordinates','inherited_from','bindings']::text[]<>'{}'
+  or (select count(*) from jsonb_object_keys(l))<>6
+  or l->'version' is distinct from '1'::jsonb or l->>'coverage' is distinct from 'partial'
+  or l->>'project_id' is distinct from new.project_id
+  or jsonb_typeof(l->'bindings') is distinct from 'array' then
+  raise exception 'invalid_cad_lineage' using errcode='22023'; end if;
+ if jsonb_array_length(l->'bindings')>32 then raise exception 'invalid_cad_lineage' using errcode='22023'; end if;
+
  if l->'coordinates' is distinct from 'null'::jsonb and (
   jsonb_typeof(l->'coordinates') is distinct from 'object'
   or (l->'coordinates')-array['origin','positive_x','positive_y','positive_z']::text[]<>'{}'
   or (select count(*) from jsonb_object_keys(l->'coordinates'))<>4
-  or exists(select 1 from jsonb_each(l->'coordinates') e where jsonb_typeof(e.value) not in ('string','null') or char_length(e.value#>>'{}')>500)) then
+  or exists(select 1 from jsonb_each(l->'coordinates') e where jsonb_typeof(e.value) not in ('string','null') or char_length(e.value#>>'{}')>500 or (jsonb_typeof(e.value)='string' and btrim(e.value#>>'{}')=''))) then
   raise exception 'invalid_cad_lineage_coordinates' using errcode='22023'; end if;
  for b in select value from jsonb_array_elements(l->'bindings') loop
   s:=b->'source';key:=(b->>'definition_id')||':'||(b->>'dimension');
@@ -57,6 +73,9 @@ begin
    or s-array['kind','id','revision','value','unit','truth','description']::text[]<>'{}'
    or (select count(*) from jsonb_object_keys(s))<>7
    or s->>'kind' is distinct from 'project_measurement'
+   or jsonb_typeof(s->'revision') is distinct from 'number'
+   or jsonb_typeof(s->'id') is distinct from 'string'
+   or coalesce(s->>'id','')!~*'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
    or coalesce(s->>'revision','')!~'^[1-9][0-9]{0,8}$'
    or jsonb_typeof(s->'value') is distinct from 'string'
    or coalesce(s->>'truth','')<>all(array['measured','provided_spec','estimated'])

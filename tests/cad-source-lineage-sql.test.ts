@@ -37,6 +37,10 @@ test('P1: exact lineage round-trips through SQL, rejects forged metadata and sur
  await assert.rejects(call(outsider,'bob.read_cad_artifact',[project,id,null]),/project_denied/)
  assert.equal(await call(owner,'bob.read_cad_artifact',[other,id,null]).catch(e=>e.message),'project_denied')
  await assert.rejects(asProjectUser(pg,owner,'update bob.artifact_cad_revisions set manifest=manifest where artifact_id=$1',[id]),/permission denied/)
+ await t.test('P1 hardening: historical CAD rows cannot be rewritten in place',async()=>{
+  await assert.rejects(pg.query("update bob.artifact_cad_revisions set manifest=manifest-'bob_lineage' where artifact_id=$1",[id]),/cad_revision_immutable/)
+  assert.deepEqual((await read(id,1)).lineage,lineage)
+ })
  const corruptions:[string,(p:any)=>void,RegExp][]=[
   ['numeric value',p=>p.data.packet.manifest.bob_lineage.bindings[0].source.value='2',/source_mismatch/],
   ['truth upgrade',p=>p.data.packet.manifest.bob_lineage.bindings[0].source.truth='provided_spec',/source_mismatch/],
@@ -53,6 +57,19 @@ test('P1: exact lineage round-trips through SQL, rejects forged metadata and sur
  const detail=structuredClone(payload);detail.data.title='Exact detail';detail.data.source_artifact_id=id;detail.data.source_revision=1;detail.data.part_ids=['panel-1'];detail.data.packet.manifest.bob_lineage.inherited_from={artifact_id:id,revision:1}
  const child=await save(detail)
  assert.deepEqual((await read(child.recordId)).lineage.bindings,lineage.bindings)
+ await t.test('P1 hardening: removing metadata cannot strip tracked parent provenance',async()=>{
+  const stripped:any=structuredClone(detail);stripped.data.title='Stripped parent';delete stripped.data.packet.manifest.bob_lineage
+  await assert.rejects(save(stripped),/cad_lineage_required/)
+ })
+ await t.test('P1 hardening: JSON revision has numeric type, not a coerced string',async()=>{
+  const bad:any=structuredClone(payload);bad.data.title='String revision';bad.data.packet.manifest.bob_lineage.bindings[0].source.revision='1'
+  await assert.rejects(save(bad),/invalid_cad_lineage_binding/)
+ })
+ await t.test('P1 hardening: tracked artifact cannot be revised through the legacy bypass',async()=>{
+  const standalone=structuredClone(payload);standalone.data.title='Disposable tracked original';const original=await save(standalone)
+  const stripped:any=structuredClone(payload);stripped.record_id=original.recordId;stripped.expected_revision=1;stripped.data.title='Stripped revision';delete stripped.data.packet.manifest.bob_lineage
+  await assert.rejects(save(stripped),/cad_lineage_required/)
+ })
  const dropped=structuredClone(detail);dropped.data.title='Dropped provenance';dropped.data.packet.manifest.bob_lineage.bindings=[]
  await assert.rejects(save(dropped),/must_reuse_source/)
  // Absent old metadata is represented honestly; it is not backfilled by guesses.
@@ -60,6 +77,10 @@ test('P1: exact lineage round-trips through SQL, rejects forged metadata and sur
  const old=await save(legacy)
  assert.equal((await read(old.recordId)).lineage_state,'legacy_untracked');assert.equal((await read(old.recordId)).lineage,null)
  await call(owner,'bob.evidence_command',[project,'measurement','revise',measurement,1,JSON.stringify({...fact,value:'1.002',change_note:'Remeasured'})])
+ await t.test('P1 hardening: missing metadata does not bypass current source checks',async()=>{
+  const stale:any=structuredClone(payload);stale.data.title='Stale legacy writer';delete stale.data.packet.manifest.bob_lineage
+  await assert.rejects(save(stale),/cad_lineage_source_changed/)
+ })
  const stale=structuredClone(payload);stale.data.title='Stale source'
  await assert.rejects(save(stale),/changed|stale|current|revision/i)
  assert.equal((await asProjectUser(pg,owner,'select source_state from bob.artifact_source_status where artifact_id=$1',[id])).rows[0].source_state,'changed')
@@ -68,5 +89,10 @@ test('P1: exact lineage round-trips through SQL, rejects forged metadata and sur
  await call(owner,'bob.artifact_command',[project,'restore',id,2,'{}'])
  assert.deepEqual((await read(id,3)).lineage,lineage,'archive/restore preserves historical source identity')
  assert.equal((await asProjectUser(pg,owner,'select source_state from bob.artifact_source_status where artifact_id=$1 and revision=3',[id])).rows[0].source_state,'changed')
+ // Old packets remain navigable and lifecycle-copyable, even after sources
+ // change. This is history preservation, not acceptance of a new stale design.
+ await call(owner,'bob.artifact_command',[project,'archive',old.recordId,1,'{}'])
+ await call(owner,'bob.artifact_command',[project,'restore',old.recordId,2,'{}'])
+ assert.equal((await read(old.recordId,3)).lineage_state,'legacy_untracked')
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
 })

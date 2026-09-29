@@ -186,6 +186,25 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
       if(!await opts.hasAccess())throw new Error('project_denied')
       return terminalFailure
      }
+     // Readability is not freshness: an otherwise successful scan may now
+     // describe a different revision than the exact rendered candidate.
+     const currentMeasurements=independentEvidence.pages.filter(page=>page.dataset==='measurements').flatMap(page=>page.records)
+     const changedPins=candidate.measurements.filter(pin=>{
+      const found=currentMeasurements.filter(record=>record.id===pin.id)
+      return found.length!==1||found[0].revision!==pin.revision||found[0].archived
+     })
+     if(changedPins.length){
+      candidate=null;acceptedReview=null;reviewPending=false;partial=true
+      terminalFailure={status:'needs_data',stage:'review',reason:'review_sources_changed',saved:false,request_id:request?.id??null,changed_measurements:changedPins,
+       next_action:'Read the current revisions and revise this same request before rendering again. A removed or changed source is not an invitation to guess. Do not repeat unchanged work or ask for permission already granted.'}
+      try{await persist('needs_data')}catch(error){
+       rethrowContinuation(error)
+       if(error instanceof Error&&error.message==='project_denied')throw error
+       terminalFailure={...terminalFailure,request_state_saved:false}
+      }
+      if(!await opts.hasAccess())throw new Error('project_denied')
+      return terminalFailure
+     }
      reviews++;metrics.reviews++
      const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
       systemMessage:CAD_REVIEW_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:CAD_REVIEW_SCHEMA,
@@ -301,6 +320,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        const verification=opts.makeLookup(),measurementRecords=new Map<string,Record<string,any>>()
        try{for(const m of args.measurements){
         const found=await verification.search({dataset:'measurements',record_id:m.id,query:null,status:null,area_id:null,after_id:null})
+        if(found.status==='denied')throw new Error('project_denied')
         const record=found.records.find(r=>r.id===m.id&&r.revision===m.revision&&!r.archived)
         if(found.status!=='ok'||!record)throw new Error('measurement_changed')
         measurementRecords.set(m.id,record)
@@ -320,7 +340,8 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        reviewPending=true
        out={status:'rendered',saved:false,applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
-     }catch(error){rethrowContinuation(error);if(['render_cad_candidate','render_saved_cad_candidate'].includes(call.function.name)){invalidRenders++;metrics.input_corrections++}out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
+     }catch(error){rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error;if(['render_cad_candidate','render_saved_cad_candidate'].includes(call.function.name)){invalidRenders++;metrics.input_corrections++}out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
+     if(out?.status==='denied')throw new Error('project_denied')
      if(!['render_cad_candidate','render_saved_cad_candidate','open_project_item'].includes(call.function.name)){
       const bytes=new TextEncoder().encode(JSON.stringify(out)).length
       if(researchBytes+bytes<=120000){researchEvidence.push({tool:call.function.name,result:out});researchBytes+=bytes}else researchTruncated=true
