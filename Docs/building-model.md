@@ -1,5 +1,6 @@
 # Persistent building model
 
+
 > **Status:** manual Slice 2C implemented, deployed and live-verified on 2026-09-13; broader geometry/import/AI extensions remain planned  
 > **Owns:** bob's persistent physical-place model across projects: sites, buildings, levels, spaces, building elements, spatial relationships, project scope, uncertainty and physical-state history  
 > **Release order:** `Docs/v1-plan.md` owns sequencing and release gates  
@@ -739,3 +740,11 @@ write an actual staircase/opening into accepted building state. Stair shape,
 source-refresh and limited headroom behavior are owned by
 [Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
 A computed exit is not a verified clear passage or a structural approval.
+
+## Accepted physical measurements in CAD
+
+P1b in [PR #160](https://github.com/EmelieHagander/Bob-the-builder/pull/160) consumes the existing accepted Space measurement snapshot. It does not promote a proposal, remeasure a room or copy its evidence into another project's measurement table. The physical identity is the snapshot plus its Building, Space and accepted Space revision; the original measurement identity/revision remains provenance. A later donor-project edit does not silently replace that accepted physical state.
+
+Reuse requires the destination project's explicit physical scope and caller authority. Access to one room does not authorize its neighbour or the donor project's private measurements. New accepted Space revisions invalidate dependent CAD freshness; removing scope makes sources unavailable. Project-owned historical CAD evidence remains readable to project members and retains its original uncertainty, without authorizing new reads from a removed physical source.
+
+`measured`, `provided_spec` and `estimated` stay distinct. A direct length binding is not a coordinate transform or proof of physical fit. Numeric coordinate systems, placement/formula dependencies and verified project-scope cleanup remain P1 work. [CAD adapter](cad-adapter.md#accepted-physical-parameter-provenance--p1b) owns the implemented binding contract; [database release contract](../db/README.md#cad-parameter-lineage-release) owns migration order. Hosted release evidence is recorded in #160.
