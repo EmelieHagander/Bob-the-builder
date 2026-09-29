@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: publicera och slutverifiera P2a på `feat/p2-request-recovery-20260929`.** Push till Bob-repot stoppades av automatisk godkännandegranskning; användargodkännande för den konkreta publiceringen återstår. Kör därefter den förberedda CLI-genereringen, flytta den granskade SQL-kandidaten till det genererade migrationsnamnet, ta bort bootstrap-workflowen och kör full CI inklusive Edge- och browsergrindar samt verkliga samtidighetsprov. Inget från P2 är applicerat eller driftsatt. Avgränsning och kontrakt finns hos [CAD-ägaren](cad-adapter.md#p2a--request-recovery-release-candidate); releaseordning hos [databasägaren](../db/README.md#p2a-request-recovery--pending). P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: slutverifiera och släpp P2a i [PR #165](https://github.com/EmelieHagander/Bob-the-builder/pull/165).** Kontrollera full CI på slutcommitten, inklusive Edge-/browsergrindar och verkliga samtidighetsprov, innan merge och koordinerad migration/funktionsrelease. Inget från P2 är ännu applicerat eller driftsatt. Avgränsning och kontrakt finns hos [CAD-ägaren](cad-adapter.md#p2a--request-recovery-release-candidate); releaseordning hos [databasägaren](../db/README.md#p2a-request-recovery--pending). P0:s verkliga användartest ligger kvar separat.
 
 ### Öppet arbete i prioritetsordning
 

@@ -1,7 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
-import {readFile} from 'node:fs/promises'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
@@ -10,9 +9,6 @@ import {handoff} from './support/cad-review-fixture.ts'
 
 test('P2: request completion and canonical CAD receipt are atomic, isolated and recoverable across turns',async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
- // Candidate SQL is deliberately not treated as an installed migration until
- // the pinned CLI generates the release filename and CI reviews that exact file.
- await pg.exec(await readFile(new URL('../db/pending/drawing_request_recovery.sql',import.meta.url),'utf8'))
  const owner=randomUUID(),outsider=randomUUID(),message='Save the reviewed construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result

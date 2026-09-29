@@ -1,6 +1,4 @@
--- P2a release candidate. NOT an installed migration. Generate its migration
--- filename with the pinned Supabase CLI before release; tests load this file
--- explicitly after the canonical schema while publication is blocked.
+-- P2a: private request recovery and atomic CAD completion.
 begin;
 set local lock_timeout='5s';
 set local statement_timeout='60s';

@@ -1,6 +1,7 @@
 /** Real multi-connection test. Only an empty, disposable local PostgreSQL DB. */
 import assert from 'node:assert/strict'
 import {parameterPacket} from '../tests/support/cad-parameter-fixture.ts'
+import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {spawn} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
 import {randomUUID} from 'node:crypto'
@@ -100,6 +101,50 @@ for(const [kind,mutation] of Object.entries(mutations))for(const first of ['sour
   assert.equal(result.independent,'current','Unrelated delivery must remain current')
   assert.deepEqual(result.lineage,f.payload.data.packet.manifest.bob_lineage,'History must remain exact')
   console.log(`PASS ${kind}, ${first} first: observed real lock wait, checked commit/readback/history`)
+  cases++
+}
+for(const kind of ['duplicate','request-first','save-first','source-first','save-before-source']) {
+  await query('drop table if exists public.cad_race_fixture;'+fixture)
+  const f=await json('select data from public.cad_race_fixture')
+  const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+  const transaction=(sql:string,tail='',service=false)=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${service?'set local role service_role;':auth}${sql};${tail}commit;`
+  const working={brief:{brief:f.payload.request_quote},owner_request:f.payload.request_quote,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(f.payload.data)}
+  const requestCall=(op:string,id:string|null=null,revision=0,status:string|null=null,payload:unknown=null)=>`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(op)},${id?literal(id):'null'},${revision},${status?literal(status):'null'},${payload?literal(JSON.stringify(payload)):'null'},${literal(randomUUID())})`
+  const request=JSON.parse((await query(transaction(requestCall('save',null,0,'reviewed',working),'',true))).split('\n').at(-1)!)
+  const payload={...f.payload,data:{...f.payload.data,drawing_request:{id:request.id,revision:request.revision}}}
+  const save=`select bob.bob_project_write_v12(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(payload))})`
+  const update=requestCall('save',request.id,request.revision,'collecting',working)
+  const first=kind==='request-first'?update:kind==='source-first'?mutations.measurement(f):save
+  const second=kind==='save-first'?update:kind==='save-before-source'?mutations.measurement(f):save
+  const key=770000+cases,barrier=await gate(key)
+  const leader=start(transaction(first,`select pg_advisory_xact_lock(${key});`,kind==='request-first'))
+  let follower:ReturnType<typeof start>|undefined
+  try{
+    const leaderPid=await waiting(leader.app,barrier.pid)
+    follower=start(transaction(second,'',kind==='save-first'))
+    await waiting(follower.app,leaderPid)
+  }finally{await barrier.close()}
+  const lead=await leader.done,follow=await follower!.done
+  assert.equal(lead.code,0,lead.stderr)
+  if(['request-first','save-first','source-first'].includes(kind)){
+    assert.notEqual(follow.code,0,'The losing conflicting operation must fail')
+    assert.match(follow.stderr,kind==='request-first'?/drawing_request_changed/:kind==='save-first'?/drawing_request_complete/:/source_changed|stale_measurement|measurement.*(changed|revision)/)
+  }else assert.equal(follow.code,0,follow.stderr)
+  const state=JSON.parse((await query(transaction(requestCall('load',request.id),'',true))).split('\n').at(-1)!)
+  const saved=!['request-first','source-first'].includes(kind)
+  assert.equal(state.status,saved?'saved':kind==='request-first'?'collecting':'reviewed')
+  assert.equal(await query(`select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}`),saved?'1':'0')
+  if(saved){
+    assert.ok(state.receipt?.recordId)
+    assert.equal(state.receipt.revision,1)
+    const source=JSON.parse((await query(transaction(`select to_jsonb(source_state) from bob.artifact_source_status where artifact_id=${literal(state.receipt.recordId)} and revision=1`))).split('\n').at(-1)!)
+    assert.equal(source,kind==='save-before-source'?'changed':'current')
+    if(kind==='duplicate'){
+      const receipt=(output:string)=>JSON.parse(output.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+      assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout),'both racing callers read the same durable receipt')
+    }
+  }else assert.equal(state.receipt,null)
+  console.log(`PASS request ${kind}: observed real lock wait, checked one-or-zero Artifact and atomic request receipt`)
   cases++
 }
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)
