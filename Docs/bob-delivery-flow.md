@@ -1,8 +1,8 @@
 # Bob — från önskemål till användbar leverans
 
-> **Status: specificerat målkontrakt och implementeringsförslag, 2026-09-29.** Produktmandatet i [user-stories.md](user-stories.md) gäller redan. Designvalen och etapperna här är underlag för nästa implementeringsbeslut, inte bevis på levererad funktion. Den här ändringen omfattar bara dokumentation.
+> **Status: specificerat målkontrakt och implementeringsförslag.** Produktmandatet i [user-stories.md](user-stories.md) gäller redan. Designvalen och etapperna här är underlag för implementation, inte bevis på levererad funktion.
 >
-> **Äger:** sambandet mellan datans väg, ansvar, överlämningar, fortsatt arbete och leveransacceptans. **Äger inte:** en ny ordlista, arbetsstruktur, databasmodell, CAD-motor, verktygskatalog eller V1-roadmap. Befintliga domänägare nedan behålls. [Nulägeskontrollen](#nulage) är en daterad bilaga, inte en ersättare för den löpande funktionsinventeringen.
+> **Äger:** sambandet mellan datans väg, ansvar, överlämningar, fortsatt arbete och leveransacceptans. **Äger inte:** en ny ordlista, arbetsstruktur, databasmodell, CAD-motor, verktygskatalog eller V1-roadmap. Befintliga domänägare nedan behålls. Kvarstående arbete finns i [State](#state); daterade kontroller och tidigare överlämning hör till [arkivet](archive/bob-delivery-flow-review-2026-09-29.md).
 
 **Fortsätt här:** [State och nästa handling](#state) · [P0:s arbetspass](#p0) · [Prioriteringar](#plan) · [Acceptansfall](#acceptans).
 
@@ -169,7 +169,7 @@ Ingen höjning av modellstorlek, promptlängd eller budget beslutas här. Först
 
 Målbilden behöver ett beständigt uppdragsläge: mål, status, nästa handling, ansvarig, blockerande beroenden, senaste giltiga underlag, försöksfingeravtryck, kvitton och kvarvarande mandat/budget. Det får inte bara vara en mening i sammanfattningen.
 
-Återanvänd befintlig jobbkörning, versionskontroll och kvittojournal där de passar. Blanda inte ihop projektets minsta nödvändiga uppdragsstatus med privata meddelanden eller specialistsamtal. Projektarbete ska i målbilden kunna fortleva efter en chattåterställning, men privata uppgifter får inte automatiskt publiceras. Dagens trådbundna ritningsutkast har en annan livscykel, se nuläget. Retention, avbrytande och eventuell behörighetsöverlämning måste regleras i respektive ägarkontrakt före implementation.
+Återanvänd befintlig jobbkörning, versionskontroll och kvittojournal där de passar. Blanda inte ihop projektets minsta nödvändiga uppdragsstatus med privata meddelanden eller specialistsamtal. Projektarbete ska i målbilden kunna fortleva efter en chattåterställning, men privata uppgifter får inte automatiskt publiceras. För den tidigare kontrollen av trådbundna ritningsutkast, se [arkiverad livscykelavgränsning](archive/bob-delivery-flow-review-2026-09-29.md#livscykel). Retention, avbrytande och eventuell behörighetsöverlämning måste regleras i respektive ägarkontrakt före implementation.
 
 Ett svar via chatt, ett ändrat mätfält i UI och en avslutad mät-Task ska använda samma kanoniska domänuppdatering. En relevant händelse väcker det väntande uppdraget; mottagaren hämtar aktuella värden och kontrollerar att luckan verkligen är löst. Att någon klickat ”klar” bevisar inte att det saknade måttet finns.
 
@@ -203,55 +203,11 @@ Luckor blir begripliga handlingar: vilket mått/observation, mellan vilka refere
 Behöriga deltagare ska kunna öppna rätt underlag efter omladdning utan Bobs privata chatt. Projektbehörighet ger inte automatiskt åtkomst till all byggnadsinformation eller andra deltagares privata information. Fysiskt arbete, säkerhetskontroller eller certifiering markeras inte utfört av att Bob producerar en fil.
 
 <a id="nulage"></a>
-## 9. Verifierat nuläge den 29 september 2026
+## 9. Hitta rätt nuläge och underlag
 
-### Avgränsning och bevisstyrka
+Läs [State](#state) för kvarstående arbete och nästa handling. För vad appen faktiskt stödjer, använd [funktionsinventeringen](function-inventory.md) och respektive domänägare; återkontrollera berörd kod mot aktuell main inför implementation.
 
-Kontrollen utgår från main [`cf320c661691d22101b121914ea69326d8cbc6f7`](https://github.com/EmelieHagander/Bob-the-builder/commit/cf320c661691d22101b121914ea69326d8cbc6f7). [PR #157](https://github.com/EmelieHagander/Bob-the-builder/pull/157) är mergad som `3d87a6b5de6b844ec7f55b155681a69ace164da2`. Sökning efter öppna PR:er gav inga träffar före denna dokumentationsändring. Det säger inget om opushat arbete eller framtida ändringar.
-
-Kod och ägardokument har lästs mot denna commit. En separat **read-only** kontroll gjordes i det angivna Supabase-projektet; mät-/scope-resultatet har databastid `2026-09-29 10:03:37.023034+00` (12:03 i Stockholm). Inga data, funktioner, inställningar eller migrationer ändrades.
-
-**Inte omkört här:** det tidigare isolerade regressionstestet, full Node/SQL-/browser-svit, betald modell/CAD-körning eller jämförelse av alla driftsatta Edge-filer. Kodvägsfynd är inte live-reproduktioner. Tidigare CI- och driftsättningsbevis hänvisas till [CAD-ägarens releasepost](cad-adapter.md#drawing-intake-and-complements--september-29-contract); de är inte nya testresultat från denna genomgång.
-
-### Det som redan finns
-
-PR #157 innehåller strukturerat ritningsintag, genomgång av samtliga överlämnade krav plus extra behov, bounded/paginerad källhämtning, privata sparade ritningsuppdrag och separata renderverktyg för ny geometri respektive befintliga delar. Direkt bindning till vissa projektmått finns. Oberoende granskning, godkännande av exakt kandidat och befintlig Artifact-sparväg finns också. Detta är en grund att komplettera, inte skäl att börja om med en annan databas.
-
-Livekontrollen bekräftade att `bob_private.drawing_requests` och `drawing_request_writes` finns med RLS aktiverat. Den kontrollen ensam bevisar inte normalanvändarens alla rättigheter eller fullständig återupptagning efter en ändring i UI.
-
-### De fyra tidigare fynden, återkontrollerade
-
-| ID | Kontrollresultat | Betydelse och bevisgräns |
-|---|---|---|
-| F1 | **Bekräftat i aktuell data:** `p_barnrum_vaningssang` har 30 måttposter, alla 30 aktiva; 0 rader i `project_physical_scope` och 0 i `area_physical_targets`. Fyra aktiva ämnesetiketter innehåller V1 och fyra V2. Alla 30 saknar component-koppling. | Fysisk projektscope saknas i dessa kanoniska relationer. V1/V2 är etiketter, inte bevis för att alla åtta motsäger varandra. Faktisk semantisk ersättning och rätt byggnad/rum måste fastställas före datarättning. Avsaknad av koppling bevisar inte att byggnaden/rummet saknas globalt. |
-| F2 | **Bekräftat i main:** `bindMeasuredDimensions` tillåter tom bindningslista och stöder ett begränsat antal dimensionsfält på definitioner, med ID/revision från projektets `measurements`. | Exakt hämtning finns när bindningen används, men det finns inget heltäckande kontrakt för fysisk källidentitet, instansplaceringar, koordinattransformationer och beräkningskedjor. Ett fält som finns är inte bevis på full täckning. |
-| F3 | **Kodvägen bekräftad, tidigare regression inte omkörd:** granskningsinsamlingen märker läsfel/avkortning som `incomplete_datasets`. Oberoende evidens skickas till modellen, men accepteringsgrenen kontrollerar inte detta fält maskinellt innan `pass` ger `ready` och en tillgänglig kandidat. | Prompten varnar, men är inte en hård grind. Det tidigare beskrivna felet är fortfarande möjligt i den lästa kodvägen. Detta bevisar inte att en felaktig liveleverans faktiskt sparats. |
-| F4 | **Bekräftat i main och granskad live-schemaform:** applicerade bindningar returneras i renderverktygets resultat, men finns inte i `CadCandidate` eller dess sparade draft. `artifact_cad_revisions` lagrar recept/exportdata och vissa identiteter; `artifact_measurements` håller mått-ID/revision men ingen koppling per parameter. | Spårning på postnivå finns. En komplett kedja parameter → källa/beräkning/placering → granskningsbevis bevaras inte via den granskade CAD-vägen. Andra Artifact-typer kan ha egna geometriunderlag; de är inte bevis för att detta CAD-kontrakt är komplett. |
-
-**Kodbevis, låsta till granskad commit:** [intag och bindningar](https://github.com/EmelieHagander/Bob-the-builder/blob/cf320c661691d22101b121914ea69326d8cbc6f7/supabase/functions/_shared/cad-intake.ts), [oberoende granskningshämtning](https://github.com/EmelieHagander/Bob-the-builder/blob/cf320c661691d22101b121914ea69326d8cbc6f7/supabase/functions/_shared/drawing-review.ts), [godkännande och kandidatskapande](https://github.com/EmelieHagander/Bob-the-builder/blob/cf320c661691d22101b121914ea69326d8cbc6f7/supabase/functions/_shared/cad-assistant.ts#L160-L307), [granskningsparser och fingeravtryck](https://github.com/EmelieHagander/Bob-the-builder/blob/cf320c661691d22101b121914ea69326d8cbc6f7/supabase/functions/_shared/cad-review.ts).
-
-**Ytterligare gräns:** nuvarande ritningsuppdrag är privata och trådbundna. CAD-kontraktet anger återupptagning genom nästa turns `request_id` och att chattreset raderar arbetsläget via FK. Det är inte samma sak som den föreslagna projektbeständiga, händelsestyrda fortsättningen. Automatisk väckning av ett vilande ritningsuppdrag efter enbart ett UI-mått eller en Task-uppdatering är **inte verifierad här** och ska inte presenteras som färdig.
-
-### Reproducerbar read-only datakontroll
-
-Kör bara inom behörig felsökning. För annat projekt ska ID:t ersättas uttryckligt; ingen global datarättning eller automatisk arkivering följer av resultatet.
-
-```sql
-select now() as checked_at,
-  (select count(*) from bob.project_physical_scope
-   where project_id='p_barnrum_vaningssang') as project_physical_links,
-  (select count(*) from bob.area_physical_targets
-   where project_id='p_barnrum_vaningssang') as area_physical_links,
-  count(*) as total,
-  count(*) filter (where not archived) as active,
-  count(*) filter (where not archived and subject ilike '%v1%') as active_v1_subject,
-  count(*) filter (where not archived and subject ilike '%v2%') as active_v2_subject,
-  count(*) filter (where not archived and component_id is null) as active_without_component
-from bob.current_measurements
-where project_id='p_barnrum_vaningssang';
-```
-
-För schemaformen: läs `information_schema.columns` för `bob.artifact_cad_revisions`, `bob.artifact_measurements`, `bob.measurement_revisions`, `bob.current_measurements` och de två scope-tabellerna. RLS kontrollerades med `pg_class.relrowsecurity` för de två privata request-tabellerna. Endast aggregat/schema redovisas här, inga måttvärden, bilder eller privata chattinnehåll.
+Den daterade kod-/datakontrollen och tidigare överlämningen finns i [granskningsarkivet](archive/bob-delivery-flow-review-2026-09-29.md). Arkiveringen flyttar bevis och historik, **inte öppna problem till ”klart”**. Åtgärderna för F3 ligger kvar i P0, F1/F2/F4 i P1 och uppdragslivscykeln i P2. Historiska test-/driftuppgifter får inte räknas som nya resultat.
 
 <a id="plan"></a>
 ## 10. Prioriterad implementeringsplan
@@ -266,7 +222,7 @@ För schemaformen: läs `information_schema.columns` för `bob.artifact_cad_revi
 | **P3 — rätt kontext och rätt projektyta** | Uppdragskort, källkarta, ändringsdelta och tydliga förmåge-/kunskapspaket; relevanta bilder levereras faktiskt. Visa leveransstatus, källstatus och samlade kompletteringar i befintliga UI-ytor. Separera gällande version från senaste förslag. | Context/tools/knowledge samt UI-index/artifacts/media. Vera granskar mobil, åtkomst och ärliga felstatusar. | Bob vet vad som behövs och var det finns; användaren ser varför han väntar och hittar rätt resultat efter reload. Inte ett separat nytt chatt- eller planeringssystem. |
 | **P4 — faktisk produktacceptans** | Kör varierade verkliga modellflöden med komplett/ofullständigt underlag och kontrollerade fel, plus deltagar-/mobil-/återbesöksprov. Testa fler konstruktioner och större projekt med samma generella modell. | UC-001–005, verification och berörda domänägare. | Dokumenterade slutresultat och kostnader, inte enbart mocks eller bra svarstext. Endast uppfyllda delutfall markeras klara; hela UC stängs enligt user-stories. |
 
-**Rekommenderad första implementationsetapp är P0.** Den har ett konkret återkontrollerat fel, en begränsad ändringsyta och ett tydligt positivt motprov. P1 är nästa strukturella steg; fysisk scope-rättning görs inte genom att gissa kopplingar eller arkivera allt som heter V1.
+**Rekommenderad första implementationsetapp är P0.** Den utgår från [det daterade fyndet F3](archive/bob-delivery-flow-review-2026-09-29.md#fynd), har en avgränsad granskningsyta och ett tydligt positivt motprov. P1 är nästa strukturella steg; fysisk scope-rättning görs inte genom att gissa kopplingar eller arkivera allt som heter V1.
 
 <a id="p0"></a>
 ### 10.1 P0 — kodgranskning, reproduktion, fix och verifiering
@@ -288,7 +244,7 @@ För schemaformen: läs `information_schema.columns` för `bob.artifact_cad_revi
 
 **Utanför P0:** fullständig parameter-/beräkningsspårning och riktad fysisk datarättning hör till P1. Händelsestyrd återupptagning efter ett senare UI-mått eller en Task-uppdatering hör till P2. P0 ska inte skapa nya frågor om redan givet arbetsmandat, men den får inte tillgodoräkna sig P2:s ännu overifierade fortsättning.
 
-**Överlämningsgrind:** uppdatera [State](#state), berörda domänägare och testbevis innan passet avslutas. Separera kodgranskad, testad, mergad och driftsatt. Ingen automatisk merge, datamigration eller driftsättning ingår; kontrollera diff, målmiljö och uttryckligt mandat före varje sådan åtgärd.
+**Överlämningsgrind:** lägg test-/granskningsbevis i PR/CI eller relevant verifieringsägare, uppdatera berörda domänkontrakt och lämna endast nästa handling och kvarstående hinder i [State](#state). Arkivera avslutade delsteg med bevislänk; kvarstående acceptans-, merge- eller driftsättningsbehov ska fortfarande synas. Ingen automatisk merge, datamigration eller driftsättning ingår; kontrollera diff, målmiljö och uttryckligt mandat före varje sådan åtgärd.
 
 <a id="acceptans"></a>
 ## 11. Acceptansfall
@@ -321,38 +277,24 @@ Alla fall bedömer slutläget i data och avsedd UI, inte bara Bobs svar. Använd
 Mät minst: andel beställningar som når korrekt leverans utan extra knuff, korrekt samlad komplettering, falska godkännanden, falska stopp, parameterursprungens täckning, kostnad per accepterad leverans, onödiga upprepningar och felaktiga dubbletter. Rapportera testantal och spridning; ett enstaka lyckat modellförsök stänger inte hela användarfallet.
 
 <a id="state"></a>
-## 12. State och överlämning
+## 12. State — nästa arbete
 
-**Denna sektion äger arbetsläget för just leveransflödets förbättring P0–P4.** Den är inte Bobs runtime-minne, en ny produktroadmap eller en andra funktionsinventering. Målkontraktet finns ovan, daterade fynd i [avsnitt 9](#nulage), appens samlade implementerade förmågor i [function-inventory.md](function-inventory.md) och releaseordningen i [v1-plan.md](v1-plan.md). Bevis ska länkas, inte återberättas som nya kontroller.
+**Nästa handling: börja med P0.1 och P0.2.** Kontrollera aktuell main och parallella ändringar, välj en separat implementationsbranch, följ hela godkännande-/sparvägen och reproducera ”obligatoriskt läsfel + modellpass” före fix. Lägg samtidigt positiva motprov för komplett underlag och styrkt irrelevant extrainformation. Arbetsordningen finns i [P0:s arbetspass](#p0); planeringen ska inte börja om.
 
-### Aktuell hållpunkt — 2026-09-29
+### Öppet arbete i prioritetsordning
 
-| Fält | Sparat läge |
+| Etapp | Vad återstår? |
 |---|---|
-| Nästa etapp | **P0 är förberett, inte genomfört.** Följ [P0.1–P0.4](#p0); inför inte spärren innan berörda kodvägar och det positiva motprovet granskats. |
-| Kontrollerad main | `cf320c661691d22101b121914ea69326d8cbc6f7`, återkontrollerad vid denna dokumentationsuppdatering. Det är källkodens bas, inte bevis för en fullständig jämförelse mot drift. |
-| Dokumentationsarbete | [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158), branch `docs/bob-delivery-flow-20260929`. Vid uppdateringen är PR:n ett öppet, omërgat utkast. Utgångspunkten för tillägget är `4f82c4d769c4cc7105a127053bd727fa16d4ba21`; PR:ns senaste commit visar dokumentversionen. |
-| Mandat för denna ändring | Spara P0-plan och tydlig överlämningsstatus. Ingen implementation, datarättning, migration, merge eller driftsättning ingår. Ett sparat arbetssätt är inte bevis på genomförd fix. |
-| Befintlig granskning | Riktad kodgranskning och daterad read-only datakontroll enligt avsnitt 9. Inte en heltäckande kodrevision av Bob. Tidigare livefynd är inte omkörda i denna statusuppdatering. |
-| P0.1 | **Planerat.** Den bredare genomgången av alla berörda godkännande-/spar-/återupptagningsvägar återstår; tidigare riktad läsning är ingångsvärde. |
-| P0.2 | **Inte kört i detta arbetspass.** Regression före fix, positivt motprov och styrkt irrelevant extrakälla återstår. |
-| P0.3 | **Inte implementerat.** Ingen P0-fix eller separat implementations-PR har skapats av detta dokumentationsarbete. |
-| P0.4 | **Inte verifierat.** Inga nya Node-/SQL-/browser- eller modell-/CAD-resultat tillförs här. P0:s leveransacceptans är öppen. |
-| P1–P4 | **Planerade, inte genomförda av denna lösningsgenomgång.** Omfattning och beroenden finns i avsnitt 10; befintliga delar av produkten ska inte misstolkas som nytillverkade eller saknade. |
-| Kvarstående hinder och avgränsningar | Granskningsfynd F1–F4 i avsnitt 9 är underlag att återkontrollera. För P0 återstår reproduktion och precisering av obligatoriskt underlag samt kontroll av möjliga kringvägar. Senare UI-/Task-väckning tillhör P2. |
-| Kod-/verifieringsansvar | Den som tar nästa P0-implementationspass ansvarar för kodkarta, patch, prov och testbevis. Ingen separat kodgranskare eller körande agent är tilldelad av denna statuspost. |
-| Dokumentationsansvar | **Archie**, enligt [subagentdefinitionen](../.claude/agents/archie.md), granskar placering, ägarskap, status, länkar och överlämning. Han ersätter inte teknisk granskare eller domänägare. |
+| **P0 — först** | Genomför kodkarta och reproduktion; precisera obligatoriska källor och möjliga kringvägar. Därefter avgränsad fix och verifiering av både stopp och leverans enligt P0.3–P0.4. [F3:s daterade underlag](archive/bob-delivery-flow-review-2026-09-29.md#fynd) är en ingång, inte ett redan kört regressionstest. |
+| **P1** | Lös parameter-/källspårning, ändringspåverkan och riktad fysisk datakvalitet. Återkontrollera F1/F2/F4; fastställ rätt scope och verkliga ersättningsrelationer innan data ändras. |
+| **P2** | Lös uppdragets beständighet, samlad komplettering, återupptagning från chatt/UI/Task, deduplicering och budget-/kvittoåterhämtning. |
+| **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
+| **P4** | Verifiera verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
-### Archie: definition, ansvar och faktisk körning
+Detaljer, ansvariga domänägare och klart-villkor finns i [implementeringsplanen](#plan), inte i en parallell roadmap.
 
-Repot har redan `.claude/agents/archie.md` med `name: archie`, beskrivning och granskningskontrakt. [CLAUDE.md](../CLAUDE.md) hänvisar dokumentationsarbete dit. Läs även [learnings](../.claude/agents/archie-learnings.md) och [findings](../.claude/agents/archie-findings.md). Återanvänd denna definition; skapa inte en parallell Archie eller lägg denna etapps tillfälliga status i hans stabila instruktion.
+**P0:s öppna utgångskrav:** A06 måste stoppa felaktigt godkännande; A01 måste nå sparad, kopplad och återöppnad leverans utan nytt lov. Saknade testbevis eller fel i ett senare leveransled förblir öppna hinder. Tekniskt färdig kod är inte automatiskt produktacceptans eller driftsättning.
 
-Archie är en dokumentationsstödjande subagent för utvecklingsarbetet, inte en ny byggspecialist i Bobs produktflöde. **Att definitionen finns är inte bevis för att en separat subagent har körts.** I denna dokumentationsuppdatering har den arbetande assistenten läst och använt kontraktet; ingen separat Archie-körning eller oberoende granskning påstås. Om Archie anropas i nästa verktygsmiljö ska faktiskt granskningsresultat länkas. Om granskningen görs manuellt anges det i stället.
+**Arbetsgräns:** nästa P0-pass behöver ett implementationsuppdrag och en separat implementations-PR. Denna dokumentationsbranch ger inte mandat till merge, datarättning eller driftsättning. Kontrollera alltid ändring och målmiljö före sådana åtgärder. Dokumentationens arbetsyta är [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158).
 
-### Uppdatera vid varje avslutat pass
-
-Den ansvarige för passet uppdaterar denna hållpunkt med datum, kontrollerad main och arbetscommit, branch/PR, genomförda delsteg, kvarstående hinder och **en konkret nästa handling**. Länka testnamn/kommandon, miljö, resultat och granskningsbevis från PR/CI eller relevant ägardokument. Skriv ”inte kört” där bevis saknas. Äldre datakontroller och modellkörningar behåller sina egna datum.
-
-Håll planerad, kodgranskad, reproducerad, implementerad, testad, mergad och driftsatt isär. En godkänd PR eller grön fixturesvit får inte automatiskt markera faktisk modell-/deltagaracceptans klar. Om verifierat runtime-beteende ändras uppdateras den berörda domänägaren och funktionsinventeringen, med länk hit för återstående förbättringsarbete. State ersätter inte dessa ägare.
-
-**Nästa konkreta handling:** på ett uttryckligt P0-uppdrag, kontrollera aktuell main och pågående ändringar igen, skapa/återanvänd rätt separat implementationsbranch och börja med kodkartan i P0.1 samt regressionen i P0.2. Planeringen börjar inte om, och P1/P2 ska inte blandas in utan att beroendet görs tydligt. Ingen merge eller driftsättning följer automatiskt av att arbetspasset startas eller avslutas.
+**Ansvar och underhåll:** den som tar arbetspasset ansvarar för nästa handling och kvarstående hinder; Archie ansvarar för dokumentationsplacering enligt [sin prompt](../.claude/agents/archie.md#forward-looking-state-and-archives). Flytta avslutade delsteg och bevis till PR/CI, verifieringsägare eller daterat arkiv. Behåll endast öppna åtgärder, beslut, beroenden och acceptanskrav här. Gällande produktkontrakt ska däremot ligga kvar hos sina ägare.

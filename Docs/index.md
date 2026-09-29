@@ -14,7 +14,8 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
-| end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — specified target, September 29 read-only findings and acceptance cases; not deployed behavior |
+| next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work only; start with P0, not completed-work history |
+| end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — specified target, P0 work pass and acceptance cases; not deployed behavior |
 | five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
 | baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
 | general audit of Bob's tool use and unfinished work after PR #146 | `Docs/bob-tool-autonomy-audit-2026-09-25.md` — live configuration, reproducible runtime findings, test-policy drift and outcome acceptance |
@@ -137,7 +138,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
-- [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract, specified**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and a staged implementation proposal. Reuses the domain owners; its dated review appendix is not the maintained capability inventory. No implementation or deployment is claimed.
+- [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract, specified**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and a staged implementation proposal. Reuses the domain owners. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in the archive below. No implementation or deployment is claimed.
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-tools.md` — **tool-system owner**: since 2026-09-27 the whole permitted toolbox is offered every step on named shelves, with waiting/used-up tools listed and no forced tool choice; caller authority and execution fences are unchanged. The earlier core/on-demand tiers and list/load discovery are kept as history. Does not claim the generic drawing engine is built.
 - `Docs/bob-tool-autonomy-audit-2026-09-25.md` — **dated audit after PR #146**: actual models/loadout, general completion gaps, discovery and budget failures, CAD feedback and behavioural verification; follow the domain owners for implementation contracts.
@@ -166,9 +167,14 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `.claude/agents/vera.md` — stable Vera contract.
 - `.claude/agents/vera-learnings.md` — durable frontend/UX lessons.
 - `.claude/agents/vera-findings.md` — unresolved frontend/UX drift or follow-ups.
-- `.claude/agents/archie.md` — stable Archie contract.
+- [.claude/agents/archie.md](../.claude/agents/archie.md) — stable Archie contract, including forward-looking State and archive placement.
 - `.claude/agents/archie-learnings.md` — durable documentation lessons.
-- `.claude/agents/archie-findings.md` — unresolved documentation/product-contract drift.
+- [.claude/agents/archie-findings.md](../.claude/agents/archie-findings.md) — unresolved documentation/product-contract drift only; resolved entries belong in the archive.
+
+## Archives — historical evidence, not active work
+
+- [Delivery-flow review, 2026-09-29](archive/bob-delivery-flow-review-2026-09-29.md) — dated code/data findings, verification limits and the superseded handoff snapshot. Open actions remain in [State](bob-delivery-flow.md#state); archiving this record does not close them.
+- [Archie's resolved findings](../.claude/agents/archive/archie-findings-2026-09-29.md) — historical FINDING-A01–A03 closure records, removed from the open-findings reading path.
 
 ## Precedence
 
@@ -188,5 +194,7 @@ A runtime bug is not a new product decision: fix the bug against the owning cont
 ## Documentation rule
 
 **One truth, one home.** Before adding a new markdown file, search this index and the repository for the existing owner. Extend the owner when the concern belongs there; split only when the new file has a stable independent job, then add it here.
+
+For State, handoff and open-finding maintenance, follow [Archie's forward-looking State/archive rules](../.claude/agents/archie.md#forward-looking-state-and-archives). Current contracts stay with their owners; completed-work history is not an active task list.
 
 September 2026 context extension: `ask-bob-conversations.md` supersedes its earlier provider-only memory plan with five full recent messages, a private incremental older brief, exact history retrieval, paged construction records and compact/expandable chat. Deployment evidence belongs in the merged release PR, not a source-only status claim.
