@@ -29,6 +29,7 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
     definitions: [{ id: 'panel', primitive: 'box' as const, material_ref: null, x_mm: 600, y_mm: 300, z_mm: 18 }],
     instances: [{ id: 'panel', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front' as const, 'top' as const] }
   const request = { request_id: null, brief: message, handoff, area_id: null, component_id: null, step_id: step, artifact_id: null }
+  const privateStep = Buffer.from('PRIVATE_STEP_EXPORT').toString('base64')
   const reply = (data: string | null, name?: string, args: unknown = {}) => ({ success: true, data, responseId: randomUUID(), model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
     ...(name ? { toolCalls: [{ id: randomUUID(), type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
 
@@ -36,14 +37,14 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
     const turn = randomUUID(), claim = await call(null, 'bob.bob_claim_turn', [project, owner, turn, message], 'service_role')
     assert.equal(claim.status, 'claimed')
     let writes = 0, renders = 0, reviews = 0, designerCalls = 0
-    const receipts: any[] = []
+    const receipts: any[] = [], errors: string[] = []
     const writer = createProjectWriter(project, message, async payload => {
       writes++
       try {
         const data = await call(owner, 'bob.bob_project_write_v11', [project, claim.thread_id, turn, claim.generation, JSON.stringify(payload)])
         receipts.push(data); return { data, error: null }
-      } catch (e: any) { return { data: null, error: { code: e.code, message: e.message } } }
-    }, async () => ({ data: receipts, error: null }), async () => ({ data: { generation: claim.generation, receipts }, error: null }))
+      } catch (e: any) { errors.push(e.message); return { data: null, error: { code: e.code, message: e.message } } }
+    }, async () => ({ data: receipts.slice(-1), error: null }), async () => ({ data: { generation: claim.generation, receipts: receipts.slice(-1) }, error: null }))
     const makeLookup = () => createProjectLookup(project, async (pid, q) => {
       if (broken && renders > 0 && q.dataset === 'physical_elements') return { data: null, error: { code: 'backend_error' } }
       try { return { data: await call(owner, 'bob.search_bob_project_data_v8', [pid, q.dataset, q.query, q.status, q.area_id, q.record_id, q.after_id ?? null]), error: null } }
@@ -51,15 +52,16 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
     }, 5000, 40)
     const cadAssistant = createCadAssistant({ projectId: project, userId: owner, ownerRequest: message, available: true, deadline: Date.now() + 300000,
       hasAccess: async () => true, makeLookup, readArtifact: async () => null,
-      render: async r => { renders++; return { recipe: r, manifest: { engine: { name: 'fixture' }, assembly_id: r.assembly_id, instances: r.instances },
-        files: { front: 'PHN2Zz48L3N2Zz4=', top: 'PHN2Zz48L3N2Zz4=', step: 'PRIVATE_STEP_EXPORT' }, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } } },
+      // Match the production packet contract; rendering itself is still mocked.
+      render: async r => { renders++; return { recipe: r, manifest: { engine: { name: 'build123d' }, assembly_id: r.assembly_id, instances: r.instances },
+        files: { front: 'PHN2Zz48L3N2Zz4=', top: 'PHN2Zz48L3N2Zz4=', step: privateStep }, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } } },
       callModel: async o => {
         if (o.functionName === 'cad-research') return reply(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Synthetic concept requirement' }], additional_needs: [] })
         if (o.functionName === 'cad-reviewer') { reviews++; return reviewReply() }
         return ++designerCalls === 1 ? reply(null, 'render_cad_candidate', { purpose: 'project', recipe, dimension_bindings: [], title: 'Shelf concept', description: 'Synthetic construction', assumptions: 'Not certified or measured site fit', target_revision: 1, measurements: [] }) : reply('Ready for review.')
       },
     })
-    return { writer, cadAssistant, makeLookup, receipts, get writes() { return writes }, get renders() { return renders }, get reviews() { return reviews },
+    return { writer, cadAssistant, makeLookup, receipts, errors, get writes() { return writes }, get renders() { return renders }, get reviews() { return reviews },
       finish: () => call(null, 'bob.bob_fail_turn_v2', [project, owner, claim.thread_id, turn, claim.generation], 'service_role') }
   }
 
@@ -71,36 +73,39 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
         if (o.schemaName === 'bob_delivery_language') return { ...reply(null), success: false }
         const names = o.tools?.map(tool => tool.function.name) ?? []
         if (++calls === 1) { assert(names.includes('design_project_cad')); return reply(null, 'design_project_cad', request) }
-        if (calls === 2) { assert(names.includes('save_cad_design'), 'complete evidence must unlock saving without another owner prompt'); return reply(null, 'save_cad_design', { request_quote: message }) }
+        if (calls === 2 || calls === 3) {
+          assert(names.includes('save_cad_design'), 'complete evidence must unlock saving without another owner prompt')
+          // The third call retries the exact save inside the active claim.
+          return reply(null, 'save_cad_design', {})
+        }
         return reply('Konceptritningen är sparad och kopplad till arbetssteget.')
       },
     })
-    assert.equal(good.writes, 1); assert.equal(good.renders, 1); assert.equal(good.reviews, 1)
-    assert.equal(good.receipts.length, 1)
+    assert.deepEqual(good.errors, [], 'the synthetic packet must satisfy the real SQL contract')
+    assert.equal(good.writes, 2); assert.equal(good.renders, 1); assert.equal(good.reviews, 1)
+    assert.equal(good.receipts.length, 2)
+    assert.deepEqual(good.receipts[1], good.receipts[0], 'retry reuses the exact SQL receipt, not a second Artifact')
     const saved = good.receipts[0], id = saved.recordId
     assert.deepEqual(saved.record.step_ids, [step])
     const overview: any = (await query('select * from bob.current_drawing_overview where id=$1', [id])).rows[0]
     assert.equal(overview.revision, 1); assert.equal(overview.steps[0].id, step); assert.equal(overview.source_state, 'current')
-    assert(!JSON.stringify(overview).includes('PRIVATE_STEP_EXPORT'))
+    assert(!JSON.stringify(overview).includes(privateStep))
     const work: any = (await query('select * from bob.current_drawing_steps where artifact_id=$1', [id])).rows[0]
     assert.equal(work.step_id, step); assert.equal(work.artifact_revision, 1)
     assert.deepEqual((await query('select recipe from bob.artifact_cad_revisions where artifact_id=$1 and artifact_revision=1', [id])).rows[0].recipe, recipe)
-    const retry = createBobToolSession({ writer: good.writer, cadAssistant: good.cadAssistant, lookup: good.makeLookup(), readPolicy: seedToolPolicy })
-    await retry.prepare()
-    assert.equal((await retry.execute('save_cad_design', { request_quote: message })).status, 'saved')
-    assert.equal(good.writes, 1, 'the same save returns its receipt, not a new write')
     assert.equal((await query('select * from bob.current_drawing_steps where artifact_id=$1', [id])).rows.length, 1)
+    assert.equal((await query('select * from bob.artifact_cad_revisions where project_id=$1', [project])).rows.length, 1)
   } finally { await good.finish() }
 
   const before = (await query('select * from bob.current_drawing_overview where project_id=$1 order by id', [project])).rows
   const bad = await scenario(true)
   try {
-    const tools = createBobToolSession({ writer: bad.writer, cadAssistant: bad.cadAssistant, lookup: bad.makeLookup(), readPolicy: seedToolPolicy })
+    const tools = createBobToolSession({ writer: bad.writer, cadAssistant: bad.cadAssistant, lookup: bad.makeLookup(), readPolicy: seedToolPolicy, message })
     await tools.prepare()
     const failed = await tools.execute('design_project_cad', request)
     assert.equal(failed.status, 'unavailable'); assert.equal(failed.stage, 'review')
     assert(!(await tools.prepare()).some(tool => tool.function.name === 'save_cad_design'))
-    assert.notEqual((await tools.execute('save_cad_design', { request_quote: message })).status, 'saved', 'a guessed tool name is not authority')
+    assert.notEqual((await tools.execute('save_cad_design', {})).status, 'saved', 'a guessed tool name is not authority')
     assert.equal(bad.writes, 0); assert.equal(bad.reviews, 0); assert.equal(bad.renders, 1)
     assert.deepEqual((await query('select * from bob.current_drawing_overview where project_id=$1 order by id', [project])).rows, before)
     assert.equal((await query('select * from bob.artifact_cad_revisions where project_id=$1', [project])).rows.length, 1)

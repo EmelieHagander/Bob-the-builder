@@ -127,7 +127,6 @@ again. The reviewer has no tools, writer or designer response cursor. It returns
 coverage for every requirement and explicit issues. Code rejects missing preview
 pixels, omitted requested views, malformed/incomplete reviews and contradictory
 passes with failed requirements/errors. Open site checks may remain warnings.
-
 A rejected candidate returns to the designer with concrete feedback. At most
 three reviews (initial plus two repair checks), four renders and ten designer
 rounds fit the existing consultation deadline. A missing reviewer is an honest
@@ -272,7 +271,6 @@ all 59/57 bundled modules; only the type-only provenance module is omitted by
 the bundler. Ask Bob retains JWT verification; the worker retains its per-job
 capability check. Unauthenticated/invalid-capability probes return 401/403.
 There were no active jobs at rollout.
-
 [Pages deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36460335091)
 and [CAD deployment](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36460335073)
 both passed. The live CAD smoke test verified actual STEP/SVG/PNG generation,
@@ -442,3 +440,19 @@ the bundler omits only type-only `src/data/provenance.ts`. No active Bob jobs
 were present before deployment. Model settings and the shared spending threshold
 are unchanged. No paid drawing run was started during this release; owner testing
 of actual requirement assessment and drawing quality remains necessary.
+
+## Mandatory independent-review evidence — P0
+
+**Implementation:** [PR #159](https://github.com/EmelieHagander/Bob-the-builder/pull/159), not deployed by this change. This strengthens the independent-review boundary above; the broader delivery plan remains in [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158).
+
+`collectDrawingReviewEvidence` defines the server-owned mandatory baseline: project, measurements, physical spaces/elements, space measurements and relationships; the plan is included when the request has a Step. Reads remain caller-scoped with the existing page/byte limits. An empty successfully completed read differs from an unavailable or truncated read. Unrelated datasets are not added merely because tools can read them. This is a conservative existing baseline, not P1's future parameter-level dependency/relevance manifest.
+
+Before paying the independent reviewer, `reviewCurrentCandidate` requires that baseline's `incomplete_datasets` be empty. Backend errors, paging without a usable next cursor, repeated cursors, page exhaustion and byte exhaustion cannot be waived by a model `pass`. The gate is shared by new geometry, saved-detail rendering and the last designer round. Existing preview, requirement, authority and fingerprint checks still apply.
+
+A failed read returns `unavailable`, `stage: review`, `reason: review_sources_incomplete`, the complete failed-dataset list and the same `request_id` when available. It clears candidate/approval, leaves no saveable candidate and stops unchanged consultations within that assistant turn. No reviewer call is counted or made for that blocked candidate. This is a retrieval failure, not a new measurement task, design error or request for renewed owner approval.
+
+The request checkpoint uses the existing `retrieval_failed` state and preserves its draft/assessment; exports and image pixels are not copied into request memory. If checkpoint persistence fails, `request_state_saved: false` distinguishes that additional failure while the in-memory approval/save boundary stays closed. A later legitimate resume after retrieval repair reuses the request identity and performs fresh source reads, render and review; the stored draft never confers approval. Existing turn authority and budget rules are unchanged. Event-triggered resume and cross-turn attempt deduplication remain P2 work.
+
+`save_cad_design` still receives the exact server-held candidate, not model-supplied geometry. Its registration gate and execution-time candidate check prevent an unapproved or guessed save from reaching the claimed writer. The database continues to enforce target/source revisions, project authority, receipts and Step links; this patch introduces no database-wide review certificate, migration or new permission. Other manual drawing formats keep their existing separate contracts.
+
+Regression coverage is owned by `tests/cad-evidence-gate.test.ts`, `tests/cad-evidence-recovery.test.ts` and `tests/cad-evidence-delivery.test.ts`. They cover the permissive-reviewer counterexample and complete-input positive, collective failures, checkpoint failure, same-request recovery, alternate render paths, cleared earlier approval, and the production Bob loop/tool boundary through real PGlite SQL/RLS, save receipts, Step/project readback and preservation of an existing delivery. AI/CAD network responses are controlled fixtures, not live model or physical-quality acceptance. Dated commands, results and remaining release gates belong in PR #159 rather than being treated as deployment evidence here.
