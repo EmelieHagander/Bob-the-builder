@@ -1,0 +1,43 @@
+name: CAD lineage concurrency
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'db/migrations/**'
+      - 'tests/support/**'
+      - 'scripts/*cad-lineage*'
+      - '.github/workflows/cad-lineage-concurrency.yml'
+  workflow_dispatch:
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: bob_lineage_concurrency
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      BOB_DISPOSABLE_POSTGRES: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: fixture-only
+      PGDATABASE: bob_lineage_concurrency
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: command -v psql
+      - run: node --import tsx scripts/check-cad-lineage-concurrency.ts
