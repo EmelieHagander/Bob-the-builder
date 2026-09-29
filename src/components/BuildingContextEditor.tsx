@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type {
   PhysicalBuilding,
+  PhysicalBuildingFootprint,
   PhysicalElement,
   PhysicalLevel,
   PhysicalRelationship,
@@ -25,6 +26,7 @@ export interface BuildingContextEditorProps {
   showProjectScope?: boolean
   sharing?: ReactNode
   selectedBuildingId: string | null
+  footprint: PhysicalBuildingFootprint | null
   levels: PhysicalLevel[]
   spaces: PhysicalSpace[]
   elements: PhysicalElement[]
@@ -74,6 +76,15 @@ function siteAddress(site: PhysicalSite | undefined): string {
   return [street, place, site.countryCode].filter(Boolean).join(' · ')
 }
 
+function footprintDimensions(footprint: PhysicalBuildingFootprint | null): string {
+  const dims = footprint?.geometry?.principal_dimensions_mm
+  if (!dims || typeof dims !== 'object' || Array.isArray(dims)) return ''
+  const length = Number((dims as Record<string, unknown>).length)
+  const depth = Number((dims as Record<string, unknown>).depth)
+  if (!Number.isFinite(length) || !Number.isFinite(depth)) return ''
+  return `${Math.round(length).toLocaleString('sv-SE')} × ${Math.round(depth).toLocaleString('sv-SE')} mm`
+}
+
 export function BuildingContextEditor({
   sites,
   buildings,
@@ -81,6 +92,7 @@ export function BuildingContextEditor({
   showProjectScope = true,
   sharing,
   selectedBuildingId,
+  footprint,
   levels,
   spaces,
   elements,
@@ -147,6 +159,21 @@ export function BuildingContextEditor({
       </div>
 
       {sharing}
+
+      {footprint && <section className="card foundation-section" style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ marginBottom: 3 }}>Exterior footprint</h3>
+            <p className="foundation-hint" style={{ margin: 0 }}>
+              Accepted physical geometry · {String(footprint.geometry.units ?? 'mm')}
+              {footprintDimensions(footprint) ? ` · ${footprintDimensions(footprint)}` : ''}
+            </p>
+          </div>
+          <span className="image-purpose">{truthLabel(footprint.truth)}</span>
+        </div>
+        {footprint.source && <p style={{ marginBottom: footprint.notes ? 6 : 0 }}>Source: {footprint.source}</p>}
+        {footprint.notes && <p className="foundation-hint" style={{ marginBottom: 0 }}>{footprint.notes}</p>}
+      </section>}
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
