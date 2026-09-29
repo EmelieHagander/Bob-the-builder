@@ -60,3 +60,52 @@ test('P1: exact finite decimal conversion must not introduce a floating-point di
 test('P1: unknown numeric records cannot become source-backed geometry',()=>{
  assert.throws(()=>bindMeasuredDimensions(recipe,[binding],new Map([[measurementId,{...measurement,truth:'unknown'}]])))
 })
+
+// Additional contract checks; the initial four tests above were executed red
+// against the unchanged production source before implementation.
+import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, measurementMillimetres } from '../supabase/functions/_shared/cad-lineage.ts'
+import { candidateFingerprint } from '../supabase/functions/_shared/cad-review.ts'
+
+test('P1: direct conversion respects the canonical decimal range and cannot mask conflicting normalization',()=>{
+ for(const [value,unit,want] of [['1.001','m',1001],['0.001','mm',0.001],['12.345','cm',123.45],['1000000','m',1000000000]] as const)
+  assert.equal(measurementMillimetres({value,unit,truth:'measured'}),want)
+ for(const value of ['-1','1e3','1.0001','NaN','1000001'])assert.throws(()=>measurementMillimetres({value,unit:'m'}))
+ assert.throws(()=>measurementMillimetres({...measurement,millimetres:'1002'}),/inconsistent/)
+})
+
+test('P1: saved details inherit source pins and original coordinates, not new guesses',()=>{
+ const exact=bindMeasuredDimensions(recipe,[binding],new Map([[measurementId,measurement]]))
+ const lineage=buildCadLineage('A',exact,[binding],new Map([[measurementId,measurement]]),handoff.coordinates)
+ const inherited=inheritCadLineage('A',{lineage},exact,requestId,3)
+ assert.deepEqual(inherited.bindings,lineage.bindings);assert.deepEqual(inherited.coordinates,lineage.coordinates)
+ assert.deepEqual(lineageMeasurementPins([],inherited),[{id:measurementId,revision:2}])
+ assert.throws(()=>lineageMeasurementPins([{id:measurementId,revision:3}],inherited),/conflicting/)
+ assert.equal(inheritCadLineage('A',{},exact,requestId,3).coordinates,null)
+ assert.equal(inheritCadLineage('A',{},exact,requestId,3).bindings.length,0)
+ assert.throws(()=>inheritCadLineage('A',{lineage:{...lineage,project_id:'B'}},exact,requestId,3),/invalid/)
+ assert.throws(()=>inheritCadLineage('A',{lineage},recipe,requestId,3),/invalid/)
+})
+
+test('P1: changing a source classification changes the reviewed candidate fingerprint',async()=>{
+ const f=fixture();assert.equal((await f.assistant.consult(request)).status,'ready')
+ const original=f.assistant.candidate!,changed=structuredClone(original)
+ changed.packet.manifest.bob_lineage.bindings[0].source.truth='estimated'
+ assert.notEqual(await candidateFingerprint(original),await candidateFingerprint(changed))
+ assert.equal(f.assistant.candidate!.packet.manifest.bob_lineage.bindings[0].source.truth,'measured')
+})
+
+
+test('P1: the saved-detail tool carries inherited pins even when the designer supplies none',async()=>{
+ const parent=fixture();assert.equal((await parent.assistant.consult(request)).status,'ready')
+ const source=parent.assistant.candidate!,lineage=source.packet.manifest.bob_lineage
+ let calls=0
+ const a=createCadAssistant({research:false,projectId:'A',userId:'u',available:true,hasAccess:async()=>true,deadline:Date.now()+300000,
+  makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:'solution'}]:q.dataset==='measurements'?[measurement]:[],related:[],truncated:false},error:null}),1000,40),
+  readArtifact:async()=>({recipe:source.packet.recipe,lineage}),
+  render:async r=>({recipe:r,manifest:{bob_lineage:{version:999,coverage:'complete'}},files:{front:'Zml4dHVyZQ=='},previews:{front:'Zml4dHVyZQ==',top:'Zml4dHVyZQ=='}}),
+  callModel:async o=>o.functionName==='cad-reviewer'?reviewReply():{success:true,data:null,responseId:'detail',model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(++calls===1?{toolCalls:[{id:'render',type:'function' as const,function:{name:'render_saved_cad_candidate',arguments:JSON.stringify({source_artifact_id:requestId,source_revision:1,part_ids:['panel-1'],title:'Detail',description:'Exact saved part',assumptions:'No new physical evidence',target_revision:1,measurements:[]})}}]}:{})}})
+ assert.equal((await a.consult(request)).status,'ready')
+ assert.deepEqual(a.candidate!.measurements,[{id:measurementId,revision:2}])
+ assert.deepEqual(a.candidate!.packet.manifest.bob_lineage.bindings,lineage.bindings)
+ assert.equal(a.candidate!.packet.manifest.bob_lineage.coverage,'partial','renderer metadata cannot forge authority')
+})

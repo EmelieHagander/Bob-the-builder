@@ -1,3 +1,4 @@
+import { measurementMillimetres } from './cad-lineage.ts'
 import type { DesignHandoff } from './cad-review.ts'
 import type { LookupInput, createProjectLookup } from './project-lookup.ts'
 
@@ -55,9 +56,8 @@ export function bindMeasuredDimensions(recipe:any,bindings:unknown,records:Map<s
  for(const b of bindings){
   if(!b||Object.keys(b).sort().join(',')!=='definition_id,dimension,measurement_id,revision'||typeof b.definition_id!=='string'||typeof b.measurement_id!=='string'||!Number.isSafeInteger(b.revision))throw new Error('invalid_dimension_bindings')
   const m=records.get(b.measurement_id),d=result?.definitions?.find((v:any)=>v.id===b.definition_id),key=b.definition_id+':'+b.dimension
-  const factor=m?({mm:1,cm:10,m:1000} as Record<string,number>)[m.unit]:undefined
-  if(!m||m.revision!==b.revision||m.archived||!factor||typeof m.value!=='number'&&!(typeof m.value==='string'&&/^[0-9]+(?:\.[0-9]+)?$/.test(m.value))||!d||!Object.hasOwn(d,b.dimension)||!['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm'].includes(b.dimension)||seen.has(key))throw new Error('unusable_measurement_binding')
-  const value=Number(m.value)*factor
+  if(!m||m.revision!==b.revision||m.archived||typeof m.value!=='number'&&!(typeof m.value==='string'&&/^[0-9]+(?:\.[0-9]+)?$/.test(m.value))||!d||!Object.hasOwn(d,b.dimension)||!['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm'].includes(b.dimension)||seen.has(key))throw new Error('unusable_measurement_binding')
+  const value=measurementMillimetres(m)
   if(!Number.isFinite(value)||value<=0)throw new Error('unusable_measurement_binding')
   d[b.dimension]=value;seen.add(key)
  }

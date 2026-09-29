@@ -1,3 +1,4 @@
+import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
 import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
@@ -280,7 +281,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        if(!object(args)||(args.purpose!==undefined&&args.purpose!=='project')||!text(args.title,200)||!text(args.description,6000)||!text(args.assumptions,3500)||args.target_revision!==selected.revision
          ||!Array.isArray(args.measurements)||args.measurements.length>20||args.measurements.some((m:any)=>!uuid(m.id)||!Number.isSafeInteger(m.revision)||m.revision<1)
          ||!Array.isArray(args.part_ids)||new Set(args.part_ids).size!==args.part_ids.length)throw new Error('invalid_candidate')
-       let recipe=args.recipe
+       let recipe=args.recipe,lineage:CadLineage|null=null
        if(args.source_artifact_id!==null){
         if(!uuid(args.source_artifact_id)||!Number.isSafeInteger(args.source_revision)||args.source_revision<1||recipe!==null)throw new Error('invalid_source')
         const source=await opts.readArtifact(args.source_artifact_id,args.source_revision)
@@ -294,6 +295,8 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
          if(recipe.clearances)recipe.clearances=recipe.clearances.filter((c:any)=>args.part_ids.includes(c.first_id)&&args.part_ids.includes(c.second_id))
          if(recipe.motions)recipe.motions=recipe.motions.filter((c:any)=>[...c.moving_ids,...c.obstacle_ids].every(id=>args.part_ids.includes(id)))
         }
+        lineage=inheritCadLineage(opts.projectId,source,recipe,args.source_artifact_id,args.source_revision)
+        args.measurements=lineageMeasurementPins(args.measurements,lineage)
        }else if(args.source_revision!==null||args.part_ids.length)throw new Error('invalid_source')
        const verification=opts.makeLookup(),measurementRecords=new Map<string,Record<string,any>>()
        try{for(const m of args.measurements){
@@ -304,14 +307,16 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        }}finally{sources.push(...verification.sources)}
        if(call.function.name==='render_cad_candidate')recipe=bindMeasuredDimensions(recipe,args.dimension_bindings??[],measurementRecords)
        const parsed=parseCadAssemblyRequest(recipe);if(!parsed){invalidRenders++;metrics.input_corrections++;out={status:'invalid',reason:'invalid_geometry',issues:cadIssues(recipe),renders_remaining:4-renders,corrections_remaining:8-invalidRenders};messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(out)});continue}
+       lineage??=buildCadLineage(opts.projectId,parsed,args.dimension_bindings??[],measurementRecords,handoff.coordinates)
        renders++;metrics.renders++
        let packet:CadPacket
        try{packet=await opts.render(parsed)}catch(error){
         rethrowContinuation(error);partial=true
         return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed',summary:'The CAD service failed. Stop this design attempt; changing the construction is not a renderer repair.'}
        }
+       packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage}}
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
-       await persist('draft',{draft:{recipe:parsed,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements}})
+       await persist('draft',{draft:{recipe:parsed,lineage,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements}})
        reviewPending=true
        out={status:'rendered',saved:false,applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
