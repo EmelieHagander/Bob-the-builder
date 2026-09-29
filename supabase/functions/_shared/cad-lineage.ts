@@ -92,9 +92,9 @@ export function inheritCadLineage(projectId:string,source:any,recipe:any,artifac
   return {version:old?.version??1,coverage:'partial',project_id:projectId,coordinates:structuredClone(old?.coordinates??null),inherited_from:{artifact_id:artifactId,revision},bindings}
 }
 
-export function lineageMeasurementPins(existing:{id:string;revision:number}[],lineage:CadLineage){
+export function lineageMeasurementPins(existing:{id:string;revision:number}[],lineage:CadLineage|null){
   const pins=new Map<string,number>()
-  for(const p of [...existing,...lineage.bindings.flatMap(b=>b.source.kind==='project_measurement'?[{id:b.source.id,revision:b.source.revision}]:[])]){
+  for(const p of [...existing,...(lineage?.bindings??[]).flatMap(b=>b.source.kind==='project_measurement'?[{id:b.source.id,revision:b.source.revision}]:[])]){
     if(pins.has(p.id)&&pins.get(p.id)!==p.revision)throw new Error('conflicting_measurement_pins')
     pins.set(p.id,p.revision)
   }

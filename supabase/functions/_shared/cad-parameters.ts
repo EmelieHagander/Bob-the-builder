@@ -1,3 +1,4 @@
+import {parseCadFrames,compileCadFrames,cadCoordinateSystem,frameParameterIds,CAD_FRAMES_SCHEMA,type CadFrameInput,type CadFrame} from './cad-frames.ts'
 import {CAD_DIMENSIONS,measurementMillimetres,type CadLineage} from './cad-lineage.ts'
 import type {CadAssemblyRequest} from './cad-adapter.ts'
 
@@ -9,14 +10,20 @@ export type ParameterInput=
  |{id:string;role:'decision'|'estimate';value:number;unit:ParameterUnit;reason:string}
  |{id:string;role:'derived';operation:'add_v1'|'subtract_v1'|'multiply_v1'|'divide_v1';operands:[string,string];rounding:'exact'|'half_away_6'}
  |{id:string;role:'unknown';unit:ParameterUnit;reason:string}
-export type ParameterPlan={version:1;nodes:ParameterInput[];bindings:{path:string;node:string}[]}
-export type CadParameters={version:1;project_id:string;coverage:'complete';precision:'decimal_6';nodes:(ParameterInput&{normalized:{value:number;unit:ParameterUnit};sources:ParameterSource[]})[];bindings:ParameterPlan['bindings']}
+export type ParameterPlan={version:1;frames:CadFrameInput[];nodes:ParameterInput[];bindings:{path:string;node:string}[]}
+export type CadParameters={version:1;project_id:string;coverage:'complete';precision:'decimal_6';coordinate_system:ReturnType<typeof cadCoordinateSystem>;frames:CadFrame[];nodes:(ParameterInput&{normalized:{value:number;unit:ParameterUnit};sources:ParameterSource[]})[];bindings:ParameterPlan['bindings']}
 const exact=(v:any,keys:string[])=>!!v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',')
 const id=(v:any):v is string=>typeof v==='string'&&/^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/.test(v)
 const uuid=(v:any):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
 const unit=(v:any):v is ParameterUnit=>['mm','deg','scalar'].includes(v)
 const reason=(v:any)=>typeof v==='string'&&!!v.trim()&&v.length<=2000
 const scale=1000000n
+export class CadParameterSourceError extends Error {
+ constructor(message:string,readonly technical=false){super(message)}
+}
+export class CadParameterGap extends Error {
+ constructor(readonly gaps:{id:string;unit:ParameterUnit;reason:string}[]){super('unknown_required_parameters')}
+}
 function decimal(v:unknown):bigint{
  if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>1e9||Number(v.toFixed(6))!==v)throw new Error('parameter_precision')
  const [whole,fraction]=Math.abs(v).toFixed(6).split('.')
@@ -49,7 +56,8 @@ export function cadParameterTargets(recipe:CadAssemblyRequest){
 }
 export function parseParameterPlan(raw:unknown):ParameterPlan{
  const v=raw as any
- if(!exact(v,['version','nodes','bindings'])||v.version!==1||!Array.isArray(v.nodes)||!v.nodes.length||v.nodes.length>1024||!Array.isArray(v.bindings)||v.bindings.length>8192)throw new Error('invalid_parameter_plan')
+ if(!exact(v,['version','frames','nodes','bindings'])||v.version!==1||!Array.isArray(v.nodes)||!v.nodes.length||v.nodes.length>1024||!Array.isArray(v.bindings)||v.bindings.length>8192)throw new Error('invalid_parameter_plan')
+ parseCadFrames(v.frames)
  const seen=new Set<string>()
  for(const n of v.nodes){
   if(!id(n?.id)||seen.has(n.id))throw new Error('invalid_parameter_identity');seen.add(n.id)
@@ -89,12 +97,16 @@ function sourceSnapshot(projectId:string,ref:Ref,project:Map<string,Record<strin
 
 /** Evaluate a declarative DAG with decimal arithmetic. No executable model code,
  * implicit unit conversions, inferred decisions or unknown-to-zero coercion. */
-export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,raw:unknown,project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>):CadParameters{
+export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,raw:unknown,project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>,images=new Map<string,string>()):CadParameters{
  const plan=parseParameterPlan(raw),targets=cadParameterTargets(recipe),inputs=new Map(plan.nodes.map(n=>[n.id,n]))
+ parameterSourcePins(plan)
  const result=new Map<string,CadParameters['nodes'][number]>(),active=new Set<string>()
  const missing=[...targets.keys()].filter(path=>!plan.bindings.some(b=>b.path===path))
- const unknown=plan.nodes.filter(n=>n.role==='unknown').map(n=>n.id)
- if(missing.length||unknown.length)throw new Error('parameter_gaps:'+JSON.stringify({unbound:missing,unknown}))
+ for(const f of plan.frames)if(f.kind==='image'&&!images.has(f.source_ref))throw new Error('coordinate_image_unread')
+ const unknown=plan.nodes.filter((n):n is Extract<ParameterInput,{role:'unknown'}>=>n.role==='unknown')
+ const frameGaps=plan.frames.filter(f=>f.required&&f.placement===null).map(f=>({id:f.id,unit:'scalar' as const,reason:f.reason}))
+ if(unknown.length||frameGaps.length)throw new CadParameterGap([...unknown.map(({id,unit,reason})=>({id,unit,reason})),...frameGaps])
+ if(missing.length)throw new Error('parameter_gaps:'+JSON.stringify({unbound:missing}))
  function evaluate(key:string):CadParameters['nodes'][number]{
   if(result.has(key))return result.get(key)!
   if(active.has(key))throw new Error('parameter_cycle')
@@ -130,7 +142,56 @@ export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,
   const n=evaluate(b.node);if(n.normalized.unit!==t.unit)throw new Error('parameter_unit_mismatch')
   writes.push({set:t.set,value:n.normalized.value})
  }
+ const frames=compileCadFrames(plan.frames,evaluate,images)
  if(result.size!==plan.nodes.length)throw new Error('parameter_unused_node')
  for(const write of writes)write.set(write.value)
- return {version:1,project_id:projectId,coverage:'complete',precision:'decimal_6',nodes:[...result.values()],bindings:plan.bindings}
+ return {version:1,project_id:projectId,coverage:'complete',precision:'decimal_6',coordinate_system:cadCoordinateSystem(recipe),frames,nodes:[...result.values()],bindings:plan.bindings}
 }
+
+export function cadParameterSources(value:CadParameters|undefined):ParameterSource[]{
+ return value?.nodes.flatMap(n=>n.role==='source'?n.sources:[])??[]
+}
+const stable=(value:unknown):string=>JSON.stringify(value,(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v)
+/** Recompute stored nodes and geometry before selecting a detail. Inheritance
+ * retains only dependencies reachable from the selected parameter bindings. */
+export function inheritCadParameters(projectId:string,sourceRecipe:CadAssemblyRequest,stored:unknown,recipe:CadAssemblyRequest):CadParameters{
+ const v=stored as CadParameters
+ if(!exact(v,['version','project_id','coverage','precision','coordinate_system','frames','nodes','bindings'])||v.version!==1||v.project_id!==projectId||v.coverage!=='complete'||v.precision!=='decimal_6'||!Array.isArray(v.nodes))throw new Error('invalid_saved_parameters')
+ const project=new Map<string,Record<string,any>>(),physical=new Map<string,Record<string,any>>()
+ const nodes=v.nodes.map(n=>{
+  const {normalized,sources,...input}=n
+  if(!exact(normalized,['value','unit'])||!Array.isArray(sources))throw new Error('invalid_saved_parameters')
+  if(n.role==='source'){
+   if(sources.length!==1)throw new Error('invalid_saved_parameters')
+   const s=sources[0];if(!s||s.kind!==n.source.kind||s.id!==n.source.id)throw new Error('invalid_saved_parameters')
+   const record={...s,source:s.description,project_id:projectId}
+   ;(s.kind==='project_measurement'?project:physical).set(s.id,record)
+  }else if(sources.length)throw new Error('invalid_saved_parameters')
+  return input as ParameterInput
+ })
+ if(!Array.isArray(v.frames))throw new Error('invalid_saved_parameters')
+ const frames=v.frames.map(({source_version,translation_mm,rotation_degrees,axes,...f})=>f),images=new Map(v.frames.filter(f=>f.kind==='image').map(f=>[f.source_ref,f.source_version!] as [string,string]))
+ const original=structuredClone(sourceRecipe)
+ const checked=compileCadParameters(projectId,original,{version:1,frames,nodes,bindings:v.bindings},project,physical,images)
+ if(stable(original)!==stable(sourceRecipe)||stable(checked)!==stable(v))throw new Error('invalid_saved_parameters')
+ const paths=cadParameterTargets(recipe),bindings=v.bindings.filter(b=>paths.has(b.path)),needed=new Set<string>(),index=new Map(nodes.map(n=>[n.id,n]))
+ function retain(id:string){if(needed.has(id))return;needed.add(id);const node=index.get(id)!;if(node.role==='derived')node.operands.forEach(retain)}
+ bindings.forEach(b=>retain(b.node));frameParameterIds(frames).forEach(retain)
+ const before=stable(recipe),result=compileCadParameters(projectId,recipe,{version:1,frames,nodes:nodes.filter(n=>needed.has(n.id)),bindings},project,physical,images)
+ if(stable(recipe)!==before)throw new Error('invalid_saved_parameters')
+ return result
+}
+
+const object=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
+const identifier={type:'string',pattern:'^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'}
+const units={type:'string',enum:['mm','deg','scalar']}
+const revision={type:'integer',minimum:1},identity={type:'string',format:'uuid'}
+const explanation={type:'string',minLength:1,maxLength:2000}
+export const CAD_PARAMETERS_SCHEMA=object({version:{type:'integer',enum:[1]},frames:CAD_FRAMES_SCHEMA,
+ nodes:{type:'array',minItems:1,maxItems:1024,items:{anyOf:[
+  object({id:identifier,role:{type:'string',enum:['source']},source:{anyOf:[object({kind:{type:'string',enum:['project_measurement']},id:identity,revision}),object({kind:{type:'string',enum:['space_measurement']},id:identity,space_revision:revision})]}}),
+  object({id:identifier,role:{type:'string',enum:['decision','estimate']},value:{type:'number',minimum:-1e9,maximum:1e9},unit:units,reason:explanation}),
+  object({id:identifier,role:{type:'string',enum:['derived']},operation:{type:'string',enum:['add_v1','subtract_v1','multiply_v1','divide_v1']},operands:{type:'array',minItems:2,maxItems:2,items:identifier},rounding:{type:'string',enum:['exact','half_away_6']}}),
+  object({id:identifier,role:{type:'string',enum:['unknown']},unit:units,reason:explanation}),
+ ]}},bindings:{type:'array',minItems:1,maxItems:8192,items:object({path:{type:'string',maxLength:240},node:identifier})},
+})

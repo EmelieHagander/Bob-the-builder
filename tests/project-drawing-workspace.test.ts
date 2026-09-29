@@ -1,3 +1,4 @@
+import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -104,7 +105,7 @@ test('CAD save scope enters the same work links; archive copies do not resurrect
  const c=await claimed()
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
   title:'CAD shelf',description:'Generic construction',assumptions:'Concept only',target_revision:1,measurements:[{id:measurement,revision:1}],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:steps[0],artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}}
+  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any),engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}}
  const saved=await c.rpc(payload)
  assert.deepEqual(saved.record.step_ids,[steps[0]])
  const preview:any=(await query(owner,'select * from bob.current_drawing_overview where id=$1',[saved.recordId])).rows[0]

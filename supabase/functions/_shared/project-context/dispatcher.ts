@@ -137,6 +137,7 @@ export function createProjectContext(opts: {
       try { return (await Promise.all(records.map(r => bounded(signal => byRef(r.item.ref)!.current(r.item.ref, r.version, signal))))).every(Boolean) }
       catch { partial = true; return false }
     },
+    imageEvidence(){return new Map([...delivered.values(),...pending].map(r=>[r.item.ref,r.version]))},
     carrier(): ImageCarrier[] {
       if (!pending.length) return []
       return [{ role: 'user', content: [

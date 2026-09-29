@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant} from '../supabase/functions/_shared/cad-assistant.ts'
+import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {splitDimensionBindings,bindPhysicalDimensions} from '../supabase/functions/_shared/cad-physical-lineage.ts'
 import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'

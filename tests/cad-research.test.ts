@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { collectCadResearch } from '../supabase/functions/_shared/cad-research.ts'
-import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
+import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import { createProjectLookup, SEARCH_TOOL } from '../supabase/functions/_shared/project-lookup.ts'
 import { handoff, reviewReply } from './support/cad-review-fixture.ts'
 const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixture',responseId:'cursor',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'call',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
