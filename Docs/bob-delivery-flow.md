@@ -278,14 +278,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: slutför releasegrinden för P1 i [PR #163](https://github.com/EmelieHagander/Bob-the-builder/pull/163).** Verifiera slutlig CI och PostgreSQL-samtidighet, dubbelkontrollera diff och målmiljö, merga, applicera endast den nya migreringen och driftsätt båda Bob-funktionerna. Läs tillbaka versioner och kör rollbackat spar-/återläsningsprov. Därefter är nästa implementationsetapp P2; P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: avgränsa första P2-utfallet för beständiga uppdrag och återupptagning.** Utgå från befintliga ritningsuppdrag och kvitton. Följ ett avbrutet uppdrag genom nästa tur, komplettering och återupptagning utan dubbletter eller oförändrade omförsök. P1:s kontrakt och releasebevis finns i [CAD-ägaren](cad-adapter.md#complete-numeric-parameter-graph-and-coordinate-frames--p1) och [PR #163](https://github.com/EmelieHagander/Bob-the-builder/pull/163); P0:s verkliga användartest ligger kvar separat.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
-| **P0/P1 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet medan P1 fortsätter. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P2** | Lös uppdragets beständighet, samlad komplettering, återupptagning från chatt/UI/Task, deduplicering och budget-/kvittoåterhämtning. Oförändrade försök mellan turer och händelsestyrd väckning behöver egna kontroller; en same-turn-spärr räcker inte. |
+| **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
+| **P2** | Fortsätt befintliga uppdrags beständighet, samlad komplettering, återupptagning från chatt/UI/Task, deduplicering och budget-/kvittoåterhämtning. Oförändrade försök mellan turer och händelsestyrd väckning behöver egna kontroller; en same-turn-spärr räcker inte. |
 | **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
