@@ -85,7 +85,7 @@ for(const [kind,mutation] of Object.entries(mutations))for(const first of ['sour
   assert.equal(leadResult.code,0,leadResult.stderr)
   if(first==='source'){
     assert.notEqual(followResult.code,0,'A save with an obsolete source/scope must fail')
-    assert.match(followResult.stderr,kind==='scope'?/physical_source_unavailable/:/source_changed|measurement.*(changed|revision)|stale_measurement/)
+    assert.match(followResult.stderr,['scope','building'].includes(kind)?/physical_source_unavailable/:/source_changed|measurement.*(changed|revision)|stale_measurement/)
   }else assert.equal(followResult.code,0,followResult.stderr)
   const result=JSON.parse((await query(transaction(`select jsonb_build_object(
     'count',(select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}),
