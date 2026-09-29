@@ -173,6 +173,21 @@ Examples: Main house, Garage, Workshop, Shed.
 
 A Building may be created before any Space is known.
 
+### 2.2A Accepted exterior footprint
+
+A Building may optionally carry one revisioned **accepted exterior footprint** before any room/Level geometry exists. This is deliberately smaller than a CAD/BIM model: it answers only "what is the accepted outside outline of this Building?"
+
+The runtime stores:
+- polygon points in **millimetres** (`geometry.units = "mm"`);
+- a Building-local frame;
+- truth state (`measured | provided_spec | estimated | ai_assessment | unknown`);
+- human-readable source/provenance and notes;
+- revision/history independently from Project drawings.
+
+This footprint is accepted physical context. A Project Artifact may use or refine it but does not silently replace it. Conversely, an external site-plan app may keep a metre-based map projection of the same Building while linking by stable Building identity; unit conversion and map rotation belong to that integration layer, not to the Building identity itself.
+
+The first runtime tables are `building_footprints` + `building_footprint_revisions`, read through `current_building_footprints` and written through the guarded `physical_building_footprint_command`.
+
 ## 2.3 Level
 
 A `Level` groups Spaces when floors/storeys are known and useful.
