@@ -16,6 +16,11 @@ export interface PhysicalSite extends Audit {
   revision: number
   name: string
   notes: string
+  addressLine1: string
+  addressLine2: string
+  postalCode: string
+  locality: string
+  countryCode: string
   archived: boolean
 }
 export interface PhysicalBuilding extends Audit {
@@ -146,7 +151,19 @@ function audit(row: Row): Audit {
   return { reason: row.change_note, actor: row.actor_label, recordedAt: row.recorded_at }
 }
 function site(row: Row): PhysicalSite {
-  return { id: row.id, revision: row.revision, name: row.name, notes: row.notes, archived: row.archived, ...audit(row) }
+  return {
+    id: row.id,
+    revision: row.revision,
+    name: row.name,
+    notes: row.notes,
+    addressLine1: row.address_line1 ?? '',
+    addressLine2: row.address_line2 ?? '',
+    postalCode: row.postal_code ?? '',
+    locality: row.locality ?? '',
+    countryCode: row.country_code ?? '',
+    archived: row.archived,
+    ...audit(row),
+  }
 }
 function building(row: Row): PhysicalBuilding {
   return { id: row.id, siteId: row.site_id ?? null, revision: row.revision, name: row.name, notes: row.notes, archived: row.archived, ...audit(row) }
