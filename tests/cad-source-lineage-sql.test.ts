@@ -1,3 +1,4 @@
+import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -26,7 +27,7 @@ test('P1: exact lineage round-trips through SQL, rejects forged metadata and sur
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
   title:'Source-bound shelf',description:'Concept',assumptions:'No structural certification',target_revision:1,measurements:[{id:measurement,revision:1}],
   source_artifact_id:null as string|null,source_revision:null as number|null,part_ids:[] as string[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
+  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
  const save=(p:any)=>call(owner,'bob.bob_project_write_v11',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const read=(id:string,rev:number|null=null)=>call(owner,'bob.read_cad_artifact',[project,id,rev])
  const saved=await save(payload),id=saved.recordId

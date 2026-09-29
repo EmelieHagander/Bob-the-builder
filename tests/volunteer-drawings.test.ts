@@ -1,3 +1,4 @@
+import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -94,8 +95,9 @@ test('source changes stay distinct from saved status, and unavailable sources hi
 test('CAD and parametric geometry use the saved recipe; CAD manifests and model exports are excluded', async () => {
   const f = await fixture(), id = await drawing(f)
   const definitions = [{ id: 'panel', primitive: 'box', x_mm: 800, y_mm: 400, z_mm: 18 }]
+  const cadRecipe:any={contract_version:1,units:'mm',assembly_id:'fixture',definitions,instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
   await pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)', [f.project, id,
-    json({ contract_version: 1, units: 'mm', definitions, privateField: 'NOT_SHARED' }), json({ internal: 'NOT_SHARED' }), json({ front: 'PHN2Zy8+', top: 'PHN2Zy8+', step: 'NOT_SHARED', log: 'NOT_SHARED' })])
+    json({ ...cadRecipe, privateField: 'NOT_SHARED' }), json({ bob_parameters:parameterPacket(f.project,cadRecipe),internal: 'NOT_SHARED' }), json({ front: 'PHN2Zy8+', top: 'PHN2Zy8+', step: 'NOT_SHARED', log: 'NOT_SHARED' })])
   const d = await read(f, id)
   assert.deepEqual(d.content.cad, { recipe: { definitions }, files: { front: 'PHN2Zy8+', top: 'PHN2Zy8+' }, source_changed: false })
   assert.doesNotMatch(json(d), /NOT_SHARED/)

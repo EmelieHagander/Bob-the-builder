@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant,RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
+import {RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
+import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import {parseIntakeAssessment,bindMeasuredDimensions,type DrawingRequest,type DrawingRequestStore} from '../supabase/functions/_shared/cad-intake.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'

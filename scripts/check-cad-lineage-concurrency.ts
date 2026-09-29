@@ -1,5 +1,6 @@
 /** Real multi-connection test. Only an empty, disposable local PostgreSQL DB. */
 import assert from 'node:assert/strict'
+import {parameterPacket} from '../tests/support/cad-parameter-fixture.ts'
 import {spawn} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
 import {randomUUID} from 'node:crypto'
@@ -56,6 +57,7 @@ assert.equal(await query("select count(*) from pg_namespace where nspname in ('b
 await installProjectSchema({exec:async(sql:string)=>{await query(sql);return []}})
 const fixture=await readFile(new URL('./cad-lineage-concurrency-fixture.sql',import.meta.url),'utf8')
 const mutations={
+  image:(f:any)=>`select bob.media_command(${literal(f.project)},'begin_delete',${literal(f.image)},'{}')`,
   measurement:(f:any)=>`select bob.evidence_command(${literal(f.project)},'measurement','revise',${literal(f.project_measure)},1,'{"subject":"Panel depth","value":"31.000","unit":"cm","truth":"provided_spec","source":"Concurrent fixture","required":true,"change_note":"Concurrent revision"}')`,
   space:(f:any)=>`select bob.physical_node_command(${literal(f.building)},'space','revise',${literal(f.space)},1,${literal(JSON.stringify({name:'Changed room',kind:'room',truth:'measured',source:'Concurrent fixture',measurements:[{id:f.physical_measure,revision:1}],change_note:'Concurrent accepted revision'}))})`,
   scope:(f:any)=>`select bob.physical_scope_command(${literal(f.project)},'project','unlink',${literal(f.scope)},'{}')`,
@@ -71,6 +73,7 @@ for(const [kind,mutation] of Object.entries(mutations))for(const first of ['sour
   const baseline=JSON.parse((await query(transaction(save(f.payload)))).split('\n').at(-1)!)
   const control=structuredClone(f.payload)
   control.data.title='Independent panel';control.data.measurements=[];control.data.packet.manifest.bob_lineage.bindings=[]
+  control.data.packet.manifest.bob_parameters=parameterPacket(f.project,control.data.packet.recipe)
   const independent=JSON.parse((await query(transaction(save(control)))).split('\n').at(-1)!)
   const next=structuredClone(f.payload);next.data.title='Racing save'
   const key=770000+cases, barrier=await gate(key)
@@ -85,7 +88,7 @@ for(const [kind,mutation] of Object.entries(mutations))for(const first of ['sour
   assert.equal(leadResult.code,0,leadResult.stderr)
   if(first==='source'){
     assert.notEqual(followResult.code,0,'A save with an obsolete source/scope must fail')
-    assert.match(followResult.stderr,['scope','building'].includes(kind)?/physical_source_unavailable/:/source_changed|measurement.*(changed|revision)|stale_measurement/)
+    assert.match(followResult.stderr,['scope','building'].includes(kind)?/physical_source_unavailable/:/source_changed|image_changed|measurement.*(changed|revision)|stale_measurement/)
   }else assert.equal(followResult.code,0,followResult.stderr)
   const result=JSON.parse((await query(transaction(`select jsonb_build_object(
     'count',(select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}),

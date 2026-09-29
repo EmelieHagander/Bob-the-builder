@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createCadAssistant, type CadPacket } from '../supabase/functions/_shared/cad-assistant.ts'
+import {type CadPacket} from '../supabase/functions/_shared/cad-assistant.ts'
+import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
 import { handoff, reviewReply } from './support/cad-review-fixture.ts'
