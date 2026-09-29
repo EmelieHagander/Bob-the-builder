@@ -19,6 +19,13 @@ jobs:
           git rev-parse HEAD > source-commit.txt
           git archive --format=tar HEAD > source.tar
           sha256sum source.tar > source-sha256.txt
+      - uses: actions/checkout@v4
+        with:
+          ref: 5d1abfb47ffd8e4f2c115b06ed0b06a042f3f5d6
+          path: docs-owner
+          persist-credentials: false
+      - name: Archive pinned documentation owner
+        run: git -C docs-owner archive --format=tar HEAD > docs-owner.tar
       - uses: actions/upload-artifact@v4
         with:
           name: p1-continuation-source
@@ -26,4 +33,5 @@ jobs:
             source.tar
             source-commit.txt
             source-sha256.txt
+            docs-owner.tar
           retention-days: 2
