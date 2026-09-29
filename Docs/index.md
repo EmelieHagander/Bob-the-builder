@@ -21,7 +21,7 @@
 | dynamic project Steps, completion requirements, responsibility, evidence and replanning | `Docs/living-project-plan.md` — implemented foundation plus remaining product direction; hierarchy refinement in `Docs/domain-dictionary.md` |
 | material-led assemblies, dynamic specifications and linked drawing/pick/Shopping use case | `Docs/material-assembly-use-case.md` — specified end-to-end target; not a complete implementation |
 | reusable material/part definitions, dynamic profiles and catalog tools | `Docs/material-catalog.md` — slice A deployed 2026-09-22; live versioned material/part definitions and tools, no assembly geometry yet |
-| generic CAD engine adapter / construction geometry seam | `Docs/cad-adapter.md` — hosted build123d/Open Cascade service, CAD assistant and versioned Artifact persistence; live design acceptance tracked separately |
+| generic CAD engine adapter / construction geometry seam | `Docs/cad-adapter.md` — hosted build123d/Open Cascade service, whole drawing intake, complements and versioned Artifact persistence; live design acceptance tracked separately |
 | persistent site/building/space context and chat-driven narrative capture | `Docs/building-model.md` |
 | function difficulty / scope buckets / first vertical slice | `Docs/function-scope.md` |
 | original product intent and personas | `Docs/Mockups and initial plans/BuildCoord_PRD.md` |

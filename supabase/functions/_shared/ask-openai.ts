@@ -187,7 +187,21 @@ export async function answerWithOpenAi(opts: {
     }, 10_000, 128, 512*1024),
     callModel,
   })
+  const drawingRequestCall=async(raw:Record<string,unknown>)=>{
+   // Read timestamps change during replay; record revisions and values do not.
+   const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
+   return memo('cad:request',input,async(identity)=>{
+    const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:opts.clientTurnId+':'+(identity?.key??crypto.randomUUID())})
+    if(error)throw new Error('drawing_request_unavailable')
+    return data
+   })
+  }
   const cadAssistant = createCadAssistant({
+    ...(claimedServer?{requestStore:{
+      list:()=>drawingRequestCall({p_operation:'list'}),
+      load:(id:string)=>drawingRequestCall({p_operation:'load',p_id:id}),
+      save:(id:string|null,expected:number,status:string,payload:any)=>drawingRequestCall({p_operation:'save',p_id:id,p_expected:expected,p_status:status,p_payload:payload}),
+    }}:{}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),

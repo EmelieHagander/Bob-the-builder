@@ -67,12 +67,14 @@ export function createBobToolSession(opts: {
     ...(opts.recordReader?.tools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.recordReader!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.recordReader!.execute(v)})),
     ...(opts.imageTools?.tools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.imageTools!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.imageTools!.execute(spec.function.name,v)})),
     ...(opts.cadAssistant ? [
-      ...opts.cadAssistant.tools.map(spec => ({spec,version:2,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
+      ...opts.cadAssistant.tools.map(spec => ({spec,version:3,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
       {spec:SAVE_CAD_TOOL,version:1,waitingFor:'appears when design_project_cad returns a reviewed candidate',
        gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
         const c=opts.cadAssistant!.candidate;if(!c)return {status:'missing_context'}
-        return opts.writer!.commit({kind:'cad',record_id:c.artifact_id,expected_updated_at:null,expected_revision:c.expected_revision,request_quote:(v as any).request_quote,data:c})
+        const receipt=await opts.writer!.commit({kind:'cad',record_id:c.artifact_id,expected_updated_at:null,expected_revision:c.expected_revision,request_quote:(v as any).request_quote,data:c})
+        if(receipt.status==='saved')await opts.cadAssistant!.markSaved()
+        return receipt
       }},
     ]:[]),
     ...(opts.planAssistant?.tools ?? []).map(spec => ({ spec, version: 1,

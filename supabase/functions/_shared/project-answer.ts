@@ -117,6 +117,8 @@ export async function runProjectAnswer(opts: {
     { role: 'user', content: buildTurnFrame(opts.projectId, briefing, opts.context) + (catalog ? '\n\nProject Catalog (metadata only):\n' + JSON.stringify(catalog) : '') },
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
+  const drawingRequests=await opts.cadAssistant?.pending()
+  if(Array.isArray(drawingRequests)&&drawingRequests.length)messages.push({role:'user',content:'Outstanding drawing requests (private working state, not verified project truth). Resume the matching request_id after complements; do not restart or duplicate follow-up tasks.\n'+JSON.stringify(drawingRequests)})
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   const observation: TurnObservation = { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' }
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }
