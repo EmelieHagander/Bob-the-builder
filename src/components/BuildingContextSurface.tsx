@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type {
   PhysicalBuilding,
+  PhysicalBuildingFootprint,
   PhysicalElement,
   PhysicalLevel,
   PhysicalRelationship,
@@ -29,6 +30,7 @@ type BuildingContextGateway = {
   elements(projectId: string, buildingId: string): Promise<PhysicalElement[]>
   relationships(projectId: string, buildingId: string): Promise<PhysicalRelationship[]>
   proposals(projectId: string, buildingId: string): Promise<Proposals>
+  footprint(projectId: string, buildingId: string): Promise<PhysicalBuildingFootprint | null>
   canDirectEdit(projectId: string, buildingId: string): Promise<boolean>
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editBuilding(projectId: string, action: 'create' | 'revise', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
@@ -37,6 +39,7 @@ type BuildingContextGateway = {
 }
 
 type Detail = {
+  footprint: PhysicalBuildingFootprint | null
   levels: PhysicalLevel[]
   spaces: PhysicalSpace[]
   elements: PhysicalElement[]
@@ -45,7 +48,7 @@ type Detail = {
   proposals: Proposals
 }
 
-const emptyDetail: Detail = { levels: [], spaces: [], elements: [], relationships: [], canDirectEdit: false, proposals: emptyProposals }
+const emptyDetail: Detail = { footprint: null, levels: [], spaces: [], elements: [], relationships: [], canDirectEdit: false, proposals: emptyProposals }
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const isDenied = (error: string) => /\bdenied\b|\bunauthori[sz]ed\b|\bforbidden\b|\bpermission\b|row[- ]level security|\brls\b/i.test(error)
 
@@ -111,14 +114,15 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
     if (!selectedBuildingId) return () => { alive = false }
     setDetailLoading(true)
     Promise.all([
+      context.footprint(projectId, selectedBuildingId),
       context.levels(projectId, selectedBuildingId),
       context.spaces(projectId, selectedBuildingId),
       context.elements(projectId, selectedBuildingId),
       context.relationships(projectId, selectedBuildingId),
       context.canDirectEdit(projectId, selectedBuildingId),
       projectId ? context.proposals(projectId, selectedBuildingId) : Promise.resolve(emptyProposals),
-    ]).then(([levels, spaces, elements, relationships, canDirectEdit, proposals]) => {
-      if (alive) setDetail({ levels, spaces, elements, relationships, canDirectEdit, proposals })
+    ]).then(([footprint, levels, spaces, elements, relationships, canDirectEdit, proposals]) => {
+      if (alive) setDetail({ footprint, levels, spaces, elements, relationships, canDirectEdit, proposals })
     }).catch(reason => {
       if (alive) {
         setDetail(emptyDetail)
@@ -174,6 +178,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       showProjectScope={Boolean(projectId)}
       sharing={selectedBuilding && detail.canDirectEdit && <BuildingSharingCard key={selectedBuilding.id} buildingId={selectedBuilding.id} buildingName={selectedBuilding.name} />}
       selectedBuildingId={selectedBuildingId}
+      footprint={detail.footprint}
       levels={detail.levels}
       spaces={detail.spaces}
       elements={detail.elements}
