@@ -69,8 +69,10 @@ test('missing or explicitly cleared targets return actionable prerequisites befo
 })
 
 test('CAD research has a bounded stage and exact measurement verification remains available after it',async()=>{
- const f=fixture();let calls=0,renders=0
- f.opts.makeLookup=()=>createProjectLookup('A',async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:i.dataset==='measurements'?[{id,revision:1}]:[],related:[],truncated:false},error:null}),1000,4)
+ const f=fixture();let calls=0,renders=0,readers=0
+ // Exhaust only the designer's research reader. Exact measurement verification
+ // and independent review have separate readers with sufficient baseline budget.
+ f.opts.makeLookup=()=>createProjectLookup('A',async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:i.dataset==='measurements'?[{id,revision:1}]:[],related:[],truncated:false},error:null}),1000,++readers===1?4:40)
  f.opts.callModel=async(o:any)=>{
   calls++
   if(calls<=3)return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
@@ -107,7 +109,6 @@ function imageFixture(){
  },1000,40)
  return {...f,row,reads,sources,context,get downloads(){return downloads}}
 }
-
 test('CAD receives Bob-selected original pixels beside fresh project facts after Bob has consumed the carrier',async()=>{
  const f=imageFixture(),parent=f.context(),child=f.context()
  await parent.execute('open_project_item',{refs:[`image:${id}`]})
