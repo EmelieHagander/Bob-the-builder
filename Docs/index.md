@@ -14,7 +14,7 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
-| next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work only; start with P0, not completed-work history |
+| next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; the active stage lives there, not in this index |
 | end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — specified target, P0 work pass and acceptance cases; not deployed behavior |
 | five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
 | baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
