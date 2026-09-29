@@ -1,0 +1,23 @@
+name: P1 migration bootstrap
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p1-parameter-bootstrap.yml'
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx supabase --help
+      - run: npx supabase migration --help
+      - run: npx supabase migration new --help
+      - run: npx supabase migration new cad_parameter_graph
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-parameter-migration
+          path: supabase/migrations/*_cad_parameter_graph.sql
