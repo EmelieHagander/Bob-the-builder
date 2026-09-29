@@ -227,7 +227,7 @@ Den daterade kod-/datakontrollen och tidigare överlämningen finns i [gransknin
 <a id="p0"></a>
 ### 10.1 P0 — kodgranskning, reproduktion, fix och verifiering
 
-**Sparad arbetsplan, inte genomförd implementation.** Arbetssättet är ett avgränsat pass per etapp, med möjlighet att dela större etapper. Varje pass omfattar granskning, reproducerbara prov, avgränsad implementation och verifiering; planen får inte behandlas som bevis för att alla antaganden redan är riktiga. Aktuellt arbetsläge finns i [State](#state).
+**Arbetsmetod för P0.** Arbetssättet är ett avgränsat pass per etapp, med möjlighet att dela större etapper. Varje pass omfattar granskning, reproducerbara prov, avgränsad implementation och verifiering; planen får inte behandlas som bevis för att alla antaganden redan är riktiga. Aktuellt återstående arbete finns i [State](#state); genomförandebevis hör till [implementations-PR #159](https://github.com/EmelieHagander/Bob-the-builder/pull/159), inte en avslutslogg här.
 
 **P0:s mål:** göra godkännandegränsen tillförlitlig utan fler onödiga stopp. Båda riktningarna krävs: obligatoriskt oläst underlag ska stoppa godkännande, och tillräckligt giltigt underlag ska kunna nå sparad och kopplad leverans inom befintligt mandat.
 
@@ -279,22 +279,22 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: börja med P0.1 och P0.2.** Kontrollera aktuell main och parallella ändringar, välj en separat implementationsbranch, följ hela godkännande-/sparvägen och reproducera ”obligatoriskt läsfel + modellpass” före fix. Lägg samtidigt positiva motprov för komplett underlag och styrkt irrelevant extrainformation. Arbetsordningen finns i [P0:s arbetspass](#p0); planeringen ska inte börja om.
+**Nästa handling: ta ställning till P0-ändringen i [PR #159](https://github.com/EmelieHagander/Bob-the-builder/pull/159) och dess återstående release-/acceptansgrindar.** Kontrollera aktuell main, PR-huvud och testbevis före beslut om merge eller driftsättning. Börja inte om med kodkarta och grundreproduktion; deras bevis hör till implementations-PR:n. Vid ändrad kod ska berörda prov köras om.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
-| **P0 — först** | Genomför kodkarta och reproduktion; precisera obligatoriska källor och möjliga kringvägar. Därefter avgränsad fix och verifiering av både stopp och leverans enligt P0.3–P0.4. [F3:s daterade underlag](archive/bob-delivery-flow-review-2026-09-29.md#fynd) är en ingång, inte ett redan kört regressionstest. |
-| **P1** | Lös parameter-/källspårning, ändringspåverkan och riktad fysisk datakvalitet. Återkontrollera F1/F2/F4; fastställ rätt scope och verkliga ersättningsrelationer innan data ändras. |
-| **P2** | Lös uppdragets beständighet, samlad komplettering, återupptagning från chatt/UI/Task, deduplicering och budget-/kvittoåterhämtning. |
+| **P0 — release och faktisk acceptans** | Slutligt gransknings-/merge-beslut för #159, separat mandat och förkontroll inför eventuell driftsättning samt ett verkligt användarprov av komplett underlag → sparad och åtkomlig leverans. Kontrollera även felmeddelande/återhämtning vid kontrollerat läsfel utan att skada produktionsdata. Fixture-, SQL- och browserbevis ersätter inte betald modell-/CAD-acceptans eller driftsatt kod. |
+| **P1** | Lös parameter-/källspårning, ändringspåverkan och riktad fysisk datakvalitet. Återkontrollera F1/F2/F4; fastställ rätt scope och verkliga ersättningsrelationer innan data ändras. Förfina P0:s konservativa serverägda basuppsättning till kontrollerbar relevans per krav/parameter utan att modellen kan välja bort oläst nödvändig evidens. |
+| **P2** | Lös uppdragets beständighet, samlad komplettering, återupptagning från chatt/UI/Task, deduplicering och budget-/kvittoåterhämtning. Oförändrade försök mellan turer och händelsestyrd väckning behöver egna kontroller; en same-turn-spärr räcker inte. |
 | **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
 | **P4** | Verifiera verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
-Detaljer, ansvariga domänägare och klart-villkor finns i [implementeringsplanen](#plan), inte i en parallell roadmap.
+Detaljer, ansvariga domänägare och klart-villkor finns i [implementeringsplanen](#plan), inte i en parallell roadmap. Källkodskontraktet för P0 ägs av `Docs/cad-adapter.md` i #159. Daterad reproduktion, kodkarta, testresultat och testbegränsningar länkas från samma PR; de ska inte kopieras tillbaka till State.
 
-**P0:s öppna utgångskrav:** A06 måste stoppa felaktigt godkännande; A01 måste nå sparad, kopplad och återöppnad leverans utan nytt lov. Saknade testbevis eller fel i ett senare leveransled förblir öppna hinder. Tekniskt färdig kod är inte automatiskt produktacceptans eller driftsättning.
+**P0:s kvarstående utgångskrav:** A01 behöver faktisk modell-/CAD-/deltagaracceptans i avsedd miljö. Behåll skillnaden mellan A06:s maskinella säkerhet, kontrollerad leveransmekanik och verklig ritningskvalitet. Nyupptäckta fel eller saknade releasebevis förblir öppna hinder. Tekniskt färdig kod är inte automatiskt produktacceptans eller driftsättning.
 
-**Arbetsgräns:** nästa P0-pass behöver ett implementationsuppdrag och en separat implementations-PR. Denna dokumentationsbranch ger inte mandat till merge, datarättning eller driftsättning. Kontrollera alltid ändring och målmiljö före sådana åtgärder. Dokumentationens arbetsyta är [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158).
+**Arbetsgräns:** implementationsarbetets branch är `fix/p0-cad-review-evidence-20260929` i #159; dokumentationens arbetsyta är [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158). Slå inte ihop eller driftsätt någon av dem utan särskilt mandat och kontroll av aktuell diff/målmiljö. Nästa strukturella implementationsetapp är P1; barnrummets data får inte rättas genom gissning.
 
 **Ansvar och underhåll:** den som tar arbetspasset ansvarar för nästa handling och kvarstående hinder; Archie ansvarar för dokumentationsplacering enligt [sin prompt](../.claude/agents/archie.md#forward-looking-state-and-archives). Flytta avslutade delsteg och bevis till PR/CI, verifieringsägare eller daterat arkiv. Behåll endast öppna åtgärder, beslut, beroenden och acceptanskrav här. Gällande produktkontrakt ska däremot ligga kvar hos sina ägare.
