@@ -55,16 +55,16 @@ select
   r.revision,
   r.name,
   r.notes,
-  r.address_line1,
-  r.address_line2,
-  r.postal_code,
-  r.locality,
-  r.country_code,
   r.archived,
   r.change_note,
   r.recorded_by,
   r.actor_label,
-  r.recorded_at
+  r.recorded_at,
+  r.address_line1,
+  r.address_line2,
+  r.postal_code,
+  r.locality,
+  r.country_code
 from bob.sites s
 join bob.site_revisions r
   on r.site_id=s.id
