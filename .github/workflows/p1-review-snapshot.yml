@@ -1,0 +1,29 @@
+name: P1 review snapshot
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/p1-review-snapshot.yml']
+permissions:
+  contents: read
+jobs:
+  source:
+    if: github.head_ref == 'fix/p1-cad-source-lineage-20260929'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Archive tracked source only
+        run: |
+          git rev-parse HEAD > source-commit.txt
+          git archive --format=tar HEAD > source.tar
+          sha256sum source.tar > source-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p1-continuation-source
+          path: |
+            source.tar
+            source-commit.txt
+            source-sha256.txt
+          retention-days: 2
