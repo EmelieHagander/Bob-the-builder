@@ -14,6 +14,7 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
+| end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — specified target, September 29 read-only findings and acceptance cases; not deployed behavior |
 | five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
 | baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
 | general audit of Bob's tool use and unfinished work after PR #146 | `Docs/bob-tool-autonomy-audit-2026-09-25.md` — live configuration, reproducible runtime findings, test-policy drift and outcome acceptance |
@@ -136,6 +137,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
+- [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract, specified**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and a staged implementation proposal. Reuses the domain owners; its dated review appendix is not the maintained capability inventory. No implementation or deployment is claimed.
 - `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-tools.md` — **tool-system owner**: since 2026-09-27 the whole permitted toolbox is offered every step on named shelves, with waiting/used-up tools listed and no forced tool choice; caller authority and execution fences are unchanged. The earlier core/on-demand tiers and list/load discovery are kept as history. Does not claim the generic drawing engine is built.
 - `Docs/bob-tool-autonomy-audit-2026-09-25.md` — **dated audit after PR #146**: actual models/loadout, general completion gaps, discovery and budget failures, CAD feedback and behavioural verification; follow the domain owners for implementation contracts.
