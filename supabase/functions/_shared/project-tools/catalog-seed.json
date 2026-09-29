@@ -126,9 +126,9 @@
   },
   {
     "name": "design_project_cad",
-    "description": "Delegate construction to a CAD designer with structured requirements and independent visual review.",
-    "how_to": "Open relevant reference images, then supply brief plus handoff: deliverable, requirements with stable IDs/basis/source refs, coordinate mapping, requested views and unresolved checks. Carry earlier owner corrections forward; never invent a known compass direction. The server passes the original request, reopens selected pixels and pins the current target. The designer researches and renders, then a separate reviewer compares exact geometry and pixels to the request. Rejected designs get bounded repair. Only ready results expose save_cad_design. Bob saves the exact candidate and remains responsible for the requested outcome.",
-    "schema_version": 2,
+    "description": "Collect and assess all drawing requirements, then construct and independently review CAD.",
+    "how_to": "Delegate early with the full requirement checklist; the collector reads project facts and relevant images. Use request_id=null for a new drawing, or resume an outstanding request ID after complements. Known measurements keep exact values, units and provenance. needs_data returns ALL blocking gaps: resolve reversible choices yourself; reuse existing Tasks/Steps or collect necessary measurements together in chat. Never treat retrieval failure as missing user data. Preserve earlier requirements and owner corrections. Resume the same request after saving complements; sources refresh. Only ready exposes save_cad_design; save the exact reviewed candidate.",
+    "schema_version": 3,
     "always_load": false,
     "preload_phases": [
       "design"

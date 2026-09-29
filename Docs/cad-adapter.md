@@ -335,3 +335,91 @@ all remain enabled. There were no active Bob jobs before release. Deployed
 All 59/57 retrieved runtime modules match the tested source byte for byte; the
 bundler omits only the type-only `src/data/provenance.ts`. Unauthenticated POSTs
 return 401. No paid drawing attempt was started as part of this correction.
+
+## Drawing intake and complements — September 29 contract
+
+This section supersedes the earlier collector-only handoff and combined new/detail
+render tool. It supports the drawing outcome in `user-stories.md`: Bob gathers a
+usable whole brief before spending on construction, and missing input becomes
+one actionable list rather than repeated designer restarts.
+
+```mermaid
+flowchart TD
+ B[Bob: requirements and request ID] --> Q[Cheap structural check]
+ Q --> C[Collector: current records and relevant images]
+ C --> A{Whole evidence sufficient?}
+ A -->|Read failed| R[Resolve retrieval; preserve gaps]
+ A -->|Missing or conflicting| G[Bob receives all gaps]
+ G --> D{Bob can resolve from evidence?}
+ D -->|Yes| U[Save complement]
+ D -->|No| T[Reuse Task or Step; gather measurements in chat]
+ T --> U
+ U --> C
+ R --> C
+ A -->|Yes| N[Designer: construct and render]
+ N --> V[Independent review]
+ V -->|Repair needed, budget remains| N
+ V -->|Pass| S[Bob saves exact Artifact]
+```
+
+The quick check is structural: a valid requirement handoff and current selected
+target. Both a present and missing target continue through intake, so a target
+choice cannot hide missing room facts. The collector receives bounded paginated
+records for project, plan, Tasks, requirements, solutions, measurements,
+components, physical spaces/elements, space measurements and relationships.
+It can make targeted read-only queries and list/open relevant images. Bob may
+delegate early instead of doing the same research first.
+
+The mini/low collector must assess every requirement exactly once and add any
+necessary dependencies omitted from the handoff. Each check is known, assumed,
+missing or conflicting, with source refs, explanation, blocking status and a
+follow-up action. All blocking gaps return together. Reversible choices belong
+to Bob; missing physical measurements belong to measurement collection; genuine
+owner choices belong to the owner. Existing Tasks and plan Steps are included
+so Bob can reuse them. Follow-up writes still use the existing authorized tools;
+intake itself is read-only and does not silently create Tasks.
+
+Failed, overlarge, truncated or unreadable evidence remains a retrieval problem.
+An invalid/incomplete checklist cannot start the designer. Missing target returns
+its existing solution/selection tools alongside other gaps. Bounds remain explicit:
+4 pages per baseline dataset, 120 kB packet, 3 collector calls, 8 reads per call,
+2 consultations per turn, existing render/review limits and the shared $1 stop
+threshold. This is a stop threshold, not a guaranteed provider billing cap.
+No larger budget or model upgrade is part of this change.
+
+Known records are handed forward unchanged, with original values, units, IDs and
+revisions. The AI selects meaning and placement. New geometry can bind a part
+dimension to a pinned measurement ID/revision: the server supplies that exact
+numeric value in mm (mm/cm/m), rejects stale or ambiguous sources, and includes
+the resulting recipe in rendering and independent review. It does not infer
+which part every free-text measure describes, solve arbitrary dimension chains,
+or certify physical fit. Non-bound design dimensions remain explicit design
+choices subject to review. Image appearance cannot override established measures.
+
+`render_cad_candidate` takes new geometry and dimension bindings.
+`render_saved_cad_candidate` takes a saved Artifact revision and existing instance
+IDs, with no recipe. This removes the ambiguous combination that rejected the
+September 28 attempt before the renderer was called. A saved detail still reuses
+exact original dimensions and placements.
+
+Each request stores its brief, original request, image refs, assessment, exact
+source packet and an unverified recipe draft in a private conversation-scoped
+record. No image bytes, rendered files or signed URLs belong in this record.
+The next turn receives pending request summaries and resumes by `request_id`;
+all source reads refresh. Earlier requirements survive a partial new handoff.
+A stored draft is never directly savable: it must be rendered and independently
+reviewed against the fresh evidence. A successful Artifact save closes the request.
+Conversation reset deletes this private working state through the thread FK.
+Other owners, projects and inactive/stale turn claims cannot access it.
+
+The service-only `bob_drawing_request` RPC enforces the existing claimed-turn
+check, optimistic revisions and idempotent journal write keys. Runtime uses
+caller-scoped project readers for evidence. Service credentials only persist the
+private request, never bypass project source permissions. The tool catalog's
+`design_project_cad` contract moves to version 3.
+
+Validation: focused Node/SQL tests cover simultaneous gaps, retrieval failures,
+complement/resume, measurement bindings, new/detail tool separation, no pixel
+persistence, owner isolation, stale claims, revision conflicts and replay-safe
+writes. Full-suite and deployment evidence is recorded with the release below.
+Fixtures prove control flow, not actual model judgement or drawing quality.

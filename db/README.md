@@ -665,3 +665,5 @@ Direct helper calls cannot read another Project or bypass revision scope.
 volunteer detail reader's render joins. Capability checks and grants remain unchanged;
 no database-wide configuration or API timeout is relaxed. Both follow-ups are deployed;
 see the release evidence above.
+
+`20260929045921_bob_drawing_requests.sql` adds private conversation-scoped drawing intake and replay receipts. Service-only `bob_drawing_request` checks the current owner/project/turn claim and optimistic revision; reset cascades working state. No browser grants or project measurement writes. The drawing workflow and release status belong to [CAD adapter](../Docs/cad-adapter.md#drawing-intake-and-complements--september-29-contract).
