@@ -198,6 +198,7 @@ export async function answerWithOpenAi(opts: {
   }
   const cadAssistant = createCadAssistant({
     ...(claimedServer?{requestStore:{
+      atomicSave:true,
       list:()=>drawingRequestCall({p_operation:'list'}),
       load:(id:string)=>drawingRequestCall({p_operation:'load',p_id:id}),
       save:(id:string|null,expected:number,status:string,payload:any)=>drawingRequestCall({p_operation:'save',p_id:id,p_expected:expected,p_status:status,p_payload:payload}),

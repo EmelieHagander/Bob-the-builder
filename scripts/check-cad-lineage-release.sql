@@ -10,6 +10,7 @@ declare
  physical_measure uuid:=gen_random_uuid(); project_measure uuid:=gen_random_uuid(); solution uuid:=gen_random_uuid();
  turn_id uuid:=gen_random_uuid(); donor text; project text; claim jsonb; snapshot jsonb;
  recipe jsonb; parameters jsonb; lineage jsonb; payload jsonb; detail jsonb; saved jsonb; child jsonb; readback jsonb;
+ drawing_request jsonb; working jsonb;
  request_text text:='P1 release smoke: save synthetic source-bound CAD'; source_state text;
 begin
  insert into auth.users(id,email,email_confirmed_at) values(actor,actor::text||'@p1-release.invalid',now());
@@ -51,12 +52,26 @@ begin
   'title','Synthetic source-bound panel','description','Release fixture','assumptions','No physical claim','target_revision',1,'measurements',jsonb_build_array(jsonb_build_object('id',project_measure,'revision',1)),
   'source_artifact_id',null,'source_revision',null,'part_ids','[]'::jsonb,'area_id',null,'component_id',null,'step_id',null,'artifact_id',null,'expected_revision',0,
   'packet',jsonb_build_object('recipe',recipe,'manifest',jsonb_build_object('engine',jsonb_build_object('name','build123d'),'assembly_id','p1-release','bob_lineage',lineage,'bob_parameters',parameters),'files',jsonb_build_object('front','PHN2Zz48L3N2Zz4=','step','SYNTHETIC_RELEASE_EXPORT'))));
+ working:=jsonb_build_object('brief',jsonb_build_object('brief',request_text),'owner_request',request_text,'reference_refs','[]'::jsonb,
+  'reviewed_candidate',jsonb_set(payload->'data','{packet}',(payload->'data'->'packet')-array['files','previews']::text[]));
+ set local role service_role;
+ drawing_request:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',null,0,'reviewed',working,'release-reviewed');
+ set local role authenticated;
+ payload:=jsonb_set(payload,'{data,drawing_request}',jsonb_build_object('id',drawing_request->'id','revision',drawing_request->'revision'));
  saved:=bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,payload);
+ set local role service_role;
+ readback:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'load',(drawing_request->>'id')::uuid);
+ if readback->>'status' is distinct from 'saved' or readback->'receipt' is distinct from saved then raise exception 'smoke_request_receipt'; end if;
+ begin
+  perform bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',(drawing_request->>'id')::uuid,(readback->>'revision')::integer,'collecting',working,'reopen-closed');
+  raise exception 'smoke_completed_request_reopened';
+ exception when serialization_failure then null; end;
+ set local role authenticated;
  readback:=bob.read_cad_artifact(project,(saved->>'recordId')::uuid,null);
  if readback->'parameters' is distinct from parameters then raise exception 'smoke_parameters_readback'; end if;
  if readback->'lineage' is distinct from lineage then raise exception 'smoke_lineage_readback'; end if;
  if bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,payload) is distinct from saved then raise exception 'smoke_receipt_replay'; end if;
- detail:=jsonb_set(jsonb_set(jsonb_set(jsonb_set(payload,'{data,title}','"Synthetic detail"'),'{data,source_artifact_id}',saved->'recordId'),'{data,source_revision}','1'),'{data,part_ids}','["panel"]');
+ detail:=jsonb_set(jsonb_set(jsonb_set(jsonb_set(payload#-'{data,drawing_request}','{data,title}','"Synthetic detail"'),'{data,source_artifact_id}',saved->'recordId'),'{data,source_revision}','1'),'{data,part_ids}','["panel"]');
  detail:=jsonb_set(detail,'{data,packet,manifest,bob_lineage,inherited_from}',jsonb_build_object('artifact_id',saved->'recordId','revision',1));
  child:=bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,detail);
  if bob.read_cad_artifact(project,(child->>'recordId')::uuid,null)->'lineage'->'bindings' is distinct from lineage->'bindings' then raise exception 'smoke_detail_readback'; end if;
@@ -72,7 +87,7 @@ begin
  select s.source_state into source_state from bob.artifact_source_status s where s.artifact_id=(child->>'recordId')::uuid and s.revision=1;
  if source_state is distinct from 'changed' then raise exception 'smoke_changed_source_status: %',source_state; end if;
  begin
-  perform bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,jsonb_set(payload,'{data,title}','"Stale synthetic source"'));
+  perform bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,jsonb_set(payload#-'{data,drawing_request}','{data,title}','"Stale synthetic source"'));
   raise exception 'smoke_stale_source_allowed';
  exception when serialization_failure then null; end;
  perform bob.physical_scope_command(project,'project','unlink',scope,'{}'::jsonb);
@@ -81,7 +96,15 @@ begin
  if bob.read_cad_artifact(project,(saved->>'recordId')::uuid,1)->'lineage' is distinct from lineage then raise exception 'smoke_history_lost'; end if;
  set local role service_role;
  perform bob.bob_fail_turn_v2(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer);
+ turn_id:=gen_random_uuid();
+ claim:=bob.bob_claim_turn(project,actor,turn_id,request_text);
+ readback:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'load',(drawing_request->>'id')::uuid);
+ if readback->'receipt' is distinct from saved then raise exception 'smoke_cross_turn_receipt'; end if;
+ set local role authenticated;
+ if bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,payload) is distinct from saved then raise exception 'smoke_cross_turn_replay'; end if;
+ set local role service_role;
+ perform bob.bob_fail_turn_v2(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer);
  reset role;
 end $$;
 rollback;
-select 'P1 authenticated-role save/read/detail, replay, denial, stale/scope checks passed; all writes rolled back' as release_smoke;
+select 'P1/P2a authenticated-role save/read/detail, atomic request and cross-turn replay, denial, stale/scope checks passed; all writes rolled back' as release_smoke;

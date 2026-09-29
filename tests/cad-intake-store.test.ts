@@ -31,5 +31,7 @@ test('private request persistence is replay-safe, revision-checked and isolated 
  assert.deepEqual(await run('list',null,0,null,null,null,{...other,turn:otherTurn},two),[])
  await assert.rejects(asProjectUser(pg,one,sql,['A',one,claim.thread_id,turn,claim.generation,'list',null,0,null,null,null]),/permission denied/)
  await assert.rejects(run('save',saved.id,1,'draft',{...payload,previews:{front:'data:image/png;base64,aaa'}},'pixels'),/pixels_forbidden/)
- const closed=await run('save',saved.id,1,'saved',payload,'saved');assert.equal(closed.revision,2);assert.deepEqual(await run('list'),[])
+ const draft=await run('save',saved.id,1,'draft',payload,'draft');assert.equal(draft.revision,2)
+ await assert.rejects(run('save',saved.id,2,'saved',payload,'saved'),/completion_requires_receipt/)
+ assert.equal((await run('list'))[0].id,saved.id,'status-only completion cannot hide an unfinished request')
 })

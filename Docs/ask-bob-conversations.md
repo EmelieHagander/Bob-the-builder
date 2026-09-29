@@ -4,6 +4,8 @@
 
 ## Ownership and authority
 
+Drawing-request recovery is owned by [CAD adapter — P2a](cad-adapter.md#p2a--request-recovery-release-candidate). That branch is a release candidate, not deployed behavior. It adds an intake retry condition across turns and binds completion to the CAD receipt without creating a second transcript or broadening private-thread access.
+
 There is one active private thread per `(auth user, Bob project)`. The database owns the visible transcript; normal-user RLS requires both thread ownership and current project membership. Another member of the same project cannot read it. The browser supplies only the current request and its stable turn UUID, never provider ids, history, a summary or a tool conversation.
 
 The public `guest@bob.local` identity is shared. Its chat remains device-local and provider-stateless between questions, without private server summary/history or write tools. Do not merge local guest history into an ordinary account implicitly.
