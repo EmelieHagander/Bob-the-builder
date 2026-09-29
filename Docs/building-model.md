@@ -137,7 +137,25 @@ Examples:
 
 A Site is useful when a user has a house, garage and separate workshop on the same property, or when a new building project begins on open ground.
 
+A Site may carry one structured postal address (`address_line1`, optional second line, postal code, locality and country code). That address belongs to the **place**, not to each Building: "Boningshus", "Liten lada" and "Garage" can therefore keep distinct Building names while sharing the same Site address. Address fields are revisioned physical context and remain optional.
+
 Bob must not require a Site for every project. A standalone project/building remains valid.
+
+### 2.1A Optional external site-plan integration
+
+Another app may hold a different projection of the same place — for example a garden/site-plan app that owns outdoor coordinates and footprints. Bob must not duplicate that app's whole model or make it a runtime dependency.
+
+The integration contract is identity-based:
+
+- Bob remains authoritative for persistent `Site` / `Building` identity, building history, Spaces, Elements and build Projects.
+- The external app remains authoritative for its own map geometry and domain data.
+- A map object may softly reference a Bob `Building` with relation `represents`.
+- A planned map object may softly reference a Bob `Project` with relation `planned_by` before any physical Building exists.
+- The whole external site/garden may softly reference one Bob `Site` with relation `located_at`.
+- Soft references must not be cross-schema foreign keys. Either app must continue working when the other app is absent or unavailable.
+- A planned object becoming real does not silently convert project intent into accepted/as-built Building truth. The Building is created/accepted through Bob's physical-model authority path, after which the external object may add a `represents` link.
+
+Akr is the first intended consumer of this seam, but the physical-model contract stays app-neutral.
 
 ## 2.2 Building
 
