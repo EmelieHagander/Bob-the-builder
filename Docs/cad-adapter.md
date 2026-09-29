@@ -423,3 +423,22 @@ complement/resume, measurement bindings, new/detail tool separation, no pixel
 persistence, owner isolation, stale claims, revision conflicts and replay-safe
 writes. Full-suite and deployment evidence is recorded with the release below.
 Fixtures prove control flow, not actual model judgement or drawing quality.
+
+Deployment verified: [PR #157](https://github.com/EmelieHagander/Bob-the-builder/pull/157)
+merged as `3d87a6b5de6b844ec7f55b155681a69ace164da2`, with tested head
+`52d65c808778086ccc21549de46082bc7a096a3c` and tree
+`1233556d8ed7a4a34f63dc11cea84ec55631eafa`. CI run `36525725670` passed
+Node/SQL tests, Edge checks, builds and all browser flows; CAD adapter run
+`36525725653` passed. The final image regression exercises the production
+collector/designer/reviewer handoff and confirms the private request stores refs,
+not pixels. These are fixtures, not a paid live drawing acceptance test.
+
+Hosted migration `20260929053138 / bob_drawing_requests` maps to source
+`20260929045921`. Readback confirms both private tables have RLS, the claimed-turn
+RPC permits service-role execution only, and the active design tool is version 3.
+Deployed `ask-bob` v56 (JWT enabled) and `bob-worker` v24 (existing per-job
+capability). All 60/58 retrieved runtime files match the tested source exactly;
+the bundler omits only type-only `src/data/provenance.ts`. No active Bob jobs
+were present before deployment. Model settings and the shared spending threshold
+are unchanged. No paid drawing run was started during this release; owner testing
+of actual requirement assessment and drawing quality remains necessary.
