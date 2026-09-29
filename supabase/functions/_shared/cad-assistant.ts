@@ -162,13 +162,30 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
      }
      if(reviews>=3||Date.now()+15000>=until){candidate=null;partial=true;return {status:'incomplete',stage:'review',reason:'review_budget',saved:false}}
      if(!await opts.hasAccess()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
-     reviews++;metrics.reviews++
      const pinned=await candidateFingerprint(candidate)
      const reviewLookup=opts.makeLookup()
      let independentEvidence
      try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id)}
      finally{sources.push(...reviewLookup.sources)}
      if(!await opts.hasAccess())throw new Error('project_denied')
+     // Required review reads are a server prerequisite, not advice that a
+     // permissive model may waive. Both render paths reach this same gate.
+     if(independentEvidence.incomplete_datasets.length){
+      const incomplete=independentEvidence.incomplete_datasets
+      candidate=null;acceptedReview=null;reviewPending=false;partial=true;metrics.review_unavailable++
+      terminalFailure={status:'unavailable',stage:'review',reason:'review_sources_incomplete',saved:false,request_id:request?.id??null,incomplete_datasets:incomplete,
+       next_action:'Resolve the listed source retrieval failures, then resume the same request_id with fresh sources. Do not create measurement tasks or repeat unchanged design/render calls. No reviewer was called for this candidate and no candidate was approved.'}
+      // Keep the existing draft/assessment, but never persist an approval.
+      // Even a failed checkpoint must leave the in-memory save gate closed.
+      try{await persist('retrieval_failed',{incomplete})}catch(error){
+       rethrowContinuation(error)
+       if(error instanceof Error&&error.message==='project_denied')throw error
+       terminalFailure={...terminalFailure,request_state_saved:false}
+      }
+      if(!await opts.hasAccess())throw new Error('project_denied')
+      return terminalFailure
+     }
+     reviews++;metrics.reviews++
      const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
       systemMessage:CAD_REVIEW_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:CAD_REVIEW_SCHEMA,
       messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
