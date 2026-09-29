@@ -222,6 +222,7 @@ Source migrations and hosted registry entries are:
 | `supabase/migrations/20260913140500_physical_identity_delete_boundary.sql` | `20260913141357_bob_physical_identity_delete_boundary` |
 | `supabase/migrations/20260913143000_building_context_fk_indexes.sql` | `20260913142013_bob_building_context_fk_indexes` |
 | `supabase/migrations/20260913144500_building_delete_child_order.sql` | `20260913143018_bob_building_delete_child_order` |
+| `supabase/migrations/20260929194500_site_structured_address.sql` | `20260929180225_bob_site_structured_address` |
 
 Do not replay these source timestamps or edit applied migrations. Physical tables and
 history are RLS-protected. `bob_private` owns physical membership/authority helpers;
@@ -232,6 +233,13 @@ adapter behind the single `database.ts` UI seam. Guarded physical deletion requi
 direct authority, a current archived identity and no active Project/Area scope; the
 follow-up delete migration removes child identities in explicit safe order while
 preserving strong foreign keys.
+
+The 2026-09-29 Site-address extension adds optional revisioned `address_line1`,
+`address_line2`, `postal_code`, `locality` and two-letter `country_code` to
+`site_revisions`, exposes them through `current_sites`, and accepts them through
+the same guarded Site command. The address belongs to the Site rather than to each
+Building, so several named Buildings on one property share one location without
+duplicating physical identity.
 
 [Foundation verification](../Docs/foundation-verification.md) owns the exact CI,
 320/390/1280 browser, hosted Auth/PostgREST, Pages and self-cleanup evidence. This
