@@ -122,7 +122,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
    if(opts.research!==false){
     const facts=await collectIntakeFacts(lookup)
     const initialEvidence=[{tool:'current_target',result:target},...facts.evidence]
-    messages.push({role:'user',content:JSON.stringify({source_evidence:initialEvidence,incomplete_datasets:facts.incomplete,handoff,reference_refs:referenceRefs,notice:'Assess every requirement and all necessary dependencies. Known numbers remain exact. Read errors are system gaps, not requests for new measurements.'})})
+    messages.push({role:'user',content:JSON.stringify({source_evidence:initialEvidence,incomplete_datasets:facts.incomplete,handoff,reference_refs:referenceRefs,image_catalog:await opts.context?.catalog()??null,notice:'Assess every requirement and all necessary dependencies. Known numbers remain exact. Read errors are system gaps, not requests for new measurements.'})})
     const collected=await collectCadResearch({userId:opts.userId,messages,handoff,initialEvidence,hasAccess:async()=>await opts.hasAccess()&&(!opts.context||await opts.context.validate()),deadline:until,callModel:opts.callModel,
      carrier:()=>{const pixels=opts.context?.carrier()??[];referencePixels.push(...pixels);return pixels},confirmDelivery:()=>opts.context?.confirmDelivery(),
      tools:()=>[...(lookup.remaining>0?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context?.tools.filter(t=>['list_project_category','open_project_item'].includes(t.function.name))??[])],

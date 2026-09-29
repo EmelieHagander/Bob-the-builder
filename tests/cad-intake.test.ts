@@ -2,6 +2,8 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createCadAssistant,RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 import {parseIntakeAssessment,bindMeasuredDimensions,type DrawingRequest,type DrawingRequestStore} from '../supabase/functions/_shared/cad-intake.ts'
+import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 const id='30000000-0000-4000-8000-000000000001'
@@ -74,4 +76,18 @@ test('legacy new geometry with grouping part_ids reaches rendering without saved
  const f=fixture();let calls=0
  const a=createCadAssistant({...f.opts,callModel:async o=>o.functionName==='cad-research'?reply('finish_cad_research',assessment):o.functionName==='cad-reviewer'?reviewReply():++calls===1?reply('render_cad_candidate',{...candidate,source_artifact_id:null,source_revision:null,part_ids:['invented-group']}):reply()})
  assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,1);assert.deepEqual(a.candidate?.part_ids,[])
+})
+
+test('collector, designer and reviewer see the selected original image while persisted evidence contains refs only',async()=>{
+ const f=fixture();let calls=0;const seen:string[]=[]
+ const row:MediaRow={id:measurement,project_id:'A',title:'Relevant original reference',purpose:'reference',state:'ready',content_type:'image/png',byte_size:8,width:2,height:2,bucket_id:'bob-project-media',object_path:`A/${measurement}`,created_at:'2026-09-01T00:00:00Z',updated_at:'2026-09-01T00:00:00Z'}
+ const context=createProjectContext({hasAccess:f.opts.hasAccess,sources:[],adapters:[createMediaAdapter('A',{count:async()=>1,list:async()=>[row],read:async()=>row,download:async()=>Uint8Array.from([137,80,78,71,13,10,26,10])})]})
+ const a=createCadAssistant({...f.opts,context,referenceImageRefs:()=>['image:'+measurement],callModel:async o=>{
+  const content=JSON.stringify(o.messages)
+  if(o.functionName==='cad-research'){assert(content.includes('image_catalog'));assert(content.includes('data:image/png;base64,iVBORw0KGgo='));seen.push('collector');return reply('finish_cad_research',assessment)}
+  if(o.functionName==='cad-reviewer'){assert(content.includes('data:image/png;base64,iVBORw0KGgo='));seen.push('reviewer');return reviewReply()}
+  if(++calls===1){assert(content.includes('data:image/png;base64,iVBORw0KGgo='));seen.push('designer');return reply('render_cad_candidate',candidate)}
+  return reply()
+ }})
+ assert.equal((await a.consult(request)).status,'ready');assert.deepEqual(seen,['collector','designer','reviewer']);assert.deepEqual(f.row?.payload.reference_refs,['image:'+measurement]);assert(!JSON.stringify(f.row).includes('base64'))
 })
