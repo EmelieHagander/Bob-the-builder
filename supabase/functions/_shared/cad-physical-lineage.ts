@@ -3,12 +3,13 @@ import type {createProjectLookup} from './project-lookup.ts'
 
 type RecordValue=Record<string,any>
 export type PhysicalDimensionBinding={definition_id:string;dimension:string;space_measurement_id:string;space_revision:number}
-const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+const isCadDimension=(v:unknown):v is typeof CAD_DIMENSIONS[number]=>CAD_DIMENSIONS.some(dimension=>dimension===v)
 export function splitDimensionBindings(value:unknown){
  if(!Array.isArray(value)||value.length>32)throw new Error('invalid_dimension_bindings')
  const physical:PhysicalDimensionBinding[]=[],project:any[]=[],seen=new Set<string>()
  for(const b of value){
-  if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.definition_id!=='string'||!CAD_DIMENSIONS.includes(b.dimension))throw new Error('invalid_dimension_bindings')
+  if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.definition_id!=='string'||!isCadDimension(b.dimension))throw new Error('invalid_dimension_bindings')
   const key=b.definition_id+':'+b.dimension
   if(seen.has(key))throw new Error('duplicate_dimension_binding');seen.add(key)
   if('space_measurement_id' in b){
@@ -49,25 +50,32 @@ export async function readPhysicalCadSources(makeLookup:()=>ReturnType<typeof cr
   for(const [id,revision] of ids){
    const m=await read(lookup,'physical_space_measurements',id)
    if(!m)continue
-   if(!spaceCache.has(m.space_id))spaceCache.set(m.space_id,await read(spaces,'physical_spaces',m.space_id))
-   if(!buildingCache.has(m.building_id))buildingCache.set(m.building_id,await read(buildings,'physical_buildings',m.building_id))
-   const sp=spaceCache.get(m.space_id),bu=buildingCache.get(m.building_id)
+   // Read records are untrusted. Validate identities before using them as
+   // cache keys or following them to another physical object; never coerce.
+   const spaceId=m.space_id,buildingId=m.building_id
+   if(!uuid(spaceId)||!uuid(buildingId)){
+    technical=true;issues.push({id,reason:'invalid_source_identity'});continue
+   }
+   if(!spaceCache.has(spaceId))spaceCache.set(spaceId,await read(spaces,'physical_spaces',spaceId))
+   if(!buildingCache.has(buildingId))buildingCache.set(buildingId,await read(buildings,'physical_buildings',buildingId))
+   const sp=spaceCache.get(spaceId),bu=buildingCache.get(buildingId)
    if(!sp||!bu)continue
-   if(m.space_revision!==revision||sp.revision!==revision||sp.building_id!==m.building_id||sp.archived||bu.archived){issues.push({id,reason:'accepted_physical_source_changed'});continue}
+   if(m.space_revision!==revision||sp.revision!==revision||sp.building_id!==buildingId||sp.archived||bu.archived){issues.push({id,reason:'accepted_physical_source_changed'});continue}
    records.set(id,m)
   }
   if(issues.length)throw new PhysicalCadSourceError(issues,technical)
   return records
  }finally{
   // Preserve caller-visible source receipts even when verification fails.
-  sourceReceipts.push(...lookup.sources,...spaces.sources,...buildings.sources)
+  sourceReceipts.push(...lookup.sources,...spaces.sources)
+  sourceReceipts.push(...buildings.sources)
  }
 }
 export function bindPhysicalDimensions(recipe:any,bindings:PhysicalDimensionBinding[],records:Map<string,RecordValue>,lineage:CadLineage){
  const seen=new Set(lineage.bindings.map(b=>b.definition_id+':'+b.dimension))
  for(const b of bindings){
   const key=b.definition_id+':'+b.dimension
-  if(seen.has(key)||!CAD_DIMENSIONS.includes(b.dimension))throw new Error('invalid_physical_binding')
+  if(seen.has(key)||!isCadDimension(b.dimension))throw new Error('invalid_physical_binding')
   seen.add(key)
   const m=records.get(b.space_measurement_id),d=recipe.definitions?.find((d:any)=>d.id===b.definition_id)
   if(!m||m.id!==b.space_measurement_id||m.space_revision!==b.space_revision||!d||!Object.hasOwn(d,b.dimension)||!uuid(m.building_id)||!uuid(m.space_id)||!uuid(m.measurement_id)
