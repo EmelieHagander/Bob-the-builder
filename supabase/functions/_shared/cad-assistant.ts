@@ -1,3 +1,5 @@
+import {splitDimensionBindings,readPhysicalCadSources,bindPhysicalDimensions,physicalLineageSources,PhysicalCadSourceError} from './cad-physical-lineage.ts'
+import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
 import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
@@ -165,7 +167,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
      const pinned=await candidateFingerprint(candidate)
      const reviewLookup=opts.makeLookup()
      let independentEvidence
-     try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id)}
+     try{independentEvidence=await collectDrawingReviewEvidence(reviewLookup,!!raw.step_id,physicalLineageSources(candidate.packet.manifest.bob_lineage).length>0)}
      finally{sources.push(...reviewLookup.sources)}
      if(!await opts.hasAccess())throw new Error('project_denied')
      // Required review reads are a server prerequisite, not advice that a
@@ -178,6 +180,32 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
       // Keep the existing draft/assessment, but never persist an approval.
       // Even a failed checkpoint must leave the in-memory save gate closed.
       try{await persist('retrieval_failed',{incomplete})}catch(error){
+       rethrowContinuation(error)
+       if(error instanceof Error&&error.message==='project_denied')throw error
+       terminalFailure={...terminalFailure,request_state_saved:false}
+      }
+      if(!await opts.hasAccess())throw new Error('project_denied')
+      return terminalFailure
+     }
+     // Readability is not freshness: an otherwise successful scan may now
+     // describe a different revision than the exact rendered candidate.
+     const currentMeasurements=independentEvidence.pages.filter(page=>page.dataset==='measurements').flatMap(page=>page.records)
+     const changedPins=candidate.measurements.filter(pin=>{
+      const found=currentMeasurements.filter(record=>record.id===pin.id)
+      return found.length!==1||found[0].revision!==pin.revision||found[0].archived
+     })
+     const physicalPins=physicalLineageSources(candidate.packet.manifest.bob_lineage)
+     const recordsFor=(dataset:string)=>independentEvidence.pages.filter(p=>p.dataset===dataset).flatMap(p=>p.records)
+     const changedPhysical=physicalPins.filter(pin=>{
+      const rows=recordsFor('physical_space_measurements').filter(r=>r.id===pin.id)
+      const sp=recordsFor('physical_spaces').find(r=>r.id===pin.space_id),bu=recordsFor('physical_buildings').find(r=>r.id===pin.building_id)
+      return rows.length!==1||rows[0].space_revision!==pin.space_revision||!sp||sp.revision!==pin.space_revision||sp.archived||!bu||bu.archived
+     })
+     if(changedPins.length||changedPhysical.length){
+      candidate=null;acceptedReview=null;reviewPending=false;partial=true
+      terminalFailure={status:'needs_data',stage:'review',reason:'review_sources_changed',saved:false,request_id:request?.id??null,changed_measurements:changedPins,changed_physical_sources:changedPhysical.map(p=>p.id),
+       next_action:'Read the current revisions and revise this same request before rendering again. A removed or changed source is not an invitation to guess. Do not repeat unchanged work or ask for permission already granted.'}
+      try{await persist('needs_data')}catch(error){
        rethrowContinuation(error)
        if(error instanceof Error&&error.message==='project_denied')throw error
        terminalFailure={...terminalFailure,request_state_saved:false}
@@ -280,7 +308,8 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        if(!object(args)||(args.purpose!==undefined&&args.purpose!=='project')||!text(args.title,200)||!text(args.description,6000)||!text(args.assumptions,3500)||args.target_revision!==selected.revision
          ||!Array.isArray(args.measurements)||args.measurements.length>20||args.measurements.some((m:any)=>!uuid(m.id)||!Number.isSafeInteger(m.revision)||m.revision<1)
          ||!Array.isArray(args.part_ids)||new Set(args.part_ids).size!==args.part_ids.length)throw new Error('invalid_candidate')
-       let recipe=args.recipe
+       let recipe=args.recipe,lineage:CadLineage|null=null
+       const bindings=splitDimensionBindings(call.function.name==='render_cad_candidate'?args.dimension_bindings??[]:[])
        if(args.source_artifact_id!==null){
         if(!uuid(args.source_artifact_id)||!Number.isSafeInteger(args.source_revision)||args.source_revision<1||recipe!==null)throw new Error('invalid_source')
         const source=await opts.readArtifact(args.source_artifact_id,args.source_revision)
@@ -294,28 +323,49 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
          if(recipe.clearances)recipe.clearances=recipe.clearances.filter((c:any)=>args.part_ids.includes(c.first_id)&&args.part_ids.includes(c.second_id))
          if(recipe.motions)recipe.motions=recipe.motions.filter((c:any)=>[...c.moving_ids,...c.obstacle_ids].every(id=>args.part_ids.includes(id)))
         }
+        lineage=inheritCadLineage(opts.projectId,source,recipe,args.source_artifact_id,args.source_revision)
+        args.measurements=lineageMeasurementPins(args.measurements,lineage)
        }else if(args.source_revision!==null||args.part_ids.length)throw new Error('invalid_source')
        const verification=opts.makeLookup(),measurementRecords=new Map<string,Record<string,any>>()
        try{for(const m of args.measurements){
         const found=await verification.search({dataset:'measurements',record_id:m.id,query:null,status:null,area_id:null,after_id:null})
+        if(found.status==='denied')throw new Error('project_denied')
         const record=found.records.find(r=>r.id===m.id&&r.revision===m.revision&&!r.archived)
         if(found.status!=='ok'||!record)throw new Error('measurement_changed')
         measurementRecords.set(m.id,record)
        }}finally{sources.push(...verification.sources)}
-       if(call.function.name==='render_cad_candidate')recipe=bindMeasuredDimensions(recipe,args.dimension_bindings??[],measurementRecords)
+       const physicalPins=[...bindings.physical,...physicalLineageSources(lineage).map(p=>({space_measurement_id:p.id,space_revision:p.space_revision}))]
+       const physicalRecords=physicalPins.length?await readPhysicalCadSources(opts.makeLookup,physicalPins,sources):new Map()
+       if(call.function.name==='render_cad_candidate'){
+        recipe=bindMeasuredDimensions(recipe,bindings.project,measurementRecords)
+        lineage=buildCadLineage(opts.projectId,recipe,bindings.project,measurementRecords,handoff.coordinates)
+        recipe=bindPhysicalDimensions(recipe,bindings.physical,physicalRecords,lineage)
+       }
        const parsed=parseCadAssemblyRequest(recipe);if(!parsed){invalidRenders++;metrics.input_corrections++;out={status:'invalid',reason:'invalid_geometry',issues:cadIssues(recipe),renders_remaining:4-renders,corrections_remaining:8-invalidRenders};messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(out)});continue}
+       lineage??=buildCadLineage(opts.projectId,parsed,[],measurementRecords,handoff.coordinates)
        renders++;metrics.renders++
        let packet:CadPacket
        try{packet=await opts.render(parsed)}catch(error){
         rethrowContinuation(error);partial=true
         return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed',summary:'The CAD service failed. Stop this design attempt; changing the construction is not a renderer repair.'}
        }
+       packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage}}
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
-       await persist('draft',{draft:{recipe:parsed,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements}})
+       await persist('draft',{draft:{recipe:parsed,lineage,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements}})
        reviewPending=true
        out={status:'rendered',saved:false,applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
-     }catch(error){rethrowContinuation(error);if(['render_cad_candidate','render_saved_cad_candidate'].includes(call.function.name)){invalidRenders++;metrics.input_corrections++}out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
+     }catch(error){
+      rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error
+      if(error instanceof PhysicalCadSourceError){
+       candidate=null;acceptedReview=null;partial=true
+       terminalFailure={status:error.technical?'unavailable':'needs_data',stage:'source',reason:error.message,saved:false,request_id:request?.id??null,issues:error.issues,
+        next_action:'Resolve current physical source identity, scope or retrieval; resume this same request. Do not replace unavailable physical sources with guesses.'}
+       try{await persist(error.technical?'retrieval_failed':'needs_data')}catch(e){rethrowContinuation(e);if(e instanceof Error&&e.message==='project_denied')throw e;terminalFailure={...terminalFailure,request_state_saved:false}}
+       return terminalFailure
+      }
+      if(['render_cad_candidate','render_saved_cad_candidate'].includes(call.function.name)){invalidRenders++;metrics.input_corrections++}out={status:'unavailable',reason:error instanceof Error?error.message:'tool_failed'}}
+     if(out?.status==='denied')throw new Error('project_denied')
      if(!['render_cad_candidate','render_saved_cad_candidate','open_project_item'].includes(call.function.name)){
       const bytes=new TextEncoder().encode(JSON.stringify(out)).length
       if(researchBytes+bytes<=120000){researchEvidence.push({tool:call.function.name,result:out});researchBytes+=bytes}else researchTruncated=true

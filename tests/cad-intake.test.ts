@@ -18,7 +18,7 @@ function fixture(){
  let row:DrawingRequest|null=null,target=true,readError=false,design=0,renders=0;const reads:string[]=[]
  const store:DrawingRequestStore={list:async()=>row?[{id:row.id,status:row.status}]:[],load:async key=>key===row?.id?structuredClone(row):null,save:async(key,expected,status,payload)=>{assert.equal(expected,row?.revision??0);assert.equal(key,row?.id??null);row={id,revision:expected+1,status,payload:structuredClone(payload)};return structuredClone(row)}}
  const opts={requestStore:store,projectId:'A',userId:'u',ownerRequest:'Build the whole requested construction.',hasAccess:async()=>true,deadline:Date.now()+300000,available:true,
-  makeLookup:()=>createProjectLookup('A',async(_p,q)=>{reads.push(q.dataset);return {data:{records:q.dataset==='target'&&target?[{id:'project',revision:1,solution_id:'s'}]:q.dataset==='measurements'?[{id:measurement,revision:2,value:'132',unit:'cm'}]:[],related:[],truncated:false},error:readError&&q.dataset==='physical_elements'?{code:'oops'}:null}},1000,40),
+  makeLookup:()=>createProjectLookup('A',async(_p,q)=>{reads.push(q.dataset);return {data:{records:q.dataset==='target'&&target?[{id:'project',revision:1,solution_id:'s'}]:q.dataset==='measurements'?[{id:measurement,revision:2,value:'132',unit:'cm',truth:'measured',source:'Measured fixture width'}]:[],related:[],truncated:false},error:readError&&q.dataset==='physical_elements'?{code:'oops'}:null}},1000,40),
   callModel:async(o:any)=>{if(o.functionName==='cad-research')return reply('finish_cad_research',assessment);if(o.functionName==='cad-reviewer')return reviewReply();return ++design===1?reply('render_cad_candidate',candidate):reply()},
   render:async(r:any)=>{renders++;return {recipe:r,manifest:{instances:r.instances},files:{front:'not persisted'},previews:{front:'pixels',top:'pixels'}}},readArtifact:async()=>null}
  return {opts,reads,get row(){return row},get renders(){return renders},get design(){return design},noTarget:()=>{target=false},failRead:()=>{readError=true}}
@@ -55,7 +55,7 @@ test('new geometry has no saved selection fields; saved selections have no recip
  assert('recipe' in fresh);assert(!('part_ids' in fresh));assert(!('source_artifact_id' in fresh));assert('part_ids' in saved);assert(!('recipe' in saved))
 })
 test('server binds exact measured values in mm and refuses stale, ambiguous or unpinned input',()=>{
- const records=new Map([[measurement,{id:measurement,revision:2,value:'132',unit:'cm'}]])
+ const records=new Map([[measurement,{id:measurement,revision:2,value:'132',unit:'cm',truth:'measured',source:'Measured fixture width'}]])
  const bindings=[{definition_id:'panel',dimension:'x_mm',measurement_id:measurement,revision:2}]
  assert.equal(bindMeasuredDimensions(recipe,bindings,records).definitions[0].x_mm,1320);assert.equal(recipe.definitions[0].x_mm,999)
  assert.throws(()=>bindMeasuredDimensions(recipe,[{...bindings[0],revision:1}],records),/unusable/)

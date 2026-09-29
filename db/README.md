@@ -1,5 +1,6 @@
 # bob — database
 
+
 bob lives in a **shared Postgres database**. Bob-owned project data and sharing
 records live in **`bob`**; guarded internal authority helpers live in non-exposed
 **`bob_private`**. The household/friend sharing extension reads the existing
@@ -667,3 +668,13 @@ no database-wide configuration or API timeout is relaxed. Both follow-ups are de
 see the release evidence above.
 
 `20260929045921_bob_drawing_requests.sql` adds private conversation-scoped drawing intake and replay receipts. Service-only `bob_drawing_request` checks the current owner/project/turn claim and optimistic revision; reset cascades working state. No browser grants or project measurement writes. The drawing workflow and release status belong to [CAD adapter](../Docs/cad-adapter.md#drawing-intake-and-complements--september-29-contract).
+
+## CAD parameter lineage release
+
+P1a/P1b in [PR #160](https://github.com/EmelieHagander/Bob-the-builder/pull/160) extends the existing CAD revision/save/read boundary. Apply only the two reviewed pending migrations, in order: `20260929131000_cad_parameter_lineage.sql`, then `20260929170812_cad_physical_source_lineage.sql`. The second replaces the first validator while preserving its trigger identity and adds physical-source freshness to the existing invoker assessment/view. Hosted ledger timestamps may differ; record the filename-to-ledger mapping in the release PR. Never replay the shared migration history.
+
+Before application, recheck main/head, the hosted ledger, active Bob jobs and existing `manifest.bob_lineage` use. Both migrations are transactional, with bounded lock/statement timeouts, and have no data backfill or cross-app schema writes. Apply them before deploying both `ask-bob` and `bob-worker` from the reviewed immutable commit. Preserve each endpoint's existing authentication configuration. The writer still enforces project/turn authority; physical reads additionally require this project's scope. Functions/views remain invoker-based; the trigger helper has no public executable grant.
+
+After application, verify function/trigger/view definitions and permissions, then run `scripts/check-cad-lineage-release.sql`: synthetic identities and project records, authenticated-role source-bound save/read/detail, rejection of stale/denied sources, and unconditional transaction rollback. This validates hosted SQL with RLS, not an actual Auth login or HTTP/model delivery. Confirm no synthetic records persist and verify both deployed endpoints separately. Real user acceptance stays open in [State](../Docs/bob-delivery-flow.md#state).
+
+Rollback is not transparent: an older writer may be blocked from revising tracked CAD or deriving from a tracked parent. Preserve the additive schema and historical metadata; do not drop the validator or strip lineage to restore writes. Diagnose the failing boundary before selecting a reviewed backend version. [CAD adapter](../Docs/cad-adapter.md#accepted-physical-parameter-provenance--p1b) owns the versioned metadata and remaining coverage limits; [building model](../Docs/building-model.md#accepted-physical-measurements-in-cad) owns the accepted physical state.
