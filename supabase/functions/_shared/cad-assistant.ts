@@ -331,7 +331,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
         lineage=inheritCadLineage(opts.projectId,source,recipe,args.source_artifact_id,args.source_revision)
         if(source.parameter_state==='complete'&&(source.parameters??source.manifest?.bob_parameters)==null)throw new Error('invalid_saved_parameters')
         if((source.parameters??source.manifest?.bob_parameters)!=null)parameters=inheritCadParameters(opts.projectId,source.recipe,source.parameters??source.manifest.bob_parameters,recipe)
-        const frameImages=parameters?.frames.filter(f=>f.kind==='image')??[]
+        const frameImages=[...new Map((parameters?.frames.filter(f=>f.kind==='image')??[]).map(f=>[f.source_ref,f])).values()]
         for(let offset=0;offset<frameImages.length;offset+=CONTEXT_LIMITS.batch){
          if(!opts.context)throw new CadParameterSourceError('coordinate_images_unavailable',true)
          const opened=await opts.context.execute('open_project_item',{refs:frameImages.slice(offset,offset+CONTEXT_LIMITS.batch).map(f=>f.source_ref)})
