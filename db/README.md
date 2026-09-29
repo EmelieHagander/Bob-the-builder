@@ -225,6 +225,7 @@ Source migrations and hosted registry entries are:
 | `supabase/migrations/20260913144500_building_delete_child_order.sql` | `20260913143018_bob_building_delete_child_order` |
 | `supabase/migrations/20260929194500_site_structured_address.sql` | `20260929180225_bob_site_structured_address` |
 | `supabase/migrations/20260929201000_building_site_assignment.sql` | `20260929180945_bob_building_site_assignment` |
+| `supabase/migrations/20260929203500_building_footprint_geometry.sql` | `20260929184325_bob_building_footprint_geometry` |
 
 Do not replay these source timestamps or edit applied migrations. Physical tables and
 history are RLS-protected. `bob_private` owns physical membership/authority helpers;
@@ -245,6 +246,12 @@ duplicating physical identity. The follow-up Building-site assignment migration 
 a direct Building authority attach an existing standalone Building to an accessible
 Site through the normal revisioned command; changing the Site is rejected for
 derived/household-only editors.
+
+The footprint migration adds one optional accepted exterior polygon per Building,
+revisioned independently from Project Artifacts. `geometry.units` is required to be
+`mm`; truth/source provenance is mandatory for non-unknown geometry. Reads use
+`current_building_footprints`; writes use the guarded
+`bob.physical_building_footprint_command` and ordinary Building edit authority.
 
 [Foundation verification](../Docs/foundation-verification.md) owns the exact CI,
 320/390/1280 browser, hosted Auth/PostgREST, Pages and self-cleanup evidence. This
