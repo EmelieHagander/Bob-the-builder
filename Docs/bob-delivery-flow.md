@@ -4,6 +4,8 @@
 >
 > **Äger:** sambandet mellan datans väg, ansvar, överlämningar, fortsatt arbete och leveransacceptans. **Äger inte:** en ny ordlista, arbetsstruktur, databasmodell, CAD-motor, verktygskatalog eller V1-roadmap. Befintliga domänägare nedan behålls. [Nulägeskontrollen](#nulage) är en daterad bilaga, inte en ersättare för den löpande funktionsinventeringen.
 
+**Fortsätt här:** [State och nästa handling](#state) · [P0:s arbetspass](#p0) · [Prioriteringar](#plan) · [Acceptansfall](#acceptans).
+
 ## 1. Utfallet vi vill ha
 
 **Bob driver ett levande projekt. Chatten är kontaktytan, inte projektets databas eller arbetskö.** Användaren anger mål och mandat samt bidrar med observationer på plats. Bob ansvarar för att nästa meningsfulla resultat blir användbart, eller att ett verkligt hinder får en ansvarig och en bestämd fortsättning.
@@ -266,6 +268,28 @@ För schemaformen: läs `information_schema.columns` för `bob.artifact_cad_revi
 
 **Rekommenderad första implementationsetapp är P0.** Den har ett konkret återkontrollerat fel, en begränsad ändringsyta och ett tydligt positivt motprov. P1 är nästa strukturella steg; fysisk scope-rättning görs inte genom att gissa kopplingar eller arkivera allt som heter V1.
 
+<a id="p0"></a>
+### 10.1 P0 — kodgranskning, reproduktion, fix och verifiering
+
+**Sparad arbetsplan, inte genomförd implementation.** Arbetssättet är ett avgränsat pass per etapp, med möjlighet att dela större etapper. Varje pass omfattar granskning, reproducerbara prov, avgränsad implementation och verifiering; planen får inte behandlas som bevis för att alla antaganden redan är riktiga. Aktuellt arbetsläge finns i [State](#state).
+
+**P0:s mål:** göra godkännandegränsen tillförlitlig utan fler onödiga stopp. Båda riktningarna krävs: obligatoriskt oläst underlag ska stoppa godkännande, och tillräckligt giltigt underlag ska kunna nå sparad och kopplad leverans inom befintligt mandat.
+
+| Del | Arbete | Konkret utfall / bevis som ska lämnas |
+|---|---|---|
+| **P0.1 — granska hela den berörda kodvägen** | Kontrollera aktuell main, arbetsbranch och pågående ändringar. Följ intag → granskarens källhämtning → modellutslag → kandidatstatus/lagring → faktisk spargräns och steglänk. Sök alternativa verktygsvägar, återlästa kandidater och retryvägar; begränsa inte granskningen till den redan identifierade accepteringsgrenen. Kartlägg var obligatoriska källor bestäms och hur relevant lästäckning kontrolleras. | Kodkarta med exakta filer/funktioner/commit, möjliga kringvägar och föreslagen auktoritativ kontrollpunkt. Redovisa vad som är kodläst, testat respektive ännu okänt. |
+| **P0.2 — reproducera före ändring** | Skriv/kör regressionen för obligatoriskt läsfel + modellens `pass` och följ även sparvägen. Lägg positivt motprov med komplett underlag samt ett fall med styrkt irrelevant oläst extrainformation. Kontrollera avkortning/paginering, åtkomstfel och återläst äldre kandidat där kodvägen motiverar det. | Ett test som visar felet före fix och oförändrade acceptanskrav för efterprovet. Exakta testnamn, kommandon, miljö och resultat; utebliven reproduktion rapporteras som sådan, inte som ett redan passerat test. |
+| **P0.3 — minsta sammanhängande fix** | Inför maskinella villkor som modellens svar inte kan överrösta. Hantera nödvändig källtäckning före betald granskning och säkerställ att ingen berörd sparväg kan kringgå godkännandet. Bevara korrekta tidigare leveranser. Skilj läsfel från verkliga uppgiftsluckor och återför rätt nästa handling. | Avgränsad kodändring på separat implementationsbranch. Ingen generell databasombyggnad, gissad datarättning, ny agentuppdelning eller budgethöjning. Om någon sådan ändring faktiskt krävs ska beroendet och nytt scope redovisas, inte smygas in. |
+| **P0.4 — verifiera båda riktningarna och granska diffen** | Kör regressionerna och relevanta tester/kontroller enligt [verify](../.claude/skills/verify/SKILL.md). Följ både det stoppade flödet och komplett underlag till sparad version, rätt steglänk och återläsning. Granska diff och felvägar separat från själva patchandet; ange vem eller vilket verktyg som faktiskt granskade. | Separat implementations-PR med bevis, kvarstående begränsningar och bedömning inför eventuell driftsättning. Fixture-/integrationstest, verklig modell-/CAD-körning och driftsättning redovisas separat; inget av dem får ersätta de andra i statusen. |
+
+**Obligatoriskt kontra irrelevant:** oläst obligatoriskt underlag stoppar. Styrkt irrelevant extrainformation ska inte stoppa. Osäker relevans behöver utredas och får inte väljas bort enbart av samma modell som vill godkänna kandidaten. Intagets krav, källidentitet och användning måste ge en kontrollerbar grund för avgränsningen; P1:s fulla källgraf förklaras inte färdig av en smal P0-fix.
+
+**P0:s utgångsprov:** [A06](#acceptans) ska förhindra godkänd sparbar kandidat vid nödvändigt läsfel även om modellen svarar `pass`. [A01](#acceptans) är det positiva motprovet hela vägen till tillgänglig leverans utan nytt lov. Berörda delar av A03, A11 och A13 kontrollerar lästäckning, korrekt felklass och bevarad delvis lyckad leverans. Om ett separat fel i ett senare led hindrar A01 ska P0:s spärrfix och den återstående leveransblockeringen rapporteras var för sig — inte sammanfattas som ”hela P0 klart”.
+
+**Utanför P0:** fullständig parameter-/beräkningsspårning och riktad fysisk datarättning hör till P1. Händelsestyrd återupptagning efter ett senare UI-mått eller en Task-uppdatering hör till P2. P0 ska inte skapa nya frågor om redan givet arbetsmandat, men den får inte tillgodoräkna sig P2:s ännu overifierade fortsättning.
+
+**Överlämningsgrind:** uppdatera [State](#state), berörda domänägare och testbevis innan passet avslutas. Separera kodgranskad, testad, mergad och driftsatt. Ingen automatisk merge, datamigration eller driftsättning ingår; kontrollera diff, målmiljö och uttryckligt mandat före varje sådan åtgärd.
+
 <a id="acceptans"></a>
 ## 11. Acceptansfall
 
@@ -296,6 +320,39 @@ Alla fall bedömer slutläget i data och avsedd UI, inte bara Bobs svar. Använd
 
 Mät minst: andel beställningar som når korrekt leverans utan extra knuff, korrekt samlad komplettering, falska godkännanden, falska stopp, parameterursprungens täckning, kostnad per accepterad leverans, onödiga upprepningar och felaktiga dubbletter. Rapportera testantal och spridning; ett enstaka lyckat modellförsök stänger inte hela användarfallet.
 
-## 12. Överlämning
+<a id="state"></a>
+## 12. State och överlämning
 
-Nästa session ska läsa detta dokument tillsammans med domänägarna, kontrollera om main/drift ändrats och därefter ta ställning till P0. De verifierade fynden är avgränsade i avsnitt 9. Designkontrakten i avsnitt 2–8 och etapperna i avsnitt 10 är inte genomförda av denna ändring. Ingen merge, datarättning, migration, modellinställning eller driftsättning ingår.
+**Denna sektion äger arbetsläget för just leveransflödets förbättring P0–P4.** Den är inte Bobs runtime-minne, en ny produktroadmap eller en andra funktionsinventering. Målkontraktet finns ovan, daterade fynd i [avsnitt 9](#nulage), appens samlade implementerade förmågor i [function-inventory.md](function-inventory.md) och releaseordningen i [v1-plan.md](v1-plan.md). Bevis ska länkas, inte återberättas som nya kontroller.
+
+### Aktuell hållpunkt — 2026-09-29
+
+| Fält | Sparat läge |
+|---|---|
+| Nästa etapp | **P0 är förberett, inte genomfört.** Följ [P0.1–P0.4](#p0); inför inte spärren innan berörda kodvägar och det positiva motprovet granskats. |
+| Kontrollerad main | `cf320c661691d22101b121914ea69326d8cbc6f7`, återkontrollerad vid denna dokumentationsuppdatering. Det är källkodens bas, inte bevis för en fullständig jämförelse mot drift. |
+| Dokumentationsarbete | [PR #158](https://github.com/EmelieHagander/Bob-the-builder/pull/158), branch `docs/bob-delivery-flow-20260929`. Vid uppdateringen är PR:n ett öppet, omërgat utkast. Utgångspunkten för tillägget är `4f82c4d769c4cc7105a127053bd727fa16d4ba21`; PR:ns senaste commit visar dokumentversionen. |
+| Mandat för denna ändring | Spara P0-plan och tydlig överlämningsstatus. Ingen implementation, datarättning, migration, merge eller driftsättning ingår. Ett sparat arbetssätt är inte bevis på genomförd fix. |
+| Befintlig granskning | Riktad kodgranskning och daterad read-only datakontroll enligt avsnitt 9. Inte en heltäckande kodrevision av Bob. Tidigare livefynd är inte omkörda i denna statusuppdatering. |
+| P0.1 | **Planerat.** Den bredare genomgången av alla berörda godkännande-/spar-/återupptagningsvägar återstår; tidigare riktad läsning är ingångsvärde. |
+| P0.2 | **Inte kört i detta arbetspass.** Regression före fix, positivt motprov och styrkt irrelevant extrakälla återstår. |
+| P0.3 | **Inte implementerat.** Ingen P0-fix eller separat implementations-PR har skapats av detta dokumentationsarbete. |
+| P0.4 | **Inte verifierat.** Inga nya Node-/SQL-/browser- eller modell-/CAD-resultat tillförs här. P0:s leveransacceptans är öppen. |
+| P1–P4 | **Planerade, inte genomförda av denna lösningsgenomgång.** Omfattning och beroenden finns i avsnitt 10; befintliga delar av produkten ska inte misstolkas som nytillverkade eller saknade. |
+| Kvarstående hinder och avgränsningar | Granskningsfynd F1–F4 i avsnitt 9 är underlag att återkontrollera. För P0 återstår reproduktion och precisering av obligatoriskt underlag samt kontroll av möjliga kringvägar. Senare UI-/Task-väckning tillhör P2. |
+| Kod-/verifieringsansvar | Den som tar nästa P0-implementationspass ansvarar för kodkarta, patch, prov och testbevis. Ingen separat kodgranskare eller körande agent är tilldelad av denna statuspost. |
+| Dokumentationsansvar | **Archie**, enligt [subagentdefinitionen](../.claude/agents/archie.md), granskar placering, ägarskap, status, länkar och överlämning. Han ersätter inte teknisk granskare eller domänägare. |
+
+### Archie: definition, ansvar och faktisk körning
+
+Repot har redan `.claude/agents/archie.md` med `name: archie`, beskrivning och granskningskontrakt. [CLAUDE.md](../CLAUDE.md) hänvisar dokumentationsarbete dit. Läs även [learnings](../.claude/agents/archie-learnings.md) och [findings](../.claude/agents/archie-findings.md). Återanvänd denna definition; skapa inte en parallell Archie eller lägg denna etapps tillfälliga status i hans stabila instruktion.
+
+Archie är en dokumentationsstödjande subagent för utvecklingsarbetet, inte en ny byggspecialist i Bobs produktflöde. **Att definitionen finns är inte bevis för att en separat subagent har körts.** I denna dokumentationsuppdatering har den arbetande assistenten läst och använt kontraktet; ingen separat Archie-körning eller oberoende granskning påstås. Om Archie anropas i nästa verktygsmiljö ska faktiskt granskningsresultat länkas. Om granskningen görs manuellt anges det i stället.
+
+### Uppdatera vid varje avslutat pass
+
+Den ansvarige för passet uppdaterar denna hållpunkt med datum, kontrollerad main och arbetscommit, branch/PR, genomförda delsteg, kvarstående hinder och **en konkret nästa handling**. Länka testnamn/kommandon, miljö, resultat och granskningsbevis från PR/CI eller relevant ägardokument. Skriv ”inte kört” där bevis saknas. Äldre datakontroller och modellkörningar behåller sina egna datum.
+
+Håll planerad, kodgranskad, reproducerad, implementerad, testad, mergad och driftsatt isär. En godkänd PR eller grön fixturesvit får inte automatiskt markera faktisk modell-/deltagaracceptans klar. Om verifierat runtime-beteende ändras uppdateras den berörda domänägaren och funktionsinventeringen, med länk hit för återstående förbättringsarbete. State ersätter inte dessa ägare.
+
+**Nästa konkreta handling:** på ett uttryckligt P0-uppdrag, kontrollera aktuell main och pågående ändringar igen, skapa/återanvänd rätt separat implementationsbranch och börja med kodkartan i P0.1 samt regressionen i P0.2. Planeringen börjar inte om, och P1/P2 ska inte blandas in utan att beroendet görs tydligt. Ingen merge eller driftsättning följer automatiskt av att arbetspasset startas eller avslutas.
