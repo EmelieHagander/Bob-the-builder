@@ -31,7 +31,15 @@ export interface BuildingContextEditorProps {
   relationships: PhysicalRelationship[]
   canDirectEdit: boolean
   onSelectBuilding: (buildingId: string) => void
-  onCreateSite: (id: string, data: { name: string; notes: string }) => Promise<void>
+  onCreateSite: (id: string, data: {
+    name: string
+    notes: string
+    address_line1: string
+    address_line2: string
+    postal_code: string
+    locality: string
+    country_code: string
+  }) => Promise<void>
   onCreateBuilding: (id: string, data: { site_id: string | null; name: string; notes: string }) => Promise<void>
   onCreateNode: (kind: NodeKind, id: string, data: NodeData) => Promise<void>
   onLinkProject: (id: string, data: { target_kind: 'building'; building_id: string }) => Promise<void>
@@ -57,6 +65,13 @@ const relationOptions: { value: RelationshipKind; label: string }[] = [
 const truthLabel = (truth: PhysicalTruth) => truthOptions.find(option => option.value === truth)?.label ?? 'AI assessment'
 const relationLabel = (relation: RelationshipKind) => relationOptions.find(option => option.value === relation)?.label ?? relation
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
+
+function siteAddress(site: PhysicalSite | undefined): string {
+  if (!site) return ''
+  const street = [site.addressLine1, site.addressLine2].filter(Boolean).join(', ')
+  const place = [site.postalCode, site.locality].filter(Boolean).join(' ')
+  return [street, place, site.countryCode].filter(Boolean).join(' · ')
+}
 
 export function BuildingContextEditor({
   sites,
@@ -105,8 +120,15 @@ export function BuildingContextEditor({
       <div className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
-            <p className="foundation-hint" style={{ margin: 0 }}>{selected.siteId ? sites.find(site => site.id === selected.siteId)?.name ?? 'Site' : 'Standalone building'}</p>
-            <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
+            {(() => {
+              const site = selected.siteId ? sites.find(candidate => candidate.id === selected.siteId) : undefined
+              const address = siteAddress(site)
+              return <>
+                <p className="foundation-hint" style={{ margin: 0 }}>{site?.name ?? 'Standalone building'}</p>
+                <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
+                {address && <p className="foundation-hint" style={{ margin: '0 0 4px' }}>{address}</p>}
+              </>
+            })()}
             {selected.notes && <p style={{ margin: 0 }}>{selected.notes}</p>}
           </div>
           {showProjectScope && <div className="cluster" style={{ flexWrap: 'wrap' }}>
@@ -211,6 +233,11 @@ function CreatePhysicalModal({
 }) {
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
+  const [addressLine1, setAddressLine1] = useState('')
+  const [addressLine2, setAddressLine2] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [locality, setLocality] = useState('')
+  const [countryCode, setCountryCode] = useState('SE')
   const [siteId, setSiteId] = useState('')
   const [levelId, setLevelId] = useState('')
   const [position, setPosition] = useState('0')
@@ -244,7 +271,15 @@ function CreatePhysicalModal({
       setBusy(true); setError('')
       try {
         const id = crypto.randomUUID()
-        if (mode === 'site') await onCreateSite(id, { name, notes })
+        if (mode === 'site') await onCreateSite(id, {
+          name,
+          notes,
+          address_line1: addressLine1,
+          address_line2: addressLine2,
+          postal_code: postalCode,
+          locality,
+          country_code: countryCode,
+        })
         else if (mode === 'building') await onCreateBuilding(id, { site_id: siteId || null, name, notes })
         else if (mode === 'level') await onCreateNode('level', id, { name, position: Number(position), notes })
         else if (mode === 'space') await onCreateNode('space', id, { name, kind, level_id: levelId || null, notes, truth, source, measurements: [] })
@@ -255,7 +290,17 @@ function CreatePhysicalModal({
     }}>
       <fieldset disabled={busy} className="foundation-form" style={{ border: 0, padding: 0, margin: 0 }}>
         {(mode === 'site' || mode === 'building' || mode === 'level' || mode === 'space' || mode === 'element') && <Field label={mode === 'space' ? 'Space name' : mode === 'element' ? 'Element name' : 'Name'}><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>}
-        {mode === 'building' && <Field label="Site (optional)"><select style={inputStyle} value={siteId} onChange={event => setSiteId(event.target.value)}><option value="">No site / standalone</option>{sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></Field>}
+        {mode === 'site' && <>
+          <Field label="Street address"><input style={inputStyle} maxLength={240} autoComplete="address-line1" value={addressLine1} onChange={event => setAddressLine1(event.target.value)} /></Field>
+          <Field label="Address line 2 (optional)"><input style={inputStyle} maxLength={240} autoComplete="address-line2" value={addressLine2} onChange={event => setAddressLine2(event.target.value)} /></Field>
+          <div className="cluster" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 130px' }}><Field label="Postal code"><input style={inputStyle} maxLength={40} autoComplete="postal-code" value={postalCode} onChange={event => setPostalCode(event.target.value)} /></Field></div>
+            <div style={{ flex: '2 1 180px' }}><Field label="Locality"><input style={inputStyle} maxLength={160} autoComplete="address-level2" value={locality} onChange={event => setLocality(event.target.value)} /></Field></div>
+            <div style={{ flex: '0 1 90px' }}><Field label="Country"><input style={inputStyle} maxLength={2} autoComplete="country" value={countryCode} onChange={event => setCountryCode(event.target.value.toUpperCase())} /></Field></div>
+          </div>
+          <p className="foundation-hint">The address belongs to the Site, so every Building here can keep its own name while sharing the same physical address.</p>
+        </>}
+        {mode === 'building' && <Field label="Site (optional)"><select style={inputStyle} value={siteId} onChange={event => setSiteId(event.target.value)}><option value="">No site / standalone</option>{sites.map(site => <option key={site.id} value={site.id}>{site.name}{siteAddress(site) ? ' · ' + siteAddress(site) : ''}</option>)}</select></Field>}
         {mode === 'level' && <Field label="Order / position"><input style={inputStyle} type="number" value={position} onChange={event => setPosition(event.target.value)} /></Field>}
         {mode === 'space' && <><Field label="Kind"><input style={inputStyle} maxLength={80} placeholder="Bedroom, kitchen, porch…" value={kind} onChange={event => setKind(event.target.value)} /></Field><Field label="Level (optional)"><select style={inputStyle} value={levelId} onChange={event => setLevelId(event.target.value)}><option value="">Not modelled / unknown</option>{levels.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}</select></Field></>}
         {mode === 'element' && <><Field label="Kind"><input style={inputStyle} required maxLength={80} placeholder="Window, wall, beam, outlet…" value={kind} onChange={event => setKind(event.target.value)} /></Field><Field label="Space (optional)"><select style={inputStyle} value={subject} onChange={event => setSubject(event.target.value)}><option value="">Whole building / not placed</option>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field><Field label="Description"><textarea style={inputStyle} rows={2} maxLength={4000} value={description} onChange={event => setDescription(event.target.value)} /></Field></>}
