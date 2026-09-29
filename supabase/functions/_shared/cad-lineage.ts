@@ -2,11 +2,13 @@ import type { DesignHandoff } from './cad-review.ts'
 
 export const CAD_DIMENSIONS = ['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm'] as const
 export type DimensionBinding = { definition_id:string; dimension:string; measurement_id:string; revision:number }
+export type ProjectMeasurementSource={kind:'project_measurement';id:string;revision:number;value:string;unit:string;truth:string;description:string}
+export type SpaceMeasurementSource={kind:'space_measurement';id:string;building_id:string;space_id:string;space_revision:number;measurement_id:string;measurement_revision:number;value:string;unit:string;truth:string;description:string}
 export type CadLineage = {
-  version:1; coverage:'partial'; project_id:string;
+  version:1|2; coverage:'partial'; project_id:string;
   coordinates:DesignHandoff['coordinates'] | null;
   inherited_from:{artifact_id:string;revision:number} | null;
-  bindings:{definition_id:string;dimension:string;source:{kind:'project_measurement';id:string;revision:number;value:string;unit:string;truth:string;description:string};normalized:{value:number;unit:'mm'}}[];
+  bindings:{definition_id:string;dimension:string;source:ProjectMeasurementSource|SpaceMeasurementSource;normalized:{value:number;unit:'mm'}}[];
 }
 
 /** Shift the decimal before the sole conversion to a JS number. Multiplying a
@@ -44,11 +46,20 @@ const exact = (v:unknown, keys:string[]):v is Record<string,any> => !!v && typeo
 const uuid = (v:unknown):v is string => typeof v==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
 const text = (v:unknown,max:number):v is string => typeof v==='string' && !!v.trim() && v.length<=max
 
+function validSource(s:unknown,version:number):s is ProjectMeasurementSource|SpaceMeasurementSource {
+ if(!s||typeof s!=='object')return false
+ const v=s as Record<string,any>
+ if(v.kind==='project_measurement')return exact(v,['kind','id','revision','value','unit','truth','description'])&&uuid(v.id)&&Number.isSafeInteger(v.revision)&&v.revision>0
+ return version===2&&v.kind==='space_measurement'&&exact(v,['kind','id','building_id','space_id','space_revision','measurement_id','measurement_revision','value','unit','truth','description'])
+  &&[v.id,v.building_id,v.space_id,v.measurement_id].every(uuid)&&Number.isSafeInteger(v.space_revision)&&v.space_revision>0
+  &&Number.isSafeInteger(v.measurement_revision)&&v.measurement_revision>0
+}
+
 /** Readback is a trust boundary too. Validate all retained metadata before
  * selecting a detail; malformed provenance cannot be recast as legacy absence. */
 function validLineage(value:unknown,projectId:string):value is CadLineage {
   if(!exact(value,['version','coverage','project_id','coordinates','inherited_from','bindings'])
-    ||value.version!==1||value.coverage!=='partial'||value.project_id!==projectId
+    ||![1,2].includes(value.version)||value.coverage!=='partial'||value.project_id!==projectId
     ||!Array.isArray(value.bindings)||value.bindings.length>32)return false
   const c=value.coordinates,parent=value.inherited_from
   if(c!==null&&(!exact(c,['origin','positive_x','positive_y','positive_z'])||Object.values(c).some(v=>v!==null&&!text(v,500))))return false
@@ -57,8 +68,7 @@ function validLineage(value:unknown,projectId:string):value is CadLineage {
   for(const b of value.bindings){
     if(!exact(b,['definition_id','dimension','source','normalized'])||!text(b.definition_id,200)
       ||!CAD_DIMENSIONS.includes(b.dimension)||seen.has(b.definition_id+':'+b.dimension)
-      ||!exact(b.source,['kind','id','revision','value','unit','truth','description'])
-      ||b.source.kind!=='project_measurement'||!uuid(b.source.id)||!Number.isSafeInteger(b.source.revision)||b.source.revision<1
+      ||!validSource(b.source,value.version)
       ||typeof b.source.value!=='string'||!['measured','provided_spec','estimated'].includes(b.source.truth)||!text(b.source.description,2000)
       ||!exact(b.normalized,['value','unit'])||b.normalized.unit!=='mm'||typeof b.normalized.value!=='number')return false
     try{if(measurementMillimetres(b.source)!==b.normalized.value)return false}catch{return false}
@@ -79,12 +89,12 @@ export function inheritCadLineage(projectId:string,source:any,recipe:any,artifac
     const d=recipe.definitions.find((d:any)=>d.id===b.definition_id)
     if(b.normalized.value!==d[b.dimension])throw new Error('invalid_source_lineage')
   }
-  return {version:1,coverage:'partial',project_id:projectId,coordinates:structuredClone(old?.coordinates??null),inherited_from:{artifact_id:artifactId,revision},bindings}
+  return {version:old?.version??1,coverage:'partial',project_id:projectId,coordinates:structuredClone(old?.coordinates??null),inherited_from:{artifact_id:artifactId,revision},bindings}
 }
 
 export function lineageMeasurementPins(existing:{id:string;revision:number}[],lineage:CadLineage){
   const pins=new Map<string,number>()
-  for(const p of [...existing,...lineage.bindings.map(b=>({id:b.source.id,revision:b.source.revision}))]){
+  for(const p of [...existing,...lineage.bindings.flatMap(b=>b.source.kind==='project_measurement'?[{id:b.source.id,revision:b.source.revision}]:[])]){
     if(pins.has(p.id)&&pins.get(p.id)!==p.revision)throw new Error('conflicting_measurement_pins')
     pins.set(p.id,p.revision)
   }

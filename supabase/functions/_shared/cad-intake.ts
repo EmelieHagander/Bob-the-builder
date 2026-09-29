@@ -48,7 +48,11 @@ export function evidenceRefs(evidence:{tool:string;result:unknown}[],handoff:Des
 export type DrawingRequest={id:string;revision:number;status:string;payload:{brief:Record<string,any>;owner_request:string|null;reference_refs:string[];assessment?:IntakeAssessment|null;incomplete?:string[];evidence?:unknown;draft?:unknown}}
 export type DrawingRequestStore={list:()=>Promise<unknown>;load:(id:string)=>Promise<DrawingRequest|null>;save:(id:string|null,expected:number,status:string,payload:DrawingRequest['payload'])=>Promise<DrawingRequest>}
 
-export const DIMENSION_BINDINGS_SCHEMA={type:'array',maxItems:32,description:'Bind directly measured part dimensions to exact current measurement records. The server supplies the mm value. Use assumptions for genuinely designed dimensions; never substitute an image estimate for an existing measurement.',items:{type:'object',additionalProperties:false,properties:{definition_id:{type:'string'},dimension:{type:'string',enum:['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm']},measurement_id:{type:'string'},revision:{type:'integer',minimum:1}},required:['definition_id','dimension','measurement_id','revision']}}
+const dimensions={type:'string',enum:['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm']}
+export const DIMENSION_BINDINGS_SCHEMA={type:'array',maxItems:32,description:'Bind a part dimension to an exact project measurement OR an accepted physical space-measurement snapshot. Never copy a room snapshot into this project to fake source identity. Read physical_space_measurements and use its id and space_revision. The server supplies mm; keep original truth classes. Unbound dimensions remain design choices.',items:{anyOf:[
+ {type:'object',additionalProperties:false,properties:{definition_id:{type:'string'},dimension:dimensions,measurement_id:{type:'string'},revision:{type:'integer',minimum:1}},required:['definition_id','dimension','measurement_id','revision']},
+ {type:'object',additionalProperties:false,properties:{definition_id:{type:'string'},dimension:dimensions,space_measurement_id:{type:'string'},space_revision:{type:'integer',minimum:1}},required:['definition_id','dimension','space_measurement_id','space_revision']}
+]}}
 /** AI maps a source to a part dimension; deterministic code supplies its value. */
 export function bindMeasuredDimensions(recipe:any,bindings:unknown,records:Map<string,Record<string,any>>){
  if(!Array.isArray(bindings)||bindings.length>32)throw new Error('invalid_dimension_bindings')

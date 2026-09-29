@@ -12,8 +12,8 @@ For every discrepancy, identify the view or part, the conflicting project source
 
 /** Independent caller-scoped reads, not just the designer's selected evidence.
  * Bounded pages remain explicitly incomplete; no service-role domain access. */
-export async function collectDrawingReviewEvidence(lookup: ReturnType<typeof createProjectLookup>, hasStep: boolean) {
-  const datasets: LookupInput['dataset'][] = ['project', ...(hasStep ? ['plan' as const] : []),
+export async function collectDrawingReviewEvidence(lookup: ReturnType<typeof createProjectLookup>, hasStep: boolean, hasPhysicalSources = false) {
+  const datasets: LookupInput['dataset'][] = ['project', ...(hasPhysicalSources ? ['physical_buildings' as const] : []), ...(hasStep ? ['plan' as const] : []),
     'measurements', 'physical_spaces', 'physical_elements', 'physical_space_measurements', 'physical_relationships']
   const pages: LookupResult[] = []
   const incomplete: LookupInput['dataset'][] = []
