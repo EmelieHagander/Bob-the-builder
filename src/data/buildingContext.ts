@@ -31,6 +31,14 @@ export interface PhysicalBuilding extends Audit {
   notes: string
   archived: boolean
 }
+export interface PhysicalBuildingFootprint extends Audit {
+  buildingId: string
+  revision: number
+  geometry: Record<string, unknown>
+  truth: PhysicalTruth
+  source: string
+  notes: string
+}
 export interface PhysicalLevel extends Audit {
   id: string
   buildingId: string
@@ -244,6 +252,22 @@ export function createBuildingContext(
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('project_buildings').select('*').eq('project_id', projectId).eq('archived', false).order('name')) as Row[]
       guard(); return scoped(rows, projectId).map(building)
+    },
+    async footprint(projectId: string, buildingId: string): Promise<PhysicalBuildingFootprint | null> {
+      const { db, guard } = connection(projectId)
+      const row = checked(await db.from('current_building_footprints').select('*')
+        .eq('building_id', buildingId).maybeSingle()) as Row | null
+      guard()
+      if (!row) return null
+      return {
+        buildingId: row.building_id,
+        revision: row.revision,
+        geometry: row.geometry ?? {},
+        truth: row.truth,
+        source: row.source,
+        notes: row.notes,
+        ...audit(row),
+      }
     },
     async levels(projectId: string, buildingId: string): Promise<PhysicalLevel[]> {
       const { db, guard } = connection(projectId)
