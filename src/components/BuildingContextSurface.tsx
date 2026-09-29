@@ -31,7 +31,7 @@ type BuildingContextGateway = {
   proposals(projectId: string, buildingId: string): Promise<Proposals>
   canDirectEdit(projectId: string, buildingId: string): Promise<boolean>
   editSite(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
-  editBuilding(projectId: string, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
+  editBuilding(projectId: string, action: 'create' | 'revise', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editNode(projectId: string, buildingId: string, kind: NodeKind, action: 'create', id: string, expected: number, data: Record<string, unknown>): Promise<unknown>
   editScope(projectId: string, kind: 'project', action: 'link', id: string, data: Record<string, unknown>): Promise<unknown>
 }
@@ -184,6 +184,9 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       onCreateBuilding={async (id, data) => {
         await context.editBuilding(projectId, 'create', id, 0, data)
         setSelectedBuildingId(id)
+      }}
+      onEditBuilding={async (id, expected, data) => {
+        await context.editBuilding(projectId, 'revise', id, expected, data)
       }}
       onCreateNode={async (kind, id, data) => {
         if (!selectedBuildingId) throw new Error('Choose a building first.')
