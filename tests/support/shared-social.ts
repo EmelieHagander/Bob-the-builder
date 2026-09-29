@@ -1,7 +1,7 @@
 import type { PGlite } from '@electric-sql/pglite'
 
 /** External app contracts verified from the shared project catalog. No real data. */
-export async function setupSharedSocial(pg: PGlite) {
+export async function setupSharedSocial(pg: Pick<PGlite, 'exec'>) {
   await pg.exec(`
     create schema shared;
     create type shared.access_status as enum ('invited','active','revoked');

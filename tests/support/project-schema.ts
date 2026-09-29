@@ -5,6 +5,12 @@ import { setupSharedSocial } from './shared-social.ts'
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts. */
 export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>) {
   const pg = new PGlite()
+  await installProjectSchema(pg, beforeMigration ? (_db, name) => beforeMigration(pg, name) : undefined)
+  return pg
+}
+
+/** Same migrations and fake external contracts on PGlite or disposable PostgreSQL. */
+export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigration?: (pg: Pick<PGlite, 'exec'>, name: string) => Promise<void>) {
   await pg.exec(`
     create role anon; create role authenticated; create role service_role bypassrls; create role authenticator;
     create schema auth;
@@ -29,7 +35,6 @@ export async function projectSchema(beforeMigration?: (pg: PGlite, name: string)
       await pg.exec(await readFile(new URL(name, root), 'utf8'))
     }
   }
-  return pg
 }
 
 export async function asProjectUser(pg: PGlite, uid: string | null, sql: string, values: unknown[] = [], role = 'authenticated') {
