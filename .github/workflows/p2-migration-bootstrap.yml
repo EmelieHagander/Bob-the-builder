@@ -1,0 +1,23 @@
+name: Generate P2 migration
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p2-migration-bootstrap.yml'
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx --no-install supabase migration new --help
+      - run: npx --no-install supabase migration new drawing_request_recovery
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-p2-migration
+          path: supabase/migrations/*_drawing_request_recovery.sql
