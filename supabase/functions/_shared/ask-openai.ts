@@ -193,7 +193,7 @@ export async function answerWithOpenAi(opts: {
    const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
    return memo('cad:request',input,async(identity)=>{
     const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:opts.clientTurnId+':'+(identity?.key??crypto.randomUUID())})
-    if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
+    if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
     return data
    })
   }
@@ -203,7 +203,7 @@ export async function answerWithOpenAi(opts: {
       newId:()=>memo('cad:project_request_id',{},async()=>crypto.randomUUID()),
       caller:async(name,args)=>{
         const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
-        if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
+        if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
         return data
       },
     })}:{}),

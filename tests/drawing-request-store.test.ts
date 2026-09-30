@@ -22,3 +22,12 @@ test('P2b production store binds a stable caller-created identity, keeps packets
  await store.cancel!('stable-request',1)
  assert.equal(calls.at(-1)?.transport,'caller');assert.equal(calls.at(-1)?.name,'cancel_drawing_request')
 })
+
+test('P2b expected cancellation conflicts return a recoverable result, while transport failures remain failures',async()=>{
+ let failure='drawing_request_changed'
+ const store=createDrawingRequestStore({projectId:'A',binding:{},newId:async()=>'id',privateCall:async()=>null,caller:async()=>{throw new Error(failure)}})
+ assert.equal((await store.cancel!('id',1)).status,'conflict')
+ failure='drawing_request_complete';assert.equal((await store.cancel!('id',1)).reason,'drawing_request_complete')
+ failure='drawing_request_denied';assert.equal((await store.cancel!('id',1)).status,'not_allowed')
+ failure='network';await assert.rejects(store.cancel!('id',1),/network/)
+})
