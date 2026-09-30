@@ -19,10 +19,11 @@ export interface CurrentViewReader {
 
 // Structural client seam keeps this shared Edge module independent of npm/jsr
 // Supabase import versions. callerDb is the already JWT-bound `bob` schema client.
-interface ReadQuery extends PromiseLike<{ data: unknown; error: unknown }> {
+type ReadResult = PromiseLike<{ data: unknown; error: unknown }>
+interface ReadQuery extends ReadResult {
   eq(column: string, value: unknown): ReadQuery
   abortSignal(signal: AbortSignal): ReadQuery
-  maybeSingle(): ReadQuery
+  maybeSingle(): ReadResult
   order(column: string): ReadQuery
   limit(count: number): ReadQuery
 }

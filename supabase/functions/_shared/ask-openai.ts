@@ -1,5 +1,5 @@
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
-import { hydrateCurrentView, createCurrentViewReader } from './current-view.ts'
+import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
 import { parseBobScreen, type BobScreenPointer, type CurrentView } from '../../../src/domain/bobScreen.ts'
 import {createDrawingBudget} from './drawing-budget.ts'
@@ -177,7 +177,9 @@ export async function answerWithOpenAi(opts: {
           turnId: opts.clientTurnId, generation: claimedServer.generation }, opts.screen)
         : parseBobScreen(opts.screen)
       if (screen) {
-        const reader = createCurrentViewReader(client, opts.userId)
+        // Erase the SDK's recursive schema inference at this fixed-query seam.
+        // The reader validates unknown results and preserves this caller client.
+        const reader = createCurrentViewReader(client as unknown as CurrentViewClient, opts.userId)
         const read = () => hydrateCurrentView({ projectId: opts.projectId, screen, reader })
         // A lease replay rebuilds the same model input; only fresh caller reads
         // can authorize its reuse. Never journal the freshness check itself.

@@ -92,7 +92,7 @@ export async function runClaimedProjectTurn(opts: {
       if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
       if (!result.evidence.writes?.length) { await fail(); return { ok: false, error: 'context_unavailable' } }
       // Preserve committed changes while withholding a reply based on a changed focus.
-      result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({ notice: 'recovered', receipts: result.evidence.writes }),
+      result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({ notice: 'recovered', receipts: opts.writer?.receipts ?? [] }),
         evidence: { ...result.evidence, sources: [], partial: true, currentView: { status: 'unavailable', projectId: opts.projectId,
           surface: opts.currentView.surface, focus: {}, sources: [], warnings: ['focus_changed_after_read'], retrievedAt: new Date().toISOString() } } }
     } else result = { ...result, evidence: { ...result.evidence, currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } }
