@@ -3,6 +3,7 @@ import type { ChatMessage } from './types'
 import type { AnswerEvidence } from './provenance'
 import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
 import { isBobAnswerEvidence } from './bobEvidence'
+import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 
 function resolveSupabaseUrl(raw: string | undefined): string | null {
   const value = raw?.trim()
@@ -67,8 +68,8 @@ export function describeBobProgress(progress: BobProgress | undefined): string {
 export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
-  retry?: { text: string; turnId: string }
-  pending?: { text: string; turnId: string; expiresAt: number; progress?: BobProgress; notice?: string }
+  retry?: { text: string; turnId: string; screen?: BobScreenPointer | null }
+  pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; expiresAt: number; progress?: BobProgress; notice?: string }
   lastCompletedTurnId?: string
   threadId?: string
   latestSeq?: number
@@ -133,6 +134,8 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
     if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
+    // Older jobs have no pointer. Never replace a recovered turn with this page.
+    try { unfinished.screen = parseBobScreen(job.data?.screen) } catch { unfinished.screen = null }
     if (job.data && ['queued', 'running'].includes(job.data.status)) {
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
@@ -202,9 +205,10 @@ export async function askBob(
   projectId: string,
   message: string,
   clientTurnId: string = crypto.randomUUID(),
+  screen?: BobScreenPointer | null,
 ): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string } | { pending: true; expiresAt: number }> {
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
-  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true })
+  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true, ...(screen !== undefined ? { screen } : {}) })
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
   if (res.ok && res.status === 'accepted' && res.jobId && Number.isFinite(Date.parse(res.expiresAt ?? ''))) return { pending: true, expiresAt: Date.parse(res.expiresAt!) }

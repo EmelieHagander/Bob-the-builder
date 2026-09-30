@@ -675,3 +675,14 @@ current ownership/version, source loss, physical unlink, pagination and denial),
 `scripts/check-volunteer-browser.mjs` (rendered CAD/parametric/image content, refresh,
 reload, changed/unavailable sources and revoked access on phone/desktop). These test
 participants provide technical proof, not acceptance by actual volunteers.
+
+
+## Parameter sources, changes and request complements — P3 source, release pending
+
+`CadSourceMap` in the existing CAD viewer renders validated saved parameter metadata through `readCadSourceMap`. A complete graph distinguishes measured sources, provided specifications, estimates, design choices, calculations and unknowns; it shows source revisions, affected recipe paths, derivation operands/rounding and recorded coordinate frames. Legacy bindings remain partial and bare recipe values remain unknown. Invalid or inaccessible metadata is unavailable, never reconstructed as evidence. Graph coverage does not approve construction or physical fit.
+
+`artifact_source_changes(project, artifact, revision)` complements the existing caller-authorized freshness assessment with at most 200 source deltas. It compares saved/current measurement, Space, source drawing and target revisions, plus image version hashes, and identifies dependent parameter ids where recorded. Revoked physical/image identities are withheld. Truncation, malformed deltas or failed reads produce a visible incomplete/unavailable notice; missing deltas do not make an old drawing current. The exact saved values remain unchanged. Database authority and deployment order belong in [db/README.md](../db/README.md#p3-screen-context-and-source-changes--source-release-pending).
+
+Drawing cards show source freshness independently of saved Concept/Measured/Build ready status. Exact-version details state both the revision being viewed and a newer saved head when one exists. Solution cards retain the selected target's exact revision when a newer alternative is saved. Existing Project-home, Step, Task and Plans & drawings surfaces remain the result entry points; opening a saved revision does not select or approve it.
+
+Drawing request cards show shared Task/current Plan requirement names, responsibility and destination Step, with relevant measurement/Task/Step links, waiting/reconnect/budget states and the exact saved drawing link. Shared labels come only from canonical project records, never private conversation briefs or assessments. A missing canonical label is reported rather than replaced with private prose. Ask Bob actions reuse the current project's drawer and surface focus. See [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target) for that boundary and [State](bob-delivery-flow.md#state) for remaining release and acceptance gates.

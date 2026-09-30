@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
@@ -12,6 +13,7 @@ function parseCost(cost: string): number {
 }
 
 export function Shopping() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'shopping' }, 'Shopping')
   const [version, setVersion] = useState(0)
   const projectId = db.getActiveProjectId() ?? ''
   const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [version])

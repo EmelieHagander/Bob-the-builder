@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import * as db from '../data/database'
 import { Avatar, Icon, Loading, skillDotColor, useAsync } from '../components/ui'
@@ -12,6 +13,7 @@ const dietWarn = /allerg|gluten|vegan|dairy/i
 const SKILL_LABEL: Record<SkillLevel, string> = { novice: 'novice', intermediate: 'intermediate', expert: 'expert' }
 
 export function People() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'people' }, 'People')
   const [version, setVersion] = useState(0)
   const { data: people, loading, error } = useAsync(() => db.getPeople(), [version])
   const { data: projects } = useAsync(() => db.getProjects(), [])

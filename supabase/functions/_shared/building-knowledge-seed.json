@@ -1,8 +1,8 @@
 {
-  "version": "2026-09-25.1",
+  "version": "2026-09-30.1",
   "cards": [
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -31,10 +31,25 @@
       "publisher": "Svenskt Trä",
       "edition": "Webbavsnitt Fuktkvot, kontrollerat 2026-09-25",
       "kind": "industry_guidance",
-      "content_sha256": "aaf279b4b97dbfb6c3bc15751455c4feab56698eaa19829612d71ad011596ab8"
+      "applicability": [
+        "Val av virke och passningar där användningsmiljö och träets rörelse spelar roll."
+      ],
+      "required_questions": [
+        "Vilken användningsmiljö ska virket passa för?",
+        "Vilka verkliga mått och vilket fukttillstånd är dokumenterade?"
+      ],
+      "checks": [
+        "Jämför materialets dokumenterade tillstånd med avsedd användningsmiljö.",
+        "Kontrollera passningar mot verkliga mått och planerad rörelse."
+      ],
+      "limitations": [
+        "Anger inga projektspecifika glipor eller uppmätta fuktvärden.",
+        "En ritning ersätter inte kontroll av virket."
+      ],
+      "content_sha256": "86fbc8594bad7a25388ddbb603eb22784ee785ae9d24981ae9646f2f6badcbed"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -61,10 +76,25 @@
       "publisher": "Svenskt Trä",
       "edition": "Dimensionering av träkonstruktioner del 2, 2019, kapitel 10",
       "kind": "industry_guidance",
-      "content_sha256": "b14376842015bc3f66d5e1578a55204101ee08b13f444c87ba11534d5e1be3a1"
+      "applicability": [
+        "Planering av förband och infästningar i trä."
+      ],
+      "required_questions": [
+        "Vilken last och lastriktning ska förbandet hantera?",
+        "Vilket virke, vilken infästningsprodukt och vilka avstånd är valda?"
+      ],
+      "checks": [
+        "Kontrollera valda förutsättningar mot produktens dokumentation.",
+        "Redovisa centrum-, änd- och kantavstånd för förbandet."
+      ],
+      "limitations": [
+        "Den äldre källan ger begreppslig vägledning, inte aktuellt produktgodkännande.",
+        "Paketet dimensionerar inte förbandet eller bevisar dess bärförmåga."
+      ],
+      "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -91,10 +121,25 @@
       "publisher": "Boverket",
       "edition": "Förundersökning vid ändring, sidan granskad 2026-07-01",
       "kind": "official_guidance",
-      "content_sha256": "894f01116f3d946c94c725c0e28e6680a445f158c75792dcd7d4dcb49c1335c3"
+      "applicability": [
+        "Förundersökning inför ändringar av en befintlig byggnad."
+      ],
+      "required_questions": [
+        "Vilken befintlig konstruktion och vilket skick är kända?",
+        "Vilka byggnadsdelar och laster påverkas av den föreslagna ändringen?"
+      ],
+      "checks": [
+        "Håll dokumenterade uppgifter skilda från kvarstående undersökningar.",
+        "Kontrollera ändringens påverkan på last och andra byggnadsdelar."
+      ],
+      "limitations": [
+        "Paketet fastställer inte den verkliga byggnadens konstruktion eller skick.",
+        "Sammanfattningen är inte ett godkännande av en konstruktionsändring."
+      ],
+      "content_sha256": "30d2108b367ded74a4ea96cccd15cbd4e711b411a1ac94db809c8514d164a512"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -120,10 +165,25 @@
       "publisher": "Jordbruksverket",
       "edition": "Mått i stall och utrymmen för fjäderfän, kontrollerat 2026-09-25",
       "kind": "official_guidance",
-      "content_sha256": "02b4602c343c097b9d6dbda3d22abbeaf980d720176b75278b45396be700e647"
+      "applicability": [
+        "Planeringsunderlag för hönshus och fjäderfäutrymmen."
+      ],
+      "required_questions": [
+        "Vilken djurtyp, vilket antal och vilket hållningssystem gäller?",
+        "Vilken måttkategori hos källan gäller för dessa djur?"
+      ],
+      "checks": [
+        "Kontrollera tillgänglig area, reden och sittpinnar var för sig.",
+        "Hämta den tillämpliga kategorin hos källan innan minimimått används."
+      ],
+      "limitations": [
+        "Innehåller inga aktuella numeriska minimimått.",
+        "En generell golvyta visar inte att hela utrymmet uppfyller behoven."
+      ],
+      "content_sha256": "b2a199bbecc5efff43d73843da685cc5d26d19177200736b157704bb43dd8702"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -147,10 +207,25 @@
       "publisher": "Jordbruksverket",
       "edition": "Kaniner som sällskapsdjur, kontrollerat 2026-09-25",
       "kind": "official_guidance",
-      "content_sha256": "4444210b2e5163ef9492f20ae1d6ba9c89fa09fbd413ccaf71cc8e6a697ae988"
+      "applicability": [
+        "Planeringsunderlag för kaninutrymmen."
+      ],
+      "required_questions": [
+        "Hur många kaniner ska utrymmet rymma och vilken måttkategori gäller?",
+        "Hur planeras rörelseutrymme, skydd, hylla, golv och strö?"
+      ],
+      "checks": [
+        "Kontrollera golvutförande och strö samt tillämplig måttkategori hos källan.",
+        "Bedöm rörelse, skydd och hylla för det angivna antalet djur."
+      ],
+      "limitations": [
+        "Innehåller inga aktuella numeriska minimimått.",
+        "Hönsregler kan inte användas som måttunderlag för kaniner."
+      ],
+      "content_sha256": "84638c33c645182c65a9eaef21aa286ad12b9251fe83a72d09d76c10f81d54d4"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -175,10 +250,25 @@
       "publisher": "Elsäkerhetsverket",
       "edition": "Vad får jag göra själv med el?, sidan granskad 2025-07-30",
       "kind": "official_guidance",
-      "content_sha256": "1dddf4e8c44defd1e491694cd6105a9d7b51b98395e2f61ca60e4ee9145f642e"
+      "applicability": [
+        "Planering av omfattning och ansvar för elarbete."
+      ],
+      "required_questions": [
+        "Ändrar arbetet en fast installation?",
+        "Vem ska utföra arbetet och vilka villkor gäller för just den åtgärden?"
+      ],
+      "checks": [
+        "Kontrollera åtgärdens omfattning och villkor mot aktuell originalkälla.",
+        "Skilj arbetsuppgiftens tilldelning från rätten att utföra arbetet."
+      ],
+      "limitations": [
+        "Paketet ger ingen behörighet och fastställer inte att en installation är säker.",
+        "Sammanfattningen ersätter inte tillämplig aktuell källa eller kontroll av projektet."
+      ],
+      "content_sha256": "6e6eadf24a56349ceefae89c2633758a28fd54da201f4e7884bdce5611c405ee"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -205,10 +295,25 @@
       "publisher": "Bob project",
       "edition": "Arbetsmetod 2026-09-25",
       "kind": "product_workflow",
-      "content_sha256": "795b480ce8559751bdcd4482c72a81e72ee4c93e44f7fd80f7bb6fc3e8874321"
+      "applicability": [
+        "Övergång från sparad ritningsversion till kapnings- och materialplanering."
+      ],
+      "required_questions": [
+        "Vilken sparad ritningsversion och vilka delinstanser ska räknas?",
+        "Vilka råmått, sågspår, tillgängliga längder och bekräftade lagerposter används?"
+      ],
+      "checks": [
+        "Behåll delidentiteter och kontrollera fiberriktning, sågspår och råmått före kapning.",
+        "Matcha lager mot samma material och dimension innan kvarstående inköpsbehov beräknas."
+      ],
+      "limitations": [
+        "Arbetsmetoden visar inte att en kaplista eller ett inköpsbehov redan har skapats.",
+        "Paketet ersätter inte den aktuella ritningsversionen eller bekräftat lager."
+      ],
+      "content_sha256": "689199e9ac0cfda65133c6b26c33e0403fbdb912bba29936acc8ba2d68b71fe7"
     },
     {
-      "version": "2026-09-25.1",
+      "version": "2026-09-30.1",
       "status": "active",
       "audience": "public",
       "reviewed_at": "2026-09-25",
@@ -234,7 +339,22 @@
       "publisher": "Bob project",
       "edition": "Geometrisk arbetsmetod 2026-09-25",
       "kind": "product_workflow",
-      "content_sha256": "947c7e11d67c6f1e860433ae9443900543f315d257ead2bcc76646306c73c14e"
+      "applicability": [
+        "Kontroll av lådor och andra delar med en angiven rörelse och möjliga hinder."
+      ],
+      "required_questions": [
+        "Vilka delar, hinder och vilken fullständig rörelse ska undersökas?",
+        "Vilken minsta frigång ska kontrolleras?"
+      ],
+      "checks": [
+        "Kontrollera både stängt läge och hela den avsedda rörelsen.",
+        "Skilj faktisk överlappning från möjlig kollision i ett omslutande rätblock."
+      ],
+      "limitations": [
+        "Ett fritt rörelseområde gäller bara undersökta delar och undersökt rörelse.",
+        "Arbetsmetoden bevisar inte fysisk passning eller att en geometrisk kontroll har körts."
+      ],
+      "content_sha256": "ec3fde83b0708e121175227642528032b3d526e6e4e67f42f0d751822529e4b3"
     }
   ]
 }

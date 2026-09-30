@@ -1,8 +1,23 @@
 # Ask bob — project context implementation plan
 
-> **Status: planned / pre-build.** This file owns the technical landing sequence for the already-specified runtime context contract in [`ask-bob-context.md`](ask-bob-context.md). It does **not** redefine that contract and does not claim any screen-context seam, Project Catalog, Context Router, Process Lens, new pull tools, image vision path or Project Librarian is built.
+> **Status: remaining landing plan with partial implementation.** This owns the technical sequence for [`ask-bob-context.md`](ask-bob-context.md). Its module sketches, wire examples and slice sequence are a design target; the current implemented mapping below takes precedence for file names and supported scope.
 >
-> **Current runtime:** `supabase/README.md` + `supabase/functions/_shared/project-lookup.ts` + `project-answer.ts` remain deployed truth until a slice below is migrated/deployed/verified.
+> **Current runtime:** `supabase/README.md` and current function code own implemented provider/tool behavior. The P3 additions below are source implementation pending release; do not infer hosted availability from committed code.
+
+## Current landing map — P3 source, release pending
+
+| Concern | Actual owner / remaining boundary |
+| --- | --- |
+| Strict screen pointer and safe hydrated types | `src/domain/bobScreen.ts`; Task work Step (`planStepId`) and selected instruction (`instructionId`) stay distinct. |
+| Frontend surface lifecycle | `src/lib/bobSurface.ts`; `useBobSurface` publishes token-owned route/project entries, `getBobSurface(projectId)` reads at send time. |
+| Caller-authorized hydration | `_shared/current-view.ts`; fixed projections and relation checks, not the proposed giant category registry. |
+| Own-write/concurrent-change guard | `_shared/current-view-guard.ts`; guarded complete readbacks only, fresh checks outside replay journal. |
+| Durable original pointer | Migration `20260930112431_bob_p3_context_and_source_changes.sql`, `_shared/bob-conversation.ts`, `_shared/bob-background.ts`; private per-turn capture, enqueue/claim/status recovery. |
+| Model handoff and answer evidence | `_shared/ask-openai.ts`, `project-answer.ts`, `project-turn.ts`; frozen input plus current authority checks and receipt-preserving settlement. |
+| Existing images | `project-context/dispatcher.ts`, `media.ts`, `media-transport.ts`; image-only catalog/list/open and actual authorized pixels. |
+| Broader catalog/router/lenses/Librarian | Still specified below; no general category-registry or cheap-router deployment is claimed. |
+
+This map supersedes planned C0/C2 file names and any assertion that no image opening exists. The wider C1/C3/C4/C6/C7 acceptance cannot be inferred from delivery of Current View or the image adapter. Keep remaining release/acceptance gates in [State](bob-delivery-flow.md#state), with detailed execution evidence in the release PR.
 
 ## Job of this plan
 

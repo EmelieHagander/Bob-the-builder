@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Area, Solution, SolutionVersion, SolutionMeasurement, TargetDecision } from '../data/types'
@@ -121,7 +122,7 @@ function VersionDialog({ projectId, id, revision, edit, areas, onClose, onSaved 
   const { data, loading, error } = useAsync(() => db.getSolutionVersion(projectId, id, revision), [projectId, id, revision, attempt])
   if (data && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea="" onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? data.title + ' · Version ' + data.revision : 'Solution version'} onClose={onClose}>
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <VersionDetails value={data} />}
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(n => n + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} /></>}
   </Modal>
 }
 function History({ projectId, record, areaId, onClose, onVersion }: {
@@ -170,6 +171,9 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
   const [params, setParams] = useSearchParams(), area = params.get('area') ?? ''
   const [archived, setArchived] = useState(false), [offset, setOffset] = useState(0), [attempt, setAttempt] = useState(0)
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  const focused = dialog?.kind === 'version' ? { id: dialog.id, revision: dialog.revision }
+    : dialog?.kind === 'view' || dialog?.kind === 'edit' ? { id: dialog.record.id, revision: dialog.record.revision } : null
+  useBobSurface(projectId, { surface: 'solutions', ...(!focused && area ? { areaId: area } : {}), ...(focused ? { solutionId: focused.id, solutionRevision: focused.revision } : {}) }, focused ? `Alternative · v${focused.revision}` : 'Solutions & target')
   const { data, loading, error } = useAsync(async () => {
     const [alternatives, target, areas] = await Promise.all([
       db.getSolutions(projectId, area, archived, offset), db.getSelectedTarget(projectId, area), db.getAreas(),

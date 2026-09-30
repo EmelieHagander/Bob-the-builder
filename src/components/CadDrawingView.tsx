@@ -1,13 +1,20 @@
 import type { CadDrawing } from '../data/artifacts'
 import { cadParts, cadCutListCsv } from '../data/cadParts'
+import type { DrawingSourceStatus } from '../data/drawingSources'
+import { CadSourceMap } from './CadSourceMap'
 
 /** SVG is an image document, never injected into the page's DOM. */
-export function CadDrawingView({value,title}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>>;title:string}){
+export function CadDrawingView({value,title,projectId,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>>;title:string;projectId?:string;sourceStatus?:DrawingSourceStatus}){
  const names:Record<string,string>={front:'Front',right:'Right',top:'Top',isometric:'Overview'}
  const checks=value.manifest?.checks
+ if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
+  <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>
+  <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
+ </section>
  return <section aria-label={`${title} CAD drawings`}>
   <p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>
   {value.source_changed&&<p role="alert" className="solution-attention">The source construction has changed. This detail still shows its recorded revision.</p>}
+  <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
   {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><figure key={key} style={{margin:'12px 0'}}>
    <img alt={`${title} — ${label}`} src={`data:image/svg+xml;base64,${value.files[key]}`} style={{width:'100%',maxHeight:480,objectFit:'contain',background:'white',border:'1px solid var(--line)'}} />
    <figcaption><a download={`${key}.svg`} href={`data:image/svg+xml;base64,${value.files[key]}`}>{label} · download drawing</a></figcaption>

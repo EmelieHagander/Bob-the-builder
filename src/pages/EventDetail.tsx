@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -37,6 +38,7 @@ export function EventDetail() {
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
 
+  useBobSurface(db.getActiveProjectId() ?? '', event && !loading ? { surface: 'event', eventId: event.id } : null, event ? `Build day · ${event.title}` : 'Build day loading')
   if (loading) return <div className="page"><Loading /></div>
   if (!event) return <div className="page"><EmptyState icon="magnifying-glass" title="Event not found" hint="Check the events list for the right date." /></div>
 

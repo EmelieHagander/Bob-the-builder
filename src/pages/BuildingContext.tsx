@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import type { ComponentProps } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { BuildingContextSurface } from '../components/BuildingContextSurface'
@@ -6,6 +7,7 @@ import { Icon } from '../components/ui'
 type SurfaceProps = ComponentProps<typeof BuildingContextSurface>
 
 export function BuildingContext(props: SurfaceProps) {
+  useBobSurface(props.projectId, { surface: 'building' }, 'Building & spaces')
   const [params] = useSearchParams()
   const building = params.get('building') ?? undefined
   return <div className="page building-context-page">

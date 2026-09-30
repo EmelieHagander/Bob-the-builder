@@ -3,8 +3,10 @@ import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { answerWithOpenAi } from './ask-openai.ts'
 import { BobContinuation, createBobJournal } from './bob-job-journal.ts'
 import { sealCredential, openCredential } from './bob-job-credentials.ts'
+import { parseBobScreen } from '../../../src/domain/bobScreen.ts'
+import type { BobTurnInput } from './bob-request.ts'
 
-type Input = { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string }
+type Input = BobTurnInput
 const binding = (v: Pick<Input, 'userId' | 'projectId' | 'clientTurnId'>) => JSON.stringify([v.userId, v.projectId, v.clientTurnId])
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 function services() {
@@ -27,10 +29,11 @@ export async function enqueueBobTurn(input: Input) {
   const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
   const expires = Math.min(Number(payload.exp) * 1000, Date.now() + 20 * 60_000)
   if (!Number.isFinite(expires) || expires < Date.now() + 30000) return { ok: false as const, error: 'unauthorized' }
-  const result = await s.rpc('bob_enqueue_job', {
+  const result = await s.rpc('bob_enqueue_job_v2', {
     p_project: input.projectId, p_user: input.userId, p_turn: input.clientTurnId, p_message: input.message,
     p_credential: await sealCredential(token, binding(input), s.secret), p_expires: new Date(expires).toISOString(),
     p_worker_url: s.url.replace(/\/$/, '') + '/functions/v1/bob-worker',
+    p_screen: input.screen ?? null,
   })
   if (result.status === 'accepted') {
     console.log('[Bob job]', JSON.stringify({ jobId: result.jobId, turnId: input.clientTurnId, status: 'queued' }))
@@ -104,7 +107,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         const payload = { stage: value.stage, step: Math.min(999, value.step), saved: Math.min(999, value.saved), ...(value.tool && /^[a-z][a-z0-9_]{0,63}$/.test(value.tool) ? { tool: value.tool } : {}) }
         s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
       }
-      const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId,
+      const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId, screen: parseBobScreen(job.screen),
         background: { drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()

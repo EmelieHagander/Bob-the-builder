@@ -1,8 +1,20 @@
 # Ask bob — project context gateway
 
-> **Status: specified / pre-build.** This is the owning contract for how Ask bob knows what the user is looking at, discovers project context, selects the relevant parts, opens exact records and researches across several project sources at runtime. It does **not** claim that the screen-context seam, Project Catalog, Context Router, Process Lens or Project Librarian are built yet.
+> **Status: mixed implementation and specified target.** This owns how Ask bob turns screen focus and project sources into runtime context. The implemented scope is distinguished below; examples and architecture beyond it remain a target, not a deployment claim.
 >
 > **Current runtime (2026-09-13):** `supabase/README.md` owns the deployed Slice 0 briefing + bounded `search_project_data` lookup. `Docs/ask-bob-conversations.md` separately owns transcript/provider continuity. Until this contract is implemented, the deployed Slice 0 path remains runtime truth.
+
+## Implemented scope and remaining target
+
+**P3 source implementation; merge, hosted application and acceptance pending.** `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time, and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.
+
+Current View contains project/viewer, Area, Task, current Plan Step, selected task instruction, exact Solution/Artifact revision or Event where supported. Safe names, task instructions, status and responsibility come from server reads; browser labels are display-only. Foreign, stale and mismatched relations discard the projection. Errors are distinct from missing focus. Historical drawing/solution selections do not become the latest or selected target.
+
+The original pointer is privately pinned to a logical turn and retained by background recovery and retry, including omission by older clients. Its model input is journalled for replay. Caller access and the hydrated projection are checked afresh before provider work, tool execution and final settlement. A change stops further use of stale context; only a complete verified own-write readback can explain supported project/Area/Task/Event/Plan changes. Unsupported or incomplete receipts fail closed. Committed receipts survive recovery while a stale-context reply is withheld. Neither the pointer nor catalog counts are evidence; accepted server reads may appear in private answer evidence after reload.
+
+Existing `project-context/dispatcher.ts` supplies an **image-only** catalog, metadata listing and exact image opening with real pixels, bounded caller-authorized reads and freshness checks. Other project records use `search_project_data`, paged research and scoped detail tools documented in [the tool owner](ask-bob-tools.md) and [backend owner](../supabase/README.md). The full all-category Project Catalog, separate cheap Context Router, fixed Process Lens and multi-source Project Librarian below remain specified. P3 does not replace the existing working toolbox with that larger architecture.
+
+**Acceptance still needed for the P3 release:** strict/foreign pointer cases, navigation and reload, private turn recovery, verified own changes versus concurrent edits, revocation, actual relevant-image delivery and knowledge-package consumption. Local fixtures are separate from hosted Auth/model evidence; release gates live in [State](bob-delivery-flow.md#state).
 
 ## Decision
 

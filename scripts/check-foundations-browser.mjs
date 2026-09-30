@@ -4,7 +4,7 @@ import { createMultifloorFixture, verifyMultifloorBrowser } from './multifloor-b
 // No AI calls. The real SQL/RLS and deployed Storage service have separate checks.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { chromium } from 'playwright-core'
 import { createFactsFixture, verifyFactsBrowser } from './project-facts-browser.mjs'
@@ -17,6 +17,7 @@ import { installSheetLayerFixture, verifySheetLayersBrowser } from './sheet-laye
 
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
+const sourceGraph = JSON.parse(await readFile(new URL('./fixtures/cad-source-map.json', import.meta.url), 'utf8'))
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
 let logs = '', browser, activePage
 server.stdout.on('data', data => { logs += data })
@@ -36,7 +37,7 @@ try {
   await mkdir('test-results', { recursive: true })
   for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
-    const errors = [], assets = new Map(), objects = new Map(), steps = []
+    const errors = [], assets = new Map(), objects = new Map(), steps = [], focusedTurns = []
     let imageBytes, failUpload = false, slowDownload = null
     let clock = 0, currentPlan = null
     const timestamp = () => new Date(Date.UTC(2026, 8, 9, 12, 0, ++clock)).toISOString()
@@ -70,6 +71,21 @@ try {
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
       if (path.startsWith('/rest/') || path.startsWith('/storage/')) assert.equal(request.headers().authorization, 'Bearer ' + token)
+      // Page-focus checks own only these named turns; existing generative
+      // scenarios keep their independent chat fixtures and authority.
+      if (path === '/functions/v1/ask-bob' && method === 'POST' && /^Page focus question/.test(request.postDataJSON().message)) {
+        const body = request.postDataJSON()
+        focusedTurns.push(body)
+        const pointer = body.screen, focus = {}
+        if (pointer.artifactId) focus.drawing = { id: pointer.artifactId, name: 'CAD shelf detail', revision: pointer.artifactRevision, status: 'concept', archived: false, sourceState: 'current' }
+        if (pointer.taskId) focus.task = { id: task.id, name: task.name, status: task.status, instructions: task.instructions, assignees: [] }
+        if (pointer.instructionId) {
+          const selected = steps.find(step => step.id === pointer.instructionId)
+          assert(selected)
+          focus.instruction = { id: selected.id, name: selected.title, revision: selected.revision, instructions: selected.instructions, required: selected.required, completedAt: selected.completed_at }
+        }
+        return respond({json:{ok:true,status:'completed',projectId:'A',summary:'Page focus verified from saved records.',evidence:{kind:'ai_assessment',sources:[],partial:false,currentView:{status:'ok',projectId:'A',surface:pointer.surface,project:{id:'A',name:'Porch A'},focus,sources:[],warnings:[],retrievedAt:timestamp()}}}})
+      }
       // The active multi-floor scenario must own chat/history before the
       // older room fixture, which otherwise handles every Ask Bob request.
       if (await stair.handle(request, url, respond)) return
@@ -239,6 +255,24 @@ try {
     assert.equal(await page.getByLabel('Task status', { exact: true }).inputValue(), 'done')
     assert(await check.getByRole('checkbox').isChecked())
     assert((await page.locator('.task-step').first().textContent()).includes('Check opening'))
+    await check.getByRole('button', { name: 'Ask Bob about this instruction', exact: true }).click()
+    const focusDrawer = page.getByRole('complementary', { name: 'Ask bob for Porch A', exact: true })
+    await focusDrawer.getByLabel('Bob page context').getByText('Instruction · Check opening', { exact: true }).waitFor()
+    await focusDrawer.getByLabel('Question for bob').fill('Page focus question — instruction')
+    await focusDrawer.getByRole('button', { name: 'Send', exact: true }).click()
+    await focusDrawer.getByText('Page focus verified from saved records.', { exact: true }).waitFor()
+    assert.deepEqual(focusedTurns.at(-1).screen, { surface: 'task', taskId: 'taskA', areaId: 'areaA', instructionId: steps.find(step => step.title === 'Check opening').id })
+    await page.keyboard.press('Escape')
+    await focusDrawer.waitFor({ state: 'hidden' })
+    await check.getByRole('button', { name: 'Use whole Task', exact: true }).click()
+    await page.getByRole('button', { name: 'Ask bob', exact: true }).click()
+    await focusDrawer.getByLabel('Bob page context').getByText('Task · Prepare opening', { exact: true }).waitFor()
+    await focusDrawer.getByLabel('Question for bob').fill('Page focus question — whole task')
+    await focusDrawer.getByRole('button', { name: 'Send', exact: true }).click()
+    await focusDrawer.locator('.bob-working').waitFor({state:'hidden'})
+    assert.deepEqual(focusedTurns.at(-1).screen, { surface: 'task', taskId: 'taskA', areaId: 'areaA' })
+    await page.keyboard.press('Escape')
+    await focusDrawer.waitFor({ state: 'hidden' })
     await work.locator('summary').click()
     await work.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Task/media layout must fit the viewport')
@@ -260,18 +294,72 @@ try {
     const cadId=randomUUID(), cadOriginal=[...artifacts.records.values()].find(r=>r.project_id==='A')
     const cadRow={...cadOriginal,id:cadId,artifact_id:cadId,title:'CAD shelf detail',revision:1,kind:'detail',status:'concept',generator:null,generator_version:null,parametric_recipe:null,has_room_layout:false,has_stair_study:false,has_multifloor_plan:false,area_id:null,archived:false,measurements:[],recorded_at:timestamp()}
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
-    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:{definitions:[{id:'shelf.panel',primitive:'box',x_mm:800,y_mm:400,z_mm:18}],instances:[{id:'shelf.one',definition_id:'shelf.panel'},{id:'shelf.two',definition_id:'shelf.panel'}]},manifest:{checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
+    artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByText('Parts and dimensions',{exact:true}).click()
-    await page.getByRole('cell',{name:'800 × 400 × 18',exact:true}).waitFor()
+    await page.getByRole('cell',{name:'980 × 18 × 300',exact:true}).waitFor()
     assert.equal(await page.getByRole('link',{name:'Download cut list',exact:true}).count(),1)
     await page.getByText('Geometry checks',{exact:true}).click()
     await page.getByText('Overlap check: complete.',{exact:false}).waitFor()
     await page.reload()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),1)
+    await page.getByText('Parameter sources and changes',{exact:true}).click()
+    const sourceMap = page.locator('.cad-source-map')
+    await sourceMap.getByText(/Every controlling value/).waitFor()
+    await sourceMap.getByText('Original value: 1 m · truth: measured',{exact:true}).waitFor()
+    await sourceMap.getByText('Original value: 18 mm · truth: provided_spec',{exact:true}).waitFor()
+    await sourceMap.getByText('Saved value: 980 mm',{exact:true}).waitFor()
+    await sourceMap.getByText('Saved value: 20 mm',{exact:true}).waitFor()
+    await sourceMap.getByText(/Calculation: subtract_v1 · inputs width, allowance/).waitFor()
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Source map must fit mobile without promoting estimates to measurements')
     await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
+    await sourceMap.getByText('Original value: 1 m · truth: measured',{exact:true}).scrollIntoViewIfNeeded()
+    await page.screenshot({path:`test-results/cad-parameter-source-${viewport.width}.png`})
+    // An explicitly opened historical revision remains the page focus even
+    // when a newer saved proposal exists. Bob opens over the version dialog.
+    artifacts.records.set(cadId,{...cadRow,revision:2})
+    artifacts.histories.set(cadId,[cadRow,{...cadRow,revision:2}])
+    await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
+    // The exact URL is already open; reload to read the collaborator's new head
+    // while keeping the historical revision selected in the URL.
+    await page.reload()
+    const versionDialog = page.getByRole('dialog',{name:'CAD shelf detail · Version 1',exact:true})
+    await versionDialog.getByText(/The newest saved revision is 2; this view keeps revision 1/).waitFor()
+    await page.screenshot({path:`test-results/drawing-historical-version-${viewport.width}.png`})
+    const askVersion = versionDialog.getByRole('button',{name:'Ask Bob about this version',exact:true})
+    await askVersion.click()
+    const bobDialog = page.getByRole('dialog',{name:'Bob conversation for Porch A',exact:true})
+    await bobDialog.getByLabel('Bob page context').getByText('Drawing · v1',{exact:true}).waitFor()
+    await bobDialog.getByLabel('Question for bob').fill('Page focus question — saved drawing version')
+    await bobDialog.getByRole('button',{name:'Send',exact:true}).click()
+    await bobDialog.getByText(/Page records used · CAD shelf detail · v1/).waitFor()
+    assert.deepEqual(focusedTurns.at(-1).screen,{surface:'drawings',artifactId:cadId,artifactRevision:1})
+    await bobDialog.getByRole('button',{name:'Close Ask bob',exact:true}).focus()
+    await page.keyboard.press('Shift+Tab')
+    assert(await bobDialog.evaluate(el=>el.contains(document.activeElement)),'Reverse Tab stays inside Bob over a drawing modal')
+    for(let i=0;i<12;i++) { await page.keyboard.press('Tab'); assert(await bobDialog.evaluate(el=>el.contains(document.activeElement)),'Tab stays inside Bob') }
+    await bobDialog.getByRole('button',{name:'New conversation',exact:true}).click()
+    const resetDialog = page.getByRole('dialog',{name:'Start a new conversation?',exact:true})
+    await resetDialog.waitFor()
+    assert(await resetDialog.evaluate(el=>el.contains(document.activeElement)),'Nested confirmation receives focus')
+    await page.keyboard.press('Escape')
+    await resetDialog.waitFor({state:'hidden'})
+    assert(await bobDialog.isVisible())
+    assert(await bobDialog.evaluate(el=>el.contains(document.activeElement)),'Closing confirmation restores Bob focus')
+    await page.keyboard.press('Escape')
+    await bobDialog.waitFor({state:'hidden'})
+    assert(await versionDialog.isVisible(),'Closing Bob preserves the exact drawing dialog')
+    assert(await askVersion.evaluate(el=>el===document.activeElement),'Closing Bob restores the initiating action')
+    await versionDialog.getByRole('button',{name:'Close',exact:true}).click()
+    await page.getByRole('button',{name:'Ask bob',exact:true}).click()
+    await bobDialog.getByLabel('Question for bob').fill('Page focus question — drawings list')
+    await bobDialog.getByRole('button',{name:'Send',exact:true}).click()
+    await bobDialog.locator('.bob-working').waitFor({state:'hidden'})
+    assert.deepEqual(focusedTurns.at(-1).screen,{surface:'drawings'},'Closing version must clear selected revision')
+    await page.keyboard.press('Escape')
+    artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
     // A saved plan step reopens its exact construction and scoped images.
     const planStepId=randomUUID()
     currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
@@ -299,7 +387,7 @@ try {
     assert.equal(await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).count(),0)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     // The server's source assessment must survive navigation/reload in every surface.
-    artifacts.sources.set(cadId,{source_state:'changed',source_reasons:['target_changed']})
+    artifacts.sources.set(cadId,{source_state:'changed',source_reasons:['measurement_changed'],changes:[{kind:'project_measurement',id:'90000000-0000-4000-8000-000000000002',saved_revision:2,current_revision:5,parameter_ids:['width','inside'],state:'changed'}]})
     await page.goto(base)
     await drawings.getByText('Sources changed — review drawing',{exact:true}).waitFor()
     await page.reload()
@@ -308,10 +396,29 @@ try {
     await workspace.getByText('Sources changed — review drawing',{exact:true}).waitFor()
     await workspace.getByRole('link',{name:'CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('dialog').getByText('Sources changed — review drawing',{exact:true}).waitFor()
-    artifacts.sources.set(cadId,{source_state:'unavailable',source_reasons:['source_unavailable']})
+    await page.getByText('Parameter sources and changes',{exact:true}).click()
+    await sourceMap.getByText('Saved revision: 2 · current revision: 5',{exact:true}).waitFor()
+    await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).waitFor()
+    await sourceMap.getByText('Saved value: 980 mm',{exact:true}).waitFor()
+    await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).scrollIntoViewIfNeeded()
+    await page.screenshot({path:`test-results/drawing-source-map-${viewport.width}.png`,fullPage:true})
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByText('Sources changed — review drawing',{exact:true}).waitFor()
+    artifacts.sources.set(cadId,{source_state:'unavailable',source_reasons:['source_unavailable'],changes:[{kind:'project_measurement',id:null,saved_revision:2,current_revision:null,parameter_ids:['width','inside'],state:'unavailable'}]})
     await page.goto(base)
     await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert.equal(await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).count(),0)
+    await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
+    await page.getByText(/Current-use drawing preview is withheld/).waitFor()
+    assert.equal(await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).count(),0)
+    assert.equal(await page.getByRole('link',{name:'Download 3D model',exact:true}).count(),0)
+    await page.getByText('Parameter sources and changes',{exact:true}).click()
+    await sourceMap.getByText('Source identity unavailable with current access',{exact:true}).waitFor()
+    assert(!(await sourceMap.textContent()).includes('90000000-0000-4000-8000-000000000002'))
+    assert(!(await sourceMap.textContent()).includes('Saved value: 980'))
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.goto(base)
+    await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
     await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
     await page.screenshot({path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})

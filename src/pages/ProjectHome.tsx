@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
@@ -19,6 +20,7 @@ export function ProjectHome() {
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
   const projectId = project?.id ?? ''
+  useBobSurface(projectId, { surface: 'project' }, 'Project')
   const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
       ? Promise.all([
@@ -45,7 +47,8 @@ export function ProjectHome() {
     !artifact.areaId
     && artifact.targetRevision === selectedDecision.revision
     && artifact.solutionId === selectedTarget.id
-    && artifact.solutionRevision === selectedTarget.revision,
+    && artifact.solutionRevision === selectedTarget.revision
+    && artifact.sourceStatus?.source_state === 'current',
   ))
   const nextPlanningAction = missingMeasurements.length > 0
     ? {

@@ -594,3 +594,13 @@ foundations, generated proposals/guidance, deterministic drawing generation,
 calculations, BOM/stock/shopping and full progress/as-built history remain later
 scope. Manual 1A/1B, 2A/2B, 3A and 4A completion does not close full Slices 1–4
 or the V1 release.
+
+## P3 local release preparation — 2026-09-30
+
+Source commit `84f9ded` on `feat/p3-grounded-context-20260930` is a prepared release, not hosted runtime evidence. Separate Archie, Vera and backend subagents reviewed the changes. Their findings were fixed: freshness checks now run before each executed tool call within a model batch; drawing destination labels use the matching canonical Step; context errors describe page/project changes and explicit retry.
+
+`npm test` passed **837/837**, including a reproduced negative regression for a concurrent focus mutation between two tool calls and positive receipt-based continuation. Production build, vocabulary check, PWA checks, changed-script syntax and diff whitespace checks passed. The focused current-view run passed 35 tests. Local `check:edge` was blocked by unavailable network access to `esm.sh`; Chrome is absent. Deno and rendered desktop/mobile/reload verification must run in CI. No hosted migration, Edge function or frontend release was made in this preparation pass.
+
+`scripts/check-live-bob.mjs` now includes a disposable ordinary Auth/HTTP/model acceptance probe: caller-hydrated Task focus, actual pixels from a neutrally titled color fixture, the deployed versioned timber knowledge package, and private answer readback. It removes the image through ordinary caller commands. This probe is prepared but has not run. Fixture projects printed by the workflow still require operator cleanup.
+
+The user subsequently directly authorized the exact GitHub destination, merge and Supabase release. [PR #177](https://github.com/EmelieHagander/Bob-the-builder/pull/177) is published. [CI 36731702358](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36731702358) on head `4d1ebf9` passed **838/838** tests, Edge types, build, PWA, every browser group except foundations, and conversation reset/recovery at all three widths. CAD adapter and lineage concurrency also passed. The remaining foundations failure was a historical-version fixture changing its server head while navigating to the already-open URL; the explicit reload correction still requires a green run and complete rendered source-map/version review. No hosted migration or deployment has been made. [State](bob-delivery-flow.md#state) contains the remaining release gates.

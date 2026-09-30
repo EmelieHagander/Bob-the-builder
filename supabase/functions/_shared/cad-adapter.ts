@@ -17,7 +17,7 @@ export type CadAssemblyResult={contract_version:1;engine:{name:'build123d';versi
 
 const ID=/^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/
 const obj=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
-const exact=(v:Record<string,unknown>,keys:string[])=>Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k))
+const exact=(v:Record<string,unknown>,keys:string[])=>Object.keys(v).length===keys.length&&keys.every(k=>Object.prototype.hasOwnProperty.call(v,k))
 const id=(v:unknown):v is string=>typeof v==='string'&&ID.test(v)
 const finite=(v:unknown,bound:number,positive=false):v is number=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=bound&&(!positive||v>0)
 const place=(v:unknown)=>obj(v)&&exact(v,['x','y','z','rx','ry','rz'])

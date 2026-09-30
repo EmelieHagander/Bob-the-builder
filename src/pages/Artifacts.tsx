@@ -1,4 +1,5 @@
 import { CadDrawingView } from '../components/CadDrawingView'
+import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
 import { DrawingSourceNotice } from '../components/DrawingSourceNotice'
 import { StairStudyDrawing } from '../components/StairStudyDrawing'
 import { BuildingPlanDrawing } from '../components/BuildingPlanDrawing'
@@ -94,6 +95,7 @@ function GeneratedDetails({ value }: { value: ArtifactVersion }) {
 function VersionDetails({ value, target }: { value: ArtifactVersion; target: SelectedTarget }) {
   const [image, setImage] = useState(false)
   return <div className="fact-details">
+    <p className="foundation-hint">Viewing saved revision {value.revision}.{value.latestRevision && value.latestRevision !== value.revision ? ` The newest saved revision is ${value.latestRevision}; this view keeps revision ${value.revision}.` : ''} A saved Concept remains a proposal; source freshness does not approve it for building.</p>
     <div className="foundation-actions">
       <span className="image-purpose">{KIND_LABELS[value.kind]}</span>
       <span className="image-purpose">{STATUS_LABELS[value.status]}</span>
@@ -104,7 +106,7 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
-    {value.cad && <CadDrawingView value={value.cad} title={value.title} />}
+    {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
       artifactId: value.id, revision: value.revision, status: STATUS_LABELS[value.status],
       source: `${value.solutionTitle} · solution v${value.solutionRevision} · target decision ${value.targetRevision}. ${value.assumptions}` }} />}
@@ -268,7 +270,7 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
   if (data && !data.cad && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.cad || data?.parametricRecipe || data?.hasRoomLayout || data?.hasStairStudy || data?.hasMultifloorPlan)} onClose={onClose}>
     {data?.cad && edit && <p>Ask Bob to revise this drawing. Include its title and the changes you want so the CAD assistant can update the construction and its views together.</p>}
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <VersionDetails value={data} target={target} />}
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} target={target} /></>}
   </Modal>
 }
 
@@ -359,6 +361,9 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
   const [offset, setOffset] = useState(0)
   const [attempt, setAttempt] = useState(0)
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  const focused = dialog?.kind === 'version' ? { id: dialog.id, revision: dialog.revision }
+    : dialog?.kind === 'view' || dialog?.kind === 'edit' ? { id: dialog.record.id, revision: dialog.record.revision } : null
+  useBobSurface(projectId, { surface: 'drawings', ...(!focused && area ? { areaId: area } : {}), ...(focused ? { artifactId: focused.id, artifactRevision: focused.revision } : {}) }, focused ? `Drawing · v${focused.revision}` : 'Drawings')
   const { data, loading, error } = useAsync(async () => {
     const [drawings, target, areas] = await Promise.all([
       db.getProjectArtifacts(projectId, area, archived, offset),
@@ -441,6 +446,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
             {item.parametricRecipe && <span className="image-purpose">Parametric 2D</span>}
             <span className="image-purpose">Version {item.revision}{item.archived ? ' · Archived' : ''}</span></div>
           <p>{item.description}</p>
+          <DrawingSourceNotice source={item.sourceStatus} />
           <p className="foundation-hint">Based on {item.solutionTitle} · Version {item.solutionRevision} · target decision {item.targetRevision}</p>
           {comparable && !current && <p className="solution-attention">The selected target for this scope changed after this drawing version. Review before building from it.</p>}
           {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}

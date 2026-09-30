@@ -28,6 +28,7 @@ try {
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
     let sendMode = 'normal', answerCalls = 0, releaseAnswer
+    const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
@@ -62,10 +63,15 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
-        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
+        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, screen: row.screen??null, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/rpc/sharing_directory') return respond({ json: { households: [], friends: [] } })
+      if (url.pathname === '/rest/v1/rpc/project_sharing_state') return respond({ json: {
+        projectId: req.postDataJSON().p_project, householdId: null, buildingId: null,
+        revision: 0, canManage: false, buildings: [], invitations: [],
+      } })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Reset fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
@@ -103,10 +109,11 @@ try {
       }
       if (url.pathname === '/functions/v1/ask-bob') {
         const body = req.postDataJSON(), h = histories.get(body.projectId)
+        sentTurns.push(body)
         answerCalls++
         h.id ??= crypto.randomUUID()
         if (sendMode !== 'normal') {
-          const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
+          const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, screen:body.screen, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
           if (sendMode === 'background') { pending.background = true; pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
           h.messages.push(pending)
           const finish = () => {
@@ -305,6 +312,29 @@ try {
       await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
       assert.equal(await drawer.getByText('Bob is working on the project…', { exact: true }).count(), 0)
     }
+    // Recover the original turn's frozen pointer on a different page after reload.
+    const focusedRetry=crypto.randomUUID()
+    h.messages.push({role:'user',text:'Retry original project focus',turn_id:focusedRetry,screen:{surface:'project'},background:true,delivery_state:'failed',updated_at:new Date().toISOString(),seq:h.next_seq++})
+    await page.goto(base+'#/people');await page.reload();drawer=await open()
+    await drawer.getByRole('button',{name:'Retry request',exact:true}).waitFor()
+    await drawer.getByText('Continuing the original request',{exact:true}).waitFor()
+    const answersBeforeRetry=await drawer.getByText('FRESH ANSWER',{exact:true}).count()
+    const retryArrival=page.waitForRequest(r=>new URL(r.url()).pathname==='/functions/v1/ask-bob'&&r.postDataJSON()?.action==='send')
+    await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
+    const retryBody=(await retryArrival).postDataJSON()
+    assert.equal(retryBody.clientTurnId,focusedRetry)
+    assert.deepEqual(retryBody.screen,{surface:'project'},'Reload on People cannot change the original request focus')
+    await drawer.getByText('FRESH ANSWER',{exact:true}).nth(answersBeforeRetry).waitFor()
+    await drawer.locator('.bob-working').waitFor({state:'hidden'})
+    const answersBeforeNew=await drawer.getByText('FRESH ANSWER',{exact:true}).count()
+    const freshArrival=page.waitForRequest(r=>new URL(r.url()).pathname==='/functions/v1/ask-bob'&&r.postDataJSON()?.message==='New page request')
+    await drawer.getByRole('textbox',{name:'Question for bob'}).fill('New page request')
+    await drawer.getByRole('button',{name:'Send',exact:true}).click()
+    assert.deepEqual((await freshArrival).postDataJSON().screen,{surface:'people'},'A new logical turn uses the current page')
+    await drawer.getByText('FRESH ANSWER',{exact:true}).nth(answersBeforeNew).waitFor()
+    await drawer.locator('.bob-working').waitFor({state:'hidden'})
+    assert(sentTurns.length>0)
+    await page.screenshot({path:`test-results/bob-frozen-page-retry-${viewport.width}.png`})
     await page.keyboard.press('Escape')
     await drawer.waitFor({ state: 'hidden' })
     drawer = await open()

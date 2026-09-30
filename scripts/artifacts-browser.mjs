@@ -23,7 +23,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
-        'artifact_source_status','current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
+        'artifacts','artifact_source_status','artifact_source_changes','current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
         'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions','current_drawing_overview','current_drawing_steps',
       ]
@@ -31,8 +31,19 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
+      if(table==='artifacts')return reply({json:records.get(eq('id'))?.project_id===eq('project_id')?{current_revision:records.get(eq('id')).revision}:null})
 
-      if(table==='artifact_source_status') return reply({json:sourceStatus(eq('artifact_id'))})
+      if(table==='artifact_source_changes') {
+        const body=request.postDataJSON()
+        const row=records.get(body.p_artifact)
+        assert(row&&row.project_id===body.p_project,'Delta is requested under the exact project')
+        return reply({json:{changes:sourceStatus(body.p_artifact).changes??[],truncated:false}})
+      }
+      if(table==='artifact_source_status') {
+        if(eq('artifact_id'))return reply({json:sourceStatus(eq('artifact_id'))})
+        const pairs=[...(url.searchParams.get('or')??'').matchAll(/artifact_id\.eq\.([0-9a-f-]+),revision\.eq\.(\d+)/gi)]
+        return reply({json:pairs.map(match=>({artifact_id:match[1],revision:Number(match[2]),...sourceStatus(match[1])}))})
+      }
       if(table==='current_drawing_steps') return reply({json:[...records.values()].filter(r=>r.project_id===eq('project_id')&&!r.archived)
         .flatMap(r=>(workLinks.get(r.id)??[]).map(s=>({project_id:r.project_id,artifact_id:r.id,artifact_revision:r.revision,title:r.title,status:r.status,area_id:r.area_id,...sourceStatus(r.id),step_id:s.id,step_title:s.title})))})
       if(table==='current_drawing_overview') {

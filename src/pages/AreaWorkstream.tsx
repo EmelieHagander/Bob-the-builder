@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -58,6 +59,8 @@ export function AreaWorkstream() {
     setError(null)
     void action().then(reload).catch(err => setError(err instanceof Error ? err.message : String(err)))
   }
+
+  useBobSurface(projectId, area && !loading && !areaError ? { surface: 'area', areaId: area.id } : null, area ? `Area · ${area.name}` : 'Area loading')
 
   if (loading) return <div className="page"><Loading label="Loading Area…" /></div>
   if (!area || areaError) return <div className="page"><EmptyState icon="magnifying-glass" title="Area unavailable" hint={areaError?.message ?? 'It may have been renamed, removed or your access changed.'} /></div>

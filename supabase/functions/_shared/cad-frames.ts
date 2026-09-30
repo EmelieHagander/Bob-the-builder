@@ -1,5 +1,5 @@
 import type {CadAssemblyRequest} from './cad-adapter.ts'
-import type {CadParameters,ParameterInput,ParameterUnit} from './cad-parameters.ts'
+import type {CadParameters,ParameterUnit} from './cad-parameters.ts'
 
 export type CadFrameInput={id:string;kind:'room'|'image';source_ref:string;required:boolean;reason:string;placement:{x:string;y:string;z:string;rx:string;ry:string;rz:string}|null}
 export type CadFrame=CadFrameInput&{source_version:string|null;translation_mm:number[]|null;rotation_degrees:number[]|null;axes:number[][]|null}

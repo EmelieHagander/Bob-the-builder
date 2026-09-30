@@ -7,7 +7,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './ui'
 
-export function Modal({ title, onClose, children, wide = false }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ title, onClose, children, wide = false, layer }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean; layer?: number }) {
   const dialog = useRef<HTMLDivElement>(null)
   const close = useRef(onClose)
   close.current = onClose
@@ -36,6 +36,7 @@ export function Modal({ title, onClose, children, wide = false }: { title: strin
   return createPortal(
     <div
       className="modal-overlay"
+      style={layer ? { zIndex: layer } : undefined}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

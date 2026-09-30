@@ -12,8 +12,8 @@ plans. It does not supersede domain write rules, Artifact lineage, private media
 conversation compaction or the selected-image grounding repair. See
 [bounded writes](ask-bob-writes.md), [images](media-and-steps.md),
 [conversation state](ask-bob-conversations.md) and [drawings](artifacts.md).
-The wider Current View/router/Librarian design remains in
-[the context plan](ask-bob-context.md), not implicitly implemented here.
+Current View and the remaining broader catalog/router/Librarian design are distinguished in
+[the context owner](ask-bob-context.md#implemented-scope-and-remaining-target). The image-only catalog/list/open tools do not imply that general architecture is implemented.
 
 ## Current toolbox contract — 2026-09-27
 

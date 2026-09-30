@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -211,6 +212,7 @@ export function ProjectFacts() {
   const kind: FactKind = params.get('kind') === 'component' ? 'component' : 'measurement'
   const areaId = params.get('area') ?? ''
   const componentId = kind === 'measurement' ? params.get('part') ?? '' : ''
+  useBobSurface(projectId, { surface: 'facts', ...(areaId ? { areaId } : {}) }, kind === 'measurement' ? 'Measurements' : 'Existing parts')
   const requestedStatus = params.get('status')
   const status: 'active' | 'missing' | 'archived' = requestedStatus === 'archived'
     ? 'archived'
