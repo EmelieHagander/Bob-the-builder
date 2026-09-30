@@ -252,7 +252,7 @@ Compact chat is the default, with an **Aa** comfortable-spacing toggle stored as
 
 ### P2b project request lifecycle
 
-**Implemented in [PR #167](https://github.com/EmelieHagander/Bob-the-builder/pull/167), pending release.** The first P2b slice separates a caller-created project request identity from its private working packet. The broader lifecycle contract below includes later gates; budget allocations, gap/Task links, restoration of cleared requirements and automatic wakeup are not implemented by this slice.
+**Deployed 2026-09-30 in [PR #167](https://github.com/EmelieHagander/Bob-the-builder/pull/167).** The first P2b slice separates a caller-created project request identity from its private working packet. The broader lifecycle contract below includes later gates; budget allocations, gap/Task links, restoration of cleared requirements and automatic wakeup are not implemented by this slice.
 
 | State | Lifetime and access boundary |
 |---|---|
