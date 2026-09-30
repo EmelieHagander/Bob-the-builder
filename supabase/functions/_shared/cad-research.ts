@@ -4,10 +4,10 @@ import type { DesignHandoff } from './cad-review.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 
 type Evidence = { tool: string; result: unknown }
-export const CAD_RESEARCH_CONTRACT = '2026-09-30-source-citations-and-input-readiness'
+export const CAD_RESEARCH_CONTRACT = '2026-09-30-source-citations-and-input-readiness-strict-v2'
 const FINISH = { type: 'function' as const, function: { name: 'finish_cad_research',
  description: 'Hand the retrieved source records to the constructor. No design decisions or rewritten measurements.',
- parameters: INTAKE_SCHEMA } }
+ parameters: INTAKE_SCHEMA, strict:true } }
 
 /** Read-only selection, in a separate provider conversation. The constructor gets
  * exact tool results, never a small model's lossy rewrite of measurements. */
@@ -27,8 +27,10 @@ export async function collectCadResearch(opts: {
   const refs=evidenceRefs(evidence,opts.handoff)
   const parameters=structuredClone(INTAKE_SCHEMA)
   for(const field of [parameters.properties.checks,parameters.properties.additional_needs]){
-   if(refs.size)Object.assign(field.items.properties.source_refs.items,{enum:[...refs].sort()})
-   else field.items.properties.source_refs.maxItems=0
+   // The enum occurs twice in this schema. Stay within provider enum limits;
+   // the exact server-side allowlist still validates larger evidence sets.
+   if(refs.size&&refs.size<=400&&JSON.stringify([...refs]).length<=30000)Object.assign(field.items.properties.source_refs.items,{enum:[...refs].sort()})
+   else if(!refs.size)field.items.properties.source_refs.maxItems=0
   }
   const tools = [...opts.tools(), {...FINISH,function:{...FINISH.function,parameters}}]
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'cad-research',
@@ -55,7 +57,9 @@ export async function collectCadResearch(opts: {
      assessment=parseIntakeAssessment(args,opts.handoff,evidenceRefs(evidence,opts.handoff))
      if(assessment&&result.toolCalls.length===1){finished=true;continue}
      assessment=null
-     out={status:'invalid',reason:'Assess every requirement once, use only allowed source refs, and finish in a separate call after reads. Blocking checks require an action other than none; the requested output itself is not a missing input.',required_check_ids:opts.handoff.requirements.map(r=>r.id),allowed_source_refs:[...evidenceRefs(evidence,opts.handoff)].sort()}
+     const checks=[...(Array.isArray(args?.checks)?args.checks:[]),...(Array.isArray(args?.additional_needs)?args.additional_needs:[])]
+     const allowed=evidenceRefs(evidence,opts.handoff)
+     out={status:'invalid',reason:'Assess every requirement once, use only allowed source refs, and finish in a separate call after reads. Blocking checks require an action other than none; the requested output itself is not a missing input.',invalid_source_refs:[...new Set(checks.flatMap(c=>Array.isArray(c?.source_refs)?c.source_refs:[]).filter(r=>typeof r==='string'&&!allowed.has(r)))].slice(0,20),required_check_ids:opts.handoff.requirements.map(r=>r.id),allowed_source_refs:[...allowed].sort()}
     } else
     out = await opts.execute(call.function.name, args)
    } catch (error) { rethrowContinuation(error); if (error instanceof Error && error.message === 'project_denied') throw error; out = {status:'unavailable'} }

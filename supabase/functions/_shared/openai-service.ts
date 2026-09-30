@@ -175,6 +175,7 @@ export interface OpenAIServiceOptions {
       name: string;
       description: string;
       parameters: Record<string, unknown>;
+      strict?: boolean;
     };
   }>;
   tool_choice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
@@ -557,7 +558,7 @@ export async function callOpenAIResponses<T = unknown>(
             name: tool.function.name,
             description: tool.function.description,
             parameters: sanitizeJsonSchema(tool.function.parameters, true),
-            strict: false,
+            strict: tool.function.strict === true,
           };
         }
         return tool;
