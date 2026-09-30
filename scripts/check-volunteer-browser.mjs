@@ -107,7 +107,7 @@ async function fixture(viewport) {
   })
   const page = await context.newPage(); activePage = page; page.setDefaultTimeout(15000)
   page.on('pageerror', error => state.errors.push(error.message))
-  return { context, page, state }
+  return { context, page, state, original, replacement }
 }
 async function layout(page, viewport, label) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -128,7 +128,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] })
   await mkdir('test-results', { recursive: true })
   for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-    const { context, page, state } = await fixture(viewport)
+    const { context, page, state, original, replacement } = await fixture(viewport)
     await page.goto(base + '#/volunteer/' + invitation)
     await page.getByLabel('Your name', { exact: true }).waitFor()
     assert.equal(await page.locator('input[type="email"],input[type="password"]').count(), 0)
