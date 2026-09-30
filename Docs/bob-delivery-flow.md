@@ -278,15 +278,35 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: kör `scripts/check-live-p3-member.mjs` med en befintlig verifierad medlemssession i säker runner-miljö, och stäng P3 först när privat bakgrundsfokus och återläsning passerar.** `BOB_P3_LIVE_CONFIRM=disposable-fixtures-only` avgränsar provet; medlemssessionen ska inte lämnas i chatten. Teknisk release och avgränsade livebevis finns hos [verifieringsägaren](foundation-verification.md#p3-hosted-technical-release--2026-09-30). P0:s verkliga användartest och P4 hålls separat öppna.
+**Nästa handling: börja P4 med en granskning av verkliga modell- och deltagarflöden mot UC-001–005 och acceptansmatrisen nedan.** Följ varje fall från originalunderlag till sparat resultat, rätt projektyta och återbesök; identifiera vilka prov som redan finns och vilka som kräver en ny körning. P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna och hindrar inte P4:s förberedelse och granskning.
 
-### Öppet arbete i prioritetsordning
+### Aktivt arbete — P4
 
-| Etapp | Vad återstår? |
+P4 är produktacceptans enligt [planen](#plan) och [user stories](user-stories.md#product-mandate--2026-09-24). Matrisen grupperar befintliga acceptansfall; den ändrar inte deras krav eller markerar dem verifierade. Första passet granskar aktuell main och förbereder avgränsade projekt, underlag, roller och kostnadsramar innan modell-/deltagarkörning. Vanlig medlemssession och avsedda deltagarroller behövs för de fullständiga skriv- och återbesöksflödena.
+
+| Testgrupp | Befintligt kontrakt | Bevis som ska samlas |
+|---|---|---|
+| Komplett underlag och olika konstruktioner | UC-001/005; A01/A04/A07/A08/A17/A19. A01:s verkliga användarprov återanvänds från P0-todo. | Spar-/länkkvitton, parameterursprung, korrekt syfte och öppnat resultat. Variera konstruktion och fysisk scope utan nya objektspecifika verktyg. |
+| Ofullständigt och äldre underlag | UC-001; A02/A03 | Alla nödvändiga luckor samlade, redan känd uppgift återfunnen, samma uppdrag återupptaget efter komplettering. |
+| Versioner och ändrade källor | UC-003/005; A05/A09/A18 | Exakt sparad/vald version, upptäckt samtidig ändring och korrekt påverkan utan att historiskt inköp/utförande skrivs om. |
+| Fel, kostnadsstopp och delvis lyckat | UC-005; A06/A10/A11/A12/A13/A14 | Kontrollerad felväg, rätt fortsättning, bevarade kvitton och frånvaro av dubbla betalda försök/leveranser. |
+| Privat återhämtning och mobil deltagare | UC-003; A15/A16. P3:s smalare fokus-/historikprov finns i gemensam todo. | Återbesök och rätt behörig deltagarvy utan åtkomst till privat chatt; nekad/återkallad åtkomst vid datagränsen. A15:s bredare reset-/uppdragskrav provas separat. |
+| Manuellt underlag vid rätt steg | UC-004:s verifieringsscenario; UC-003 | En sparad bild återanvänds i två steg; ändrad koppling och reload bevarar rätt underlag och övriga stegets länk. |
+| Större bygge över flera dagar | UC-002; A20 | Aktuell deltagarvy och omplanering vid avbokning/materialförsening; färdigt arbete bevaras. |
+
+Dokumentera slutresultat, källor/versioner, testroll, tid, modell-/verktygsanrop och kostnad hos [verifieringsägaren](foundation-verification.md). CI-/SQL-/HTTP-fixturer och faktisk modell-/deltagaracceptans redovisas var för sig. Nya fynd får ansvarig kodgräns, reproduktion och riktad rättning; ett lyckat fall stänger inte ett helt UC.
+
+<a id="acceptans-todo"></a>
+### Gemensam acceptans-todo — P0 och P3
+
+Båda återstående punkterna är acceptansprov. Ingen ytterligare implementation är identifierad som förutsättning; eventuella provfynd hanteras när de reproduceras. Användaren har valt att behålla dem tillsammans i todo och fortsätta med P4.
+
+| Test | Vad återstår? |
 |---|---|
-| **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P3 — medlemsacceptans återstår** | Verifiera vanlig namngiven Auth-session → bakgrundskörning med bevarat Task-fokus → privat återläsning → idempotent återbesök. Säker medlemssession saknas i den aktuella runner-miljön; förberett prov använder inga nya Auth-användare, tokens eller behörighetsändringar. Större katalog/router/Librarian är fortsatt specificerade hos kontextägaren. |
-| **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
+| **P0 — verkligt användarutfall, öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Rollbackat SQL-prov, CI och deployment stänger inte användarprovet. |
+| **P3 — medlemsacceptans, öppet** | Kör `scripts/check-live-p3-member.mjs`: vanlig namngiven Auth-session → bakgrundskörning med bevarat Task-fokus → privat återläsning → idempotent återbesök. Befintlig verifierad medlemssession behövs i säker runner-miljö; `BOB_P3_LIVE_CONFIRM=disposable-fixtures-only` avgränsar provet. Provet skapar inga Auth-användare/tokens och ändrar inga behörigheter. Sessionen ska inte lämnas i chatten. |
+
+Teknisk release och avgränsade livebevis för P3 finns hos [verifieringsägaren](foundation-verification.md#p3-hosted-technical-release--2026-09-30). Större katalog/router/Librarian är fortsatt specificerade hos kontextägaren; flytten av testpunkter till todo gör inte de förmågorna implementerade.
 
 **Arbetsmetod:** håll ett avgränsat kodutfall aktivt åt gången. Följ källägare → faktisk spar-/återläsningsgräns, reproducera relevanta fel med negativa och positiva prov, gör minsta sammanhängande ändring och verifiera. Arkivera avslutade prov i PR/CI. Ange nästa kvarstående grind här, inte en historik över gröna körningar. Nya röda kontroller blir nästa handling.
 
@@ -296,6 +316,6 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 
 **Kvarstående acceptans:** A01:s verkliga användarutfall är öppet. P1:s tekniska prov för A04/A05/A07/A08/A09/A18 och releasebevis samlas i #163; verkliga modell-/deltagarutfall är en separat grind. `partial`-metadata och `legacy_untracked`-ritningar är inte fullständig spårning eller verifierad fysisk geometri.
 
-**Arbetsgräns och ägare:** utgå från aktuell main och kör endast det kvarstående medlemsprovet enligt nästa handling. [ask-bob-context.md](ask-bob-context.md#implemented-scope-and-remaining-target) äger skärmfokus, [building-knowledge.md](building-knowledge.md) kunskapspaketen och [artifacts.md](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed) källkarta, versionsstatus och kompletteringar. `Docs/cad-adapter.md` äger CAD-kontraktet, [building-model.md](building-model.md) de fysiska begreppen och `db/README.md` databasgränsen och releaseordningen. Genomförd P1a/P1b-release är inte mandat att gissa datarättningar. Dubbelkontrollera aktuell diff, målmiljö och gällande användarmandat före nästa applicering eller driftsättning.
+**Arbetsgräns och ägare:** utgå från aktuell main och håll ett avgränsat P4-fall aktivt åt gången. De parkerade P0/P3-proven återanvänds vid den gemensamma testomgången. [ask-bob-context.md](ask-bob-context.md#implemented-scope-and-remaining-target) äger skärmfokus, [building-knowledge.md](building-knowledge.md) kunskapspaketen och [artifacts.md](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed) källkarta, versionsstatus och kompletteringar. `Docs/cad-adapter.md` äger CAD-kontraktet, [building-model.md](building-model.md) de fysiska begreppen och `db/README.md` databasgränsen och releaseordningen. Genomförd P1a/P1b-release är inte mandat att gissa datarättningar. Dubbelkontrollera aktuell diff, målmiljö och gällande användarmandat före nästa applicering eller driftsättning.
 
 **Underhåll:** uppdatera nästa handling och öppna hinder enligt [Archies prompt](../.claude/agents/archie.md#forward-looking-state-and-archives). Gällande kontrakt stannar hos sina ägare. Länka körda prov och avslutade fynd från PR/CI eller daterat arkiv; kopiera inte tillbaka dem som en avslutslogg i State.
