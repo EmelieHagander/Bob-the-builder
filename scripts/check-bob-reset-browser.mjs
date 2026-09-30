@@ -67,6 +67,11 @@ try {
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/rpc/sharing_directory') return respond({ json: { households: [], friends: [] } })
+      if (url.pathname === '/rest/v1/rpc/project_sharing_state') return respond({ json: {
+        projectId: req.postDataJSON().p_project, householdId: null, buildingId: null,
+        revision: 0, canManage: false, buildings: [], invitations: [],
+      } })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Reset fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
@@ -313,17 +318,21 @@ try {
     await page.goto(base+'#/people');await page.reload();drawer=await open()
     await drawer.getByRole('button',{name:'Retry request',exact:true}).waitFor()
     await drawer.getByText('Continuing the original request',{exact:true}).waitFor()
+    const answersBeforeRetry=await drawer.getByText('FRESH ANSWER',{exact:true}).count()
     const retryArrival=page.waitForRequest(r=>new URL(r.url()).pathname==='/functions/v1/ask-bob'&&r.postDataJSON()?.action==='send')
     await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
     const retryBody=(await retryArrival).postDataJSON()
     assert.equal(retryBody.clientTurnId,focusedRetry)
     assert.deepEqual(retryBody.screen,{surface:'project'},'Reload on People cannot change the original request focus')
-    await drawer.getByText('FRESH ANSWER',{exact:true}).last().waitFor()
+    await drawer.getByText('FRESH ANSWER',{exact:true}).nth(answersBeforeRetry).waitFor()
+    await drawer.locator('.bob-working').waitFor({state:'hidden'})
+    const answersBeforeNew=await drawer.getByText('FRESH ANSWER',{exact:true}).count()
     const freshArrival=page.waitForRequest(r=>new URL(r.url()).pathname==='/functions/v1/ask-bob'&&r.postDataJSON()?.message==='New page request')
     await drawer.getByRole('textbox',{name:'Question for bob'}).fill('New page request')
     await drawer.getByRole('button',{name:'Send',exact:true}).click()
     assert.deepEqual((await freshArrival).postDataJSON().screen,{surface:'people'},'A new logical turn uses the current page')
-    await drawer.getByText('FRESH ANSWER',{exact:true}).last().waitFor()
+    await drawer.getByText('FRESH ANSWER',{exact:true}).nth(answersBeforeNew).waitFor()
+    await drawer.locator('.bob-working').waitFor({state:'hidden'})
     assert(sentTurns.length>0)
     await page.screenshot({path:`test-results/bob-frozen-page-retry-${viewport.width}.png`})
     await page.keyboard.press('Escape')

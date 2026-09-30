@@ -167,7 +167,7 @@ try{
   await drawer.getByText('Bob could not safely use the page, project or conversation context. The records may have changed while he was working. Review any saved changes, then use Retry request to reread the original selection.',{exact:true}).waitFor()
   await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
   await drawer.getByRole('button',{name:'Retry request',exact:true}).waitFor({state:'hidden'})
-  await page.waitForFunction(()=>!document.querySelector('[aria-label="Ask bob for Build together"] button[aria-label="Send"]')?.disabled)
+  await drawer.locator('.bob-working').waitFor({state:'hidden'})
   assert.equal(contextFailures,2,'Changed-context recovery makes one explicit retry')
   assert.deepEqual(sentScreens.at(-1),{surface:'project',planStepId:root.id},'Changed-context retry retains the original Step selection')
   await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
