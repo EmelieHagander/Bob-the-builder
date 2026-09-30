@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: börja P4 med en granskning av verkliga modell- och deltagarflöden mot UC-001–005 och acceptansmatrisen nedan.** Följ varje fall från originalunderlag till sparat resultat, rätt projektyta och återbesök; identifiera vilka prov som redan finns och vilka som kräver en ny körning. P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna och hindrar inte P4:s förberedelse och granskning.
+**Nästa handling: verifiera P4:s rättningar för deltagarens instruktionsbilder och modellens påstående om ett ännu osparat underlag.** Kör CI:s mobil-/reload-prov, applicera den additiva bildläsningen efter granskning och kör liveprovet `scripts/check-live-p4.mjs` för media samt verandans omprov. Bevis och avgränsning ligger hos [verifieringsägaren](foundation-verification.md#p4-product-acceptance--2026-09-30). P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna.
 
 ### Aktivt arbete — P4
 

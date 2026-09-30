@@ -406,6 +406,13 @@ normal-client raw read/write grants, including no read access to secret hashes.
 | `volunteer_rsvp`, `volunteer_task_action` | Own attendance and task assignment only. Task status/check writes require current own assignment, preserve required-check rules and reject stale changes. No task/instruction creation or editing. |
 | `volunteer_media` | Exact active session + same-project task + ready task/step/area-linked image resolve the sole permitted Storage object for the media proxy. |
 
+`20260930174127_volunteer_instruction_images.sql` adds exact `steps[].images`
+and general `contextImages` to `volunteer_task`, including image purpose. The
+legacy `images` union is preserved for older clients. Only ready same-project
+assets linked to that instruction or the existing task/Area/current-primary-Step
+scope are returned; session, byte access and ACL rules are unchanged. Hosted
+application and P4 acceptance are recorded in `Docs/foundation-verification.md`.
+
 Food availability is derived from an existing meal or nonempty build-event food
 description. Merely having a Food navigation item does not count. Allergy input
 is optional and limited to 1000 characters; nonempty allergy writes without food
