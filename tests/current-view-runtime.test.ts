@@ -6,6 +6,7 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
 import type { CurrentView } from '../src/domain/bobScreen.ts'
+import { hydrateCurrentView, type CurrentViewReader } from '../supabase/functions/_shared/current-view.ts'
 
 const view: CurrentView = { status:'ok',projectId:'A',surface:'task',project:{id:'A',name:'Build'},
   focus:{task:{id:'taskA',name:'Original task',status:'todo',instructions:'Inspect'}},sources:[],warnings:[],retrievedAt:'2026-09-30T12:00:00Z' }
@@ -96,4 +97,39 @@ test('client evidence validation rejects foreign/malformed focus and preserves l
   assert(!isBobAnswerEvidence({...evidence,currentView:{...view,projectId:'B'}},'A'))
   assert(!isBobAnswerEvidence({...evidence,currentView:{...view,status:'unavailable'}},'A'))
   assert(!isBobAnswerEvidence({...evidence,currentView:{...view,focus:{task:{...view.focus.task,secret:'hidden'}}}},'A'))
+})
+
+test('real caller-hydrated Task/Step assignments reach client evidence without admitting profiles or malformed responsibility',async()=>{
+  const row=(id:string,extra:Record<string,unknown>={})=>({id,project_id:'A',name:id,...extra})
+  const reader:CurrentViewReader={
+    project:async()=>({id:'A',name:'Build'}),viewer:async()=>null,area:async()=>null,
+    task:async()=>row('taskA',{area_id:null,primary_step_id:'stepA',status:'todo',instructions:'Inspect'}),
+    assignees:async()=>({rows:[row('personA',{task_id:'taskA',email:'PRIVATE',diet:'PRIVATE'})],truncated:false}),
+    person:async()=>row('personA',{email:'PRIVATE',diet:'PRIVATE'}),
+    planStep:async()=>row('stepA',{area_id:null,plan_revision:1,state:'active',goal:'Inspect',notes:'',responsible_kind:'person',responsible_person_id:'personA'}),
+    instruction:async()=>null,solution:async()=>null,drawing:async()=>null,event:async()=>null,
+  }
+  const currentView=await hydrateCurrentView({projectId:'A',screen:{surface:'task',taskId:'taskA'},reader})
+  const evidence={kind:'ai_assessment',sources:[],partial:false,currentView}
+  assert.equal(currentView.status,'ok')
+  assert.deepEqual(currentView.focus.task?.assignees,[{id:'personA',name:'personA'}])
+  assert.deepEqual(currentView.focus.planStep?.responsible,{kind:'person',person:{id:'personA',name:'personA'}})
+  assert.doesNotMatch(JSON.stringify(currentView),/PRIVATE|email|diet/)
+  assert(isBobAnswerEvidence(evidence,'A'),'the actual server projection must pass the client boundary')
+  for(const responsible of [{kind:'bob'},{kind:'unassigned'}]){
+    assert(isBobAnswerEvidence({...evidence,currentView:{...currentView,focus:{...currentView.focus,
+      planStep:{...currentView.focus.planStep,responsible},task:{...currentView.focus.task,assignees:[]}}}},'A'))
+  }
+  const replace=(key:'task'|'planStep',patch:Record<string,unknown>)=>({...evidence,currentView:{...currentView,
+    focus:{...currentView.focus,[key]:{...currentView.focus[key],...patch}}}})
+  for(const assignees of [null,{},Array(9).fill({id:'personA',name:'A'}),[{id:'x y',name:'A'}],[{id:'personA',name:'A',email:'PRIVATE'}],
+    [{id:'personA',name:'A',project_id:'B'}],[{id:'personA',name:'A'.repeat(241)}]]){
+    assert(!isBobAnswerEvidence(replace('task',{assignees}),'A'))
+  }
+  for(const responsible of [null,[],{kind:'person'},{kind:'person',person:{id:'x y',name:'A'}},
+    {kind:'person',person:{id:'personA',name:'A',diet:'PRIVATE'}},{kind:'bob',person:{id:'personA',name:'A'}},
+    {kind:'unassigned',person:null},{kind:'admin'},{kind:'person',person:{id:'personA',name:'A'},email:'PRIVATE'}]){
+    assert(!isBobAnswerEvidence(replace('planStep',{responsible}),'A'))
+  }
+  assert(!isBobAnswerEvidence(evidence,'B'),'canonical assignments do not relax the project boundary')
 })

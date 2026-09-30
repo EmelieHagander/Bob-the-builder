@@ -17,10 +17,20 @@ export function isBobCurrentView(value: unknown, projectId: string): value is Cu
   if (!entity(v.project) || v.project.id !== projectId || v.viewer !== undefined && !entity(v.viewer)) return false
   const fields: Record<string, string[]> = { area: [], task: ['status','instructions'], planStep: ['state','planRevision','goal','notes'],
     instruction: ['revision','instructions','required','completedAt'], solution: ['revision','archived'], drawing: ['revision','status','archived','sourceState'], event: ['status','day','time','place'] }
+  const publicPerson = (e: unknown) => entity(e) && Object.keys(e).every(k => k === 'id' || k === 'name')
   return Object.entries(v.focus).every(([key,e]) => {
     if (!Object.prototype.hasOwnProperty.call(fields,key) || !entity(e)) return false
     const row = e as unknown as Record<string,unknown>
-    if (Object.keys(row).some(k => !['id','name',...fields[key]].includes(k))) return false
+    const optional = key === 'task' ? ['assignees'] : key === 'planStep' ? ['responsible'] : []
+    if (Object.keys(row).some(k => !['id','name',...fields[key],...optional].includes(k))) return false
+    if ('assignees' in row && (!Array.isArray(row.assignees) || row.assignees.length > 8 || !row.assignees.every(publicPerson))) return false
+    if ('responsible' in row) {
+      const responsible = row.responsible
+      if (!responsible || typeof responsible !== 'object' || Array.isArray(responsible)) return false
+      const r = responsible as Record<string,unknown>
+      if (Object.keys(r).some(k => k !== 'kind' && k !== 'person') || !['bob','person','unassigned'].includes(String(r.kind))) return false
+      if (r.kind === 'person' ? !publicPerson(r.person) : 'person' in r) return false
+    }
     return fields[key].every(k => k === 'revision' || k === 'planRevision' ? Number.isSafeInteger(row[k]) && Number(row[k]) > 0
       : k === 'archived' || k === 'required' ? typeof row[k] === 'boolean'
       : k === 'completedAt' ? row[k] === null || typeof row[k] === 'string' && Number.isFinite(Date.parse(row[k]))

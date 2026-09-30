@@ -78,7 +78,7 @@ try {
         focusedTurns.push(body)
         const pointer = body.screen, focus = {}
         if (pointer.artifactId) focus.drawing = { id: pointer.artifactId, name: 'CAD shelf detail', revision: pointer.artifactRevision, status: 'concept', archived: false, sourceState: 'current' }
-        if (pointer.taskId) focus.task = { id: task.id, name: task.name, status: task.status, instructions: task.instructions }
+        if (pointer.taskId) focus.task = { id: task.id, name: task.name, status: task.status, instructions: task.instructions, assignees: [] }
         if (pointer.instructionId) {
           const selected = steps.find(step => step.id === pointer.instructionId)
           assert(selected)

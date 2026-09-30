@@ -50,7 +50,8 @@ try{
     const b=req.postDataJSON();sentScreens.push(b.screen)
     assert.equal(b.projectId,'P');assert.deepEqual(Object.keys(b).sort(),['action','background','clientTurnId','message','projectId','screen'])
     if(b.message==='Retry after changed page context'&&contextFailures++===0)return respond({ok:false,error:'context_unavailable'},503)
-    const focus=b.screen.taskId?{task:{id:'cut',name:'Cut panels',status:'doing',instructions:tasks[0].instructions}}:b.screen.planStepId?{planStep:{id:root.id,name:root.title,state:root.state,planRevision:1,goal:root.goal,notes:root.notes}}:{}
+    const focusedStep={id:root.id,name:root.title,state:root.state,planRevision:1,goal:root.goal,notes:root.notes,responsible:{kind:'bob'}}
+    const focus=b.screen.taskId?{task:{id:'cut',name:'Cut panels',status:'doing',instructions:tasks[0].instructions,assignees:[]},planStep:focusedStep}:b.screen.planStepId?{planStep:focusedStep}:{}
     return respond({ok:true,status:'completed',projectId:'P',summary:'Read this page from saved project records.',evidence:{kind:'ai_assessment',partial:false,sources:[],currentView:{status:'ok',projectId:'P',project:{id:'P',name:project.name},surface:b.screen.surface,focus,sources:[],warnings:[],retrievedAt:new Date().toISOString()}}})
    }
    if(path==='/rest/v1/bob_threads')return respond(null)
@@ -176,9 +177,9 @@ try{
   await drawer.getByText('Task · Cut panels',{exact:true}).waitFor()
   await drawer.getByRole('textbox',{name:'Question for bob'}).fill('What do I do here?')
   await drawer.getByRole('button',{name:'Send',exact:true}).click()
-  await drawer.getByText('Page records used · Cut panels',{exact:true}).waitFor()
+  await drawer.getByText('Page records used · Drawers / Cut panels',{exact:true}).waitFor()
   assert.deepEqual(sentScreens.at(-1),{surface:'task',taskId:'cut',planStepId:root.id})
-  await drawer.getByText('Page records used · Cut panels',{exact:true}).waitFor()
+  await drawer.getByText('Page records used · Drawers / Cut panels',{exact:true}).waitFor()
   await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
   await page.goto(base+'#/events/day-one')
   await page.getByRole('heading',{name:'Build day one',exact:true}).waitFor()
