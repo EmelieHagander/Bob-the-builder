@@ -10,7 +10,7 @@ declare
  physical_measure uuid:=gen_random_uuid(); project_measure uuid:=gen_random_uuid(); solution uuid:=gen_random_uuid();
  turn_id uuid:=gen_random_uuid(); donor text; project text; claim jsonb; snapshot jsonb;
  recipe jsonb; parameters jsonb; lineage jsonb; payload jsonb; detail jsonb; saved jsonb; child jsonb; readback jsonb;
- drawing_request jsonb; working jsonb; root_id uuid:=gen_random_uuid(); reset_seq bigint;
+ drawing_request jsonb; working jsonb; root_id uuid:=gen_random_uuid(); reset_seq bigint; recovery_plan jsonb; recovery_step uuid;
  request_text text:='P1 release smoke: save synthetic source-bound CAD'; source_state text;
 begin
  insert into auth.users(id,email,email_confirmed_at) values(actor,actor::text||'@p1-release.invalid',now());
@@ -57,6 +57,27 @@ begin
  perform bob.create_drawing_request(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,root_id,'{"area_id":null,"component_id":null,"step_id":null,"artifact_id":null}'::jsonb);
  set local role service_role;
  drawing_request:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',root_id,0,'reviewed',working,'release-reviewed');
+
+ -- Recover a genuinely cleared packet from canonical requirements, then prove
+ -- the same restored identity still completes through the ordinary caller writer.
+ perform bob.bob_fail_turn_v2(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer);
+ set local role authenticated;
+ select next_seq into reset_seq from bob.bob_threads where id=(claim->>'thread_id')::uuid;
+ perform bob.bob_reset_conversation(project,(claim->>'thread_id')::uuid,reset_seq);
+ reset role;
+ recovery_plan:=bob_private.project_plan_propose(project,0,'{"summary":"Synthetic recovery","reason":"Release fixture","steps":[{"step_id":null,"title":"Concept","goal":"Source-bound concept drawing","state":"active","phase":"planning","area_id":null,"responsible_kind":"bob","responsible_person_id":null,"notes":"","requirements":[{"requirement_id":null,"type":"drawing","title":"Concept drawing","description":"Preserve exact current dimensions","resolution":"open","responsible_kind":"bob","responsible_person_id":null,"evidence_selector":{"kind":"none","id":null,"subject":null,"area_id":null}}]}],"task_links":[]}'::jsonb);
+ recovery_plan:=bob_private.project_plan_decide(project,0,(recovery_plan#>>'{record,revision}')::integer,'approve','Release fixture');
+ recovery_step:=(recovery_plan#>>'{record,steps,0,id}')::uuid;
+ turn_id:=gen_random_uuid();
+ set local role service_role;
+ claim:=bob.bob_claim_turn(project,actor,turn_id,request_text);
+ set local role authenticated;
+ drawing_request:=bob.restore_drawing_request(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,root_id,2,1,recovery_step,request_text);
+ if drawing_request->>'status' is distinct from 'collecting' or (drawing_request->>'revision')::integer<>3 then raise exception 'smoke_restoration'; end if;
+ if bob.restore_drawing_request(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,root_id,2,1,recovery_step,request_text) is distinct from drawing_request then raise exception 'smoke_restoration_replay'; end if;
+ working:=drawing_request->'payload'||jsonb_build_object('reviewed_candidate',working->'reviewed_candidate');
+ set local role service_role;
+ drawing_request:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',root_id,3,'reviewed',working,'release-restored-reviewed');
  set local role authenticated;
  payload:=jsonb_set(payload,'{data,drawing_request}',jsonb_build_object('id',drawing_request->'id','revision',drawing_request->'revision'));
  saved:=bob.bob_project_write_v11(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,payload);
@@ -125,4 +146,4 @@ begin
  reset role;
 end $$;
 rollback;
-select 'P1/P2b authenticated-role save/read/detail, atomic request and cross-turn/reset replay, cancellation fence, denial, stale/scope checks passed; all writes rolled back' as release_smoke;
+select 'P1/P2c authenticated-role save/read/detail, canonical same-ID restoration, atomic request and cross-turn/reset replay, cancellation fence, denial, stale/scope checks passed; all writes rolled back' as release_smoke;

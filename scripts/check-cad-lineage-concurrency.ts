@@ -191,4 +191,50 @@ for(const kind of ['cancel-first','save-before-cancel','project-duplicate','proj
   console.log(`PASS project request ${kind}: observed real lock wait, stable identity and fenced completion`)
   cases++
 }
+
+// Restoration races use the real actor/request/plan locks and canonical writer.
+for(const kind of ['restore-duplicate','cancel-before-restore','restore-before-cancel','plan-before-restore','plan-before-restored-save','restored-save-before-plan']) {
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture'),id=randomUUID()
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const transaction=(sql:string,tail='',role='authenticated')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${auth}set local role ${role};${sql};${tail}commit;`
+ const requirement={requirement_id:null,type:'drawing',title:'Synthetic concept',description:'Use current source-bound dimensions.',resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}
+ const step={step_id:null,title:'Concept',goal:'Source-bound drawing',state:'active',phase:'planning',area_id:null,responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[requirement]}
+ const proposal={summary:'Synthetic plan',reason:'Concurrency fixture',steps:[step],task_links:[]}
+ const propose=(expected:number)=>`select bob_private.project_plan_propose(${literal(f.project)},${expected},${literal(JSON.stringify(proposal))})`
+ const decide=(expected:number,rev:number)=>`select bob_private.project_plan_decide(${literal(f.project)},${expected},${rev},'approve','Concurrency fixture')`
+ await query(transaction(propose(0),'','postgres'))
+ const plan=JSON.parse((await query(transaction(decide(0,1),'','postgres'))).split('\n').at(-1)!).record
+ const scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
+ await query(transaction(`select bob.create_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},${literal(JSON.stringify(scope))})`))
+ const restore=`select bob.restore_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},0,1,${literal(plan.steps[0].id)},${literal(f.payload.request_quote)})`
+ const cancel=`select bob.cancel_drawing_request(${literal(f.project)},${literal(id)},0)`
+ let save=''
+ if(kind.includes('restored-save')){
+  const restored=JSON.parse((await query(transaction(restore))).split('\n').at(-1)!)
+  const working={...restored.payload,reviewed_candidate:drawingCandidateCommitment(f.payload.data)}
+  const packet=JSON.parse((await query(transaction(`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},'save',${literal(id)},1,'reviewed',${literal(JSON.stringify(working))},'reviewed')`,'','service_role'))).split('\n').at(-1)!)
+  const payload={...f.payload,data:{...f.payload.data,drawing_request:{id,revision:packet.revision}}}
+  save=`select bob.bob_project_write_v12(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(payload))})`
+ }
+ if(kind.includes('plan'))await query(transaction(propose(1),'','postgres'))
+ const first=kind==='cancel-before-restore'?cancel:kind.startsWith('plan-before')?decide(1,2):kind==='restored-save-before-plan'?save:restore
+ const second=kind==='restore-before-cancel'?cancel:kind==='restored-save-before-plan'?decide(1,2):kind==='plan-before-restored-save'?save:restore
+ const key=770000+cases,barrier=await gate(key)
+ const leader=start(transaction(first,`select pg_advisory_xact_lock(${key});`,kind.startsWith('plan-before')?'postgres':'authenticated'))
+ let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(transaction(second,'',kind==='restored-save-before-plan'?'postgres':'authenticated'));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ if(['restore-duplicate','restored-save-before-plan'].includes(kind))assert.equal(follow.code,0,follow.stderr)
+ else {assert.notEqual(follow.code,0);assert.match(follow.stderr,kind==='cancel-before-restore'?/drawing_request_cancelled/:kind==='restore-before-cancel'?/drawing_request_changed/:/drawing_requirements_changed/)}
+ const state=await json(`select jsonb_build_object('status',status,'revision',revision,'plan',recovery_plan_revision) from bob_private.project_drawing_requests where id=${literal(id)}`)
+ assert.equal(state.status,kind==='cancel-before-restore'?'cancelled':kind==='plan-before-restore'?'paused':kind==='restored-save-before-plan'?'saved':kind==='plan-before-restored-save'?'reviewed':'collecting')
+ assert.equal(await query(`select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}`),kind==='restored-save-before-plan'?'1':'0')
+ if(kind==='restore-duplicate'){
+  assert.equal(state.revision,1)
+  const result=(out:string)=>JSON.parse(out.split('\n').find(line=>line.startsWith('{')&&line.includes('"payload"'))!)
+  assert.deepEqual(result(lead.stdout),result(follow.stdout))
+ }
+ console.log(`PASS restoration ${kind}: observed lock wait; checked revision, terminal fence and Artifact count`);cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

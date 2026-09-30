@@ -42,6 +42,8 @@ export const RENDER_SAVED_CAD_TOOL=tool('render_saved_cad_candidate','Render an 
 const READ_REQUESTS_TOOL=tool('read_drawing_requests','Read minimal project drawing status and exact saved Artifact references. No private chat or drafts. Use after_id for the next page.',{request_id:{type:['string','null']},after_id:{type:['string','null']}})
 const CANCEL_REQUEST_TOOL=tool('cancel_drawing_request','Cancel your drawing request only when the owner asks to stop it. Read its current revision first. This fences late saves; it does not delete an already saved Artifact.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0}})
 export type CadPacket={recipe:CadAssemblyRequest;manifest:Record<string,any>;files:Record<string,string>;previews?:Record<string,string>}
+const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused request from ALL canonical requirements of a current approved plan Step and the current owner instruction. Read request and plan first. Keeps the same ID; starts fresh intake without recovering deleted chat. Then call design_project_cad with that ID and preserve the restored requirements. Does not grant readiness or a new budget.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},plan_revision:{type:'integer',minimum:1},step_id:{type:'string'},request_quote:{type:'string',maxLength:500}})
+
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 export const CAD_SYSTEM=`You are the construction designer at Bob's drawing desk. Bob runs the project and brings you a brief; you turn it into a coherent construction and useful drawings. The tape measure is still at the building site, an arrangement geometry cannot negotiate.
 
@@ -59,13 +61,26 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
  const metrics={research_calls:0,consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
- return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL]:[],get lifecycleRemaining(){return Math.max(0,12-lifecycleUsed)},
+ return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return Math.max(0,12-lifecycleUsed)},
  async lifecycle(name:string,raw:unknown){
   if(!object(raw))return {status:'invalid'}
   if(!await opts.hasAccess())throw new Error('project_denied')
   if(lifecycleUsed>=12)return {status:'budget_exhausted'}
   if(name==='read_drawing_requests'&&Object.keys(raw).sort().join(',')==='after_id,request_id'&&[raw.request_id,raw.after_id].every(v=>v===null||uuid(v))&&opts.requestStore?.read){
    lifecycleUsed++;return opts.requestStore.read(raw.request_id,raw.after_id)
+  }
+  if(name==='restore_drawing_request'&&Object.keys(raw).sort().join(',')==='expected_revision,plan_revision,request_id,request_quote,step_id'&&uuid(raw.request_id)&&uuid(raw.step_id)&&Number.isSafeInteger(raw.expected_revision)&&raw.expected_revision>=0&&Number.isSafeInteger(raw.plan_revision)&&raw.plan_revision>0&&text(raw.request_quote,500)&&opts.requestStore?.restore){
+   if(!opts.ownerRequest?.includes(raw.request_quote))return {status:'invalid',reason:'request_quote_required'}
+   lifecycleUsed++
+   try{
+    const result=await opts.requestStore.restore(raw.request_id,raw.expected_revision,raw.plan_revision,raw.step_id,raw.request_quote)
+    candidate=null;acceptedReview=null;savedRequest=null
+    return {status:'restored',request_id:result.id,revision:result.revision,brief:result.payload.brief,next_action:'Continue design_project_cad with this same request_id and the returned brief/handoff. Fresh current-source intake is required; unknowns stay unknown. No new budget was allocated.'}
+   }catch(error){
+    rethrowContinuation(error)
+    if(error instanceof Error&&['drawing_request_changed','drawing_request_cancelled','drawing_request_complete','drawing_request_denied','drawing_request_not_paused','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden'].includes(error.message))return {status:'recovery_required',reason:error.message,saved:false,request_id:raw.request_id,next_action:'Read current request/plan and resolve the stated requirement or authority conflict. Do not replace this request or guess missing requirements.'}
+    throw error
+   }
   }
   if(name==='cancel_drawing_request'&&Object.keys(raw).sort().join(',')==='expected_revision,request_id'&&uuid(raw.request_id)&&Number.isSafeInteger(raw.expected_revision)&&raw.expected_revision>=0&&opts.requestStore?.cancel){
    lifecycleUsed++;const result=await opts.requestStore.cancel(raw.request_id,raw.expected_revision)
@@ -91,13 +106,15 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
    if(request.status==='saved')return {status:request.receipt?'already_saved':'completed_unlinked',saved:!!request.receipt,request_id:request.id,receipt:request.receipt??null,
     next_action:'This request is complete. Read its saved Artifact and source status. Do not regenerate or save it again. A changed deliverable needs a new request referencing that Artifact.'}
    if(request.status==='cancelled'||request.status==='paused')return {status:request.status==='cancelled'?'cancelled':'recovery_required',saved:false,request_id:request.id,revision:request.revision,reason:request.reason,
-    next_action:request.status==='cancelled'?'This request was cancelled. Do not regenerate or save it.':'The private working packet is unavailable. The project request remains, but its unsaved requirements and draft cannot be recovered from it. Do not guess them or silently create a replacement. Restore from explicit requirements through the lifecycle recovery path when available.'}
+    next_action:request.status==='cancelled'?'This request was cancelled. Do not regenerate or save it.':'The private working packet is unavailable. The project request remains, but its unsaved requirements and draft cannot be recovered from it. Do not guess them or silently create a replacement. Restore from explicit requirements with restore_drawing_request from a current plan Step and the owner instruction.'}
    for(const key of ['area_id','component_id','step_id','artifact_id'])raw[key]??=request.payload.brief[key]??null
    // Source revisions refresh below; the original requirement contract survives.
    const earlier=parseDesignHandoff(request.payload.brief.handoff)
    const incoming=parseDesignHandoff(raw.handoff)
    if(earlier&&incoming){
-    incoming.requirements=[...earlier.requirements.filter(r=>!incoming.requirements.some(n=>n.id===r.id)),...incoming.requirements]
+    incoming.requirements=request.payload.restoration
+     ?[...earlier.requirements,...incoming.requirements.filter(r=>!earlier.requirements.some(n=>n.id===r.id))]
+     :[...earlier.requirements.filter(r=>!incoming.requirements.some(n=>n.id===r.id)),...incoming.requirements]
     raw.handoff=incoming
    }
   }
@@ -107,7 +124,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
   if(!handoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
   const lookup=opts.makeLookup(),groundingLookup=opts.makeLookup(),until=opts.durable?opts.deadline-20000:Math.min(opts.deadline-20000,Date.now()+300000)
   const ownerRequest=[request?.payload.owner_request,opts.ownerRequest].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join('\n')||null
-  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:request?.payload.draft,reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
+  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:request?.payload.draft,restoration:request?.payload.restoration,reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
   const persist=async(status:string,patch:Partial<DrawingRequest['payload']>={})=>{payload={...payload,...patch};if(opts.requestStore)request=await opts.requestStore.save(request?.id??null,request?.revision??0,status,payload)}
   const checkAuthority=async()=>{
    if(!await opts.hasAccess())return false
@@ -228,7 +245,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
       // Even a failed checkpoint must leave the in-memory save gate closed.
       try{await persist('retrieval_failed',{incomplete})}catch(error){
        rethrowContinuation(error)
-       if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].includes(error.message))throw error
+       if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message))throw error
        terminalFailure={...terminalFailure,request_state_saved:false}
       }
       if(!await checkAuthority())throw new Error('project_denied')
@@ -254,7 +271,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        next_action:'Read the current revisions and revise this same request before rendering again. A removed or changed source is not an invitation to guess. Do not repeat unchanged work or ask for permission already granted.'}
       try{await persist('needs_data')}catch(error){
        rethrowContinuation(error)
-       if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].includes(error.message))throw error
+       if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message))throw error
        terminalFailure={...terminalFailure,request_state_saved:false}
       }
       if(!await checkAuthority())throw new Error('project_denied')
@@ -428,7 +445,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
        out={status:'rendered',saved:false,applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
      }catch(error){
-      rethrowContinuation(error);if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].includes(error.message))throw error
+      rethrowContinuation(error);if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message))throw error
       if(error instanceof CadParameterSourceError){
        candidate=null;acceptedReview=null;partial=true
        terminalFailure={status:error.technical?'unavailable':'needs_data',stage:'parameters',reason:error.message,saved:false,request_id:request?.id??null,next_action:'Refresh the exact source and resume this request. Do not replace changed or unavailable sources with design guesses.'}
@@ -469,7 +486,7 @@ export function createCadAssistant(opts:{requestStore?:DrawingRequestStore;resea
   }catch(error){
    rethrowContinuation(error);candidate=null;acceptedReview=null;partial=true
    if(error instanceof Error&&error.message==='project_denied')throw error
-   if(error instanceof Error&&['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].includes(error.message)){
+   if(error instanceof Error&&['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message)){
     candidate=null;acceptedReview=null;partial=true
     return {status:'stopped',saved:false,request_id:request?.id??null,reason:error.message,next_action:'Read the current project request status. Do not restart this attempt or save its candidate.'}
    }
