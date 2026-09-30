@@ -128,7 +128,7 @@ test('P2: a late provider receipt reconciles once and recovers its original tran
  const project=(await call(owner,'bob.create_project',[{name:'Late budget fixture'}])).id
  const c=await call(null,'bob.bob_claim_turn',[project,owner,turn,'Draw shelf'],'service_role')
  await call(owner,'bob.create_drawing_request',[project,c.thread_id,turn,c.generation,id,scope])
- await call(null,'bob.bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',id,0,'collecting',{brief:scope,owner_request:'Draw shelf',reference_refs:[]},randomUUID()],'service_role')
+ await call(null,'bob.bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',id,0,'collecting',{brief:scope,owner_request:'Draw shelf',reference_refs:[],retry:{fingerprint:'f'.repeat(64),outcome:{status:'unavailable',reason:'turn_budget_exhausted'}}},randomUUID()],'service_role')
  const budget=(op:string,run=execution,result:any=null)=>call(null,'bob.bob_drawing_budget',[project,owner,c.thread_id,turn,c.generation,id,run,key,op,result],'service_role')
  await budget('reserve')
  await pg.exec("update shared_private.ai_runtime set worker_url='https://fixtureproject.supabase.co/functions/v1/ai-background-worker'; update shared_private.ai_receivers set enabled=true where app='bob'")
@@ -139,6 +139,8 @@ test('P2: a late provider receipt reconciles once and recovers its original tran
  for(let n=0;n<2;n++)await pg.exec('select bob_private.reconcile_drawing_costs()')
  const work=await call(owner,'bob.drawing_request_work',[project,id])
  assert.equal(work.budget.calls,1);assert.equal(work.budget.spent_usd,.004);assert.equal(work.budget.outcome_unknown,false)
+ const checkpoint=(await pg.query<any>('select revision,payload from bob_private.drawing_requests where id=$1',[id])).rows[0]
+ assert.equal(checkpoint.revision,2);assert.equal(checkpoint.payload.retry.fingerprint,'');assert.equal(checkpoint.payload.retry.outcome.reason,'turn_budget_exhausted','late receipt releases the gate without discarding phase recovery')
  const recovered=await budget('reserve',randomUUID());assert.equal(recovered.status,'recover');assert.equal(recovered.execution_id,execution);assert.equal(recovered.recovery.key,operation);assert.deepEqual(recovered.recovery.context,context)
  const parsed={success:true,data:'Exact late output',model:'fixture',estimatedCostUsd:.004,usage:{total_tokens:1200}}
  await budget('complete',execution,parsed)

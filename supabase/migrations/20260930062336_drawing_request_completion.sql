@@ -373,6 +373,11 @@ begin
   if known then
    update bob_private.drawing_model_calls set completed=true,cost_usd=cost where request_id=pending.request_id and key=pending.key;
    update bob_private.drawing_budgets set spent_usd=spent_usd+coalesce(cost,0),unpriced=unpriced or cost is null where request_id=pending.request_id;
+   -- A newly known receipt is real technical progress. Release only the retry
+   -- fingerprint; retain its outcome and exact draft for phase recovery.
+   update bob_private.drawing_requests d set payload=jsonb_set(d.payload,'{retry,fingerprint}','""'::jsonb),revision=d.revision+1
+   where d.id=pending.request_id and d.payload ? 'retry' and exists(select 1 from bob_private.project_drawing_requests r where r.id=d.id and r.status not in ('saved','cancelled','paused'));
+   if found then update bob_private.project_drawing_requests set revision=revision+1 where id=pending.request_id; end if;
    insert into bob_private.drawing_project_events(project_id) values(pending.project_id) on conflict(project_id) do update set revision=bob_private.drawing_project_events.revision+1;
   end if;
  end loop;
