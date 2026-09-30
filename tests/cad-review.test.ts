@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {type CadPacket} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
-import {parseDesignHandoff,parseCadReview,candidateFingerprint} from '../supabase/functions/_shared/cad-review.ts'
+import {parseDesignHandoff,parseCadReview,candidateFingerprint,cadReviewSchema} from '../supabase/functions/_shared/cad-review.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
@@ -30,6 +30,8 @@ test('original request and structured directions reach a separate, tool-free rev
  assert.equal((await a.consult(request)).status,'ready')
  const review=f.seen.find(o=>o.functionName==='cad-reviewer')
  assert.equal(review.previousResponseId,undefined);assert.equal(review.tools,undefined)
+ assert.deepEqual(review.schema.properties.requirements.required,['shape'])
+ assert.equal(review.schema.properties.requirements.additionalProperties,false)
  const data=JSON.parse(review.messages[0].content)
  assert.equal(data.owner_request,f.opts.ownerRequest);assert.equal(data.handoff.coordinates.positive_x,'east')
  assert.deepEqual(data.candidate.recipe,recipe)
@@ -72,6 +74,18 @@ test('handoff rejects unknown shape, duplicate requirement identities and fabric
  assert(parseDesignHandoff(handoff));assert.equal(parseDesignHandoff({...handoff,requirements:[handoff.requirements[0],handoff.requirements[0]]}),null)
  assert.equal(parseDesignHandoff({...handoff,coordinates:{...handoff.coordinates,positive_x:42}}),null)
  assert.equal(parseCadReview({verdict:'pass',summary:'fine',requirements:[],issues:[]},handoff),null)
+})
+test('strict review keys cover the whole handoff; a plan-only pass cannot replace it',()=>{
+ const full={...handoff,requirements:[...handoff.requirements,{id:'width',requirement:'Bind exact width',basis:'project_record' as const,source_ref:'measurement-id'}]}
+ const schema=cadReviewSchema(full)
+ const map=schema.properties.requirements as any
+ assert.deepEqual(map.required,['shape','width']);assert.equal(map.additionalProperties,false)
+ const value={verdict:'pass',summary:'Reviewed exact candidate',requirements:{shape:{status:'met',evidence:'One panel'},width:{status:'met',evidence:'Measurement revision 2'}},issues:[]}
+ assert.deepEqual(parseCadReview(value,full)?.requirements.map(r=>r.id),['shape','width'])
+ assert.equal(parseCadReview({...value,requirements:{'plan-uuid':value.requirements.shape}},full),null)
+ assert.equal(parseCadReview({...value,requirements:{shape:value.requirements.shape}},full),null)
+ assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{...value.requirements.width,id:'invented'}}},full),null)
+ assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{status:'failed',evidence:'Wrong binding'}}},full)?.verdict,'revise')
 })
 test('review gets original reference pixels and revocation during review prevents saving',async()=>{
  const f=fixture();let valid=true,sawReference=false
