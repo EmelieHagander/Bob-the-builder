@@ -155,9 +155,9 @@ try {
     await secondInstruction.getByRole('img',{name:original.title,exact:true}).waitFor()
     state.instructionReplaced=true
     await dialog.getByRole('button',{name:'Refresh task',exact:true}).click()
-    await firstInstruction.getByText(replacement.title,{exact:false}).waitFor()
-    assert.equal(await firstInstruction.getByText(original.title,{exact:false}).count(),0)
-    assert.equal(await secondInstruction.getByText(replacement.title,{exact:false}).count(),0)
+    await firstInstruction.locator('figcaption').filter({hasText:replacement.title}).waitFor()
+    assert.equal(await firstInstruction.locator('figcaption').filter({hasText:original.title}).count(),0)
+    assert.equal(await secondInstruction.locator('figcaption').filter({hasText:replacement.title}).count(),0)
     await firstInstruction.getByRole('button',{name:'View image',exact:true}).click()
     await firstInstruction.getByRole('img',{name:replacement.title,exact:true}).waitFor()
     await secondInstruction.getByRole('button',{name:'View image',exact:true}).click()
@@ -165,8 +165,8 @@ try {
     await layout(page,viewport,'instruction-images')
     await page.reload()
     await page.getByRole('button',{name:'View task',exact:true}).click()
-    await firstInstruction.getByText(replacement.title,{exact:false}).waitFor()
-    await secondInstruction.getByText(original.title,{exact:false}).waitFor()
+    await firstInstruction.locator('figcaption').filter({hasText:replacement.title}).waitFor()
+    await secondInstruction.locator('figcaption').filter({hasText:original.title}).waitFor()
 
     await dialog.getByRole('button',{name:'View drawing: Bench assembly CAD',exact:true}).click()
     let reader=dialog.getByRole('article',{name:'Drawing reader',exact:true})
