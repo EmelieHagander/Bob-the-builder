@@ -2,11 +2,11 @@
 
 > **Status: mixed implementation and specified target.** This owns how Ask bob turns screen focus and project sources into runtime context. The implemented scope is distinguished below; examples and architecture beyond it remain a target, not a deployment claim.
 >
-> **Current runtime (2026-09-13):** `supabase/README.md` owns the deployed Slice 0 briefing + bounded `search_project_data` lookup. `Docs/ask-bob-conversations.md` separately owns transcript/provider continuity. Until this contract is implemented, the deployed Slice 0 path remains runtime truth.
+> **Current runtime (2026-09-30):** `supabase/README.md` owns the deployed briefing, bounded lookup and P3 Current View seams. `Docs/ask-bob-conversations.md` separately owns transcript/provider continuity. The implemented scope below takes precedence over the wider design sketches.
 
 ## Implemented scope and remaining target
 
-**P3 source implementation; merge, hosted application and acceptance pending.** `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time, and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.
+**P3 deployed; named-member acceptance remains open.** [Release evidence](foundation-verification.md#p3-hosted-technical-release--2026-09-30) distinguishes CI/browser fixtures, hosted SQL roles and ordinary guest Auth/model consumption. `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time, and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.
 
 Current View contains project/viewer, Area, Task, current Plan Step, selected task instruction, exact Solution/Artifact revision or Event where supported. Safe names, task instructions, status and responsibility come from server reads; browser labels are display-only. Foreign, stale and mismatched relations discard the projection. Errors are distinct from missing focus. Historical drawing/solution selections do not become the latest or selected target.
 
@@ -14,7 +14,7 @@ The original pointer is privately pinned to a logical turn and retained by backg
 
 Existing `project-context/dispatcher.ts` supplies an **image-only** catalog, metadata listing and exact image opening with real pixels, bounded caller-authorized reads and freshness checks. Other project records use `search_project_data`, paged research and scoped detail tools documented in [the tool owner](ask-bob-tools.md) and [backend owner](../supabase/README.md). The full all-category Project Catalog, separate cheap Context Router, fixed Process Lens and multi-source Project Librarian below remain specified. P3 does not replace the existing working toolbox with that larger architecture.
 
-**Acceptance still needed for the P3 release:** strict/foreign pointer cases, navigation and reload, private turn recovery, verified own changes versus concurrent edits, revocation, actual relevant-image delivery and knowledge-package consumption. Local fixtures are separate from hosted Auth/model evidence; release gates live in [State](bob-delivery-flow.md#state).
+**Acceptance boundary:** CI covers strict/foreign pointers, navigation/reload, private recovery, own changes versus concurrent edits and revocation; hosted role/RPC checks cover private capture and permissions. The ordinary guest/model probe proves focused Task hydration, actual relevant pixels and knowledge-package consumption while keeping guest server history absent. Ordinary named-member background/private-readback acceptance remains open in [State](bob-delivery-flow.md#state); these proof types do not substitute for one another.
 
 ## Decision
 

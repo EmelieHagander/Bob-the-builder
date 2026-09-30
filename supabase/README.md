@@ -30,7 +30,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
-| `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 release pending. |
+| `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 deployed; named-member acceptance remains open. |
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |
 | `bob.search_bob_project_data_v2` | Current static paged research projections under caller RLS; original lookup kept compatible. |
 | `_shared/bob-working-context.ts` | Five verbatim messages, incremental older summary and claimed-thread history retrieval. |
@@ -177,11 +177,11 @@ The following remain the acceptance contract. Local evidence and outstanding liv
    being labelled live; no mock result counts as live proof. The retired endpoint
    rejects old requests without contacting a provider.
 
-## P3 screen context — source release pending
+## P3 screen context — deployed
 
 The strict send request accepts optional `screen` ids/revisions only; no browser labels, viewer identity or fact blobs. Current View is hydrated under the same caller JWT and explicit project as other reads. Durable original capture crosses normal/background/retry paths through service-only turn commands, while domain hydration remains caller-authorized. Replay keeps the original model input; fresh authority/context checks are never memoized. See [the context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target) for supported surfaces, freshness stops and the remaining wider target.
 
-Apply the additive P3 migration before deploying updated `ask-bob` and `bob-worker`, then the matching frontend. Verify hosted command permissions, ordinary member/denied reads, background recovery and actual model context/image/knowledge consumption; local fixture results cannot establish those live outcomes. Database migration ownership and release details are in [db/README.md](../db/README.md#p3-screen-context-and-source-changes--source-release-pending). Existing AI models/settings and shared background transport are reused; no new cheap-router settings or shared-app configuration are introduced.
+The additive P3 migration is applied; `ask-bob` v68 and `bob-worker` v36 are ACTIVE and bundled from immutable reviewed `58ee8c6185858f33018a9400393ebe08d770b536`, followed by the matching Pages release. [Verification](../Docs/foundation-verification.md#p3-hosted-technical-release--2026-09-30) records actual caller/model/pixel/knowledge consumption and hosted role/RPC permissions. The shared guest has local-only history; ordinary named-member background/private readback remains open. Database migration ownership and release details are in [db/README.md](../db/README.md#p3-screen-context-and-source-changes--applied). Existing AI models/settings and shared background transport are reused; no new cheap-router settings or shared-app configuration are introduced.
 
 ## Actions
 

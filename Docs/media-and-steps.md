@@ -144,7 +144,7 @@ and actual test/deployment results.
 This image slice supersedes the image-not-yet-implemented statements in
 `ask-bob-context.md` and `ask-bob-context-implementation.md` only. It does not
 claim the broader Context Router, Process Lens, full Project Catalog or Project
-Librarian are built. P3 Current View is separately source implemented pending release
+Librarian are built. P3 Current View is separately deployed, with named-member acceptance pending
 with its status owned by [the context contract](ask-bob-context.md#implemented-scope-and-remaining-target). The registry currently exposes **images**;
 existing project data still uses `search_project_data`. Source implementation is
 not deployment proof: PR #89 records CI, Pages, Edge readback and live-test limits.

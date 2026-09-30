@@ -2,9 +2,9 @@
 
 > **Status: remaining landing plan with partial implementation.** This owns the technical sequence for [`ask-bob-context.md`](ask-bob-context.md). Its module sketches, wire examples and slice sequence are a design target; the current implemented mapping below takes precedence for file names and supported scope.
 >
-> **Current runtime:** `supabase/README.md` and current function code own implemented provider/tool behavior. The P3 additions below are source implementation pending release; do not infer hosted availability from committed code.
+> **Current runtime:** `supabase/README.md` and current function code own implemented provider/tool behavior. The P3 additions below are deployed; [release evidence](foundation-verification.md#p3-hosted-technical-release--2026-09-30) records the actual boundaries and remaining named-member acceptance.
 
-## Current landing map — P3 source, release pending
+## Current landing map — P3 deployed
 
 | Concern | Actual owner / remaining boundary |
 | --- | --- |

@@ -8,11 +8,11 @@
 
 No embeddings, copied handbook, global private-document store or live regulatory search is implemented. Current legal/product-sensitive decisions need the applicable current original source and actual project inputs. The 2019 fastener reference supplies conceptual orientation only, with no copied dimensioning tables or assumption that an old product/standard edition is current.
 
-## Structured packages — P3 source, release pending
+## Structured packages — P3 deployed
 
 Seed version `2026-09-30.1` retains the same eight original summaries and source register. Each now includes `applicability`, `required_questions`, `checks` and `limitations`, with a new content hash. Both Bob and the CAD assistant receive these fields through the existing `search_building_knowledge` result; its description instructs them to consult known project records before asking the owner again. Package questions identify needed inputs, and reading checks never proves they ran. This is an authored expansion of the seed, not a new review of the linked original editions; their review dates and remaining current-source limitations remain visible.
 
-No new ingestion, embeddings, live source lookup or broader corpus is implied. Runtime acceptance must prove a relevant package reaches the actual model call and remains distinct from measured project facts. See [State](bob-delivery-flow.md#state) for the pending release gates.
+No new ingestion, embeddings, live source lookup or broader corpus is implied. The deployed ordinary guest/model probe consumed `timber.moisture` version `2026-09-30.1` together with actual image pixels and caller-hydrated Task focus; [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) owns that proof. This bounded result does not establish the wider corpus or full product acceptance. Remaining work lives in [State](bob-delivery-flow.md#state).
 
 ## Product contract
 
