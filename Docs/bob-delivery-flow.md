@@ -278,14 +278,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: implementera P2b:s projektbeständiga minimiidentitet och privata arbetsminnesgräns.** Följ det [specificerade livscykelkontraktet](ask-bob-conversations.md#p2b-project-request-lifecycle--specified-not-implemented): samma uppdrags-ID och sparade kvitto överlever chattreset, privat innehåll gör det inte; avbrytande och avslut delar versionslås. Börja med negativa/positiva reset- och behörighetsprov samt ett verkligt avbryt-/sparrace. Koppla därefter det minimala projektläget till den befintliga request-store och atomiska CAD-spargränsen. Händelseväckning och kostnadsreservationer är senare avgränsade kodutfall. P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: slutverifiera och släpp P2b i [PR #167](https://github.com/EmelieHagander/Bob-the-builder/pull/167).** Kontrollera hela CI, den verkliga samtidigheten vid avbrytande/sparande och reset-kvittot på slutcommitten. Dubbelkontrollera målmiljö och diff före migration och båda funktionsreleaserna; kör sedan det rollbackade produktionsprovet och läs tillbaka behörigheter och versionskopplingar. P2b är ännu inte applicerad eller driftsatt. [Samtalsägaren](ask-bob-conversations.md#p2b-project-request-lifecycle) skiljer den avgränsade implementationen från återstående livscykel. P0:s verkliga användartest ligger kvar separat.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
 | **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P2** | Genomför P2b enligt nästa handling. Fortsätt sedan med beständiga lucka–Task/Step-kopplingar, återupptagning från UI/Task och händelser, deduplicering av nya uppdrag samt budget-/felåterhämtning efter designer- och granskarstopp. Den avgränsade intagsspärren täcker bara fullständigt kända läsberoenden; extra specialistläsningar behöver en återläsbar beroendeplan. Modell-/deltagarprov återstår. |
+| **P2** | Släpp P2b enligt nästa handling. Fortsätt sedan med explicit återställning av rensade krav till samma uppdrag, beständiga lucka–Task/Step-kopplingar, återupptagning från UI/Task och händelser, deduplicering av nya uppdrag samt budget-/felåterhämtning efter designer- och granskarstopp. Den avgränsade intagsspärren täcker bara fullständigt kända läsberoenden; extra specialistläsningar behöver en återläsbar beroendeplan. Modell-/deltagarprov återstår. |
 | **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 

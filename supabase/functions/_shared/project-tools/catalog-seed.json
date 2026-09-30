@@ -36,6 +36,15 @@
     "active": true
   },
   {
+    "name": "cancel_drawing_request",
+    "description": "Cancel the initiating member's drawing request and fence late saves.",
+    "how_to": "Only on the owner's instruction to stop that request. Read its exact id/revision first. The database checks current member and original initiator. Completed Artifacts are not deleted or relabelled cancelled.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "compile_project_plan",
     "description": "Compile Bob's plan intent into exact Steps/Requirements and return nano's advisory review to Bob. Read-only; Bob decides corrections and saving.",
     "how_to": "Pass only plan_intent for an initial plan or broad replan. For a focused change use edit_project_plan, preserving unrelated work mechanically. The server binds the current revision. Mini compiles and nano advises; Bob assesses objections. Correct server errors, then save a sound proposal with save_compiled_project_plan. Task candidates contain only ownership changes, staged with the proposal and applied on approval. Use remaining_attempts; do not ask again for granted proposal scope.",
@@ -278,6 +287,15 @@
     "name": "propose_project_plan",
     "description": "Create a reviewable living Project Plan proposal with dynamic Steps, Completion Requirements, responsibility and evidence selectors. It is not current until explicitly approved.",
     "how_to": "Low-level manual proposal write. Normally do NOT use this after compile_project_plan: save_compiled_project_plan owns that path and preserves the exact reviewed compilation. Use this only when a manual proposal genuinely cannot come from the compiler. It still requires the exact current revision and the full strict Step/Requirement schema.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "read_drawing_requests",
+    "description": "Read shared minimal drawing request status without private chat.",
+    "how_to": "Use request_id=null and after_id=null to list; follow next_cursor for later pages. Read status/revision before cancellation. A paused context_cleared request retains identity but not private requirements; never invent the lost brief or silently replace it.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
