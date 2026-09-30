@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { AIBackgroundPending } from '../supabase/functions/_shared/ai-background.ts'
+import {INTAKE_SCHEMA} from '../supabase/functions/_shared/cad-intake.ts'
 
 test('actual shared AI service opts into background, resumes tools and preserves synchronous callers', async () => {
  const g=globalThis as any, oldFetch=g.fetch,oldDeno=g.Deno
@@ -28,6 +29,9 @@ test('actual shared AI service opts into background, resumes tools and preserves
   const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
   const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
   const base={app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',prompt:'Draw',previousResponseId:'resp_prior',reasoningEffort:'high',tools:[{type:'function',function:{name:'render_cad_candidate',description:'Render',parameters:{type:'object',properties:{},required:[]}}}]}
+  const intake=structuredClone(INTAKE_SCHEMA)
+  Object.assign(intake.properties.checks.items.properties.source_refs.items,{enum:['requirement:width','measurement-1']})
+  ;(base.tools as any[]).push({type:'function',function:{name:'finish_cad_research',description:'Assess',parameters:intake,strict:true}})
   const background={key:'job/cad/0',fingerprint:'a'.repeat(64),receiver:'bob',context:{jobId:id},expiresAt:'2030-01-01T00:00:00Z'}
   const vision={...base,messages:[{role:'user',content:[{type:'image_url',image_url:'private-image:fixture/revision'}]}],
     resolveImage:async(ref:string)=>{assert.equal(ref,'private-image:fixture/revision');downloads++;return 'data:image/png;base64,iVBORw0KGgo='}}
@@ -35,6 +39,10 @@ test('actual shared AI service opts into background, resumes tools and preserves
   assert.equal(downloads,1);assert.equal(requests[0].input[0].content[0].image_url,'data:image/png;base64,iVBORw0KGgo=')
   assert.equal(ledger.length,0,'pending acceptance is not a zero-cost completion')
   assert.equal(requests[0].previous_response_id,'resp_prior');assert.equal(requests[0].reasoning.effort,'high');assert.equal(requests[0].tools[0].name,'render_cad_candidate')
+  assert.equal(requests[0].tools[0].strict,false,'existing callers keep their wire contract')
+  assert.equal(requests[0].tools[1].strict,true,'collector strict opt-in reaches the actual provider request')
+  assert.deepEqual(requests[0].tools[1].parameters.properties.checks.items.properties.source_refs.items.enum,['requirement:width','measurement-1'])
+  assert.equal(requests[0].tools[1].parameters.properties.checks.items.additionalProperties,false)
   await assert.rejects(()=>service.callOpenAIResponses({...vision,background}),AIBackgroundPending)
   assert.equal(requests.length,1)
   assert.equal(downloads,1,'waiting must not hydrate images')

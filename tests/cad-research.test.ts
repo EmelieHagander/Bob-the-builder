@@ -15,11 +15,13 @@ test('live intake rejects invented citations and repairs with exact refs without
   initialEvidence:[{tool:'search_project_data',result:facts}],callModel:async o=>{
    calls++
    const schema=o.tools!.find(t=>t.function.name==='finish_cad_research')!.function.parameters as any
+   assert.equal(o.tools!.find(t=>t.function.name==='finish_cad_research')!.function.strict,true)
    assert.deepEqual(schema.properties.checks.items.properties.source_refs.items.enum,['requirement:shape','west.parts','west.total'])
    assert(JSON.stringify(o.messages).includes('not an input prerequisite'))
    if(calls===1)return reply('finish_cad_research',{...assessment,checks:assessment.checks.map(c=>({...c,source_refs:['user:current_request','measurements']}))})
    const feedback=JSON.parse(String(o.messages!.find(m=>m.role==='tool')!.content))
    assert.equal(feedback.status,'invalid');assert(feedback.allowed_source_refs.includes('requirement:shape'))
+   assert.deepEqual(feedback.invalid_source_refs,['user:current_request','measurements'])
    return reply('finish_cad_research',{...assessment,additional_needs:[{id:'width',status:'missing',blocking:true,source_refs:['west.total'],action:'measurement',detail:'Exact width remains unknown'}]})
   }})
  assert.equal(calls,2);assert.equal(result.truncated,false);assert.equal(result.assessment?.additional_needs[0].blocking,true)
@@ -29,6 +31,17 @@ test('cheap collection is bounded and returns exact conflicting values and pagin
  const result=await collectCadResearch({handoff,userId:'u',messages:[],tools:()=>[SEARCH_TOOL],execute:async()=>facts,hasAccess:async()=>true,deadline:Date.now()+200000,
   callModel:async o=>{calls++;assert.equal(o.functionName,'cad-research');assert.equal(o.outputTokenLimit,3000);assert(!JSON.stringify(o).includes('render_cad_candidate'));return reply('search_project_data',read)}})
  assert.equal(calls,3);assert.deepEqual(result.evidence[0].result,facts);assert.equal(result.truncated,true)
+})
+test('large citation sets keep server validation without exceeding strict schema enum limits',async()=>{
+ const records=Array.from({length:401},(_,i)=>({id:'source-'+i}))
+ const result=await collectCadResearch({handoff,userId:'u',messages:[],tools:()=>[],execute:async()=>null,hasAccess:async()=>true,deadline:Date.now()+200000,
+  initialEvidence:[{tool:'read',result:records}],callModel:async o=>{
+   const finish=o.tools!.find(t=>t.function.name==='finish_cad_research')!.function
+   assert.equal(finish.strict,true)
+   assert.equal((finish.parameters as any).properties.checks.items.properties.source_refs.items.enum,undefined)
+   return reply('finish_cad_research',{...assessment,checks:assessment.checks.map(c=>({...c,source_refs:['source-400']}))})
+  }})
+ assert.equal(result.truncated,false);assert.deepEqual(result.assessment?.checks[0].source_refs,['source-400'])
 })
 test('invented write calls are never executed by the researcher',async()=>{
  let executed=0
