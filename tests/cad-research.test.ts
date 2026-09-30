@@ -9,6 +9,21 @@ const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixt
 const assessment={checks:handoff.requirements.map(r=>({id:r.id,status:'known',blocking:false,source_refs:['requirement:'+r.id],action:'none',detail:'Explicit requested concept'})),additional_needs:[]}
 const read={dataset:'measurements',query:null,status:null,area_id:null,record_id:null,after_id:null}
 const facts={status:'ok',records:[{id:'west.total',revision:2,value:2700,unit:'mm'},{id:'west.parts',revision:1,value:2720,unit:'mm'}],truncated:true,next_cursor:'next-page'}
+test('live intake rejects invented citations and repairs with exact refs without relaxing physical gaps',async()=>{
+ let calls=0
+ const result=await collectCadResearch({handoff,userId:'u',messages:[],tools:()=>[],execute:async()=>{throw Error('unexpected read')},hasAccess:async()=>true,deadline:Date.now()+200000,
+  initialEvidence:[{tool:'search_project_data',result:facts}],callModel:async o=>{
+   calls++
+   const schema=o.tools!.find(t=>t.function.name==='finish_cad_research')!.function.parameters as any
+   assert.deepEqual(schema.properties.checks.items.properties.source_refs.items.enum,['requirement:shape','west.parts','west.total'])
+   assert(JSON.stringify(o.messages).includes('not an input prerequisite'))
+   if(calls===1)return reply('finish_cad_research',{...assessment,checks:assessment.checks.map(c=>({...c,source_refs:['user:current_request','measurements']}))})
+   const feedback=JSON.parse(String(o.messages!.find(m=>m.role==='tool')!.content))
+   assert.equal(feedback.status,'invalid');assert(feedback.allowed_source_refs.includes('requirement:shape'))
+   return reply('finish_cad_research',{...assessment,additional_needs:[{id:'width',status:'missing',blocking:true,source_refs:['west.total'],action:'measurement',detail:'Exact width remains unknown'}]})
+  }})
+ assert.equal(calls,2);assert.equal(result.truncated,false);assert.equal(result.assessment?.additional_needs[0].blocking,true)
+})
 test('cheap collection is bounded and returns exact conflicting values and pagination, not model prose',async()=>{
  let calls=0
  const result=await collectCadResearch({handoff,userId:'u',messages:[],tools:()=>[SEARCH_TOOL],execute:async()=>facts,hasAccess:async()=>true,deadline:Date.now()+200000,
