@@ -278,14 +278,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: verifiera och slutför P2:s samlade release i [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).** Implementation av luckkopplingar, uppdragsbudget, händelsekörning och UI granskas mot [samtalsägarens kompletterade kontrakt](ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Kör verklig PostgreSQL-samtidighet, UI-återbesök, Auth/HTTP och avgränsade modellflöden innan etappen stängs. Diff, målmiljö och användarmandat dubbelkontrolleras före migration/driftsättning. P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: avgränsa P3:s första leverans för rätt kontext och rätt projektyta.** Läs aktuell main och kontrakten för kontext, kunskap, media och ritningsstatus; välj en sammanhängande brist från faktisk inläsning till synligt resultat efter återbesök. Granska mobil, åtkomst och ärliga felstatusar med Veras befintliga perspektiv. P0:s verkliga användartest ligger kvar separat. P2:s release- och verifieringsbevis finns i [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
 | **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P2** | Slutför granskning, CI, driftsättning och Auth/HTTP-/modellprov för #171. Verifiera samma uppdrag efter UI-/Task-komplettering, dubbelexekvering utan merkostnad, budgetstopp, late-receipt-recovery, återkallad åtkomst och oförändrat misslyckande. Kod skriven är inte en stängd etapp. |
 | **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
