@@ -96,7 +96,7 @@ API. Reopen a completed task before adding or reopening a required check. Comple
 steps does not automatically complete a task or certify a professional inspection.
 Images on steps reuse the same upload, existing-image attachment and read-back path.
 
-### Name-only volunteer extension (prepared source)
+### Name-only volunteer extension
 
 The project-only volunteer journey can read existing task/area-linked images and
 instructions, and update steps on tasks the participant has joined. Required
@@ -104,12 +104,21 @@ checks still gate task completion. `completed_by_volunteer` records the Bob pers
 ID separately from the authenticated actor field; it never invents an Auth user.
 Authenticated completion/reopen clears the volunteer actor field.
 
+The P4 instruction-image correction adds `steps[].images` (exact task-instruction
+links, with purpose) and `contextImages` (task, Area and current primary work-Step
+images) to `volunteer_task`. The existing `images` union remains for older clients.
+The participant view places each instruction's images beside its text. Reusing an
+original in two instructions and replacing one link preserves the other; refresh
+clears downloaded previews and reads the current links. Task instructions and
+project-plan Steps remain distinct identities. Rollout and live proof are tracked
+in [P4 verification](foundation-verification.md#p4-product-acceptance--2026-09-30).
+
 Images are downloaded through the capability-checked `volunteer-media` Edge
 function. It checks current access and the exact task/image relation before and
 after fetching original bytes; it returns `no-store` responses and never makes
 Storage public. [The data contract](../db/README.md#name-only-volunteer-access)
-owns this prepared extension. Hosted migration, proxy deployment and browser/live
-proof remain separate gates in the verification owner.
+owns this extension. The deployed foundation is confirmed there; the additive P4
+instruction-image correction requires its own migration and browser/live proof.
 
 ## Reachable UI and verification
 

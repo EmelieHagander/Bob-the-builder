@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import * as db from '../data/database'
-import { validVolunteerSecret, volunteerSecret, type VolunteerPreview, type VolunteerState, type VolunteerTask, type VolunteerTaskSummary, type VolunteerEvent, type VolunteerMeal, type VolunteerUpdate } from '../data/volunteers'
+import { validVolunteerSecret, volunteerSecret, type VolunteerPreview, type VolunteerState, type VolunteerTask, type VolunteerTaskSummary, type VolunteerImage, type VolunteerEvent, type VolunteerMeal, type VolunteerUpdate } from '../data/volunteers'
 import { readVolunteerSession, saveVolunteerSession, forgetVolunteerSession } from '../lib/volunteerSession'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Icon, Loading, useAsync } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { VolunteerDrawings } from '../components/VolunteerDrawings'
+import { IMAGE_PURPOSES } from '../components/ProjectImages'
 
 const message = (reason: unknown) => reason instanceof Error ? reason.message : String(reason)
 const statusName = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
@@ -217,14 +218,16 @@ function VolunteerTaskPanel({ secret, projectId, taskId, onClose, onChanged, onD
     } catch (reason) { if (mounted.current) { setError(message(reason)); onDenied(reason) } }
     finally { if (mounted.current) setBusy(false) }
   }
+  const imageFigures = (items: VolunteerImage[]) => items.map(image => <figure key={image.id} className="volunteer-image"><figcaption>{image.title}{image.purpose && <span className="foundation-hint"> · {IMAGE_PURPOSES[image.purpose]}</span>}</figcaption>{images[image.id] ? <img src={images[image.id]} alt={image.title} /> : <button className="btn" disabled={busy} onClick={() => void showImage(image.id)}>View image</button>}</figure>)
+  const contextImages = task?.contextImages ?? task?.images ?? []
   return <Modal title={task?.name ?? 'Task'} onClose={() => { if (!busy) onClose() }} wide>
     {loading ? <Loading /> : loadError ? <FormError>{loadError.message}</FormError> : task && <div className="foundation-form">
       <p className="foundation-hint">{task.area} · {statusName[task.status]}</p>
       <p className="volunteer-text">{task.instructions || 'No written instructions yet. Check with the crew before you start.'}</p>
       {task.mine ? <><Field label="Task progress"><select style={inputStyle} value={task.status} disabled={busy} onChange={event => void action('status', { status: event.target.value, expectedUpdatedAt: task.updatedAt })}>{Object.entries(statusName).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field><button className="btn" disabled={busy} onClick={() => void action('release')}>Leave this task</button></> : <button className="btn btn-primary" disabled={busy || task.status === 'done'} onClick={() => void action('claim')}>{task.status === 'done' ? 'Task completed' : 'Join this task'}</button>}
-      {task.steps.length > 0 && <div className="volunteer-steps"><h3>Instructions & checks</h3>{task.steps.map((step, index) => <article className="card volunteer-step" key={step.id}><h4>{index + 1}. {step.title}{step.required ? ' · Required check' : ''}</h4><p className="volunteer-text">{step.instructions}</p>{step.completedAt && <p className="foundation-hint">Completed</p>}{task.mine && <button className="btn" disabled={busy} onClick={() => void action('check', { stepId: step.id, revision: step.revision, completed: !step.completedAt })}>{step.completedAt ? 'Reopen instruction' : 'Complete instruction'}</button>}</article>)}</div>}
+      {task.steps.length > 0 && <div className="volunteer-steps"><h3>Instructions & checks</h3>{task.steps.map((step, index) => <article className="card volunteer-step" aria-label={step.title} key={step.id}><h4>{index + 1}. {step.title}{step.required ? ' · Required check' : ''}</h4><p className="volunteer-text">{step.instructions}</p>{imageFigures(step.images ?? [])}{step.completedAt && <p className="foundation-hint">Completed</p>}{task.mine && <button className="btn" disabled={busy} onClick={() => void action('check', { stepId: step.id, revision: step.revision, completed: !step.completedAt })}>{step.completedAt ? 'Reopen instruction' : 'Complete instruction'}</button>}</article>)}</div>}
       <VolunteerDrawings key={`${version}:${task.updatedAt}`} secret={secret} projectId={projectId} taskId={taskId} onDenied={onDenied} />
-      {task.images.length > 0 && <div className="volunteer-steps"><h3>Task, step & area images</h3>{task.images.map(image => <figure key={image.id} className="volunteer-image"><figcaption>{image.title}</figcaption>{images[image.id] ? <img src={images[image.id]} alt={image.title} /> : <button className="btn" disabled={busy} onClick={() => void showImage(image.id)}>View image</button>}</figure>)}</div>}
+      {contextImages.length > 0 && <div className="volunteer-steps"><h3>Task, step & area images</h3>{imageFigures(contextImages)}</div>}
     </div>}
     {error && <div role="alert"><FormError>{error}</FormError></div>}
     <div className="foundation-actions"><button className="btn" disabled={busy} onClick={() => { urls.current.forEach(URL.revokeObjectURL); urls.current = []; setImages({}); setSaved(null); setError(''); setVersion(value => value + 1) }}>Refresh task</button><button className="btn" disabled={busy} onClick={onClose}>Done</button></div>

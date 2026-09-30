@@ -1,5 +1,42 @@
 # Foundation verification and rollout
 
+## P4 product acceptance — 2026-09-30
+
+**Implementation under review; the P4 corrections are not yet deployed.**
+`scripts/check-live-p4.mjs` runs bounded real read-only model scenarios and a
+manual media/name-only participant HTTP scenario in new disposable projects.
+Use `BOB_P4_LIVE_CONFIRM=disposable-fixtures-only`, the existing public Bob
+configuration and `BOB_P4_GROUP=model|media|all`. `BOB_P4_CASES` selects named
+model cases without repeating already accepted calls. No Auth users, privileges
+or private named-member sessions are created. Inspect the report and remove only
+its exact fixture projects after ordinary caller Storage cleanup.
+
+The first six model replies cover a shelf (60 cm → corrected 71 cm), a bunk bed
+with two unknown inputs (one later complemented to 650 mm), a porch with missing
+foundation/load/attachment evidence, and a multi-room renovation with finished
+work. All six mechanically pass real OpenAI, caller/project scope, exact source
+IDs, Task focus, expected values and absence of writes. Manual review accepts
+five replies and finds a porch defect: conditional discussion of a concept sketch
+is turned into a claim that the sketch already exists. No sketch was created.
+The common evidence principle is corrected within the existing prompt budget;
+a new deployed porch reply must be reviewed before that finding is closed.
+
+The media scenario reproduces a second defect through actual Auth, PostgREST and
+Storage: the participant API flattens two instructions' images and loses their
+individual placement. A full-schema regression fails before the correction and
+passes after it. The additive migration preserves the legacy union, adds exact
+instruction image lists and general context images, and retains capability/byte
+authorization. The participant UI renders each list beside its instruction.
+Browser fixtures now cover reuse, independent replacement and reload at
+320/390/1280 px; CI screenshots and hosted after-proofs remain required.
+
+These are **partial** A02/A04/A05/A16/A17/A19 observations and UC-003/004
+mechanics. They do not prove Bob-driven generation/save/link, complete A15/A20,
+real mobile participant acceptance, field safety or a whole UC. P0/P3 acceptance
+remains in the [shared todo](bob-delivery-flow.md#acceptans-todo). Cost, final CI,
+deployment, fixture cleanup and reviewed model outputs belong in this release
+record when performed; no historical green result substitutes for them.
+
 ## September 24 work and drawing release
 
 **Deployed 2026-09-24:** [PR 137](https://github.com/EmelieHagander/Bob-the-builder/pull/137)

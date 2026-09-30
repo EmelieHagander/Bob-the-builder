@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { TaskStatus, ThemeName } from './types'
+import type { TaskStatus, ThemeName, MediaPurpose } from './types'
 import type { ArtifactGeneration, ArtifactKind, ArtifactStatus, CadDrawing } from './artifacts'
 import type { StorageBoxRecipe } from '../lib/storageBox'
 import type { RoomLayoutDetails } from '../lib/roomLayout'
@@ -13,10 +13,12 @@ export interface VolunteerState {
   person: { id: string; name: string; allergies: string | null; updatedAt: string }
 }
 export interface VolunteerTaskSummary { id: string; name: string; area: string; status: TaskStatus; skill: string; hours: string; mine: boolean }
+export interface VolunteerImage { id: string; title: string; purpose?: MediaPurpose }
 export interface VolunteerTask extends VolunteerTaskSummary {
   projectId: string; instructions: string; updatedAt: string
-  steps: { id: string; title: string; instructions: string; required: boolean; isCheckpoint: boolean; completedAt: string | null; revision: number }[]
-  images: { id: string; title: string }[]
+  steps: { id: string; title: string; instructions: string; required: boolean; isCheckpoint: boolean; completedAt: string | null; revision: number; images?: VolunteerImage[] }[]
+  images: VolunteerImage[]
+  contextImages?: VolunteerImage[]
 }
 export interface VolunteerDrawingSummary {
   id: string; revision: number; title: string; status: ArtifactStatus; stepId: string; stepTitle: string

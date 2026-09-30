@@ -51,6 +51,39 @@ before(async () => {
 })
 after(() => pg.close())
 
+test('P4: participant keeps exact instruction image links after independent replacement and reload', async () => {
+  const f = await fixture(), other = await fixture()
+  await rpc(null, 'volunteer_join', [f.invite, f.session, 'Synthetic participant', null])
+  const steps = [randomUUID(), randomUUID()]
+  for (const [position, id] of steps.entries()) await pg.query(
+    'insert into bob.task_steps(id,project_id,task_id,title,position,created_by) values($1,$2,$3,$4,$5,$6)',
+    [id, f.project, f.task, 'Instruction ' + position, position + 1, owner])
+  const [original, replacement, general, foreign] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()]
+  for (const id of [original, replacement, general, foreign]) await pg.query(
+    "insert into bob.media_assets(id,project_id,original_name,title,purpose,content_type,byte_size,width,height,created_by,state) values($1,$2,'synthetic.png','Synthetic image','instruction','image/png',100,10,10,$3,'ready')",
+    [id, id === foreign ? other.project : f.project, owner])
+  const attach = (id: string, step: string) => rpc(owner, 'media_command', [f.project, 'link', id, JSON.stringify({ target_kind: 'step', target_id: step })])
+  await attach(original, steps[0]); await attach(original, steps[1]); await attach(original, steps[1])
+  await rpc(owner, 'media_command', [f.project, 'link', general, JSON.stringify({ target_kind: 'task', target_id: f.task })])
+  await assert.rejects(attach(foreign, steps[0]), /Image unavailable|project|Project/)
+  const read = () => rpc(null, 'volunteer_task', [f.session, f.task])
+  let result = await read()
+  assert.deepEqual(result.steps.map((s: any) => s.images.map((i: any) => i.id)), [[original], [original]])
+  assert.equal(result.steps[0].images[0].purpose, 'instruction')
+  assert.deepEqual(result.contextImages.map((i: any) => i.id), [general])
+  assert.deepEqual(new Set(result.images.map((i: any) => i.id)), new Set([original, general]), 'Legacy clients retain the union')
+  await attach(replacement, steps[0])
+  const link = (await pg.query('select id from bob.media_links where media_id=$1 and step_id=$2', [original, steps[0]])).rows[0].id
+  await rpc(owner, 'media_command', [f.project, 'unlink', original, JSON.stringify({ link_id: link })])
+  result = await read()
+  assert.deepEqual(result.steps.map((s: any) => s.images.map((i: any) => i.id)), [[replacement], [original]])
+  await pg.query("update bob.media_assets set state='deleting' where id=$1", [replacement])
+  assert.deepEqual((await read()).steps[0].images, [], 'Removed/unready bytes never stay in instruction metadata')
+  await assert.rejects(rpc(null, 'volunteer_task', [f.session, other.task]), /Task unavailable/)
+  await rpc(owner, 'revoke_volunteer_access', [f.project, f.link.id, null])
+  await assert.rejects(read(), /access|Access|revoked|expired/)
+})
+
 test('name-only joining creates one project person and zero Auth accounts or shared-family records', async () => {
   const f = await fixture()
   const beforeUsers = (await pg.query('select count(*) n from auth.users')).rows[0].n

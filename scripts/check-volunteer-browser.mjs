@@ -16,12 +16,18 @@ server.stdout.on('data', chunk => { logs += chunk }); server.stderr.on('data', c
 
 async function fixture(viewport) {
   const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
-  const state = { joined: false, secret: '', food: false, name: '', allergies: null, profileRevision: 1, mine: false, status: 'todo', taskRevision: 1, checkRevision: 1, checked: false, going: false, revoked: false, unavailable: false, drawingsLinked: true, drawingRevision: 1, drawingSource: 'current', writes: [], errors: [] }
+  const state = { joined: false, secret: '', food: false, name: '', allergies: null, profileRevision: 1, mine: false, status: 'todo', taskRevision: 1, checkRevision: 1, checked: false, going: false, revoked: false, unavailable: false, instructionReplaced: false, drawingsLinked: true, drawingRevision: 1, drawingSource: 'current', writes: [], errors: [] }
   const profileTime = () => `2026-09-14T06:00:${String(state.profileRevision).padStart(2, '0')}Z`
   const taskTime = () => `2026-09-14T06:01:${String(state.taskRevision).padStart(2, '0')}Z`
   const project = { name: 'The community garden and long workshop renovation', description: 'Help make a place for everyone.', location: 'The garden', theme: 'birch', startLabel: 'Saturday', startDate: null, endDate: null }
   const snapshot = () => ({ projectId: 'A', linkId: 'L', project, person: { id: 'v-Kim', name: state.name, allergies: state.food ? state.allergies : null, updatedAt: profileTime() }, hasFood: state.food, expiresAt: '2099-01-01T00:00:00Z' })
-  const task = () => ({ projectId: 'A', id: 'T', name: 'Paint the bench', area: 'Garden', status: state.status, instructions: 'Prepare the surface before painting.', updatedAt: taskTime(), mine: state.mine, images: [{id: '80000000-0000-4000-8000-000000000001', title: 'Primary Step assembly guide'}], steps: [{ id: 'S', title: 'Check the surface', instructions: 'Ask the crew before starting if you are unsure.', required: true, isCheckpoint: true, completedAt: state.checked ? taskTime() : null, revision: state.checkRevision }] })
+  const general = {id:'80000000-0000-4000-8000-000000000001',title:'Primary Step assembly guide',purpose:'instruction'}
+  const original = {id:'80000000-0000-4000-8000-000000000002',title:'Shared preparation photo',purpose:'instruction'}
+  const replacement = {id:'80000000-0000-4000-8000-000000000003',title:'Updated surface photo',purpose:'instruction'}
+  const task = () => ({ projectId: 'A', id: 'T', name: 'Paint the bench', area: 'Garden', status: state.status, instructions: 'Prepare the surface before painting.', updatedAt: taskTime(), mine: state.mine,
+    contextImages:[general],images:[general,original,...(state.instructionReplaced?[replacement]:[])],
+    steps: [{ id: 'S', title: 'Check the surface', instructions: 'Ask the crew before starting if you are unsure.', required: true, isCheckpoint: true, completedAt: state.checked ? taskTime() : null, revision: state.checkRevision,images:[state.instructionReplaced?replacement:original] },
+      {id:'S2',title:'Apply finish',instructions:'Follow the shared preparation photo.',required:false,isCheckpoint:false,completedAt:null,revision:1,images:[original]}] })
   const drawingSummary = index => ({id:drawingIds[index],title:drawingTitles[index],revision:state.drawingRevision,status:'concept',stepId:'work-step',stepTitle:'Assemble the bench',sourceState:state.drawingSource,sourceReasons:state.drawingSource==='current'?[]:['target_changed']})
   await context.route('https://fonts.googleapis.com/**', route => route.abort())
   await context.route(api + '/**', async route => {
@@ -35,7 +41,8 @@ async function fixture(viewport) {
     if (request.method() === 'OPTIONS') return respond({ status: 204 })
     if (path === '/functions/v1/volunteer-media') {
       const body = request.postDataJSON()
-      assert.deepEqual(body, {session: state.secret, taskId: 'T', mediaId: '80000000-0000-4000-8000-000000000001', ...(body.drawingId ? {drawingId:drawingIds[2],revision:state.drawingRevision} : {})})
+      assert([general.id,original.id,replacement.id].includes(body.mediaId))
+      assert.deepEqual(body, {session: state.secret, taskId: 'T', mediaId: body.mediaId, ...(body.drawingId ? {drawingId:drawingIds[2],revision:state.drawingRevision} : {})})
       if (body.drawingId) assert(state.drawingsLinked && state.drawingSource !== 'unavailable')
       assert(!state.revoked)
       return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
@@ -100,7 +107,7 @@ async function fixture(viewport) {
   })
   const page = await context.newPage(); activePage = page; page.setDefaultTimeout(15000)
   page.on('pageerror', error => state.errors.push(error.message))
-  return { context, page, state }
+  return { context, page, state, original, replacement }
 }
 async function layout(page, viewport, label) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -121,7 +128,7 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] })
   await mkdir('test-results', { recursive: true })
   for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-    const { context, page, state } = await fixture(viewport)
+    const { context, page, state, original, replacement } = await fixture(viewport)
     await page.goto(base + '#/volunteer/' + invitation)
     await page.getByLabel('Your name', { exact: true }).waitFor()
     assert.equal(await page.locator('input[type="email"],input[type="password"]').count(), 0)
@@ -138,9 +145,28 @@ try {
     const dialog = page.getByRole('dialog', { name: 'Paint the bench', exact: true })
     await dialog.getByText('Prepare the surface before painting.', { exact: true }).waitFor()
     await dialog.getByRole('heading',{name:'Task, step & area images',exact:true}).waitFor()
-    await dialog.getByRole('button',{name:'View image',exact:true}).click()
+    await dialog.getByRole('heading',{name:'Task, step & area images',exact:true}).locator('..').getByRole('button',{name:'View image',exact:true}).click()
     await dialog.getByRole('img',{name:'Primary Step assembly guide',exact:true}).waitFor()
     assert(await dialog.getByRole('img',{name:'Primary Step assembly guide',exact:true}).evaluate(img=>img.complete && img.naturalWidth>0),'Original image bytes render')
+
+    const firstInstruction=dialog.getByRole('article',{name:'Check the surface',exact:true})
+    const secondInstruction=dialog.getByRole('article',{name:'Apply finish',exact:true})
+    await firstInstruction.getByRole('button',{name:'View image',exact:true}).click()
+    await secondInstruction.getByRole('img',{name:original.title,exact:true}).waitFor()
+    state.instructionReplaced=true
+    await dialog.getByRole('button',{name:'Refresh task',exact:true}).click()
+    await firstInstruction.locator('figcaption').filter({hasText:replacement.title}).waitFor()
+    assert.equal(await firstInstruction.locator('figcaption').filter({hasText:original.title}).count(),0)
+    assert.equal(await secondInstruction.locator('figcaption').filter({hasText:replacement.title}).count(),0)
+    await firstInstruction.getByRole('button',{name:'View image',exact:true}).click()
+    await firstInstruction.getByRole('img',{name:replacement.title,exact:true}).waitFor()
+    await secondInstruction.getByRole('button',{name:'View image',exact:true}).click()
+    await secondInstruction.getByRole('img',{name:original.title,exact:true}).waitFor()
+    await layout(page,viewport,'instruction-images')
+    await page.reload()
+    await page.getByRole('button',{name:'View task',exact:true}).click()
+    await firstInstruction.locator('figcaption').filter({hasText:replacement.title}).waitFor()
+    await secondInstruction.locator('figcaption').filter({hasText:original.title}).waitFor()
 
     await dialog.getByRole('button',{name:'View drawing: Bench assembly CAD',exact:true}).click()
     let reader=dialog.getByRole('article',{name:'Drawing reader',exact:true})
@@ -184,8 +210,8 @@ try {
 
     await dialog.getByRole('button', { name: 'Join this task', exact: true }).click()
     await dialog.getByLabel('Task progress').selectOption('doing')
-    await dialog.getByRole('button', { name: 'Complete instruction', exact: true }).click()
-    await dialog.getByRole('button', { name: 'Reopen instruction', exact: true }).waitFor()
+    await firstInstruction.getByRole('button', { name: 'Complete instruction', exact: true }).click()
+    await firstInstruction.getByRole('button', { name: 'Reopen instruction', exact: true }).waitFor()
     await dialog.getByLabel('Task progress').selectOption('done')
     await dialog.getByText('Garden · Done', { exact: true }).waitFor()
     await layout(page, viewport, 'task')
