@@ -7,7 +7,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {handoff} from './support/cad-review-fixture.ts'
 
-test('P2: request completion and canonical CAD receipt are atomic, isolated and recoverable across turns',async t=>{
+for(const lifetime of ['legacy','project'])test(`P2: ${lifetime} request completion and canonical CAD receipt are atomic, isolated and recoverable across turns`,async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Save the reviewed construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
@@ -23,14 +23,19 @@ test('P2: request completion and canonical CAD receipt are atomic, isolated and 
  const step=approved.record.steps[0].id
  let turn=randomUUID(),claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
  assert.equal(claim.status,'claimed')
- const store=(op:string,id:string|null=null,expected=0,status:string|null=null,payload:any=null,key=randomUUID())=>
-  call(null,'bob.bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,op,id,expected,status,payload,key],'service_role')
+ const scope={area_id:null,component_id:null,step_id:step,artifact_id:null}
+ const store=async(op:string,id:string|null=null,expected=0,status:string|null=null,payload:any=null,key=randomUUID())=>{
+  if(lifetime==='project'&&op==='save'&&id===null){
+   id=randomUUID();await call(owner,'bob.create_drawing_request',[project,claim.thread_id,turn,claim.generation,id,JSON.stringify(scope)])
+  }
+  return call(null,'bob.bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,op,id,expected,status,payload,key],'service_role')
+ }
  const save=(p:any)=>call(owner,'bob.bob_project_write_v12',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const recipe:any={contract_version:1,units:'mm',assembly_id:'p2-shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:600,y_mm:300,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
  const lineage=buildCadLineage(project,recipe,[],new Map(),handoff.coordinates)
  const candidate:any={title:'P2 shelf',description:'Concept',assumptions:'Site fit unverified',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:step,artifact_id:null,expected_revision:0,
   packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe),bob_lineage:lineage,engine:{name:'build123d'},assembly_id:'p2-shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'}}}
- const working={brief:{brief:message,handoff},owner_request:message,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(candidate)}
+ const working={brief:{...scope,brief:message,handoff},owner_request:message,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(candidate)}
  const request=await store('save',null,0,'reviewed',working)
  const payload:any={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{...candidate,drawing_request:{id:request.id,revision:request.revision}}}
 
@@ -80,4 +85,19 @@ test('P2: request completion and canonical CAD receipt are atomic, isolated and 
  await assert.rejects(save(changed),/drawing_request_complete/)
  assert.equal((await pg.query('select count(*)::int n from bob.artifact_cad_revisions where project_id=$1',[project])).rows[0].n,1)
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+ if(lifetime==='project'){
+  const thread=(await asProjectUser(pg,owner,'select id,next_seq from bob.bob_threads where id=$1',[claim.thread_id])).rows[0]
+  await call(owner,'bob.bob_reset_conversation',[project,thread.id,thread.next_seq])
+  assert.equal((await pg.query('select count(*)::int n from bob_private.drawing_requests where id=$1',[request.id])).rows[0].n,0)
+  const projection=(await call(owner,'bob.project_drawing_requests',[project,request.id,null])).requests[0]
+  assert.equal(projection.status,'saved');assert.equal(projection.artifact_id,saved.recordId)
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  assert.notEqual(claim.thread_id,priorThread)
+  assert.deepEqual((await store('load',request.id)).receipt,saved)
+  assert.deepEqual(await save(payload),saved,'exact completed receipt survives removal of all private working packets')
+  await assert.rejects(save(changed),/drawing_request_complete/)
+  await assert.rejects(call(owner,'bob.cancel_drawing_request',[project,request.id,projection.revision]),/drawing_request_complete/)
+  assert.equal((await pg.query('select count(*)::int n from bob.artifact_cad_revisions where project_id=$1',[project])).rows[0].n,1)
+ }
+
 })

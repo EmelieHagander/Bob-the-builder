@@ -21,7 +21,7 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Living plan', tools: ['compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
-  { label: 'Drawings and CAD', tools: ['design_project_cad', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
+  { label: 'Drawings and CAD', tools: ['design_project_cad', 'read_drawing_requests', 'cancel_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'delete_shopping_item'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
   { label: 'Building and site', tools: ['save_building_context'] },
@@ -67,6 +67,7 @@ export function createBobToolSession(opts: {
     ...(opts.recordReader?.tools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.recordReader!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.recordReader!.execute(v)})),
     ...(opts.imageTools?.tools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.imageTools!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.imageTools!.execute(spec.function.name,v)})),
     ...(opts.cadAssistant ? [
+      ...(opts.cadAssistant.lifecycleTools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.cadAssistant!.lifecycleRemaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.lifecycle(spec.function.name,v)})),
       ...opts.cadAssistant.tools.map(spec => ({spec,version:3,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
       {spec:SAVE_CAD_TOOL,version:1,waitingFor:'appears when design_project_cad returns a reviewed candidate',
        gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{

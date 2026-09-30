@@ -1,3 +1,4 @@
+import {createDrawingRequestStore} from './drawing-request-store.ts'
 import { createBobModelBudget } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
@@ -192,17 +193,20 @@ export async function answerWithOpenAi(opts: {
    const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
    return memo('cad:request',input,async(identity)=>{
     const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:opts.clientTurnId+':'+(identity?.key??crypto.randomUUID())})
-    if(error)throw new Error('drawing_request_unavailable')
+    if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
     return data
    })
   }
   const cadAssistant = createCadAssistant({
-    ...(claimedServer?{requestStore:{
-      atomicSave:true,
-      list:()=>drawingRequestCall({p_operation:'list'}),
-      load:(id:string)=>drawingRequestCall({p_operation:'load',p_id:id}),
-      save:(id:string|null,expected:number,status:string,payload:any)=>drawingRequestCall({p_operation:'save',p_id:id,p_expected:expected,p_status:status,p_payload:payload}),
-    }}:{}),
+    ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,
+      privateCall:drawingRequestCall,
+      newId:()=>memo('cad:project_request_id',{},async()=>crypto.randomUUID()),
+      caller:async(name,args)=>{
+        const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
+        if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
+        return data
+      },
+    })}:{}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),

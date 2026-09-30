@@ -147,4 +147,48 @@ for(const kind of ['duplicate','request-first','save-first','source-first','save
   console.log(`PASS request ${kind}: observed real lock wait, checked one-or-zero Artifact and atomic request receipt`)
   cases++
 }
+for(const kind of ['cancel-first','save-before-cancel','project-duplicate','project-request-first']) {
+  await query('drop table if exists public.cad_race_fixture;'+fixture)
+  const f=await json('select data from public.cad_race_fixture'),id=randomUUID()
+  const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+  const transaction=(sql:string,tail='',service=false)=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${service?'set local role service_role;':auth}${sql};${tail}commit;`
+  const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(k=>[k,f.payload.data[k]??null]))
+  await query(transaction(`select bob.create_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},${literal(JSON.stringify(scope))})`))
+  const working={brief:{...scope,brief:f.payload.request_quote},owner_request:f.payload.request_quote,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(f.payload.data)}
+  const requestCall=(op:string,revision=0,status:string|null=null)=>`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(op)},${literal(id)},${revision},${status?literal(status):'null'},${literal(JSON.stringify(working))},${literal(randomUUID())})`
+  const request=JSON.parse((await query(transaction(requestCall('save',0,'reviewed'),'',true))).split('\n').at(-1)!)
+  const payload={...f.payload,data:{...f.payload.data,drawing_request:{id,revision:request.revision}}}
+  const save=`select bob.bob_project_write_v12(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(payload))})`
+  const cancel=`select bob.cancel_drawing_request(${literal(f.project)},${literal(id)},${request.revision})`
+  const update=requestCall('save',request.revision,'collecting')
+  const first=kind==='cancel-first'?cancel:kind==='project-request-first'?update:save
+  const second=kind==='save-before-cancel'?cancel:save
+  const key=770000+cases,barrier=await gate(key)
+  const leader=start(transaction(first,`select pg_advisory_xact_lock(${key});`,kind==='project-request-first'))
+  let follower:ReturnType<typeof start>|undefined
+  try{
+    const leaderPid=await waiting(leader.app,barrier.pid)
+    follower=start(transaction(second));await waiting(follower.app,leaderPid)
+  }finally{await barrier.close()}
+  const lead=await leader.done,follow=await follower!.done
+  assert.equal(lead.code,0,lead.stderr)
+  if(kind==='project-duplicate')assert.equal(follow.code,0,follow.stderr)
+  else{
+    assert.notEqual(follow.code,0,'A cancelled, completed or advanced request fences the losing operation')
+    assert.match(follow.stderr,kind==='cancel-first'?/drawing_request_cancelled/:kind==='save-before-cancel'?/drawing_request_complete/:/drawing_request_changed/)
+  }
+  const state=JSON.parse((await query(transaction(requestCall('load'),'',true))).split('\n').at(-1)!)
+  const saved=['save-before-cancel','project-duplicate'].includes(kind)
+  assert.equal(state.status,saved?'saved':kind==='cancel-first'?'cancelled':'collecting')
+  assert.equal(await query(`select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}`),saved?'1':'0')
+  const projection=JSON.parse((await query(transaction(`select bob.project_drawing_requests(${literal(f.project)},${literal(id)},null)`))).split('\n').at(-1)!).requests[0]
+  assert.equal(projection.status,state.status);assert.equal(projection.revision,state.revision)
+  if(saved)assert.equal(projection.artifact_id,state.receipt.recordId)
+  if(kind==='project-duplicate'){
+    const receipt=(output:string)=>JSON.parse(output.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+    assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout))
+  }
+  console.log(`PASS project request ${kind}: observed real lock wait, stable identity and fenced completion`)
+  cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

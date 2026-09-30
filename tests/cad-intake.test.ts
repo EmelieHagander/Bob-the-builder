@@ -162,3 +162,41 @@ test('collector, designer and reviewer see the selected original image while per
  }})
  assert.equal((await a.consult(request)).status,'ready');assert.deepEqual(seen,['collector','designer','reviewer']);assert.deepEqual(f.row?.payload.reference_refs,['image:'+measurement]);assert(!JSON.stringify(f.row).includes('base64'))
 })
+
+test('P2b: cancelled/reset requests do no model work; cancellation during collection prevents design',async()=>{
+ for(const status of ['cancelled','paused']){
+  const f=fixture();await f.opts.requestStore.save(null,0,'needs_data',{brief:request,owner_request:'Private',reference_refs:[]})
+  const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,load:async()=>({...f.row!,status,reason:status==='paused'?'context_cleared':'owner_cancelled'})}})
+  const out=await a.consult({...request,request_id:id})
+  assert.equal(out.status,status==='paused'?'recovery_required':'cancelled');assert.equal(f.renders,0);assert.equal(a.metrics.research_calls,0)
+ }
+ const f=fixture();let cancelled=false,calls=0
+ const original=f.opts.callModel
+ f.opts.callModel=async o=>{calls++;const r=await original(o);cancelled=true;return r}
+ const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,assertActive:async()=>{if(cancelled)throw new Error('drawing_request_cancelled')}}})
+ const result=await a.consult(request)
+ assert.equal(result.status,'stopped');assert.equal(result.reason,'drawing_request_cancelled')
+ assert.equal(calls,1);assert.equal(f.renders,0);assert.equal(a.candidate,null)
+})
+
+test('P2b: actual toolbox offers status/cancellation even after design consultations are spent',async()=>{
+ const {createBobToolSession}=await import('../supabase/functions/_shared/project-tools/bob-tools.ts')
+ const {domainToolLoadout}=await import('./support/tool-loadout.ts')
+ const f=fixture();let cancellations=0
+ f.opts.callModel=async()=>reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})
+ const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,
+  read:async()=>({requests:[{id,revision:f.row!.revision,status:'needs_data'}],next_cursor:null}),
+  cancel:async(key,revision)=>{assert.equal(key,id);assert.equal(revision,f.row!.revision);cancellations++;return {id,revision:revision+1,status:'cancelled'}},
+ }})
+ await a.consult(request);await a.consult({...request,request_id:id});assert.equal(a.remaining,0)
+ const tools=createBobToolSession({cadAssistant:a,lookup:f.opts.makeLookup(),readPolicy:domainToolLoadout('read_drawing_requests','cancel_drawing_request')})
+ const offered=await tools.prepare()
+ assert(offered.some(t=>t.function.name==='read_drawing_requests'));assert(offered.some(t=>t.function.name==='cancel_drawing_request'))
+ assert(!offered.some(t=>t.function.name==='design_project_cad'))
+ const read=await tools.execute('read_drawing_requests',{request_id:id,after_id:null})
+ assert.equal(read.requests[0].id,id)
+ assert.equal((await tools.execute('cancel_drawing_request',{request_id:id,expected_revision:-1})).status,'invalid')
+ assert.equal(cancellations,0)
+ assert.equal((await tools.execute('cancel_drawing_request',{request_id:id,expected_revision:read.requests[0].revision})).status,'cancelled')
+ assert.equal(cancellations,1)
+})
