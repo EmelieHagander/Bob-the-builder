@@ -1,3 +1,4 @@
+import {drawingInputFingerprint} from './drawing-request-recovery.ts'
 import type { DrawingRequestStore } from './cad-intake.ts'
 
 type Input=Record<string,unknown>
@@ -13,6 +14,9 @@ export function createDrawingRequestStore(opts:{
  const read=(id:string|null,after:string|null=null)=>opts.caller('project_drawing_requests',{p_project:opts.projectId,p_id:id,p_after:after})
  return {
   atomicSave:true,
+  ensureGapTask:(id,expected,gap,requirement,plan)=>opts.caller('ensure_drawing_gap_task',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_requirement:requirement,p_plan_revision:plan}),
+  work:id=>opts.caller('drawing_request_work',{p_project:opts.projectId,p_id:id}),
+  linkGap:(id,expected,gap,task,step)=>opts.caller('link_drawing_gap',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_task:task,p_step:step}),
   list:()=>opts.privateCall({p_operation:'list'}),
   load:id=>restored.has(id)?Promise.resolve(structuredClone(restored.get(id))):opts.privateCall({p_operation:'load',p_id:id}),
   restore:async(id,expected,planRevision,step,quote)=>{
@@ -43,7 +47,8 @@ export function createDrawingRequestStore(opts:{
    if(id===null){
     const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(k=>[k,payload.brief[k]??null]))
     id=await opts.newId()
-    await opts.caller('create_drawing_request',{...opts.binding,p_id:id,p_scope:scope})
+    const resolved=await opts.caller('resolve_drawing_request',{...opts.binding,p_id:id,p_scope:scope,p_intent:await drawingInputFingerprint(payload.brief,null,null)})
+    if(resolved.reused)throw new Error('drawing_request_reuse:'+resolved.id)
    }
    const result=await opts.privateCall({p_operation:'save',p_id:id,p_expected:expected,p_status:status,p_payload:payload})
    if(restored.has(id))restored.set(id,result)

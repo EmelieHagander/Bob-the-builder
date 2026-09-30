@@ -254,3 +254,14 @@ export async function resetAskBobConversation(projectId: string): Promise<'serve
 export function refreshAskBobProject(projectId: string): void {
   if (projectId === getActiveProjectId()) window.dispatchEvent(new Event(PROJECT_CHANGED_EVENT))
 }
+
+/** Refresh existing delegated authority from the normal current Auth session.
+ * This endpoint cannot create work, change its instruction or increase budget. */
+export async function renewDrawingRequests(projectId:string):Promise<void>{
+ if(!bobDb||getActiveProjectId()!==projectId)return
+ const {data}=await bobDb.auth.getSession()
+ if(!data.session||data.session.user.email?.toLowerCase()===GUEST_EMAIL)return
+ const result=await bobDb.functions.invoke('ask-bob',{body:{action:'renew_requests',projectId}})
+ if(getActiveProjectId()!==projectId)return
+ if(result.error||!result.data?.ok)throw new Error('Drawing requests could not reconnect. Sign in again if your session expired.')
+}

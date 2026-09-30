@@ -1,3 +1,4 @@
+import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
 import { useState } from 'react'
@@ -86,6 +87,7 @@ export function ProjectHome() {
     {db.authEnabled() && <>
       <div className="foundation-actions" style={{ marginTop: 18 }}><button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button></div>
       <ProjectDrawings key={project.id} projectId={project.id} />
+      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
     </>}
 
     <section style={{ marginTop: 18 }}>

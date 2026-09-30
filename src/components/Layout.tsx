@@ -222,6 +222,20 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
     return () => { cancelled = true; clearInterval(timer); window.removeEventListener(db.BOB_INBOX_EVENT, check); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) }
   }, [project.id, authTick])
 
+  useEffect(() => {
+    let checking=false
+    const renew=async()=>{
+      if(checking||document.visibilityState==='hidden')return
+      checking=true
+      try{await db.renewDrawingRequests(project.id)}catch{/* Request cards retain an honest authorization-needed state. */}
+      finally{checking=false}
+    }
+    void renew()
+    const timer=setInterval(renew,60000)
+    window.addEventListener('focus',renew)
+    return()=>{clearInterval(timer);window.removeEventListener('focus',renew)}
+  },[project.id,authTick])
+
   return (
     <div className="app-shell">
       <Sidebar />

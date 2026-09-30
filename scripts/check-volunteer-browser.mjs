@@ -26,6 +26,9 @@ async function fixture(viewport) {
   await context.route('https://fonts.googleapis.com/**', route => route.abort())
   await context.route(api + '/**', async route => {
       const inboxPath = new URL(route.request().url()).pathname
+      if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
+      if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
+
       if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
     const request = route.request(), path = new URL(request.url()).pathname
     const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS' } })
@@ -35,7 +38,7 @@ async function fixture(viewport) {
       assert.deepEqual(body, {session: state.secret, taskId: 'T', mediaId: '80000000-0000-4000-8000-000000000001', ...(body.drawingId ? {drawingId:drawingIds[2],revision:state.drawingRevision} : {})})
       if (body.drawingId) assert(state.drawingsLinked && state.drawingSource !== 'unavailable')
       assert(!state.revoked)
-      return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*'}})
+      return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=','base64'),headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
     }
     assert(!path.startsWith('/auth/'), 'The volunteer journey must never call Auth')
     assert(path.startsWith('/rest/v1/rpc/volunteer_'), 'Guest must not query raw tables, account or shared-app APIs')

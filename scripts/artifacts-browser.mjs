@@ -246,7 +246,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   })
 
   await page.goto(base + '#/artifacts')
-  await page.getByRole('heading', { name: 'Drawings', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Drawings', level: 1, exact: true }).waitFor()
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
   await page.getByLabel('Drawing scope', { exact: true }).selectOption('areaA')
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()

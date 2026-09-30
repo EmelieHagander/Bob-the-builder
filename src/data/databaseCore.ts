@@ -2117,3 +2117,29 @@ export async function getProjectDrawingPreview(projectId:string,id:string,revisi
  guard();if(result.error)throw new Error('Drawing preview is unavailable. Open the saved drawing to inspect its version.')
  return result.data as {preview_svg:string|null;parametric_recipe:unknown;source_media_id:string|null}
 }
+
+export interface DrawingRequestWork {
+ request:{id:string;revision:number;status:string;reason:string|null;artifact_id:string|null;artifact_revision:number|null;scope:{step_id:string|null}}
+ gaps:{id:string;action:string;blocking:boolean;observed_revision:number;task_id:string|null;task_name:string|null;step_id:string|null}[]
+ can_manage:boolean;resume_state:string
+ budget:{legacy_untracked?:boolean;revision:number;calls:number;call_limit:number;spent_usd:number;usd_limit:number;outcome_unknown:boolean}|null
+}
+export async function getDrawingRequests(projectId:string,after:string|null=null,task:string|null=null):Promise<{items:DrawingRequestWork[];next_cursor:string|null}>{
+ const guard=captureFileContext(projectId);guard()
+ if(!db)return {items:[],next_cursor:null}
+ const {data,error}=await db.rpc('drawing_work_list',{p_project:projectId,p_after:after,p_task:task})
+ guard();if(error)throw new Error('Drawing requests could not be loaded.')
+ return data
+}
+export async function cancelDrawingRequest(projectId:string,id:string,revision:number){
+ const guard=captureFileContext(projectId);guard()
+ if(!db)throw new Error('Open a connected project.')
+ const {error}=await db.rpc('cancel_drawing_request',{p_project:projectId,p_id:id,p_expected:revision})
+ guard();if(error)throw new Error('The request changed or cannot be cancelled. Refresh its status.')
+}
+export async function grantDrawingBudget(projectId:string,id:string,revision:number,grantId:string){
+ const guard=captureFileContext(projectId);guard()
+ if(!db)throw new Error('Open a connected project.')
+ const {error}=await db.rpc('grant_drawing_budget',{p_project:projectId,p_id:id,p_expected:revision,p_grant:grantId})
+ guard();if(error)throw new Error('The budget could not be extended. Refresh the request; uncertain charges must be reconciled first.')
+}

@@ -1,3 +1,4 @@
+import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { answerWithOpenAi } from './ask-openai.ts'
 import { BobContinuation, createBobJournal } from './bob-job-journal.ts'
@@ -15,7 +16,7 @@ function services() {
     if (error) throw new Error(error.message)
     return data
   }
-  return { url, key, secret, rpc }
+  return { url, key, secret, rpc, client }
 }
 export async function enqueueBobTurn(input: Input) {
   const s = services()
@@ -40,6 +41,29 @@ export async function enqueueBobTurn(input: Input) {
   if (result.mode === 'local_only') return answerWithOpenAi(input)
   if (result.status === 'completed') return { ok: true as const, projectId: input.projectId, answer: result.answer as string, evidence: result.evidence }
   return { ok: false as const, error: 'turn_in_flight' }
+}
+
+/** Renew only already-delegated work using this authenticated session's ordinary
+ * short-lived JWT. No refresh credential or new budget is accepted here. */
+export async function renewDrawingRequests(input:{authHeader:string;userId:string;projectId:string}){
+ const s=services()
+ const caller=createClient(s.url,s.key,{db:{schema:'bob'},global:{headers:{Authorization:input.authHeader}},auth:{persistSession:false,autoRefreshToken:false}})
+ const {data,error}=await caller.rpc('drawing_resume_bindings',{p_project:input.projectId}).abortSignal(AbortSignal.timeout(12000))
+ if(error||!Array.isArray(data))return {ok:false,error:'project_denied'}
+ const token=input.authHeader.replace(/^Bearer\s+/i,'')
+ const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))
+ const expires=Math.min(Number(payload.exp)*1000,Date.now()+20*60000)
+ if(!Number.isFinite(expires)||expires<Date.now()+30000)return {ok:false,error:'unauthorized'}
+ for(const request of data){
+  await s.rpc('bob_renew_drawing_authority',{p_project:input.projectId,p_user:input.userId,p_id:request.id,p_turn:request.turn_id,
+   p_credential:await sealCredential(token,binding({...input,clientTurnId:request.turn_id}),s.secret),p_expires:new Date(expires).toISOString(),p_worker_url:s.url.replace(/\/$/,'')+'/functions/v1/bob-worker'})
+ }
+ if(data.length){
+  const version=await drawingRuntimeVersion(s.client,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')})
+  await s.rpc('bob_observe_drawing_runtime',{p_project:input.projectId,p_user:input.userId,p_fingerprint:version})
+ }
+ await s.rpc('bob_dispatch_jobs')
+ return {ok:true,renewed:data.length}
 }
 
 /** Per-job capability, checked inside the service-only claim command. Neither
@@ -81,7 +105,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
       }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId,
-        background: { jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
+        background: { drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()
       const finished = await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })

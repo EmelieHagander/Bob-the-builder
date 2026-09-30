@@ -278,14 +278,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: avgränsa och implementera P2d — beständiga kopplingar mellan intagsluckor och befintliga Tasks/Steps.** Utgå från aktuell main och [samtalsägarens livscykelkontrakt](ask-bob-conversations.md#p2b-project-request-lifecycle). Definiera stabil luckidentitet och återanvänd befintliga uppgifter när samma krav återkommer. Följ kopplingen genom sparande, nytt samtal och aktuella källversioner; prova dubbel leverans, projektisolering och återkallad behörighet. Privat insamlingsbedömning får inte automatiskt bli delad projekttext. Automatisk återupptagning behöver sin egen behörighets- och budgetgräns. P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: verifiera och slutför P2:s samlade release i [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).** Implementation av luckkopplingar, uppdragsbudget, händelsekörning och UI granskas mot [samtalsägarens kompletterade kontrakt](ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Kör verklig PostgreSQL-samtidighet, UI-återbesök, Auth/HTTP och avgränsade modellflöden innan etappen stängs. Diff, målmiljö och användarmandat dubbelkontrolleras före migration/driftsättning. P0:s verkliga användartest ligger kvar separat.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
 | **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P2** | Genomför P2d enligt nästa handling. Fortsätt med återupptagning från UI/Task och händelser, deduplicering av nya uppdrag samt budget-/felåterhämtning efter designer- och granskarstopp. Den avgränsade intagsspärren täcker bara fullständigt kända läsberoenden; extra specialistläsningar behöver en återläsbar beroendeplan. Modell-/deltagarprov återstår. |
+| **P2** | Slutför granskning, CI, driftsättning och Auth/HTTP-/modellprov för #171. Verifiera samma uppdrag efter UI-/Task-komplettering, dubbelexekvering utan merkostnad, budgetstopp, late-receipt-recovery, återkallad åtkomst och oförändrat misslyckande. Kod skriven är inte en stängd etapp. |
 | **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
