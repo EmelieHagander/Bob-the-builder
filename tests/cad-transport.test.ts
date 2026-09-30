@@ -10,9 +10,19 @@ async function packet(){const files={step:Buffer.from('ISO-10303-21').toString('
 }
 test('transport delivers bounded PNG views only with valid hashes bound to the exact SVG exports',async()=>{
  const p=await packet();const fetcher=(async()=>new Response(JSON.stringify(p))) as typeof fetch
- assert.equal((await createCadTransport('https://fixture.invalid/render','fixture',fetcher)(recipe)).previews?.front,png)
+ const result=await createCadTransport('https://fixture.invalid/render','fixture',fetcher)(recipe)
+ assert.equal(result.previews?.front,png)
+ assert.equal(result.manifest.previews,undefined)
+ assert.deepEqual(result.manifest.preview_metadata,p.manifest.previews)
+ assert(!JSON.stringify(result.manifest).includes(png))
  p.manifest.previews.front.source_sha256='0'.repeat(64)
  await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',fetcher)(recipe),/invalid_cad_preview/)
+})
+test('preview metadata cannot smuggle bytes or paths into the private commitment',async()=>{
+ for(const patch of [{file:'../front.png'},{pixels:png},{sha256:'not-a-hash'}]){
+  const p=await packet();Object.assign(p.manifest.previews.front,patch)
+  await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',(async()=>new Response(JSON.stringify(p))) as typeof fetch)(recipe),/invalid_cad_preview/)
+ }
 })
 test('missing or corrupted previews cannot masquerade as visual feedback',async()=>{
  const p=await packet();p.previews.front='not png'

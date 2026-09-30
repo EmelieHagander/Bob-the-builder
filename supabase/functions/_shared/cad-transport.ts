@@ -1,5 +1,6 @@
 import { parseCadAssemblyResult, type CadAssemblyRequest } from './cad-adapter.ts'
 import type { CadPacket } from './cad-assistant.ts'
+export const CAD_TRANSPORT_CONTRACT='2026-09-30-preview-hash-metadata'
 
 /** The host and secret are deployment configuration, never model input. */
 export function createCadTransport(endpoint:string|undefined,token:string|undefined,fetcher:typeof fetch=fetch){
@@ -23,16 +24,21 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
    if(digest!==manifest.exports[k].sha256)throw new Error('cad_hash_mismatch')
   }
   if(!packet.previews || typeof packet.previews!=='object' || Object.keys(packet.previews).sort().join(',')!==[...recipe.views].sort().join(','))throw new Error('cad_previews_missing')
+  const previewMetadata:Record<string,{file:string;sha256:string;source_sha256:string}>={}
   for(const view of recipe.views){
    const encoded=packet.previews[view], metadata=packet.manifest.previews?.[view]
-   if(typeof encoded!=='string'||encoded.length>700000||!metadata||metadata.source_sha256!==manifest.exports[view].sha256)throw new Error('invalid_cad_preview')
+   if(typeof encoded!=='string'||encoded.length>700000||!metadata||Object.keys(metadata).sort().join(',')!=='file,sha256,source_sha256'||metadata.file!==view+'.png'||typeof metadata.sha256!=='string'||!/^[0-9a-f]{64}$/.test(metadata.sha256)||metadata.source_sha256!==manifest.exports[view].sha256)throw new Error('invalid_cad_preview')
    const raw=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))
    if(![137,80,78,71,13,10,26,10].every((n,i)=>raw[i]===n)||raw.length<24)throw new Error('invalid_cad_preview')
    const header=new DataView(raw.buffer),width=header.getUint32(16),height=header.getUint32(20)
    if(!width||!height||width>1024||height>1024)throw new Error('invalid_cad_preview')
    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
    if(digest!==metadata.sha256)throw new Error('cad_preview_hash_mismatch')
+   previewMetadata[view]={file:metadata.file,sha256:metadata.sha256,source_sha256:metadata.source_sha256}
   }
-  return {recipe:structuredClone(recipe),manifest,files:packet.files,previews:packet.previews}
+  // Keep checked hashes in the exact review/save commitment, while reserving
+  // "previews" for pixel payloads that may never enter private request state.
+  const persistedManifest:Record<string,unknown>={...manifest};delete persistedManifest.previews
+  return {recipe:structuredClone(recipe),manifest:{...persistedManifest,preview_metadata:previewMetadata},files:packet.files,previews:packet.previews}
  }
 }

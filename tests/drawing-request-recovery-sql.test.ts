@@ -34,7 +34,7 @@ for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} requ
  const recipe:any={contract_version:1,units:'mm',assembly_id:'p2-shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:600,y_mm:300,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
  const lineage=buildCadLineage(project,recipe,[],new Map(),handoff.coordinates)
  const candidate:any={title:'P2 shelf',description:'Concept',assumptions:'Site fit unverified',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:step,artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe),bob_lineage:lineage,engine:{name:'build123d'},assembly_id:'p2-shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'}}}
+  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe),bob_lineage:lineage,engine:{name:'build123d'},assembly_id:'p2-shelf',preview_metadata:{front:{file:'front.png',sha256:'a'.repeat(64),source_sha256:'b'.repeat(64)}}},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'},previews:{front:'PRIVATE_PIXELS'}}}
  const working={brief:{...scope,brief:message,handoff},owner_request:message,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(candidate)}
  let request=await store('save',null,0,'reviewed',working)
  if(lifetime==='restored'){
@@ -51,6 +51,12 @@ for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} requ
   await assert.rejects(store('save',request.id,request.revision,'saved',working),/completion_requires_receipt/)
   const bad=structuredClone(payload);bad.data.title='Different unchecked candidate'
   await assert.rejects(save(bad),/drawing_candidate_changed/)
+  const alteredMetadata=structuredClone(payload);alteredMetadata.data.packet.manifest.preview_metadata.front.sha256='c'.repeat(64)
+  await assert.rejects(save(alteredMetadata),/drawing_candidate_changed/)
+  for(const forbidden of [{previews:{front:'PRIVATE_PIXELS'}},{preview_metadata:{front:{pixels:'data:image/png;base64,abc'}}}]){
+   const poisoned=structuredClone(working);Object.assign(poisoned.reviewed_candidate.packet.manifest,forbidden)
+   await assert.rejects(store('save',request.id,request.revision,'reviewed',poisoned),/drawing_request_pixels_forbidden/)
+  }
   const stale=structuredClone(payload);stale.data.drawing_request.revision++
   await assert.rejects(save(stale),/drawing_request_changed/)
   await assert.rejects(call(owner,'bob.bob_project_write_v12',[project,claim.thread_id,turn,claim.generation+1,JSON.stringify(payload)]),/turn_not_claimed/)
@@ -71,6 +77,7 @@ for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} requ
   assert.equal((await pg.query('select count(*)::int n from bob.artifacts where project_id=$1',[project])).rows[0].n,0)
  })
 
+ assert.deepEqual((await store('load',request.id)).payload.reviewed_candidate.packet.manifest.preview_metadata,candidate.packet.manifest.preview_metadata)
  const saved=await save(payload)
  assert.equal(saved.dataset,'artifacts');assert.equal(saved.revision,1)
  assert.deepEqual(saved.record.step_ids,[step])
@@ -81,6 +88,7 @@ for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} requ
  assert.deepEqual(await save(payload),saved,'a lost response retries without another Artifact or revision')
  await assert.rejects(store('save',request.id,completed.revision,'collecting',working),/drawing_request_complete/)
  assert.equal((await pg.query('select count(*)::int n from bob.artifacts where project_id=$1',[project])).rows[0].n,1)
+ assert(!JSON.stringify(completed).includes('PRIVATE_PIXELS'),'private request does not copy preview pixels')
  assert(!JSON.stringify(completed).includes('PRIVATE_EXPORT'),'private request does not copy export bytes')
 
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
