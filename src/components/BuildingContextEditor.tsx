@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import type {
   PhysicalBuilding,
+  PhysicalBuildingFootprint,
   PhysicalElement,
   PhysicalLevel,
   PhysicalRelationship,
@@ -14,7 +15,7 @@ import { Modal } from './Modal'
 import { Icon } from './ui'
 
 type NodeKind = 'level' | 'space' | 'element' | 'relationship'
-type EditorMode = 'site' | 'building' | NodeKind | 'link' | null
+type EditorMode = 'site' | 'building' | 'building_edit' | NodeKind | 'link' | null
 
 type NodeData = Record<string, unknown>
 
@@ -25,14 +26,24 @@ export interface BuildingContextEditorProps {
   showProjectScope?: boolean
   sharing?: ReactNode
   selectedBuildingId: string | null
+  footprint: PhysicalBuildingFootprint | null
   levels: PhysicalLevel[]
   spaces: PhysicalSpace[]
   elements: PhysicalElement[]
   relationships: PhysicalRelationship[]
   canDirectEdit: boolean
   onSelectBuilding: (buildingId: string) => void
-  onCreateSite: (id: string, data: { name: string; notes: string }) => Promise<void>
+  onCreateSite: (id: string, data: {
+    name: string
+    notes: string
+    address_line1: string
+    address_line2: string
+    postal_code: string
+    locality: string
+    country_code: string
+  }) => Promise<void>
   onCreateBuilding: (id: string, data: { site_id: string | null; name: string; notes: string }) => Promise<void>
+  onEditBuilding: (id: string, expected: number, data: { site_id: string | null; name: string; notes: string; change_note: string }) => Promise<void>
   onCreateNode: (kind: NodeKind, id: string, data: NodeData) => Promise<void>
   onLinkProject: (id: string, data: { target_kind: 'building'; building_id: string }) => Promise<void>
   onSaved: () => void
@@ -58,6 +69,22 @@ const truthLabel = (truth: PhysicalTruth) => truthOptions.find(option => option.
 const relationLabel = (relation: RelationshipKind) => relationOptions.find(option => option.value === relation)?.label ?? relation
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
 
+function siteAddress(site: PhysicalSite | undefined): string {
+  if (!site) return ''
+  const street = [site.addressLine1, site.addressLine2].filter(Boolean).join(', ')
+  const place = [site.postalCode, site.locality].filter(Boolean).join(' ')
+  return [street, place, site.countryCode].filter(Boolean).join(' · ')
+}
+
+function footprintDimensions(footprint: PhysicalBuildingFootprint | null): string {
+  const dims = footprint?.geometry?.principal_dimensions_mm
+  if (!dims || typeof dims !== 'object' || Array.isArray(dims)) return ''
+  const length = Number((dims as Record<string, unknown>).length)
+  const depth = Number((dims as Record<string, unknown>).depth)
+  if (!Number.isFinite(length) || !Number.isFinite(depth)) return ''
+  return `${Math.round(length).toLocaleString('sv-SE')} × ${Math.round(depth).toLocaleString('sv-SE')} mm`
+}
+
 export function BuildingContextEditor({
   sites,
   buildings,
@@ -65,6 +92,7 @@ export function BuildingContextEditor({
   showProjectScope = true,
   sharing,
   selectedBuildingId,
+  footprint,
   levels,
   spaces,
   elements,
@@ -73,6 +101,7 @@ export function BuildingContextEditor({
   onSelectBuilding,
   onCreateSite,
   onCreateBuilding,
+  onEditBuilding,
   onCreateNode,
   onLinkProject,
   onSaved,
@@ -105,14 +134,24 @@ export function BuildingContextEditor({
       <div className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
-            <p className="foundation-hint" style={{ margin: 0 }}>{selected.siteId ? sites.find(site => site.id === selected.siteId)?.name ?? 'Site' : 'Standalone building'}</p>
-            <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
+            {(() => {
+              const site = selected.siteId ? sites.find(candidate => candidate.id === selected.siteId) : undefined
+              const address = siteAddress(site)
+              return <>
+                <p className="foundation-hint" style={{ margin: 0 }}>{site?.name ?? 'Standalone building'}</p>
+                <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
+                {address && <p className="foundation-hint" style={{ margin: '0 0 4px' }}>{address}</p>}
+              </>
+            })()}
             {selected.notes && <p style={{ margin: 0 }}>{selected.notes}</p>}
           </div>
-          {showProjectScope && <div className="cluster" style={{ flexWrap: 'wrap' }}>
-            <span className="image-purpose">{scoped ? 'Used by this project' : 'Not linked to this project'}</span>
-            {!scoped && <button className="btn btn-primary" type="button" onClick={() => setMode('link')}>Use in this project</button>}
-          </div>}
+          <div className="cluster" style={{ flexWrap: 'wrap' }}>
+            {canDirectEdit && <button className="btn" type="button" onClick={() => setMode('building_edit')}>Edit building</button>}
+            {showProjectScope && <>
+              <span className="image-purpose">{scoped ? 'Used by this project' : 'Not linked to this project'}</span>
+              {!scoped && <button className="btn btn-primary" type="button" onClick={() => setMode('link')}>Use in this project</button>}
+            </>}
+          </div>
         </div>
         {!canDirectEdit && scoped && showProjectScope && <p className="foundation-hint" style={{ marginBottom: 0 }}>
           You can use this building as project context. Direct edits to accepted physical truth require building authority; project proposals stay separate.
@@ -120,6 +159,21 @@ export function BuildingContextEditor({
       </div>
 
       {sharing}
+
+      {footprint && <section className="card foundation-section" style={{ marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ marginBottom: 3 }}>Exterior footprint</h3>
+            <p className="foundation-hint" style={{ margin: 0 }}>
+              Accepted physical geometry · {String(footprint.geometry.units ?? 'mm')}
+              {footprintDimensions(footprint) ? ` · ${footprintDimensions(footprint)}` : ''}
+            </p>
+          </div>
+          <span className="image-purpose">{truthLabel(footprint.truth)}</span>
+        </div>
+        {footprint.source && <p style={{ marginBottom: footprint.notes ? 6 : 0 }}>Source: {footprint.source}</p>}
+        {footprint.notes && <p className="foundation-hint" style={{ marginBottom: 0 }}>{footprint.notes}</p>}
+      </section>}
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -177,6 +231,7 @@ export function BuildingContextEditor({
       onClose={() => setMode(null)}
       onCreateSite={onCreateSite}
       onCreateBuilding={onCreateBuilding}
+      onEditBuilding={onEditBuilding}
       onCreateNode={onCreateNode}
       onLinkProject={onLinkProject}
       onSaved={() => { setMode(null); onSaved() }}
@@ -193,6 +248,7 @@ function CreatePhysicalModal({
   onClose,
   onCreateSite,
   onCreateBuilding,
+  onEditBuilding,
   onCreateNode,
   onLinkProject,
   onSaved,
@@ -205,13 +261,20 @@ function CreatePhysicalModal({
   onClose: () => void
   onCreateSite: BuildingContextEditorProps['onCreateSite']
   onCreateBuilding: BuildingContextEditorProps['onCreateBuilding']
+  onEditBuilding: BuildingContextEditorProps['onEditBuilding']
   onCreateNode: BuildingContextEditorProps['onCreateNode']
   onLinkProject: BuildingContextEditorProps['onLinkProject']
   onSaved: () => void
 }) {
-  const [name, setName] = useState('')
-  const [notes, setNotes] = useState('')
-  const [siteId, setSiteId] = useState('')
+  const editingBuilding = mode === 'building_edit'
+  const [name, setName] = useState(editingBuilding ? building?.name ?? '' : '')
+  const [notes, setNotes] = useState(editingBuilding ? building?.notes ?? '' : '')
+  const [addressLine1, setAddressLine1] = useState('')
+  const [addressLine2, setAddressLine2] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [locality, setLocality] = useState('')
+  const [countryCode, setCountryCode] = useState('SE')
+  const [siteId, setSiteId] = useState(editingBuilding ? building?.siteId ?? '' : '')
   const [levelId, setLevelId] = useState('')
   const [position, setPosition] = useState('0')
   const [kind, setKind] = useState('')
@@ -223,7 +286,7 @@ function CreatePhysicalModal({
   const [relation, setRelation] = useState<RelationshipKind>('adjacent_to')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const title = mode === 'site' ? 'Add site' : mode === 'building' ? 'Add building' : mode === 'level' ? 'Add level' : mode === 'space' ? 'Add space' : mode === 'element' ? 'Add building element' : mode === 'relationship' ? 'Add spatial relationship' : 'Use building in project'
+  const title = mode === 'site' ? 'Add site' : mode === 'building' ? 'Add building' : mode === 'building_edit' ? 'Edit building' : mode === 'level' ? 'Add level' : mode === 'space' ? 'Add space' : mode === 'element' ? 'Add building element' : mode === 'relationship' ? 'Add spatial relationship' : 'Use building in project'
   const needsTruth = mode === 'space' || mode === 'element' || mode === 'relationship'
 
   return <Modal title={title} onClose={() => { if (!busy) onClose() }}>
@@ -244,8 +307,22 @@ function CreatePhysicalModal({
       setBusy(true); setError('')
       try {
         const id = crypto.randomUUID()
-        if (mode === 'site') await onCreateSite(id, { name, notes })
+        if (mode === 'site') await onCreateSite(id, {
+          name,
+          notes,
+          address_line1: addressLine1,
+          address_line2: addressLine2,
+          postal_code: postalCode,
+          locality,
+          country_code: countryCode,
+        })
         else if (mode === 'building') await onCreateBuilding(id, { site_id: siteId || null, name, notes })
+        else if (mode === 'building_edit' && building) await onEditBuilding(building.id, building.revision, {
+          site_id: siteId || null,
+          name,
+          notes,
+          change_note: 'Building details updated',
+        })
         else if (mode === 'level') await onCreateNode('level', id, { name, position: Number(position), notes })
         else if (mode === 'space') await onCreateNode('space', id, { name, kind, level_id: levelId || null, notes, truth, source, measurements: [] })
         else if (mode === 'element') await onCreateNode('element', id, { space_id: subject || null, kind, name, description, truth, source })
@@ -254,14 +331,27 @@ function CreatePhysicalModal({
       } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
     }}>
       <fieldset disabled={busy} className="foundation-form" style={{ border: 0, padding: 0, margin: 0 }}>
-        {(mode === 'site' || mode === 'building' || mode === 'level' || mode === 'space' || mode === 'element') && <Field label={mode === 'space' ? 'Space name' : mode === 'element' ? 'Element name' : 'Name'}><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>}
-        {mode === 'building' && <Field label="Site (optional)"><select style={inputStyle} value={siteId} onChange={event => setSiteId(event.target.value)}><option value="">No site / standalone</option>{sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></Field>}
+        {(mode === 'site' || mode === 'building' || mode === 'building_edit' || mode === 'level' || mode === 'space' || mode === 'element') && <Field label={mode === 'space' ? 'Space name' : mode === 'element' ? 'Element name' : 'Name'}><input style={inputStyle} required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></Field>}
+        {mode === 'site' && <>
+          <Field label="Street address"><input style={inputStyle} maxLength={240} autoComplete="address-line1" value={addressLine1} onChange={event => setAddressLine1(event.target.value)} /></Field>
+          <Field label="Address line 2 (optional)"><input style={inputStyle} maxLength={240} autoComplete="address-line2" value={addressLine2} onChange={event => setAddressLine2(event.target.value)} /></Field>
+          <div className="cluster" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 130px' }}><Field label="Postal code"><input style={inputStyle} maxLength={40} autoComplete="postal-code" value={postalCode} onChange={event => setPostalCode(event.target.value)} /></Field></div>
+            <div style={{ flex: '2 1 180px' }}><Field label="Locality"><input style={inputStyle} maxLength={160} autoComplete="address-level2" value={locality} onChange={event => setLocality(event.target.value)} /></Field></div>
+            <div style={{ flex: '0 1 90px' }}><Field label="Country"><input style={inputStyle} maxLength={2} autoComplete="country" value={countryCode} onChange={event => setCountryCode(event.target.value.toUpperCase())} /></Field></div>
+          </div>
+          <p className="foundation-hint">The address belongs to the Site, so every Building here can keep its own name while sharing the same physical address.</p>
+        </>}
+        {(mode === 'building' || mode === 'building_edit') && <>
+          <Field label="Site (optional)"><select style={inputStyle} value={siteId} onChange={event => setSiteId(event.target.value)}><option value="">No site / standalone</option>{sites.map(site => <option key={site.id} value={site.id}>{site.name}{siteAddress(site) ? ' · ' + siteAddress(site) : ''}</option>)}</select></Field>
+          {mode === 'building_edit' && <p className="foundation-hint">Changing the Site is an identity-level change and requires direct Building authority.</p>}
+        </>}
         {mode === 'level' && <Field label="Order / position"><input style={inputStyle} type="number" value={position} onChange={event => setPosition(event.target.value)} /></Field>}
         {mode === 'space' && <><Field label="Kind"><input style={inputStyle} maxLength={80} placeholder="Bedroom, kitchen, porch…" value={kind} onChange={event => setKind(event.target.value)} /></Field><Field label="Level (optional)"><select style={inputStyle} value={levelId} onChange={event => setLevelId(event.target.value)}><option value="">Not modelled / unknown</option>{levels.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}</select></Field></>}
         {mode === 'element' && <><Field label="Kind"><input style={inputStyle} required maxLength={80} placeholder="Window, wall, beam, outlet…" value={kind} onChange={event => setKind(event.target.value)} /></Field><Field label="Space (optional)"><select style={inputStyle} value={subject} onChange={event => setSubject(event.target.value)}><option value="">Whole building / not placed</option>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field><Field label="Description"><textarea style={inputStyle} rows={2} maxLength={4000} value={description} onChange={event => setDescription(event.target.value)} /></Field></>}
         {mode === 'relationship' && <><Field label="First space"><select style={inputStyle} required value={subject} onChange={event => setSubject(event.target.value)}>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field><Field label="Relationship"><select style={inputStyle} value={relation} onChange={event => setRelation(event.target.value as RelationshipKind)}>{relationOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field><Field label="Second space"><select style={inputStyle} required value={object} onChange={event => setObject(event.target.value)}>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field></>}
         {needsTruth && <><Field label="How certain is this?"><select style={inputStyle} value={truth} onChange={event => setTruth(event.target.value as Exclude<PhysicalTruth, 'ai_assessment'>)}>{truthOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field><Field label="Source / how do we know?"><textarea style={inputStyle} rows={2} required={truth !== 'unknown'} maxLength={2000} placeholder={truth === 'unknown' ? 'Optional while unknown' : 'Measurement, drawing, observation…'} value={source} onChange={event => setSource(event.target.value)} /></Field></>}
-        {(mode === 'site' || mode === 'building' || mode === 'level' || mode === 'space' || mode === 'relationship') && <Field label="Notes"><textarea style={inputStyle} rows={2} maxLength={4000} value={notes} onChange={event => setNotes(event.target.value)} /></Field>}
+        {(mode === 'site' || mode === 'building' || mode === 'building_edit' || mode === 'level' || mode === 'space' || mode === 'relationship') && <Field label="Notes"><textarea style={inputStyle} rows={2} maxLength={4000} value={notes} onChange={event => setNotes(event.target.value)} /></Field>}
         {needsTruth && <p className="foundation-hint">Unknown stays unknown. This manual form cannot create an AI-assessment fact.</p>}
         {error && <div role="alert"><FormError>{error}</FormError></div>}
         {busy && <p role="status">Saving and reading back…</p>}

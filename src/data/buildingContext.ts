@@ -16,6 +16,11 @@ export interface PhysicalSite extends Audit {
   revision: number
   name: string
   notes: string
+  addressLine1: string
+  addressLine2: string
+  postalCode: string
+  locality: string
+  countryCode: string
   archived: boolean
 }
 export interface PhysicalBuilding extends Audit {
@@ -25,6 +30,14 @@ export interface PhysicalBuilding extends Audit {
   name: string
   notes: string
   archived: boolean
+}
+export interface PhysicalBuildingFootprint extends Audit {
+  buildingId: string
+  revision: number
+  geometry: Record<string, unknown>
+  truth: PhysicalTruth
+  source: string
+  notes: string
 }
 export interface PhysicalLevel extends Audit {
   id: string
@@ -146,7 +159,19 @@ function audit(row: Row): Audit {
   return { reason: row.change_note, actor: row.actor_label, recordedAt: row.recorded_at }
 }
 function site(row: Row): PhysicalSite {
-  return { id: row.id, revision: row.revision, name: row.name, notes: row.notes, archived: row.archived, ...audit(row) }
+  return {
+    id: row.id,
+    revision: row.revision,
+    name: row.name,
+    notes: row.notes,
+    addressLine1: row.address_line1 ?? '',
+    addressLine2: row.address_line2 ?? '',
+    postalCode: row.postal_code ?? '',
+    locality: row.locality ?? '',
+    countryCode: row.country_code ?? '',
+    archived: row.archived,
+    ...audit(row),
+  }
 }
 function building(row: Row): PhysicalBuilding {
   return { id: row.id, siteId: row.site_id ?? null, revision: row.revision, name: row.name, notes: row.notes, archived: row.archived, ...audit(row) }
@@ -227,6 +252,22 @@ export function createBuildingContext(
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('project_buildings').select('*').eq('project_id', projectId).eq('archived', false).order('name')) as Row[]
       guard(); return scoped(rows, projectId).map(building)
+    },
+    async footprint(projectId: string, buildingId: string): Promise<PhysicalBuildingFootprint | null> {
+      const { db, guard } = connection(projectId)
+      const row = checked(await db.from('current_building_footprints').select('*')
+        .eq('building_id', buildingId).maybeSingle()) as Row | null
+      guard()
+      if (!row) return null
+      return {
+        buildingId: row.building_id,
+        revision: row.revision,
+        geometry: row.geometry ?? {},
+        truth: row.truth,
+        source: row.source,
+        notes: row.notes,
+        ...audit(row),
+      }
     },
     async levels(projectId: string, buildingId: string): Promise<PhysicalLevel[]> {
       const { db, guard } = connection(projectId)
