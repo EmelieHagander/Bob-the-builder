@@ -166,7 +166,7 @@ begin
  insert into bob_private.drawing_budget_grants values(p_id,p_grant,p_expected);
  -- Only a cost stop is released by a budget grant; unchanged quality failures
  -- still need changed input or a concrete technical repair.
- update bob_private.drawing_requests set payload=payload-'retry',revision=revision+1
+ update bob_private.drawing_requests set payload=jsonb_set(payload,'{retry,fingerprint}','""'::jsonb),revision=revision+1
  where id=p_id and payload#>>'{retry,outcome,reason}'='turn_budget_exhausted';
  if found then update bob_private.project_drawing_requests set revision=revision+1 where id=p_id; end if;
  insert into bob_private.drawing_project_events(project_id) values(p_project)
@@ -232,6 +232,10 @@ declare c jsonb;
 begin
  if not exists(select 1 from bob_private.project_drawing_requests where id=new.id) then return new; end if;
  if jsonb_typeof(new.payload#>'{assessment,checks}')='array' then
+  -- A complete replacement assessment retires vanished needs but keeps stable
+  -- IDs and work links should a later assessment find the same need again.
+  update bob_private.drawing_gaps set blocking=false,action='none',observed_revision=new.revision
+  where request_id=new.id and not exists(select 1 from jsonb_array_elements((new.payload#>'{assessment,checks}')||coalesce(new.payload#>'{assessment,additional_needs}','[]')) needed where needed->>'id'=requirement_key);
   for c in select value from jsonb_array_elements((new.payload#>'{assessment,checks}')||coalesce(new.payload#>'{assessment,additional_needs}','[]')) loop
    if c->>'id' ~ '^[a-zA-Z0-9_-]{1,40}$' and c->>'action' in ('measurement','owner_decision','bob_decision','none') and jsonb_typeof(c->'blocking')='boolean' then
     insert into bob_private.drawing_gaps(request_id,project_id,requirement_key,action,blocking,observed_revision)
@@ -293,7 +297,8 @@ begin
   if tg_op='DELETE' then return old; end if;
   insert into bob_private.drawing_project_events(project_id) values(item->>'id')
   on conflict(project_id) do update set revision=bob_private.drawing_project_events.revision+1;
- else
+ end if;
+ if tg_table_name in ('buildings','building_spaces','space_measurements','building_elements','spatial_relationships','building_members') then
   -- Physical truth is Bob-owned but may be shared by multiple explicit scopes.
   for project in select distinct s.project_id from bob.project_physical_scope s
    where s.building_id::text=coalesce(item->>'building_id',case when tg_table_name='buildings' then item->>'id' end)
@@ -309,7 +314,7 @@ begin
 end $$;
 revoke all on function bob_private.signal_drawing_change() from public,anon,authenticated,service_role;
 do $$ declare name text; begin
- foreach name in array array['projects','tasks','measurements','existing_components','project_targets','project_plans','project_plan_evidence','project_plan_step_tasks','material_requirements','stock_items','artifacts','project_physical_scope','area_physical_targets','building_spaces','space_measurements','building_elements','spatial_relationships'] loop
+ foreach name in array array['projects','tasks','measurements','existing_components','project_targets','project_plans','project_plan_evidence','project_plan_step_tasks','material_requirements','stock_items','artifacts','project_physical_scope','area_physical_targets','buildings','building_spaces','space_measurements','building_elements','spatial_relationships'] loop
   execute format('create trigger drawing_source_changed after insert or update or delete on bob.%I for each row execute function bob_private.signal_drawing_change()',name);
  end loop;
 end $$;
@@ -366,6 +371,7 @@ begin
   if known then
    update bob_private.drawing_model_calls set completed=true,cost_usd=cost where request_id=pending.request_id and key=pending.key;
    update bob_private.drawing_budgets set spent_usd=spent_usd+coalesce(cost,0),unpriced=unpriced or cost is null where request_id=pending.request_id;
+   insert into bob_private.drawing_project_events(project_id) values(pending.project_id) on conflict(project_id) do update set revision=bob_private.drawing_project_events.revision+1;
   end if;
  end loop;
 end $$;
@@ -376,11 +382,11 @@ declare candidate record; r bob_private.project_drawing_requests; a bob_private.
 begin
  for candidate in select q.id,q.project_id,q.owner_user_id from bob_private.project_drawing_requests q
  join bob_private.drawing_project_events e on e.project_id=q.project_id and e.revision>q.observed_event
- where q.status in ('needs_data','retrieval_failed','draft','reviewed') and q.thread_id is not null and q.origin_turn_id is not null
+ where q.status in ('collecting','ready_to_design','needs_data','retrieval_failed','draft','reviewed') and q.thread_id is not null and q.origin_turn_id is not null
  order by q.updated_at limit 20 loop
   if not pg_try_advisory_xact_lock(hashtextextended(candidate.project_id||':'||candidate.owner_user_id::text,0)) then continue; end if;
   select * into r from bob_private.project_drawing_requests where id=candidate.id for update;
-  if r.status not in ('needs_data','retrieval_failed','draft','reviewed') or r.thread_id is null then continue; end if;
+  if r.status not in ('collecting','ready_to_design','needs_data','retrieval_failed','draft','reviewed') or r.thread_id is null then continue; end if;
   if not exists(select 1 from bob.people where project_id=r.project_id and auth_user_id=r.owner_user_id) then
    delete from bob_private.drawing_authorities where request_id=r.id;continue;
   end if;

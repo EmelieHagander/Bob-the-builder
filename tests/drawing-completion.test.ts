@@ -113,3 +113,65 @@ test('P2 events: UI/chat domain changes resume the original mandate, deduplicate
  await pg.query('delete from bob.projects where id=$1',[project])
  assert.equal((await pg.query('select count(*)::int n from bob_private.drawing_project_events')).rows[0].n,0,'project deletion does not recreate an event row')
 })
+
+test('P2: a late provider receipt reconciles once and recovers its original transport',async t=>{
+ const pg=await projectSchema();t.after(()=>pg.close())
+ const owner=randomUUID(),id=randomUUID(),turn=randomUUID(),execution=randomUUID(),key='e'.repeat(64)
+ const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
+ await pg.query('insert into auth.users values($1,$2,now())',[owner,'late-budget@example.test'])
+ const project=(await call(owner,'bob.create_project',[{name:'Late budget fixture'}])).id
+ const c=await call(null,'bob.bob_claim_turn',[project,owner,turn,'Draw shelf'],'service_role')
+ await call(owner,'bob.create_drawing_request',[project,c.thread_id,turn,c.generation,id,scope])
+ await call(null,'bob.bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',id,0,'collecting',{brief:scope,owner_request:'Draw shelf',reference_refs:[]},randomUUID()],'service_role')
+ const budget=(op:string,run=execution,result:any=null)=>call(null,'bob.bob_drawing_budget',[project,owner,c.thread_id,turn,c.generation,id,run,key,op,result],'service_role')
+ await budget('reserve')
+ await pg.exec("update shared_private.ai_runtime set worker_url='https://fixtureproject.supabase.co/functions/v1/ai-background-worker'; update shared_private.ai_receivers set enabled=true where app='bob'")
+ const context={jobId:execution,role:'cad-designer'},operation=execution+'/model:cad:0'
+ const ai=await call(null,'shared.ai_job_reserve',['bob',operation,key,'bob',context,new Date(Date.now()+600000).toISOString(),{user_id:owner,module:'cad',ai_function:'cad-designer',model:'fixture',input_price_per_1m:2,cached_price_per_1m:.5,output_price_per_1m:10}],'service_role')
+ const response={id:'resp_'+ai.id.replaceAll('-',''),status:'completed',metadata:{ai_job_id:ai.id},model:'fixture',output_text:'Exact late output',usage:{input_tokens:1000,output_tokens:200}}
+ await call(null,'shared.ai_job_accept',[ai.id,response],'service_role')
+ for(let n=0;n<2;n++)await pg.exec('select bob_private.reconcile_drawing_costs()')
+ const work=await call(owner,'bob.drawing_request_work',[project,id])
+ assert.equal(work.budget.calls,1);assert.equal(work.budget.spent_usd,.004);assert.equal(work.budget.outcome_unknown,false)
+ const recovered=await budget('reserve',randomUUID());assert.equal(recovered.status,'recover');assert.equal(recovered.execution_id,execution);assert.equal(recovered.recovery.key,operation);assert.deepEqual(recovered.recovery.context,context)
+ const parsed={success:true,data:'Exact late output',model:'fixture',estimatedCostUsd:.004,usage:{total_tokens:1200}}
+ await budget('complete',execution,parsed)
+ assert.deepEqual((await budget('reserve',randomUUID())).response,parsed)
+ assert.equal((await call(owner,'bob.drawing_request_work',[project,id])).budget.spent_usd,.004,'parsed recovery never charges the same receipt twice')
+})
+
+test('P2: shared requirements create one canonical Task and private needs cannot publish prose',async t=>{
+ const pg=await projectSchema();t.after(()=>pg.close())
+ const owner=randomUUID(),id=randomUUID(),turn=randomUUID()
+ const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
+ await pg.query('insert into auth.users values($1,$2,now())',[owner,'gap-task@example.test'])
+ const project=(await call(owner,'bob.create_project',[{name:'Gap Task fixture'}])).id
+ const requirement={requirement_id:null,type:'measurement',title:'Measure shelf width',description:'Canonical shared instruction',resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}
+ const proposal=await call(owner,'bob_private.project_plan_propose',[project,0,{summary:'Drawing input',reason:'Fixture',steps:[{step_id:null,title:'Drawing',goal:'Shelf concept',state:'active',phase:'planning',area_id:null,responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[requirement]}],task_links:[]}],'postgres')
+ const plan=(await call(owner,'bob_private.project_plan_decide',[project,0,proposal.record.revision,'approve','Use requirements'],'postgres')).record
+ const step=plan.steps[0],rid=step.requirements[0].id
+ const c=await call(null,'bob.bob_claim_turn',[project,owner,turn,'Draw shelf'],'service_role')
+ await call(owner,'bob.create_drawing_request',[project,c.thread_id,turn,c.generation,id,{...scope,step_id:step.id}])
+ const payload={brief:{...scope,step_id:step.id,handoff:{requirements:[{id:'width',basis:'project_record',source_ref:rid}]}},owner_request:'PRIVATE words',reference_refs:[],assessment:{checks:[{id:'width',action:'measurement',blocking:true,detail:'PRIVATE needs'}],additional_needs:[{id:'other',action:'measurement',blocking:true,detail:'PRIVATE other'}]}}
+ const save=(rev:number)=>call(null,'bob.bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',id,rev,'needs_data',payload,randomUUID()],'service_role')
+ await save(0)
+ const rows=(await pg.query<any>('select id,requirement_key from bob_private.drawing_gaps where request_id=$1',[id])).rows
+ const gid=rows.find(g=>g.requirement_key==='width')!.id,privateId=rows.find(g=>g.requirement_key==='other')!.id
+ await assert.rejects(call(owner,'bob.ensure_drawing_gap_task',[project,id,1,privateId,rid,plan.revision]),/canonical_requirement_required/)
+ const task=await call(owner,'bob.ensure_drawing_gap_task',[project,id,1,gid,rid,plan.revision])
+ assert.equal((await call(owner,'bob.ensure_drawing_gap_task',[project,id,1,gid,rid,plan.revision])).task_id,task.task_id)
+ const shared=(await pg.query<any>('select name,instructions from bob.tasks where id=$1',[task.task_id])).rows[0]
+ assert.deepEqual(shared,{name:requirement.title,instructions:requirement.description});assert(!JSON.stringify(shared).includes('PRIVATE'))
+ payload.assessment.additional_needs=[];await save(1)
+ assert.equal((await pg.query<any>('select blocking from bob_private.drawing_gaps where id=$1',[privateId])).rows[0].blocking,false,'retired needs keep identity without blocking forever')
+ assert.equal((await pg.query<any>('select count(*)::int n from bob.tasks where project_id=$1',[project])).rows[0].n,1)
+})
+
+
+test('P2: an unpriced transport failure cannot release its uncertain reservation',async()=>{
+ const operations:string[]=[]
+ const budget=createDrawingBudget({executionId:randomUUID(),command:async input=>{operations.push(String(input.p_operation));return {status:'reserved'}}})
+ const failure:any={success:false,data:null,model:'fixture',error:'Network error: timeout',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
+ assert.deepEqual(await budget('request',{functionName:'cad-designer'} as any,async()=>failure),failure)
+ assert.deepEqual(operations,['reserve'])
+})

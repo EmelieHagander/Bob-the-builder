@@ -125,7 +125,6 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     raw.handoff=incoming
    }
   }
-  if(!opts.available)return {status:'unavailable',stage:'cad_engine',saved:false,reason:'CAD service is not configured. This is an infrastructure issue, not a missing user approval.'}
   if(used>=2)return {status:'budget_exhausted',saved:false}
   const handoff=parseDesignHandoff(raw.handoff)
   if(!handoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
@@ -158,8 +157,10 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    else result={status:'invalid'}
    await dependencies.record(name,args,result);return result
   }
+  let resumeDraft:Record<string,any>|null=null
   let retryInputs:{evidence:Record<string,unknown>;images:unknown}|undefined
-  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,dependencies:await dependencies.digest()},retryInputs.images):''
+  const sourceFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,dependencies:await dependencies.digest()},retryInputs.images):''
+  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,dependencies:await dependencies.digest()},retryInputs.images):''
   let expected=0
   if(raw.artifact_id){
    const old=await readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
@@ -190,6 +191,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    used++;metrics.consultations++
    messages.push({role:'user',content:JSON.stringify({current_target:selected??null,quick_check:{target:hasTarget,requirements:handoff.requirements.length>0},notice:'Cheap structural check only; the collector must assess the whole request even if this check fails. Current target is design intent, never physical verification.'})})
    if(!request?.payload.retry)await persist('collecting')
+   if(!opts.available){await persist('retrieval_failed');return {status:'unavailable',stage:'cad_engine',saved:false,request_id:request?.id??null,reason:'CAD service is not configured. This is an infrastructure issue, not a missing user approval.'}}
    const referenceRefs=payload.reference_refs
    const imageFailures:string[]=[]
    if(referenceRefs.length&&!opts.context)imageFailures.push(...referenceRefs)
@@ -204,14 +206,23 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     const initialEvidence=[{tool:'current_target',result:target},...facts.evidence]
     const imageCatalog=await opts.context?.catalog()??null
     await dependencies.refresh(executeRead)
-    retryInputs={evidence:{initialEvidence,artifact_revision:expected,...(runtimeVersion?{runtimeVersion}:{})},images:{refs:[...referenceRefs].sort(),versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),failures:imageFailures,catalog:imageCatalog}}
+    retryInputs={evidence:{initialEvidence,artifact_revision:expected},images:{refs:[...referenceRefs].sort(),versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),failures:imageFailures,catalog:imageCatalog}}
     const inputFingerprint=await retryFingerprint()
     if(request?.payload.retry?.fingerprint===inputFingerprint){
      partial=true
      return { ...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
       next_action:'No source or structured requirement changed since this pause. Reuse the existing gaps and Tasks; save the needed complement before resuming this same request. Retrieval failure is not a request for new measurements.' }
     }
+    const draft=payload.draft
+    if(object(draft)&&draft.source_fingerprint===await sourceFingerprint()&&parseCadAssemblyRequest(draft.recipe)
+      &&(request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted')){
+     resumeDraft=draft
+     referencePixels.push(...opts.context?.carrier()??[])
+     researchEvidence.push(...(Array.isArray(request?.payload.evidence)?request.payload.evidence:[]))
+     payload.assessment=request?.payload.assessment
+    }
     await persist('collecting',{retry:undefined})
+    if(!resumeDraft){
     messages.push({role:'user',content:JSON.stringify({source_evidence:initialEvidence,incomplete_datasets:facts.incomplete,handoff,reference_refs:referenceRefs,image_catalog:imageCatalog,notice:'Assess every requirement and all necessary dependencies. Known numbers remain exact. Read errors are system gaps, not requests for new measurements.'})})
     const collected=await collectCadResearch({userId:opts.userId,messages,handoff,initialEvidence,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel:model,
      carrier:()=>{const pixels=opts.context?.carrier()??[];referencePixels.push(...pixels);return pixels},confirmDelivery:()=>opts.context?.confirmDelivery(),
@@ -234,6 +245,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
      return {...outcome,request_id:request?.id??null}
     }
     messages=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:ownerRequest,brief:raw,current_target:selected,source_evidence:collected.evidence,intake:collected.assessment,previous_draft:request?.payload.draft??null,notice:'Exact source records are authoritative. Preserve their values, units and provenance; images and assumptions cannot override them. A previous draft is unverified and must be rendered and reviewed with current sources.'})},...referencePixels]
+    }
    }else if(!hasTarget)return {status:'prerequisite_required',stage:'target',saved:false,required_tools:requiredTools}
    else if(imageFailures.length)return {status:'unavailable',stage:'reference_images',saved:false}
    // Specialists need the same current-fact grounding as Bob when viewing pixels.
@@ -334,6 +346,24 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
      metrics.review_rejections++
      if(reviews>=3||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
      return {status:'revise',saved:false,review}
+   }
+   if(resumeDraft){
+    // A repaired runtime gets the exact pinned recipe. Current source reads and
+    // the independent review remain mandatory; no designer call precedes them.
+    const d=resumeDraft,parsed=parseCadAssemblyRequest(d.recipe)!
+    renders++;metrics.renders++
+    let packet:CadPacket
+    try{packet=await opts.render(parsed)}catch(error){
+     rethrowContinuation(error);partial=true
+     return {status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
+    }
+    const {bob_parameters:_untrusted,...manifest}=packet.manifest
+    packet={...packet,manifest:{...manifest,bob_lineage:d.lineage,...(d.parameters?{bob_parameters:d.parameters}:{})}}
+    candidate={packet,title:d.title,description:d.description,assumptions:d.assumptions,target_revision:d.target_revision,measurements:d.measurements,source_artifact_id:d.source_artifact_id,source_revision:d.source_revision,part_ids:d.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
+    reviewPending=true
+    const checked=await reviewCurrentCandidate()
+    if(checked.status!=='revise')return checked
+    messages.push({role:'user',content:JSON.stringify({previous_draft:d,independent_review:checked.review,notice:'Repair the concrete review issues in this same construction.'})})
    }
    for(let round=0;round<10&&Date.now()<until;round++){
     if(!await checkAuthority())throw new Error('project_denied')
@@ -456,6 +486,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
        const parsed=parseCadAssemblyRequest(recipe);if(!parsed){invalidRenders++;metrics.input_corrections++;out={status:'invalid',reason:'invalid_geometry',issues:cadIssues(recipe),renders_remaining:4-renders,corrections_remaining:8-invalidRenders};messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(out)});continue}
        lineage??=buildCadLineage(opts.projectId,parsed,[],measurementRecords,handoff.coordinates)
        renders++;metrics.renders++
+       await persist('draft',{draft:{source_fingerprint:await sourceFingerprint(),recipe:parsed,lineage,parameters,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements,target_revision:args.target_revision,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids}})
        let packet:CadPacket
        try{packet=await opts.render(parsed)}catch(error){
         rethrowContinuation(error);partial=true
@@ -464,7 +495,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
        const {bob_parameters:_untrustedParameters,...renderManifest}=packet.manifest
        packet={...packet,manifest:{...renderManifest,bob_lineage:lineage,...(parameters?{bob_parameters:parameters}:{})}}
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
-       await persist('draft',{draft:{recipe:parsed,lineage,parameters,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements}})
+
        reviewPending=true
        out={status:'rendered',saved:false,applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:'Check dimensions and construction intent. Resolve unintended overlaps. Partial or absent checks do not prove clearance. Motion checks are conservative translation envelopes. Geometry does not verify physical fit or strength.'}
       }
@@ -531,8 +562,8 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
   finally{sources.push(...lookup.sources,...groundingLookup.sources)}
   }
   const outcome=await attempt()
-  if(request&&!candidate&&retryInputs&&dependencies.complete&&!['stopped','cancelled','paused','saved','existing_request'].includes(outcome.status)&&!('retry_suppressed' in outcome)){
-   await persist(request.status,{dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})
+  if(request&&!candidate&&retryInputs&&dependencies.complete&&!['stopped','cancelled','paused','saved','existing_request'].includes(String(outcome.status))&&!('retry_suppressed' in outcome)){
+   await persist(outcome.status==='needs_data'?'needs_data':'retrieval_failed',{...(object(payload.draft)?{draft:{...payload.draft,source_fingerprint:await sourceFingerprint()}}:{}),dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})
   }
   return outcome
  }}

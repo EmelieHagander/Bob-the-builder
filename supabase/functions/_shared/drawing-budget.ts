@@ -15,6 +15,9 @@ export function createDrawingBudget(opts:{
   if(reserved.status==='completed')return reserved.response as OpenAIServiceResponse<string>
   if(!['reserved','recover'].includes(reserved.status))return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'turn_budget_exhausted'}
   const result=await work(reserved.recovery)
+  // A transport failure with no priced receipt can have happened after billing.
+  // Leave its reservation pending for provider reconciliation, never mark it free.
+  if(!result.success&&result.estimatedCostUsd==null)return result
   if(reserved.execution_id)binding.p_execution=reserved.execution_id
   // No catch/release: an exception after dispatch does not prove no charge.
   await opts.command({...binding,p_operation:'complete',p_response:result})

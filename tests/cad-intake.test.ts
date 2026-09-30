@@ -240,3 +240,16 @@ test('P2c changed canonical requirements stop a restored attempt before paid wor
  const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,load:async()=>({id,revision:3,status:'collecting',payload:{brief:request,owner_request:'Restore',reference_refs:[],restoration:{plan_revision:1,step_id:id}}}),assertActive:async()=>{throw Error('drawing_requirements_changed')}},callModel:async()=>{paid++;throw Error('must not pay')}})
  const result=await a.consult({...request,request_id:id});assert.equal(result.reason,'drawing_requirements_changed');assert.equal(paid,0);assert.equal(f.renders,0)
 })
+
+
+test('P2: runtime repair renders the same private draft and reviews it without another designer',async()=>{
+ const f=fixture();let version='broken',fail=true,paid=0;const render=f.opts.render,model=f.opts.callModel
+ const opts={...f.opts,runtimeVersion:async()=>version,render:async(r:any)=>{if(fail)throw new Error('renderer offline');return render(r)},callModel:async(o:any)=>{paid++;return model(o)}}
+ const first=await createCadAssistant(opts).consult(request)
+ assert.equal(first.reason,'render_failed');assert.equal(f.row?.status,'retrieval_failed');assert.deepEqual((f.row?.payload.draft as any).recipe,recipe)
+ const before=paid
+ assert.equal((await createCadAssistant(opts).consult({...request,request_id:id})).retry_suppressed,true);assert.equal(paid,before)
+ version='repaired';fail=false
+ const result=await createCadAssistant(opts).consult({...request,request_id:id})
+ assert.equal(result.status,'ready');assert.equal(f.design,1,'no repeat design');assert.equal(paid,before+1,'only independent review is charged');assert.equal(f.renders,1)
+})
