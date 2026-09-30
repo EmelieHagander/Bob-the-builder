@@ -315,13 +315,19 @@ try {
     await sourceMap.getByText(/Calculation: subtract_v1 · inputs width, allowance/).waitFor()
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Source map must fit mobile without promoting estimates to measurements')
     await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
+    await sourceMap.getByText('Original value: 1 m · truth: measured',{exact:true}).scrollIntoViewIfNeeded()
+    await page.screenshot({path:`test-results/cad-parameter-source-${viewport.width}.png`})
     // An explicitly opened historical revision remains the page focus even
     // when a newer saved proposal exists. Bob opens over the version dialog.
     artifacts.records.set(cadId,{...cadRow,revision:2})
     artifacts.histories.set(cadId,[cadRow,{...cadRow,revision:2}])
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
+    // The exact URL is already open; reload to read the collaborator's new head
+    // while keeping the historical revision selected in the URL.
+    await page.reload()
     const versionDialog = page.getByRole('dialog',{name:'CAD shelf detail · Version 1',exact:true})
     await versionDialog.getByText(/The newest saved revision is 2; this view keeps revision 1/).waitFor()
+    await page.screenshot({path:`test-results/drawing-historical-version-${viewport.width}.png`})
     const askVersion = versionDialog.getByRole('button',{name:'Ask Bob about this version',exact:true})
     await askVersion.click()
     const bobDialog = page.getByRole('dialog',{name:'Bob conversation for Porch A',exact:true})
@@ -394,6 +400,7 @@ try {
     await sourceMap.getByText('Saved revision: 2 · current revision: 5',{exact:true}).waitFor()
     await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).waitFor()
     await sourceMap.getByText('Saved value: 980 mm',{exact:true}).waitFor()
+    await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).scrollIntoViewIfNeeded()
     await page.screenshot({path:`test-results/drawing-source-map-${viewport.width}.png`,fullPage:true})
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByText('Sources changed — review drawing',{exact:true}).waitFor()

@@ -278,14 +278,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: publicera P3-branchen `feat/p3-grounded-context-20260930` till `EmelieHagander/Bob-the-builder` och kör CI:s Deno- och browserprov på mobil, desktop och efter reload.** Destination och release är direkt godkända av användaren. Lokala verifieringsbevis finns hos [verifieringsägaren](foundation-verification.md#p3-local-release-preparation--2026-09-30). Dubbelkontrollera diff och målmiljö före additiv datamigration, Edge-deploy och merge/webbdeploy; P3 stängs först efter driftsatt återläsning och faktisk modellkonsumtion. P0:s verkliga användartest hålls separat öppet.
+**Nästa handling: slutför CI och bildgranskningen för P3:s historiska ritningsversioner efter reload i [PR #177](https://github.com/EmelieHagander/Bob-the-builder/pull/177).** Branchen är publicerad; destination och release är direkt godkända av användaren. Verifieringsbevis finns hos [verifieringsägaren](foundation-verification.md#p3-local-release-preparation--2026-09-30). Dubbelkontrollera diff och målmiljö före additiv datamigration, Edge-deploy och merge/webbdeploy; P3 stängs först efter driftsatt återläsning och faktisk modellkonsumtion. P0:s verkliga användartest hålls separat öppet.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
 | **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P3 — release och acceptans återstår** | Publicering och CI:s Deno-/browsergrindar. Bevisa sparad/vald version mot nyare förslag efter reload och bevarad åtkomstgräns i browser. Applicering, Edge-/webbdeploy, merge och driftsatt Auth/modellprov för fokus, relevanta bildpixlar, kunskap och återläsning återstår; större katalog/router/Librarian är fortsatt specificerade hos kontextägaren. |
+| **P3 — release och acceptans återstår** | Slutför CI:s browsergrind och bildgranskning för sparad/vald version mot nyare förslag efter reload. Applicering, Edge-/webbdeploy, merge och driftsatt Auth/modellprov för fokus, relevanta bildpixlar, kunskap och återläsning återstår; större katalog/router/Librarian är fortsatt specificerade hos kontextägaren. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
 **Arbetsmetod:** håll ett avgränsat kodutfall aktivt åt gången. Följ källägare → faktisk spar-/återläsningsgräns, reproducera relevanta fel med negativa och positiva prov, gör minsta sammanhängande ändring och verifiera. Arkivera avslutade prov i PR/CI. Ange nästa kvarstående grind här, inte en historik över gröna körningar. Nya röda kontroller blir nästa handling.
