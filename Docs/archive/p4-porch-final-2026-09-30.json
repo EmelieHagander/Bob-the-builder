@@ -1,0 +1,166 @@
+{
+  "scope": "P4 partial: real read-only guest model; manual media; name-only participant HTTP",
+  "startedAt": "2026-09-30T18:48:59.128Z",
+  "fixtureProjects": [
+    {
+      "id": "p_4f381eab87694356a33364fac7b2f836",
+      "name": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa"
+    }
+  ],
+  "results": [
+    {
+      "case": "porch",
+      "phase": "initial",
+      "projectId": "p_4f381eab87694356a33364fac7b2f836",
+      "turnId": "1f2b37c8-4d3c-4148-8aa7-555b5a36e195",
+      "sourceIds": [
+        "f432cb0e-d19a-4711-a42a-930f7d6fd765",
+        "7f0c06a4-5a01-430c-aadb-aea1b0d76619",
+        "9a3b426d-e732-4604-bf4f-e7abce57aa3b"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 36791,
+      "summary": "Jag läste aktuell uppgift och mått i projektet.\n\n- **Användbara konceptmått:** veranda med tak, **ca 3000 × 4000 mm**. De är registrerade som **uppskattade konceptmått**, inte fältmätta värden.\n- **Aktuell uppgift:** **“Veranda”**, status **todo**. Noteringen säger också: **syntetiskt underlag, inget verkligt arbete verifierat**.\n\nDet som **saknas/verifieras inte ännu** är:\n- **grunddjup**\n- **mark/grundförutsättningar**\n- **laster**\n- **befintlig infästning mot huset**\n\n**Nästa möjliga arbete:** verifiera platsmått och bärande förutsättningar på riktigt: måttsättning på plats, grund/mark, infästningspunkt och lastantaganden.\n\n**Det som hindrar tillverkningsunderlag:** utan de verifieringarna går det inte att låsa dimensionering, infästningar, grundlösning eller detaljmått. En konceptskiss räcker alltså inte som tillverkningsunderlag.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_4f381eab87694356a33364fac7b2f836",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_f5641c41-1cab-4fec-90b3-1c57b40c6c8a",
+              "name": "Veranda",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_4f381eab87694356a33364fac7b2f836",
+              "dataset": "project",
+              "recordId": "p_4f381eab87694356a33364fac7b2f836",
+              "label": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa",
+              "updatedAt": "2026-09-30T18:49:08.911899+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T18:50:06.707Z"
+            },
+            {
+              "projectId": "p_4f381eab87694356a33364fac7b2f836",
+              "dataset": "crew",
+              "recordId": "m_28703752bc1a483c9b15b8f8296339b7",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T18:49:08.635563+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T18:50:06.707Z"
+            },
+            {
+              "projectId": "p_4f381eab87694356a33364fac7b2f836",
+              "dataset": "tasks",
+              "recordId": "t_f5641c41-1cab-4fec-90b3-1c57b40c6c8a",
+              "label": "Veranda",
+              "updatedAt": "2026-09-30T18:49:14.847288+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T18:50:06.707Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T18:50:06.707Z",
+          "project": {
+            "id": "p_4f381eab87694356a33364fac7b2f836",
+            "name": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa"
+          },
+          "viewer": {
+            "id": "m_28703752bc1a483c9b15b8f8296339b7",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "project",
+            "recordId": "p_4f381eab87694356a33364fac7b2f836",
+            "label": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa",
+            "updatedAt": "2026-09-30T18:49:08.911899+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T18:49:32.540Z"
+          },
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "crew",
+            "recordId": "m_28703752bc1a483c9b15b8f8296339b7",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T18:49:08.635563+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T18:49:32.540Z"
+          },
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "tasks",
+            "recordId": "t_f5641c41-1cab-4fec-90b3-1c57b40c6c8a",
+            "label": "Veranda",
+            "updatedAt": "2026-09-30T18:49:14.847288+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T18:49:32.540Z"
+          },
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "measurements",
+            "recordId": "7f0c06a4-5a01-430c-aadb-aea1b0d76619",
+            "label": "Valt konceptdjup",
+            "retrievedAt": "2026-09-30T18:49:49.740Z",
+            "updatedAt": "2026-09-30T18:49:30.575102+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "measurements",
+            "recordId": "9a3b426d-e732-4604-bf4f-e7abce57aa3b",
+            "label": "Grunddjup",
+            "retrievedAt": "2026-09-30T18:49:49.740Z",
+            "updatedAt": "2026-09-30T18:49:30.735938+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_4f381eab87694356a33364fac7b2f836",
+            "dataset": "measurements",
+            "recordId": "f432cb0e-d19a-4711-a42a-930f7d6fd765",
+            "label": "Vald konceptbredd",
+            "retrievedAt": "2026-09-30T18:49:49.740Z",
+            "updatedAt": "2026-09-30T18:49:21.731125+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Concept dimensions remain estimates, unknown foundation/load/attachment stay unknown, and no saved sketch or completed work is claimed. This is input honesty, not completed A17 or a saved delivery."
+    }
+  ],
+  "notProven": [
+    "Bob-driven save/link",
+    "named-member history/idempotency",
+    "mobile rendering",
+    "complete UC-001–005",
+    "construction safety"
+  ],
+  "finishedAt": "2026-09-30T18:50:07.876Z",
+  "runtime": {
+    "source": "7262e05c65c4ff648f48351cca75ef8a462f11b0",
+    "askBob": 70,
+    "worker": 38
+  },
+  "activeOwner": "../foundation-verification.md#p4-product-acceptance--2026-09-30"
+}

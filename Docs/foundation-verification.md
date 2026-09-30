@@ -2,7 +2,21 @@
 
 ## P4 product acceptance — 2026-09-30
 
-**Implementation under review; the P4 corrections are not yet deployed.**
+**First P4 pass released; whole P4 and UC-001–005 remain open.**
+[PR #178](https://github.com/EmelieHagander/Bob-the-builder/pull/178) merged as
+`5696728d9a21f9eae954a482de0a6a6c4a119399`. Final reviewed source
+`7262e05c65c4ff648f48351cca75ef8a462f11b0` passed
+[CI 36759787908](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36759787908):
+**841/841**, vocabulary, Edge types, build/PWA and every browser group.
+[CAD lineage concurrency 36759787986](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36759787986)
+also passed. Review followed Vera's and Archie's prompts manually; no independent
+steward subagent review is claimed. Chrome was unavailable locally, so browser
+verification ran in CI. Artifact `11118631866` was downloaded and all three new
+instruction screenshots inspected at 320/390/1280 px. Captions, purposes and
+independent image placement fit; browser assertions separately prove decoded
+fixture pixels, refresh, reload and revoked access. These tiny image fixtures
+are not proof that a real construction photograph is usable on a phone.
+
 `scripts/check-live-p4.mjs` runs bounded real read-only model scenarios and a
 manual media/name-only participant HTTP scenario in new disposable projects.
 Use `BOB_P4_LIVE_CONFIRM=disposable-fixtures-only`, the existing public Bob
@@ -16,10 +30,20 @@ with two unknown inputs (one later complemented to 650 mm), a porch with missing
 foundation/load/attachment evidence, and a multi-room renovation with finished
 work. All six mechanically pass real OpenAI, caller/project scope, exact source
 IDs, Task focus, expected values and absence of writes. Manual review accepts
-five replies and finds a porch defect: conditional discussion of a concept sketch
-is turned into a claim that the sketch already exists. No sketch was created.
-The common evidence principle is corrected within the existing prompt budget;
-a new deployed porch reply must be reviewed before that finding is closed.
+five replies and finds a porch defect: discussion of concept inputs becomes a
+claim that a sketch already exists, despite zero saved Artifacts or images.
+[The initial report](archive/p4-model-initial-2026-09-30.json) retains full
+synthetic answers, sources and manual verdicts. The first generic clarification
+still failed the [deployed retry](archive/p4-porch-first-retry-2026-09-30.json);
+its mechanical pass did not close the finding. The final common rule requires
+reading an output's saved record before calling it existing, and distinguishes
+inputs from deliverables, within the **1000-word** permanent prompt ceiling.
+The unchanged original porch scenario was rerun against final deployed source.
+[Its reviewed answer](archive/p4-porch-final-2026-09-30.json) preserves estimated
+concept dimensions and unknown foundation/load/attachment conditions without
+claiming a saved sketch or completed work. This closes the reproduced existence
+claim in this scenario; it does not establish a saved concept/manufacturing
+delivery or the whole A17.
 
 The media scenario reproduces a second defect through actual Auth, PostgREST and
 Storage: the participant API flattens two instructions' images and loses their
@@ -27,15 +51,61 @@ individual placement. A full-schema regression fails before the correction and
 passes after it. The additive migration preserves the legacy union, adds exact
 instruction image lists and general context images, and retains capability/byte
 authorization. The participant UI renders each list beside its instruction.
-Browser fixtures now cover reuse, independent replacement and reload at
-320/390/1280 px; CI screenshots and hosted after-proofs remain required.
+The hosted after-proof passes ordinary caller reserve/upload/finalise, absent
+bytes rejection, idempotent retry, one original shared between two instructions,
+replacement of only the first link, fresh caller readback, name-only participant
+instruction placement, exact HTTP bytes with `no-store`, and RPC/HTTP denial
+after individual-session revocation. Browser fixtures separately cover refresh
+and reload at 320/390/1280 px. No Auth users or privileges were created.
+
+The additive source migration
+`20260930174127_volunteer_instruction_images.sql` was applied as
+`20260930183122_bob_p4_volunteer_instruction_images`; source SHA-256 is
+`fd6ccbbf2bf58ee4a71b76b080e1f3c9d9279f4fadd3e7598d4161267f7b2fc5`.
+The private function retains its exact ACL, `SECURITY DEFINER` and empty
+`search_path`. Bob-scoped security advisor findings are unchanged: 24 INFO
+RPC/service-only tables and eight pre-existing WARN notices for intentionally
+authenticated definer RPCs. There are no new Bob warnings or errors. The
+[release evidence](archive/p4-live-release-2026-09-30.json) records exact names,
+before/after findings and metadata; this is not a claim about other apps in the
+shared database.
+
+`ask-bob` **v70** and `bob-worker` **v38** bundle the immutable final reviewed
+source above, retaining their respective JWT modes. Earlier v69/v37 supplied
+the successful media proof and unsuccessful first porch retry; the image SQL/UI
+is identical in final source. Readback verified both final wrapper files and
+bundle hashes. [Pages 36761512308](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36761512308)
+published the matching frontend. HTTP 200 and served asset
+`/Bob-the-builder/assets/index-bPyr19Oz.js` confirm the new participant contract
+at https://emeliehagander.github.io/Bob-the-builder/.
+[Live Bob 36761512263](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36761512263)
+also passes actual Auth/PostgREST/OpenAI source use, non-member 403, retired
+endpoint 410, exact Task focus, real image pixels, versioned knowledge and absent
+guest server history. It remains a guest release smoke, not private-member acceptance.
+
+Cost comes from exact `bob.execution_events` turn IDs, not an invoice. The six
+initial replies used 13 model calls, 109875 input / 6328 output tokens and
+estimated **$0.184135**. Including both porch retries gives eight replies,
+17 calls, 143503 input / 8105 output tokens and **$0.264908**. One extra early
+setup reply brings the total P4 probe spend to 19 calls / **$0.301520**;
+the automatic main release smoke is separate. No cost per accepted CAD delivery
+is claimed. Before deleting any project, reports and accounting were captured,
+ordinary caller commands removed its Storage bytes/metadata, and an operator
+checked exact ID/name/type, sole guest Auth membership and absence of media,
+objects, Artifacts and private threads. Only the ten printed P4 fixtures and
+the newly printed release-smoke fixture were removed. Follow-up counts are zero
+for their projects, people, Tasks/instructions, measurements, media, invitations,
+sessions, private threads and objects; the smoke's material is also absent.
 
 These are **partial** A02/A04/A05/A16/A17/A19 observations and UC-003/004
 mechanics. They do not prove Bob-driven generation/save/link, complete A15/A20,
 real mobile participant acceptance, field safety or a whole UC. P0/P3 acceptance
-remains in the [shared todo](bob-delivery-flow.md#acceptans-todo). Cost, final CI,
-deployment, fixture cleanup and reviewed model outputs belong in this release
-record when performed; no historical green result substitutes for them.
+remains in the [shared todo](bob-delivery-flow.md#acceptans-todo). The remaining
+model-driven save/link/complement, controlled failure/budget, private reset,
+real mobile participant and multi-day replanning cases stay in
+[active State](bob-delivery-flow.md#state). An existing verified ordinary member
+session in a secure runner is still needed for the full writing/private-history
+flows; the public guest cannot substitute for that acceptance role.
 
 ## September 24 work and drawing release
 

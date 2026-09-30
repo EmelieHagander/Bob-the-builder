@@ -1,0 +1,1121 @@
+{
+  "date": "2026-09-30",
+  "scope": "Six real read-only guest replies; synthetic projects. Partial product evidence only.",
+  "runtime": {
+    "askBob": 68,
+    "worker": 36,
+    "source": "58ee8c6185858f33018a9400393ebe08d770b536"
+  },
+  "fixtureProjects": [
+    {
+      "id": "p_e330500370464473a571f4dde9fa9c90",
+      "name": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565"
+    },
+    {
+      "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+      "name": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4"
+    },
+    {
+      "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+      "name": "Bob P4 verification porch 0ab9091e-f3de-4892-9865-5199e8cb0000"
+    },
+    {
+      "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+      "name": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1"
+    },
+    {
+      "id": "p_292c79b7f95e45df83062c6a069f4a06",
+      "name": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be"
+    }
+  ],
+  "results": [
+    {
+      "case": "shelf",
+      "phase": "initial",
+      "projectId": "p_e330500370464473a571f4dde9fa9c90",
+      "turnId": "e4e55e13-fa77-4e2d-b542-2df3a7c9d83e",
+      "sourceIds": [
+        "be11dfc6-de82-42fd-8edf-fefa6c931a32",
+        "f40e5e76-81d8-4144-8c7d-81c6b7c2d56f",
+        "e7c3a4de-458a-4b0d-afd9-f40f596e6816"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 31079,
+      "summary": "Jag läste aktuell uppgift och sparade mått i projektet.\n\n- Uppgift: **Fristående hylla**  \n  - Status: **todo**  \n  - Notering: **”Syntetiskt underlag. Inget verkligt arbete verifierat.”**\n\nSparade **syntetiska arbetsmått**:\n- Arbetsbredd: **60 cm** = **600 mm**\n- Arbetsdjup: **25 cm**\n- Skivtjocklek: **18 mm**\n\nDetta är alltså **arbetsvärden för konceptet**, inte fysisk kontroll på plats. Ingen verklig uppmätning eller verifiering är registrerad.\n\nNästa möjliga konstruktionssteg är att ta fram en enkel **delning/kapskiss** för en fristående hylla utifrån **600 × 250 mm** och **18 mm skiva** innan något kapas. Mått först, såg sen — universum blir mindre dyrt då.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_e330500370464473a571f4dde9fa9c90",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+              "name": "Fristående hylla",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "project",
+              "recordId": "p_e330500370464473a571f4dde9fa9c90",
+              "label": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565",
+              "updatedAt": "2026-09-30T17:38:53.847054+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:39:47.491Z"
+            },
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "crew",
+              "recordId": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:38:53.568358+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:39:47.491Z"
+            },
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "tasks",
+              "recordId": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+              "label": "Fristående hylla",
+              "updatedAt": "2026-09-30T17:39:00.762368+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:39:47.491Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:39:47.491Z",
+          "project": {
+            "id": "p_e330500370464473a571f4dde9fa9c90",
+            "name": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565"
+          },
+          "viewer": {
+            "id": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "project",
+            "recordId": "p_e330500370464473a571f4dde9fa9c90",
+            "label": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565",
+            "updatedAt": "2026-09-30T17:38:53.847054+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:18.183Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "crew",
+            "recordId": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:38:53.568358+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:18.183Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "tasks",
+            "recordId": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+            "label": "Fristående hylla",
+            "updatedAt": "2026-09-30T17:39:00.762368+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:18.183Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "be11dfc6-de82-42fd-8edf-fefa6c931a32",
+            "label": "Arbetsbredd",
+            "retrievedAt": "2026-09-30T17:39:32.541Z",
+            "updatedAt": "2026-09-30T17:39:07.945004+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "e7c3a4de-458a-4b0d-afd9-f40f596e6816",
+            "label": "Skivtjocklek",
+            "retrievedAt": "2026-09-30T17:39:32.541Z",
+            "updatedAt": "2026-09-30T17:39:17.266948+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "f40e5e76-81d8-4144-8c7d-81c6b7c2d56f",
+            "label": "Arbetsdjup",
+            "retrievedAt": "2026-09-30T17:39:32.541Z",
+            "updatedAt": "2026-09-30T17:39:17.112107+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Read source values/truth correctly; corrected/complemented sources and remaining unknowns preserved. No whole-UC acceptance claimed."
+    },
+    {
+      "case": "shelf",
+      "phase": "fresh_read_after_change",
+      "projectId": "p_e330500370464473a571f4dde9fa9c90",
+      "turnId": "50583945-d172-412d-a045-ed87d0c909c9",
+      "sourceIds": [
+        "be11dfc6-de82-42fd-8edf-fefa6c931a32",
+        "f40e5e76-81d8-4144-8c7d-81c6b7c2d56f",
+        "e7c3a4de-458a-4b0d-afd9-f40f596e6816"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 36153,
+      "summary": "Läst utan ändringar.\n\nUppgift: **Fristående hylla** — *“Syntetiskt underlag. Inget verkligt arbete verifierat.”*\n\nAktuella projektmått:\n- **Arbetsbredd, rev 2:** **71 cm** = **710 mm**  \n  - Jag utgår bara från denna rättade aktuella revision, inte den ersatta bredden.\n- **Arbetsdjup, rev 1:** **25 cm** = **250 mm**\n- **Skivtjocklek, rev 1:** **18 mm** = **18 mm**",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_e330500370464473a571f4dde9fa9c90",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+              "name": "Fristående hylla",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "project",
+              "recordId": "p_e330500370464473a571f4dde9fa9c90",
+              "label": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565",
+              "updatedAt": "2026-09-30T17:38:53.847054+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:40:23.678Z"
+            },
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "crew",
+              "recordId": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:38:53.568358+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:40:23.678Z"
+            },
+            {
+              "projectId": "p_e330500370464473a571f4dde9fa9c90",
+              "dataset": "tasks",
+              "recordId": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+              "label": "Fristående hylla",
+              "updatedAt": "2026-09-30T17:39:00.762368+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:40:23.678Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:40:23.678Z",
+          "project": {
+            "id": "p_e330500370464473a571f4dde9fa9c90",
+            "name": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565"
+          },
+          "viewer": {
+            "id": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "project",
+            "recordId": "p_e330500370464473a571f4dde9fa9c90",
+            "label": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565",
+            "updatedAt": "2026-09-30T17:38:53.847054+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:49.588Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "crew",
+            "recordId": "m_1fd7b5b3e04f4429ad36f4368ca478c2",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:38:53.568358+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:49.588Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "tasks",
+            "recordId": "t_abc1217a-927c-4087-b929-a05d4eeee886",
+            "label": "Fristående hylla",
+            "updatedAt": "2026-09-30T17:39:00.762368+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:39:49.588Z"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "be11dfc6-de82-42fd-8edf-fefa6c931a32",
+            "label": "Arbetsbredd",
+            "retrievedAt": "2026-09-30T17:40:06.805Z",
+            "updatedAt": "2026-09-30T17:39:48.57024+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "e7c3a4de-458a-4b0d-afd9-f40f596e6816",
+            "label": "Skivtjocklek",
+            "retrievedAt": "2026-09-30T17:40:06.805Z",
+            "updatedAt": "2026-09-30T17:39:17.266948+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_e330500370464473a571f4dde9fa9c90",
+            "dataset": "measurements",
+            "recordId": "f40e5e76-81d8-4144-8c7d-81c6b7c2d56f",
+            "label": "Arbetsdjup",
+            "retrievedAt": "2026-09-30T17:40:06.805Z",
+            "updatedAt": "2026-09-30T17:39:17.112107+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Read source values/truth correctly; corrected/complemented sources and remaining unknowns preserved. No whole-UC acceptance claimed."
+    },
+    {
+      "case": "bunk",
+      "phase": "initial",
+      "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+      "turnId": "5cfdc695-cc40-4e47-a04e-bdf73659d7ec",
+      "sourceIds": [
+        "6e218602-25cb-4851-9bc7-17511940f409",
+        "5d68b196-8929-4bf1-8ec2-130084c6aa15",
+        "cecf728f-f45b-47ca-85e9-561d5e38d10e"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 53407,
+      "summary": "Läst utan ändringar.\n\n- **Uppgift nu:** *Våningssäng med lådor* är fortfarande **konceptarbete**, inte tillverkning. Underlaget säger också att **inget verkligt arbete är verifierat**.\n- **Behåll känt arbetsmått:** **vald madrassbredd 900 mm** — **uppskattat arbetsmått**, inte platsmätt.\n- **Ta i en och samma mätrunda på plats:**\n  1. **Tillgänglig höjd** där sängen ska stå  \n  2. **Fri lådrörelse** framför/vid lådorna i fullt utdrag\n\n- **Tillverkning bör vänta** tills de två platsmåtten är tagna.\n- **Kvarstående säkerhetskontroller:** verifiera att lösningen fungerar **fristående** och **inte bygger på väggen som primär bärning**, samt att verklig höjd och lådgång faktiskt fungerar. Snickeri utan mått är mest ett kreativt sätt att producera ved.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+              "name": "Våningssäng med lådor",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "project",
+              "recordId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "label": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4",
+              "updatedAt": "2026-09-30T17:40:39.475362+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:41:50.954Z"
+            },
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "crew",
+              "recordId": "m_f06b330808054529bde86d86215dba2f",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:40:33.042212+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:41:50.954Z"
+            },
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "tasks",
+              "recordId": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+              "label": "Våningssäng med lådor",
+              "updatedAt": "2026-09-30T17:40:45.428551+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:41:50.954Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:41:50.954Z",
+          "project": {
+            "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "name": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4"
+          },
+          "viewer": {
+            "id": "m_f06b330808054529bde86d86215dba2f",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "project",
+            "recordId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "label": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4",
+            "updatedAt": "2026-09-30T17:40:39.475362+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:00.871Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "crew",
+            "recordId": "m_f06b330808054529bde86d86215dba2f",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:40:33.042212+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:00.871Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "tasks",
+            "recordId": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+            "label": "Våningssäng med lådor",
+            "updatedAt": "2026-09-30T17:40:45.428551+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:00.871Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "5d68b196-8929-4bf1-8ec2-130084c6aa15",
+            "label": "Fri lådrörelse",
+            "retrievedAt": "2026-09-30T17:41:25.544Z",
+            "updatedAt": "2026-09-30T17:40:58.249119+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "6e218602-25cb-4851-9bc7-17511940f409",
+            "label": "Vald madrassbredd",
+            "retrievedAt": "2026-09-30T17:41:25.544Z",
+            "updatedAt": "2026-09-30T17:40:51.434508+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "cecf728f-f45b-47ca-85e9-561d5e38d10e",
+            "label": "Tillgänglig höjd",
+            "retrievedAt": "2026-09-30T17:41:25.544Z",
+            "updatedAt": "2026-09-30T17:40:58.410098+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Read source values/truth correctly; corrected/complemented sources and remaining unknowns preserved. No whole-UC acceptance claimed."
+    },
+    {
+      "case": "bunk",
+      "phase": "fresh_read_after_change",
+      "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+      "turnId": "6488944e-09fb-4e38-88fa-71d82c6dab19",
+      "sourceIds": [
+        "6e218602-25cb-4851-9bc7-17511940f409",
+        "5d68b196-8929-4bf1-8ec2-130084c6aa15",
+        "cecf728f-f45b-47ca-85e9-561d5e38d10e"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 44656,
+      "summary": "Jag läste aktuell uppgift och projektmåtten.\n\n**Uppgift**\n- **Våningssäng med lådor** — status **todo**\n- Instruktion: **syntetiskt underlag, inget verkligt arbete verifierat**\n\n**Nu känt i projektet**\n- **Vald madrassbredd:** **900 mm**, **estimated**, **rev 1**\n- **Fri lådrörelse:** **650 mm**, **estimated**, **rev 2**  \n  - det är den kompletterade posten\n\n**Fortfarande saknat / behöver mätas**\n- **Tillgänglig höjd:** fortfarande **unknown**, **rev 1**\n\nKort sagt: lådrörelsen finns nu sparad som arbetsvärde, men **tillgänglig höjd saknas fortfarande som faktisk uppgift**. 900 och 650 är dessutom **inte uppmätta fältmått** utan sparade uppskattningar.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+              "name": "Våningssäng med lådor",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "project",
+              "recordId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "label": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4",
+              "updatedAt": "2026-09-30T17:40:39.475362+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:42:35.893Z"
+            },
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "crew",
+              "recordId": "m_f06b330808054529bde86d86215dba2f",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:40:33.042212+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:42:35.893Z"
+            },
+            {
+              "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+              "dataset": "tasks",
+              "recordId": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+              "label": "Våningssäng med lådor",
+              "updatedAt": "2026-09-30T17:40:45.428551+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:42:35.893Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:42:35.893Z",
+          "project": {
+            "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "name": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4"
+          },
+          "viewer": {
+            "id": "m_f06b330808054529bde86d86215dba2f",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "project",
+            "recordId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "label": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4",
+            "updatedAt": "2026-09-30T17:40:39.475362+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:53.267Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "crew",
+            "recordId": "m_f06b330808054529bde86d86215dba2f",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:40:33.042212+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:53.267Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "tasks",
+            "recordId": "t_8817ea2b-c061-42c4-9166-55878ca2326b",
+            "label": "Våningssäng med lådor",
+            "updatedAt": "2026-09-30T17:40:45.428551+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:41:53.267Z"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "5d68b196-8929-4bf1-8ec2-130084c6aa15",
+            "label": "Fri lådrörelse",
+            "retrievedAt": "2026-09-30T17:42:10.594Z",
+            "updatedAt": "2026-09-30T17:41:52.049369+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "6e218602-25cb-4851-9bc7-17511940f409",
+            "label": "Vald madrassbredd",
+            "retrievedAt": "2026-09-30T17:42:10.594Z",
+            "updatedAt": "2026-09-30T17:40:51.434508+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_b276d7100c7549c3a10ba2824ec3c032",
+            "dataset": "measurements",
+            "recordId": "cecf728f-f45b-47ca-85e9-561d5e38d10e",
+            "label": "Tillgänglig höjd",
+            "retrievedAt": "2026-09-30T17:42:10.594Z",
+            "updatedAt": "2026-09-30T17:40:58.410098+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Read source values/truth correctly; corrected/complemented sources and remaining unknowns preserved. No whole-UC acceptance claimed."
+    },
+    {
+      "case": "porch",
+      "phase": "initial",
+      "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+      "turnId": "7d6a194e-16f0-4172-a386-5042dd125558",
+      "sourceIds": [
+        "b3869522-f7a6-40c6-82fb-53f0ef86c76f",
+        "eb0990d4-21e4-4f20-85f6-9ae48f06f7a9",
+        "54208bd3-a782-4504-9359-9abef990fa4a"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 36274,
+      "summary": "Jag har läst projektdata och uppgiften.\n\n- **Användbara konceptmått:** veranda med tak, **3000 × 4000 mm**. Dessa är **uppskattade arbetsmått**, inte fältmätta.\n- **Aktuell uppgift:** **“Veranda”** står som **todo** och säger uttryckligen **“Syntetiskt underlag. Inget verkligt arbete verifierat.”**\n\nDet som **saknas** för verkligt underlag är fortfarande:\n- **grund/mark**: **grunddjup okänt**\n- **laster**: inte verifierade\n- **befintlig infästning**: inte verifierad\n\n**Nästa möjliga arbete:** verifiera på plats grundförutsättningar, faktiska anslutningsmått och infästningsmöjlighet, samt fastställa dimensionerande laster. Först därefter går det att dimensionera bärverket.\n\n**Det som hindrar tillverkningsunderlag:** inga verifierade grund-, last- eller infästningsdata. Just nu finns bara en **konceptskiss**, och den är inte ett tillverkningsunderlag.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_85ed1789-675e-44b8-9e22-539102fe0aa6",
+              "name": "Veranda",
+              "status": "todo",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+              "dataset": "project",
+              "recordId": "p_885cc1d9adac4809b5c26c689bc4772d",
+              "label": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1",
+              "updatedAt": "2026-09-30T17:47:48.09824+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:48:43.635Z"
+            },
+            {
+              "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+              "dataset": "crew",
+              "recordId": "m_3d3061d70df74fb4afa056113ec77f51",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:47:47.757786+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:48:43.635Z"
+            },
+            {
+              "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+              "dataset": "tasks",
+              "recordId": "t_85ed1789-675e-44b8-9e22-539102fe0aa6",
+              "label": "Veranda",
+              "updatedAt": "2026-09-30T17:47:54.934237+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:48:43.635Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:48:43.635Z",
+          "project": {
+            "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "name": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1"
+          },
+          "viewer": {
+            "id": "m_3d3061d70df74fb4afa056113ec77f51",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "project",
+            "recordId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "label": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1",
+            "updatedAt": "2026-09-30T17:47:48.09824+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:48:09.280Z"
+          },
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "crew",
+            "recordId": "m_3d3061d70df74fb4afa056113ec77f51",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:47:47.757786+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:48:09.280Z"
+          },
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "tasks",
+            "recordId": "t_85ed1789-675e-44b8-9e22-539102fe0aa6",
+            "label": "Veranda",
+            "updatedAt": "2026-09-30T17:47:54.934237+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:48:09.280Z"
+          },
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "measurements",
+            "recordId": "54208bd3-a782-4504-9359-9abef990fa4a",
+            "label": "Grunddjup",
+            "retrievedAt": "2026-09-30T17:48:25.396Z",
+            "updatedAt": "2026-09-30T17:48:08.180876+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "measurements",
+            "recordId": "b3869522-f7a6-40c6-82fb-53f0ef86c76f",
+            "label": "Vald konceptbredd",
+            "retrievedAt": "2026-09-30T17:48:25.396Z",
+            "updatedAt": "2026-09-30T17:48:00.947298+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+            "dataset": "measurements",
+            "recordId": "eb0990d4-21e4-4f20-85f6-9ae48f06f7a9",
+            "label": "Valt konceptdjup",
+            "retrievedAt": "2026-09-30T17:48:25.396Z",
+            "updatedAt": "2026-09-30T17:48:08.02488+00:00",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "failed",
+      "semanticReason": "Claims an existing concept sketch although no Artifact or image was saved."
+    },
+    {
+      "case": "renovation",
+      "phase": "initial",
+      "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+      "turnId": "ea52f56e-9b38-4b45-a18c-66ead8d261c4",
+      "sourceIds": [
+        "ce6844d5-0207-41d0-a408-23228b3c0efa",
+        "ebfb2ce7-bdcc-4547-b9f3-6b4e8bb90b64"
+      ],
+      "status": "passed_mechanical_checks",
+      "checks": {
+        "backend": true,
+        "project": true,
+        "answer": true,
+        "noWrites": true,
+        "scopedSources": true,
+        "exactSources": true,
+        "expectedValue": true,
+        "focus": true
+      },
+      "elapsedMs": 66100,
+      "summary": "Jag läste bara aktuella projektposter.\n\n- **Uppgiftens verkliga status:** *Flerrumsrenovering* står som **done/klar**. Inga blockerare, beroenden eller material kopplade till uppgiften är registrerade.\n- **Aktuella mått:**  \n  - Arbetsbredd i **rum A**: **240 cm**, markerat som **uppskattat**.  \n  - Arbetsbredd i **rum B**: **okänt** och ska fortsatt behandlas som okänt.\n- **Materialförsening och avbokning:** jag hittar inga separata registrerade framtida uppgifter, byggdagar, shopping- eller materialposter att flytta om. Det betyder att påverkan just nu hör hemma i **fortsatt planering**, inte i att återöppna det som redan står klart.\n- **Praktiskt följdarbete:** bevara utfört arbete som klart; lägg eventuellt framtida materialberoende arbete på vänt tills material finns, och hantera avbokningen som en omplanering av kommande arbete först när sådant arbete faktiskt finns registrerat. Inga påhittade deltagare behövs; verkligheten är rörig nog ändå.",
+      "evidence": {
+        "kind": "ai_assessment",
+        "currentView": {
+          "status": "ok",
+          "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+          "surface": "task",
+          "focus": {
+            "task": {
+              "id": "t_9d93586c-8f91-463c-ae06-b25c77ed769b",
+              "name": "Flerrumsrenovering",
+              "status": "done",
+              "instructions": "Syntetiskt underlag. Inget verkligt arbete verifierat.",
+              "assignees": []
+            }
+          },
+          "sources": [
+            {
+              "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+              "dataset": "project",
+              "recordId": "p_292c79b7f95e45df83062c6a069f4a06",
+              "label": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be",
+              "updatedAt": "2026-09-30T17:48:59.963715+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:50:21.809Z"
+            },
+            {
+              "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+              "dataset": "crew",
+              "recordId": "m_c1121ecc232d4e9da22a0067a0119253",
+              "label": "Project creator",
+              "updatedAt": "2026-09-30T17:48:50.985946+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:50:21.809Z"
+            },
+            {
+              "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+              "dataset": "tasks",
+              "recordId": "t_9d93586c-8f91-463c-ae06-b25c77ed769b",
+              "label": "Flerrumsrenovering",
+              "updatedAt": "2026-09-30T17:49:05.694121+00:00",
+              "truth": "unknown",
+              "retrievedAt": "2026-09-30T17:50:21.809Z"
+            }
+          ],
+          "warnings": [],
+          "retrievedAt": "2026-09-30T17:50:21.809Z",
+          "project": {
+            "id": "p_292c79b7f95e45df83062c6a069f4a06",
+            "name": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be"
+          },
+          "viewer": {
+            "id": "m_c1121ecc232d4e9da22a0067a0119253",
+            "name": "Project creator"
+          }
+        },
+        "references": [],
+        "sources": [
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "project",
+            "recordId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "label": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be",
+            "updatedAt": "2026-09-30T17:48:59.963715+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:49:17.536Z"
+          },
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "crew",
+            "recordId": "m_c1121ecc232d4e9da22a0067a0119253",
+            "label": "Project creator",
+            "updatedAt": "2026-09-30T17:48:50.985946+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:49:17.536Z"
+          },
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "tasks",
+            "recordId": "t_9d93586c-8f91-463c-ae06-b25c77ed769b",
+            "label": "Flerrumsrenovering",
+            "updatedAt": "2026-09-30T17:49:05.694121+00:00",
+            "truth": "unknown",
+            "retrievedAt": "2026-09-30T17:49:17.536Z"
+          },
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "measurements",
+            "recordId": "ce6844d5-0207-41d0-a408-23228b3c0efa",
+            "label": "Arbetsbredd i rum A",
+            "retrievedAt": "2026-09-30T17:49:40.396Z",
+            "updatedAt": "2026-09-30T17:49:11.176178+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "measurements",
+            "recordId": "ebfb2ce7-bdcc-4547-b9f3-6b4e8bb90b64",
+            "label": "Arbetsbredd i rum B",
+            "retrievedAt": "2026-09-30T17:49:40.396Z",
+            "updatedAt": "2026-09-30T17:49:16.663436+00:00",
+            "truth": "unknown"
+          },
+          {
+            "projectId": "p_292c79b7f95e45df83062c6a069f4a06",
+            "dataset": "task_work",
+            "recordId": "t_9d93586c-8f91-463c-ae06-b25c77ed769b",
+            "label": "Flerrumsrenovering",
+            "updatedAt": "2026-09-30T17:49:05.694121+00:00",
+            "retrievedAt": "2026-09-30T17:49:44.847Z",
+            "truth": "unknown"
+          }
+        ],
+        "partial": false
+      },
+      "semanticReview": "passed",
+      "semanticReason": "Read source values/truth correctly; corrected/complemented sources and remaining unknowns preserved. No whole-UC acceptance claimed."
+    }
+  ],
+  "notProven": [
+    "model/CAD save/link",
+    "named-member history/idempotency",
+    "real mobile participants",
+    "complete UC-001–005",
+    "field safety"
+  ],
+  "accounting": {
+    "source": "bob.execution_events, exact turn IDs; estimated model cost, not provider invoice",
+    "sixReplies": {
+      "modelCalls": 13,
+      "inputTokens": 109875,
+      "outputTokens": 6328,
+      "estimatedUsd": "0.184135"
+    },
+    "includingSetupAttempt": {
+      "modelCalls": 15,
+      "estimatedUsd": "0.220747"
+    },
+    "events": [
+      {
+        "turn_id": "50583945-d172-412d-a045-ed87d0c909c9",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "50583945-d172-412d-a045-ed87d0c909c9",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16193",
+        "output_tokens": "1072",
+        "estimated_cost_usd": "0.028914"
+      },
+      {
+        "turn_id": "50583945-d172-412d-a045-ed87d0c909c9",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "5cfdc695-cc40-4e47-a04e-bdf73659d7ec",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "5cfdc695-cc40-4e47-a04e-bdf73659d7ec",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16718",
+        "output_tokens": "856",
+        "estimated_cost_usd": "0.026987"
+      },
+      {
+        "turn_id": "5cfdc695-cc40-4e47-a04e-bdf73659d7ec",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "6488944e-09fb-4e38-88fa-71d82c6dab19",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "6488944e-09fb-4e38-88fa-71d82c6dab19",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16943",
+        "output_tokens": "1198",
+        "estimated_cost_usd": "0.032680"
+      },
+      {
+        "turn_id": "6488944e-09fb-4e38-88fa-71d82c6dab19",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "7d6a194e-16f0-4172-a386-5042dd125558",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "7d6a194e-16f0-4172-a386-5042dd125558",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16829",
+        "output_tokens": "853",
+        "estimated_cost_usd": "0.027220"
+      },
+      {
+        "turn_id": "7d6a194e-16f0-4172-a386-5042dd125558",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "e4e55e13-fa77-4e2d-b542-2df3a7c9d83e",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "e4e55e13-fa77-4e2d-b542-2df3a7c9d83e",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16025",
+        "output_tokens": "722",
+        "estimated_cost_usd": "0.023244"
+      },
+      {
+        "turn_id": "e4e55e13-fa77-4e2d-b542-2df3a7c9d83e",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "ea52f56e-9b38-4b45-a18c-66ead8d261c4",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "ea52f56e-9b38-4b45-a18c-66ead8d261c4",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": "27167",
+        "output_tokens": "1627",
+        "estimated_cost_usd": "0.045090"
+      },
+      {
+        "turn_id": "ea52f56e-9b38-4b45-a18c-66ead8d261c4",
+        "kind": "tool",
+        "role": "tool",
+        "status": "empty",
+        "event_count": 7,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "ea52f56e-9b38-4b45-a18c-66ead8d261c4",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "f9571761-02d2-4f2a-ac44-97a0f2c0b1b8",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "f9571761-02d2-4f2a-ac44-97a0f2c0b1b8",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16015",
+        "output_tokens": "770",
+        "estimated_cost_usd": "0.036612"
+      },
+      {
+        "turn_id": "f9571761-02d2-4f2a-ac44-97a0f2c0b1b8",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      }
+    ]
+  },
+  "porchSavedOutputsChecked": {
+    "projectId": "p_885cc1d9adac4809b5c26c689bc4772d",
+    "savedArtifacts": 0,
+    "savedImages": 0,
+    "source": "Read-only hosted SQL at review; statement was not true"
+  },
+  "activeOwner": "../foundation-verification.md#p4-product-acceptance--2026-09-30"
+}

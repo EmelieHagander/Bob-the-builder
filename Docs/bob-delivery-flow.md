@@ -278,11 +278,11 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: verifiera P4:s rättningar för deltagarens instruktionsbilder och modellens påstående om ett ännu osparat underlag.** Kör CI:s mobil-/reload-prov, applicera den additiva bildläsningen efter granskning och kör liveprovet `scripts/check-live-p4.mjs` för media samt verandans omprov. Bevis och avgränsning ligger hos [verifieringsägaren](foundation-verification.md#p4-product-acceptance--2026-09-30). P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna.
+**Nästa handling: kör P4:s kompletteringsfall hela vägen till sparad, länkad och återöppnad leverans (A02/A03).** Det kräver en befintlig verifierad vanlig medlemssession i säker runner-miljö; den finns ännu inte för acceptansprovet. Använd inte den publika gästens läsprov som ersättning för skriv-/privathistorikrollen. Välj ett avgränsat uppdrag och bevara samma uppdrag efter samlad komplettering. Bevis och avgränsning för tidigare delprov ligger hos [verifieringsägaren](foundation-verification.md#p4-product-acceptance--2026-09-30). P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna.
 
 ### Aktivt arbete — P4
 
-P4 är produktacceptans enligt [planen](#plan) och [user stories](user-stories.md#product-mandate--2026-09-24). Matrisen grupperar befintliga acceptansfall; den ändrar inte deras krav eller markerar dem verifierade. Första passet granskar aktuell main och förbereder avgränsade projekt, underlag, roller och kostnadsramar innan modell-/deltagarkörning. Vanlig medlemssession och avsedda deltagarroller behövs för de fullständiga skriv- och återbesöksflödena.
+P4 är produktacceptans enligt [planen](#plan) och [user stories](user-stories.md#product-mandate--2026-09-24). Matrisen visar kvarstående hela utfall efter det första avgränsade passet; lässvar och tekniska delprov stänger inte deras krav. Vanlig medlemssession och avsedda deltagarroller behövs för de fullständiga skriv- och återbesöksflödena. Modellens skillnad mellan koncept-/tillverkningsunderlag ska också provas vid faktisk generering och sparande, utöver det dokumenterade läsomprovet.
 
 | Testgrupp | Befintligt kontrakt | Bevis som ska samlas |
 |---|---|---|
@@ -291,7 +291,6 @@ P4 är produktacceptans enligt [planen](#plan) och [user stories](user-stories.m
 | Versioner och ändrade källor | UC-003/005; A05/A09/A18 | Exakt sparad/vald version, upptäckt samtidig ändring och korrekt påverkan utan att historiskt inköp/utförande skrivs om. |
 | Fel, kostnadsstopp och delvis lyckat | UC-005; A06/A10/A11/A12/A13/A14 | Kontrollerad felväg, rätt fortsättning, bevarade kvitton och frånvaro av dubbla betalda försök/leveranser. |
 | Privat återhämtning och mobil deltagare | UC-003; A15/A16. P3:s smalare fokus-/historikprov finns i gemensam todo. | Återbesök och rätt behörig deltagarvy utan åtkomst till privat chatt; nekad/återkallad åtkomst vid datagränsen. A15:s bredare reset-/uppdragskrav provas separat. |
-| Manuellt underlag vid rätt steg | UC-004:s verifieringsscenario; UC-003 | En sparad bild återanvänds i två steg; ändrad koppling och reload bevarar rätt underlag och övriga stegets länk. |
 | Större bygge över flera dagar | UC-002; A20 | Aktuell deltagarvy och omplanering vid avbokning/materialförsening; färdigt arbete bevaras. |
 
 Dokumentera slutresultat, källor/versioner, testroll, tid, modell-/verktygsanrop och kostnad hos [verifieringsägaren](foundation-verification.md). CI-/SQL-/HTTP-fixturer och faktisk modell-/deltagaracceptans redovisas var för sig. Nya fynd får ansvarig kodgräns, reproduktion och riktad rättning; ett lyckat fall stänger inte ett helt UC.

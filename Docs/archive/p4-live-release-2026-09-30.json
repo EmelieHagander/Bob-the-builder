@@ -1,0 +1,1558 @@
+{
+  "date": "2026-09-30",
+  "scope": "Partial P4 live release evidence; synthetic disposable projects only. This archive links to ../foundation-verification.md#p4-product-acceptance--2026-09-30.",
+  "migration": {
+    "source": "supabase/migrations/20260930174127_volunteer_instruction_images.sql",
+    "sourceSha256": "fd6ccbbf2bf58ee4a71b76b080e1f3c9d9279f4fadd3e7598d4161267f7b2fc5",
+    "hosted": "20260930183122_bob_p4_volunteer_instruction_images"
+  },
+  "firstDeployment": {
+    "source": "174bd0b203b2159f19378b8ad8a3cd412bb46f92",
+    "askBob": {
+      "id": "5e8d418f-3f4d-4c32-93ac-c7305d37b90b",
+      "slug": "ask-bob",
+      "name": "ask-bob",
+      "status": "ACTIVE",
+      "version": 69,
+      "created_at": 1788984424181,
+      "updated_at": 1790793094119,
+      "verify_jwt": true,
+      "import_map": false,
+      "entrypoint_path": "/tmp/user_fn_yuobtgoidmmmwfqenkau_5e8d418f-3f4d-4c32-93ac-c7305d37b90b_69/source/index.ts",
+      "ezbr_sha256": "b1ffdd01a2971f220df0f12a1d2fd1fc80676dfc1fbc1aae76637f6e7180bc34",
+      "files": [
+        {
+          "name": "index.ts",
+          "content": "// Immutable reviewed P4 source; Supabase bundles this graph at deployment.\nimport \"https://raw.githubusercontent.com/EmelieHagander/Bob-the-builder/174bd0b203b2159f19378b8ad8a3cd412bb46f92/supabase/functions/ask-bob/index.ts\";\n"
+        }
+      ]
+    },
+    "worker": {
+      "id": "9abcddc3-088e-47a1-84b1-f9f3f9ae5400",
+      "slug": "bob-worker",
+      "name": "bob-worker",
+      "status": "ACTIVE",
+      "version": 37,
+      "created_at": 1790252887264,
+      "updated_at": 1790793103834,
+      "verify_jwt": false,
+      "import_map": false,
+      "entrypoint_path": "/tmp/user_fn_yuobtgoidmmmwfqenkau_9abcddc3-088e-47a1-84b1-f9f3f9ae5400_37/source/index.ts",
+      "ezbr_sha256": "951c8300391b9cf17ea5802adea7d6bee29664b4d2807b8ceab51eb51b43e131",
+      "files": [
+        {
+          "name": "index.ts",
+          "content": "// Immutable reviewed P4 source; Supabase bundles this graph at deployment.\nimport \"https://raw.githubusercontent.com/EmelieHagander/Bob-the-builder/174bd0b203b2159f19378b8ad8a3cd412bb46f92/supabase/functions/bob-worker/index.ts\";\n"
+        }
+      ]
+    }
+  },
+  "functionBoundary": [
+    {
+      "definition_md5": "3c57c63b2d306b5215ae648044a31d14",
+      "prosecdef": true,
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "proacl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres,anon=X/postgres}"
+    }
+  ],
+  "security": {
+    "bobFindingsUnchanged": true,
+    "before": [
+      {
+        "name": "rls_enabled_no_policy",
+        "level": "INFO",
+        "findings": [
+          {
+            "detail": "Table \\`bob.execution_events\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "execution_events",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob.person_emails\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "person_emails",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob.volunteer_links\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "volunteer_links",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob.volunteer_sessions\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "volunteer_sessions",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_job_steps\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_job_steps",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_jobs\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_jobs",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_thread_summary\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_thread_summary",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_turn_screens\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_turn_screens",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_write_receipts\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_write_receipts",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.catalog_item_provenance\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "catalog_item_provenance",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_attempts\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_attempts",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_authorities\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_authorities",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_budget_grants\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_budget_grants",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_budgets\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_budgets",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_gaps\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_gaps",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_model_calls\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_model_calls",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_model_results\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_model_results",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_project_events\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_project_events",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_project_runtime\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_project_runtime",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_request_writes\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_request_writes",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_requests\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_requests",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_requirement_tasks\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_requirement_tasks",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.image_descriptions\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "image_descriptions",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Table \\`bob_private.project_drawing_requests\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "project_drawing_requests",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          }
+        ]
+      },
+      {
+        "name": "authenticated_security_definer_function_executable",
+        "level": "WARN",
+        "findings": [
+          {
+            "detail": "Function `bob.bob_chat_inbox(p_project text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_chat_inbox`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_chat_inbox",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.bob_image_descriptions(p_project text, p_media uuid[])` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_image_descriptions`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_image_descriptions",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_media uuid[]",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.bob_mark_chat_read(p_project text, p_thread uuid, p_seq bigint)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_mark_chat_read`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_mark_chat_read",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_thread uuid, p_seq bigint",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.drawing_resume_bindings(p_project text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/drawing_resume_bindings`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "drawing_resume_bindings",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.ensure_drawing_gap_task(p_project text, p_id uuid, p_expected integer, p_gap uuid, p_requirement uuid, p_plan_revision integer)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/ensure_drawing_gap_task`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "ensure_drawing_gap_task",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_gap uuid, p_requirement uuid, p_plan_revision integer",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.grant_drawing_budget(p_project text, p_id uuid, p_expected integer, p_grant uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/grant_drawing_budget`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "grant_drawing_budget",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_grant uuid",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.link_drawing_gap(p_project text, p_id uuid, p_expected integer, p_gap uuid, p_task text, p_step uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/link_drawing_gap`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "link_drawing_gap",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_gap uuid, p_task text, p_step uuid",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          },
+          {
+            "detail": "Function `bob.resolve_drawing_request(p_project text, p_thread uuid, p_turn uuid, p_generation bigint, p_id uuid, p_scope jsonb, p_intent text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/resolve_drawing_request`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "resolve_drawing_request",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_thread uuid, p_turn uuid, p_generation bigint, p_id uuid, p_scope jsonb, p_intent text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T17:49:42.675Z"
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "name": "rls_enabled_no_policy",
+        "level": "INFO",
+        "findings": [
+          {
+            "detail": "Table \\`bob.execution_events\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "execution_events",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob.person_emails\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "person_emails",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob.volunteer_links\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "volunteer_links",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob.volunteer_sessions\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "volunteer_sessions",
+              "type": "table",
+              "schema": "bob"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_job_steps\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_job_steps",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_jobs\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_jobs",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_thread_summary\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_thread_summary",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_turn_screens\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_turn_screens",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.bob_write_receipts\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "bob_write_receipts",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.catalog_item_provenance\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "catalog_item_provenance",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_attempts\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_attempts",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_authorities\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_authorities",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_budget_grants\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_budget_grants",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_budgets\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_budgets",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_gaps\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_gaps",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_model_calls\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_model_calls",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_model_results\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_model_results",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_project_events\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_project_events",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_project_runtime\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_project_runtime",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_request_writes\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_request_writes",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_requests\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_requests",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.drawing_requirement_tasks\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "drawing_requirement_tasks",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.image_descriptions\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "image_descriptions",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Table \\`bob_private.project_drawing_requests\\` has RLS enabled, but no policies exist",
+            "metadata": {
+              "name": "project_drawing_requests",
+              "type": "table",
+              "schema": "bob_private"
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          }
+        ]
+      },
+      {
+        "name": "authenticated_security_definer_function_executable",
+        "level": "WARN",
+        "findings": [
+          {
+            "detail": "Function `bob.bob_chat_inbox(p_project text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_chat_inbox`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_chat_inbox",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.bob_image_descriptions(p_project text, p_media uuid[])` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_image_descriptions`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_image_descriptions",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_media uuid[]",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.bob_mark_chat_read(p_project text, p_thread uuid, p_seq bigint)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/bob_mark_chat_read`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "bob_mark_chat_read",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_thread uuid, p_seq bigint",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.drawing_resume_bindings(p_project text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/drawing_resume_bindings`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "drawing_resume_bindings",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.ensure_drawing_gap_task(p_project text, p_id uuid, p_expected integer, p_gap uuid, p_requirement uuid, p_plan_revision integer)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/ensure_drawing_gap_task`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "ensure_drawing_gap_task",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_gap uuid, p_requirement uuid, p_plan_revision integer",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.grant_drawing_budget(p_project text, p_id uuid, p_expected integer, p_grant uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/grant_drawing_budget`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "grant_drawing_budget",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_grant uuid",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.link_drawing_gap(p_project text, p_id uuid, p_expected integer, p_gap uuid, p_task text, p_step uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/link_drawing_gap`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "link_drawing_gap",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_id uuid, p_expected integer, p_gap uuid, p_task text, p_step uuid",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          },
+          {
+            "detail": "Function `bob.resolve_drawing_request(p_project text, p_thread uuid, p_turn uuid, p_generation bigint, p_id uuid, p_scope jsonb, p_intent text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/resolve_drawing_request`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+            "metadata": {
+              "name": "resolve_drawing_request",
+              "schema": "bob",
+              "language": "plpgsql",
+              "arguments": "p_project text, p_thread uuid, p_turn uuid, p_generation bigint, p_id uuid, p_scope jsonb, p_intent text",
+              "security_definer": true
+            },
+            "observed_at": "2026-09-30T18:32:34.803Z"
+          }
+        ]
+      }
+    ]
+  },
+  "firstPorchRetryAccounting": {
+    "events": [
+      {
+        "turn_id": "5cb4599d-9119-4484-b0f4-ed3d3993c827",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "5cb4599d-9119-4484-b0f4-ed3d3993c827",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16779",
+        "output_tokens": "921",
+        "estimated_cost_usd": "0.040786"
+      },
+      {
+        "turn_id": "5cb4599d-9119-4484-b0f4-ed3d3993c827",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      }
+    ],
+    "manualVerdict": "failed: saved inputs still described as a concept sketch; see p4-porch-first-retry-2026-09-30.json"
+  },
+  "cleanup": {
+    "inspected": [
+      {
+        "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+        "name": "Bob P4 verification porch 0ab9091e-f3de-4892-9865-5199e8cb0000",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_292c79b7f95e45df83062c6a069f4a06",
+        "name": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_3468d8ac8e664122aac9c04436f400b2",
+        "name": "Bob P4 verification porch 8734867c-9414-4f95-8f21-4a950c319552",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_6a0d679fa8b447a8ade28f1563996760",
+        "name": "Bob P4 verification shelf 04052779-c430-41aa-ac26-9d765faf2a9e",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+        "name": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+        "name": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "name": "Bob P4 verification media 2e7ecec7-5177-465c-b231-6d2d9bfba03a",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_e330500370464473a571f4dde9fa9c90",
+        "name": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      },
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "name": "Bob P4 verification media e7e1bc31-8957-4fd6-aa2e-9ce0457e54a6",
+        "type": "Verification",
+        "name_matches": true,
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "authenticated_people": 1,
+        "guest_people": 1,
+        "artifacts": 0
+      }
+    ],
+    "removed": [
+      {
+        "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+        "name": "Bob P4 verification porch 0ab9091e-f3de-4892-9865-5199e8cb0000"
+      },
+      {
+        "id": "p_292c79b7f95e45df83062c6a069f4a06",
+        "name": "Bob P4 verification renovation c768b2b5-04cb-4f1b-8dc5-b31066a130be"
+      },
+      {
+        "id": "p_3468d8ac8e664122aac9c04436f400b2",
+        "name": "Bob P4 verification porch 8734867c-9414-4f95-8f21-4a950c319552"
+      },
+      {
+        "id": "p_6a0d679fa8b447a8ade28f1563996760",
+        "name": "Bob P4 verification shelf 04052779-c430-41aa-ac26-9d765faf2a9e"
+      },
+      {
+        "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+        "name": "Bob P4 verification porch 1881c05b-ca76-4a5f-a9f7-1e698a72f6b1"
+      },
+      {
+        "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+        "name": "Bob P4 verification bunk 0d7363bd-2d38-48a3-8529-dd9c06c6b9b4"
+      },
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "name": "Bob P4 verification media 2e7ecec7-5177-465c-b231-6d2d9bfba03a"
+      },
+      {
+        "id": "p_e330500370464473a571f4dde9fa9c90",
+        "name": "Bob P4 verification shelf 8b13b961-f11c-468e-84f7-a0f8fcbc6565"
+      },
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "name": "Bob P4 verification media e7e1bc31-8957-4fd6-aa2e-9ce0457e54a6"
+      }
+    ],
+    "after": [
+      {
+        "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_292c79b7f95e45df83062c6a069f4a06",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_3468d8ac8e664122aac9c04436f400b2",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_6a0d679fa8b447a8ade28f1563996760",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_e330500370464473a571f4dde9fa9c90",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      }
+    ],
+    "finalPorchInspected": [
+      {
+        "id": "p_4f381eab87694356a33364fac7b2f836",
+        "name": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa",
+        "type": "Verification",
+        "media_assets": 0,
+        "storage_objects": 0,
+        "private_threads": 0,
+        "artifacts": 0,
+        "authenticated_people": 1,
+        "guest_people": 1
+      }
+    ],
+    "finalPorchRemoved": [
+      {
+        "id": "p_4f381eab87694356a33364fac7b2f836",
+        "name": "Bob P4 verification porch d3d44b67-1bb8-4f55-92f3-c164b85cd5aa"
+      }
+    ],
+    "allTenAfter": [
+      {
+        "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_292c79b7f95e45df83062c6a069f4a06",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_3468d8ac8e664122aac9c04436f400b2",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_4f381eab87694356a33364fac7b2f836",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_6a0d679fa8b447a8ade28f1563996760",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_e330500370464473a571f4dde9fa9c90",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      }
+    ],
+    "mainSmoke": {
+      "inspected": [
+        {
+          "id": "p_67b779bad0034cdbb55f354129c27194",
+          "name": "Bob CI verification 124c2b8c-6333-46c0-af5b-5c1568d99bc1",
+          "type": "Verification",
+          "description": "Disposable release verification fixture. Contains no real project data.",
+          "media_assets": 0,
+          "storage_objects": 0,
+          "private_threads": 0,
+          "artifacts": 0,
+          "authenticated_people": 1,
+          "guest_people": 1,
+          "materials": [
+            {
+              "id": "m_d9c0cc93-aacb-4ea6-8c79-a164918af3a7",
+              "qty": "37 pieces",
+              "name": "Verification bolt 124c2b8c-6333-46c0-af5b-5c1568d99bc1"
+            }
+          ],
+          "tasks": [
+            {
+              "id": "t_dc667573-2f11-47eb-9f3f-4b3b110b045d",
+              "name": "P3 focus 124c2b8c-6333-46c0-af5b-5c1568d99bc1"
+            }
+          ]
+        }
+      ],
+      "removed": [
+        {
+          "id": "p_67b779bad0034cdbb55f354129c27194",
+          "name": "Bob CI verification 124c2b8c-6333-46c0-af5b-5c1568d99bc1"
+        }
+      ],
+      "after": [
+        {
+          "projects": 0,
+          "people": 0,
+          "tasks": 0,
+          "materials": 0,
+          "media": 0,
+          "private_threads": 0,
+          "objects": 0
+        }
+      ]
+    },
+    "allElevenAfter": [
+      {
+        "id": "p_1ff24cd700cf4d31a0d8a5c50916ba95",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_292c79b7f95e45df83062c6a069f4a06",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_3468d8ac8e664122aac9c04436f400b2",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_4f381eab87694356a33364fac7b2f836",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_67b779bad0034cdbb55f354129c27194",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_6a0d679fa8b447a8ade28f1563996760",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_885cc1d9adac4809b5c26c689bc4772d",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_b276d7100c7549c3a10ba2824ec3c032",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_e330500370464473a571f4dde9fa9c90",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      },
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "projects": 0,
+        "people": 0,
+        "tasks": 0,
+        "instructions": 0,
+        "measurements": 0,
+        "materials": 0,
+        "artifacts": 0,
+        "media": 0,
+        "invites": 0,
+        "sessions": 0,
+        "private_threads": 0,
+        "objects": 0
+      }
+    ]
+  },
+  "finalDeployment": {
+    "source": "7262e05c65c4ff648f48351cca75ef8a462f11b0",
+    "askBob": {
+      "id": "5e8d418f-3f4d-4c32-93ac-c7305d37b90b",
+      "slug": "ask-bob",
+      "name": "ask-bob",
+      "status": "ACTIVE",
+      "version": 70,
+      "created_at": 1788984424181,
+      "updated_at": 1790794114620,
+      "verify_jwt": true,
+      "import_map": false,
+      "entrypoint_path": "/tmp/user_fn_yuobtgoidmmmwfqenkau_5e8d418f-3f4d-4c32-93ac-c7305d37b90b_70/source/index.ts",
+      "ezbr_sha256": "74ae25fbed7b7704e77b82e2d416359a856f65415477625078805e6691ddfe97",
+      "files": [
+        {
+          "name": "index.ts",
+          "content": "// Immutable reviewed P4 source; Supabase bundles this graph at deployment.\nimport \"https://raw.githubusercontent.com/EmelieHagander/Bob-the-builder/7262e05c65c4ff648f48351cca75ef8a462f11b0/supabase/functions/ask-bob/index.ts\";\n"
+        }
+      ]
+    },
+    "worker": {
+      "id": "9abcddc3-088e-47a1-84b1-f9f3f9ae5400",
+      "slug": "bob-worker",
+      "name": "bob-worker",
+      "status": "ACTIVE",
+      "version": 38,
+      "created_at": 1790252887264,
+      "updated_at": 1790794138794,
+      "verify_jwt": false,
+      "import_map": false,
+      "entrypoint_path": "/tmp/user_fn_yuobtgoidmmmwfqenkau_9abcddc3-088e-47a1-84b1-f9f3f9ae5400_38/source/index.ts",
+      "ezbr_sha256": "14176e78853de28bc3f7a52e564e74bf20531b7901d354b5f12b4e6df2f0348f",
+      "files": [
+        {
+          "name": "index.ts",
+          "content": "// Immutable reviewed P4 source; Supabase bundles this graph at deployment.\nimport \"https://raw.githubusercontent.com/EmelieHagander/Bob-the-builder/7262e05c65c4ff648f48351cca75ef8a462f11b0/supabase/functions/bob-worker/index.ts\";\n"
+        }
+      ]
+    }
+  },
+  "release": {
+    "pullRequest": 178,
+    "merge": "5696728d9a21f9eae954a482de0a6a6c4a119399",
+    "ci": 36759787908,
+    "lineageConcurrency": 36759787986,
+    "reviewedScreenshotArtifact": 11118631866,
+    "pages": 36761512308,
+    "liveBob": 36761512263,
+    "servedAsset": "/Bob-the-builder/assets/index-bPyr19Oz.js"
+  },
+  "finalPorchAccounting": {
+    "events": [
+      {
+        "turn_id": "1f2b37c8-4d3c-4148-8aa7-555b5a36e195",
+        "kind": "delivery",
+        "role": "bob",
+        "status": "answered",
+        "event_count": 1,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      },
+      {
+        "turn_id": "1f2b37c8-4d3c-4148-8aa7-555b5a36e195",
+        "kind": "model",
+        "role": "ask-bob",
+        "status": "ok",
+        "event_count": 2,
+        "input_tokens": "16849",
+        "output_tokens": "856",
+        "estimated_cost_usd": "0.039987"
+      },
+      {
+        "turn_id": "1f2b37c8-4d3c-4148-8aa7-555b5a36e195",
+        "kind": "tool",
+        "role": "tool",
+        "status": "ok",
+        "event_count": 3,
+        "input_tokens": null,
+        "output_tokens": null,
+        "estimated_cost_usd": null
+      }
+    ],
+    "manualVerdict": "passed: inputs stay estimates; no saved sketch claimed; partial A17 only"
+  },
+  "accounting": {
+    "scope": "P4 model probes only; automatic main release smoke is separate.",
+    "sixInitialReplies": {
+      "modelCalls": 13,
+      "inputTokens": 109875,
+      "outputTokens": 6328,
+      "estimatedUsd": "0.184135"
+    },
+    "eightMainRepliesIncludingBothPorchRetries": {
+      "modelCalls": 17,
+      "inputTokens": 143503,
+      "outputTokens": 8105,
+      "estimatedUsd": "0.264908"
+    },
+    "includingOneExtraSetupReply": {
+      "modelCalls": 19,
+      "estimatedUsd": "0.301520"
+    },
+    "pricing": "Recorded estimated USD, not provider invoice or cost per accepted delivery; no completed CAD delivery is claimed."
+  },
+  "mediaBefore": {
+    "scope": "P4 partial: real read-only guest model; manual media; name-only participant HTTP",
+    "startedAt": "2026-09-30T17:36:03.087Z",
+    "fixtureProjects": [
+      {
+        "id": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "name": "Bob P4 verification media e7e1bc31-8957-4fd6-aa2e-9ce0457e54a6"
+      }
+    ],
+    "results": [
+      {
+        "case": "manual_shared_media",
+        "projectId": "p_f7057cca008049a6a72d3ffc0dbd786e",
+        "status": "failed",
+        "checks": {},
+        "error": "Cannot read properties of undefined (reading 'some')",
+        "mediaCleaned": true
+      }
+    ],
+    "notProven": [
+      "Bob-driven save/link",
+      "named-member history/idempotency",
+      "mobile rendering",
+      "complete UC-001–005",
+      "construction safety"
+    ],
+    "finishedAt": "2026-09-30T17:37:05.086Z",
+    "runtime": {
+      "source": "58ee8c6185858f33018a9400393ebe08d770b536",
+      "askBob": 68,
+      "worker": 36
+    }
+  },
+  "mediaAfter": {
+    "scope": "P4 partial: real read-only guest model; manual media; name-only participant HTTP",
+    "startedAt": "2026-09-30T18:32:07.400Z",
+    "fixtureProjects": [
+      {
+        "id": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "name": "Bob P4 verification media 2e7ecec7-5177-465c-b231-6d2d9bfba03a"
+      }
+    ],
+    "results": [
+      {
+        "case": "manual_shared_media",
+        "projectId": "p_bec8cea62a8b4bd4bd25e4314e0503dd",
+        "status": "passed",
+        "checks": {
+          "missingBytesRejected": true,
+          "idempotentFinalize": true,
+          "sharedOriginal": true,
+          "linkRetry": true,
+          "independentReplacement": true,
+          "freshCallerReadback": true,
+          "participantInstructions": true,
+          "exactHttpBytes": true,
+          "revokedDenied": true
+        },
+        "mediaCleaned": true
+      }
+    ],
+    "notProven": [
+      "Bob-driven save/link",
+      "named-member history/idempotency",
+      "mobile rendering",
+      "complete UC-001–005",
+      "construction safety"
+    ],
+    "finishedAt": "2026-09-30T18:34:05.867Z",
+    "runtime": {
+      "source": "174bd0b203b2159f19378b8ad8a3cd412bb46f92",
+      "askBob": 69,
+      "worker": 37
+    }
+  }
+}

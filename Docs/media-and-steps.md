@@ -117,8 +117,9 @@ Images are downloaded through the capability-checked `volunteer-media` Edge
 function. It checks current access and the exact task/image relation before and
 after fetching original bytes; it returns `no-store` responses and never makes
 Storage public. [The data contract](../db/README.md#name-only-volunteer-access)
-owns this extension. The deployed foundation is confirmed there; the additive P4
-instruction-image correction requires its own migration and browser/live proof.
+owns this extension. The additive P4 migration is applied and its browser and
+live participant HTTP proofs are recorded in the linked P4 verification. Real
+phone/participant product acceptance remains separate.
 
 ## Reachable UI and verification
 
