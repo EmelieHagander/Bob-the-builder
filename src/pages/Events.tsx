@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
@@ -7,6 +8,7 @@ import { useAuthTick } from '../components/Layout'
 import { EventModal } from '../components/editors'
 
 export function Events() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'events' }, 'Build days')
   const tick = useAuthTick()
   const [version, setVersion] = useState(0)
   const { data: events } = useAsync(() => db.getEvents(), [version])

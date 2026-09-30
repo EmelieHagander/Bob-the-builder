@@ -1,3 +1,4 @@
+import { openBobForCurrentSurface, useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
@@ -74,6 +75,7 @@ function StepImages({ projectId, stepId }: { projectId: string; stepId: string }
 
 export function TaskDetail() {
   const { taskId = '' } = useParams()
+  const [bobInstruction, setBobInstruction] = useState<{ taskId: string; id: string } | null>(null)
   const projectId = db.getActiveProjectId() ?? ''
   const [version, setVersion] = useState(0)
   const { data: detail, loading, error: loadError } = useAsync(() => db.getTaskDetail(projectId, taskId), [projectId, taskId, version])
@@ -88,6 +90,9 @@ export function TaskDetail() {
     setBusy(true); setError('')
     try { await action(); reload() } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
+  const focusedPlanStep = work?.steps.find(step => step.id === detail?.task.primaryStepId)
+  const focusedInstruction = bobInstruction?.taskId === taskId ? detail?.steps.find(step => step.id === bobInstruction.id) : undefined
+  useBobSurface(projectId, detail && !loading && !loadError ? { surface: 'task', taskId: detail.task.id, ...(detail.task.areaId ? { areaId: detail.task.areaId } : {}), ...(focusedPlanStep ? { planStepId: focusedPlanStep.id } : {}), ...(focusedInstruction ? { instructionId: focusedInstruction.id } : {}) } : null, focusedInstruction ? `Instruction · ${focusedInstruction.title}` : detail ? `Task · ${detail.task.name}` : 'Task loading')
   if (loading && !detail) return <div className="page"><Loading /></div>
   if (!detail || loadError) return <div className="page"><h1 className="page-title">Task unavailable</h1>
     <p role="alert">{loadError?.message ?? 'This task may have been removed, or your project access changed.'}</p>
@@ -132,10 +137,12 @@ export function TaskDetail() {
               <button className="btn" aria-label={'Move ' + step.title + ' down'} disabled={!editable || busy || index === steps.length - 1}
                 onClick={() => void act(() => db.editTaskSteps(projectId, task.id, 'move', step.id, { revision: step.revision, direction: 'down' }))}><Icon name="arrow-down" size={17} /></button>
               <button className="btn" disabled={!editable || busy} onClick={() => setDialog({ kind: 'step', step })}>Edit instruction</button>
+              <button className="btn" onClick={() => { setBobInstruction({ taskId, id: step.id }); openBobForCurrentSurface() }}>Ask Bob about this instruction</button>
               <button className="btn" aria-label={'Remove instruction: ' + step.title} disabled={!editable || busy} onClick={() => setDialog({ kind: 'delete', step })}><Icon name="trash" size={16} /></button>
             </div>
           </div>
           {step.isCheckpoint && <p className="checkpoint-label">{step.required ? 'Required completion check' : 'Optional check'}</p>}
+          {focusedInstruction?.id === step.id && <div className="foundation-actions"><span className="foundation-hint">Bob’s selected instruction</span><button className="btn" onClick={() => setBobInstruction(null)}>Use whole Task</button></div>}
           {step.instructions && <p className="instruction-text">{step.instructions}</p>}
           {step.completedAt && <p className="foundation-hint">Completed {new Date(step.completedAt).toLocaleString()}</p>}
           <StepImages projectId={projectId} stepId={step.id} />

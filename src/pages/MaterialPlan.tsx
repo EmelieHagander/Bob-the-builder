@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -387,6 +388,7 @@ export function MaterialPlan() {
   const [offset, setOffset] = useState(0)
   const [archived, setArchived] = useState(false)
   const [areaFilter, setAreaFilter] = useState(initialArea)
+  useBobSurface(projectId, { surface: 'material-plan', ...(areaFilter ? { areaId: areaFilter } : {}) }, 'Material plan')
   const [editor, setEditor] = useState<'new' | { id: string; revision: number } | null>(null)
   const [calculator, setCalculator] = useState(false)
   const [detail, setDetail] = useState<{ id: string; revision: number; areaId: string; edit?: boolean } | null>(null)

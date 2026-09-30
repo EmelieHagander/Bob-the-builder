@@ -1,4 +1,6 @@
-import type { DesignHandoff } from './cad-review.ts'
+/** Kept independent of model/runtime types so exact provenance validation can
+ * also run at the browser readback boundary. */
+type CadCoordinates = { origin: string | null; positive_x: string | null; positive_y: string | null; positive_z: string | null }
 
 export const CAD_DIMENSIONS = ['x_mm','y_mm','z_mm','diameter_mm','length_mm','outside_diameter_mm','wall_thickness_mm'] as const
 export type DimensionBinding = { definition_id:string; dimension:string; measurement_id:string; revision:number }
@@ -6,7 +8,7 @@ export type ProjectMeasurementSource={kind:'project_measurement';id:string;revis
 export type SpaceMeasurementSource={kind:'space_measurement';id:string;building_id:string;space_id:string;space_revision:number;measurement_id:string;measurement_revision:number;value:string;unit:string;truth:string;description:string}
 export type CadLineage = {
   version:1|2; coverage:'partial'; project_id:string;
-  coordinates:DesignHandoff['coordinates'] | null;
+  coordinates:CadCoordinates | null;
   inherited_from:{artifact_id:string;revision:number} | null;
   bindings:{definition_id:string;dimension:string;source:ProjectMeasurementSource|SpaceMeasurementSource;normalized:{value:number;unit:'mm'}}[];
 }
@@ -30,7 +32,7 @@ export function measurementMillimetres(m:Record<string,any>):number {
 /** Metadata is constructed from authorized records, never accepted from the
  * designer or renderer. Partial deliberately excludes unbound values,
  * placements, cuts, physical-source transforms and formula dependencies. */
-export function buildCadLineage(projectId:string,recipe:any,bindings:DimensionBinding[],records:Map<string,Record<string,any>>,coordinates:DesignHandoff['coordinates']):CadLineage {
+export function buildCadLineage(projectId:string,recipe:any,bindings:DimensionBinding[],records:Map<string,Record<string,any>>,coordinates:CadCoordinates):CadLineage {
   return {version:1,coverage:'partial',project_id:projectId,coordinates:structuredClone(coordinates),inherited_from:null,
     bindings:bindings.map(b=>{
       const m=records.get(b.measurement_id),d=recipe.definitions.find((d:any)=>d.id===b.definition_id)

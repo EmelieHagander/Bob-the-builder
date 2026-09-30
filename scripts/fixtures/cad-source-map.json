@@ -1,0 +1,292 @@
+{
+  "projectId": "A",
+  "recipe": {
+    "contract_version": 1,
+    "units": "mm",
+    "assembly_id": "source-test",
+    "definitions": [
+      {
+        "id": "panel",
+        "primitive": "box",
+        "material_ref": null,
+        "x_mm": 980,
+        "y_mm": 18,
+        "z_mm": 300
+      }
+    ],
+    "instances": [
+      {
+        "id": "panel",
+        "definition_id": "panel",
+        "placement": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        }
+      }
+    ],
+    "views": [
+      "front"
+    ]
+  },
+  "manifest": {
+    "bob_parameters": {
+      "version": 1,
+      "project_id": "A",
+      "coverage": "complete",
+      "precision": "decimal_6",
+      "coordinate_system": {
+        "version": 1,
+        "id": "source-test",
+        "length_unit": "mm",
+        "angle_unit": "deg",
+        "origin": [
+          0,
+          0,
+          0
+        ],
+        "positive_axes": [
+          [
+            1,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            0
+          ],
+          [
+            0,
+            0,
+            1
+          ]
+        ],
+        "rotation": "build123d_0.13_intrinsic_xyz",
+        "definition_origins": {
+          "box": "minimum_corner",
+          "cylinder": "xy_center_z_min",
+          "tube": "xy_center_z_min"
+        },
+        "instance_parent": "assembly",
+        "cut_parent": "definition",
+        "frame_identity": "artifact_revision_and_recipe_path",
+        "views": {
+          "front": {
+            "toward_camera": [
+              0,
+              -1,
+              0
+            ],
+            "up": [
+              0,
+              0,
+              1
+            ]
+          },
+          "right": {
+            "toward_camera": [
+              1,
+              0,
+              0
+            ],
+            "up": [
+              0,
+              0,
+              1
+            ]
+          },
+          "top": {
+            "toward_camera": [
+              0,
+              0,
+              1
+            ],
+            "up": [
+              0,
+              1,
+              0
+            ]
+          },
+          "isometric": {
+            "toward_camera": [
+              1,
+              -1,
+              1
+            ],
+            "up": [
+              0,
+              0,
+              1
+            ]
+          }
+        }
+      },
+      "frames": [],
+      "nodes": [
+        {
+          "id": "width",
+          "role": "source",
+          "source": {
+            "kind": "project_measurement",
+            "id": "90000000-0000-4000-8000-000000000002",
+            "revision": 2
+          },
+          "normalized": {
+            "value": 1000,
+            "unit": "mm"
+          },
+          "sources": [
+            {
+              "kind": "project_measurement",
+              "id": "90000000-0000-4000-8000-000000000002",
+              "revision": 2,
+              "value": "1",
+              "unit": "m",
+              "truth": "measured",
+              "description": "Tape between marked endpoints"
+            }
+          ]
+        },
+        {
+          "id": "allowance",
+          "role": "estimate",
+          "value": 20,
+          "unit": "mm",
+          "reason": "Estimated fit allowance, verify on site",
+          "normalized": {
+            "value": 20,
+            "unit": "mm"
+          },
+          "sources": []
+        },
+        {
+          "id": "inside",
+          "role": "derived",
+          "operation": "subtract_v1",
+          "operands": [
+            "width",
+            "allowance"
+          ],
+          "rounding": "exact",
+          "normalized": {
+            "value": 980,
+            "unit": "mm"
+          },
+          "sources": []
+        },
+        {
+          "id": "thickness",
+          "role": "source",
+          "source": {
+            "kind": "project_measurement",
+            "id": "90000000-0000-4000-8000-000000000003",
+            "revision": 3
+          },
+          "normalized": {
+            "value": 18,
+            "unit": "mm"
+          },
+          "sources": [
+            {
+              "kind": "project_measurement",
+              "id": "90000000-0000-4000-8000-000000000003",
+              "revision": 3,
+              "value": "18",
+              "unit": "mm",
+              "truth": "provided_spec",
+              "description": "Supplier thickness specification"
+            }
+          ]
+        },
+        {
+          "id": "height",
+          "role": "decision",
+          "value": 300,
+          "unit": "mm",
+          "reason": "Chosen height for concept",
+          "normalized": {
+            "value": 300,
+            "unit": "mm"
+          },
+          "sources": []
+        },
+        {
+          "id": "zero",
+          "role": "decision",
+          "value": 0,
+          "unit": "mm",
+          "reason": "Local assembly datum",
+          "normalized": {
+            "value": 0,
+            "unit": "mm"
+          },
+          "sources": []
+        },
+        {
+          "id": "angle",
+          "role": "decision",
+          "value": 0,
+          "unit": "deg",
+          "reason": "Local assembly axes",
+          "normalized": {
+            "value": 0,
+            "unit": "deg"
+          },
+          "sources": []
+        }
+      ],
+      "bindings": [
+        {
+          "path": "definitions/panel/x_mm",
+          "node": "inside"
+        },
+        {
+          "path": "definitions/panel/y_mm",
+          "node": "thickness"
+        },
+        {
+          "path": "definitions/panel/z_mm",
+          "node": "height"
+        },
+        {
+          "path": "instances/panel/placement/x",
+          "node": "zero"
+        },
+        {
+          "path": "instances/panel/placement/y",
+          "node": "zero"
+        },
+        {
+          "path": "instances/panel/placement/z",
+          "node": "zero"
+        },
+        {
+          "path": "instances/panel/placement/rx",
+          "node": "angle"
+        },
+        {
+          "path": "instances/panel/placement/ry",
+          "node": "angle"
+        },
+        {
+          "path": "instances/panel/placement/rz",
+          "node": "angle"
+        }
+      ]
+    },
+    "checks": {
+      "collisions": {
+        "status": "complete",
+        "tested_pairs": 0,
+        "skipped_pairs": 0,
+        "overlaps": []
+      },
+      "clearances": [],
+      "motions": []
+    }
+  }
+}

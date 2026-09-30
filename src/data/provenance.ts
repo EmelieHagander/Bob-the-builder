@@ -31,5 +31,7 @@ export interface AnswerEvidence {
   partial: boolean
   writes?: ProjectWriteReceipt[]
   references?: ReferenceEvidence[]
+  /** Caller-hydrated entry focus; retained with the owner's answer, never shared chat. */
+  currentView?: import('../domain/bobScreen.ts').CurrentView
 }
 export interface ReferenceEvidence { id:string;title:string;url:string;version:string;reviewedAt:string }

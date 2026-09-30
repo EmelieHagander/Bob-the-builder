@@ -10,6 +10,7 @@ import type { ToolPolicyReader } from './project-tools/session.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { createPlanAssistant } from './plan-assistant.ts'
 import type { WorkingContext } from './bob-working-context.ts'
+import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
 import type { createProjectLookup } from './project-lookup.ts'
@@ -21,6 +22,7 @@ export async function runClaimedProjectTurn(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
+  currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
@@ -84,6 +86,17 @@ export async function runClaimedProjectTurn(opts: {
     else if (result.ok) result = { ...result, evidence }
   }
   if (!result.ok) { await fail(); return result }
+  if (opts.currentView) {
+    const valid = !opts.validateCurrentView || await opts.validateCurrentView()
+    if (!valid) {
+      if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
+      if (!result.evidence.writes?.length) { await fail(); return { ok: false, error: 'context_unavailable' } }
+      // Preserve committed changes while withholding a reply based on a changed focus.
+      result = { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({ notice: 'recovered', receipts: result.evidence.writes }),
+        evidence: { ...result.evidence, sources: [], partial: true, currentView: { status: 'unavailable', projectId: opts.projectId,
+          surface: opts.currentView.surface, focus: {}, sources: [], warnings: ['focus_changed_after_read'], retrievedAt: new Date().toISOString() } } }
+    } else result = { ...result, evidence: { ...result.evidence, currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } }
+  }
   if (opts.projectContext && !await opts.projectContext.validate()) {
     if (!await opts.hasAccess()) { await fail(); return { ok: false, error: 'project_denied' } }
     if (opts.writer?.receipts.length) {

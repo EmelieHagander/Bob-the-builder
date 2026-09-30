@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -78,6 +79,8 @@ export function ProjectStepWorkspace({projectId}:{projectId:string}){
  const [adding,setAdding]=useState<WorkStep|null>(null)
  const {data,error,loading}=useAsync(()=>db.getProjectStepWorkspace(projectId),[projectId,version,local])
  const {data:crew}=useAsync(()=>db.getPeople(),[projectId,version])
+ const focused = !loading && !error ? data?.steps.find(step=>step.id===selected.get('step')) : undefined
+ useBobSurface(projectId, focused ? {surface:'project',planStepId:focused.id} : null, focused ? `Plan Step · ${focused.title}` : 'Project', 2)
  if(loading&&!data)return <p role="status">Loading project plan…</p>
  if(error)return <p role="alert">Project plan could not be loaded. <button className="btn" onClick={()=>setLocal(v=>v+1)}>Try again</button></p>
  if(!data)return null

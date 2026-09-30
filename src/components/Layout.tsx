@@ -4,11 +4,13 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import * as db from '../data/database'
 import { phaseLabel } from '../lib/projectPhase'
 import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
 import { AskBob } from './AskBob'
+import { BOB_OPEN_EVENT, useBobSurface } from '../lib/bobSurface'
+import type { BobScreenSurface } from '../domain/bobScreen'
 
 /** Re-render dependency that bumps on every sign-in/out (no-op in demo mode). */
 export function useAuthTick(): number {
@@ -200,10 +202,19 @@ function MobileNav() {
 }
 
 export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } }) {
+  const location = useLocation()
+  const surfaces: Record<string, BobScreenSurface> = { '/': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
+  const surface = surfaces[location.pathname] ?? 'project'
+  useBobSurface(project.id, { surface }, 'Project context', 0)
   const [bobOpen, setBobOpen] = useState(false)
   const [bobStarted, setBobStarted] = useState(false)
   const [bobUnread, setBobUnread] = useState(false)
   const authTick = useAuthTick()
+  useEffect(() => {
+    const show = () => { setBobStarted(true); setBobOpen(true) }
+    window.addEventListener(BOB_OPEN_EVENT, show)
+    return () => window.removeEventListener(BOB_OPEN_EVENT, show)
+  }, [])
   useEffect(() => {
     let cancelled = false, checking = false
     setBobUnread(false)

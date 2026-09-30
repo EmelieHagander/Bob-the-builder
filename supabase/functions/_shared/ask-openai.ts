@@ -1,4 +1,7 @@
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
+import { hydrateCurrentView, createCurrentViewReader } from './current-view.ts'
+import { createCurrentViewGuard } from './current-view-guard.ts'
+import { parseBobScreen, type BobScreenPointer, type CurrentView } from '../../../src/domain/bobScreen.ts'
 import {createDrawingBudget} from './drawing-budget.ts'
 import {createDrawingRequestStore} from './drawing-request-store.ts'
 import { createBobModelBudget } from './bob-model-budget.ts'
@@ -34,6 +37,7 @@ import { runClaimedProjectTurn } from './project-turn.ts'
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
+  screen?: BobScreenPointer | null;
   background?: { drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
@@ -163,6 +167,35 @@ export async function answerWithOpenAi(opts: {
   }})
   const threadId = claimedServer?.thread_id ?? null
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
+  let currentView: CurrentView | undefined
+  let validateCurrentView: (() => Promise<boolean>) | undefined
+  let getCurrentViewEvidence: (() => CurrentView) | undefined
+  if (!opts.background?.drawingRequestId) {
+    try {
+      const screen = claimedServer && threadId
+        ? await conversations.captureScreen({ projectId: opts.projectId, userId: opts.userId, threadId,
+          turnId: opts.clientTurnId, generation: claimedServer.generation }, opts.screen)
+        : parseBobScreen(opts.screen)
+      if (screen) {
+        const reader = createCurrentViewReader(client, opts.userId)
+        const read = () => hydrateCurrentView({ projectId: opts.projectId, screen, reader })
+        // A lease replay rebuilds the same model input; only fresh caller reads
+        // can authorize its reuse. Never journal the freshness check itself.
+        currentView = await memo('context:current_view', screen, read)
+        const guard = createCurrentViewGuard({ initial: currentView, read, hasAccess,
+          receipts: () => writer?.receipts ?? [] })
+        validateCurrentView = guard.validate
+        getCurrentViewEvidence = guard.evidence
+        lookup.sources.push(...currentView.sources)
+      }
+    } catch (error) {
+      rethrowContinuation(error)
+      if (threadId && claimedServer) {
+        try { await conversations.fail(opts.projectId, opts.userId, threadId, opts.clientTurnId, claimedServer.generation) } catch { /* normal lease recovery */ }
+      }
+      return { ok: false, error: 'context_unavailable' }
+    }
+  }
   // The v13 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
     payload => rpc('bob_project_write_v13', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
@@ -298,7 +331,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

@@ -5,12 +5,34 @@
  */
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import * as db from '../data/database'
 import { Icon, useAsync } from './ui'
 import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
 import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
+import { getBobSurface, useBobSurfaceSnapshot } from '../lib/bobSurface'
+import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
+
+type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null }
+
+function ViewEvidence({ view }: { view: CurrentView }) {
+  if (view.status !== 'ok') return <p className="foundation-hint" role="status">
+    {view.status === 'not_found' ? 'The page selection could not be found in this project.' : view.status === 'unsupported' ? 'Detailed context for this page is unavailable.' : 'The page records could not be read.'} Bob has no verified page focus for this answer.
+  </p>
+  const f = view.focus
+  const warnings: Record<string, string> = { plan_step_goal_truncated: 'The Step goal was shortened in the page context.', plan_step_notes_truncated: 'The Step notes were shortened in the page context.', task_instructions_truncated: 'Task instructions were shortened in the page context.', selected_instruction_truncated: 'The selected instruction was shortened in the page context.' }
+  const labels = [f.area?.name, f.planStep?.name, f.task?.name, f.instruction?.name,
+    f.solution && `${f.solution.name} · v${f.solution.revision}`,
+    f.drawing && `${f.drawing.name} · v${f.drawing.revision}`, f.event?.name].filter(Boolean)
+  return <details className="bob-context-evidence">
+    <summary>Page records used{labels.length ? ` · ${labels.join(' / ')}` : ''}</summary>
+    <p className="foundation-hint">Read from the project at {new Date(view.retrievedAt).toLocaleString()}. Page focus does not approve measurements or drawings.</p>
+    {f.drawing && <p>Viewed drawing v{f.drawing.revision} · {f.drawing.status.replace(/_/g, ' ')} · {f.drawing.sourceState === 'current' ? 'linked sources current' : f.drawing.sourceState === 'changed' ? 'sources changed — review before use' : 'sources could not be checked'}</p>}
+    {view.warnings.length > 0 && <ul>{view.warnings.map((warning, i) => <li key={i}>{warnings[warning] ?? 'Some page context was limited. Open the saved source for its complete details.'}</li>)}</ul>}
+  </details>
+}
 
 const toneColor = {
   clay: { c: 'var(--clay)', bg: 'var(--clay-bg)' },
@@ -193,6 +215,7 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
       <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
+        {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
           <p>Stored project information; measurements and specifications are not verified.</p>
@@ -221,6 +244,7 @@ function WorkingBubble({ label }: { label: string }) {
 }
 
 export function AskBob({ open, onClose, project }: { open: boolean; onClose: () => void; project: { id: string; name: string } }) {
+  const surface = useBobSurfaceSnapshot(project.id)
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('bob:chat-density') !== 'comfortable' } catch { return true } })
@@ -232,6 +256,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const sendVersion = useRef(0)
   const [viewport, setViewport] = useState<{ height: number; top: number } | null>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
+  const overlay = useRef<HTMLDivElement>(null)
   const stickToEnd = useRef(true)
   useEffect(() => { try { localStorage.setItem('bob:chat-density', compact ? 'compact' : 'comfortable') } catch { /* preference is optional */ } }, [compact])
   useEffect(() => {
@@ -260,8 +285,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [historyNotice, setHistoryNotice] = useState('')
   const [working, setWorking] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
-  const [retry, setRetry] = useState<{ text: string; turnId: string } | null>(null)
-  const [recovering, setRecovering] = useState<{ text: string; turnId: string; expiresAt: number } | null>(null)
+  const [retry, setRetry] = useState<RetryTurn | null>(null)
+  const [recovering, setRecovering] = useState<(RetryTurn & { expiresAt: number }) | null>(null)
   const [workingLabel, setWorkingLabel] = useState(db.describeBobProgress(undefined))
   // Keep this component alive when closed so a local request and draft survive.
   // A page reload recovers the same turn from the private server transcript.
@@ -280,8 +305,22 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [open, needsRefresh, working, project.id])
   useEffect(() => {
     if (!open) return
+    const previous = document.activeElement as HTMLElement | null
+    composer.current?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [open])
+  useEffect(() => {
+    if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !confirmReset) { event.preventDefault(); close() }
+      const dialogs = document.querySelectorAll('[role="dialog"]')
+      if (dialogs[dialogs.length - 1] !== overlay.current) return
+      if (event.key === 'Escape' && !confirmReset) { event.preventDefault(); event.stopImmediatePropagation(); close() }
+      if (event.key === 'Tab') {
+        const targets = Array.from(overlay.current?.querySelectorAll<HTMLElement>('button:not([disabled]),textarea:not([disabled]),a[href],summary,[tabindex="0"]') ?? []).filter(node => node.getClientRects().length > 0)
+        const first = targets[0], last = targets[targets.length - 1]
+        if (event.shiftKey && (document.activeElement === first || !overlay.current?.contains(document.activeElement))) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && (document.activeElement === last || !overlay.current?.contains(document.activeElement))) { event.preventDefault(); first?.focus() }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -451,19 +490,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
-  const send = async (retryRequest?: { text: string; turnId: string }, appendUser = !retryRequest) => {
+  const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
+    // A retry belongs to the original send. A new request reads navigation now.
+    const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
     setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
     if (appendUser) push({ from: 'user', text })
     setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
-    const result = await db.askBob(project.id, text, clientTurnId)
+    const result = await db.askBob(project.id, text, clientTurnId, screen)
     if (!isCurrent()) return
     if ('pending' in result) {
-      setRecovering({ text, turnId: clientTurnId, expiresAt: result.expiresAt })
+      setRecovering({ text, turnId: clientTurnId, screen, expiresAt: result.expiresAt })
       return
     }
     // A disconnected HTTP response does not mean the server stopped working.
@@ -479,7 +520,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       } catch { /* Preserve the same turn id for a later recovery attempt. */ }
       if (!isCurrent()) return
       if (result.unavailable === 'turn_in_flight') {
-        setRecovering({ text, turnId: clientTurnId, expiresAt: Date.now() + 5 * 60_000 })
+        setRecovering({ text, turnId: clientTurnId, screen, expiresAt: Date.now() + 5 * 60_000 })
         setHistoryNotice('Bob is still working. Reconnecting to the conversation…')
         return
       }
@@ -490,7 +531,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (result.evidence.writes?.length) setNeedsRefresh(true)
       push({ from: 'bob', text: result.answer, evidence: result.evidence })
     } else if (result.unavailable !== 'project_changed') {
-      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId })
+      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId, screen })
       const message = result.unavailable === 'not_configured'
         ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
         : result.unavailable === 'unauthorized'
@@ -502,7 +543,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             : result.unavailable === 'context_preparing'
               ? 'Bob is catching up on the older conversation. Retry the same request to continue; no new project changes were made.'
             : result.unavailable === 'context_unavailable'
-              ? 'Bob could not prepare the conversation context. No answer was generated from incomplete history. Please retry.'
+              ? 'Bob could not safely use the page, project or conversation context. The records may have changed while he was working. Review any saved changes, then use Retry request to reread the original selection.'
             : result.unavailable === 'turn_in_flight'
               ? 'That conversation already has a question in progress. Try again when it finishes.'
               : 'I could not retrieve an answer for this project. Please try again.'
@@ -514,8 +555,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   if (!open) return null
 
-  return (
-    <div className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
+  return createPortal(
+    <div ref={overlay} role="dialog" aria-modal="true" aria-label={`Bob conversation for ${project.name}`} className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
       <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: 'max(8px, env(safe-area-inset-top)) 12px 8px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
@@ -529,6 +570,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             <Icon name="arrow-counter-clockwise" size={16} /> New conversation
           </button>
           <button type="button" className="btn bob-density" aria-label="Comfortable text spacing" aria-pressed={!compact} title={compact ? 'Use larger text and spacing' : 'Use compact text and spacing'} onClick={() => setCompact(value => !value)}>Aa</button>
+        </div>
+        <div className="bob-context" aria-label="Bob page context">
+          <strong>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</strong>
+          <span>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</span>
         </div>
 
         <div ref={historyScroll} className="bob-history" onScroll={e => {
@@ -563,7 +608,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           </div>
         </form>
       </aside>
-      {confirmReset && <Modal title="Start a new conversation?" onClose={() => { if (!resetPending.current) setConfirmReset(false) }}>
+      {confirmReset && <Modal title="Start a new conversation?" layer={100} onClose={() => { if (!resetPending.current) setConfirmReset(false) }}>
         <p style={{ lineHeight: 1.5, overflowWrap: 'anywhere' }}>Clear your chat and Bob’s conversation context for <strong>{project.name}</strong>. This cannot be undone.</p>
         <p style={{ lineHeight: 1.5, color: 'var(--ink-soft)' }}>Saved project data and other people’s chats stay unchanged.</p>
         {resetError && <p role="alert" style={{ color: 'var(--clay)', lineHeight: 1.5 }}>{resetError}</p>}
@@ -572,6 +617,6 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <button type="button" className="btn btn-primary" style={{ minHeight: 44 }} disabled={resetting} onClick={() => { void resetConversation() }}>{resetting ? 'Clearing…' : 'Clear chat and context'}</button>
         </div>
       </Modal>}
-    </div>
+    </div>, document.body,
   )
 }

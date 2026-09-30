@@ -28,8 +28,12 @@ try{
   const grouped=step('30000000-0000-4000-8000-000000000002','Floor','kitchen','design')
   const tasks=[{id:'cut',project_id:'P',primary_step_id:root.id,area_id:null,name:'Cut panels',status:'doing',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'Follow the saved cutting list',updated_at:'2026-09-24T00:00:00Z'},
    {id:'legacy',project_id:'P',primary_step_id:null,area_id:'kitchen',name:'Inspect existing floor',status:'done',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'',updated_at:'2026-09-24T00:00:00Z'}]
-  let creates=0,reads=0,requestsVisible=false,grants=0,grantId=null,cancels=0
-  const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[{id:'50000000-0000-4000-8000-000000000001',action:'measurement',blocking:true,observed_revision:3,task_id:'cut',task_name:'Cut panels',step_id:root.id}],can_manage:true,resume_state:'waiting_for_change',budget:{revision:1,calls:24,call_limit:24,spent_usd:0.35,usd_limit:1,outcome_unknown:false}}
+  let creates=0,reads=0,requestsVisible=false,grants=0,grantId=null,cancels=0,contextFailures=0
+  const sentScreens=[]
+  const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[
+   {id:'50000000-0000-4000-8000-000000000002',action:'prerequisite',blocking:true,observed_revision:3,task_id:null,task_name:null,label:'Inspect floor before placing drawers',owner_label:null,step_title:grouped.title,area_id:'kitchen',step_id:grouped.id},
+   {id:'50000000-0000-4000-8000-000000000001',action:'measurement',blocking:true,observed_revision:3,task_id:'cut',task_name:'Cut panels',label:'Record panel width',owner_label:'Bob',step_title:root.title,area_id:null,step_id:root.id},
+  ],can_manage:true,resume_state:'waiting_for_change',budget:{revision:1,calls:24,call_limit:24,spent_usd:0.35,usd_limit:1,outcome_unknown:false}}
   await context.route('https://fonts.googleapis.com/**',r=>r.abort())
   await context.route(`${api}/**`,async route=>{
       const inboxPath = new URL(route.request().url()).pathname
@@ -42,6 +46,14 @@ try{
    if(req.method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
    if(path==='/auth/v1/token')return respond({access_token:token,refresh_token:'fixture',expires_in:3600,expires_at:expiresAt,token_type:'bearer',user})
    if(path==='/auth/v1/user')return respond(user)
+   if(path==='/functions/v1/ask-bob'){
+    const b=req.postDataJSON();sentScreens.push(b.screen)
+    assert.equal(b.projectId,'P');assert.deepEqual(Object.keys(b).sort(),['action','background','clientTurnId','message','projectId','screen'])
+    if(b.message==='Retry after changed page context'&&contextFailures++===0)return respond({ok:false,error:'context_unavailable'},503)
+    const focus=b.screen.taskId?{task:{id:'cut',name:'Cut panels',status:'doing',instructions:tasks[0].instructions}}:b.screen.planStepId?{planStep:{id:root.id,name:root.title,state:root.state,planRevision:1,goal:root.goal,notes:root.notes}}:{}
+    return respond({ok:true,status:'completed',projectId:'P',summary:'Read this page from saved project records.',evidence:{kind:'ai_assessment',partial:false,sources:[],currentView:{status:'ok',projectId:'P',project:{id:'P',name:project.name},surface:b.screen.surface,focus,sources:[],warnings:[],retrievedAt:new Date().toISOString()}}})
+   }
+   if(path==='/rest/v1/bob_threads')return respond(null)
    if(path==='/rest/v1/projects')return respond(req.headers().accept?.includes('object+json')?project:[project])
    if(path==='/rest/v1/account')return respond({id:'account',name:'Work fixture',owner_name:'',email:''})
    if(path==='/rest/v1/areas')return respond([area])
@@ -126,7 +138,12 @@ try{
   await page.goto(base+'#/');await page.reload()
   const requests=page.getByRole('region',{name:'Drawing requests',exact:true})
   await requests.getByRole('heading',{name:'Waiting for information',exact:true}).waitFor()
-  await requests.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
+  await requests.getByText('Record panel width',{exact:true}).waitFor()
+  await requests.getByText('Responsible: Bob',{exact:true}).waitFor()
+  await requests.getByRole('link',{name:'Open linked task',exact:true}).waitFor()
+  const requestDestination=requests.locator('.drawing-request-card > p').getByRole('link',{name:root.title,exact:true})
+  assert.equal(await requestDestination.getAttribute('href'),'#/?step='+encodeURIComponent(root.id),'Destination label belongs to the request Step, even when its first prerequisite belongs to another Step')
+  assert.equal(await requests.getByRole('link',{name:grouped.title,exact:true}).getAttribute('href'),'#/?step='+encodeURIComponent(grouped.id),'The prerequisite retains its own linked Step')
   await requests.getByRole('button',{name:'Add request budget',exact:true}).click()
   const budgetDialog=page.getByRole('dialog',{name:'Add request budget',exact:true})
   assert.equal(grants,0,'opening the budget decision never spends money')
@@ -137,7 +154,45 @@ try{
   await requests.getByText('24 / 48 calls · $0.35 / $2.00',{exact:true}).waitFor()
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Requests fit mobile viewport')
   await page.screenshot({path:`test-results/drawing-requests-${width}.png`,fullPage:true})
-  await requests.getByRole('link',{name:'Cut panels',exact:true}).click()
+  const drawer=page.getByRole('complementary',{name:'Ask bob for Build together'})
+  await requests.getByRole('button',{name:'Ask Bob from this Step',exact:true}).click()
+  await drawer.getByLabel('Bob page context').getByText('Plan Step · Drawers',{exact:true}).waitFor()
+  await drawer.getByRole('textbox',{name:'Question for bob'}).fill('What is missing for this Step?')
+  await drawer.getByRole('button',{name:'Send',exact:true}).click()
+  await drawer.getByText('Page records used · Drawers',{exact:true}).waitFor()
+  assert.deepEqual(sentScreens.at(-1),{surface:'project',planStepId:root.id},'Request action opens its actual destination Step context')
+  await drawer.getByRole('textbox',{name:'Question for bob'}).fill('Retry after changed page context')
+  await drawer.getByRole('button',{name:'Send',exact:true}).click()
+  await drawer.getByText('Bob could not safely use the page, project or conversation context. The records may have changed while he was working. Review any saved changes, then use Retry request to reread the original selection.',{exact:true}).waitFor()
+  await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
+  await drawer.getByRole('button',{name:'Retry request',exact:true}).waitFor({state:'hidden'})
+  await page.waitForFunction(()=>!document.querySelector('[aria-label="Ask bob for Build together"] button[aria-label="Send"]')?.disabled)
+  assert.equal(contextFailures,2,'Changed-context recovery makes one explicit retry')
+  assert.deepEqual(sentScreens.at(-1),{surface:'project',planStepId:root.id},'Changed-context retry retains the original Step selection')
+  await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
+  await requests.getByRole('link',{name:'Open linked task',exact:true}).click()
+  await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Ask bob',exact:true}).click()
+  await drawer.getByText('Task · Cut panels',{exact:true}).waitFor()
+  await drawer.getByRole('textbox',{name:'Question for bob'}).fill('What do I do here?')
+  await drawer.getByRole('button',{name:'Send',exact:true}).click()
+  await drawer.getByText('Page records used · Cut panels',{exact:true}).waitFor()
+  assert.deepEqual(sentScreens.at(-1),{surface:'task',taskId:'cut',planStepId:root.id})
+  await drawer.getByText('Page records used · Cut panels',{exact:true}).waitFor()
+  await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
+  await page.goto(base+'#/events/day-one')
+  await page.getByRole('heading',{name:'Build day one',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Ask bob',exact:true}).click()
+  await drawer.getByText('Build day · Build day one',{exact:true}).waitFor()
+  await drawer.getByRole('textbox',{name:'Question for bob'}).fill('Who is coming here?')
+  const eventAnswer=page.waitForResponse(response=>response.url().includes('/functions/v1/ask-bob')&&response.request().postDataJSON()?.message==='Who is coming here?')
+  await drawer.getByRole('button',{name:'Send',exact:true}).click()
+  await eventAnswer
+  await drawer.getByText('Read this page from saved project records.',{exact:true}).last().waitFor()
+  assert.deepEqual(sentScreens.at(-1),{surface:'event',eventId:'day-one'},'An already-mounted drawer reads the new page at send time')
+  await page.screenshot({path:`test-results/bob-current-view-${width}.png`,fullPage:true})
+  await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
+  await page.goto(base+'#/tasks/cut')
   await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
   await page.getByRole('region',{name:'Drawing requests',exact:true}).getByRole('button',{name:'Cancel request',exact:true}).click()
   await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor();assert.equal(cancels,1)

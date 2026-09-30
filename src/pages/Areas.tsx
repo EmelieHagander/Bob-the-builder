@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -8,6 +9,7 @@ import { PhasePill, PhaseTransitionDialog } from '../components/PhaseUI'
 import { areaNextAction, areaPhaseSummary } from '../lib/projectPhase'
 
 export function Areas() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'areas' }, 'Areas')
   const [version, setVersion] = useState(0)
   const projectVersion = useProjectVersion()
   const [params, setParams] = useSearchParams()

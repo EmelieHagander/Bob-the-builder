@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import type { StudWallRole } from '../lib/artifactGeometry'
 import type { StorageBoxRecipe } from '../lib/storageBox'
-import type { DrawingSourceStatus } from './drawingSources'
+import { parseDrawingSourceChanges, type DrawingSourceStatus } from './drawingSources'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
@@ -43,6 +43,7 @@ export interface ArtifactGeneration {
 }
 
 export interface ProjectArtifact {
+  sourceStatus?: DrawingSourceStatus
   id: string
   projectId: string
   areaId: string | null
@@ -73,6 +74,7 @@ export interface ProjectArtifact {
 export interface CadDrawing { recipe: Record<string, any>; manifest: Record<string, any>; files: Record<string, string>; step_id: string | null; source_artifact_id: string | null; source_revision: number | null; source_changed?: boolean }
 
 export interface ArtifactVersion extends ProjectArtifact {
+  latestRevision?: number
   sourceStatus?: DrawingSourceStatus
   cad?: CadDrawing | null
   measurements: ArtifactMeasurement[]
@@ -200,9 +202,19 @@ export function createArtifacts(
     guard()
     if (!r) throw new Error('Drawing version unavailable. Reload to check access.')
     scoped([r], projectId)
-    const sourceStatus = checked(await db.from('artifact_source_status').select('source_state,source_reasons')
+    const head = checked(await db.from('artifacts').select('current_revision').eq('project_id', projectId).eq('id', id).maybeSingle()) as { current_revision: number } | null
+    guard()
+    let sourceStatus = checked(await db.from('artifact_source_status').select('source_state,source_reasons')
       .eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).maybeSingle()) as DrawingSourceStatus | null
     guard()
+    if (sourceStatus && sourceStatus.source_state !== 'current') {
+      const delta = await db.rpc('artifact_source_changes', { p_project: projectId, p_artifact: id, p_revision: revision })
+      guard()
+      const result = parseDrawingSourceChanges(delta.data)
+      sourceStatus = { ...sourceStatus, ...(delta.error || !result
+        ? { changesUnavailable: true }
+        : result) }
+    }
     const refs = checked(await db.from('artifact_measurement_details').select('*')
       .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision)
       .order('measurement_id').limit(20)) as Row[]
@@ -237,6 +249,7 @@ export function createArtifacts(
     }
     guard()
     return {
+      latestRevision: head?.current_revision,
       sourceStatus: sourceStatus ?? { source_state: 'unavailable', source_reasons: ['source_unavailable'] },
       cad,
       multifloorPlan,
@@ -260,7 +273,14 @@ export function createArtifacts(
       const page = scoped(rows.slice(0, 24), projectId)
       const parametric = await recipes(projectId, page.map(r => ({ id: r.id, revision: r.revision })))
       guard()
-      return { items: page.map(r => artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_id === r.id && p.artifact_revision === r.revision)?.recipe })), hasMore: rows.length > 24 }
+      const filter = page.map(row => `and(artifact_id.eq.${row.id},revision.eq.${row.revision})`).join(',')
+      const states = filter ? checked(await db.from('artifact_source_status').select('artifact_id,revision,source_state,source_reasons')
+        .eq('project_id', projectId).or(filter).limit(24)) as Row[] : []
+      guard()
+      return { items: page.map(r => ({ ...artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_id === r.id && p.artifact_revision === r.revision)?.recipe }),
+        sourceStatus: states.find(state => state.artifact_id === r.id && state.revision === r.revision) as DrawingSourceStatus | undefined
+          ?? { source_state: 'unavailable' as const, source_reasons: ['source_unavailable'] },
+      })), hasMore: rows.length > 24 }
     },
     async history(projectId: string, id: string, offset = 0) {
       const { db, guard } = connection(projectId)

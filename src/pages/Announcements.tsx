@@ -1,3 +1,4 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { useState, type FormEvent } from 'react'
 import * as db from '../data/database'
 import { Avatar, Icon, Loading, useAsync } from '../components/ui'
@@ -5,6 +6,7 @@ import { useAuthTick } from '../components/Layout'
 import { FormError } from '../components/form'
 
 export function Announcements() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'announcements' }, 'Announcements')
   const tick = useAuthTick()
   const [version, setVersion] = useState(0)
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [version])

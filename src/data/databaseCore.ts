@@ -2120,7 +2120,8 @@ export async function getProjectDrawingPreview(projectId:string,id:string,revisi
 
 export interface DrawingRequestWork {
  request:{id:string;revision:number;status:string;reason:string|null;artifact_id:string|null;artifact_revision:number|null;scope:{step_id:string|null}}
- gaps:{id:string;action:string;blocking:boolean;observed_revision:number;task_id:string|null;task_name:string|null;step_id:string|null}[]
+ gaps:{id:string;action:string;blocking:boolean;observed_revision:number;task_id:string|null;task_name:string|null;step_id:string|null;label?:string|null;owner_label?:string|null;step_title?:string|null;area_id?:string|null}[]
+ artifact_source_state?:'current'|'changed'|'unavailable'|null
  can_manage:boolean;resume_state:string
  budget:{legacy_untracked?:boolean;revision:number;calls:number;call_limit:number;spent_usd:number;usd_limit:number;outcome_unknown:boolean}|null
 }

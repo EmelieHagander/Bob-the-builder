@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.110.2'
 import type { ContextStore } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
+import { parseBobScreen, type BobScreenPointer } from '../../../src/domain/bobScreen.ts'
 
 export type BobTurnClaim =
   | { mode: 'local_only'; status: 'claimed' }
@@ -23,6 +24,12 @@ function checked<T>(result: RpcResult<T>, operation: string): T {
  */
 export function createBobConversationStore(client: SupabaseClient<any, 'bob', any>) {
   return {
+    async captureScreen(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }, screen?: BobScreenPointer | null) {
+      const result = checked(await client.rpc('bob_capture_turn_screen', { p_project: binding.projectId, p_user: binding.userId,
+        p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation, p_screen: screen ?? null,
+      }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<{ screen: unknown }>, 'conversation focus')
+      return parseBobScreen(result.screen)
+    },
     workingContext(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }): ContextStore {
       const args = { p_project: binding.projectId, p_user: binding.userId, p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation }
       const rpc = async (name: string, extra = {}) => checked(await client.rpc(name, { ...args, ...extra }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<unknown>, 'conversation context')

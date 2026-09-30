@@ -46,8 +46,8 @@ export function cadParameterTargets(recipe:CadAssemblyRequest){
  const add=(path:string,obj:any,key:string,u:ParameterUnit='mm')=>targets.set(path,{unit:u,get:()=>obj[key],set:n=>{obj[key]=n}})
  const place=(path:string,p:any)=>{for(const k of ['x','y','z','rx','ry','rz'])add(path+'/'+k,p,k,k.startsWith('r')?'deg':'mm')}
  for(const d of recipe.definitions){
-  for(const k of CAD_DIMENSIONS)if(Object.hasOwn(d,k))add('definitions/'+d.id+'/'+k,d,k)
-  d.cuts?.forEach((c,i)=>{for(const k of CAD_DIMENSIONS)if(Object.hasOwn(c,k))add('definitions/'+d.id+'/cuts/'+i+'/'+k,c,k);place('definitions/'+d.id+'/cuts/'+i+'/placement',c.placement)})
+  for(const k of CAD_DIMENSIONS)if(Object.prototype.hasOwnProperty.call(d,k))add('definitions/'+d.id+'/'+k,d,k)
+  d.cuts?.forEach((c,i)=>{for(const k of CAD_DIMENSIONS)if(Object.prototype.hasOwnProperty.call(c,k))add('definitions/'+d.id+'/cuts/'+i+'/'+k,c,k);place('definitions/'+d.id+'/cuts/'+i+'/placement',c.placement)})
  }
  for(const i of recipe.instances)place('instances/'+i.id+'/placement',i.placement)
  for(const c of recipe.clearances??[])add('clearances/'+c.id+'/min_mm',c,'min_mm')

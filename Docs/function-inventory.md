@@ -1,5 +1,9 @@
 # bob — current capability & gap inventory
 
+## P3 context and visible delivery — source, release pending
+
+The P3 source adds private per-turn screen focus, caller-JWT Current View hydration and replay freshness checks, a validated CAD parameter/source map, caller-authorized change deltas, structured reference packages and shared canonical request complements. Exact saved/selected versions remain distinct from newer alternatives and source freshness. Current contracts live with [context](ask-bob-context.md#implemented-scope-and-remaining-target), [artifacts](artifacts.md#parameter-sources-changes-and-request-complements--p3-source-release-pending) and [knowledge](building-knowledge.md#structured-packages--p3-source-release-pending); [State](bob-delivery-flow.md#state) retains verification/release gates. The image-only catalog/opening is reused, not expanded into the specified general catalog/router/Librarian. This delta does not claim hosted application, successful live models or full user-case acceptance.
+
 ## Plan/CAD autonomy correction — September 25, 2026
 
 A real conversation exposed three remaining orchestration failures: a small plan

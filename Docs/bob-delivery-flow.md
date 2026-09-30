@@ -278,14 +278,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: avgränsa P3:s första leverans för rätt kontext och rätt projektyta.** Läs aktuell main och kontrakten för kontext, kunskap, media och ritningsstatus; välj en sammanhängande brist från faktisk inläsning till synligt resultat efter återbesök. Granska mobil, åtkomst och ärliga felstatusar med Veras befintliga perspektiv. P0:s verkliga användartest ligger kvar separat. P2:s release- och verifieringsbevis finns i [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
+**Nästa handling: publicera P3-branchen `feat/p3-grounded-context-20260930` till `EmelieHagander/Bob-the-builder` och kör CI:s Deno- och browserprov på mobil, desktop och efter reload.** Destination och release är direkt godkända av användaren. Lokala verifieringsbevis finns hos [verifieringsägaren](foundation-verification.md#p3-local-release-preparation--2026-09-30). Dubbelkontrollera diff och målmiljö före additiv datamigration, Edge-deploy och merge/webbdeploy; P3 stängs först efter driftsatt återläsning och faktisk modellkonsumtion. P0:s verkliga användartest hålls separat öppet.
 
 ### Öppet arbete i prioritetsordning
 
 | Etapp | Vad återstår? |
 |---|---|
 | **P0 — verkligt användarutfall, fortsatt öppet** | Kör driftsatt Bob med komplett underlag → granskad, sparad och åtkomlig leverans utan ytterligare knuff, inklusive källbundet projekt-/rumsmått och återöppnad detalj. Verifiera faktisk Auth/HTTP-väg och annan behörig deltagare. Tekniskt läsfel och återhämtning provas i avgränsad testmiljö. Användaren har valt att behålla P0:s användartest öppet separat från P1:s tekniska avslut. Rollbackat authenticated-role SQL-prov, CI och deployment stänger inte det. |
-| **P3** | Gör relevant kontext, kunskap, bildåtkomst och nästa handling tillgängliga för Bob samt visa rätt status och arbetsversion i UI. |
+| **P3 — release och acceptans återstår** | Publicering och CI:s Deno-/browsergrindar. Bevisa sparad/vald version mot nyare förslag efter reload och bevarad åtkomstgräns i browser. Applicering, Edge-/webbdeploy, merge och driftsatt Auth/modellprov för fokus, relevanta bildpixlar, kunskap och återläsning återstår; större katalog/router/Librarian är fortsatt specificerade hos kontextägaren. |
 | **P4** | Verifiera varierade verkliga modell-/deltagarflöden, mobil, återbesök och felvägar; dokumentera slutresultat och kostnader. |
 
 **Arbetsmetod:** håll ett avgränsat kodutfall aktivt åt gången. Följ källägare → faktisk spar-/återläsningsgräns, reproducera relevanta fel med negativa och positiva prov, gör minsta sammanhängande ändring och verifiera. Arkivera avslutade prov i PR/CI. Ange nästa kvarstående grind här, inte en historik över gröna körningar. Nya röda kontroller blir nästa handling.
@@ -296,6 +296,6 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 
 **Kvarstående acceptans:** A01:s verkliga användarutfall är öppet. P1:s tekniska prov för A04/A05/A07/A08/A09/A18 och releasebevis samlas i #163; verkliga modell-/deltagarutfall är en separat grind. `partial`-metadata och `legacy_untracked`-ritningar är inte fullständig spårning eller verifierad fysisk geometri.
 
-**Arbetsgräns och ägare:** utgå från aktuell main och denna State; skapa nästa avgränsade implementationsbranch därifrån. `Docs/cad-adapter.md` äger CAD-kontraktet, [building-model.md](building-model.md) de fysiska begreppen och `db/README.md` databasgränsen och releaseordningen. Genomförd P1a/P1b-release är inte mandat att gissa datarättningar. Dubbelkontrollera aktuell diff, målmiljö och gällande användarmandat före nästa applicering eller driftsättning.
+**Arbetsgräns och ägare:** fortsätt på P3-branchen ovan och återkontrollera dess diff mot aktuell main. [ask-bob-context.md](ask-bob-context.md#implemented-scope-and-remaining-target) äger skärmfokus, [building-knowledge.md](building-knowledge.md) kunskapspaketen och [artifacts.md](artifacts.md#parameter-sources-changes-and-request-complements--p3-source-release-pending) källkarta, versionsstatus och kompletteringar. `Docs/cad-adapter.md` äger CAD-kontraktet, [building-model.md](building-model.md) de fysiska begreppen och `db/README.md` databasgränsen och releaseordningen. Genomförd P1a/P1b-release är inte mandat att gissa datarättningar. Dubbelkontrollera aktuell diff, målmiljö och gällande användarmandat före nästa applicering eller driftsättning.
 
 **Underhåll:** uppdatera nästa handling och öppna hinder enligt [Archies prompt](../.claude/agents/archie.md#forward-looking-state-and-archives). Gällande kontrakt stannar hos sina ägare. Länka körda prov och avslutade fynd från PR/CI eller daterat arkiv; kopiera inte tillbaka dem som en avslutslogg i State.

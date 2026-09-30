@@ -100,6 +100,8 @@ Use existing classes/primitives before inventing a local dialect.
 - Modal frame: `src/components/Modal.tsx`
 - Domain editors: `src/components/editors.tsx`
 - AI drawer: `src/components/AskBob.tsx`
+- Page focus to Bob: `src/lib/bobSurface.ts` + `src/domain/bobScreen.ts`; [context contract](ask-bob-context.md#implemented-scope-and-remaining-target)
+- Drawing source map, exact-version status and shared request complements: `src/components/CadSourceMap.tsx`, `DrawingRequests.tsx` + [artifact contract](artifacts.md#parameter-sources-changes-and-request-complements--p3-source-release-pending)
 - Installation behavior, assets and verification: `README.md` → Install Bob on a phone; public guide in `src/pages/Install.tsx`, account entry in `src/components/InstallSettingsCard.tsx`
 
 A page should compose these pieces and own domain-specific layout/meaning; it should not silently fork their generic behavior.

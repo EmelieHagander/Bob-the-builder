@@ -1,9 +1,11 @@
+import { useBobSurface } from '../lib/bobSurface'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { AvatarStack, Icon, Loading, SkillPill, StatusPill, statusCheck, useAsync } from '../components/ui'
 import { PhasePill } from '../components/PhaseUI'
 
 export function Today() {
+  useBobSurface(db.getActiveProjectId() ?? '', { surface: 'today' }, 'Today’s work')
   const projectId = db.getActiveProjectId() ?? ''
   const { data: tasks } = useAsync(() => db.getTodayTasks(), [])
   const { data: readiness } = useAsync(() => projectId ? db.getTaskReadiness(projectId) : Promise.resolve([]), [projectId])
