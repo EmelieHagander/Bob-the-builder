@@ -179,24 +179,62 @@ test('P2b: cancelled/reset requests do no model work; cancellation during collec
  assert.equal(calls,1);assert.equal(f.renders,0);assert.equal(a.candidate,null)
 })
 
-test('P2b: actual toolbox offers status/cancellation even after design consultations are spent',async()=>{
+test('P2c: actual toolbox offers lifecycle tools after design consultations are spent without refilling them',async()=>{
  const {createBobToolSession}=await import('../supabase/functions/_shared/project-tools/bob-tools.ts')
  const {domainToolLoadout}=await import('./support/tool-loadout.ts')
  const f=fixture();let cancellations=0
  f.opts.callModel=async()=>reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})
  const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,
+  restore:async()=>({id,revision:9,status:'collecting',payload:f.row!.payload}),
   read:async()=>({requests:[{id,revision:f.row!.revision,status:'needs_data'}],next_cursor:null}),
   cancel:async(key,revision)=>{assert.equal(key,id);assert.equal(revision,f.row!.revision);cancellations++;return {id,revision:revision+1,status:'cancelled'}},
  }})
  await a.consult(request);await a.consult({...request,request_id:id});assert.equal(a.remaining,0)
- const tools=createBobToolSession({cadAssistant:a,lookup:f.opts.makeLookup(),readPolicy:domainToolLoadout('read_drawing_requests','cancel_drawing_request')})
+ const tools=createBobToolSession({cadAssistant:a,lookup:f.opts.makeLookup(),readPolicy:domainToolLoadout('read_drawing_requests','cancel_drawing_request','restore_drawing_request')})
  const offered=await tools.prepare()
  assert(offered.some(t=>t.function.name==='read_drawing_requests'));assert(offered.some(t=>t.function.name==='cancel_drawing_request'))
  assert(!offered.some(t=>t.function.name==='design_project_cad'))
+ assert(offered.some(t=>t.function.name==='restore_drawing_request'))
+ assert.equal((await tools.execute('restore_drawing_request',{request_id:id,expected_revision:1,plan_revision:1,step_id:id,request_quote:'Build the whole requested construction.'})).status,'restored')
+ assert.equal(a.remaining,0,'restoration does not grant another consultation')
+ assert(!(await tools.prepare()).some(t=>t.function.name==='design_project_cad'))
  const read=await tools.execute('read_drawing_requests',{request_id:id,after_id:null})
  assert.equal(read.requests[0].id,id)
  assert.equal((await tools.execute('cancel_drawing_request',{request_id:id,expected_revision:-1})).status,'invalid')
  assert.equal(cancellations,0)
  assert.equal((await tools.execute('cancel_drawing_request',{request_id:id,expected_revision:read.requests[0].revision})).status,'cancelled')
  assert.equal(cancellations,1)
+})
+
+test('P2c restore tool runs fresh intake on the same identity and cannot overwrite canonical requirements',async()=>{
+ const f=fixture();let paid=0,restores=0,restored=false,blocked=true
+ const canonical={...handoff,requirements:[{...handoff.requirements[0],requirement:'Keep the canonical east-side drawer requirement',basis:'project_record' as const,source_ref:measurement}]}
+ const store:DrawingRequestStore={...f.opts.requestStore,
+  read:async()=>({requests:[]}),cancel:async()=>({status:'cancelled'}),
+  load:async()=>restored?{id,revision:3,status:'collecting',payload:{brief:{...request,handoff:canonical},owner_request:'Restore the drawing',reference_refs:[],restoration:{plan_revision:1,step_id:id}}}:{id,revision:2,status:'paused',payload:{brief:{},owner_request:null,reference_refs:[]}},
+  restore:async(key,expected,plan,step,quote)=>{assert.equal(key,id);assert.equal(expected,2);assert.equal(quote,'Restore the drawing');restores++;restored=true;return (await store.load(id))!},
+  save:async(key,expected,status,payload)=>({id:key!,revision:expected+1,status,payload}),
+ }
+ const a=createCadAssistant({...f.opts,requestStore:store,ownerRequest:'Restore the drawing',callModel:async o=>{
+  paid++;if(o.functionName==='cad-research')assert(JSON.stringify(o.messages).includes('canonical east-side'))
+  if(o.functionName==='cad-research')return reply('finish_cad_research',{checks:[blocked?check('shape','missing',true):{...check('shape'),source_refs:[measurement]}],additional_needs:[]})
+  return f.opts.callModel(o)
+ }})
+ assert.equal((await a.consult({...request,request_id:id})).status,'recovery_required');assert.equal(paid,0)
+ const args={request_id:id,expected_revision:2,plan_revision:1,step_id:id,request_quote:'Restore the drawing'}
+ assert.equal((await a.lifecycle('restore_drawing_request',{...args,request_quote:'fabricated'})).status,'invalid');assert.equal(restores,0)
+ assert.equal((await a.lifecycle('restore_drawing_request',args)).status,'restored');assert.equal(paid,0)
+ const resumed=await a.consult({...request,request_id:id,handoff:{...handoff,requirements:[{...handoff.requirements[0],requirement:'Overwrite the canonical requirement'}]}})
+ assert.equal(resumed.status,'needs_data');assert.equal(resumed.request_id,id);assert.equal(paid,1);assert.equal(f.renders,0)
+ assert(f.reads.includes('measurements')&&f.reads.includes('plan'))
+ blocked=false
+ const complete=await a.consult({...request,request_id:id,handoff:canonical})
+ assert.equal(complete.status,'ready',JSON.stringify(complete));assert.equal(complete.request_id,id);assert.equal(f.renders,1)
+ assert.equal(a.remaining,0)
+})
+
+test('P2c changed canonical requirements stop a restored attempt before paid work',async()=>{
+ const f=fixture();let paid=0
+ const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,load:async()=>({id,revision:3,status:'collecting',payload:{brief:request,owner_request:'Restore',reference_refs:[],restoration:{plan_revision:1,step_id:id}}}),assertActive:async()=>{throw Error('drawing_requirements_changed')}},callModel:async()=>{paid++;throw Error('must not pay')}})
+ const result=await a.consult({...request,request_id:id});assert.equal(result.reason,'drawing_requirements_changed');assert.equal(paid,0);assert.equal(f.renders,0)
 })

@@ -7,7 +7,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {handoff} from './support/cad-review-fixture.ts'
 
-for(const lifetime of ['legacy','project'])test(`P2: ${lifetime} request completion and canonical CAD receipt are atomic, isolated and recoverable across turns`,async t=>{
+for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} request completion and canonical CAD receipt are atomic, isolated and recoverable across turns`,async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Save the reviewed construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
@@ -18,14 +18,14 @@ for(const lifetime of ['legacy','project'])test(`P2: ${lifetime} request complet
  const solution=randomUUID()
  await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'Concept',assumptions:'Site fit unknown',tradeoffs:'Simple',measurements:[]})])
  await call(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Use design'})])
- const plan=await call(owner,'bob_private.project_plan_propose',[project,0,JSON.stringify({summary:'Build shelf',reason:'Requested',steps:[{step_id:null,title:'Draw shelf',goal:'Concept available',state:'active',phase:'planning',area_id:null,responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[]}],task_links:[]})],'postgres')
+ const plan=await call(owner,'bob_private.project_plan_propose',[project,0,JSON.stringify({summary:'Build shelf',reason:'Requested',steps:[{step_id:null,title:'Draw shelf',goal:'Concept available',state:'active',phase:'planning',area_id:null,responsible_kind:'bob',responsible_person_id:null,notes:'',requirements:[{requirement_id:null,type:'drawing',title:'Shelf concept',description:'Provide a checked concept drawing',resolution:'open',responsible_kind:'bob',responsible_person_id:null,evidence_selector:{kind:'none',id:null,subject:null,area_id:null}}]}],task_links:[]})],'postgres')
  const approved=await call(owner,'bob_private.project_plan_decide',[project,0,plan.record.revision,'approve','Proceed'],'postgres')
  const step=approved.record.steps[0].id
  let turn=randomUUID(),claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
  assert.equal(claim.status,'claimed')
  const scope={area_id:null,component_id:null,step_id:step,artifact_id:null}
  const store=async(op:string,id:string|null=null,expected=0,status:string|null=null,payload:any=null,key=randomUUID())=>{
-  if(lifetime==='project'&&op==='save'&&id===null){
+  if(lifetime!=='legacy'&&op==='save'&&id===null){
    id=randomUUID();await call(owner,'bob.create_drawing_request',[project,claim.thread_id,turn,claim.generation,id,JSON.stringify(scope)])
   }
   return call(null,'bob.bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,op,id,expected,status,payload,key],'service_role')
@@ -36,7 +36,15 @@ for(const lifetime of ['legacy','project'])test(`P2: ${lifetime} request complet
  const candidate:any={title:'P2 shelf',description:'Concept',assumptions:'Site fit unverified',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:step,artifact_id:null,expected_revision:0,
   packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe),bob_lineage:lineage,engine:{name:'build123d'},assembly_id:'p2-shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'}}}
  const working={brief:{...scope,brief:message,handoff},owner_request:message,reference_refs:[],reviewed_candidate:drawingCandidateCommitment(candidate)}
- const request=await store('save',null,0,'reviewed',working)
+ let request=await store('save',null,0,'reviewed',working)
+ if(lifetime==='restored'){
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  const thread=(await pg.query('select next_seq from bob.bob_threads where id=$1',[claim.thread_id])).rows[0]
+  await call(owner,'bob.bob_reset_conversation',[project,claim.thread_id,thread.next_seq])
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  request=await call(owner,'bob.restore_drawing_request',[project,claim.thread_id,turn,claim.generation,request.id,2,1,step,message])
+  request=await store('save',request.id,request.revision,'reviewed',{...request.payload,reviewed_candidate:working.reviewed_candidate})
+ }
  const payload:any={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{...candidate,drawing_request:{id:request.id,revision:request.revision}}}
 
  await t.test('status alone, changed candidate, wrong thread, stale generation and direct access cannot complete',async()=>{
@@ -85,7 +93,7 @@ for(const lifetime of ['legacy','project'])test(`P2: ${lifetime} request complet
  await assert.rejects(save(changed),/drawing_request_complete/)
  assert.equal((await pg.query('select count(*)::int n from bob.artifact_cad_revisions where project_id=$1',[project])).rows[0].n,1)
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
- if(lifetime==='project'){
+ if(lifetime!=='legacy'){
   const thread=(await asProjectUser(pg,owner,'select id,next_seq from bob.bob_threads where id=$1',[claim.thread_id])).rows[0]
   await call(owner,'bob.bob_reset_conversation',[project,thread.id,thread.next_seq])
   assert.equal((await pg.query('select count(*)::int n from bob_private.drawing_requests where id=$1',[request.id])).rows[0].n,0)

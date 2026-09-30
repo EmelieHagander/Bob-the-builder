@@ -337,6 +337,15 @@
     "active": true
   },
   {
+    "name": "restore_drawing_request",
+    "description": "Restore the initiating member's paused drawing from an explicit current plan Step.",
+    "how_to": "Read request status and the current approved plan first. Supply exact request and plan revisions, a Step with complete canonical requirements, and a quote from the current owner instruction. All Step requirements are restored without private chat. Returns collecting, never readiness. Continue design_project_cad with the same request_id; current sources and the full intake must pass before design. Changed plan requirements require explicit restoration again. Cancellation and completion remain terminal; no new budget or authority is granted.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "save_building_context",
     "description": "Record a narrated house as linked Building, Level, Space and element observations or proposals. This records context; it does not calculate a drawing.",
     "how_to": "Read existing physical identities before creating nodes. Use batch-local @keys only for new dependencies. Above/below does not imply matching footprints. An open kitchen/dining connection is not an invented wall. Keep current observations separate from remodel proposals. Use notes_append for Building additions. Existing unscoped Buildings require explicit manual linking; Project membership does not grant physical-edit authority. A change is saved only with a successful receipt.",

@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: avgränsa och implementera P2c — explicit återställning av rensade krav till samma uppdrag.** Utgå från aktuell main och [samtalsägarens livscykelkontrakt](ask-bob-conversations.md#p2b-project-request-lifecycle). Fastställ vilka kanoniska projektkrav och aktuella källor som krävs, återknyt dem med ett behörighetskontrollerat kommando och bevara uppdragsidentitet, revisionsspärr, eventuella budgetreferenser och historiska kvitton. Prova saknade krav, återkallad behörighet, avbrytande och dubbel återställning innan specialistarbete återupptas. Förlorad privat text får inte återskapas från någon annans chatt eller ersättas med antaganden. P0:s verkliga användartest ligger kvar separat.
+**Nästa handling: slutverifiera och släpp P2c i [PR #169](https://github.com/EmelieHagander/Bob-the-builder/pull/169).** Kontrollera slutcommitens CI och verkliga PostgreSQL-racefall för återställning, avbrytande och ändrad plan. Dubbelkontrollera målmiljö och diff före migration och båda funktionsreleaserna; verifiera därefter rollbackat återställnings-/sparprov, behörigheter och källversioner. P2c är ännu inte driftsatt. [Samtalsägaren](ask-bob-conversations.md#p2c-explicit-request-restoration) avgränsar den explicita vägen via planens kanoniska krav. P0:s verkliga användartest ligger kvar separat.
 
 ### Öppet arbete i prioritetsordning
 
