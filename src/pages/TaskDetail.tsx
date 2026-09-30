@@ -1,3 +1,4 @@
+import {DrawingRequests} from '../components/DrawingRequests'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -110,6 +111,7 @@ export function TaskDetail() {
       <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
     </select></Field></div>
     <TaskReadinessPanel projectId={projectId} taskId={task.id} areaId={task.areaId} refreshKey={version} />
+    {db.authEnabled()&&<DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}
     <section className="card foundation-section" aria-label="Task instructions">
       <div className="foundation-heading"><h2>Instructions</h2><button className="btn" disabled={!editable} onClick={() => setDialog({ kind: 'instructions' })}>Edit instructions</button></div>
       {detail.instructions ? <p className="instruction-text">{detail.instructions}</p> : <p className="foundation-hint">Describe the scope and the result this task should achieve.</p>}

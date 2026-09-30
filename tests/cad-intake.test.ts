@@ -89,21 +89,23 @@ test('P2: repaired read failure resumes, and changed structured requirements rel
  assert.equal(calls,2)
 })
 
-test('P2: additional collector dependencies and failed assessment never create a stale retry gate',async()=>{
+test('P2: discovered collector dependencies refresh before suppressing unchanged paid retries',async()=>{
  const f=fixture();let calls=0
  f.opts.callModel=async()=>++calls%2===1
   ?reply('search_project_data',{dataset:'artifacts',query:null,status:null,area_id:null,record_id:null,after_id:null})
   :reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})
  await createCadAssistant(f.opts).consult(request)
- assert.equal(f.row!.payload.retry,undefined)
- await createCadAssistant(f.opts).consult({...request,request_id:id})
- assert.equal(calls,4,'extra source reads must be refreshed rather than reusing a partial dependency hash')
+ assert(f.row!.payload.dependencies?.some(d=>d.tool==='search_project_data'&&(d.args as any).dataset==='artifacts'))
+ assert(f.row!.payload.retry)
+ const repeated=await createCadAssistant(f.opts).consult({...request,request_id:id})
+ assert.equal(repeated.retry_suppressed,true)
+ assert.equal(calls,2,'extra dependencies were refreshed without another model call')
  const g=fixture();let failedCalls=0
  g.opts.callModel=async()=>{failedCalls++;return reply()}
  await createCadAssistant(g.opts).consult(request)
- assert.equal(g.row!.payload.retry,undefined)
+ assert(g.row!.payload.retry)
  await createCadAssistant(g.opts).consult({...request,request_id:id})
- assert.equal(failedCalls,2,'a failed model assessment is not unchanged physical evidence')
+ assert.equal(failedCalls,1,'an unchanged failed assessment cannot repeatedly spend the request budget')
 })
 
 test('P2: atomic writer receives the exact request revision and completed requests cannot regenerate',async()=>{

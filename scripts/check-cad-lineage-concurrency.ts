@@ -237,4 +237,38 @@ for(const kind of ['restore-duplicate','cancel-before-restore','restore-before-c
  }
  console.log(`PASS restoration ${kind}: observed lock wait; checked revision, terminal fence and Artifact count`);cases++
 }
+// Request identity and dispatch accounting must serialize across real connections.
+for(const kind of ['identity-duplicate','budget-reservation','gap-link-conflict']){
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture'),id=randomUUID(),execution=randomUUID()
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const tx=(sql:string,tail='',service=false)=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${service?'set local role service_role;':auth}${sql};${tail}commit;`
+ const scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
+ const resolve=(rid:string)=>`select bob.resolve_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(rid)},${literal(JSON.stringify(scope))},${literal('a'.repeat(64))})`
+ let first=resolve(id),second=resolve(randomUUID())
+ if(kind!=='identity-duplicate'){
+  await query(tx(first))
+  const packet={brief:{...scope},owner_request:'Fixture',reference_refs:[],assessment:{checks:[{id:'width',action:'measurement',blocking:true}],additional_needs:[]}}
+  await query(tx(`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},'save',${literal(id)},0,'needs_data',${literal(JSON.stringify(packet))},'fixture')`,'',true))
+  if(kind==='budget-reservation'){
+   first=`select bob.bob_drawing_budget(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},${literal(execution)},${literal('b'.repeat(64))},'reserve',null)`
+   second=first
+  }else{
+   const gap=await query(`select id from bob_private.drawing_gaps where request_id=${literal(id)}`)
+   const one='t_'+randomUUID(),two='t_'+randomUUID()
+   await query(`insert into bob.tasks(id,project_id,name,status) values(${literal(one)},${literal(f.project)},'Measure width','todo'),(${literal(two)},${literal(f.project)},'Other task','todo')`)
+   const link=(task:string)=>`select bob.link_drawing_gap(${literal(f.project)},${literal(id)},1,${literal(gap)},${literal(task)},null)`
+   first=link(one);second=link(two)
+  }
+ }
+ const barrier=await gate(770000+cases),leader=start(tx(first,`select pg_advisory_xact_lock(${770000+cases});`,kind==='budget-reservation'))
+ let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(second,'',kind==='budget-reservation'));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ if(kind==='gap-link-conflict'){assert.notEqual(follow.code,0);assert.match(follow.stderr,/drawing_gap_already_linked/)}
+ else assert.equal(follow.code,0,follow.stderr)
+ if(kind==='identity-duplicate')assert.equal(await query(`select count(*) from bob_private.project_drawing_requests where project_id=${literal(f.project)}`),'1')
+ if(kind==='budget-reservation')assert.equal(await query(`select calls from bob_private.drawing_budgets where request_id=${literal(id)}`),'1')
+ console.log(`PASS lifecycle ${kind}: observed real lock wait; one identity/reservation/link`);cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

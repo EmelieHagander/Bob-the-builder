@@ -172,6 +172,15 @@
     "active": true
   },
   {
+    "name": "ensure_drawing_gap_task",
+    "description": "Reuse or create a Task for a canonical drawing requirement.",
+    "how_to": "Read stable request/gap IDs and the current Plan revision first. The gap must reference an already shared canonical requirement. Reuses the requirement Task atomically across repeated calls and requests; never copies private collector text.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "finalize_project_image",
     "description": "Recover a previously uploaded pending image.",
     "how_to": "Use the pending media_id after upload succeeded but finalization failed. This never regenerates or uploads bytes. Storage metadata must match before the image becomes ready.",
@@ -204,6 +213,15 @@
     "name": "inspect_stair_options",
     "description": "Compare straight or quarter-turn stairs with a square landing on a saved multi-floor plan. Read-only geometric study; not a rounded/winder stair generator.",
     "how_to": "Read current plan sources first. Compare one to four explicit parameter candidates; use returned exit, direction and headroom facts. Choose reversible design assumptions, but do not invent unknown floor or ceiling heights. Headroom is a stated study criterion, not a verified regulation. Checks cover full walking rectangles against a flat slab and rectangular opening; doors, beams, roof slopes, structure and safety remain unmodelled.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "link_drawing_gap",
+    "description": "Link a drawing gap to existing project work.",
+    "how_to": "Read the request revision and stable gap ID first. Use exact existing Task and Step IDs. Repeated linking is idempotent; existing links cannot be silently replaced. Do not publish private collector prose.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -287,6 +305,15 @@
     "name": "propose_project_plan",
     "description": "Create a reviewable living Project Plan proposal with dynamic Steps, Completion Requirements, responsibility and evidence selectors. It is not current until explicitly approved.",
     "how_to": "Low-level manual proposal write. Normally do NOT use this after compile_project_plan: save_compiled_project_plan owns that path and preserves the exact reviewed compilation. Use this only when a manual proposal genuinely cannot come from the compiler. It still requires the exact current revision and the full strict Step/Requirement schema.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "read_drawing_request_work",
+    "description": "Read durable drawing gaps, Task/Step links and request budget.",
+    "how_to": "Read before creating follow-up Tasks. Reuse stable gaps and existing links. Task completion does not replace source measurements. Private assessment text is not published.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],

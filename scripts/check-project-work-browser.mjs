@@ -28,10 +28,14 @@ try{
   const grouped=step('30000000-0000-4000-8000-000000000002','Floor','kitchen','design')
   const tasks=[{id:'cut',project_id:'P',primary_step_id:root.id,area_id:null,name:'Cut panels',status:'doing',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'Follow the saved cutting list',updated_at:'2026-09-24T00:00:00Z'},
    {id:'legacy',project_id:'P',primary_step_id:null,area_id:'kitchen',name:'Inspect existing floor',status:'done',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'',updated_at:'2026-09-24T00:00:00Z'}]
-  let creates=0,reads=0
+  let creates=0,reads=0,requestsVisible=false,grants=0,grantId=null,cancels=0
+  const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[{id:'50000000-0000-4000-8000-000000000001',action:'measurement',blocking:true,observed_revision:3,task_id:'cut',task_name:'Cut panels',step_id:root.id}],can_manage:true,resume_state:'waiting_for_change',budget:{revision:1,calls:24,call_limit:24,spent_usd:0.35,usd_limit:1,outcome_unknown:false}}
   await context.route('https://fonts.googleapis.com/**',r=>r.abort())
   await context.route(`${api}/**`,async route=>{
       const inboxPath = new URL(route.request().url()).pathname
+      if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:requestsVisible?[requestWork]:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
+      if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
+
       if (['/rest/v1/rpc/bob_chat_inbox','/rest/v1/rpc/bob_mark_chat_read','/rest/v1/bob_delegation_notices'].includes(inboxPath)) return route.fulfill({status:200,json:inboxPath.endsWith('bob_delegation_notices')?[]:null,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
    const req=route.request(),url=new URL(req.url()),path=url.pathname
    const respond=(json,status=200)=>route.fulfill({status,json,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
@@ -54,6 +58,14 @@ try{
     root.tasks=tasks.filter(t=>t.primary_step_id===root.id)
     grouped.related_tasks=[root.tasks[0]]
     return respond({project_id:'P',vocabulary_version:'2026-09-24.1',status:'approved',revision:1,focus_step_id:grouped.id,areas:[area],steps:[root,grouped],unorganised_tasks:tasks.filter(t=>!t.primary_step_id)})
+   }
+   if(path==='/rest/v1/rpc/grant_drawing_budget'){
+    const b=req.postDataJSON();assert.equal(b.p_project,'P');assert.equal(b.p_id,requestWork.request.id);assert.equal(b.p_expected,1)
+    if(!grantId){grantId=b.p_grant;grants++;requestWork.budget={...requestWork.budget,revision:2,call_limit:48,usd_limit:2};return respond({error:'lost_response'},503)}
+    assert.equal(b.p_grant,grantId,'retry keeps the allocation idempotency key');return respond({revision:2})
+   }
+   if(path==='/rest/v1/rpc/cancel_drawing_request'){
+    const b=req.postDataJSON();assert.equal(b.p_expected,3);cancels++;requestWork.request.status='cancelled';requestWork.request.revision++;requestWork.resume_state='cancelled';return respond({status:'cancelled',revision:4})
    }
    if(path==='/rest/v1/rpc/create_work_task'){
     const b=req.postDataJSON();assert.equal(b.p_project,'P');assert.equal(b.p_step,root.id);assert.equal(b.p_area,null)
@@ -110,6 +122,26 @@ try{
   await page.reload();await page.getByRole('link',{name:'Inspect existing floor',exact:true}).waitFor()
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Build day has no horizontal overflow')
   await page.screenshot({path:`test-results/build-day-${width}.png`,fullPage:true})
+  requestsVisible=true
+  await page.goto(base+'#/');await page.reload()
+  const requests=page.getByRole('region',{name:'Drawing requests',exact:true})
+  await requests.getByRole('heading',{name:'Waiting for information',exact:true}).waitFor()
+  await requests.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
+  await requests.getByRole('button',{name:'Add request budget',exact:true}).click()
+  const budgetDialog=page.getByRole('dialog',{name:'Add request budget',exact:true})
+  assert.equal(grants,0,'opening the budget decision never spends money')
+  await budgetDialog.getByRole('button',{name:'Add $1 / 24 calls',exact:true}).click()
+  await budgetDialog.getByRole('alert').waitFor()
+  await budgetDialog.getByRole('button',{name:'Add $1 / 24 calls',exact:true}).click()
+  await budgetDialog.waitFor({state:'hidden'});assert.equal(grants,1)
+  await requests.getByText('24 / 48 calls · $0.35 / $2.00',{exact:true}).waitFor()
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Requests fit mobile viewport')
+  await page.screenshot({path:`test-results/drawing-requests-${width}.png`,fullPage:true})
+  await requests.getByRole('link',{name:'Cut panels',exact:true}).click()
+  await page.getByRole('heading',{name:'Cut panels',exact:true}).waitFor()
+  await page.getByRole('region',{name:'Drawing requests',exact:true}).getByRole('button',{name:'Cancel request',exact:true}).click()
+  await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor();assert.equal(cancels,1)
+  await page.reload();await page.getByRole('heading',{name:'Cancelled',exact:true}).waitFor()
   assert.deepEqual(errors,[]);await context.close()
   console.log(`Unified work ${width}px: root/Area Steps, Task creation/readback, navigation/reload, references, legacy work and focus OK`)
  }

@@ -15,6 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 /** Same injectable HTTP boundary in deployment and integration tests. */
 export function createBobHandler(deps: {
+  renew?: (opts:{authHeader:string;userId:string;projectId:string})=>Promise<{ok:boolean;error?:string;renewed?:number}>
   authenticate: (header: string) => Promise<string | null>
   enqueue?: (opts: { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string }) => Promise<ProjectAnswer | { ok: true; status: 'accepted'; projectId: string; jobId: string; expiresAt: string }>
   answer: (opts: { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string }) => Promise<ProjectAnswer>
@@ -32,6 +33,11 @@ export function createBobHandler(deps: {
       let body: Record<string, unknown>
       try { body = JSON.parse(text) } catch { return fail('bad_request', 400) }
       if (!body || typeof body !== 'object' || Array.isArray(body)) return fail('bad_request', 400)
+      if(body.action==='renew_requests'&&deps.renew){
+        if(Object.keys(body).sort().join(',')!=='action,projectId'||typeof body.projectId!=='string'||!body.projectId.trim()||body.projectId.length>200)return fail('bad_request',400)
+        const result=await deps.renew({authHeader,userId,projectId:body.projectId})
+        return json(result,result.ok?200:result.error==='project_denied'?403:401)
+      }
       if (body.action !== 'send') return fail('unsupported_action', 409)
       // clientTurnId is an idempotency key only. Provider ids, transcripts and
       // model history remain server-owned and are still rejected here.

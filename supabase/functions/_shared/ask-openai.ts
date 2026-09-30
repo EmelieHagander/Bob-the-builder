@@ -1,3 +1,5 @@
+import {drawingRuntimeVersion} from './drawing-runtime.ts'
+import {createDrawingBudget} from './drawing-budget.ts'
 import {createDrawingRequestStore} from './drawing-request-store.ts'
 import { createBobModelBudget } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
@@ -32,7 +34,7 @@ import { runClaimedProjectTurn } from './project-turn.ts'
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
-  background?: { jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
+  background?: { drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -70,6 +72,8 @@ export async function answerWithOpenAi(opts: {
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
+  let drawingRequestId:string|null=null
+  let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   const modelBudget = createBobModelBudget()
   const callModel = async (options: OpenAIServiceOptions) => modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
@@ -80,13 +84,15 @@ export async function answerWithOpenAi(opts: {
     const allowed = Math.max(1000, Math.min(timeout, wall))
     let result
     try {
-      result = await callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
+      const invoke=(recovery?:{key:string;context:Record<string,unknown>;expiresAt:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
           expiresAt: new Date(opts.background!.deadline).toISOString(),
+          ...recovery,
         } } : {}),
       })
+      result=drawingRequestId&&drawingBudget?await drawingBudget(drawingRequestId,options,invoke):await invoke()
     } catch (error) {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
@@ -192,12 +198,23 @@ export async function answerWithOpenAi(opts: {
    // Read timestamps change during replay; record revisions and values do not.
    const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
    return memo('cad:request',input,async(identity)=>{
-    const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:opts.clientTurnId+':'+(identity?.key??crypto.randomUUID())})
+    const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:(opts.background?.drawingRequestId?opts.background.jobId:opts.clientTurnId)+':'+(identity?.key??crypto.randomUUID())})
     if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','drawing_request_not_paused','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
     return data
    })
   }
+  drawingBudget=createDrawingBudget({executionId:opts.background?.jobId??opts.clientTurnId,command:async input=>{
+      const {data,error}=await internal.rpc('bob_drawing_budget',{...binding,p_user:opts.userId,...input}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('drawing_budget_unavailable')
+      return data
+  }})
+
   const cadAssistant = createCadAssistant({
+    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')})),
+    requestModel:async(id,_options,work)=>{
+      const previous=drawingRequestId;drawingRequestId=id
+      try{return await work()}finally{drawingRequestId=previous}
+    },
     ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,
       privateCall:drawingRequestCall,
       newId:()=>memo('cad:project_request_id',{},async()=>crypto.randomUUID()),
@@ -226,6 +243,24 @@ export async function answerWithOpenAi(opts: {
     context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
+  if(opts.background?.drawingRequestId){
+    // This is an audited domain-event execution of the original instruction.
+    // No invented user turn, model-written mandate or generic project tool loop.
+    const request=await drawingRequestCall({p_operation:'load',p_id:opts.background.drawingRequestId})
+    if(!request)return {ok:false,error:'drawing_request_unavailable'}
+    if(request.status==='saved')return {ok:true,projectId:opts.projectId,answer:'Ritningen är redan sparad.',evidence:{kind:'ai_assessment',references:[],sources:[],partial:false,writes:request.receipt?[request.receipt]:[]}}
+    if(['paused','cancelled'].includes(request.status))return {ok:false,error:'drawing_request_inactive'}
+    const outcome:Record<string,any>=await cadAssistant.consult({...request.payload.brief,request_id:request.id})
+    const candidate=cadAssistant.candidate
+    if(candidate&&writer){
+      const receipt=await writer.commit({kind:'cad',record_id:candidate.artifact_id,expected_updated_at:null,expected_revision:candidate.expected_revision,request_quote:opts.message.slice(0,500),data:candidate})
+      if(receipt.status!=='saved')return {ok:false,error:'drawing_save_unconfirmed'}
+      await cadAssistant.markSaved()
+    }
+    journal?.check()
+    await metrics.finish({ok:true,partial:!candidate,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
+    return {ok:true,projectId:opts.projectId,answer:typeof outcome.user_message==='string'?outcome.user_message:'Uppdragets aktuella underlag är kontrollerat.',evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!candidate,writes:writer?.receipts??[]}}
+  }
   const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
     generate: async prompt => {
