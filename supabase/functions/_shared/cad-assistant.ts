@@ -17,7 +17,7 @@ import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, CAD_REVIEW_SCHEMA, CAD_REVIEW_SYSTEM, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
+import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, cadReviewSchema, CAD_REVIEW_SYSTEM, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -315,7 +315,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
      }
      reviews++;metrics.reviews++
      const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
-      systemMessage:CAD_REVIEW_SYSTEM+'\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:CAD_REVIEW_SCHEMA,
+      systemMessage:CAD_REVIEW_SYSTEM+'\nReport requirements as an object keyed by EVERY exact handoff requirement ID in the response schema. Source/plan UUIDs support evidence; they never replace these keys. Check extra source requirements in issues too.\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:cadReviewSchema(handoff),
       messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
        source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},

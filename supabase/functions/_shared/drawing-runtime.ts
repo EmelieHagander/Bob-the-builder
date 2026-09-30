@@ -1,5 +1,6 @@
 import {fingerprint} from './bob-job-journal.ts'
 import {CAD_RESEARCH_CONTRACT} from './cad-research.ts'
+import {CAD_REVIEW_CONTRACT} from './cad-review.ts'
 
 /** Only Bob's CAD settings and advertised model capabilities affect this hash.
  * Credentials and provider responses never enter it. A changed technical
@@ -14,5 +15,5 @@ export async function drawingRuntimeVersion(client:any,configured:{model:boolean
  const effective=['cad-research','cad-designer','cad-reviewer'].map(role=>settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='cad')??settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='global')??null)
  const fallback=models.data?.find((m:any)=>m.is_default)??models.data?.[0]
  const used=new Set(effective.map((r:any)=>r?.model??fallback?.model_name))
- return fingerprint({engine_contract:2,research_contract:CAD_RESEARCH_CONTRACT,configured,settings:effective,models:models.data?.filter((m:any)=>used.has(m.model_name)||m===fallback)})
+ return fingerprint({engine_contract:2,research_contract:CAD_RESEARCH_CONTRACT,review_contract:CAD_REVIEW_CONTRACT,configured,settings:effective,models:models.data?.filter((m:any)=>used.has(m.model_name)||m===fallback)})
 }

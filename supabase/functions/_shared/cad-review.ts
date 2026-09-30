@@ -47,6 +47,14 @@ export const CAD_REVIEW_SCHEMA = record({
   requirements: { type: 'array', maxItems: 24, items: record({ id: { type: 'string' }, status: { type: 'string', enum: ['met', 'unresolved', 'failed'] }, evidence: string }) },
   issues: { type: 'array', maxItems: 20, items: record({ severity: { type: 'string', enum: ['warning', 'error'] }, code: { type: 'string', enum: ['orientation', 'geometry', 'views', 'reference', 'requirements', 'readability', 'uncertainty'] }, correction: string }) },
 })
+export const CAD_REVIEW_CONTRACT='2026-09-30-exact-requirement-map'
+/** Exact required object keys make omissions and substituted plan UUIDs
+ * impossible in a strict provider response. Internal reviews remain arrays. */
+export function cadReviewSchema(handoff:DesignHandoff){
+ return {...CAD_REVIEW_SCHEMA,properties:{...CAD_REVIEW_SCHEMA.properties,
+  requirements:record(Object.fromEntries(handoff.requirements.map(r=>[r.id,record({status:{type:'string',enum:['met','unresolved','failed']},evidence:string})]))),
+ }}
+}
 export const CAD_REVIEW_SYSTEM = `${DRAWING_REVIEW_INSTRUCTION}
 
 You independently review Bob's construction drawing. You are not its designer. Evaluate the exact geometry, engine checks and generated PNG views against the ORIGINAL owner request, structured handoff and authorised source evidence. Check missing requirements as well as those Bob listed. Compare reference pixels, coordinate/compass directions, relative placement, requested views, dimensions, clearances and legibility. A mirror image or wrong side is a defect even if sizes match.
@@ -57,6 +65,10 @@ export function parseCadReview(value: unknown, handoff: DesignHandoff): CadRevie
   if (typeof v === 'string') { try { v = JSON.parse(v) } catch { return null } }
   if (!exact(v, ['verdict', 'summary', 'requirements', 'issues']) || !['pass', 'revise'].includes(v.verdict) || !text(v.summary)) return null
   const ids = new Set(handoff.requirements.map(r => r.id))
+  if(v.requirements&&!Array.isArray(v.requirements)){
+    if(!exact(v.requirements,[...ids])||Object.values(v.requirements).some(r=>!exact(r,['status','evidence'])))return null
+    v={...v,requirements:handoff.requirements.map(r=>({id:r.id,...v.requirements[r.id]}))}
+  }
   if (!Array.isArray(v.requirements) || v.requirements.length !== ids.size
     || v.requirements.some((r: any) => !exact(r, ['id', 'status', 'evidence']) || !ids.has(r.id) || !['met', 'unresolved', 'failed'].includes(r.status) || !text(r.evidence))
     || new Set(v.requirements.map((r: any) => r.id)).size !== ids.size) return null
