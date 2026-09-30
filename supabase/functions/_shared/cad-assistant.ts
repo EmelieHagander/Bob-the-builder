@@ -215,7 +215,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     }
     const draft=payload.draft
     if(object(draft)&&draft.source_fingerprint===await sourceFingerprint()&&parseCadAssemblyRequest(draft.recipe)
-      &&(request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted')){
+      &&(['collecting','draft','reviewed'].includes(request?.status??'')||request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted')){
      resumeDraft=draft
      referencePixels.push(...opts.context?.carrier()??[])
      researchEvidence.push(...(Array.isArray(request?.payload.evidence)?request.payload.evidence:[]))
@@ -563,7 +563,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
   }
   const outcome=await attempt()
   if(request&&!candidate&&retryInputs&&dependencies.complete&&!['stopped','cancelled','paused','saved','existing_request'].includes(String(outcome.status))&&!('retry_suppressed' in outcome)){
-   try{await persist(outcome.status==='needs_data'?'needs_data':'retrieval_failed',{...(object(payload.draft)?{draft:{...payload.draft,source_fingerprint:await sourceFingerprint()}}:{}),dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})}catch(error){
+   try{await persist(outcome.status==='needs_data'?'needs_data':'retrieval_failed',{reviewed_candidate:undefined,...(object(payload.draft)?{draft:{...payload.draft,source_fingerprint:await sourceFingerprint()}}:{}),dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})}catch(error){
     rethrowContinuation(error)
     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message))throw error
     return {...outcome,request_state_saved:false}

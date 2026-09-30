@@ -253,3 +253,20 @@ test('P2: runtime repair renders the same private draft and reviews it without a
  const result=await createCadAssistant(opts).consult({...request,request_id:id})
  assert.equal(result.status,'ready');assert.equal(f.design,1,'no repeat design');assert.equal(paid,before+1,'only independent review is charged');assert.equal(f.renders,1)
 })
+
+
+test('P2: interrupted collecting checkpoint reuses the exact draft and clears rejected approval before failure persistence',async()=>{
+ const f=fixture();let rejectReview=true,paid=0;const model=f.opts.callModel,save=f.opts.requestStore.save
+ const opts={...f.opts,callModel:async(o:any)=>{paid++;return model(o)},requestStore:{...f.opts.requestStore,save:async(...args:Parameters<typeof save>)=>{
+  if(rejectReview&&args[2]==='reviewed')throw Error('drawing_request_pixels_forbidden')
+  if(args[2]==='retrieval_failed')assert.equal(args[3].reviewed_candidate,undefined,'failed approval must not poison failure checkpoint')
+  return save(...args)
+ }}}
+ const failed=await createCadAssistant(opts).consult(request)
+ assert.equal(failed.status,'unavailable');assert.equal(f.row?.status,'retrieval_failed');assert.equal(f.row?.payload.reviewed_candidate,undefined)
+ const row=f.row!;const payload=structuredClone(row.payload);delete payload.retry
+ await save(row.id,row.revision,'collecting',payload)
+ const before=paid,designs=f.design;rejectReview=false
+ const recovered=await createCadAssistant(opts).consult({...request,request_id:id})
+ assert.equal(recovered.status,'ready');assert.equal(f.design,designs,'no additional designer after interrupted checkpoint');assert.equal(paid,before+1);assert.equal(f.renders,2)
+})
