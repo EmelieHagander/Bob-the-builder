@@ -27,6 +27,7 @@ test('P2: request-wide reservations, replay, allocation and private results surv
  assert.equal((await budget('reserve')).status,'outcome_unknown','synchronous dispatch cannot be repeated after uncertain outcome')
  assert.equal((await budget('reserve',key,randomUUID())).status,'outcome_unknown')
  assert.equal((await budget('reserve','b'.repeat(64),randomUUID())).status,'budget_exhausted','new operation cannot bypass uncertain charge')
+ assert.equal((await budget('reserve','b'.repeat(64),execution)).status,'budget_exhausted','same execution cannot disguise a new uncertain operation')
  await assert.rejects(call(owner,'bob.grant_drawing_budget',[project,id,1,randomUUID()]),/budget_outcome_unknown/)
  const response={success:true,data:'PRIVATE provider response',model:'fixture',usage:{total_tokens:10},estimatedCostUsd:1.01}
  await budget('complete',key,execution,response)
@@ -76,6 +77,11 @@ test('P2 events: UI/chat domain changes resume the original mandate, deduplicate
  await pg.query('insert into auth.users values($1,$2,now())',[owner,'event-owner@example.test'])
  const project=(await call(owner,'bob.create_project',[JSON.stringify({name:'Event fixture'})])).id
  const c=await service('bob_claim_turn',[project,owner,turn,'Draw the shelf from saved measurements'])
+ // Older inactive requests must not occupy the bounded dispatch page forever.
+ for(let n=0;n<21;n++){
+  const old=randomUUID();await call(owner,'bob.create_drawing_request',[project,c.thread_id,turn,c.generation,old,scope])
+  await service('bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',old,0,'needs_data',{brief:{...scope},owner_request:'Draw the shelf from saved measurements',reference_refs:[]},randomUUID()])
+ }
  const intent='a'.repeat(64)
  await call(owner,'bob.resolve_drawing_request',[project,c.thread_id,turn,c.generation,id,scope,intent])
  const repeated=await call(owner,'bob.resolve_drawing_request',[project,c.thread_id,turn,c.generation,randomUUID(),scope,intent])

@@ -116,7 +116,7 @@ begin
    return jsonb_build_object('status',case when c.execution_id=p_execution and exists(select 1 from bob_private.bob_jobs where id=p_execution and async_models and status in ('queued','running') and expires_at>clock_timestamp()) then 'reserved' else 'outcome_unknown' end);
   end if;
   if b.calls>=b.call_limit or b.spent_usd>=b.usd_limit or b.unpriced
-   or exists(select 1 from bob_private.drawing_model_calls where request_id=p_id and not completed and execution_id<>p_execution) then
+   or exists(select 1 from bob_private.drawing_model_calls where request_id=p_id and not completed) then
    return jsonb_build_object('status','budget_exhausted');
   end if;
   insert into bob_private.drawing_model_calls(request_id,key,execution_id,thread_id) values(p_id,p_key,p_execution,p_thread);
@@ -357,7 +357,9 @@ create function bob_private.reconcile_drawing_costs() returns void language plpg
 declare pending record; cost numeric; known boolean;
 begin
  for pending in select c.*,r.project_id,r.owner_user_id from bob_private.drawing_model_calls c join bob_private.project_drawing_requests r on r.id=c.request_id
- where not c.completed and not exists(select 1 from bob_private.bob_jobs j where j.id=c.execution_id and j.status in ('queued','running') and j.expires_at>clock_timestamp()) limit 40 loop
+ where not c.completed and not exists(select 1 from bob_private.bob_jobs j where j.id=c.execution_id and j.status in ('queued','running') and j.expires_at>clock_timestamp())
+ and exists(select 1 from shared_private.ai_jobs a where a.app='bob' and a.fingerprint=c.key and a.context->>'jobId'=c.execution_id::text
+  and (exists(select 1 from shared.ai_usage_events u where u.background_job_id=a.id) or a.status='failed' and a.response_id is null)) limit 40 loop
   if not pg_try_advisory_xact_lock(hashtextextended(pending.project_id||':'||pending.owner_user_id::text,0)) then continue; end if;
   perform 1 from bob_private.project_drawing_requests where id=pending.request_id for update;
   perform 1 from bob_private.drawing_budgets where request_id=pending.request_id for update;
@@ -383,6 +385,11 @@ begin
  for candidate in select q.id,q.project_id,q.owner_user_id from bob_private.project_drawing_requests q
  join bob_private.drawing_project_events e on e.project_id=q.project_id and e.revision>q.observed_event
  where q.status in ('collecting','ready_to_design','needs_data','retrieval_failed','draft','reviewed') and q.thread_id is not null and q.origin_turn_id is not null
+ and exists(select 1 from bob_private.drawing_authorities authority_row where authority_row.request_id=q.id and authority_row.thread_id=q.thread_id and authority_row.expires_at>clock_timestamp()+interval '30 seconds')
+ and exists(select 1 from bob.people p where p.project_id=q.project_id and p.auth_user_id=q.owner_user_id)
+ and exists(select 1 from bob_private.bob_thread_provider_state state_row where state_row.thread_id=q.thread_id and state_row.in_flight_turn_id is null)
+ and not exists(select 1 from bob_private.drawing_budgets b where b.request_id=q.id and (b.unpriced or b.calls>=b.call_limit or b.spent_usd>=b.usd_limit))
+ and not exists(select 1 from bob_private.drawing_model_calls c where c.request_id=q.id and not c.completed)
  order by q.updated_at limit 20 loop
   if not pg_try_advisory_xact_lock(hashtextextended(candidate.project_id||':'||candidate.owner_user_id::text,0)) then continue; end if;
   select * into r from bob_private.project_drawing_requests where id=candidate.id for update;
