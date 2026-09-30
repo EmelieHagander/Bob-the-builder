@@ -86,10 +86,11 @@ try {
   assert(focus.evidence.sources.some(source => source.dataset === 'image_pixels' && source.recordId === imageId), 'Pixels must reach a successful real model call')
   assert(focus.evidence.references?.some(reference => reference.id === 'timber.moisture' && reference.version === '2026-09-30.1'), 'The model must consume the deployed knowledge package')
   assert.match(focus.summary, /röd|red/i, 'Neutral metadata cannot reveal the fixture color')
-  const thread = checked(await client.from('bob_threads').select('id').eq('project_id', project.id).eq('owner_user_id', auth.user.id).eq('status', 'active').single())
-  const history = checked(await client.from('bob_messages').select('role,evidence,delivery_state').eq('thread_id', thread.id).order('seq'))
-  assert(history.some(row => row.role === 'assistant' && row.delivery_state === 'completed' && row.evidence?.currentView?.focus?.task?.id === taskId), 'The private focused answer is read back through the ordinary caller')
-  console.log('P3 live caller focus → real image pixels → versioned knowledge → private answer readback: passed.')
+  // The shared public guest deliberately has local-only conversation state.
+  // Private member persistence is a separate named-session acceptance gate.
+  const threads = checked(await client.from('bob_threads').select('id').eq('project_id', project.id).eq('owner_user_id', auth.user.id))
+  assert.deepEqual(threads, [], 'Shared guest conversations must not create private server history')
+  console.log('P3 live guest caller focus → real image pixels → versioned knowledge: passed. Shared guest server history remains absent; named-member private readback is a separate acceptance gate.')
 } catch (error) {
   // Never serialize Supabase request objects, sessions, tokens or user records.
   console.error(`Live Bob verification failed: ${error.message}`)
