@@ -6,6 +6,11 @@ import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 import { createBuildingIntakeFixture, verifyBuildingIntakeBrowser } from './building-intake-browser.mjs'
 
+const settleVisual = page => page.evaluate(async () => {
+  await document.fonts.ready
+  await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})))
+})
+
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -148,6 +153,7 @@ try {
     assert.equal(await roomNotes.locator('p').isVisible(), false)
     await roomNotes.locator('summary').click()
     assert.equal(await roomNotes.locator('p').innerText(), 'A saved observation that must stay available.')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/building-space-notes-${viewport.width}.png`, fullPage: true })
     await roomNotes.locator('summary').click()
 
@@ -159,6 +165,7 @@ try {
     await page.getByText('Used by this project', { exact: true }).waitFor()
     assert.equal(await roomNotes.getAttribute('open'), null)
     assert.equal(await roomNotes.locator('p').textContent(), 'A saved observation that must stay available.')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/building-clean-spaces-${viewport.width}.png`, fullPage: true })
     await page.getByText('Kids room', { exact: true }).waitFor()
 
@@ -200,6 +207,7 @@ try {
     assert.equal(await page.getByText('No spaces yet. Add only the room or space you know about.', { exact: true }).count(), 0)
     assert.deepEqual(errors, [])
 
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/building-context-${viewport.width}.png`, fullPage: true })
     await context.close()
   }

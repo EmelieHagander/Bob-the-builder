@@ -5,6 +5,11 @@ import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 
+const settleVisual = page => page.evaluate(async () => {
+  await document.fonts.ready
+  await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})))
+})
+
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -191,11 +196,13 @@ try {
     await createModal.getByRole('textbox').fill('  Name only  ')
     const createButton = createModal.getByRole('button', { name: 'Create project', exact: true })
     assert(await createButton.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }), 'Create is unobscured and reachable')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/new-project-${viewport.width}.png`, fullPage: true })
     await createButton.click()
     await createModal.waitFor({ state: 'hidden' })
     await page.locator('.card').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating from account does not secretly select a project')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/projectless-account-${viewport.width}.png`, fullPage: true })
     await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
     let drawer = await openBob('A')
@@ -214,6 +221,7 @@ try {
     await drawer.getByRole('button', { name: 'Expand message editor', exact: true }).click()
     assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Expansion preserves exact draft')
     assert((await editor.boundingBox()).height >= 200, 'Expanded editor has a real writing surface')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-editor-${viewport.width}.png`, fullPage: true })
     await drawer.getByRole('button', { name: 'Collapse message editor', exact: true }).click()
     assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Collapse preserves exact draft')
@@ -226,6 +234,7 @@ try {
     assert.equal(await activeCreate.locator('input, textarea, select').count(), 1)
     await activeCreate.getByRole('textbox').fill('Draft project')
     assert(await activeCreate.getByRole('button', { name: 'Create project', exact: true }).evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }))
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/new-project-with-active-project-${viewport.width}.png`, fullPage: true })
     await activeCreate.getByRole('button', { name: 'Cancel', exact: true }).click()
     await page.goto(`${base}#/`)
@@ -250,6 +259,7 @@ try {
       const box = await drawer.getByRole('button', { name, exact: true }).boundingBox()
       assert(box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height, `${name} must be reachable with a 44px target`)
     }
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-${viewport.width}.png`, fullPage: true })
     assert.equal(await drawer.getByText("What's blocking us?", { exact: true }).count(), 0, 'Suggestion chips do not crowd an active conversation')
     await page.setViewportSize({ width: viewport.width, height: 480 })
@@ -324,6 +334,7 @@ try {
     assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Reading older messages preserves position')
     await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).click()
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 100))
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-writes-${viewport.width}.png`, fullPage: true })
     await page.getByRole('button', { name: 'Close Ask bob' }).click()
     await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()
@@ -340,6 +351,7 @@ try {
     await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
     await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).scrollIntoViewIfNeeded()
     assert(await drawer.evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Image evidence must fit the phone drawer')
+    await settleVisual(page)
     await page.screenshot({path:`test-results/ask-bob-images-${viewport.width}.png`,fullPage:true})
     await page.reload();drawer=await openBob('A')
     await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()
