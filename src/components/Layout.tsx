@@ -38,6 +38,13 @@ const NAV: NavItem[] = [
   { to: '/account', icon: 'user-circle', label: 'Account' },
 ]
 
+const ACCOUNT_NAV: NavItem[] = [
+  { to: '/account', icon: 'user-circle', label: 'Account', end: true },
+  { to: '/account/calendar', icon: 'calendar-dots', label: 'Calendar' },
+  { to: '/account/buildings', icon: 'house', label: 'Buildings' },
+  { to: '/account/settings', icon: 'gear-six', label: 'Settings' },
+]
+
 function Sidebar() {
   const tick = useAuthTick()
   const projectVersion = useProjectVersion()
@@ -92,14 +99,14 @@ function Sidebar() {
           <Icon name="mountains" size={15} />
         </div>
         <div style={{ flex: 1, lineHeight: 1.2, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project?.name ?? '…'}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project?.name ?? 'All projects'}</div>
           <div style={{ fontSize: 11, color: '#ffffff85', marginTop: 2 }}>{project ? `${phaseLabel(project.phase)} · ${project.location.split(',')[0] || project.type}` : ''}</div>
         </div>
         <Icon name="caret-up-down" size={14} color="#ffffffaa" />
       </Link>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {NAV.map((n) => (
+        {(project ? NAV : ACCOUNT_NAV).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} style={{ display: 'block' }}>
             {({ isActive }) => (
               <div
@@ -164,11 +171,11 @@ function Sidebar() {
   )
 }
 
-function MobileNav() {
+function MobileNav({ hasProject }: { hasProject: boolean }) {
   // Field work stays one tap away. Stable tabs are easier to learn than
   // phase-dependent navigation, so Today replaces People here; People remains
   // available from the full project navigation.
-  const items = [NAV[0], NAV[1], NAV[7], NAV[3], NAV[NAV.length - 1]]
+  const items = hasProject ? [NAV[0], NAV[1], NAV[7], NAV[3], NAV[NAV.length - 1]] : ACCOUNT_NAV
   return (
     <nav
       className="no-print mobile-nav"
@@ -201,11 +208,12 @@ function MobileNav() {
   )
 }
 
-export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } }) {
+export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } | null }) {
   const location = useLocation()
   const surfaces: Record<string, BobScreenSurface> = { '/': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
+  const showBob = !!project && !location.pathname.startsWith('/account')
   const surface = surfaces[location.pathname] ?? 'project'
-  useBobSurface(project.id, { surface }, 'Project context', 0)
+  useBobSurface(project?.id ?? '', showBob ? { surface } : null, 'Project context', 0)
   const [bobOpen, setBobOpen] = useState(false)
   const [bobStarted, setBobStarted] = useState(false)
   const [bobUnread, setBobUnread] = useState(false)
@@ -218,6 +226,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
   useEffect(() => {
     let cancelled = false, checking = false
     setBobUnread(false)
+    if (!project) return
     const check = async () => {
       if (checking || document.visibilityState === 'hidden') return
       checking = true
@@ -231,9 +240,10 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
     window.addEventListener('focus', check)
     document.addEventListener('visibilitychange', check)
     return () => { cancelled = true; clearInterval(timer); window.removeEventListener(db.BOB_INBOX_EVENT, check); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) }
-  }, [project.id, authTick])
+  }, [project?.id, authTick])
 
   useEffect(() => {
+    if (!project) return
     let checking=false
     const renew=async()=>{
       if(checking||document.visibilityState==='hidden')return
@@ -245,14 +255,14 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
     const timer=setInterval(renew,60000)
     window.addEventListener('focus',renew)
     return()=>{clearInterval(timer);window.removeEventListener('focus',renew)}
-  },[project.id,authTick])
+  },[project?.id,authTick])
 
   return (
     <div className="app-shell">
       <Sidebar />
       <div className="main-col">{children}</div>
 
-      <button
+      {showBob && <button
         className="no-print"
         aria-label="Ask bob"
         aria-describedby={bobUnread ? 'bob-unread-status' : undefined}
@@ -281,10 +291,10 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
         </span>
         Ask bob
         {bobUnread && <span id="bob-unread-status" className="bob-unread-badge" role="status">New from Bob</span>}
-      </button>
+      </button>}
 
-      <MobileNav />
-      {bobStarted && <AskBob project={project} open={bobOpen} onClose={() => setBobOpen(false)} />}
+      <MobileNav hasProject={!!project} />
+      {bobStarted && project && <AskBob project={project} open={bobOpen && showBob} onClose={() => setBobOpen(false)} />}
     </div>
   )
 }

@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: kör P4:s kompletteringsfall hela vägen till sparad, länkad och återöppnad leverans (A02/A03).** Det kräver en befintlig verifierad vanlig medlemssession i säker runner-miljö; den finns ännu inte för acceptansprovet. Använd inte den publika gästens läsprov som ersättning för skriv-/privathistorikrollen. Välj ett avgränsat uppdrag och bevara samma uppdrag efter samlad komplettering. Bevis och avgränsning för tidigare delprov ligger hos [verifieringsägaren](foundation-verification.md#p4-product-acceptance--2026-09-30). P0:s användartest och P3:s medlemsprov ligger tillsammans i [acceptans-todo](#acceptans-todo) för en senare testomgång enligt användarens prioritering. De står fortsatt öppna.
+**Nästa handling: verifiera och publicera mobilrättningarna, sedan fortsätt samma P4-uppdrag efter djupkomplettering (A02/A03).** Det faktiska användarprovet har nu nått en sparad `needs_data`-status men återhämtningens svar samlar inte den nödvändiga frågan tydligt. Följ upp `continuation_changed` och det upprepade intaget vid ansvarig gräns i `project-answer.ts`/ritningsuppdragets retryväg, med riktat negativt och positivt prov. Läs status efter komplettering innan ett nytt betalt försök; återanvänd samma uppdrag och kräv spar-/steglänkkvitto samt återöppnad ritning. [Verifieringsägaren](foundation-verification.md#mobile-project-overview-and-observed-p4-run--2026-10-01) skiljer detta observerade användarutfall från CI-fixturer. P0:s användartest och P3:s separata medlemsprov ligger kvar tillsammans i [acceptans-todo](#acceptans-todo); det manuella P4-provet ersätter dem inte.
 
 ### Aktivt arbete — P4
 

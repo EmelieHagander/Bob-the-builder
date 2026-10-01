@@ -727,3 +727,32 @@ The public guest is deliberately local-only. The ordinary guest probe must prove
 [PR #177](https://github.com/EmelieHagander/Bob-the-builder/pull/177) merged as `e10b7c5edcfdad07ddada739dec304ca471d965c` after [CI 36735424164](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36735424164) passed on final head `49e26b8`. [Pages 36736996739](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36736996739) deployed successfully to https://emeliehagander.github.io/Bob-the-builder/. [Live Bob 36736996841](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36736996841) passed actual Auth/member-scoped PostgREST/OpenAI source disclosure, non-member 403, retired endpoint 410, exact P3 Task focus, real image pixels, `timber.moisture` version `2026-09-30.1` and absent guest server history. The image was removed through ordinary caller Storage/domain commands. Operator cleanup verified the exact printed project `p_82ce0d2c0f1049d9b81e8ed45cda5bc9`, its nonce/name/description, sole guest membership and absent media/objects/threads before deleting only that fixture. Subsequent counts for project, members, Tasks, materials, media and image objects are all zero.
 
 To run the remaining named-member gate, provide `VITE_SUPABASE_URL`, publishable `VITE_SUPABASE_ANON_KEY`, `BOB_TEST_MEMBER_ID` and `BOB_TEST_MEMBER_ACCESS_TOKEN` only through a secure runner environment, then run `BOB_P3_LIVE_CONFIRM=disposable-fixtures-only node scripts/check-live-p3-member.mjs`. The existing verified session must have at least ten minutes remaining. The probe creates/logs one disposable project, bounds HTTP/polling, neither refreshes nor revokes the session, and does not create users or change permissions. Its exact printed project requires operator cleanup afterward. No ordinary named-member acceptance result is claimed.
+
+
+## Mobile project overview and observed P4 run — 2026-10-01
+
+The requested UI corrections use existing account, project-edit and physical
+record boundaries: explicit Close project persists across reload; account routes
+work without an active Project; shared name-only creation leaves details/dates for
+later; account navigation hides the project composer while preserving its draft;
+shared modals render above the drawer. Space notes are expandable and retained
+verbatim, with uncertainty/proposal labels still visible.
+
+Local verification on the implementation branch: **841/841** Node tests and the
+production build pass. Chrome is absent locally; the changed browser flows require
+CI and screenshot inspection at 320/390/1280 px before release. Vocabulary passes;
+Edge dependency fetching remains pending/blocked locally. This is a manual review
+against Vera/Archie instructions, not independent subagent review.
+
+A read-only inspection of the user's running incomplete-depth shelf test observed
+one worker fail with `continuation_changed` after 21 claims, followed by a completed
+recovery response. The canonical request is `needs_data`, revision 13, without a
+saved Artifact receipt. The assessment retains supplied 600 mm width and 800 mm
+height and identifies owner-chosen depth as the remaining blocker. The recovery
+answer points at the request instead of asking that concrete question. This is
+an open A02/A03/A10 finding, not accepted end-to-end delivery. No retry, cancellation,
+reset, credential generation or alteration of user records was performed.
+Private transcript, Auth identities and record IDs are deliberately not copied
+into repository evidence. Full complement → saved drawing → Step link → reload
+and participant access remain unverified. Next action belongs in
+[State](bob-delivery-flow.md#state).

@@ -73,6 +73,15 @@ function ProjectApp() {
     <p>Could not load your project. Your access may have changed.</p>
     <button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
   </div>
+  if (!project && location.pathname.startsWith('/account')) return <Layout key={`account:${authTick}`} project={null}>
+    <Routes>
+      <Route path="/account" element={<AccountDashboard />} />
+      <Route path="/account/calendar" element={<AccountCalendar />} />
+      <Route path="/account/settings" element={<AccountSettings />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </Layout>
+  if (!project && location.pathname === '/' && db.getActiveProjectId() === null) return <Navigate to="/account" replace />
   if (!project) return <StartProject onCreated={() => setBootVersion(v => v + 1)} />
 
   return (

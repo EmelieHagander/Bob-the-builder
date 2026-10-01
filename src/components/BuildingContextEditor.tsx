@@ -115,7 +115,7 @@ export function BuildingContextEditor({
           </div>}
         </div>
         {!canDirectEdit && scoped && showProjectScope && <p className="foundation-hint" style={{ marginBottom: 0 }}>
-          You can use this building as project context. Direct edits to accepted physical truth require building authority; project proposals stay separate.
+          View only. Ask a building owner to update these details.
         </p>}
       </div>
 
@@ -123,7 +123,7 @@ export function BuildingContextEditor({
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div><h3 style={{ marginBottom: 3 }}>Spaces</h3><p className="foundation-hint" style={{ margin: 0 }}>A building can be useful with only one known room.</p></div>
+          <div><h3 style={{ marginBottom: 3 }}>Spaces</h3><p className="foundation-hint" style={{ margin: 0 }}>Rooms and other spaces in this building.</p></div>
           {canDirectEdit && <div className="cluster" style={{ flexWrap: 'wrap' }}>
             <button className="btn" type="button" onClick={() => setMode('level')}>Add level</button>
             <button className="btn btn-primary" type="button" onClick={() => setMode('space')}>Add space</button>
@@ -135,15 +135,17 @@ export function BuildingContextEditor({
               <div><strong>{space.name}</strong><div className="foundation-hint">{space.kind || 'Space'}{space.levelId ? ` · ${levelNames.get(space.levelId) ?? 'Level'}` : ''}</div></div>
               <span className="image-purpose">{truthLabel(space.truth)}</span>
             </div>
-            {space.notes && <p style={{ marginBottom: 0 }}>{space.notes}</p>}
-            {space.hasProposal && <p className="foundation-hint" style={{ marginBottom: 0 }}>A proposed change exists; accepted current state is still shown here.</p>}
+            {space.notes && <details className="space-notes" style={{ marginTop: 10 }}>
+              <summary>Notes</summary><p style={{ marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{space.notes}</p>
+            </details>}
+            {space.hasProposal && <p className="foundation-hint" style={{ marginBottom: 0 }}>Proposed change available.</p>}
           </div>)}
         </div>}
       </section>
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div><h3 style={{ marginBottom: 3 }}>Known elements</h3><p className="foundation-hint" style={{ margin: 0 }}>Windows, doors, beams, outlets and other physical parts can be added only when useful.</p></div>
+          <div><h3 style={{ marginBottom: 3 }}>Known elements</h3><p className="foundation-hint" style={{ margin: 0 }}>Windows, doors and other building parts.</p></div>
           {canDirectEdit && <button className="btn" type="button" onClick={() => setMode('element')}>Add element</button>}
         </div>
         {elements.filter(element => !element.archived).length === 0 ? <p style={{ marginTop: 14 }}>No building elements recorded.</p> : <div style={{ display: 'grid', gap: 9, marginTop: 14 }}>
@@ -156,7 +158,7 @@ export function BuildingContextEditor({
 
       <section className="card foundation-section" style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div><h3 style={{ marginBottom: 3 }}>Spatial relationships</h3><p className="foundation-hint" style={{ margin: 0 }}>Relationships work before a complete floor plan exists.</p></div>
+          <div><h3 style={{ marginBottom: 3 }}>Spatial relationships</h3><p className="foundation-hint" style={{ margin: 0 }}>How the rooms connect or sit beside each other.</p></div>
           {canDirectEdit && spaces.length >= 2 && <button className="btn" type="button" onClick={() => setMode('relationship')}>Add relationship</button>}
         </div>
         {relationships.filter(relation => !relation.archived).length === 0 ? <p style={{ marginTop: 14 }}>No room relationships recorded yet.</p> : <div style={{ display: 'grid', gap: 9, marginTop: 14 }}>
@@ -262,9 +264,9 @@ function CreatePhysicalModal({
         {mode === 'relationship' && <><Field label="First space"><select style={inputStyle} required value={subject} onChange={event => setSubject(event.target.value)}>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field><Field label="Relationship"><select style={inputStyle} value={relation} onChange={event => setRelation(event.target.value as RelationshipKind)}>{relationOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field><Field label="Second space"><select style={inputStyle} required value={object} onChange={event => setObject(event.target.value)}>{spaces.map(space => <option key={space.id} value={space.id}>{space.name}</option>)}</select></Field></>}
         {needsTruth && <><Field label="How certain is this?"><select style={inputStyle} value={truth} onChange={event => setTruth(event.target.value as Exclude<PhysicalTruth, 'ai_assessment'>)}>{truthOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></Field><Field label="Source / how do we know?"><textarea style={inputStyle} rows={2} required={truth !== 'unknown'} maxLength={2000} placeholder={truth === 'unknown' ? 'Optional while unknown' : 'Measurement, drawing, observation…'} value={source} onChange={event => setSource(event.target.value)} /></Field></>}
         {(mode === 'site' || mode === 'building' || mode === 'level' || mode === 'space' || mode === 'relationship') && <Field label="Notes"><textarea style={inputStyle} rows={2} maxLength={4000} value={notes} onChange={event => setNotes(event.target.value)} /></Field>}
-        {needsTruth && <p className="foundation-hint">Unknown stays unknown. This manual form cannot create an AI-assessment fact.</p>}
+        {needsTruth && <p className="foundation-hint">Choose Unknown until you have a measurement, observation or plan.</p>}
         {error && <div role="alert"><FormError>{error}</FormError></div>}
-        {busy && <p role="status">Saving and reading back…</p>}
+        {busy && <p role="status">Saving…</p>}
         <div className="foundation-actions"><button className="btn" type="button" onClick={onClose}>Cancel</button><button className="btn btn-primary">{busy ? 'Saving…' : 'Save'}</button></div>
       </fieldset>
     </form>}

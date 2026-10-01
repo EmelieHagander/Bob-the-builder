@@ -317,7 +317,7 @@ select {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 100;
   background: rgba(32, 27, 14, 0.45);
   display: flex;
   align-items: center;
@@ -796,3 +796,7 @@ select {
 .work-task-list li > span { display: block; }
 .work-criteria, .work-unorganised { margin-top: 14px; }
 .work-criteria summary, .work-unorganised summary { cursor: pointer; min-height: 32px; }
+
+.space-notes > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 600; }
+.space-notes > summary::before { content: "▸"; margin-right: 8px; }
+.space-notes[open] > summary::before { content: "▾"; }
