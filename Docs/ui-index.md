@@ -35,14 +35,26 @@ Current implementation anchors:
 Owned by `src/components/Layout.tsx`:
 
 - desktop sidebar;
-- active-project entry/account switch;
+- active-project entry/account switch; **Close project** on Account clears the active choice without deleting the Project or changing membership, including after reload;
 - mobile bottom navigation;
-- floating Ask bob control and drawer host;
+- floating Ask bob control and drawer host on project surfaces; Account routes hide the project composer and remain usable with no active Project;
 - signed-in identity/sign-out affordance.
 
 Do not create another shell/navigation system inside feature pages.
 
 Project phases are **state**, not routes: do not add Concept / Design / Planning / Build / Complete as shell navigation.
+
+### Project creation and room notes
+
+`NewProjectForm` is shared by the start screen and Account modal. Creation asks
+only for a Project name; empty details and an unscheduled build can be enriched
+later through the existing Project detail/schedule editor. Account navigation
+hides an already-open Bob composer without discarding its unsent project draft.
+The project creation modal renders above the Bob drawer.
+
+Building & spaces uses practical labels. Space notes are collapsed under
+**Notes**, retained verbatim and expandable; truth labels and proposed/current
+separation remain visible. Presentation changes never delete physical records.
 
 ### Page frame
 

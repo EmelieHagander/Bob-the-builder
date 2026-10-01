@@ -5,6 +5,11 @@ import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
 
+const settleVisual = page => page.evaluate(async () => {
+  await document.fonts.ready
+  await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {})))
+})
+
 const base = 'http://127.0.0.1:4173/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -30,6 +35,7 @@ try {
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = []
+    const visibleProjects = [...projects]
     const requests = []
     const histories = new Map(['A', 'B'].map(id => [id, { thread: null, nextSeq: 1, messages: [] }]))
     let slow = deferred()
@@ -67,7 +73,7 @@ try {
         assert.equal(request.headers().authorization, `Bearer ${token}`)
         const body = request.postDataJSON()
         assert.deepEqual(Object.keys(body).sort(), ['action', 'background', 'clientTurnId', 'message', 'projectId', 'screen'])
-        assert.deepEqual(body.screen, {surface:'project'}, 'Account fallback never publishes private account fields')
+        assert.deepEqual(body.screen, {surface:'project'}, 'Project context never publishes private account fields')
         assert.equal(body.action, 'send')
         assert.match(body.clientTurnId, UUID, 'Bob turn id is a client UUID idempotency key')
         requests.push(body)
@@ -127,7 +133,15 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
-      if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
+      if (url.pathname === '/rest/v1/rpc/sharing_directory') return respond({ json: { households: [], friends: [] } })
+      if (url.pathname === '/rest/v1/rpc/create_project') {
+        const input = request.postDataJSON().p_input
+        assert.deepEqual(input, { name: 'Name only', description: '', location: '', type: '', theme: 'birch', start_label: '', start_date: null, end_date: null })
+        const created = { ...input, id: 'C', slug: 'name-only' }
+        visibleProjects.push(created)
+        return respond({ json: created })
+      }
+      if (url.pathname === '/rest/v1/projects') return respond({ json: visibleProjects })
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
         const pid = url.searchParams.get('project_id')?.replace('eq.', '') ?? 'A'
@@ -164,6 +178,33 @@ try {
     await page.getByRole('heading', { name: 'Sign in', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Ask bob', exact: true }).count(), 0, 'Account has no project composer')
+    await page.getByRole('button', { name: 'Close project', exact: true }).click()
+    await page.getByRole('button', { name: 'Close project', exact: true }).waitFor({ state: 'hidden' })
+    await page.reload()
+    await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Explicit no-project choice survives reload')
+    assert.equal(await page.getByRole('button', { name: 'Close project', exact: true }).count(), 0)
+    await page.goto(`${base}#/account/settings`)
+    await page.getByRole('heading', { name: 'Account settings', exact: true }).waitFor()
+    await page.goto(`${base}#/account`)
+    await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'New project', exact: true }).click()
+    const createModal = page.getByRole('dialog', { name: 'New project', exact: true })
+    await createModal.waitFor()
+    assert.equal(await createModal.locator('input, textarea, select').count(), 1, 'Only project name is collected')
+    await createModal.getByRole('textbox').fill('  Name only  ')
+    const createButton = createModal.getByRole('button', { name: 'Create project', exact: true })
+    assert(await createButton.evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }), 'Create is unobscured and reachable')
+    await settleVisual(page)
+    await page.screenshot({ path: `test-results/new-project-${viewport.width}.png`, fullPage: true })
+    await createButton.click()
+    await createModal.waitFor({ state: 'hidden' })
+    await page.locator('.card').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open', exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating from account does not secretly select a project')
+    await settleVisual(page)
+    await page.screenshot({ path: `test-results/projectless-account-${viewport.width}.png`, fullPage: true })
+    await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
     let drawer = await openBob('A')
     const editor = drawer.getByRole('textbox', { name: 'Question for bob' })
     assert.equal(await editor.evaluate(node => node.tagName), 'TEXTAREA')
@@ -180,9 +221,25 @@ try {
     await drawer.getByRole('button', { name: 'Expand message editor', exact: true }).click()
     assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Expansion preserves exact draft')
     assert((await editor.boundingBox()).height >= 200, 'Expanded editor has a real writing surface')
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-editor-${viewport.width}.png`, fullPage: true })
     await drawer.getByRole('button', { name: 'Collapse message editor', exact: true }).click()
     assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Collapse preserves exact draft')
+    await page.goto(`${base}#/account`)
+    await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    assert.equal(await page.getByRole('textbox', { name: 'Question for bob' }).count(), 0, 'Project composer hides on account navigation')
+    await page.getByRole('button', { name: 'New project', exact: true }).click()
+    const activeCreate = page.getByRole('dialog', { name: 'New project', exact: true })
+    await activeCreate.waitFor()
+    assert.equal(await activeCreate.locator('input, textarea, select').count(), 1)
+    await activeCreate.getByRole('textbox').fill('Draft project')
+    assert(await activeCreate.getByRole('button', { name: 'Create project', exact: true }).evaluate(node => { const r = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)) }))
+    await settleVisual(page)
+    await page.screenshot({ path: `test-results/new-project-with-active-project-${viewport.width}.png`, fullPage: true })
+    await activeCreate.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.goto(`${base}#/`)
+    await drawer.waitFor()
+    assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Account navigation preserves the project draft')
     const density = drawer.getByRole('button', { name: 'Comfortable text spacing', exact: true })
     assert.equal(await density.getAttribute('aria-pressed'), 'false')
     await density.click()
@@ -202,6 +259,7 @@ try {
       const box = await drawer.getByRole('button', { name, exact: true }).boundingBox()
       assert(box && box.width >= 44 && box.height >= 44 && box.x >= 0 && box.x + box.width <= viewport.width && box.y >= 0 && box.y + box.height <= viewport.height, `${name} must be reachable with a 44px target`)
     }
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-${viewport.width}.png`, fullPage: true })
     assert.equal(await drawer.getByText("What's blocking us?", { exact: true }).count(), 0, 'Suggestion chips do not crowd an active conversation')
     await page.setViewportSize({ width: viewport.width, height: 480 })
@@ -276,6 +334,7 @@ try {
     assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Reading older messages preserves position')
     await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).click()
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 100))
+    await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-writes-${viewport.width}.png`, fullPage: true })
     await page.getByRole('button', { name: 'Close Ask bob' }).click()
     await page.getByRole('button', { name: 'Ask bob', exact: true }).waitFor()
@@ -292,6 +351,7 @@ try {
     await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).waitFor()
     await drawer.getByText('Bild öppnad: Fönsteranslutning',{exact:true}).scrollIntoViewIfNeeded()
     assert(await drawer.evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Image evidence must fit the phone drawer')
+    await settleVisual(page)
     await page.screenshot({path:`test-results/ask-bob-images-${viewport.width}.png`,fullPage:true})
     await page.reload();drawer=await openBob('A')
     await drawer.getByText('Project photo inspected.',{exact:true}).waitFor()

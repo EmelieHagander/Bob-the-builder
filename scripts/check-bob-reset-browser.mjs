@@ -158,6 +158,7 @@ try {
     await page.goto(`${base}#/signin`)
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Reset fixture', exact: true }).waitFor()
+    await page.locator('.card').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
     const box = await drawer.getByRole('button', { name: 'New conversation', exact: true }).boundingBox()

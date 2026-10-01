@@ -42,7 +42,7 @@ try {
     } else {
       await page.goto(`${base}#/account`)
       // Follow the user's actual route from the account screen.
-      await page.getByRole('link', { name: /Settings/ }).click()
+      await page.locator('.page-head').getByRole('link', { name: 'Settings', exact: true }).click()
       await page.getByRole('heading', { name: 'Account settings', exact: true }).waitFor()
     }
     const entry = page.getByRole('link', { name: 'Installera appen', exact: true })

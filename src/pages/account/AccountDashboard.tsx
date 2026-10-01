@@ -8,15 +8,16 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../../data/database'
-import type { AccountNote, Project, ThemeName } from '../../data/types'
+import type { AccountNote, Project } from '../../data/types'
 import { EmptyState, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../../components/ui'
 import { Modal } from '../../components/Modal'
-import { Field, FormError, inputStyle } from '../../components/form'
+import { FormError, inputStyle } from '../../components/form'
 import { InviteModal } from '../../components/InviteModal'
 import { ProjectInvitations } from '../../components/SharingCards'
 import { scheduleStatus } from '../../lib/calendarGrid'
 import { formatDate, formatDateRange } from '../../lib/format'
 import { ProjectModal, SchedulePill } from './ProjectModal'
+import { NewProjectForm } from '../../components/NewProjectForm'
 import { PhasePill } from '../../components/PhaseUI'
 import { areaPhaseSummary } from '../../lib/projectPhase'
 
@@ -63,6 +64,10 @@ export function AccountDashboard() {
           <p className="page-sub">Every build in one place — projects, shared notes and settings.</p>
         </div>
         <div className="cluster no-print">
+          {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
+          {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
+            <Icon name="sign-out" size={16} /> Close project
+          </button>}
           <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings &amp; family</Link>
           <Link to="/account/calendar" className="btn">
             <Icon name="calendar-dots" size={16} /> Calendar
@@ -300,119 +305,8 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
 
 /* ─────────────────────────── New project ─────────────────────────── */
 
-const THEMES: { name: ThemeName; label: string }[] = [
-  { name: 'birch', label: 'Birch' },
-  { name: 'forest', label: 'Forest' },
-  { name: 'dusk', label: 'Dusk' },
-]
-
 function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [location, setLocation] = useState('')
-  const [type, setType] = useState('')
-  const [theme, setTheme] = useState<ThemeName>('birch')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!name.trim() || busy) return
-    if ((startDate && !endDate) || (!startDate && endDate)) {
-      setError('Pick both schedule dates — or leave both empty for now.')
-      return
-    }
-    if (startDate && endDate && endDate < startDate) {
-      setError('The end date can’t be before the start date.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      await db.createProject({
-        name: name.trim(),
-        description: description.trim(),
-        location: location.trim(),
-        type: type.trim(),
-        theme,
-        startLabel: '',
-        startDate: startDate || null,
-        endDate: endDate || null,
-      })
-      onCreated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal title="New project" onClose={onClose}>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-        <Field label="Project name *">
-          <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Växthuset" autoFocus />
-        </Field>
-        <Field label="What are you building?">
-          <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A one-sentence description" />
-        </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Location">
-            <input style={inputStyle} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Town, Country" />
-          </Field>
-          <Field label="Type">
-            <input style={inputStyle} value={type} onChange={(e) => setType(e.target.value)} placeholder="Greenhouse" />
-          </Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Build starts (optional)">
-            <input
-              type="date"
-              style={inputStyle}
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value)
-                if (endDate && endDate < e.target.value) setEndDate(e.target.value)
-              }}
-            />
-          </Field>
-          <Field label="Build ends">
-            <input type="date" style={inputStyle} value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
-          </Field>
-        </div>
-        <Field label="Theme">
-          <div style={{ display: 'flex', gap: 6 }}>
-            {THEMES.map((t) => (
-              <button
-                key={t.name}
-                type="button"
-                onClick={() => setTheme(t.name)}
-                className="btn"
-                style={{
-                  flex: 1,
-                  padding: '9px 0',
-                  fontSize: 12.5,
-                  justifyContent: 'center',
-                  border: theme === t.name ? '2px solid var(--accent)' : '1px solid var(--line)',
-                  fontWeight: theme === t.name ? 800 : 600,
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </Field>
-        {error && <FormError>{error}</FormError>}
-        <div className="cluster" style={{ justifyContent: 'flex-end' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={!name.trim() || busy}>
-            {busy ? 'Creating…' : 'Create project'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
+  return <Modal title="New project" layer={100} onClose={onClose}>
+    <NewProjectForm onCreated={onCreated} onCancel={onClose} />
+  </Modal>
 }

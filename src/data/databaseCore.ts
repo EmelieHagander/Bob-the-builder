@@ -268,21 +268,26 @@ export async function getTaskDetail(projectId: string, taskId: string): Promise<
   return { task, instructions: '', updatedAt: '', steps: [] }
 }
 
-export function getActiveProjectId(): string | null {
+function activeProjectSelection(): string | null | undefined {
   if (activeProjectMemory !== undefined) return activeProjectMemory
   try {
-    return localStorage.getItem(ACTIVE_PROJECT_KEY)
+    const stored = localStorage.getItem(ACTIVE_PROJECT_KEY)
+    return stored === null ? undefined : stored || null
   } catch {
-    return null
+    return undefined
   }
 }
 
-export function setActiveProject(id: string): void {
+export function getActiveProjectId(): string | null {
+  return activeProjectSelection() ?? null
+}
+
+export function setActiveProject(id: string | null): void {
   activeProjectMemory = id
   contextVersion++
   askScope.invalidate()
   try {
-    localStorage.setItem(ACTIVE_PROJECT_KEY, id)
+    localStorage.setItem(ACTIVE_PROJECT_KEY, id ?? '')
   } catch {
     // storage unavailable (private mode) — the event still refreshes this session
   }
@@ -300,8 +305,8 @@ async function activeProjectId(): Promise<string | null> {
  * honestly have nothing in them yet.
  */
 function readScoped<T>(value: T[]): Promise<T[]> {
-  const stored = getActiveProjectId()
-  const active = mock.projects.find((p) => p.id === stored) ?? mock.projects[0]
+  const stored = activeProjectSelection()
+  const active = stored === undefined ? mock.projects[0] : mock.projects.find((p) => p.id === stored)
   return read(active?.id === 'p_skogsstuga' ? value : [])
 }
 
@@ -356,11 +361,11 @@ export async function getProjects(): Promise<Project[]> {
   return rows.map(mapProject)
 }
 
-/** The active project — `null` when the database has none yet (fresh install). */
+/** Explicitly closed or unavailable projects stay null; only an initial choice defaults. */
 export async function getProject(): Promise<Project | null> {
   const projects = await getProjects()
-  const activeId = getActiveProjectId()
-  if (activeId) return projects.find((p) => p.id === activeId) ?? null
+  const activeId = activeProjectSelection()
+  if (activeId !== undefined) return projects.find((p) => p.id === activeId) ?? null
   const first = projects[0] ?? null
   if (first) {
     // Initial selection is visible in the UI. An invalid stored selection never
