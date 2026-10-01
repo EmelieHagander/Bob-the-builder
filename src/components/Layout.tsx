@@ -6,6 +6,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import * as db from '../data/database'
+import type { Project } from '../data/types'
 import { phaseLabel } from '../lib/projectPhase'
 import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
 import { AskBob } from './AskBob'
@@ -45,10 +46,9 @@ const ACCOUNT_NAV: NavItem[] = [
   { to: '/account/settings', icon: 'gear-six', label: 'Settings' },
 ]
 
-function Sidebar() {
+function Sidebar({ project }: { project: Project | null }) {
   const tick = useAuthTick()
   const projectVersion = useProjectVersion()
-  const { data: project } = useAsync(() => db.getProject(), [projectVersion])
   const { data: me } = useAsync(() => db.getCurrentUser(), [tick, projectVersion])
 
   return (
@@ -208,7 +208,7 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
   )
 }
 
-export function Layout({ children, project }: { children: ReactNode; project: { id: string; name: string } | null }) {
+export function Layout({ children, project }: { children: ReactNode; project: Project | null }) {
   const location = useLocation()
   const surfaces: Record<string, BobScreenSurface> = { '/': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
   const showBob = !!project && !location.pathname.startsWith('/account')
@@ -259,7 +259,7 @@ export function Layout({ children, project }: { children: ReactNode; project: { 
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar project={project} />
       <div className="main-col">{children}</div>
 
       {showBob && <button
