@@ -50,7 +50,7 @@ Project phases are **state**, not routes: do not add Concept / Design / Planning
 only for a Project name; empty details and an unscheduled build can be enriched
 later through the existing Project detail/schedule editor. Account navigation
 hides an already-open Bob composer without discarding its unsent project draft.
-Shared modals render above the Bob drawer.
+The project creation modal renders above the Bob drawer.
 
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current

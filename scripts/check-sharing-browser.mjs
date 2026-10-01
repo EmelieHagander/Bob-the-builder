@@ -83,6 +83,7 @@ async function fixture(viewport, fresh = false) {
     if (['account_notes', 'areas', 'tasks', 'materials', 'events', 'announcements', 'current_sites', 'current_levels', 'current_elements', 'current_relationships'].some(name => path === '/rest/v1/' + name)) return respond({ json: [] })
     if (path === '/rest/v1/current_buildings') return respond({ json: buildings })
     if (path === '/rest/v1/project_buildings') return respond({ json: buildings.map(building => ({ ...building, project_id: url.searchParams.get('project_id')?.replace(/^eq\./, '') })) })
+    if (['/rest/v1/current_drawing_overview', '/rest/v1/media_assets', '/rest/v1/current_measurements', '/rest/v1/current_target', '/rest/v1/current_artifacts', '/rest/v1/current_drawing_steps'].includes(path) && method === 'GET') return respond({ json: [] })
     if (path === '/rest/v1/current_spaces') return respond({ json: state.spaces })
     if (path === '/rest/v1/rpc/can_edit_building') return respond({ json: state.canEditBuilding })
     if (path === '/rest/v1/rpc/physical_node_command') {

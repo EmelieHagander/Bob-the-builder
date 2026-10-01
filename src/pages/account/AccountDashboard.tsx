@@ -306,7 +306,7 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
 /* ─────────────────────────── New project ─────────────────────────── */
 
 function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  return <Modal title="New project" onClose={onClose}>
+  return <Modal title="New project" layer={100} onClose={onClose}>
     <NewProjectForm onCreated={onCreated} onCancel={onClose} />
   </Modal>
 }

@@ -128,6 +128,7 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
+      if (url.pathname === '/rest/v1/rpc/sharing_directory') return respond({ json: { households: [], friends: [] } })
       if (url.pathname === '/rest/v1/rpc/create_project') {
         const input = request.postDataJSON().p_input
         assert.deepEqual(input, { name: 'Name only', description: '', location: '', type: '', theme: 'birch', start_label: '', start_date: null, end_date: null })

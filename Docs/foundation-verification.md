@@ -735,7 +735,7 @@ The requested UI corrections use existing account, project-edit and physical
 record boundaries: explicit Close project persists across reload; account routes
 work without an active Project; shared name-only creation leaves details/dates for
 later; account navigation hides the project composer while preserving its draft;
-shared modals render above the drawer. Space notes are expandable and retained
+the project creation modal renders above the drawer. Space notes are expandable and retained
 verbatim, with uncertainty/proposal labels still visible.
 
 Local verification on the implementation branch: **841/841** Node tests and the
