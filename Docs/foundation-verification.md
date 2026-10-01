@@ -738,11 +738,23 @@ later; account navigation hides the project composer while preserving its draft;
 the project creation modal renders above the drawer. Space notes are expandable and retained
 verbatim, with uncertainty/proposal labels still visible.
 
-Local verification on the implementation branch: **841/841** Node tests and the
-production build pass. Chrome is absent locally; the changed browser flows require
-CI and screenshot inspection at 320/390/1280 px before release. Vocabulary passes;
-Edge dependency fetching is blocked locally by `esm.sh` connection refusal. This is a manual review
-against Vera/Archie instructions, not independent subagent review.
+Local **841/841** Node tests, production build, vocabulary and PWA checks pass.
+Chrome is absent locally and Edge fetching is blocked by `esm.sh` connection
+refusal. [CI 36903372558](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36903372558)
+on final source `ba7ba91df3a8ad61f71e44ebe080ab07729930c8` passes all 841 tests,
+Edge types, build, vocabulary/PWA and every browser group. Fifteen screenshots
+from artifact `11183281581` were manually inspected at 320/390/1280 px: creation
+with/without an active Project, projectless Account, collapsed/expanded room notes.
+Assertions separately prove reload, unobscured controls, draft/notes preservation
+and the existing drawing → Bob flow. These are HTTP/provider fixtures, not an
+owner's phone or live model trial. Review follows Vera/Archie instructions
+manually, not independent subagents.
+
+[PR #179](https://github.com/EmelieHagander/Bob-the-builder/pull/179) merged as
+`98e05d075e8f66031eb6455a440524e1945e573c`.
+[Pages 36905083409](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36905083409)
+deployed successfully to https://emeliehagander.github.io/Bob-the-builder/.
+This is a frontend release; no hosted migration or Edge deployment was performed.
 
 A read-only inspection of the user's running incomplete-depth shelf test observed
 one worker fail with `continuation_changed` after 21 claims, followed by a completed
@@ -754,7 +766,7 @@ an open A02/A03/A10 finding, not accepted end-to-end delivery. No retry, cancell
 reset, credential generation or alteration of user records was performed.
 Private transcript, Auth identities and record IDs are deliberately not copied
 into repository evidence. Content-free metrics total 20 model calls, 441,790 input
-tokens, 22,887 output tokens and estimated $0.587227; this is not a billing invoice.
+tokens, 22,887 output tokens and estimated $0.587227.
 Full complement → saved drawing → Step link → reload
 and participant access remain unverified. Next action belongs in
 [State](bob-delivery-flow.md#state).
