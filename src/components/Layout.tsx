@@ -131,14 +131,14 @@ function Sidebar() {
       </nav>
 
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ background: '#ffffff12', border: '1px solid #ffffff1f', borderRadius: 14, padding: '13px 13px 14px' }}>
+        {project && <div style={{ background: '#ffffff12', border: '1px solid #ffffff1f', borderRadius: 14, padding: '13px 13px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}>
             <Icon name="tree-evergreen" weight="fill" size={16} color="var(--accent)" /> Stuck on something?
           </div>
           <div style={{ fontSize: 11.5, color: '#ffffffb0', marginTop: 4, lineHeight: 1.4 }}>
             Ask bob — he keeps the whole build in his head so you don't have to.
           </div>
-        </div>
+        </div>}
         {me ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, borderTop: '1px solid #ffffff1f' }}>
             <Avatar person={me} size={32} />
@@ -159,10 +159,10 @@ function Sidebar() {
         ) : (
           db.authEnabled() && (
             <Link
-              to="/signin"
+              to="/account/settings"
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #ffffff1f', fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}
             >
-              <Icon name="sign-in" size={16} /> Sign in
+              <Icon name="gear-six" size={16} /> Account settings
             </Link>
           )
         )}

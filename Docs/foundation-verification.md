@@ -741,7 +741,7 @@ verbatim, with uncertainty/proposal labels still visible.
 Local verification on the implementation branch: **841/841** Node tests and the
 production build pass. Chrome is absent locally; the changed browser flows require
 CI and screenshot inspection at 320/390/1280 px before release. Vocabulary passes;
-Edge dependency fetching remains pending/blocked locally. This is a manual review
+Edge dependency fetching is blocked locally by `esm.sh` connection refusal. This is a manual review
 against Vera/Archie instructions, not independent subagent review.
 
 A read-only inspection of the user's running incomplete-depth shelf test observed
@@ -753,6 +753,8 @@ answer points at the request instead of asking that concrete question. This is
 an open A02/A03/A10 finding, not accepted end-to-end delivery. No retry, cancellation,
 reset, credential generation or alteration of user records was performed.
 Private transcript, Auth identities and record IDs are deliberately not copied
-into repository evidence. Full complement → saved drawing → Step link → reload
+into repository evidence. Content-free metrics total 20 model calls, 441,790 input
+tokens, 22,887 output tokens and estimated $0.587227; this is not a billing invoice.
+Full complement → saved drawing → Step link → reload
 and participant access remain unverified. Next action belongs in
 [State](bob-delivery-flow.md#state).

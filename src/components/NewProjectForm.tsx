@@ -30,7 +30,7 @@ export function NewProjectForm({ onCreated, onCancel }: {
     <Field label="Project name *">
       <input style={inputStyle} value={name} onChange={event => setName(event.target.value)} placeholder="Sommarstugan" required autoFocus />
     </Field>
-    <p className="foundation-hint" style={{ margin: 0 }}>You can add details and dates later from the project’s menu.</p>
+    <p className="foundation-hint" style={{ margin: 0 }}>You can add details and dates later.</p>
     {error && <FormError>{error}</FormError>}
     <div className="cluster" style={{ justifyContent: 'flex-end' }}>
       {onCancel && <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>}

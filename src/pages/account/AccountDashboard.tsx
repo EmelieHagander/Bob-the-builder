@@ -64,6 +64,7 @@ export function AccountDashboard() {
           <p className="page-sub">Every build in one place — projects, shared notes and settings.</p>
         </div>
         <div className="cluster no-print">
+          {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
           {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
             <Icon name="sign-out" size={16} /> Close project
           </button>}

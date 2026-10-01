@@ -176,12 +176,12 @@ async function fixture(viewport, fresh = false) {
   return { page, context, state }
 }
 
-async function signIn(page, fresh = false) {
+async function signIn(page) {
   await page.goto(base + '#/signin')
   await page.getByPlaceholder('you@example.se').fill(user.email)
   await page.locator('input[type="password"]').fill('fixture-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('heading', { name: fresh ? 'Welcome to bob' : 'Your account', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
 }
 
 async function openProjectSharing(page) {
@@ -353,7 +353,7 @@ try {
 
     // Both invitations and physical context work without an existing project.
     const fresh = await fixture(viewport, true)
-    await signIn(fresh.page, true)
+    await signIn(fresh.page)
     const inbox = fresh.page.getByRole('region', { name: 'Project invitations', exact: true })
     await inbox.getByText('Porch A', { exact: true }).waitFor()
     await assertLayout(fresh.page, viewport, inbox, 'incoming')
@@ -369,6 +369,8 @@ try {
     assert.deepEqual(fresh.state.accessible, ['A'])
     fresh.state.failProjectList = false
     await inbox.getByRole('button', { name: 'Refresh project access', exact: true }).click()
+    await fresh.page.getByRole('heading', { name: 'Porch A', exact: true }).waitFor()
+    await fresh.page.goto(base + '#/account')
     await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
     assert.equal(await fresh.page.getByText('Porch B', { exact: true }).count(), 0, 'Declining does not grant the other project')
     await fresh.page.reload()
