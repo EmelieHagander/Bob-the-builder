@@ -1,3 +1,5 @@
+import { readPhysicalCadSources } from './cad-physical-lineage.ts'
+import { createConstructionTools } from './construction-draft.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
@@ -204,9 +206,9 @@ export async function answerWithOpenAi(opts: {
       return { ok: false, error: 'context_unavailable' }
     }
   }
-  // The v13 wrapper preserves all older write kinds and the same claimed-turn ledger.
+  // The v14 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v13', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v14', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
@@ -226,6 +228,21 @@ export async function answerWithOpenAi(opts: {
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
     hasAccess, lookup.sources)
+  const constructionTools = createConstructionTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    read:async(id,revision,after)=>{
+      const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_read_unavailable');return data
+    },
+    readSources:async pins=>{
+      const project=new Map<string,Record<string,any>>()
+      if(pins.project.length){
+        const {data,error}=await client.from('current_measurements').select('*').eq('project_id',opts.projectId).in('id',pins.project.map(p=>p.id)).abortSignal(AbortSignal.timeout(10000))
+        if(error)throw new Error('construction_source_unavailable');for(const row of data??[])project.set(row.id,row)
+      }
+      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64),pins.physical,lookup.sources)
+      return {project,physical}
+    },
+  })
   const planAssistant = createPlanAssistant({
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
@@ -342,7 +359,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

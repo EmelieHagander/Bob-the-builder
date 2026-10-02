@@ -1030,3 +1030,35 @@ was never saved. The owner must send it through the updated ordinary member UI.
 The same-request reviewed drawing, current Step link and reopen/readback outcome
 remain open in [State](bob-delivery-flow.md#state), together with the parked P0/P3
 acceptance gates. A green fixture or deployed chat fix does not close P4.
+
+
+## K1 construction checkpoints — 2026-10-02
+
+**Prepared source; CI and hosted release pending.** Implements the scoped K1
+checkpoint contract in [Artifacts](artifacts.md#k1-construction-checkpoints),
+not the K2–K5 construction-to-purchasing chain.
+
+Deterministic tests exercise the registered Bob tool/claimed-turn SQL boundary,
+600 × 800 × 300 mm synthetic construction, formula-derived 564 mm width,
+width/thickness changes with stable IDs, exact readback by another authorised
+member, revision history, replay, stale revisions, broken joints, invalid units,
+forged normalized values, catalog freshness, cross-project denial, direct-write
+rejection, archive/restore and a second generic construction with a cyclic
+physical joint graph and a project measurement converted from cm. A negative
+source-change test exposed a missing checkpoint source-head check; the write now
+locks and validates those heads before canonical Artifact creation.
+
+The shared CAD validator extraction matches the hosted prior function body
+(MD5 `2b0f34190073a5e8ad7e61e0a2c7bbc8`); existing CAD parameter SQL tests pass.
+Edge type checks and the production build pass locally. The full CI/release
+results will be attached to this record and the PR before claiming deployment.
+The PostgreSQL concurrency runner includes K1 duplicate, competing-revision,
+measurement-first and save-first cases and verifies actual lock waits; its CI
+result is still pending. No local browser/PostgreSQL binary is available.
+
+Manual review follows Archie's prompt (not an independent subagent review).
+Supabase changelog checked October 2; the September 25 Postgres extension/operator
+breaking changes do not apply to this additive JSON/relational migration.
+No paid model call, owner shelf retry, budget grant, model change or userdata
+repair was used as proof. K1 tools preserve unresolved joint fit, hardware and
+strength; actual autonomous design quality belongs to subsequent acceptance.

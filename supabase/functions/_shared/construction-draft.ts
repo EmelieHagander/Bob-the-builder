@@ -1,0 +1,72 @@
+import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
+import { parseCadAssemblyRequest } from './cad-adapter.ts'
+import { CAD_PARAMETERS_SCHEMA, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import { schemaIssues } from './schema-issues.ts'
+import { rethrowContinuation } from './bob-job-journal.ts'
+import type { ProjectWriter } from './project-write.ts'
+
+const obj=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
+const id={type:'string',pattern:'^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'}
+const uuid={type:'string',format:'uuid'}
+const nullableUuid={anyOf:[uuid,{type:'null'}]}
+const rev={type:'integer',minimum:1,maximum:999999999}
+const nullableRev={anyOf:[rev,{type:'null'}]}
+const endpoint=obj({instance_id:id,face:{type:'string',enum:['x_min','x_max','y_min','y_max','z_min','z_max']}})
+const tool=(name:string,description:string,properties:Record<string,unknown>)=>({type:'function' as const,function:{name,description,parameters:obj(properties)}})
+export const CONSTRUCTION_SAVE_TOOL=tool('save_construction_draft',
+ 'Save a shared construction checkpoint without rendering. Read current drafts and exact catalog materials first. Complete snapshot replaces only this draft revision; preserve stable IDs and unrelated parts. CAD parameter bindings compute all dimensions and placements server-side in mm/deg. material_ref must be null; materials pins each definition. Joints name box faces in LOCAL part coordinates; methods/reasons are unverified design choices. Keep missing hardware/knowledge in open_questions. No geometry fit, strength, drawing or purchase approval is implied.',{
+ key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$',description:'Unique key for this intended write in the turn. Reuse only for exact retry; a new revision needs a new key.'},
+ record_id:nullableUuid,expected_revision:{type:'integer',minimum:0,maximum:999999999},
+ title:{type:'string',minLength:1,maxLength:200},description:{type:'string',minLength:1,maxLength:5500},area_id:{type:['string','null']},target_revision:rev,
+ change_note:{type:'string',minLength:1,maxLength:1000},recipe:CAD_RECIPE_SCHEMA,parameter_plan:CAD_PARAMETERS_SCHEMA,
+ materials:{type:'array',minItems:1,maxItems:128,items:obj({definition_id:id,material_id:uuid,material_revision:rev,part_id:nullableUuid,part_revision:nullableRev})},
+ joints:{type:'array',maxItems:1024,items:obj({id,method:{type:'string',enum:['screwed_butt','glued_butt','dowel','bolted','unresolved']},first:endpoint,second:endpoint,reason:{type:'string',minLength:1,maxLength:2000}})},
+ open_questions:{type:'array',maxItems:40,items:{type:'string',minLength:1,maxLength:1000}},
+ request_quote:{type:'string',minLength:1,maxLength:500},
+})
+export const CONSTRUCTION_READ_TOOL=tool('read_construction_draft','List current construction drafts, or read exact saved geometry, parameters, material revisions and joints. A draft is not a reviewed/rendered drawing. Historical revisions retain their original values; inspect source_state.',{
+ artifact_id:nullableUuid,revision:nullableRev,after:nullableUuid,
+})
+export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
+ read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
+ readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
+ let used=0
+ return {tools:[CONSTRUCTION_READ_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ async execute(name:string,raw:unknown):Promise<Record<string,any>>{
+  if(++used>12)return {status:'budget_exhausted'}
+  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:null
+  if(!spec)return {status:'invalid'}
+  const issues=schemaIssues(spec.function.parameters,raw)
+  if(issues.length)return {status:'invalid',issues}
+  const v=raw as any
+  if(!await opts.hasAccess())return {status:'denied'}
+  try{
+   if(name===CONSTRUCTION_READ_TOOL.function.name){
+    const result=await opts.read(v.artifact_id,v.revision,v.after) as Record<string,any>
+    if(!await opts.hasAccess())return {status:'denied'}
+    if(!result||result.projectId!==opts.projectId||!['ok','not_found'].includes(result.status)||JSON.stringify(result).length>600000)throw new Error('construction_read_unavailable')
+    return result
+   }
+   if(!opts.writer)return {status:'denied'}
+   if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact expected revision.'}
+   const recipe=parseCadAssemblyRequest(structuredClone(v.recipe))
+   if(!recipe)return {status:'invalid',message:'Invalid CAD recipe or referenced part IDs.'}
+   const plan=parseParameterPlan(v.parameter_plan)
+   // Image-oriented construction checkpoints need a canonical image carrier;
+   // never accept model-supplied image hashes as read evidence.
+   if(plan.frames.some(f=>f.kind==='image'))return {status:'invalid',message:'Image frames are not supported by the construction checkpoint yet. Keep that orientation as an open question.'}
+   const sources=await opts.readSources(parameterSourcePins(plan))
+   const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
+   if(!parseCadAssemblyRequest(recipe))return {status:'invalid',message:'Computed dimensions or placement are outside the supported geometry contract.'}
+   if(!await opts.hasAccess())return {status:'denied'}
+   const {record_id,expected_revision,request_quote,parameter_plan,...data}=v
+   return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,recipe,parameters}})
+  }catch(error){
+   rethrowContinuation(error)
+   const message=error instanceof Error?error.message:''
+   const known=/^(invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+|construction_source_unavailable)$/
+   return known.test(message)?{status:'invalid',message}:{status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
+  }
+ }}
+}
+export type ConstructionTools=ReturnType<typeof createConstructionTools>

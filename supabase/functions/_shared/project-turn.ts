@@ -1,3 +1,4 @@
+import type { ConstructionTools } from './construction-draft.ts'
 import { createDeliveryLanguage } from './delivery-language.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
@@ -23,7 +24,7 @@ export async function runClaimedProjectTurn(opts: {
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
-  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;

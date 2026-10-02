@@ -66,6 +66,22 @@ Project and Area link to **Drawings**. A connected user can:
 
 If there is no selected target, creation is blocked with a route back to **Solutions & target**. Demo mode may render the surface but does not pretend to persist it.
 
+## K1 construction checkpoints
+
+**Status: implemented source; release verification pending.** `bob.artifact_construction_revisions` extends the existing Artifact revision identity with a shared, explicitly unreviewed draft. It contains the existing CAD recipe and parameter graph, exact catalog material/optional part revisions per definition, typed joints between stable part instances, and explicit open questions. It has no engine files, render receipt, candidate approval or purchase output. The ordinary Artifact status remains **concept**; the server marks its description and readback as a construction draft.
+
+`save_construction_draft` creates or revises that identity through the claimed-turn write ledger (`bob_project_write_v14`). It requires the current selected target and expected Artifact revision. `read_construction_draft` lists current drafts with pagination, or opens one exact current/historical revision. Another authorised project member can read it without the originating private conversation. Quotes, turn/thread IDs and private provenance stay in the existing private write ledger.
+
+The same `compileCadParameters` evaluator and SQL `check_cad_parameter_graph` validate dimensions, units, formulas, source snapshots and complete numeric coverage. The latter is extracted from the existing CAD trigger, which still calls it. Checkpoint writes take the source-head locks that rendered CAD normally takes in its lineage trigger. Old measurements, changed material/part pins, wrong-project sources, stale revisions, bad references and reused identities are rejected atomically. Exact retries return their original receipt. Source changes are reflected by the existing Artifact freshness view and the checkpoint reader; previous revisions remain unchanged.
+
+Stable assembly IDs, instance-to-definition identities, primitive types and joint endpoints cannot be reassigned under an old ID, including after removal/re-addition. Dimensions, placements, material revisions and a joint's proposed method may change in a new revision. Removing a part requires removing its joint references. A physical joint graph may contain cycles; assembly sequencing is a separate later contract.
+
+Supported checkpoint geometry uses the existing box/cylinder/tube primitives and local cuts. Every definition pins a catalog material revision; a catalog part pin is optional and must reference the same material revision. `material_ref` stays null to avoid a competing opaque material identity. Typed joint endpoints currently name a **box's local** `x_min/x_max/y_min/y_max/z_min/z_max` faces. Methods are `screwed_butt`, `glued_butt`, `dowel`, `bolted` or `unresolved`, with a recorded design reason. These are unverified choices; they do not calculate anchors, prove joint fit/strength, choose hardware or establish material-dimension compatibility. Those checks belong to K2.
+
+Unknown controlling dimensions stop numeric compilation rather than becoming zero. Other unresolved matters remain in `open_questions`. Image-frame capture and optional clearance/motion checks are explicitly unsupported by this first checkpoint tool; existing CAD capability remains unchanged. Frames based on project-scoped physical measurements reuse the existing authorised reader and source validator.
+
+Generic Artifact revisions and older CAD saves cannot discard the construction checkpoint. A deferred revision guard enforces this across all existing command paths. Archive/restore copy the exact checkpoint without revalidating historical sources. K3 must add an explicit reviewed publication path that preserves and pins this construction; K1 does not silently publish through the old CAD tool. K2–K5 and real model/participant acceptance remain in [State](bob-delivery-flow.md#state).
+
 ## 4B1 deterministic geometry — stud wall with opening
 
 **Status:** implemented, deployed and live-verified. This is the first deterministic geometry fixture, not a general drawing engine.

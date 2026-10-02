@@ -29,6 +29,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
+| `_shared/construction-draft.ts` | K1 shared construction checkpoint tools, using the CAD parameter evaluator and caller-authorised v14 writes; [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints). |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
 | `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 deployed; named-member acceptance remains open. |
 | `_shared/project-lookup.ts` | Fixed tool arguments, budgets, result states and provenance. |

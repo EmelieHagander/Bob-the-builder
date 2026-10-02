@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: implementera K1:s versionerade konstruktionsutkast under befintlig Artifact-identitet.** Börja med serverkontraktet för stabila delinstanser, exakta materialrevisioner och typade förband, och verifiera skapa → återläs → ändra utan rendering. Återanvänd katalogen, CAD-parametrarna och befintlig versions-/behörighetsgräns enligt [kedjeplanen](material-assembly-use-case.md#assembly-chain-plan). [K0-rättningens release- och provbevis](foundation-verification.md#k0-construction-boundaries--2026-10-02) finns hos verifieringsägaren. K1–K5 och faktisk modell-/deltagaracceptans är kvarstående arbete.
+**Nästa handling: slutför K1:s releasegrindar och verifiera driftsatt skapa → återläs → ändra utan rendering.** Kvar är CI (inklusive riktiga samtidighetsprov), granskad merge, migration och Edge-release samt återläsning från drift. [K1-kontraktet](artifacts.md#k1-construction-checkpoints) och [provbevisen](foundation-verification.md#k1-construction-checkpoints--2026-10-02) äger implementation respektive verifiering. Därefter följer K2 enligt [kedjeplanen](material-assembly-use-case.md#assembly-chain-plan). Faktisk modell-/deltagaracceptans och K2–K5 kvarstår.
 
 ### Aktiv genomförandeordning — konstruktion till leverans
 
@@ -286,7 +286,7 @@ Detaljkontrakt, informationskällor, modellprov och acceptans ägs av [material-
 
 | Ordning | Kvarstående arbete | Nästa grind |
 |---|---|---|
-| **K1 — nästa pass** | Versionerat konstruktionsutkast med delinstanser, materialrevisioner, förband och källor under befintlig Artifact-identitet. | Bob skapar, återläser och ändrar samma konstruktion med stabila ID:n och kontrollerad behörighet. |
+| **K1 — releasegrind** | CI, merge, migration, Edge-release och verifierad driftåterläsning. | Versionshanterat skapa/läsa/ändra är tillgängligt genom Bobs registrerade verktyg. |
 | K2 | Konstruktörens verktyg, avgränsad material-/förbandskunskap och deterministiska kontroller av mått och samband. | Bob väljer delarna själv; riktiga fel stoppas och en korrekt konstruktion går vidare. |
 | K3 | Måttlinjer, måtttext och delnummer i CAD-export; kandidatgranskning följd av sparande, arbetslänk och återläsning. | Exakt granskad ritning är läsbar och nåbar från rätt steg; inget cirkelkrav på sparande före granskning. |
 | K4 | Härledda kap-/monterings-/materialunderlag och inköpsförslag inklusive förband, råformat, lager och förpackningar. | Varje rad har spårbart ursprung i samma konstruktion; ändrad geometri ger korrekt påverkan. |

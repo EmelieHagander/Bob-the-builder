@@ -271,4 +271,33 @@ for(const kind of ['identity-duplicate','budget-reservation','gap-link-conflict'
  if(kind==='budget-reservation')assert.equal(await query(`select calls from bob_private.drawing_budgets where request_id=${literal(id)}`),'1')
  console.log(`PASS lifecycle ${kind}: observed real lock wait; one identity/reservation/link`);cases++
 }
+// K1: race the public claimed-turn checkpoint RPC, with the same source locks
+// as CAD, but without renderer output or an artifact_cad_revisions insertion.
+for(const kind of ['construction-duplicate','construction-revise','construction-source-first','construction-save-first']){
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture')
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${auth}${sql};${tail}commit;`
+ const write=(p:any)=>`select bob.bob_project_write_v14(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
+ const materialPayload={kind:'catalog',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:f.payload.request_quote,data:{action:'ensure',key:'construction_material',kind:'material',name:'K1 race material',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'Synthetic race fixture',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}
+ const material=JSON.parse((await query(tx(write(materialPayload)))).split('\n').at(-1)!)
+ const recipe=structuredClone(f.payload.data.packet.recipe);recipe.definitions.forEach((d:any)=>d.material_ref=null)
+ const p:any={kind:'construction',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:f.payload.request_quote,data:{key:'checkpoint',title:'Race checkpoint',description:'Synthetic checkpoint',area_id:null,target_revision:f.payload.data.target_revision,change_note:'First checkpoint',recipe,parameters:f.payload.data.packet.manifest.bob_parameters,materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[],open_questions:['Hardware and connections unchecked']}}
+ let baseline:any=null
+ if(kind!=='construction-duplicate')baseline=JSON.parse((await query(tx(write(p)))).split('\n').at(-1)!)
+ if(kind==='construction-revise'){p.record_id=baseline.recordId;p.expected_revision=1;p.data.key='revisionA'}
+ else if(baseline)p.data.key='secondCheckpoint'
+ const other=structuredClone(p);if(kind==='construction-revise'){other.data.key='revisionB';other.data.description='Concurrent other edit'}
+ const sourceFirst=kind==='construction-source-first',saveFirst=kind==='construction-save-first'
+ const first=sourceFirst?mutations.measurement(f):write(p),second=saveFirst?mutations.measurement(f):write(other)
+ const barrier=await gate(770000+cases),leader=start(tx(first,`select pg_advisory_xact_lock(${770000+cases});`))
+ let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(second));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ if(sourceFirst||kind==='construction-revise'){assert.notEqual(follow.code,0);assert.match(follow.stderr,/construction_(measurement_)?changed/)}else assert.equal(follow.code,0,follow.stderr)
+ assert.equal(await query(`select count(*) from bob.artifact_cad_revisions where project_id=${literal(f.project)}`),'0')
+ assert.equal(await query(`select count(*) from bob.artifact_construction_revisions where project_id=${literal(f.project)}`),sourceFirst||kind==='construction-duplicate'?'1':'2')
+ if(sourceFirst||saveFirst){const read=JSON.parse((await query(tx(`select bob.read_construction_draft(${literal(f.project)},${literal(baseline.recordId)},1,null)`))).split('\n').at(-1)!);assert.equal(read.source_state,'changed')}
+ console.log(`PASS ${kind}: observed real lock wait; checkpoint CAS/replay/source freshness verified`);cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

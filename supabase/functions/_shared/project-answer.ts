@@ -1,3 +1,4 @@
+import type { ConstructionTools } from './construction-draft.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
@@ -108,7 +109,7 @@ export async function runProjectAnswer(opts: {
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number }) => void;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
-  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
