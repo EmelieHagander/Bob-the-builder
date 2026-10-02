@@ -28,7 +28,12 @@ that usage sub-breakdown must not be interpreted as no visible answer.
 A queued Bob job with zero attempts is not evidence of no execution: `bob_wait_for_ai` resets the
 per-hop counter and dispatch timestamp. This job had eight total claims and a
 live reviewer wait. No dispatcher repair or manual job replay was performed.
-Remaining acceptance is owned by [State](bob-delivery-flow.md#state).
+The owner job subsequently failed with `turn_budget_exhausted` after 11 total
+claims. This is separate from the resolved reviewer output truncation: the shared
+turn guard checks cumulative cost, logical call count and unpriced usage. Which
+condition fired remains to be established. No overall budget was raised and no
+extra owner turn was started. Remaining acceptance is owned by
+[State](bob-delivery-flow.md#state).
 
 ## Shelf scope conflict — 2026-10-02
 
