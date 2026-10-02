@@ -223,6 +223,8 @@ export interface TodayTask {
 }
 
 export interface ChatMessage {
+  turnId?: string
+  deliveryState?: 'pending' | 'failed' | 'completed'
   evidence?: import('./provenance').AnswerEvidence
   from: 'bob' | 'user'
   text: string

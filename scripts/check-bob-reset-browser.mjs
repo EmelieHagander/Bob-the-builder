@@ -35,7 +35,7 @@ try {
     await context.route(`${api}/**`, async route => {
       const req = route.request(), url = new URL(req.url())
       const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' } })
-      const who = { ...user, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
+      const who = { ...user, id: authMode === 'other' ? '00000000-0000-0000-0000-000000000099' : user.id, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
       if (req.method() === 'OPTIONS') return respond({ status: 204 })
       if (url.pathname === '/rest/v1/rpc/drawing_work_list') return respond({ json: { items: [], next_cursor: null } })
       if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'renew_requests') return respond({ json: { ok: true, renewed: 0 } })
@@ -44,6 +44,7 @@ try {
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
       if (url.pathname === '/auth/v1/user') return authMode === 'failure' ? respond({ status: 503, json: { message: 'Offline fixture' } }) : respond({ json: who })
       if (url.pathname === '/rest/v1/rpc/bob_chat_inbox') {
+        if (authMode === 'other') return respond({ json: null })
         const h = histories.get(req.postDataJSON().p_project)
         const latestSeq = Math.max(0,...(h?.messages ?? []).filter(m=>m.role==='assistant' || m.delivery_state==='failed').map(m=>m.seq))
         return respond({json:h?.id ? {threadId:h.id,latestSeq,readSeq:h.readSeq??0,unread:latestSeq>(h.readSeq??0)} : null})
@@ -80,7 +81,7 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_threads') {
         const h = histories.get(url.searchParams.get('project_id')?.replace('eq.', ''))
-        const row = h?.id ? { id: h.id, next_seq: h.next_seq } : null
+        const row = authMode !== 'other' && h?.id ? { id: h.id, next_seq: h.next_seq } : null
         return respond({ json: (req.headers().accept ?? '').includes('application/vnd.pgrst.object+json') ? row : row ? [row] : [] })
       }
       if (url.pathname === '/rest/v1/bob_messages') {
@@ -112,6 +113,20 @@ try {
         sentTurns.push(body)
         answerCalls++
         h.id ??= crypto.randomUUID()
+        if (sendMode === 'collision' || sendMode === 'collision-pending') {
+          // An event worker acquires the thread after the drawer's history read.
+          // The new message is rejected before the server inserts any user row.
+          const oldTurn = crypto.randomUUID()
+          const old = { role: 'user', text: 'OLD SHELF INSTRUCTION', turn_id: oldTurn, delivery_state: sendMode === 'collision' ? 'failed' : 'pending', background: true, updated_at: new Date().toISOString(), seq: h.next_seq++ }
+          h.messages.push(old)
+          const finish = () => {
+            old.delivery_state = 'failed'
+            h.messages.push({ role: 'assistant', text: 'OLD DEPTH QUESTION', turn_id: crypto.randomUUID(), delivery_state: 'completed', seq: h.next_seq++ })
+          }
+          if (sendMode === 'collision') finish()
+          else releaseAnswer = finish
+          return respond({ status: 409, json: { error: 'turn_in_flight' } })
+        }
         if (sendMode !== 'normal') {
           const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, screen:body.screen, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
           if (sendMode === 'background') { pending.background = true; pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
@@ -132,7 +147,10 @@ try {
           return respond({ json: { ok: true, status: 'completed', projectId: body.projectId, summary: 'RECOVERED ANSWER', evidence: { kind: 'ai_assessment', sources: [], partial: false } } })
         }
         const response = { ok: true, status: 'completed', projectId: body.projectId, summary: 'FRESH ANSWER', evidence: { kind: 'ai_assessment', sources: [], partial: false } }
-        h.messages.push({ role: 'user', text: body.message, delivery_state: 'completed', seq: h.next_seq++ }, { role: 'assistant', text: response.summary, evidence: response.evidence, delivery_state: 'completed', seq: h.next_seq++ })
+        const prior = h.messages.find(m => m.role === 'user' && m.turn_id === body.clientTurnId)
+        if (prior) prior.delivery_state = 'completed'
+        else h.messages.push({ role: 'user', text: body.message, turn_id: body.clientTurnId, delivery_state: 'completed', seq: h.next_seq++ })
+        h.messages.push({ role: 'assistant', text: response.summary, turn_id: body.clientTurnId, evidence: response.evidence, delivery_state: 'completed', seq: h.next_seq++ })
         return respond({ json: response })
       }
       if (url.pathname.startsWith('/rest/v1/') && req.method() === 'GET') return respond({ json: [] })
@@ -347,6 +365,83 @@ try {
     assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
     assert.equal(answerCalls,beforeBudgetReload)
     await page.screenshot({path:`test-results/bob-budget-stop-${viewport.width}.png`})
+    // Regression: a rejected complement must survive event replies and reload,
+    // and the original failed user message must remain visible in its position.
+    for (const mode of ['collision', 'collision-pending']) {
+      sendMode = mode
+      const complement = `Depth 30 cm ${mode}`
+      const before = answerCalls
+      await drawer.getByRole('textbox').fill(complement)
+      const arriving = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === complement)
+      await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+      const originalBody = (await arriving).postDataJSON()
+      await drawer.getByText('Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.', { exact: true }).waitFor()
+      assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)
+      assert(!h.messages.some(m => m.text === complement), '409 did not save the new message')
+      await drawer.getByText('OLD SHELF INSTRUCTION', { exact: true }).last().waitFor()
+      if (mode === 'collision-pending') assert(await drawer.getByRole('button', { name: 'Retry request', exact: true }).isDisabled())
+      await page.reload(); drawer = await open()
+      await drawer.getByText(complement, { exact: true }).waitFor()
+      assert.equal(answerCalls, before + 1, 'Reload must never resubmit held text')
+      if (mode === 'collision-pending') {
+        releaseAnswer()
+        await drawer.locator('.bob-working').waitFor({ state: 'hidden' })
+      }
+      await drawer.getByText('OLD DEPTH QUESTION', { exact: true }).last().waitFor()
+      assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)
+      assert.equal(await drawer.getByText('OLD SHELF INSTRUCTION', { exact: true }).count(), mode === 'collision' ? 1 : 2)
+      await page.screenshot({ path: `test-results/bob-${mode}-${viewport.width}.png` })
+      if (mode === 'collision') {
+        // Tab delivery storage must not leak to another project or account.
+        await page.evaluate(() => localStorage.setItem('bob:active-project', 'B'))
+        await page.reload(); drawer = await open(page, 'B')
+        assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
+        await page.evaluate(() => localStorage.setItem('bob:active-project', 'A'))
+        authMode = 'other'
+        await page.reload(); drawer = await open()
+        assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
+        authMode = 'member'
+        await page.reload(); drawer = await open()
+        await drawer.getByText(complement, { exact: true }).waitFor()
+        assert.equal(answerCalls, before + 1)
+      }
+      sendMode = 'normal'
+      const newerDraft = 'Next question still being composed'
+      await drawer.getByRole('textbox').fill(newerDraft)
+      const beforeAnswers = await drawer.getByText('FRESH ANSWER', { exact: true }).count()
+      const retried = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === complement)
+      await drawer.getByRole('button', { name: 'Retry request', exact: true }).click()
+      const retryBody = (await retried).postDataJSON()
+      assert.equal(retryBody.clientTurnId, originalBody.clientTurnId)
+      assert.deepEqual(retryBody.screen, originalBody.screen)
+      await drawer.getByText('FRESH ANSWER', { exact: true }).nth(beforeAnswers).waitFor()
+      assert.equal(await drawer.getByRole('textbox').inputValue(), newerDraft, 'Retry must preserve a newer composer draft')
+      await page.reload(); drawer = await open()
+      await drawer.getByText(complement, { exact: true }).waitFor()
+      assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)
+      assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+      assert.equal(answerCalls, before + 2, 'Only the deliberate same-ID retry sends again')
+    }
+    // Successful reset clears held text too; a failed reset preserves it.
+    sendMode = 'collision'
+    await drawer.getByRole('textbox').fill('Held before reset')
+    await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+    await drawer.getByText('Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.', { exact: true }).waitFor()
+    resetMode = 'unavailable'
+    dialog = await confirm()
+    await dialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
+    await dialog.getByText('Could not confirm the reset. Your chat is still shown; check your connection and try again.', { exact: true }).waitFor()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.reload(); drawer = await open()
+    await drawer.getByText('Held before reset', { exact: true }).waitFor()
+    resetMode = 'success'
+    dialog = await confirm()
+    await dialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
+    await drawer.getByText('New conversation started. Saved project data is unchanged.', { exact: true }).waitFor()
+    await page.reload(); drawer = await open()
+    assert.equal(await drawer.getByText('Held before reset', { exact: true }).count(), 0)
+    assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+    sendMode = 'normal'
     // Shared guest must clear only this device; an auth failure is never guest mode.
     const beforeGuest = resetCalls
     authMode = 'guest'

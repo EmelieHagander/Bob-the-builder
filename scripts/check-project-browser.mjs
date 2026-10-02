@@ -273,8 +273,16 @@ try {
       responseMode = mode
       await send(`Check ${mode}`)
       await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
-      const message = mode === 'denied' ? 'I could not access this project. Your membership may have changed.' : 'I could not retrieve an answer for this project. Please try again.'
+      const message = mode === 'unavailable'
+        ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
+        : mode === 'denied' ? 'I could not access this project. Your membership may have changed.' : 'I could not retrieve an answer for this project. Please try again.'
       await drawer.getByText(message, { exact: true }).last().waitFor()
+      if (mode === 'unavailable') {
+        const beforeDismiss = requests.length
+        await drawer.getByRole('button', { name: 'Dismiss retry', exact: true }).click()
+        await drawer.getByText('Delivery was not confirmed.', { exact: true }).waitFor()
+        assert.equal(requests.length, beforeDismiss, 'Dismissing a local retry must not call the backend')
+      }
       assert.equal(await drawer.getByText('WRONG PROJECT ANSWER', { exact: true }).count(), 0)
       assert.equal(await drawer.locator('summary').count(), 1, 'Failure must not introduce source evidence')
     }
@@ -314,6 +322,7 @@ try {
     assert.equal(await drawer.getByText('FORGED SAVED ANSWER', { exact: true }).count(), 0)
     assert.equal(await drawer.getByLabel('Saved project changes').count(), 0)
 
+    await drawer.getByRole('button', { name: 'Dismiss retry', exact: true }).click()
     await send('Save chosen plan')
     const writeTurnId = requests.at(-1).clientTurnId
     await drawer.getByText('Saved chosen plan once.', { exact: true }).waitFor()
