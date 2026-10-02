@@ -1,5 +1,6 @@
 import { fingerprint } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
+import { budgetFailure, readBudgetStop } from './bob-budget-stop.ts'
 
 /** The database owns allocation and dispatch identity. A new turn is not a new
  * budget. Reservations are made before the provider; uncertain outcomes stay
@@ -13,7 +14,9 @@ export function createDrawingBudget(opts:{
   const binding={p_id:id,p_key:key,p_execution:opts.executionId}
   const reserved=await opts.command({...binding,p_operation:'reserve'})
   if(reserved.status==='completed')return reserved.response as OpenAIServiceResponse<string>
-  if(!['reserved','recover'].includes(reserved.status))return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'turn_budget_exhausted'}
+  if(!['reserved','recover'].includes(reserved.status))return budgetFailure<string>(readBudgetStop(reserved)??{
+   scope:'drawing_request',reasons:[reserved.status==='context_cleared'?'context_cleared':reserved.status==='outcome_unknown'?'pending_outcome':'unknown'],
+  })
   const result=await work(reserved.recovery)
   // A transport failure with no priced receipt can have happened after billing.
   // Leave its reservation pending for provider reconciliation, never mark it free.

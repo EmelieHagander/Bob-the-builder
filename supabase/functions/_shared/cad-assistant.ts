@@ -1,3 +1,4 @@
+import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop } from './bob-budget-stop.ts'
 import {createDrawingDependencies} from './drawing-dependencies.ts'
 import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadParameters,inheritCadParameters,cadParameterSources,CadParameterGap,CadParameterSourceError,type CadParameters} from './cad-parameters.ts'
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
@@ -17,7 +18,7 @@ import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, cadReviewSchema, CAD_REVIEW_SYSTEM, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
+import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, cadReviewSchema, CAD_REVIEW_SYSTEM, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -150,7 +151,13 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    return true
   }
   let runtimeVersion:string|undefined
-  const model=(original:OpenAIServiceOptions)=>{const o=runtimeVersion?{...original,systemMessage:(original.systemMessage??'')+'\nRuntime configuration: '+runtimeVersion}:original;return request&&opts.requestModel?opts.requestModel(request.id,o,()=>opts.callModel(o)):opts.callModel(o)}
+  const model=async(original:OpenAIServiceOptions)=>{
+   const o=runtimeVersion?{...original,systemMessage:(original.systemMessage??'')+'\nRuntime configuration: '+runtimeVersion}:original
+   const response=await(request&&opts.requestModel?opts.requestModel(request.id,o,()=>opts.callModel(o)):opts.callModel(o))
+   if(!response.success&&response.error==='turn_budget_exhausted')throw new BobBudgetError(response,
+    original.functionName==='cad-reviewer'?'review':original.functionName==='cad-research'?'intake':'design')
+   return response
+  }
   const executeRead=async(name:string,args:unknown):Promise<any>=>{
    let result:unknown
    if(name==='search_project_data')return lookup.search(args)
@@ -320,7 +327,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
      reviews++;metrics.reviews++
      const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
       systemMessage:CAD_REVIEW_SYSTEM+'\nReport requirements as an object keyed by EVERY exact handoff requirement ID in the response schema. Source/plan UUIDs support evidence; they never replace these keys. Check extra source requirements in issues too.\n\n'+domainVocabulary('cad'),useHardcodedPrompt:true,schemaName:'bob_cad_review',schema:cadReviewSchema(handoff),
-      messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
+      messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
        source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:'Exact candidate view: '+view},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
@@ -552,10 +559,10 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:'Continue design_project_cad with this existing request_id. Reuse its work, gaps and budget; do not create another request.'}
    const reason=error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
    if(request&&!retryInputs)await persist('retrieval_failed')
-   const failure={status:'unavailable',stage:'design',saved:false,reason,renders:metrics.renders}
+   const failure={status:'unavailable',stage:error instanceof BobBudgetError?error.stage:'design',saved:false,reason,renders:metrics.renders,...(reason==='turn_budget_exhausted'?{budget_stop:readBudgetStop(error),next_action:budgetResumeAction(readBudgetStop(error))}:{})}
    if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
     const message=reason==='turn_budget_exhausted'
-     ?'Ritförsöket stoppades av kostnadsgränsen.'
+     ?budgetStopMessage(readBudgetStop(error))
      :['model_output_limit','model_reasoning_only'].includes(reason)
       ?'Designern förbrukade sin svarsbudget utan att lämna ett användbart resultat.'
       :'Designerns modellanrop misslyckades.'
