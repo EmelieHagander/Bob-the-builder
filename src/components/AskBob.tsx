@@ -516,7 +516,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
-    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && !retryRequest)) return
+    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
