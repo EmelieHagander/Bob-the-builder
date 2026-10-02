@@ -111,11 +111,13 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         background: { drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()
-      const finished = await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
+      const finished = job.drawingRequestId && result.ok
+        ? await s.rpc('bob_finish_drawing_job', { ...args, p_answer: result.answer })
+        : await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: finished.status, error: result.ok ? undefined : result.error }))
     } catch (error) {
       const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
-      console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase }))
+      console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase, operation: error instanceof BobContinuation ? error.operationKey : undefined }))
       try {
         if (error instanceof BobContinuation && error.aiWait) await s.rpc('bob_wait_for_ai', { ...args, p_ai_job: error.aiWait.id })
         else if (error instanceof BobContinuation && error.kind === 'yield') await s.rpc('bob_yield_job', args)

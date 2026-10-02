@@ -1,7 +1,7 @@
 /** Durable operation results, private to one authenticated turn. Replay rebuilds
  * the existing assistants' local state; it never sends a made-up user message. */
 export class BobContinuation extends Error {
-  constructor(readonly kind: 'yield' | 'stop', message = 'background_continue', readonly aiWait?: { id: string; accepted: boolean; role: string }) { super(message) }
+  constructor(readonly kind: 'yield' | 'stop', message = 'background_continue', readonly aiWait?: { id: string; accepted: boolean; role: string }, readonly operationKey?:string) { super(message) }
 }
 export function rethrowContinuation(error: unknown): void {
   if (error instanceof BobContinuation) throw error
@@ -58,12 +58,12 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       const key = `${stream}:${position}`, hash = await fingerprint(input)
       const retries=[...entries.values()].filter(e=>e.key.startsWith(key+':retry:'))
       if(retries.some(e=>e.fingerprint!==hash)){
-        stopped=new BobContinuation('stop','continuation_changed');throw stopped
+        stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
       }
       const prior = entries.get(key)
       if (prior) {
         if (prior.fingerprint !== hash) {
-          stopped = new BobContinuation('stop', 'continuation_changed'); throw stopped
+          stopped = new BobContinuation('stop', 'continuation_changed',undefined,key); throw stopped
         }
         const outcome = prior.value as { ok: boolean; result?: T; error?: string }
         if (!outcome.ok) throw new Error(outcome.error ?? 'operation_failed')

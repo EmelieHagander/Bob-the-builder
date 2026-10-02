@@ -325,3 +325,27 @@ Authority remains the initiating member's ordinary short-lived access JWT, seale
 Each new request starts with the existing $1 / 24-call stopping policy, now reserved and accounted across turns, worker segments and retries. The cost threshold is checked before each call; the last in-flight call can exceed it. Identical model inputs recover their private result without another paid dispatch. Unknown outcomes remain reserved; known late provider charges reconcile exactly once from Bob's shared AI usage receipt. Private result payloads disappear with the thread; minimal accounting remains with the request. Unpriced or unresolved usage blocks further spending. A separate owner-only, idempotent budget command adds $1 / 24 calls without changing the work mandate; the UI presents that concrete allocation before applying it. Older project requests receive no inferred historical costs or free refill: their pre-migration accounting is marked untracked, with zero further allocation until explicitly extended.
 
 Project Home and linked Task detail read the same request projection after reload, with current status, shared links, budget and owner controls. A saved historical Artifact is linked at its exact revision. Private context restoration remains the explicit P2c command; opening the app cannot silently recover erased requirements. P0's real user outcome and P4's broader product acceptance remain separate gates in [State](bob-delivery-flow.md#state).
+
+
+## P4 event delivery and replay — source implementation 2026-10-02
+
+Drawing lifecycle tool reads and commands now checkpoint through the same private
+turn journal. Replaying a worker reconstructs the original status/budget replies,
+including the budget before that worker's later model calls. The fresh
+`check_drawing_request` authority/reset/cancellation check remains outside the
+journal, as does caller project access. A changed operation still stops; the
+content-free diagnostic includes its operation key, never inputs or transcript.
+
+A drawing event uses one bounded, tool-free language call to express its actual
+CAD outcome in the owner's language, collecting indispensable missing inputs in
+one question. Unchanged intake still suppresses paid research/design calls; it
+can deliver its retained gap list. Technical failures remain distinct from missing
+physical data. The existing private thread receives the answer atomically with
+event completion through service-only `bob_finish_drawing_job`. Its saved evidence
+comes from the canonical request receipt, not the language model. Duplicate/stale
+claims, cancellation/reset and membership loss fence delivery. The original user
+turn is preserved; no synthetic user turn or new mandate is created.
+
+This is source implementation until the reviewed migration and both Bob runtimes
+are deployed. [Verification](foundation-verification.md#p4-replay-and-event-delivery--2026-10-02)
+owns release evidence and the outstanding real-member complement/save/link proof.
