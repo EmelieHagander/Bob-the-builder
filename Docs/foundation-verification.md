@@ -1034,7 +1034,7 @@ acceptance gates. A green fixture or deployed chat fix does not close P4.
 
 ## K1 construction checkpoints — 2026-10-02
 
-**Prepared source; CI and hosted release pending.** Implements the scoped K1
+**Merged, migrated, deployed and technically verified.** Release time is October 2 UTC / October 3 Europe/Stockholm. Implements the scoped K1
 checkpoint contract in [Artifacts](artifacts.md#k1-construction-checkpoints),
 not the K2–K5 construction-to-purchasing chain.
 
@@ -1050,11 +1050,10 @@ locks and validates those heads before canonical Artifact creation.
 
 The shared CAD validator extraction matches the hosted prior function body
 (MD5 `2b0f34190073a5e8ad7e61e0a2c7bbc8`); existing CAD parameter SQL tests pass.
-Edge type checks and the production build pass locally. The full CI/release
-results will be attached to this record and the PR before claiming deployment.
+All 127 local test files pass. Edge type checks and the production build pass locally.
 The PostgreSQL concurrency runner includes K1 duplicate, competing-revision,
 measurement-first and save-first cases and verifies actual lock waits; its CI
-result is still pending. No local browser/PostgreSQL binary is available.
+result passed all 32 races. Browser/PostgreSQL verification ran in CI, not locally.
 
 Manual review follows Archie's prompt (not an independent subagent review).
 Supabase changelog checked October 2; the September 25 Postgres extension/operator
@@ -1062,3 +1061,20 @@ breaking changes do not apply to this additive JSON/relational migration.
 No paid model call, owner shelf retry, budget grant, model change or userdata
 repair was used as proof. K1 tools preserve unresolved joint fit, hardware and
 strength; actual autonomous design quality belongs to subsequent acceptance.
+
+
+Release evidence:
+
+- [PR #184](https://github.com/EmelieHagander/Bob-the-builder/pull/184); tested head `4f248fe5f74265fe53fb00d21ecb30ec950f73da`, merge `1d124677419ea5709c4bc496089b94f2527cc202`. Tested/merged tree matches exactly: `a95a2ddf51610257e57680bcc93544aab51d627f`.
+- CI `37069731135`, job `111046050827`: **862/862 tests**, Edge/build and all browser gates passed, including 320/390/1280 px. These are regression fixtures, not a real model or participant trial.
+- PostgreSQL concurrency `37069731034`, job `111046050482`: **32 races passed**, including duplicate K1 save, competing revisions, source-first and save-first. CAD adapter `37069730852` also passed.
+- Hosted migration `20261002220943 / construction_drafts`; source file `20261002203012_construction_drafts.sql`, SHA-256 `38dbed5d3f94caf00726ae82e8cfaf676a6474678ea6ba667be38b1ac41b2992`.
+- `ask-bob` **v74**, JWT required, ACTIVE; immutable bundle SHA-256 `33a8c9ef590e0b6c89f2d1f3575b982abb014b16bfc1e46c8c4541f8d7eff620`.
+- `bob-worker` **v42**, existing custom worker authentication, ACTIVE; immutable bundle SHA-256 `65bf15c3388ba5bfba0adc650575b2c7247a5a028b6ea7f7c074632ef33cf107`.
+- Both deployed sources read back pinned to the verified merge. Unauthenticated HTTP POSTs returned 401 for both endpoints.
+- Hosted transaction with synthetic sources/catalog/checkpoint passed create → exact read → revise, same Artifact identity, replay, immutable history, stale-write rejection and outsider denial; no CAD export was created. The transaction rolled back, with zero smoke Artifact/material records remaining.
+- Readback confirmed both catalog tools active at schema version 1, RLS enabled, no authenticated direct inserts, no anonymous read RPC, authenticated claimed writes and no service-role write RPC grant. Security advisor findings are unchanged from the pre-release baseline.
+
+No owner shelf retry or paid model call was run. K1 is the persistent technical
+foundation; autonomous construction, checked joints, annotated drawing delivery,
+cut/purchasing outputs and recovery/model evaluation remain K2–K5 in [State](bob-delivery-flow.md#state).

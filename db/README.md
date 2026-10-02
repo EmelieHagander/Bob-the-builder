@@ -794,7 +794,7 @@ database responses as an unknown cause. SQL regressions
 exercise stop reasons, replay, cleared context and caller denial. [K0 evidence](../Docs/foundation-verification.md#k0-construction-boundaries--2026-10-02)
 owns investigation and release status.
 
-### Versioned construction checkpoints — K1, prepared
+### Versioned construction checkpoints — K1, applied
 
 CLI-generated `20261002203012_construction_drafts.sql` adds the project-RLS
 `artifact_construction_revisions` extension under existing Artifact identities,
@@ -815,3 +815,11 @@ project records, budgets, model configuration, material reservations or orders
 are rewritten. See [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints)
 and [verification](../Docs/foundation-verification.md#k1-construction-checkpoints--2026-10-02)
 for release state and scope.
+
+K1 applied to `yuobtgoidmmmwfqenkau` as hosted ledger
+`20261002220943 / construction_drafts`. Source migration SHA-256:
+`38dbed5d3f94caf00726ae82e8cfaf676a6474678ea6ba667be38b1ac41b2992`.
+The rollback-only hosted check passed create/read/revise, replay, history,
+stale-write rejection and outsider denial. RLS, function grants, tool catalog
+and rollback cleanup were read back; security advisors match the pre-release
+baseline. The immutable Edge release is recorded by the verification owner.

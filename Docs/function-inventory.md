@@ -1,5 +1,17 @@
 # bob — current capability & gap inventory
 
+## K1 construction checkpoints — deployed, model acceptance pending
+
+Bob now has registered tools to create, list, read and revise persistent
+construction drafts under the existing Artifact identity. Stable part instances,
+exact catalog pins, typed joints, parameter/source validation, revision history
+and caller authority are technically verified. The [Artifact owner](artifacts.md#k1-construction-checkpoints)
+defines the boundary; [release evidence](foundation-verification.md#k1-construction-checkpoints--2026-10-02)
+records PR/CI and hosted checks. This does not yet generate checked joints,
+annotated drawings, cut lists or purchasing from the same checkpoint. K2–K5 and
+real autonomous model/participant acceptance remain in [State](bob-delivery-flow.md#state).
+
+
 ## P3 context and visible delivery — deployed, acceptance pending
 
 The P3 release adds private per-turn screen focus, caller-JWT Current View hydration and replay freshness checks, a validated CAD parameter/source map, caller-authorized change deltas, structured reference packages and shared canonical request complements. Exact saved/selected versions remain distinct from newer alternatives and source freshness. Current contracts live with [context](ask-bob-context.md#implemented-scope-and-remaining-target), [artifacts](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed) and [knowledge](building-knowledge.md#structured-packages--p3-deployed); [State](bob-delivery-flow.md#state) retains the named-member acceptance gate. The image-only catalog/opening is reused, not expanded into the specified general catalog/router/Librarian. [Verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) records applied migration, Edge/Pages release, CI/mobile/reload proof and ordinary guest/model consumption. Named-member private recovery and full user-case acceptance remain open.
