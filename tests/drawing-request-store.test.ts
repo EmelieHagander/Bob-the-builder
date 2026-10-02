@@ -3,6 +3,27 @@ import {drawingInputFingerprint} from '../supabase/functions/_shared/drawing-req
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
+import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
+
+test('P4: own budget/status changes cannot rewrite a replayed tool reply; cancellation stays live',async()=>{
+ for(const checkpoint of [false,true]){
+  const entries:JournalEntry[]=[];let revision=1,status='needs_data',calls=0
+  const run=async()=>{
+   const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
+   const store=createDrawingRequestStore({projectId:'A',binding:{p_generation:revision},newId:async()=> 'id',privateCall:async()=>null,
+    ...(checkpoint?{journal}:{}),caller:async name=>name==='check_drawing_request'?{status}:{revision,budget:{calls:revision}}})
+   const work=await store.work!('id')
+   await journal.run('model',work,async()=>{calls++;return 'recorded'})
+   await store.assertActive!('id')
+   if(revision===1)throw new BobContinuation('yield')
+   return work
+  }
+  await assert.rejects(run(),BobContinuation);revision=2
+  if(!checkpoint){await assert.rejects(run(),/continuation_changed/);assert.equal(calls,1);continue}
+  assert.deepEqual(await run(),{revision:1,budget:{calls:1}});assert.equal(calls,1)
+  status='cancelled';await assert.rejects(run(),/drawing_request_cancelled/)
+ }
+})
 
 test('P2b production store binds a stable caller-created identity, keeps packets private and checks fresh status',async()=>{
  const calls:{transport:string;name:string;args:any}[]=[];let status='needs_data'

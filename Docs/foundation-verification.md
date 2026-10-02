@@ -770,3 +770,33 @@ tokens, 22,887 output tokens and estimated $0.587227.
 Full complement → saved drawing → Step link → reload
 and participant access remain unverified. Next action belongs in
 [State](bob-delivery-flow.md#state).
+
+
+## P4 replay and event delivery — 2026-10-02
+
+A fresh read of the observed owner's request finds the same `needs_data` revision,
+no saved receipt and no newer complement. The required depth decision is still
+missing. No user job was restarted, modified or cancelled during investigation.
+
+A directed regression reproduces `continuation_changed` when a lifecycle work
+read changes its revision/budget between worker segments. Checkpointing these
+caller reads and commands makes replay reuse the recorded model result; fresh
+cancellation still rejects subsequent work. This proves that code defect and its
+repair, not the exact historical divergence: the failed original job's journal
+was already cleaned up. Mismatch logs now include only the operation key to make
+a later occurrence diagnosable without exposing private input.
+
+The SQL event completion previously discarded the runtime answer for a generic
+notice. The new service-only completion command delivers its exact private answer
+and derives evidence from the canonical receipt. Full-schema tests cover unchanged
+intake, replacement of the compatibility notice, one assistant message, original
+user state, stale/duplicate claims, browser denial, cancellation and revocation.
+Language tests preserve all gaps, technical failures, worker yields and access
+loss. Separate existing tests own saved Artifact/Step identity, version readback,
+source rejection, duplicate write recovery and participant isolation.
+
+Deployment and CI are pending. The full P4 matrix and actual owner's
+complement → same request → reviewed saved drawing → Step link → reopened result
+remain open in [State](bob-delivery-flow.md#state). Local/schema/HTTP fixtures and
+real model/member acceptance must remain separately labelled. Manual review uses
+Archie's prompt; no independent subagent review is claimed.

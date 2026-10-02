@@ -1,3 +1,4 @@
+import {drawingResumeReply} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
@@ -250,7 +251,7 @@ export async function answerWithOpenAi(opts: {
       const previous=drawingRequestId;drawingRequestId=id
       try{return await work()}finally{drawingRequestId=previous}
     },
-    ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,
+    ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,journal,
       privateCall:drawingRequestCall,
       newId:()=>memo('cad:project_request_id',{},async()=>crypto.randomUUID()),
       caller:async(name,args)=>{
@@ -287,14 +288,17 @@ export async function answerWithOpenAi(opts: {
     if(['paused','cancelled'].includes(request.status))return {ok:false,error:'drawing_request_inactive'}
     const outcome:Record<string,any>=await cadAssistant.consult({...request.payload.brief,request_id:request.id})
     const candidate=cadAssistant.candidate
+    let saved=false
     if(candidate&&writer){
       const receipt=await writer.commit({kind:'cad',record_id:candidate.artifact_id,expected_updated_at:null,expected_revision:candidate.expected_revision,request_quote:opts.message.slice(0,500),data:candidate})
       if(receipt.status!=='saved')return {ok:false,error:'drawing_save_unconfirmed'}
       await cadAssistant.markSaved()
+      saved=true
     }
     journal?.check()
-    await metrics.finish({ok:true,partial:!candidate,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
-    return {ok:true,projectId:opts.projectId,answer:typeof outcome.user_message==='string'?outcome.user_message:'Uppdragets aktuella underlag är kontrollerat.',evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!candidate,writes:writer?.receipts??[]}}
+    const answer=await drawingResumeReply({message:opts.message,userId:opts.userId,outcome,saved,hasAccess,callModel})
+    await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
+    return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }
   const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),

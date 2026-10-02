@@ -1,5 +1,6 @@
 import {drawingInputFingerprint} from './drawing-request-recovery.ts'
 import type { DrawingRequestStore } from './cad-intake.ts'
+import type { BobJournal } from './bob-job-journal.ts'
 
 type Input=Record<string,unknown>
 /** Project identity creation/cancellation use the caller JWT. Only the private
@@ -9,24 +10,32 @@ export function createDrawingRequestStore(opts:{
  caller:(name:string,args:Input)=>Promise<any>;
  privateCall:(args:Input)=>Promise<any>;
  newId:()=>Promise<string>;
+ journal?:BobJournal;
 }):DrawingRequestStore {
  const restored=new Map<string,any>()
- const read=(id:string|null,after:string|null=null)=>opts.caller('project_drawing_requests',{p_project:opts.projectId,p_id:id,p_after:after})
+ // Rebuild the same transcript after a worker pause. Our own later saves and
+ // paid calls change revisions/budget; they must not rewrite earlier reads.
+ // Cancellation/reset checks stay fresh at assertActive below.
+ const caller=(name:string,args:Input)=>{
+  const {p_generation:_generation,...stable}=args
+  return opts.journal?opts.journal.run('cad:caller:'+name,stable,()=>opts.caller(name,args)):opts.caller(name,args)
+ }
+ const read=(id:string|null,after:string|null=null)=>caller('project_drawing_requests',{p_project:opts.projectId,p_id:id,p_after:after})
  return {
   atomicSave:true,
-  ensureGapTask:(id,expected,gap,requirement,plan)=>opts.caller('ensure_drawing_gap_task',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_requirement:requirement,p_plan_revision:plan}),
-  work:id=>opts.caller('drawing_request_work',{p_project:opts.projectId,p_id:id}),
-  linkGap:(id,expected,gap,task,step)=>opts.caller('link_drawing_gap',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_task:task,p_step:step}),
+  ensureGapTask:(id,expected,gap,requirement,plan)=>caller('ensure_drawing_gap_task',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_requirement:requirement,p_plan_revision:plan}),
+  work:id=>caller('drawing_request_work',{p_project:opts.projectId,p_id:id}),
+  linkGap:(id,expected,gap,task,step)=>caller('link_drawing_gap',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_task:task,p_step:step}),
   list:()=>opts.privateCall({p_operation:'list'}),
   load:id=>restored.has(id)?Promise.resolve(structuredClone(restored.get(id))):opts.privateCall({p_operation:'load',p_id:id}),
   restore:async(id,expected,planRevision,step,quote)=>{
-   const result=await opts.caller('restore_drawing_request',{...opts.binding,p_id:id,p_expected:expected,p_plan_revision:planRevision,p_step:step,p_request_quote:quote})
+   const result=await caller('restore_drawing_request',{...opts.binding,p_id:id,p_expected:expected,p_plan_revision:planRevision,p_step:step,p_request_quote:quote})
    // A load journaled before restoration must not return its old paused packet.
    restored.set(id,result);return result
   },
   read,
   cancel:async(id,expected)=>{
-   try{return await opts.caller('cancel_drawing_request',{p_project:opts.projectId,p_id:id,p_expected:expected})}
+   try{return await caller('cancel_drawing_request',{p_project:opts.projectId,p_id:id,p_expected:expected})}
    catch(error){
     if(error instanceof Error&&['drawing_request_complete','drawing_request_changed','drawing_request_denied'].includes(error.message))return {
      status:error.message==='drawing_request_denied'?'not_allowed':'conflict',reason:error.message,request_id:id,
@@ -47,7 +56,7 @@ export function createDrawingRequestStore(opts:{
    if(id===null){
     const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(k=>[k,payload.brief[k]??null]))
     id=await opts.newId()
-    const resolved=await opts.caller('resolve_drawing_request',{...opts.binding,p_id:id,p_scope:scope,p_intent:await drawingInputFingerprint(payload.brief,null,null)})
+    const resolved=await caller('resolve_drawing_request',{...opts.binding,p_id:id,p_scope:scope,p_intent:await drawingInputFingerprint(payload.brief,null,null)})
     if(resolved.reused)throw new Error('drawing_request_reuse:'+resolved.id)
    }
    const result=await opts.privateCall({p_operation:'save',p_id:id,p_expected:expected,p_status:status,p_payload:payload})
