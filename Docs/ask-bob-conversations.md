@@ -327,7 +327,7 @@ Each new request starts with the existing $1 / 24-call stopping policy, now rese
 Project Home and linked Task detail read the same request projection after reload, with current status, shared links, budget and owner controls. A saved historical Artifact is linked at its exact revision. Private context restoration remains the explicit P2c command; opening the app cannot silently recover erased requirements. P0's real user outcome and P4's broader product acceptance remain separate gates in [State](bob-delivery-flow.md#state).
 
 
-## P4 event delivery and replay — source implementation 2026-10-02
+## P4 event delivery and replay — deployed 2026-10-02
 
 Drawing lifecycle tool reads and commands now checkpoint through the same private
 turn journal. Replaying a worker reconstructs the original status/budget replies,
@@ -346,6 +346,6 @@ comes from the canonical request receipt, not the language model. Duplicate/stal
 claims, cancellation/reset and membership loss fence delivery. The original user
 turn is preserved; no synthetic user turn or new mandate is created.
 
-This is source implementation until the reviewed migration and both Bob runtimes
-are deployed. [Verification](foundation-verification.md#p4-replay-and-event-delivery--2026-10-02)
+The reviewed migration and both Bob runtimes are deployed through PR #180.
+[Verification](foundation-verification.md#p4-replay-and-event-delivery--2026-10-02)
 owns release evidence and the outstanding real-member complement/save/link proof.

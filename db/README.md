@@ -740,3 +740,21 @@ Migration `20260930112431_bob_p3_context_and_source_changes.sql` adds private `b
 The same migration adds invoker `artifact_source_changes` for bounded revision/hash deltas and makes request-work hydration caller-bound. Shared complement labels resolve canonical Tasks/current Plan requirements and responsibility; private briefs and assessment text are excluded. Physical/media source revocation hides inaccessible identities, preserving the existing RLS boundary. [Artifacts](../Docs/artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed) owns user-facing meaning; [context](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target) owns model consumption.
 
 Applied to `yuobtgoidmmmwfqenkau` as `20260930151621` / `bob_p3_context_and_source_changes` after checking the exact prerequisites. Hosted rollback role/RPC checks and definition/grant readback passed; matching Edge and Pages releases are recorded by [verification](../Docs/foundation-verification.md#p3-hosted-technical-release--2026-09-30). SQL-role and intercepted-browser proof remain distinct from ordinary Auth/model evidence. [State](../Docs/bob-delivery-flow.md#state) retains ordinary named-member background/private-readback acceptance.
+
+
+### P4 private drawing event delivery — applied
+
+`20261002102040_p4_drawing_event_delivery.sql` adds service-only
+`bob_finish_drawing_job` with a guarded private implementation. It completes the
+existing event and delivers its runtime answer to the exact private thread in one
+transaction, retaining the original user turn. Evidence is derived from the
+canonical request receipt. Fresh membership, request status, claim and expiry
+checks fence stale delivery; the actor lock and request row lock serialize it.
+The old finish command remains the compatible error/cron path. No new raw table
+access, Auth identity, shared-app change or model setting is introduced.
+
+Hosted ledger `20261002104656 / p4_drawing_event_delivery` and the matching
+`ask-bob` v71 / `bob-worker` v39 release are verified in
+[the evidence owner](../Docs/foundation-verification.md#p4-replay-and-event-delivery--2026-10-02).
+Rollback retains the additive command and canonical receipts; drain jobs before
+replacing workers. Do not replay an old transcript against incompatible inputs.

@@ -795,7 +795,43 @@ Language tests preserve all gaps, technical failures, worker yields and access
 loss. Separate existing tests own saved Artifact/Step identity, version readback,
 source rejection, duplicate write recovery and participant isolation.
 
-Deployment and CI are pending. The full P4 matrix and actual owner's
+[PR #180](https://github.com/EmelieHagander/Bob-the-builder/pull/180) final head
+`3c3c6d9070d0098709d753fc94a20d902756b10b` passes
+[CI 36996298558](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36996298558):
+845/845 tests, vocabulary, Edge types, build, PWA and all browser groups.
+[PostgreSQL concurrency 36996298574](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36996298574)
+passes. Merge is `fcb95d35ed9359602821ca3d8816fafc83c59167`.
+Artifact `11222605514` contains the final screenshots; manual inspection covers
+`drawing-requests` and `bob-frozen-page-retry` at 320/390/1280 px (six images).
+These are intercepted UI fixtures, not the owner's live CAD result.
+
+The additive source migration `20261002102040_p4_drawing_event_delivery.sql`
+(SHA-256 `c8fabba0e6e2c7008b315edaa1323f1c8c4430df1ea78a57a5a8e2e77b5825bc`)
+is applied to `yuobtgoidmmmwfqenkau` as ledger `20261002104656`, name
+`p4_drawing_event_delivery`. A fresh preflight found zero active Bob jobs.
+Hosted readback confirms both invoker/definer commands have an empty search path,
+service-only execute and no anonymous/member execute. Bob-scoped security
+advisors remain unchanged: 24 INFO and eight existing WARN; no new warning/error.
+
+`bob-worker` v39 and `ask-bob` v71 are ACTIVE, pinned to the merge above with their
+existing JWT modes. Wrapper readback confirms the exact source; bundle hashes
+are respectively `53b07cfa40ece6ad70e44ac0d3a5e25ada846c3e30ad6dbe76565effc9518c83`
+and `9b7d6a181059ecf538c651c24f38f9e17b2fd17557773c195d4f50cac7863916`.
+Both unauthenticated POST probes return 401. No other Edge function or shared AI
+configuration was changed.
+[Pages 36997321966](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36997321966)
+passes; the served frontend bundle remains `assets/index-DEc2mNy-.js`, because
+this release changes backend behavior. [Live Bob 36997321668, attempt 2](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/36997321668/attempts/2)
+passes after Edge deployment. This checks actual guest Auth/RLS/model consumption
+and guarded disposable fixtures; it does not prove named-member event/CAD delivery.
+The original owner request still has the same `needs_data` revision and no receipt
+after deployment; no test or release step restarted or changed it.
+
+The request remains project-scoped with no Step destination, and a fresh read
+finds no saved Plan revision. The real test must establish/reuse the correct
+current work Step and verify its link; a saved project drawing alone cannot
+close that gate. No owner depth choice or physical truth is supplied by this
+release. The full P4 matrix and actual owner's
 complement → same request → reviewed saved drawing → Step link → reopened result
 remain open in [State](bob-delivery-flow.md#state). Local/schema/HTTP fixtures and
 real model/member acceptance must remain separately labelled. Manual review uses
