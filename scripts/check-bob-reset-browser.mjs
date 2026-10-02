@@ -35,7 +35,7 @@ try {
     await context.route(`${api}/**`, async route => {
       const req = route.request(), url = new URL(req.url())
       const respond = options => route.fulfill({ ...options, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' } })
-      const who = { ...user, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
+      const who = { ...user, id: authMode === 'other' ? '00000000-0000-0000-0000-000000000099' : user.id, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
       if (req.method() === 'OPTIONS') return respond({ status: 204 })
       if (url.pathname === '/rest/v1/rpc/drawing_work_list') return respond({ json: { items: [], next_cursor: null } })
       if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'renew_requests') return respond({ json: { ok: true, renewed: 0 } })
@@ -44,6 +44,7 @@ try {
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
       if (url.pathname === '/auth/v1/user') return authMode === 'failure' ? respond({ status: 503, json: { message: 'Offline fixture' } }) : respond({ json: who })
       if (url.pathname === '/rest/v1/rpc/bob_chat_inbox') {
+        if (authMode === 'other') return respond({ json: null })
         const h = histories.get(req.postDataJSON().p_project)
         const latestSeq = Math.max(0,...(h?.messages ?? []).filter(m=>m.role==='assistant' || m.delivery_state==='failed').map(m=>m.seq))
         return respond({json:h?.id ? {threadId:h.id,latestSeq,readSeq:h.readSeq??0,unread:latestSeq>(h.readSeq??0)} : null})
@@ -80,7 +81,7 @@ try {
       }
       if (url.pathname === '/rest/v1/bob_threads') {
         const h = histories.get(url.searchParams.get('project_id')?.replace('eq.', ''))
-        const row = h?.id ? { id: h.id, next_seq: h.next_seq } : null
+        const row = authMode !== 'other' && h?.id ? { id: h.id, next_seq: h.next_seq } : null
         return respond({ json: (req.headers().accept ?? '').includes('application/vnd.pgrst.object+json') ? row : row ? [row] : [] })
       }
       if (url.pathname === '/rest/v1/bob_messages') {
@@ -390,6 +391,20 @@ try {
       assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)
       assert.equal(await drawer.getByText('OLD SHELF INSTRUCTION', { exact: true }).count(), mode === 'collision' ? 1 : 2)
       await page.screenshot({ path: `test-results/bob-${mode}-${viewport.width}.png` })
+      if (mode === 'collision') {
+        // Tab delivery storage must not leak to another project or account.
+        await page.evaluate(() => localStorage.setItem('bob:active-project', 'B'))
+        await page.reload(); drawer = await open(page, 'B')
+        assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
+        await page.evaluate(() => localStorage.setItem('bob:active-project', 'A'))
+        authMode = 'other'
+        await page.reload(); drawer = await open()
+        assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
+        authMode = 'member'
+        await page.reload(); drawer = await open()
+        await drawer.getByText(complement, { exact: true }).waitFor()
+        assert.equal(answerCalls, before + 1)
+      }
       sendMode = 'normal'
       const beforeAnswers = await drawer.getByText('FRESH ANSWER', { exact: true }).count()
       const retried = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === complement)
