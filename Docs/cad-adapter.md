@@ -148,7 +148,14 @@ source/target/work pins. The verdict is current-turn evidence, not a persistent
 certification attached to every historical Artifact revision.
 
 The reviewer is configured independently using the governed vision-capable mini
-model at high reasoning. The initial 5,000-token setting was exhausted by two
+model at high reasoning. Its current governed output ceiling is **50,000 tokens**
+(reasoning and verdict together), explicitly authorised by the owner and read back
+on October 2; model and reasoning effort are unchanged. Settings are read for each
+new model call, so in-flight provider calls retain their original ceiling. Request
+cost/attempt/deadline guards remain separate. See the [configuration evidence and
+remaining acceptance](foundation-verification.md#reviewer-output-ceiling--2026-10-02).
+
+Historical progression: The initial 5,000-token setting was exhausted by two
 live reviews without a usable verdict, including one with the corrected schema.
 The September 26 release raises only the reviewer's governed output setting to
 12,000 tokens (reasoning and verdict together). The call respects that setting

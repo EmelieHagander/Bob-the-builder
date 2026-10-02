@@ -1,5 +1,35 @@
 # Foundation verification and rollout
 
+## Reviewer output ceiling — 2026-10-02
+
+The owner explicitly authorised raising the CAD review ceiling to 50,000 tokens.
+At 18:05:06 UTC, a guarded update changed exactly the enabled Bob/CAD reviewer
+setting from 12,000 to 50,000 in project `yuobtgoidmmmwfqenkau`. Independent
+readback confirms `gpt-5.4-mini`, high reasoning and 50,000; the local model
+catalog ceiling is 65,536. The shared adapter reads this setting for each new
+model call. Model, reasoning effort, other roles and request spending/attempt/
+deadline guards were not changed. No Edge redeployment was needed.
+
+This later owner decision supersedes the pre-change experiment ordering recorded
+below. Successful review, rejection of known defects, actual token/cost usage,
+and the complete save/link/reopen path still require evidence; raising a ceiling
+does not prove quality or delivery.
+
+The owner's new same-thread job `6acaace7-269c-4753-82a7-4194e076cf8f` progressed
+to the independent reviewer at 18:09:44 UTC, after the setting change. Reviewer
+job `b24a759a-6006-4879-aef6-9ee959613ef9` completed at 18:11:00 UTC with
+provider `max_output_tokens=50000`, 19,962 input tokens and 24,851 output tokens
+(recorded rates imply $0.126801). It returned a usable structured `revise` verdict:
+missing visible dimension chains/text and missing save/Step link. The latter
+requires follow-up on review sequencing because candidate review precedes canonical
+save/link; a completed review is not a delivered drawing or proven review quality.
+The provider reported all output as reasoning despite returning verdict text, so
+that usage sub-breakdown must not be interpreted as no visible answer.
+A queued Bob job with zero attempts is not evidence of no execution: `bob_wait_for_ai` resets the
+per-hop counter and dispatch timestamp. This job had eight total claims and a
+live reviewer wait. No dispatcher repair or manual job replay was performed.
+Remaining acceptance is owned by [State](bob-delivery-flow.md#state).
+
 ## Shelf scope conflict — 2026-10-02
 
 **Later automatic attempt:** after the expired foreground job, an event-driven
@@ -67,7 +97,8 @@ ask `835de088e5c35aee0307ee50d771baebc89c84f94ef4476eade573c39540b186`.
 Both reject unauthorised HTTP requests with 401. This proves deployment and SQL
 role behavior, not a real member's HTTP conflict or successful model delivery.
 The user's request still had revision 17, original null scope and no saved receipt
-after release; no user records were altered. Reviewer remains mini/high/12,000.
+after release; no user records were altered. At that release checkpoint the reviewer
+remained mini/high/12,000; the later authorised configuration change is recorded above.
 
 
 ## P4 product acceptance — 2026-09-30
