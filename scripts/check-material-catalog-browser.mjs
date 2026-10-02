@@ -163,6 +163,7 @@ try {
       await drawer.getByText('I could not retrieve an answer for this project. Please try again.',{exact:true}).last().waitFor()
       assert.equal(await drawer.getByText('INVALID CATALOG RESULT',{exact:true}).count(),0)
       assert.equal(await drawer.getByLabel('Saved project changes').count(),0)
+      await drawer.getByRole('button',{name:'Dismiss retry',exact:true}).click()
     }
     drawer=await switchProject('B')
     assert.equal(await drawer.getByLabel('Saved project changes').count(),0)
