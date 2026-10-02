@@ -12,7 +12,11 @@ The public `guest@bob.local` identity is shared. Its chat remains device-local a
 
 The project database remains the authority for **saved** project state. Conversation explains goals, references and corrections, but is not proof that an earlier quantity, status or dimension is still current. Fresh project reads use the caller JWT, never privileged service reads. User-supplied observations and new decisions can supersede an old saved plan; proposed sizes remain specifications/estimates, not invented measured evidence.
 
-## Transcript and rejected-send recovery — implementation, release pending
+## Transcript and rejected-send recovery — deployed 2026-10-02
+
+Released through [PR #181](https://github.com/EmelieHagander/Bob-the-builder/pull/181);
+[verification evidence](foundation-verification.md#chat-message-recovery--2026-10-02)
+records the exact tested source and served bundle. The real shelf acceptance remains open.
 
 Every saved owner message remains visible in sequence, including failed and pending
 turns. Failed execution is labelled separately from message persistence. Only a

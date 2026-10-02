@@ -836,3 +836,34 @@ complement → same request → reviewed saved drawing → Step link → reopene
 remain open in [State](bob-delivery-flow.md#state). Local/schema/HTTP fixtures and
 real model/member acceptance must remain separately labelled. Manual review uses
 Archie's prompt; no independent subagent review is claimed.
+
+
+## Chat message recovery — 2026-10-02
+
+[PR #181](https://github.com/EmelieHagander/Bob-the-builder/pull/181) merged as
+`77989cb472606a6c08adf61b9eb188be9272b43b`. [CI 37030145118](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37030145118)
+passes on final head `33aaeed3ecaf521f70d0abe41f64d005289b1cfd`: 850 tests, vocabulary,
+Edge checks, production build, PWA and every browser group. The HTTP fixture
+regressions prove failed/pending owner visibility, rejected-complement retention,
+unrelated event isolation, reload without automatic resend, explicit same-ID retry,
+account/project isolation, composer preservation, explicit local dismissal and reset.
+Final collision screenshots were manually reviewed at 320/390/1280 px, including
+the corrected status-label contrast. Local Chrome was unavailable; the browser
+evidence is CI output, not a local browser or real model run. Vera and Archie
+guidance was followed manually, without an independent subagent review.
+
+[Pages 37031952615](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37031952615)
+completed successfully. Public HTTP readback confirms
+`assets/index-l59xDD5w.js`, SHA-256
+`0053eb4f382c19dd518a503824a1775af65fbb7d4d8f80874e1233b769a99a88`,
+contains the new interrupted-message and retained-send UI and points to
+`https://yuobtgoidmmmwfqenkau.supabase.co`. This frontend-only release does not
+change schema, Edge functions, AI configuration or the owner's data.
+
+A scoped read-only preflight found the original shelf request still at
+`needs_data`, revision 13, without a saved receipt; its private thread had one
+saved owner message and zero queued/running jobs. The rejected depth complement
+was never saved. The owner must send it through the updated ordinary member UI.
+The same-request reviewed drawing, current Step link and reopen/readback outcome
+remain open in [State](bob-delivery-flow.md#state), together with the parked P0/P3
+acceptance gates. A green fixture or deployed chat fix does not close P4.
