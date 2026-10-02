@@ -234,7 +234,7 @@ export async function answerWithOpenAi(opts: {
    // Read timestamps change during replay; record revisions and values do not.
    const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
    return memo('cad:request',input,async(identity)=>{
-    const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:(opts.background?.drawingRequestId?opts.background.jobId:opts.clientTurnId)+':'+(identity?.key??crypto.randomUUID())})
+    const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:(opts.background?.drawingRequestId?opts.background.jobId:opts.clientTurnId)+':'+(identity?.key??crypto.randomUUID())}).abortSignal(AbortSignal.timeout(12000))
     if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','drawing_request_not_paused','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
     return data
    })

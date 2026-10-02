@@ -114,7 +114,11 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     next_action:'This request is complete. Read its saved Artifact and source status. Do not regenerate or save it again. A changed deliverable needs a new request referencing that Artifact.'}
    if(request.status==='cancelled'||request.status==='paused')return {status:request.status==='cancelled'?'cancelled':'recovery_required',saved:false,request_id:request.id,revision:request.revision,reason:request.reason,
     next_action:request.status==='cancelled'?'This request was cancelled. Do not regenerate or save it.':'The private working packet is unavailable. The project request remains, but its unsaved requirements and draft cannot be recovered from it. Do not guess them or silently create a replacement. Restore from explicit requirements with restore_drawing_request from a current plan Step and the owner instruction.'}
-   for(const key of ['area_id','component_id','step_id','artifact_id'])raw[key]??=request.payload.brief[key]??null
+   const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(key=>[key,request!.payload.brief[key]??null]))
+   for(const key of Object.keys(scope))raw[key]??=scope[key]
+   if(Object.keys(scope).some(key=>raw[key]!==scope[key]))return {
+    status:'recovery_required',reason:'drawing_scope_changed',saved:false,request_id:request.id,scope,
+    next_action:'Resume design_project_cad with this same request_id and exactly the returned scope. Keep the new measurements and requirements in the handoff. A newly created work Step does not change an existing drawing request. After saving, use link_project_drawing to link the saved Artifact to the current Step. Do not create a replacement request or ask the owner to repeat supplied measurements.'}
    // Source revisions refresh below; the original requirement contract survives.
    const earlier=parseDesignHandoff(request.payload.brief.handoff)
    const incoming=parseDesignHandoff(raw.handoff)

@@ -1,5 +1,44 @@
 # Foundation verification and rollout
 
+## Shelf scope conflict — 2026-10-02
+
+**Later automatic attempt:** after the expired foreground job, an event-driven
+job ran at 16:59–17:02 UTC using the same request identity. It reached the
+independent reviewer. The provider returned `incomplete / max_output_tokens`:
+`gpt-5.4-mini`, high reasoning, 12,000 output tokens, all 12,000 reasoning and no
+usable verdict (18,921 input tokens; recorded reviewer cost $0.068191). The
+request is now `retrieval_failed`, revision 17, with no saved receipt. Its private
+reply correctly reports the review failure. This is a separate blocker from the
+scope conflict below; releasing that fix alone does not close shelf acceptance.
+A controlled reviewer experiment must measure both completion and rejection of
+known defects before changing the governed setting. The earlier designer fix
+used medium reasoning at the same ceiling; reviewer equivalence is not proven.
+No model setting or spending threshold was changed during this investigation.
+
+**Reproduced and locally corrected; deployment and real delivery pending.** The
+owner's 16:31 UTC complement was saved. Bob recorded depth 300 mm as provided
+specification, created the shelf solution and approved Plan with a design Step.
+The 20-minute job subsequently expired without a saved drawing. The original
+request remained `needs_data` at revision 13 with null Area/Step/Artifact scope.
+Journaled CAD calls tried the same request with the newly created Area and Step.
+PostgreSQL logs from 16:35 UTC show repeated `drawing_scope_changed` / `40001` in
+the request lifecycle wrapper, and the hosted API reports PostgREST 14.5.
+[Supabase's documented PostgREST 14 retry defect](https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b)
+explains why this deterministic rejection did not return promptly. No matching
+active database process remained at inspection; no termination or user-data repair
+was performed.
+
+The focused fix returns original scope and same-ID recovery before additional
+CAD work, bounds private request RPC transport, and translates only known drawing
+application conflicts to `PT409`. Local regression checks cover changed scope,
+corrected-scope continuation with new evidence, unchanged stored packet/revision,
+stale-revision conflict, replayed write receipt, authority/reset/cancellation and
+atomic CAD completion. Edge type checks pass. Full-suite/CI evidence is recorded
+in the fix PR. These controlled tests do not prove actual HTTP retry behavior or
+real model save/link delivery. The original expired turn must not be blindly
+replayed after changing its execution path; continue only after release/readback,
+using the same drawing identity and already saved project records.
+
 ## P4 product acceptance — 2026-09-30
 
 **First P4 pass released; whole P4 and UC-001–005 remain open.**

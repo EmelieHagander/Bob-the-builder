@@ -195,12 +195,17 @@ async function openProjectSharing(page) {
 
 async function assertLayout(page, viewport, scope, label) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  // Measure the settled layout, not a fractional translated frame of fadeUp.
+  // Waiting for finite animations keeps the full 44px assertion unchanged.
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity)
+    .map(animation => animation.finished.catch(() => {}))))
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${label}: page overflow at ${viewport.width}px`)
   assert(await scope.evaluate(node => node.scrollWidth <= node.clientWidth + 1), `${label}: card overflow`)
   for (const button of await scope.getByRole('button').all()) {
     if (!(await button.isVisible())) continue
     const box = await button.boundingBox()
-    assert(box && box.width >= 44 && box.height >= 44, `${label}: every action has a 44px target`)
+    assert(box && box.width >= 44 && box.height >= 44, `${label}: ${await button.innerText()} has a 44px target; measured ${JSON.stringify(box)}`)
   }
   await page.screenshot({ path: `test-results/sharing-${label}-${viewport.width}.png`, fullPage: true })
 }
