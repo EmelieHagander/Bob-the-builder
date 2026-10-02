@@ -548,3 +548,56 @@ conflicts use the [database response contract](../db/README.md#drawing-request-c
 Regression coverage belongs to `cad-intake.test.ts` and
 `project-drawing-request-lifecycle.test.ts`; actual model save/link acceptance stays
 open in [State](bob-delivery-flow.md#state).
+
+
+<a id="construction-chain-boundaries"></a>
+## Construction-chain boundaries — K0
+
+**Code correction prepared; not deployed.** [K0 evidence](foundation-verification.md#k0-construction-boundaries--2026-10-02)
+records the observed budget and stage failures. Current next action is in [State](bob-delivery-flow.md#state).
+
+Candidate review happens before publication. The server supplies `review_scope`
+with candidate stage, `saved:false` and deferred save/link/reopen checks. Intake
+checks the prerequisites for delivery, not the existence of receipts that can
+only be created later. The reviewer evaluates all construction/source/view
+requirements, leaving requirements solely about later persistence unresolved
+with `pending_delivery` evidence. Wrong source/target/scope still fails. No model
+verdict is a write receipt; Bob must save the exact approved candidate, link it
+and verify the stored version through the existing canonical boundaries.
+Controlled fixtures prove the contract and save fence, not live-model compliance.
+
+Budget failures keep the compatibility error `turn_budget_exhausted` and add
+Bob-owned `budget_stop` metadata: turn or drawing-request scope, all applicable
+causes, numeric consumption/limits and the pending/unpriced state when known.
+Cost, call count, unknown cost, pending provider outcome and cleared context have
+distinct recovery instructions. Only known fields reach logs/checkpoints; no
+provider text, credential or private project prose is included in diagnostics.
+An old database response without detailed causes stays `unknown`. This does not
+change any allocation or grant automatic retry. In particular, a new turn does
+not reset the durable drawing-request budget, superseding the earlier historical
+turn-only description above.
+
+### Planned annotation contract for K3
+
+The current contour exporter does not render dimensions or part labels. Extend
+its versioned adapter/schema/worker together; do not rely on a prompt asking for
+numbers in an SVG that the renderer cannot produce. First scope: linear dimensions
+in orthographic front/right/top views, overall and part dimensions, explicit
+placement offsets, units and stable part labels. Angular/radial dimensions and
+arbitrary drafting symbols remain outside that first contract.
+
+Each annotation needs a stable ID, selected view, typed part/assembly anchors,
+measurement axis and a binding to the resolved construction parameter/source.
+The server computes dimension values from the same model and transforms used for
+geometry; AI does not supply a second independent numeric label. Validate anchor
+existence, axis/view compatibility, units, duplicate IDs, bounded annotation count
+and source freshness. A dimension collapsed by projection must be moved to a
+valid view or reported unsupported, never displayed as zero by accident.
+
+Annotation placement may choose a supported offset/side; text, arrows and extension
+lines are presentation in the exported view. Include their extents in the viewBox
+and preserve them in PNGs generated from that exact SVG. Review and hashes cover
+the annotated exports, not an earlier image. Tests must compare numeric labels to
+resolved values, include changed thickness/width and rotated parts, reject dangling
+anchors, and inspect crowded views at supported mobile widths. Missing requested
+dimensions remain a real candidate defect after delivery requirements are deferred.

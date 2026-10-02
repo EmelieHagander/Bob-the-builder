@@ -1,4 +1,5 @@
 import type { OpenAIServiceResponse } from './openai-service.ts'
+import { budgetFailure, type BobBudgetStop } from './bob-budget-stop.ts'
 
 /** A stop threshold, not a provider billing cap: the last in-flight call may
  * cross it. Wrap journal replay too, so completed logical calls rebuild usage
@@ -8,10 +9,11 @@ export function createBobModelBudget(limitUsd = 1, maxCalls = 24) {
  return {
   get usage() { return { spent, calls, unpriced, limitUsd } },
   async run<T>(work: () => Promise<OpenAIServiceResponse<T>>): Promise<OpenAIServiceResponse<T>> {
-   if (spent >= limitUsd || calls >= maxCalls || unpriced) return {
-    success: false, data: null, model: 'unavailable',
-    usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'turn_budget_exhausted',
-   }
+   const reasons:BobBudgetStop['reasons']=[]
+   if(spent>=limitUsd)reasons.push('usd_limit')
+   if(calls>=maxCalls)reasons.push('call_limit')
+   if(unpriced)reasons.push('unpriced_usage')
+   if(reasons.length)return budgetFailure<T>({scope:'turn',reasons,calls,call_limit:maxCalls,spent_usd:spent,usd_limit:limitUsd,unpriced})
    const result = await work()
    calls++
    const cost = result.estimatedCostUsd

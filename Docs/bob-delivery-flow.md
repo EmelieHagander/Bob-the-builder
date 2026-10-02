@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: genomför K0 i [planen för konstruktionskedjan](material-assembly-use-case.md#assembly-chain-plan): fastställ verktygsluckor och steggränser före nästa implementation.** Användaren har den 2 oktober valt riktningen att Bob själv sätter ihop konstruktionen och härleder ritning, kaplista, montering och inköpsförslag från samma version. Planen gäller verktyg, information och modellroller. Det påvisade budgetstoppet och granskningsfelet ingår nu i kedjans första etapp.
+**Nästa handling: slutför granskning/CI för K0-rättningen på `codex/k0-construction-boundaries`, och ta därefter K1:s versionerade konstruktionsutkast som nästa implementationspass.** [K0-fynd och prov](foundation-verification.md#k0-construction-boundaries--2026-10-02) skiljer förberedd kod från drift; migrationen och Edge-rättningen är ännu inte driftsatta. Fortsätt enligt [kedjeplanen](material-assembly-use-case.md#assembly-chain-plan): Bob sätter ihop delar/förband och härleder ritning, listor och inköpsförslag från samma version. K1–K5 är kvarstående arbete, inte funktion som K0-rättningen har levererat.
 
 ### Aktiv genomförandeordning — konstruktion till leverans
 
@@ -286,7 +286,7 @@ Detaljkontrakt, informationskällor, modellprov och acceptans ägs av [material-
 
 | Ordning | Kvarstående arbete | Nästa grind |
 |---|---|---|
-| **K0 — nästa pass** | Kontraktsdiff mot faktisk kod/drift. Spåra senaste `turn_budget_exhausted` genom både lokal turnbudget och beständig ritningsbudget. Separera kandidatgranskning från leveranskontroll och specificera saknad måttsättning. | Kodägare, reproduktion, föreslagen korrigering och positivt motprov för varje lucka; tydlig första implementationsdiff. |
+| **K0 — gransknings-/releasegrind** | Verifiera och granska den avgränsade budgetdiagnostiken och kandidat-/leveransgränsen. Källfynd och lokal verifiering finns hos verifieringsägaren; måttsättningskontraktet finns hos CAD-ägaren. | CI, granskad migration/Edge-diff, driftsättning/readback och avgränsat riktigt modellprov; inget sparande eller korrekt modellbeteende påstås från fixturer. |
 | K1 | Versionerat konstruktionsutkast med delinstanser, materialrevisioner, förband och källor under befintlig Artifact-identitet. | Bob skapar, återläser och ändrar samma konstruktion med stabila ID:n och kontrollerad behörighet. |
 | K2 | Konstruktörens verktyg, avgränsad material-/förbandskunskap och deterministiska kontroller av mått och samband. | Bob väljer delarna själv; riktiga fel stoppas och en korrekt konstruktion går vidare. |
 | K3 | Måttlinjer, måtttext och delnummer i CAD-export; kandidatgranskning följd av sparande, arbetslänk och återläsning. | Exakt granskad ritning är läsbar och nåbar från rätt steg; inget cirkelkrav på sparande före granskning. |
@@ -295,7 +295,7 @@ Detaljkontrakt, informationskällor, modellprov och acceptans ägs av [material-
 
 **Modellbeslut:** behåll nuvarande roller som provbaslinje, inklusive granskarens godkända 50 000-tokenram. Jämför avgränsat andra modeller/resonemangsnivåer på samma uppgifter när kontrakten är stabila; välj efter korrekt leverans, felupptäckt, kostnad och tid. Deterministisk beräkning och rendering ska inte kräva fler modellroller. Ingen modelländring eller större generell kunskapsimport är beslutad i detta planeringspass.
 
-**Öppna hinder från hyllprovet:** faktisk utlösare bakom budgetfelet ska beläggas, och kandidatgranskaren ska inte kräva det spar-/steglänkkvitto som först kan skapas efter godkänd kandidat. Den nuvarande CAD-exporten behöver stöd för synlig måttsättning. [Befintliga release- och provbevis](foundation-verification.md#reviewer-output-ceiling--2026-10-02) ligger kvar hos verifieringsägaren. Återanvänd samma verkliga uppdrag, sparat djup 300 mm, lösning och Plan när ett riktat liveprov är redo; återspela inte det utgångna jobbet och ändra inte användardata för ett grönt prov. Börja implementationens prov med syntetiska projekt och bevara verkliga spar-/länkkvitton.
+**Öppna hinder från hyllprovet:** kostnadsgränserna är belagda; verifiera nu att den nya diagnostiken skiljer dem i drift. Prova att kandidatgranskaren lämnar senare spar-/länkkrav väntande och samtidigt avvisar riktiga ritningsfel. Den nuvarande CAD-exporten behöver stöd för synlig måttsättning. [Befintliga release- och provbevis](foundation-verification.md#reviewer-output-ceiling--2026-10-02) ligger kvar hos verifieringsägaren. Återanvänd samma verkliga uppdrag, sparat djup 300 mm, lösning och Plan när ett riktat liveprov är redo; återspela inte det utgångna jobbet och ändra inte användardata för ett grönt prov. Börja implementationens prov med syntetiska projekt och bevara verkliga spar-/länkkvitton.
 
 **Acceptans efter implementation:** kör först hyllan genom hela kedjan, ändra sedan bredd respektive materialtjocklek och prova en annan konstruktion med samma generiska verktyg. Kontrollera ritning, alla listor, versionspåverkan, avbrott, återöppning och annan behörig deltagare. Tekniska kontroller och verklig modell-/deltagaracceptans redovisas separat. P0/P3 och övriga P4-fall nedan kvarstår.
 

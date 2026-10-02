@@ -8,6 +8,7 @@ import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from '../supabase/functions/_shared/drawing-review.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
+import {budgetFailure} from '../supabase/functions/_shared/bob-budget-stop.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
 const reply=(data:any)=>({success:true,data,model:'fixture',responseId:'designer-cursor',usage})
 const call=(name:string,args:any)=>({...reply(null),toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
@@ -38,6 +39,33 @@ test('original request and structured directions reach a separate, tool-free rev
  assert(JSON.stringify(review.messages).includes('render-1-front'))
  assert.equal(a.quality!.fingerprint,await candidateFingerprint(a.candidate!))
  assert.equal(a.metrics.review_passed,true)
+})
+test('candidate review defers delivery receipts without certifying saved work or weakening geometry checks',async()=>{
+ const f=fixture(),model=f.opts.callModel
+ const handoffWithDelivery={...request.handoff,requirements:[...request.handoff.requirements,{id:'save_link',requirement:'Save and link the drawing to the work Step',basis:'user_request' as const,source_ref:null}]}
+ f.opts.callModel=async o=>{
+  if(o.functionName!=='cad-reviewer')return model(o)
+  const context=JSON.parse(o.messages[0].content)
+  assert.equal(context.review_scope.stage,'candidate');assert.equal(context.review_scope.saved,false)
+  assert.deepEqual(context.review_scope.deferred_checks,['save_receipt','step_link_receipt','reopen_saved_revision'])
+  assert.match(o.systemMessage,/Do not mark a future delivery action met/)
+  assert.match(o.systemMessage,/Wrong intended project\/target\/scope/)
+  return reply(JSON.stringify({verdict:'pass',summary:'Candidate ready; delivery remains',requirements:{shape:{status:'met',evidence:'Geometry checked'},save_link:{status:'unresolved',evidence:'pending_delivery: save and link after review'}},issues:[]}))
+ }
+ const assistant=createCadAssistant(f.opts),result=await assistant.consult({...request,handoff:handoffWithDelivery})
+ assert.equal(result.status,'ready');assert.equal(result.saved,false)
+ assert.equal(assistant.quality?.review.requirements.find(r=>r.id==='save_link')?.status,'unresolved')
+ const broken=parseCadReview({verdict:'pass',summary:'Incorrect width',requirements:{shape:{status:'failed',evidence:'Wrong width'},save_link:{status:'unresolved',evidence:'pending_delivery'}},issues:[]},handoffWithDelivery)
+ assert.equal(broken?.verdict,'revise','deferred delivery cannot override a construction failure')
+})
+test('review budget failure retains boundary, counters and review stage and cannot expose a savable candidate',async()=>{
+ const f=fixture(),model=f.opts.callModel
+ f.opts.callModel=async o=>o.functionName==='cad-reviewer'?budgetFailure<string>({scope:'drawing_request',reasons:['call_limit'],calls:24,call_limit:24}):model(o)
+ const assistant=createCadAssistant(f.opts),result=await assistant.consult(request)
+ assert.equal(result.reason,'turn_budget_exhausted');assert.equal(result.stage,'review')
+ assert.deepEqual(result.budget_stop,{scope:'drawing_request',reasons:['call_limit'],calls:24,call_limit:24})
+ assert.match(result.user_message,/antal modellanrop/);assert.equal(assistant.candidate,null)
+ assert.deepEqual(await assistant.consult(request),result,'same assistant does not restart after a budget stop')
 })
 test('review rejection returns concrete feedback to the designer and requires a new reviewed candidate',async()=>{
  const f=fixture();let designers=0,reviews=0
