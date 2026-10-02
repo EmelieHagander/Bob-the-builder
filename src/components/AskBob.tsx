@@ -216,7 +216,7 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
       <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
-        {isUser && msg.deliveryState === 'failed' && <div className="foundation-hint">Bob’s earlier attempt was interrupted. Your message is saved.</div>}
+        {isUser && msg.deliveryState === 'failed' && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
