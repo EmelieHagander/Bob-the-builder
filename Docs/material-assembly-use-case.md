@@ -7,6 +7,8 @@
 
 Detta är den sammanhängande framgångs-/felvägen och acceptansgrunden för materialdrivna sammanställningar. Tabell- och verktygsnamn märkta **nya** är förslag som ska valideras mot implementationen, inte befintliga API:er. Dokumentet preciserar den generella nästa ritförmågan; det gör inte befintliga specialgeneratorer generella genom en namnändring.
 
+**Aktuell genomförandeplan:** [teknisk kedja, verktyg och modellprov](#assembly-chain-plan), beslutad som planeringsriktning den 2 oktober 2026. Den bygger vidare på A–D nedan; aktuell nästa handling och öppna grindar finns i [State](bob-delivery-flow.md#state). Ursprunglig datamodell ovan är fortfarande ett förslag; senare domänägare beskriver vad som faktiskt finns.
+
 ## 1. Ägarskap och mål
 
 Användarmålen ägs fortsatt av [user-stories.md](user-stories.md), särskilt BOB-US-010 och BOB-US-018–026. Befintlig ritningsidentitet/historik ägs av [artifacts.md](artifacts.md), behov/lager/Shopping av [material-planning.md](material-planning.md), platsmodellen av [building-model.md](building-model.md), verktygsåtkomst av [ask-bob-tools.md](ask-bob-tools.md) och implementerad databas/behörighet av [db/README.md](../db/README.md). Här ägs den nya tvärgående usecase-kedjan och dess föreslagna relationer, inte en konkurrerande lager- eller inköpsmodell.
@@ -298,3 +300,80 @@ Materialprofilernas baskategorier och testdefinitioner kan seedas under behörig
 **Teknisk referens:** PostgreSQLs [JSON-typer och dokumentdesign](https://www.postgresql.org/docs/current/datatype-json.html#JSON-DOC-DESIGN) beskriver hur strukturerad JSON och relationer kan kombineras, och [constraints](https://www.postgresql.org/docs/current/ddl-constraints.html) beskriver integritetsgränser. Det är stöd för designvalet, inte verifiering av vår ännu oskrivna implementation.
 
 Innan första kod-PR ska den valda geometrikärnans operationer, uttrycksformat, numeriska precision, kommando-/payloadgränser och den gamla Shopping-handoffens kompatibilitetsadapter dokumenteras med faktiska testfall. Tabellen ovan är tillräcklig som byggmål men ska inte köras som SQL. Att en ny egenskapsprofil kan lagras betyder inte att systemet automatiskt förstår ny fysik eller en ny geometrisk operation.
+
+<a id="assembly-chain-plan"></a>
+## 14. Teknisk genomförandeplan — 2026-10-02
+
+**Status: planerad implementation, inte driftsatt kedja.** Användarens precisering är att Bob själv väljer delar och sammanfogningar och att inköpslistan härleds från samma konstruktion som ritningen. Detta är en plan för systemets verktyg, information och modellroller, inte en ny kravlista att lämna till användaren. Etapperna preciserar befintliga A–D och UC-001/003/005. Aktiv ordning ägs av [State](bob-delivery-flow.md#state).
+
+### Utgångsläge och luckor
+
+Kontrollerad kodbas: `e75f2e05d1e62f262be6dca2481d365a0874b410`. Drift- och modellbevis för det senaste hyllprovet finns hos [verifieringsägaren](foundation-verification.md#reviewer-output-ceiling--2026-10-02); kodläsningen här är inte en ny driftverifiering.
+
+| Befintlig grund | Vad kedjan fortfarande behöver |
+|---|---|
+| [Materialkatalogen](material-catalog.md) har versionerade material/deldefinitioner, egenskaper och normaliserade enheter. | Binda exakta katalogrevisioner till konstruktionens delinstanser; utöka deldefinitioner med de ankare/bearbetningar som faktiskt stöds. Nuvarande `geometry_status=definition_only` är inte en färdig konstruktionsmodell. |
+| `cad-schema.ts` har geometriska definitioner, placerade instanser, spel- och rörelsekontroller. | Typade förband mellan identifierade delar/ytor, materialbindningar, härledda parametrar och monteringens beroenden. Nuvarande `material_ref` och koordinater räcker inte. |
+| `cad-parameters.ts` och lineage-koden binder mått och beräkningar till källor. | Utöka samma mekanismer till delar, förband och härledda listor; skapa inte en andra formelmotor. |
+| `cad-worker/bob_cad/worker.py` exporterar geometri och projicerade konturer till STEP/SVG/PNG. | Ett uttryckligt kontrakt och en renderer för måttlinjer, måtttext och delbeteckningar. Att be designern försöka igen kan inte lägga till en saknad rendererförmåga. |
+| [Materialplaneringen](material-planning.md) härleder vissa blankmått/antal från sparad CAD och har lager/allokering/Shopping. | Samlad stycklista inklusive förband och tillbehör, genomförbart råmaterialuttag, kompatibel samräkning och koppling från varje inköpsrad tillbaka till ursprungsdelarna. |
+| [Kunskapsbiblioteket](building-knowledge.md) har åtta avgränsade källpaket; privata projektkällor läses separat. | Första konstruktionernas material- och förbandskunskap, versionsbundna produktanvisningar och kontrollerbar tillämpbarhet. Ett större sökindex är inte i sig byggkunnande. |
+| Jobb, journal, ritningsuppdrag, kandidatgranskning och spar-/länkkvitton finns. | Checkpoints för konstruktion och härledningar, stegvis återhämtning samt skilda kontroller för kandidatens kvalitet respektive faktiskt levererad/sparad version. |
+
+### Gemensamt arbetsunderlag
+
+En konstruktion ska vara ett versionsbundet underlag under befintlig Artifact-identitet, med ett tydligt utkast före godkänd leverans. Detaljerad schemautformning hör till [Artifacts](artifacts.md), [CAD](cad-adapter.md) och `db/README.md`; tabellnamnen i §4 är inte ett mandat att skapa parallella identiteter.
+
+Underlaget behöver stabila delinstans-ID:n, katalog-/materialrevisioner, parametrar i kanoniska enheter, position/riktning, namngivna anslutningsytor eller ankare och förband med egna ID:n. Ett förband anger vilka delar/ankare som möts, metod, placering och underbyggt behov av fästdon/tillbehör. Monteringsberoenden är en egen acyklisk ordning: ett fysiskt nät av förband kan legitimt innehålla cykler och får inte behandlas som samma graf. Upprepade instanser räknas en gång per förekomst.
+
+Beräkningar, källrevisioner, arbetsval och olösta frågor ska följa modellen. Ritning, kaplista, monteringsunderlag, materialbehov och inköpsförslag får samma konstruktionsrevision och beräkningsversion. En ändring markerar berörda resultat inaktuella tills de räknats om; gamla beställningar, reservationer och utfört arbete skrivs inte om automatiskt.
+
+### Verktyg som ska finnas i kedjan
+
+Detta är förmågor att bygga eller utöka via befintlig verktygskatalog, inte redan registrerade API-namn. Verktygens instruktioner måste ange stödda operationer och lämna maskinläsbara fel med berörda del-/förbands-ID:n.
+
+| Förmåga | Ansvar och resultat |
+|---|---|
+| Hämta underlag | Återanvänd projektläsare, exakt katalogläsning och `search_building_knowledge`. Returnera avgränsade källpaket med revision, tillämpbarhet och saknade uppgifter; skilj tekniskt läsfel från kunskapslucka. |
+| Skapa, läsa och revidera konstruktion | Spara ett behörighetskontrollerat utkast med delar/förband, idempotens och förväntad revision. Uppdatera samma identitet efter rättning; privat uppdragshistorik blir inte delad projekttext. |
+| Beräkna och validera | Servern löser stödda måttberoenden, enheter, antal, referenser, passning och tillåtna geometriska operationer. Koppla förband till explicita metoder och kontrollunderlag. Okänd hållfasthet blir inte godkänd genom en geometrikontroll. |
+| Generera ritningspaket | Kompilera samma modell till befintlig CAD-motor och lägg till källbundna mått/beteckningar. Alla exporter och granskarbilder avser samma version. Unsupported-operation ska stoppa just det steget före betalda reparationsslingor. |
+| Härleda listor och montering | Räkna delar, fästdon och tillbehör från instanser/förband. Beräkna kapförslag med format, sågspår och riktning; area ensam visar inte att en del ryms. Beskriv ordning och åtkomlighet med del-/förbandsreferenser, inte en fristående AI-lista. |
+| Leverera och verifiera | Använd befintliga kanoniska spar-, Step/Task-länk- och Shopping-kommandon. Kontrollera kvitton och återläs rätt version efter sparande; återförsök bara den saknade operationen. Inköpsförslag är inte en genomförd beställning. |
+
+### Information och modellroller
+
+Första informationspaketet avgränsas till skivmaterial, relevanta sammanfogningar, fästdon, råformat/kapning och monteringsåtkomst för provfallen. Använd katalogens typade egenskaper och kunskapsbibliotekets källregister, med utgåva, rättigheter, tillämpningsområde och indragning. Produktberoende val behöver relevanta tillverkaruppgifter. Generella regler, en produkts instruktioner och projektets mått ska förbli separata källtyper. Ny extern hämtning/import är en egen kontrollerad förmåga; den får inte antas finnas i den nuvarande sökningen.
+
+| Roll | Planerat ansvar och modellstrategi |
+|---|---|
+| Bob | Äger uppdraget, konstruktionsval och framdrift. Återanvänder verktygsresultat och sparade checkpoints; ett processteg kräver inte alltid ett nytt modellanrop. |
+| Källinsamling | Exakta uppslag och filter i kod först. Använd en mindre modell för avgränsat källurval när det behövs, utan att låta dess sammanfattning ersätta mått/tabeller/bilder. |
+| Konstruktion | En kapabel resonemangsmodell föreslår strukturerade delar, förband och ändringar. Utgå från nuvarande designer som baslinje och prova starkare alternativ endast mot samma uppgifter och verktyg. |
+| Beräkning och rendering | Deterministisk kod och befintlig CAD-kärna. Ingen språkmodell behövs för att summera styckantal, lösa stödda formler eller kopiera mått till ritningen. |
+| Oberoende granskning | Separat kontext med originalkrav, källor, exakt modell, maskinkontroller och bilder. Nuvarande reviewer med 50 000 tokens är baslinje; större modell eller annan resonemangsnivå är provkandidater, inte beslutade byten. Ett annat modellnamn garanterar inte oberoende kvalitet. |
+
+Innan modellprov: läs aktuella driftinställningar och verifiera kandidaternas verktygs-, schema- och bildstöd i aktuell leverantörsdokumentation. Jämför på låsta indata och flera körningar: korrekt färdig leverans, upptäckta kända fel, falska godkännanden/stopp, kostnad per accepterad leverans och total tid. Börja med nuvarande roller och en avgränsad alternativ kandidat; besluta utifrån resultaten om någon roll behöver bytas. Inget nytt modellköp, fine-tuning, ytterligare agentlager eller större generell kunskapsdatabas är en förutsättning för första genomgående provet.
+
+### Etapper och bevis före nästa steg
+
+| Etapp | Avgränsad leverans och kodägare | Klart när |
+|---|---|---|
+| K0. Fastställ luckor och steggränser | Gör en kontraktsdiff mot faktisk drift. Spåra senaste budgetstoppet genom både `bob-model-budget.ts` och `drawing-budget.ts`/databasreservationer. Skilj konstruktions-/ritningskrav från senare spar-/länkkrav i `cad-review.ts` och intake. Specificera måttsättningsförmågan. | Varje lucka har kodägare, reproducerbart fel, föreslagen ändring och positivt motprov. Budgetfel visar faktisk gräns, användning och återupptagningsvillkor; ingen gräns höjs blint. |
+| K1. Versionerad konstruktion | Utöka katalog/Artifact/CAD-kontraktet med delinstanser, förband, källbindningar och persistenta utkast. Använd befintlig parameter- och versionsmekanik. | Bob kan skapa, spara, läsa och ändra konstruktionen utan rendering. ID:n består; trasiga referenser, fel enheter, samtidiga ändringar och obehörig åtkomst avvisas. |
+| K2. Val och kontroll av konstruktionen | Koppla konstruktörens strukturerade ändringar till material-/förbandskällor, serverberäkningar och generiska valideringsregler. Begränsa första kontraktet till stödda operationer, inte namngivna möbeltyper. | Bob tar själv fram hela provkonstruktionen. Oberoende kontroller hittar felvänd del, fel måttkedja, saknat förband och ogrundat produktval; korrekt modell går vidare. |
+| K3. Måttsatt ritning och separat leveranskontroll | Utöka CAD-adapter/worker med mått och delnummer. Kandidatgranskaren bedömer kvalitet före publicering; efterföljande leveranskontroll verifierar sparande, länkar och återläsning. | Samma modell ger läsbara måttsatta vyer. Granskning kan godkänna en osparad kandidat utan att hela uppdraget markeras klart. Exakt godkänd version sparas och öppnas från rätt arbetssteg. |
+| K4. Kaplista, montering och inköpsförslag | Härled BOM inklusive förband, verifierbart råmaterialuttag och monteringsberoenden. Utöka befintligt material-/lager-/Shopping-flöde för kompatibel samräkning och spårbara bidrag. Kan utvecklas efter K2 parallellt i arkitekturen med ritningsutdata, men håll ett implementationspass aktivt åt gången. | Varje listpost kan härledas till rätt del/förband/version. Sågspår, materialriktning, lager och förpackningar påverkar beräkningen korrekt; inga dubbla reservationer eller påstådda inköp. |
+| K5. Ändring, återhämtning och modellval | Koppla konstruktionens checkpoints och härledningar till befintliga jobb/journaler. Reservera budget för granskning och färdigställande, med separat token-, kostnads-, anrops- och tidsredovisning. Kör modelljämförelsen ovan. | Ett avbrott återupptar kvarstående steg utan dubbel debitering eller dubbla leveranser. Måttändring uppdaterar rätt underlag med bevarad historik. Vald modellkonfiguration har mätbar kvalitet/kostnad på hela kedjan. |
+
+K0 ska inte växa till ett fristående omtag av hela Bob. Leverera därefter K1–K5 genom samma lilla genomgående prov; återanvänd befintliga katalog-, Artifact-, material- och jobbgränser. Inga nya objektspecifika `shelf`-verktyg eller parallella BOM-/Shopping-register.
+
+### Acceptans för den sammanhängande kedjan
+
+Första syntetiska provet motsvarar hyllans 600 × 800 × 300 mm, två gavlar och tre mellanliggande skivdelar, med explicit vald materialtjocklek och förbandsmetod som testdata. Bob ska själv skapa delarna och relationerna från vanlig beställning; fixturen får inte förse modellen med färdiga verktygsanrop. För 18 mm gavlar utan ytterligare spel ger den deklarerade relationen 600 − 2 × 18 = 564 mm mellanliggande bredd; ändras byggsättet måste formeln ändras, inte måttet kopieras blint.
+
+Provet följer konstruktion → kontroller → måttsatt ritning, kaplista, monteringsunderlag och inköpsförslag → spar-/länkkvitton → återöppning. Ändra därefter bredden och materialtjockleken var för sig och visa påverkan på delar, förband och listor, med oförändrad historik. Prova också en annan konstruktion med samma generiska verktyg och nya mått.
+
+Negativa prov omfattar fel delrelation, omöjligt råmaterialuttag trots tillräcklig total area, saknat fästdonsunderlag, gammal källrevision, dubbel reservation, falskt krav på sparande före kandidatgranskning samt avbrott efter sparande men före länkning. Saknad kunskap eller verktygsförmåga ger en konkret lucka, inte en extra fråga om redan kända användarmått. Det ska även gå att skilja ett användbart koncept från komplett tillverkningsunderlag.
+
+Redovisa deterministiska enhets-/SQL-/geometriprov, verkliga modellanrop och Auth/HTTP-/mobilprov separat. Kontrollera relevant UI på 320/390/1280 px och återöppning av annan behörig deltagare. Samla resultat och kostnader hos [verifieringsägaren](foundation-verification.md); behåll P0/P3 och övrig P4-acceptans öppna tills deras egna kriterier är uppfyllda. Den här dokumentationsändringen tillämpar inget schema, byter ingen modell och driftsätter ingen ny förmåga.

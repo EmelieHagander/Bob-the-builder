@@ -278,7 +278,26 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: utred `turn_budget_exhausted` i användarens nya hyllprov efter det färdiga granskningsutlåtandet.** [PR #182](https://github.com/EmelieHagander/Bob-the-builder/pull/182) är driftsatt enligt [releasebeviset](foundation-verification.md#shelf-scope-conflict--2026-10-02); den senare godkända ramändringen och provets identitet finns i [konfigurationsevidensen](foundation-verification.md#reviewer-output-ceiling--2026-10-02). Identifiera om total kostnad, antal modellanrop eller oprissatt förbrukning utlöste stoppet. Granska också varför kandidatgranskningen kräver spar-/steglänk före det efterföljande sparsteget. Kontrollera därefter rättade måttvyer, faktisk tokenförbrukning/kostnad, spar-/steglänkkvitto och återöppnad ritning. Återanvänd samma uppdrag, sparat djup 300 mm, lösning och Plan; skicka inte en extra tur eller återspela det gamla utgångna jobbet. Kvalitetskontrollen ska även avvisa kända fel innan granskarens kvalitet betraktas som verifierad. Ett modellstopp får inte beskrivas som saknade användarmått eller som en levererad ritning. Ändra inte användardata för att få ett grönt prov. P0/P3 ligger kvar i [acceptans-todo](#acceptans-todo).
+**Nästa handling: genomför K0 i [planen för konstruktionskedjan](material-assembly-use-case.md#assembly-chain-plan): fastställ verktygsluckor och steggränser före nästa implementation.** Användaren har den 2 oktober valt riktningen att Bob själv sätter ihop konstruktionen och härleder ritning, kaplista, montering och inköpsförslag från samma version. Planen gäller verktyg, information och modellroller. Det påvisade budgetstoppet och granskningsfelet ingår nu i kedjans första etapp.
+
+### Aktiv genomförandeordning — konstruktion till leverans
+
+Detaljkontrakt, informationskällor, modellprov och acceptans ägs av [material-assembly-use-case §14](material-assembly-use-case.md#assembly-chain-plan). Etapperna konkretiserar dess A–D inom P4; de skapar ingen separat produktroadmap.
+
+| Ordning | Kvarstående arbete | Nästa grind |
+|---|---|---|
+| **K0 — nästa pass** | Kontraktsdiff mot faktisk kod/drift. Spåra senaste `turn_budget_exhausted` genom både lokal turnbudget och beständig ritningsbudget. Separera kandidatgranskning från leveranskontroll och specificera saknad måttsättning. | Kodägare, reproduktion, föreslagen korrigering och positivt motprov för varje lucka; tydlig första implementationsdiff. |
+| K1 | Versionerat konstruktionsutkast med delinstanser, materialrevisioner, förband och källor under befintlig Artifact-identitet. | Bob skapar, återläser och ändrar samma konstruktion med stabila ID:n och kontrollerad behörighet. |
+| K2 | Konstruktörens verktyg, avgränsad material-/förbandskunskap och deterministiska kontroller av mått och samband. | Bob väljer delarna själv; riktiga fel stoppas och en korrekt konstruktion går vidare. |
+| K3 | Måttlinjer, måtttext och delnummer i CAD-export; kandidatgranskning följd av sparande, arbetslänk och återläsning. | Exakt granskad ritning är läsbar och nåbar från rätt steg; inget cirkelkrav på sparande före granskning. |
+| K4 | Härledda kap-/monterings-/materialunderlag och inköpsförslag inklusive förband, råformat, lager och förpackningar. | Varje rad har spårbart ursprung i samma konstruktion; ändrad geometri ger korrekt påverkan. |
+| K5 | Återhämtning, versionsändringar, budget per led och jämförande modellprov. | Hela kedjan fungerar efter avbrott och ändring, med redovisad kostnad/tid och utan falska godkännanden. |
+
+**Modellbeslut:** behåll nuvarande roller som provbaslinje, inklusive granskarens godkända 50 000-tokenram. Jämför avgränsat andra modeller/resonemangsnivåer på samma uppgifter när kontrakten är stabila; välj efter korrekt leverans, felupptäckt, kostnad och tid. Deterministisk beräkning och rendering ska inte kräva fler modellroller. Ingen modelländring eller större generell kunskapsimport är beslutad i detta planeringspass.
+
+**Öppna hinder från hyllprovet:** faktisk utlösare bakom budgetfelet ska beläggas, och kandidatgranskaren ska inte kräva det spar-/steglänkkvitto som först kan skapas efter godkänd kandidat. Den nuvarande CAD-exporten behöver stöd för synlig måttsättning. [Befintliga release- och provbevis](foundation-verification.md#reviewer-output-ceiling--2026-10-02) ligger kvar hos verifieringsägaren. Återanvänd samma verkliga uppdrag, sparat djup 300 mm, lösning och Plan när ett riktat liveprov är redo; återspela inte det utgångna jobbet och ändra inte användardata för ett grönt prov. Börja implementationens prov med syntetiska projekt och bevara verkliga spar-/länkkvitton.
+
+**Acceptans efter implementation:** kör först hyllan genom hela kedjan, ändra sedan bredd respektive materialtjocklek och prova en annan konstruktion med samma generiska verktyg. Kontrollera ritning, alla listor, versionspåverkan, avbrott, återöppning och annan behörig deltagare. Tekniska kontroller och verklig modell-/deltagaracceptans redovisas separat. P0/P3 och övriga P4-fall nedan kvarstår.
 
 ### Aktivt arbete — P4
 
@@ -298,7 +317,7 @@ Dokumentera slutresultat, källor/versioner, testroll, tid, modell-/verktygsanro
 <a id="acceptans-todo"></a>
 ### Gemensam acceptans-todo — P0 och P3
 
-Båda återstående punkterna är acceptansprov. Ingen ytterligare implementation är identifierad som förutsättning; eventuella provfynd hanteras när de reproduceras. Användaren har valt att behålla dem tillsammans i todo och fortsätta med P4.
+Båda återstående punkterna är acceptansprov. Den nya konstruktionskedjan och de påvisade hyllfelen ovan är förutsättningar för berörda delar av P0:s leveransprov; P3:s avgränsade medlemsprov behåller sin egen grind. Användaren har valt att behålla proven tillsammans i todo och fortsätta med P4.
 
 | Test | Vad återstår? |
 |---|---|
