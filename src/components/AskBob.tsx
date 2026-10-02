@@ -14,6 +14,7 @@ import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
 import { getBobSurface, useBobSurfaceSnapshot } from '../lib/bobSurface'
 import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
+import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
 
 type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null }
 
@@ -215,6 +216,7 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
       <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
+        {isUser && msg.deliveryState === 'failed' && <div className="foundation-hint">Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
@@ -288,6 +290,18 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [retry, setRetry] = useState<RetryTurn | null>(null)
   const [recovering, setRecovering] = useState<(RetryTurn & { expiresAt: number }) | null>(null)
   const [workingLabel, setWorkingLabel] = useState(db.describeBobProgress(undefined))
+  const outgoing = useRef<OutgoingTurn | null>(null)
+  const outgoingKey = useRef<string | null>(null)
+  const serverThread = useRef<string | null>(null)
+  function keepOutgoing(value: OutgoingTurn | null) {
+    outgoing.current = value
+    try {
+      if (outgoingKey.current) {
+        if (value) sessionStorage.setItem(outgoingKey.current, JSON.stringify(value))
+        else sessionStorage.removeItem(outgoingKey.current)
+      }
+    } catch { /* The in-memory message remains available if storage is disabled. */ }
+  }
   // Keep this component alive when closed so a local request and draft survive.
   // A page reload recovers the same turn from the private server transcript.
   const close = () => {
@@ -350,6 +364,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     let cancelled = false
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent()
+    outgoing.current = null; outgoingKey.current = null; serverThread.current = null
     setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('')
     void (async () => {
       const me = await db.getCurrentUser()
@@ -360,6 +375,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         const history = await db.getAskBobConversation(project.id)
         if (!current()) return
         if (history.mode === 'server') {
+          outgoingKey.current = history.ownerId ? `bob:outgoing:v1:${project.id}:${history.ownerId}` : null
+          try { outgoing.current = outgoingKey.current ? readOutgoing(sessionStorage.getItem(outgoingKey.current)) : null } catch { /* unavailable storage */ }
           applyServerHistory(history); setHistoryReady(true)
           return
         }
@@ -378,16 +395,19 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [project.id])
 
   function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
-    const unfinished = history.pending ?? history.retry
+    serverThread.current = history.threadId ?? null
+    keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages))
+    const held = outgoing.current
     setLocalHistory(false)
-    setExtra(unfinished ? [...history.messages, { from: 'user', text: unfinished.text }, ...(history.pending?.notice ? [{ from: 'bob' as const, text: history.pending.notice }] : [])] : history.messages)
+    setExtra(held ? [...history.messages, { from: 'user', text: held.text, turnId: held.turnId }] : history.messages)
     setReadTarget(history.threadId && history.latestSeq ? { threadId: history.threadId, seq: history.latestSeq } : null)
     window.dispatchEvent(new Event(db.BOB_INBOX_EVENT))
-    setRetry(history.retry ?? null)
+    setRetry(held ?? history.retry ?? null)
     setRecovering(history.pending ?? null)
     setWorkingLabel(db.describeBobProgress(history.pending?.progress))
     setWorking(!!history.pending)
-    setHistoryNotice(history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
+    setHistoryNotice(held ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
+      : history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
   }
 
   // Opening an already-mounted drawer must see replies delivered while elsewhere.
@@ -426,7 +446,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       } catch {
         if (!current()) return
         if (Date.now() >= recovering.expiresAt) {
-          setRecovering(null); setWorking(false); setRetry(recovering)
+          setRecovering(null); setWorking(false); setRetry(outgoing.current ?? recovering)
           setHistoryNotice('Could not check the answer. Reconnect and retry to recover it without repeating saved changes.')
           return
         }
@@ -451,6 +471,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
+      keepOutgoing(null)
+      serverThread.current = null
       setReadTarget(null); readAck.current = ''
       setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
@@ -473,6 +495,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
+      keepOutgoing(null)
+      serverThread.current = null
       setReadTarget(null); readAck.current = ''
       window.dispatchEvent(new Event('bob:inbox-changed'))
       setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setRetry(null)
@@ -492,14 +516,15 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
-    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset) return
+    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && !retryRequest)) return
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
     // A retry belongs to the original send. A new request reads navigation now.
     const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
+    if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, threadId: serverThread.current })
     setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
-    if (appendUser) push({ from: 'user', text })
+    if (appendUser) push({ from: 'user', text, turnId: clientTurnId })
     setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
     const result = await db.askBob(project.id, text, clientTurnId, screen)
     if (!isCurrent()) return
@@ -512,25 +537,31 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       try {
         const history = await db.getAskBobConversation(project.id)
         if (!isCurrent()) return
-        if (history.mode === 'server' && (history.pending || history.lastCompletedTurnId === clientTurnId)) {
+        if (history.mode === 'server') {
           applyServerHistory(history)
-          if (history.lastCompletedTurnId === clientTurnId && history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
+          if (history.messages.some(message => message.from === 'bob' && message.turnId === clientTurnId && message.evidence?.writes?.length)) setNeedsRefresh(true)
           return
         }
       } catch { /* Preserve the same turn id for a later recovery attempt. */ }
       if (!isCurrent()) return
       if (result.unavailable === 'turn_in_flight') {
-        setRecovering({ text, turnId: clientTurnId, screen, expiresAt: Date.now() + 5 * 60_000 })
-        setHistoryNotice('Bob is still working. Reconnecting to the conversation…')
+        setWorking(false)
+        setRetry({ text, turnId: clientTurnId, screen })
+        setHistoryNotice('Bob is busy. Your message is kept here. Use Retry request when he is free.')
         return
       }
     }
     if (!isCurrent()) return
     setWorking(false)
     if ('answer' in result) {
+      keepOutgoing(null)
       if (result.evidence.writes?.length) setNeedsRefresh(true)
       push({ from: 'bob', text: result.answer, evidence: result.evidence })
     } else if (result.unavailable !== 'project_changed') {
+      if (['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) {
+        keepOutgoing(null)
+        if (result.unavailable !== 'turn_budget_exhausted') setDraft(previous => previous || text)
+      }
       if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId, screen })
       const message = result.unavailable === 'not_configured'
         ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
@@ -593,7 +624,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
 
         {retry && <div role="status" style={{ padding: '8px 18px', fontSize: 12.5, color: 'var(--ink-soft)' }}>
-          <p>Retry the same request to check its result without duplicating saved changes.</p>
+          <p>{outgoing.current ? 'Your new message has not been confirmed. Retry this message when Bob is free.' : 'Retry the same request to check its result without duplicating saved changes.'}</p>
           <button className="btn btn-secondary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)} style={{ marginTop: 6, minHeight: 44 }}>Retry request</button>
         </div>}
         <form onSubmit={e => { e.preventDefault(); void send() }} className={`bob-composer ${expanded ? 'bob-composer-expanded' : ''}`}>
@@ -604,7 +635,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           }} />
           <div className="bob-composer-actions">
             <button type="button" className="btn" aria-label={expanded ? 'Collapse message editor' : 'Expand message editor'} aria-expanded={expanded} onClick={() => { setExpanded(value => !value); composer.current?.focus() }}><Icon name={expanded ? 'arrows-in-simple' : 'arrows-out-simple'} size={18} /></button>
-            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || !draft.trim()}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
+            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || !draft.trim() || !!outgoing.current}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
           </div>
         </form>
       </aside>

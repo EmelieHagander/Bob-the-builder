@@ -3,6 +3,7 @@ import type { ChatMessage } from './types'
 import type { AnswerEvidence } from './provenance'
 import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
 import { isBobAnswerEvidence } from './bobEvidence'
+import { readBobTranscript } from './bobTranscript'
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 
 function resolveSupabaseUrl(raw: string | undefined): string | null {
@@ -72,6 +73,7 @@ export interface BobConversationHistory {
   pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; expiresAt: number; progress?: BobProgress; notice?: string }
   lastCompletedTurnId?: string
   threadId?: string
+  ownerId?: string
   latestSeq?: number
 }
 
@@ -89,7 +91,7 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   const threadResult = await bobDb.from('bob_threads').select('id')
     .eq('project_id', projectId).eq('owner_user_id', auth.user.id).eq('status', 'active').maybeSingle()
   if (threadResult.error) throw new Error(`database: ${threadResult.error.message}`)
-  if (!threadResult.data) return { mode: 'server', messages: [] }
+  if (!threadResult.data) return { mode: 'server', messages: [], ownerId: auth.user.id }
 
   const rows = await bobDb.from('bob_messages')
     .select('role,text,evidence,delivery_state,seq,turn_id,updated_at')
@@ -97,39 +99,13 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
     .order('seq')
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
 
-  const messages: ChatMessage[] = []
   const notices = await bobDb.from('bob_delegation_notices').select('turn_id,text').eq('thread_id', threadResult.data.id)
-  // Older backends still support chat during the staged rollout.
-  const byTurn = new Map((notices.data ?? []).map(row => [row.turn_id, row.text]))
-  const appendNotice = (turn: string) => { const text = byTurn.get(turn); if (typeof text === 'string') messages.push({ from: 'bob', text }) }
-  let latestSeq = 0
-  let retry: BobConversationHistory['retry']
-  let pending: BobConversationHistory['pending']
-  let lastCompletedTurnId: string | undefined
-  for (const row of rows.data ?? []) {
-    if (row.role === 'user' && row.delivery_state === 'failed') latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
-    if (row.delivery_state !== 'completed') {
-      if (row.role === 'user' && typeof row.text === 'string' && typeof row.turn_id === 'string') {
-        // bob_claim_turn leases a pending turn for five minutes, refreshing
-        // updated_at on a retry. A pending row is not a failed request.
-        const expiresAt = Date.parse(row.updated_at) + 5 * 60_000
-        const turn = { text: row.text, turnId: row.turn_id }
-        pending = row.delivery_state === 'pending' && expiresAt > Date.now() ? { ...turn, expiresAt } : undefined
-        retry = pending ? undefined : turn
-      }
-      continue
-    }
-    retry = undefined
-    pending = undefined
-    if (row.role === 'user' && typeof row.text === 'string') {
-      messages.push({ from: 'user', text: row.text })
-      appendNotice(row.turn_id)
-    } else if (row.role === 'assistant' && typeof row.text === 'string') {
-      latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
-      lastCompletedTurnId = row.turn_id
-      messages.push({ from: 'bob', text: row.text, ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
-    }
-  }
+  const byTurn = new Map<string, string>((notices.data ?? []).map(row => [row.turn_id, row.text]))
+  const transcript = readBobTranscript(rows.data ?? [], projectId, byTurn)
+  const { messages, latestSeq, lastCompletedTurnId } = transcript
+  const turn = transcript.unfinished
+  let pending: BobConversationHistory['pending'] = turn?.pending ? { text: turn.text, turnId: turn.turnId, expiresAt: turn.expiresAt } : undefined
+  let retry: BobConversationHistory['retry'] = turn && !turn.pending ? { text: turn.text, turnId: turn.turnId } : undefined
   const unfinished = pending ?? retry
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
@@ -144,11 +120,11 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
       pending = undefined
       if (job.data.error === 'turn_budget_exhausted') {
         retry = undefined
-        messages.push({ from: 'user', text: unfinished.text }, { from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
+        messages.push({ from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
       } else retry = unfinished
     }
   }
-  return { mode: 'server', messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, latestSeq }
+  return { mode: 'server', messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, ownerId: auth.user.id, latestSeq }
 }
 
 export interface BobInbox { threadId: string; latestSeq: number; readSeq: number; unread: boolean }

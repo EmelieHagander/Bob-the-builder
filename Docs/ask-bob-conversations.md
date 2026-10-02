@@ -12,6 +12,31 @@ The public `guest@bob.local` identity is shared. Its chat remains device-local a
 
 The project database remains the authority for **saved** project state. Conversation explains goals, references and corrections, but is not proof that an earlier quantity, status or dimension is still current. Fresh project reads use the caller JWT, never privileged service reads. User-supplied observations and new decisions can supersede an old saved plan; proposed sizes remain specifications/estimates, not invented measured evidence.
 
+## Transcript and rejected-send recovery — implementation, release pending
+
+Every saved owner message remains visible in sequence, including failed and pending
+turns. Failed execution is labelled separately from message persistence. Only a
+matching turn reply can settle its retry state; independently delivered drawing
+events do not hide or acknowledge the owner's message. A newer owner message
+supersedes the older retry action while retaining the full visible history.
+
+Before an ordinary member sends, the drawer retains one attempted message, its
+idempotency UUID and frozen screen pointer in tab-scoped session storage keyed by
+verified Auth user and Project. It binds to the known private thread and is cleared
+when that thread is reset/replaced. Storage failure leaves the in-memory copy only.
+This temporary delivery record is not server history, model context or a send queue.
+No restored message is automatically submitted. A 409 or uncertain HTTP result
+reads history; only the same user-turn receipt acknowledges the message. Unrelated
+pending work may be observed, but cannot discard this copy. The retry button sends
+the original UUID and screen; new sends cannot replace the retained attempt.
+Successful receipt/reset removes it. Guest device-local history is unchanged.
+
+The regression in `scripts/check-bob-reset-browser.mjs` covers a rejected complement
+with both terminal and pending older work, retained original instructions, reload,
+explicit same-ID retry, duplicate prevention and failed/successful reset at
+320/390/1280 px. Pure transcript/retention cases live in
+`tests/bob-transcript.test.ts`. These fixtures do not close the real shelf/CAD gate.
+
 ## Explicit T1 / T2 / T3 context
 
 The September 24 correction follows Launchpad's actual context implementation, inspected at commit `28834d6efbf7ac0cb2f7069b7d275b729cb4b28e`, rather than only its earlier parked canvas. References: [`session-brief.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/session-brief.ts), [`prompt-assembly.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/prompt-assembly.ts), and [`session-recall.ts`](https://github.com/EmelieHagander/Launchpad/blob/28834d6efbf7ac0cb2f7069b7d275b729cb4b28e/supabase/functions/_shared/sessions/session-recall.ts). There is no Launchpad runtime dependency or claim that its private deployment was tested here.
