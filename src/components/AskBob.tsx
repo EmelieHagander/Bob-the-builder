@@ -523,7 +523,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     // A retry belongs to the original send. A new request reads navigation now.
     const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
     if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, threadId: serverThread.current })
-    setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
+    if (appendUser) setDraft('')
+    setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
     if (appendUser) push({ from: 'user', text, turnId: clientTurnId })
     setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
     const result = await db.askBob(project.id, text, clientTurnId, screen)
@@ -626,6 +627,15 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         {retry && <div role="status" style={{ padding: '8px 18px', fontSize: 12.5, color: 'var(--ink-soft)' }}>
           <p>{outgoing.current ? 'Your new message has not been confirmed. Retry this message when Bob is free.' : 'Retry the same request to check its result without duplicating saved changes.'}</p>
           <button className="btn btn-secondary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)} style={{ marginTop: 6, minHeight: 44 }}>Retry request</button>
+          {outgoing.current && <>
+            <button className="btn" disabled={working || resetting || confirmReset} style={{ marginTop: 6, minHeight: 44 }} onClick={() => {
+              const held = outgoing.current
+              keepOutgoing(null); setRetry(null); setHistoryNotice('Retry dismissed. This does not cancel work Bob may already have received.')
+              setExtra(messages => messages.map(message => message.from === 'user' && message.turnId === held?.turnId
+                ? { ...message, note: 'Delivery was not confirmed.' } : message))
+            }}>Dismiss retry</button>
+            <p>Dismissing the retry removes the temporary copy. It does not cancel work Bob may already have received.</p>
+          </>}
         </div>}
         <form onSubmit={e => { e.preventDefault(); void send() }} className={`bob-composer ${expanded ? 'bob-composer-expanded' : ''}`}>
           <textarea ref={composer} rows={1} disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" onKeyDown={e => {

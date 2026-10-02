@@ -406,6 +406,8 @@ try {
         assert.equal(answerCalls, before + 1)
       }
       sendMode = 'normal'
+      const newerDraft = 'Next question still being composed'
+      await drawer.getByRole('textbox').fill(newerDraft)
       const beforeAnswers = await drawer.getByText('FRESH ANSWER', { exact: true }).count()
       const retried = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === complement)
       await drawer.getByRole('button', { name: 'Retry request', exact: true }).click()
@@ -413,6 +415,7 @@ try {
       assert.equal(retryBody.clientTurnId, originalBody.clientTurnId)
       assert.deepEqual(retryBody.screen, originalBody.screen)
       await drawer.getByText('FRESH ANSWER', { exact: true }).nth(beforeAnswers).waitFor()
+      assert.equal(await drawer.getByRole('textbox').inputValue(), newerDraft, 'Retry must preserve a newer composer draft')
       await page.reload(); drawer = await open()
       await drawer.getByText(complement, { exact: true }).waitFor()
       assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)

@@ -29,7 +29,10 @@ No restored message is automatically submitted. A 409 or uncertain HTTP result
 reads history; only the same user-turn receipt acknowledges the message. Unrelated
 pending work may be observed, but cannot discard this copy. The retry button sends
 the original UUID and screen; new sends cannot replace the retained attempt.
-Successful receipt/reset removes it. Guest device-local history is unchanged.
+Successful receipt/reset removes it. The owner can explicitly dismiss the local
+retry; its visible bubble remains marked unconfirmed and no backend cancellation
+or new send occurs. Retrying preserves any newer draft in the composer. Guest
+device-local history is unchanged.
 
 The regression in `scripts/check-bob-reset-browser.mjs` covers a rejected complement
 with both terminal and pending older work, retained original instructions, reload,
