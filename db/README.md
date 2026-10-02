@@ -793,3 +793,25 @@ compatible. Matching `ask-bob` v73 and `bob-worker` v41 pin reviewed merge
 database responses as an unknown cause. SQL regressions
 exercise stop reasons, replay, cleared context and caller denial. [K0 evidence](../Docs/foundation-verification.md#k0-construction-boundaries--2026-10-02)
 owns investigation and release status.
+
+### Versioned construction checkpoints — K1, prepared
+
+CLI-generated `20261002203012_construction_drafts.sql` adds the project-RLS
+`artifact_construction_revisions` extension under existing Artifact identities,
+`read_construction_draft`, and claimed-turn `bob_project_write_v14`. Direct client
+writes and service-role grants on the new endpoint/table are absent. The private
+write function checks the claim, current request, project/person authority,
+expected revision, source locks, canonical target and catalog pins, then records
+readback in the existing receipt ledger. Conflict responses use `PT409`, avoiding
+PostgREST's automatic serialization retry loop for known domain conflicts.
+
+The migration extracts the existing CAD parameter trigger body into a shared
+validator. Existing rendered CAD retains the same validation and archive/detail
+exceptions; checkpoints disable historical bypass. A deferred guard prevents any
+older Artifact/CAD command from discarding a checkpoint. The existing freshness
+view now also assesses catalog/physical pins for construction revisions. All new
+functions have empty `search_path`; reads use invoker/RLS authority. No existing
+project records, budgets, model configuration, material reservations or orders
+are rewritten. See [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints)
+and [verification](../Docs/foundation-verification.md#k1-construction-checkpoints--2026-10-02)
+for release state and scope.

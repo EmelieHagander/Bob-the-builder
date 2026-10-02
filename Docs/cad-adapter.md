@@ -601,3 +601,12 @@ the annotated exports, not an earlier image. Tests must compare numeric labels t
 resolved values, include changed thickness/width and rotated parts, reject dangling
 anchors, and inspect crowded views at supported mobile widths. Missing requested
 dimensions remain a real candidate defect after delivery requirements are deferred.
+
+### Construction checkpoint boundary — K1
+
+The [Artifact checkpoint contract](artifacts.md#k1-construction-checkpoints) reuses
+`cad-parameters.ts` and the extracted SQL graph validator without invoking the
+CAD worker. The recipe and parameters are persistent draft inputs, not rendered
+or reviewed packets. Existing CAD publication remains guarded. K3 must compile
+and publish an exact checkpoint revision with its construction lineage; it must
+not bypass K1's Artifact revision guard or silently regenerate a parallel model.

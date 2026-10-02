@@ -591,5 +591,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_construction_draft",
+    "description": "List construction drafts or read one exact saved revision.",
+    "how_to": "Null artifact_id lists current drafts with pagination. Read exact Artifact ID and optional historical revision; inspect source_state, open_questions and limits before changing. Use save_construction_draft for revisions.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "save_construction_draft",
+    "description": "Save or revise a versioned construction with parts, exact materials and typed joints, without rendering.",
+    "how_to": "Read existing drafts and catalog revisions first. Reuse Artifact, assembly, part and joint IDs. Supply the complete CAD parameter plan; the server calculates values and rejects unknown controlling dimensions. Joint methods are design choices, not checked strength or hardware. Open questions stay explicit. A draft receipt is not a drawing or purchase receipt.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]
