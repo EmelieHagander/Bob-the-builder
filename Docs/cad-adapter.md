@@ -528,7 +528,7 @@ The project-lifetime boundary and P2b release status are owned by [conversation 
 
 ## Same-request scope recovery
 
-**Implemented; release pending.** An existing request keeps its original Area,
+**Deployed through [PR #182](https://github.com/EmelieHagander/Bob-the-builder/pull/182) on 2026-10-02; [release evidence](foundation-verification.md#shelf-scope-conflict--2026-10-02).** An existing request keeps its original Area,
 component, Step and Artifact scope across complements, including explicit nulls.
 `design_project_cad` rejects a changed scope before source/model work or writes,
 returns `recovery_required / drawing_scope_changed` with the original scope and

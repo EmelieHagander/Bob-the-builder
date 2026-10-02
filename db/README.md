@@ -762,7 +762,7 @@ replacing workers. Do not replay an old transcript against incompatible inputs.
 
 ### Drawing request conflict response
 
-**Migration prepared; not applied.** CLI-generated
+**Applied on 2026-10-02** to `yuobtgoidmmmwfqenkau` as ledger `20261002175325 / drawing_request_conflict_response`; matching `ask-bob` v72 and `bob-worker` v40 pin merge `0aa458cfc00dde62e271da1c91c8bf2e2dc88b26`. CLI-generated
 `20261002170009_drawing_request_conflict_response.sql` wraps the existing service-only
 `bob_drawing_request` command. Known deterministic drawing conflicts retain their
 message but return SQLSTATE `PT409` (HTTP 409), avoiding PostgREST 14's internal

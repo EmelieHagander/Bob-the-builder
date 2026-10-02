@@ -15,7 +15,7 @@ known defects before changing the governed setting. The earlier designer fix
 used medium reasoning at the same ceiling; reviewer equivalence is not proven.
 No model setting or spending threshold was changed during this investigation.
 
-**Reproduced and locally corrected; deployment and real delivery pending.** The
+**Scope correction deployed; real delivery and reviewer-budget acceptance remain open.** The
 owner's 16:31 UTC complement was saved. Bob recorded depth 300 mm as provided
 specification, created the shelf solution and approved Plan with a design Step.
 The 20-minute job subsequently expired without a saved drawing. The original
@@ -36,8 +36,39 @@ stale-revision conflict, replayed write receipt, authority/reset/cancellation an
 atomic CAD completion. Edge type checks pass. Full-suite/CI evidence is recorded
 in the fix PR. These controlled tests do not prove actual HTTP retry behavior or
 real model save/link delivery. The original expired turn must not be blindly
-replayed after changing its execution path; continue only after release/readback,
-using the same drawing identity and already saved project records.
+replayed after changing its execution path. The user authorised release and chose
+a new same-thread test before the reviewer-budget discussion.
+
+Release verification: [PR #182](https://github.com/EmelieHagander/Bob-the-builder/pull/182)
+merged as `0aa458cfc00dde62e271da1c91c8bf2e2dc88b26`; final reviewed head
+`733f9189bca96b749877bb4d06530e70b3cc37ea`, tree
+`6bbb069b0859be6864e0d66a4fd36d4c560a9083`. [CI 37041235274](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37041235274)
+passed 851/851 tests, Edge/vocabulary/build/PWA and all browser groups;
+[PostgreSQL concurrency 37041235249](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37041235249)
+and [CAD adapter 37041235233](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37041235233) passed.
+The sharing browser gate was repaired to await finite entrance animations before
+measuring the unchanged 44px requirement; final 320/390/1280 px checks pass.
+Manual Vera/Archie prompt review; no independent subagent review is claimed.
+
+Migration `20261002170009_drawing_request_conflict_response.sql` (SHA-256
+`8498bf595a2bbfa4f75302cddb6b702ff4ae59f0ce389e2fdec124f993bdceca`)
+was applied to `yuobtgoidmmmwfqenkau` as hosted ledger
+`20261002175325 / drawing_request_conflict_response`. Hosted rollback-only
+`check-cad-lineage-release.sql` passed exact `PT409`/message, unchanged packet and
+revision, write replay, canonical save/read/detail/restoration and authority fences.
+No synthetic users/projects remained. Definition readback confirms empty search
+paths, the new service-only entrypoint and no service/browser execution grant on
+the delegated helper. Security-advisor findings are unchanged from the preflight.
+
+`bob-worker` v40 (existing capability authentication) and `ask-bob` v72 (JWT) are
+ACTIVE and read back pinned to the merge above. Bundle hashes:
+worker `c66b3a675eef67dfdd3e2c24eb1c03b3f20b8baa9745b18c05be12be23c91146`,
+ask `835de088e5c35aee0307ee50d771baebc89c84f94ef4476eade573c39540b186`.
+Both reject unauthorised HTTP requests with 401. This proves deployment and SQL
+role behavior, not a real member's HTTP conflict or successful model delivery.
+The user's request still had revision 17, original null scope and no saved receipt
+after release; no user records were altered. Reviewer remains mini/high/12,000.
+
 
 ## P4 product acceptance — 2026-09-30
 
