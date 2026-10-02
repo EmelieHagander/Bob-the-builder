@@ -553,7 +553,7 @@ open in [State](bob-delivery-flow.md#state).
 <a id="construction-chain-boundaries"></a>
 ## Construction-chain boundaries — K0
 
-**Code correction prepared; not deployed.** [K0 evidence](foundation-verification.md#k0-construction-boundaries--2026-10-02)
+**Deployed through [PR #183](https://github.com/EmelieHagander/Bob-the-builder/pull/183); live-model acceptance remains.** [K0 evidence](foundation-verification.md#k0-construction-boundaries--2026-10-02)
 records the observed budget and stage failures. Current next action is in [State](bob-delivery-flow.md#state).
 
 Candidate review happens before publication. The server supplies `review_scope`

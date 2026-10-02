@@ -780,14 +780,16 @@ or rewrite the user's request. Hosted evidence and remaining real shelf acceptan
 belong to [verification](../Docs/foundation-verification.md#shelf-scope-conflict--2026-10-02).
 
 
-### Drawing budget diagnostics — K0, prepared
+### Drawing budget diagnostics — K0, applied
 
-`20261002191430_drawing_budget_diagnostics.sql` is CLI-generated and **not applied**.
+`20261002191430_drawing_budget_diagnostics.sql` is CLI-generated and **applied** to
+`yuobtgoidmmmwfqenkau` as `20261002194012 / drawing_budget_diagnostics` on October 2.
 It replaces the existing service-only `bob.bob_drawing_budget` in place without
 changing its signature, claim/access validation, private tables, thresholds,
 reservation identity or grants. Blocked results add numeric `budget_stop`
 metadata and reasons; existing status strings and stored provider responses stay
-compatible. Deploy the reviewed migration before matching Bob Edge code for full
-diagnostics; the code handles older responses as an unknown cause. SQL regressions
+compatible. Matching `ask-bob` v73 and `bob-worker` v41 pin reviewed merge
+`503e97f2ac3691d8bde94a2281e1c3cce04a7e61`; the code also handles older
+database responses as an unknown cause. SQL regressions
 exercise stop reasons, replay, cleared context and caller denial. [K0 evidence](../Docs/foundation-verification.md#k0-construction-boundaries--2026-10-02)
 owns investigation and release status.
