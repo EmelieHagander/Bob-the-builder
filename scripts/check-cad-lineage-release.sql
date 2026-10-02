@@ -57,6 +57,15 @@ begin
  perform bob.create_drawing_request(project,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,root_id,'{"area_id":null,"component_id":null,"step_id":null,"artifact_id":null}'::jsonb);
  set local role service_role;
  drawing_request:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',root_id,0,'reviewed',working,'release-reviewed');
+ begin
+  perform bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',root_id,1,'collecting',jsonb_set(working,'{brief,step_id}',to_jsonb(gen_random_uuid())),'release-changed-scope');
+  raise exception 'smoke_changed_scope_allowed';
+ exception when sqlstate 'PT409' then
+  if sqlerrm <> 'drawing_scope_changed' then raise; end if;
+ end;
+ readback:=bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'load',root_id);
+ if readback->'payload' is distinct from drawing_request->'payload' or readback->'revision' is distinct from drawing_request->'revision' then raise exception 'smoke_conflict_changed_packet'; end if;
+ if bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',root_id,0,'reviewed',working,'release-reviewed') is distinct from drawing_request then raise exception 'smoke_request_write_replay'; end if;
 
  -- Recover a genuinely cleared packet from canonical requirements, then prove
  -- the same restored identity still completes through the ordinary caller writer.
@@ -87,7 +96,9 @@ begin
  begin
   perform bob.bob_drawing_request(project,actor,(claim->>'thread_id')::uuid,turn_id,(claim->>'generation')::integer,'save',(drawing_request->>'id')::uuid,(readback->>'revision')::integer,'collecting',working,'reopen-closed');
   raise exception 'smoke_completed_request_reopened';
- exception when serialization_failure then null; end;
+ exception when sqlstate 'PT409' then
+  if sqlerrm <> 'drawing_request_complete' then raise; end if;
+ end;
  set local role authenticated;
  readback:=bob.read_cad_artifact(project,(saved->>'recordId')::uuid,null);
  if readback->'parameters' is distinct from parameters then raise exception 'smoke_parameters_readback'; end if;

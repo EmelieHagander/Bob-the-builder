@@ -524,3 +524,20 @@ A completed request can return its receipt even while the renderer is unavailabl
 Regression owners: `tests/cad-intake.test.ts`, `tests/drawing-request-recovery.test.ts` and `tests/drawing-request-recovery-sql.test.ts`. The SQL fixture installs the canonical migrations and exercises authenticated canonical save/read, interrupted-response replay across turns, rollback on rejection, changed payloads and authority fences. PGlite transactional fixtures do not establish concurrent-session behavior, actual Auth/HTTP/model delivery or participant acceptance. The release PR records all 15 concurrent-session cases and the hosted rollback-only smoke. Actual Auth/HTTP/model delivery and participant acceptance remain in [State](bob-delivery-flow.md#state).
 
 The project-lifetime boundary and P2b release status are owned by [conversation lifecycle — P2b](ask-bob-conversations.md#p2b-project-request-lifecycle). P2b adds minimal project identity and cancellation for newly created requests; this P2a receipt contract remains the canonical save boundary. [P2c restoration](ask-bob-conversations.md#p2c-explicit-request-restoration) owns same-ID reconstruction from canonical Step requirements and its separate release status.
+
+
+## Same-request scope recovery
+
+**Implemented; release pending.** An existing request keeps its original Area,
+component, Step and Artifact scope across complements, including explicit nulls.
+`design_project_cad` rejects a changed scope before source/model work or writes,
+returns `recovery_required / drawing_scope_changed` with the original scope and
+same request ID, and asks Bob to retry with that scope while retaining the new
+requirements and measurements. A newly created work Step is a delivery destination:
+after canonical save, `link_project_drawing` links the saved Artifact to that Step.
+No replacement request, silent scope mutation or new attempt budget is introduced.
+The private request RPC transport has a 12-second deadline; deterministic drawing
+conflicts use the [database response contract](../db/README.md#drawing-request-conflict-response).
+Regression coverage belongs to `cad-intake.test.ts` and
+`project-drawing-request-lifecycle.test.ts`; actual model save/link acceptance stays
+open in [State](bob-delivery-flow.md#state).

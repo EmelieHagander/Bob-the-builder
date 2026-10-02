@@ -22,9 +22,20 @@ test('P2b: project identity survives reset, private content disappears, cancella
  assert.equal((await read(member)).requests[0].reason,'context_missing','an interrupted first packet is not reported as running')
  const otherTurn=randomUUID(),otherClaim=await call(null,'bob.bob_claim_turn',[project,member,otherTurn,'Other private request'],'service_role')
  assert.equal(await call(null,'bob.bob_drawing_request',[project,member,otherClaim.thread_id,otherTurn,otherClaim.generation,'load',id,0,null,null,null],'service_role'),null)
- const saved=await store('save',id,0,'needs_data',working)
+ const saved=await store('save',id,0,'needs_data',working,'initial-working')
  assert.equal(saved.id,id);assert.equal(saved.revision,1)
  assert.deepEqual((await store('load')).payload,working)
+ // Reproduce the shelf complement: a new Step cannot mutate an older request's
+ // null scope. Return a terminal HTTP conflict, not PostgREST's retry SQLSTATE.
+ for(const changed of [{step_id:randomUUID()},{area_id:'new-area'}]){
+  await assert.rejects(store('save',id,1,'collecting',{...working,brief:{...working.brief,...changed}}),
+   (error:any)=>error.code==='PT409'&&error.message==='drawing_scope_changed')
+ }
+ await assert.rejects(store('save',id,0,'collecting',working),
+  (error:any)=>error.code==='PT409'&&error.message==='revision_conflict')
+ assert.deepEqual((await store('load')).payload,working,'rejected scope changes leave the original packet intact')
+ assert.equal((await store('load')).revision,1)
+ assert.deepEqual(await store('save',id,0,'needs_data',working,'initial-working'),saved,'valid retry retains its write receipt')
  const projection=(await read(member)).requests[0]
  assert.equal(projection.id,id);assert.equal(projection.status,'needs_data');assert.equal(projection.reason,null)
  assert.deepEqual(Object.keys(projection).sort(),['id','project_id','revision','kind','status','reason','scope','responsible_person_id','artifact_id','artifact_revision','created_at','updated_at'].sort())

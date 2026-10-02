@@ -44,6 +44,26 @@ test('complements resume the same request, refresh facts, retain earlier require
  assert(!JSON.stringify(f.row).includes('pixels'));assert(!JSON.stringify(f.row).includes('not persisted'));assert.deepEqual((f.row?.payload.draft as any).recipe,recipe)
  await a.markSaved();assert.equal(f.row?.status,'saved')
 })
+test('same-request complement returns immutable scope before research or writes, then resumes with the corrected scope',async()=>{
+ const f=fixture();let blocked=true,calls=0;const model=f.opts.callModel
+ f.opts.callModel=async o=>{calls++;return o.functionName==='cad-research'&&blocked
+  ?reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]}):model(o)}
+ assert.equal((await createCadAssistant(f.opts).consult(request)).status,'needs_data')
+ const original=structuredClone(f.row),reads=f.reads.length,paid=calls
+ const assistant=createCadAssistant(f.opts)
+ for(const key of ['area_id','step_id','component_id','artifact_id']){
+  const result=await assistant.consult({...request,request_id:id,[key]:'30000000-0000-4000-8000-000000000099'})
+  assert.equal(result.status,'recovery_required');assert.equal(result.reason,'drawing_scope_changed')
+  assert.equal(result.request_id,id);assert.deepEqual(result.scope,{area_id:null,component_id:null,step_id:null,artifact_id:null})
+  assert.match(result.next_action,/link_project_drawing/)
+  assert.equal(calls,paid);assert.equal(f.reads.length,reads);assert.deepEqual(f.row,original)
+ }
+ blocked=false;f.complement()
+ assert.equal((await assistant.consult({...request,request_id:id})).status,'ready')
+ assert.equal(f.row?.id,id);assert.equal(f.renders,1)
+ assert.equal(assistant.candidate?.step_id,null,'link the new Step after save, without changing the original scope')
+})
+
 test('a partial or fabricated checklist cannot pass readiness',()=>{
  const refs=new Set(['requirement:shape'])
  assert(parseIntakeAssessment(assessment,handoff,refs))

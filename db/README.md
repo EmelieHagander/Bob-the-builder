@@ -758,3 +758,23 @@ Hosted ledger `20261002104656 / p4_drawing_event_delivery` and the matching
 [the evidence owner](../Docs/foundation-verification.md#p4-replay-and-event-delivery--2026-10-02).
 Rollback retains the additive command and canonical receipts; drain jobs before
 replacing workers. Do not replay an old transcript against incompatible inputs.
+
+
+### Drawing request conflict response
+
+**Migration prepared; not applied.** CLI-generated
+`20261002170009_drawing_request_conflict_response.sql` wraps the existing service-only
+`bob_drawing_request` command. Known deterministic drawing conflicts retain their
+message but return SQLSTATE `PT409` (HTTP 409), avoiding PostgREST 14's internal
+retry loop for custom `40001`. Other serialization failures retain their original
+code. Authority, immutable scope, lifecycle, event transaction and receipt replay
+remain delegated to the existing implementation; its direct grants are revoked.
+No table data, policy, model setting or budget changes.
+
+Review the exact tree and CI/concurrency results, target `yuobtgoidmmmwfqenkau`,
+pending ledger and quiescent jobs. Apply only this migration, then release matching
+`ask-bob` and `bob-worker` with their existing authentication modes. Verify conflict
+code/message, unchanged packet/revision, receipt replay and grants, then read back
+both runtimes. Do not undo the transport correction to recover a failed model run
+or rewrite the user's request. Hosted evidence and remaining real shelf acceptance
+belong to [verification](../Docs/foundation-verification.md#shelf-scope-conflict--2026-10-02).
