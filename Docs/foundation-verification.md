@@ -1097,3 +1097,64 @@ Hosted release readback on 2026-10-03:
 The revised orchestration plan already exists in open [#186](https://github.com/EmelieHagander/Bob-the-builder/pull/186), head `09a3ecc0353d79a87f8e2d5b169bfe335fd55f61`; its [build check](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37114117177/job/111177473097) passed. It is documentation only and has not landed in main. Preserve the newer [State](bob-delivery-flow.md#state) when reconciling that PR; do not recreate the plan.
 
 `scripts/check-live-construction.ts` is a prepared, **unrun** real-model acceptance: existing verified named member, disposable project, ordinary Swedish request with no injected parts/tool calls, then independent canonical readback/checks, width 600→700 and thickness 18→21 changes, stable instance IDs and historical geometry/joints. Requires existing secure-runner member configuration plus `BOB_K2_LIVE_CONFIRM=disposable-fixtures-only`; it neither creates Auth users nor mints tokens, substitutes a guest, changes budgets or retries paid failures. The current runner has no member credentials. Actual calls, cost, autonomous outcome and named-participant acceptance remain unverified. General method references do not close the missing manufacturer/product-evidence acceptance.
+
+
+## K2 runtime payload baseline — 2026-10-03
+
+**Implemented offline audit; no runtime, prompt, model or deployment change.**
+`scripts/audit-bob-runtime.ts` now defaults to the current repository catalog seed
+and registers the K1/K2 construction and drawing-lifecycle handlers. An explicit
+older catalog is measured as supplied: missing K2 tools are reported as an unrun
+scenario, never silently replaced by the seed. The seed is not a live policy read.
+
+The former audit stopped with zero renders because its CAD fixture lacked the
+current intake/parameter contracts. The repaired fixture reaches collection,
+rejects invalid geometry before the renderer, renders once, delivers synthetic
+preview carriers to the designer and independent reviewer, and reaches a reviewed
+candidate. A separate scripted Bob loop lists, saves, checks, corrects and re-reads
+the same K1 checkpoint: a missing contact joint is rejected; revision 2 passes
+concept checks while fabrication readiness stays false. Revision 1's geometry and
+five-joint history remain intact. Storage, rendering and model replies are injected
+fixtures; these are not SQL, actual image-quality or autonomous model acceptance.
+
+The [archived report](archive/k2-runtime-baseline-2026-10-03.json) includes source
+hashes, catalog hash, six phase surfaces and individual call measurements for Bob,
+CAD collection, designer and reviewer. A successful small Task flow includes
+nonempty conversation history. Plan specialist, memory-fold and delivery-language
+calls are not exercised; the text-only premature Task/plan/material probes remain
+separate observations, not successful deliveries.
+
+Initial Bob call, current synthetic named-member toolbox:
+
+| Component | UTF-8 bytes |
+|---|---:|
+| Persona | 1,186 |
+| Shared system rules | 3,854 |
+| Domain vocabulary | 1,233 |
+| Toolbox orientation and system separators | 2,044 |
+| Tool descriptions, including catalog guides | 44,896 |
+| Tool parameter schemas | 76,311 |
+
+The 59 unique offered tools occupy **127,092 bytes** including JSON tool metadata;
+`save_construction_draft` is the largest. The system message is **8,317 bytes**.
+These observations support testing tool-guide/schema delivery first; they do not
+establish that less context improves model quality. No production instructions
+were shortened and no tools were removed.
+
+Each call separates system, frame, source data, history, tool descriptions,
+parameter/response schemas, arguments/results and image carriers. Raw UTF-8 content
+and serialised local input are different measures. Continuation calls explicitly
+report unknown retained provider context behind `previousResponseId`. Synthetic
+usage/cost/provider latency are **null**, not zero-price or token estimates;
+fixture timing measures local code only. The existing execution-metrics writer is
+reused in memory. It currently classifies `cad-research` as `other`; the audit
+preserves the actual function role separately, exposing that instrumentation gap
+without changing production diagnostics. Real input/output/cached tokens and
+cost still need provider usage in the member acceptance run.
+
+`tests/runtime-audit.test.ts` verifies UTF-8 accounting and text exclusion, the
+complete scripted repair/render/review paths, and honest old-catalog handling.
+All three tests and vocabulary verification pass locally. Network calls are
+blocked during the audit. CI includes this test file through the existing suite.
+[State](bob-delivery-flow.md#state) owns the next work; this baseline does not close
+K2's product-evidence or real-member acceptance.
