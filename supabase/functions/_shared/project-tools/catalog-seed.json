@@ -45,6 +45,15 @@
     "active": true
   },
   {
+    "name": "check_construction_draft",
+    "description": "Check an exact saved construction for supported geometry, material dimensions and joint consistency.",
+    "how_to": "Read or save a current construction first. Check its exact Artifact ID and revision. This server check supports uncut wooden boxes at orthogonal rotations and planar screwed/glued butt-joint concepts. Correct issues by revising the same draft. Compare bounds and part count with the original requirements. concept_ready is not fabrication_ready: product instructions, fastener layout, strength, stability, cutting and publication remain separate. Failed or stale reads cannot approve anything.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "compile_project_plan",
     "description": "Compile Bob's plan intent into exact Steps/Requirements and return nano's advisory review to Bob. Read-only; Bob decides corrections and saving.",
     "how_to": "Pass only plan_intent for an initial plan or broad replan. For a focused change use edit_project_plan, preserving unrelated work mechanically. The server binds the current revision. Mini compiles and nano advises; Bob assesses objections. Correct server errors, then save a sound proposal with save_compiled_project_plan. Task candidates contain only ownership changes, staged with the proposal and applied on approval. Use remaining_attempts; do not ask again for granted proposal scope.",
@@ -311,6 +320,15 @@
     "active": true
   },
   {
+    "name": "read_construction_draft",
+    "description": "List construction drafts or read one exact saved revision.",
+    "how_to": "Null artifact_id lists current drafts with pagination. Read exact Artifact ID and optional historical revision; inspect source_state, open_questions and limits before changing. Use save_construction_draft for revisions.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "read_drawing_request_work",
     "description": "Read durable drawing gaps, Task/Step links and request budget.",
     "how_to": "Read before creating follow-up Tasks. Reuse stable gaps and existing links. Task completion does not replace source measurements. Private assessment text is not published.",
@@ -412,6 +430,15 @@
     "how_to": "Save the exact server-valid compilation or focused edit after assessing its result. It takes no arguments. This saves a proposal and stages Task ownership changes; it does not approve it. Use decide_project_plan separately when the owner has explicitly authorised applying that exact plan or edit. Never reconstruct the nested plan JSON.",
     "schema_version": 1,
     "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "save_construction_draft",
+    "description": "Save or revise a versioned construction with parts, exact materials and typed joints, without rendering.",
+    "how_to": "Read existing drafts and catalog revisions first. Reuse Artifact, assembly, part and joint IDs. Supply the complete CAD parameter plan; the server calculates values and rejects unknown controlling dimensions. Joint methods are design choices, not checked strength or hardware. Open questions stay explicit. A draft receipt is not a drawing or purchase receipt. For a delegated assembly choose the parts and joints from the request, exact catalog and applicable building knowledge; ordinary reversible choices are design_choice, not new owner approvals. Derive dependent spans and positions from shared dimension nodes. After saving, call check_construction_draft on that revision and correct reported IDs with another revision. Compare bounds/count against the original requirements. A checked concept is not fabrication approval. Exact checkpoint rendering/annotation is a later capability; do not recreate it with the CAD designer as a second model or claim a drawing was delivered.",
+    "schema_version": 1,
+    "always_load": false,
     "preload_phases": [],
     "active": true
   },
@@ -587,24 +614,6 @@
     "name": "update_project_task_work",
     "description": "Update task status and assign project people.",
     "how_to": "Read the task timestamp and crew IDs. person_ids replaces the full assignee set. Assignment changes no access rights. Done records performed work, not verification of all plan criteria.",
-    "schema_version": 1,
-    "always_load": false,
-    "preload_phases": [],
-    "active": true
-  },
-  {
-    "name": "read_construction_draft",
-    "description": "List construction drafts or read one exact saved revision.",
-    "how_to": "Null artifact_id lists current drafts with pagination. Read exact Artifact ID and optional historical revision; inspect source_state, open_questions and limits before changing. Use save_construction_draft for revisions.",
-    "schema_version": 1,
-    "always_load": false,
-    "preload_phases": [],
-    "active": true
-  },
-  {
-    "name": "save_construction_draft",
-    "description": "Save or revise a versioned construction with parts, exact materials and typed joints, without rendering.",
-    "how_to": "Read existing drafts and catalog revisions first. Reuse Artifact, assembly, part and joint IDs. Supply the complete CAD parameter plan; the server calculates values and rejects unknown controlling dimensions. Joint methods are design choices, not checked strength or hardware. Open questions stay explicit. A draft receipt is not a drawing or purchase receipt.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],

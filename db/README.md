@@ -823,3 +823,7 @@ The rollback-only hosted check passed create/read/revise, replay, history,
 stale-write rejection and outsider denial. RLS, function grants, tool catalog
 and rollback cleanup were read back; security advisors match the pre-release
 baseline. The immutable Edge release is recorded by the verification owner.
+
+### K2 construction check registration
+
+`20261002231320_construction_checks.sql` registers the read-only `check_construction_draft` tool and updates the existing save-tool guide. It adds no tables, privileges, RPCs or approved-construction state. The Edge checker reads exact checkpoints/catalog definitions through the existing invoker/RLS boundary and returns transient revision-bound evidence. Invalid checkpoints remain editable drafts. Check results cannot bypass CAD publication or be written as fabrication approval. See [Artifacts](../Docs/artifacts.md#k2--construction-concept-checks) for the checker contract and [verification](../Docs/foundation-verification.md#k2-construction-checks) for release status.

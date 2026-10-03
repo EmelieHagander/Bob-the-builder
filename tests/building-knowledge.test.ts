@@ -17,8 +17,8 @@ function hashJson(value:unknown):string {
 test('every curated package has complete scope, questions, checks, limitations and an intact versioned hash',()=>{
  assert.equal(new Set(seed.cards.map(c=>c.id)).size,seed.cards.length)
  for(const c of seed.cards){
-  assert.equal(c.version,seed.version)
-  assert.equal(c.reviewed_at,'2026-09-25','package metadata changes do not pretend to re-review a source')
+  assert.match(c.version,/^2026-\d{2}-\d{2}\.\d+$/)
+  assert.equal(c.reviewed_at,c.id==='timber.adhesives'?'2026-10-02':'2026-09-25','package metadata changes do not pretend to re-review a source')
   assert(c.review_due>=c.reviewed_at)
   for(const key of ['applicability','required_questions','checks','limitations'] as const){
    assert(c[key].length>0,c.id+' '+key)
@@ -72,7 +72,7 @@ test('real Bob tool loop delivers package metadata and preserves references sepa
    return {success:true,data:'Rörelsen behöver kontrolleras mot projektets underlag.',model:'fixture',responseId:'package-answer',usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
   }})
  assert(answer.ok);assert.equal(calls,2)
- assert(answer.evidence.references?.some(r=>r.id==='workflow.fit'&&r.version===seed.version))
+ assert(answer.evidence.references?.some(r=>r.id==='workflow.fit'&&r.version===seed.cards.find(c=>c.id==='workflow.fit')!.version))
  assert(!answer.evidence.sources.some(s=>s.recordId==='workflow.fit'),'general package must never become a project record')
  assert.deepEqual(committed.evidence,answer.evidence)
 })

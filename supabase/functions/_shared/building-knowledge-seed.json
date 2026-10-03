@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-30.1",
+  "version": "2026-10-02.1",
   "cards": [
     {
       "version": "2026-09-30.1",
@@ -355,6 +355,51 @@
         "Arbetsmetoden bevisar inte fysisk passning eller att en geometrisk kontroll har körts."
       ],
       "content_sha256": "ec3fde83b0708e121175227642528032b3d526e6e4e67f42f0d751822529e4b3"
+    },
+    {
+      "version": "2026-10-02.1",
+      "status": "active",
+      "audience": "public",
+      "reviewed_at": "2026-10-02",
+      "review_due": "2027-04-02",
+      "rights": "original_summary_links_only",
+      "third_party_text_stored": false,
+      "language": "sv",
+      "jurisdiction": "general",
+      "id": "timber.adhesives",
+      "title": "Limförband i trä och skivmaterial",
+      "keywords": [
+        "lim",
+        "limning",
+        "plywood",
+        "skiva",
+        "stumförband",
+        "adhesive",
+        "glue",
+        "butt",
+        "joint"
+      ],
+      "summary": "Limförband överför krafter mellan delar. Resultatet beror på trä, lim och gränsskikt samt hur delarna förbereds och sammanfogas. Välj metod utifrån material, ytor och användningsmiljö. Geometrisk kontakt mellan två ytor visar inte att limförbandet har tillräcklig styrka.",
+      "url": "https://research.fs.usda.gov/treesearch/62250",
+      "publisher": "USDA Forest Products Laboratory",
+      "edition": "Wood Handbook, FPL-GTR-282, 2021, chapter 10",
+      "kind": "official_guidance",
+      "applicability": [
+        "Begreppsligt underlag för limning av trä och träbaserade material."
+      ],
+      "required_questions": [
+        "Vilka material, ytor, laster och vilken användningsmiljö gäller?",
+        "Vilken limprodukt och vilka arbetsvillkor stöds av dess aktuella anvisningar?"
+      ],
+      "checks": [
+        "Kontrollera ytberedning, materialkompatibilitet och produktens applicerings-, press- och härdningsvillkor.",
+        "Pröva fogens lämplighet för last, fiberriktning och miljö separat från geometrisk passning."
+      ],
+      "limitations": [
+        "Inga numeriska dimensioneringsregler eller produktgodkännanden ingår i detta paket.",
+        "Ett plant stumförband är en konceptmetod; paketet godkänner inte fogens bärförmåga."
+      ],
+      "content_sha256": "4d6d237122d80c1ab50cc1096da2ad8e8133fbc4a2536848102e1462145a60d9"
     }
   ]
 }

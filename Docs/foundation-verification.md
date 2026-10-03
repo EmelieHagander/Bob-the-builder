@@ -1078,3 +1078,11 @@ Release evidence:
 No owner shelf retry or paid model call was run. K1 is the persistent technical
 foundation; autonomous construction, checked joints, annotated drawing delivery,
 cut/purchasing outputs and recovery/model evaluation remain K2–K5 in [State](bob-delivery-flow.md#state).
+
+## K2 construction checks
+
+**2026-10-03: implementation under release verification; not yet deployed or model-accepted.** Deterministic tests cover a five-part 600 × 800 × 300 mm concept with six joints, missing/reversed joints, bad spans, collisions, unsupported geometry/methods, material dimensions/applicability, stale pins, expired knowledge, and another rotated bracket using the same generic checker. Claimed SQL/tool integration reads a saved K1 checkpoint and exact catalog through caller authority; its intentionally missing joints are rejected. No fixture is proof of autonomous construction.
+
+The first local full suite passed 127/128 files; the prompt-size gate caught an overlong permanent instruction. Construction workflow guidance was moved into the existing tool-owned guide, preserving the permanent prompt. Final CI/release evidence will replace this pending status.
+
+`scripts/check-live-construction.ts` is a prepared, **unrun** real-model acceptance: existing verified named member, disposable project, ordinary Swedish request with no injected parts/tool calls, then independent canonical readback/checks, width 600→700 and thickness 18→21 changes, stable instance IDs and historical geometry/joints. Requires existing secure-runner member configuration plus `BOB_K2_LIVE_CONFIRM=disposable-fixtures-only`; it neither creates Auth users nor mints tokens, substitutes a guest, changes budgets or retries paid failures. The current runner has no member credentials. Actual calls, cost, autonomous outcome and named-participant acceptance remain unverified. General method references do not close the missing manufacturer/product-evidence acceptance.

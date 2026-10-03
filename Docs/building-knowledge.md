@@ -14,6 +14,10 @@ Seed version `2026-09-30.1` retains the same eight original summaries and source
 
 No new ingestion, embeddings, live source lookup or broader corpus is implied. The deployed ordinary guest/model probe consumed `timber.moisture` version `2026-09-30.1` together with actual image pixels and caller-hydrated Task focus; [verification](foundation-verification.md#p3-hosted-technical-release--2026-09-30) owns that proof. This bounded result does not establish the wider corpus or full product acceptance. Remaining work lives in [State](bob-delivery-flow.md#state).
 
+## K2 method reference addition
+
+Corpus `2026-10-02.1` adds a ninth original package, `timber.adhesives`, linked to USDA Forest Products Laboratory's **Wood Handbook, FPL-GTR-282 (2021), chapter 10**. Its source landing page was read on 2026-10-02. The eight earlier packages retain their own `2026-09-30.1` versions and review dates; a corpus release does not re-review unchanged sources. `check_construction_draft` binds screwed/glued concepts to the applicable active fastener/adhesive package version and hash, with the same withdrawal, rights and expiry rules. This is general method guidance, not a numerical joint rulebook or product approval. Current manufacturer evidence ingestion and product-specific checks remain missing.
+
 ## Product contract
 
 Bob should be a knowledgeable builder with reusable tools, not a menu of hardcoded construction recipes. General construction knowledge informs choices, materials, assembly methods, checks and explanations. Private project/building records describe this particular place. Deterministic geometry/calculations produce reproducible dimensions. None of these truth classes substitutes for the others. An embedding index retrieves material at runtime; it is not model training and cannot by itself add unsupported CAD operations.
