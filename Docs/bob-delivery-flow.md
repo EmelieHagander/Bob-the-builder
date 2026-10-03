@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling: färdigställ K2:s release och modellacceptans.** Kontrollverktyget och konstruktionens verktygsinstruktion är implementerade för ortogonala, obearbetade trädelar med plana stumförband. Följ [K2-kontraktet](artifacts.md#k2--construction-concept-checks) och [verifieringsägaren](foundation-verification.md#k2-construction-checks) för aktuell teknisk status. Kör därefter det förberedda verkliga modellprovet med en befintlig behörig testmedlem: vanlig beställning, egna del-/förbandsval, sparande, kontroll samt bredd- och tjockleksändring. Körmiljön saknar medlemssession; gästkontot har inte Bobs skrivbehörighet. Produktanvisningar och produktberoende val saknar ännu verifierad källa och kontroll, och får inte räknas som godkända genom geometriprovet. K2 är därför inte slutaccepterad; K3–K5 och deltagaracceptans återstår enligt [kedjeplanen](material-assembly-use-case.md#assembly-chain-plan).
+**Nästa handling: uppdatera K2:s lokala runtime-prov och etablera en uppdelad anropsbaslinje före ändringar i promptar/verktygsyta.** Följ den [reviderade K2–K5-planen](material-assembly-use-case.md#assembly-chain-plan), [K2-kontraktet](artifacts.md#k2--construction-concept-checks) och [verifieringsägaren](foundation-verification.md#k2-construction-checks). Återstående releaseverifiering ska stängas innan modellprovet körs mot motsvarande driftversion. Nästa kodutfall avgränsas därefter av baslinjen: tydligt arbetsläge, lokal rättning och mätt kontextfördelning. Kör det förberedda verkliga modellprovet med en befintlig behörig testmedlem; senaste dokumenterade runner saknade medlemssession och gästkontot har inte Bobs skrivbehörighet. Produktanvisningar och produktberoende val saknar ännu verifierad källa och kontroll. Dessa luckor och verklig modell-/deltagaracceptans håller K2 öppet; geometrikontroll är inte tillverkningsgodkännande.
 
 ### Aktiv genomförandeordning — konstruktion till leverans
 
@@ -286,10 +286,10 @@ Detaljkontrakt, informationskällor, modellprov och acceptans ägs av [material-
 
 | Ordning | Kvarstående arbete | Nästa grind |
 |---|---|---|
-| **K2 — aktiv, acceptans öppen** | Konstruktörens verktyg, avgränsad material-/förbandskunskap och deterministiska kontroller av mått och samband. | Bob väljer delarna själv; riktiga fel stoppas och en korrekt konstruktion går vidare. |
-| K3 | Måttlinjer, måtttext och delnummer i CAD-export; kandidatgranskning följd av sparande, arbetslänk och återläsning. | Exakt granskad ritning är läsbar och nåbar från rätt steg; inget cirkelkrav på sparande före granskning. |
-| K4 | Härledda kap-/monterings-/materialunderlag och inköpsförslag inklusive förband, råformat, lager och förpackningar. | Varje rad har spårbart ursprung i samma konstruktion; ändrad geometri ger korrekt påverkan. |
-| K5 | Återhämtning, versionsändringar, budget per led och jämförande modellprov. | Hela kedjan fungerar efter avbrott och ändring, med redovisad kostnad/tid och utan falska godkännanden. |
+| **K2 — aktiv, acceptans öppen** | Mätt modellunderlag, avgränsad välja–spara–kontrollera–rätta-loop och kvarstående material-/förbandskällor. | Bob skapar och rättar samma konstruktion själv; relevanta fel/luckor redovisas och övriga uppgifter försämras inte. |
+| K3 | Måttsatt ritning från exakt kontrollerad konstruktion, separat kandidatgranskning och verifierad leverans. | Rätt revision är sparad, länkad och återläst; ritningssteget skapar ingen andra konstruktion. |
+| K4 | Listor och montering härledda från samma revision genom befintliga material-/lager-/Shopping-gränser. | Spårbara mängder, genomförbar kapning och synliga produktluckor; inga dubbla reservationer. |
+| K5 | Återhämtning och ändringar över hela kedjan, budget per led och jämförande modellprov. | Rätt steg återupptas utan upprepning av avslutade anrop/leveranser; kvalitet, kostnad och tid är uppmätta. |
 
 **Modellbeslut:** behåll nuvarande roller som provbaslinje, inklusive granskarens godkända 50 000-tokenram. Jämför avgränsat andra modeller/resonemangsnivåer på samma uppgifter när kontrakten är stabila; välj efter korrekt leverans, felupptäckt, kostnad och tid. Deterministisk beräkning och rendering ska inte kräva fler modellroller. Ingen modelländring eller större generell kunskapsimport är beslutad i detta planeringspass.
 
