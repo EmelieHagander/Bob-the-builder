@@ -34,7 +34,9 @@ import { measureRuntimeInput, measureRuntimeOutput } from './support/runtime-aud
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 import { drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
 
-export async function runRuntimeAudit(catalogArg?: string) {
+export type GuideDelivery = 'inline' | 'single' | 'batch'
+export async function runRuntimeAudit(catalogArg?: string, guideDelivery: GuideDelivery = 'inline') {
+assert(['inline', 'single', 'batch'].includes(guideDelivery))
 const originalLog = console.log, originalWarn = console.warn, originalFetch = globalThis.fetch
 try {
 // No network is permitted, including accidental calls from a new fixture.
@@ -64,6 +66,19 @@ function measured(scenario: string, model: (o: OpenAIServiceOptions) => Promise<
 const response = (data: unknown, name?: string, args?: unknown): any => ({ success: true, data, model: 'controlled-fixture',
   responseId: 'synthetic-response-' + ++responseSequence, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
   ...(name ? { toolCalls: [{ id: 'synthetic-call', type: 'function', function: { name, arguments: JSON.stringify(args) } }] } : {}) })
+// Explicitly scripted selections, not proof a real model knows which manuals
+// to request. Every inserted call runs through Bob's ordinary budget/dispatcher.
+function withManuals(replies: Array<[string, unknown]>): Array<[string, unknown]> {
+  if (guideDelivery === 'inline') return replies
+  const names = [...new Set(replies.map(([name]) => name))]
+  if (guideDelivery === 'batch') return [['read_tool_manuals', { names }], ...replies]
+  const seen = new Set<string>(), out: Array<[string, unknown]> = []
+  for (const reply of replies) {
+    if (!seen.has(reply[0])) { seen.add(reply[0]); out.push(['read_tool_manuals', { names: [reply[0]] }]) }
+    out.push(reply)
+  }
+  return out
+}
 const noIO = async (): Promise<any> => { throw new Error('Audit unexpectedly attempted external I/O') }
 function lookup(budget = 32) {
   return createProjectLookup('synthetic', async (_p, q) => ({ error: null, data: { records: q.dataset === 'project'
@@ -97,6 +112,7 @@ function fixture(phase: string | null, message = 'Skapa en uppgift för att mät
   })
   const projectContext = createProjectContext({ adapters: [], hasAccess, sources: [] })
   const opts = { ...base, message, writer, lookup: lookup(), projectContext, constructionTools,
+    toolGuideMode: guideDelivery === 'inline' ? 'inline' as const : 'manual' as const,
     context: { summary: '', throughSeq: 0, recent: [{ seq: 1, role: 'user', text: message, state: 'pending' }], history: { remaining: 4, search: noIO } },
     knowledgeReader: createKnowledgeReader(hasAccess),
     operationalReader: createOperationalReader('synthetic', noIO, hasAccess, []),
@@ -159,16 +175,20 @@ if (!missingConstructionTools.length) {
     area_id: null, target_revision: 1, change_note: 'Initial concept', recipe, parameter_plan: parameterPlan(recipe),
     materials: ['side', 'panel'].map(definition_id => ({ definition_id, material_id: id, material_revision: 1, part_id: null, part_revision: null })),
     joints: joints.slice(0, -1), open_questions: [] }
-  const replies: Array<[string, unknown]> = [
+  const replies = withManuals([
     ['read_construction_draft', { artifact_id: null, revision: null, after: null }],
     ['save_construction_draft', save], ['check_construction_draft', { artifact_id: id, revision: 1 }],
     ['save_construction_draft', { ...save, key: 'repair', record_id: id, expected_revision: 1, joints, change_note: 'Add the missing contact joint' }],
     ['check_construction_draft', { artifact_id: id, revision: 2 }],
     ['read_construction_draft', { artifact_id: id, revision: 2, after: null }],
-  ]
+  ])
   const results: any[] = []; let step = 0; let stop: any
   const answer = await runProjectAnswer({ ...f.opts, observe: value => { stop = value }, callModel: measured('construction-repair', async options => {
-    for (const m of options.messages ?? []) if (m.role === 'tool') results.push(JSON.parse(String(m.content)))
+    for (const m of options.messages ?? []) if (m.role === 'tool') {
+      const value = JSON.parse(String(m.content))
+      if (value.manuals) assert.equal(value.status, 'ok')
+      else results.push(value)
+    }
     const next = replies[step++]
     if (!next) return response('Konceptet är sparat och geometriskt kontrollerat. Produktval och hållfasthet är fortfarande öppna.')
     assert(options.tools?.some(t => t.function.name === next[0]), 'Scripted tool must actually be offered: ' + next[0])
@@ -183,7 +203,8 @@ if (!missingConstructionTools.length) {
   construction = { status: 'scripted_loop_passed', storage: 'in_memory_not_SQL', stop, revisions: f.drafts.length,
     first_check: { concept_ready: results[2].concept_ready, issues: results[2].issues.map((i: any) => i.code) },
     corrected_check: { concept_ready: results[4].concept_ready, fabrication_ready: results[4].fabrication_ready },
-    readback_revision: results[5].revision, preserved_geometry: true, historical_joint_count: f.drafts[0].joints.length }
+    readback_revision: results[5].revision, preserved_geometry: true, historical_joint_count: f.drafts[0].joints.length,
+    canonical_sha256: createHash('sha256').update(JSON.stringify(f.drafts)).digest('hex') }
 }
 
 // Compare a simple task with construction on the same current toolbox. Include
@@ -198,9 +219,14 @@ task.opts.context.recent = [
   { seq: 5, role: 'user', text: task.opts.message, state: 'pending' },
 ]
 let taskStep = 0
+const taskReplies = withManuals([
+  ['search_project_data', { dataset: 'areas', query: null, status: null, area_id: null, record_id: null, after_id: null }],
+  ['save_project_task', { record_id: null, area_id: 'synthetic-area', step_id: null, name: 'Mät öppningen', instructions: 'Syntetisk uppgift', expected_updated_at: null }],
+])
 const taskResult = await runProjectAnswer({ ...task.opts, callModel: measured('task-save-with-history', async options => {
-  if (taskStep++ === 0) return response(null, 'search_project_data', { dataset: 'areas', query: null, status: null, area_id: null, record_id: null, after_id: null })
-  if (taskStep === 2) return response(null, 'save_project_task', { record_id: null, area_id: 'synthetic-area', step_id: null, name: 'Mät öppningen', instructions: 'Syntetisk uppgift', expected_updated_at: null })
+  for (const m of options.messages ?? []) if (m.role === 'tool') assert(['ok', 'saved'].includes(JSON.parse(String(m.content)).status))
+  const next = taskReplies[taskStep++]
+  if (next) return response(null, ...next)
   return response('Uppgiften är sparad.')
 }, prior) } as any)
 assert(taskResult.ok); assert.equal(task.receipts.length, 1)
@@ -260,9 +286,10 @@ for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_
 })).status)
 assert.equal(writeStatuses.filter(s => s === 'saved').length, 9)
 
-const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
+const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/compare-bob-tool-guides.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
 const sourceHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async path => [path, createHash('sha256').update(await readFile(new URL('../' + path, import.meta.url))).digest('hex')])))
 return { report_version: 1, source_sha256: sourceHashes, fixture_date: stamp, catalog_sha256: createHash('sha256').update(JSON.stringify(catalog)).digest('hex'),
+  guide_delivery: guideDelivery, manual_selections: guideDelivery === 'inline' ? 'none' : 'scripted fixture; not autonomous model selection',
   evidence_class: 'controlled runtime mechanics; model and I/O are synthetic',
   catalog_source: useSeed ? 'current repository seed (not live policy)' : 'explicit caller-supplied snapshot (not live policy)', active_catalog_tools: catalog.filter(r => r.active).length,
   measurement_contract: { units: 'UTF-8 bytes; not tokens', boundary: 'Local callModel options before shared provider formatting/configuration', retained_history: 'previousResponseId may carry unmeasured provider context', content_accounting: 'UTF-8 content values; local_input_json_bytes separately includes local serialization overhead', coverage: 'Bob/task/construction and CAD intake/designer/reviewer; plan specialist and memory-fold calls are not exercised', usage: 'Synthetic replies; provider usage, caching, cost and latency unavailable' },
@@ -284,5 +311,5 @@ return { report_version: 1, source_sha256: sourceHashes, fixture_date: stamp, ca
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  console.log(JSON.stringify(await runRuntimeAudit(process.argv[2]), null, 2))
+  console.log(JSON.stringify(await runRuntimeAudit(process.argv[2], (process.argv[3] ?? 'inline') as GuideDelivery), null, 2))
 }

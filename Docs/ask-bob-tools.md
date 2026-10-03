@@ -26,7 +26,35 @@ Current View and the remaining broader catalog/router/Librarian design are disti
 - **No quote parameters.** Change provenance is filled by the server from the owner's current message ([writes](ask-bob-writes.md#server-owned-change-provenance--2026-09-27)); offered schemas never contain `request_quote`.
 - **Authority is unchanged.** Offering is not authorization. Every execution re-reads policy, re-checks the gate and version, and runs the handler's own validation. The set offered to one step remains a fence: a tool that becomes available during a batch returns `not_offered` and is callable from the next step.
 
-Size, measured with `scripts/audit-bob-runtime.ts --seed`: 50 tools, about 106 KB of schemas and an 8 KB system prompt per step for a named member. The prefix is stable across steps, so provider prompt caching applies.
+The current synthetic named-member baseline offers 59 tools: 127,092 UTF-8 bytes
+of serialized tools and 8,317 bytes of system text. These are sizes, not tokens
+or live usage. See the [measurement owner](foundation-verification.md#k2-runtime-payload-baseline--2026-10-03).
+Actual provider caching and cost require usage measurements.
+
+### Offline guide-delivery candidate — 2026-10-03
+
+**Implemented opt-in experiment, not enabled by production callers or deployed.**
+`toolGuideMode: 'manual'` retains every otherwise offered tool and its exact
+parameter schema, replacing its joined guide with the catalog's short description
+and an instruction to read the full guide. The session-owned `read_tool_manuals`
+reads 1–8 exact currently offered guides in one call. It does not search for,
+select or register capabilities, and has no catalog migration or operator setting.
+The browser request cannot select this option. Default callers continue to use
+the inline contract above; CAD specialists are unchanged.
+
+Execution requires a full-guide receipt from an earlier model step in this same
+session. Reading a guide and invoking its tool in the same tool batch cannot
+bypass that requirement. Policy, availability, version and offered-step fences
+still apply. Exact guide/schema changes invalidate the receipt; a mixed refused
+batch returns no guides and grants no receipts. Final tool-free replies close
+the manual surface too. Change provenance stays server-owned.
+
+The [offline comparison](foundation-verification.md#k2-tool-guide-comparison--2026-10-03)
+uses single-tool and batched reads through the actual Bob loop and its unchanged
+step/call ceilings. Requests for guides are scripted fixture choices, not
+autonomous-model evidence. Enabling this candidate requires real completion,
+error-rejection, continuation, usage/cost and authority acceptance; smaller
+submitted inputs alone do not justify rollout.
 
 ## Product rule
 

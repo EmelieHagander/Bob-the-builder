@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createToolSession, checkedToolSnapshot, serverRequestQuote, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate } from '../supabase/functions/_shared/project-tools/session.ts'
+import { createToolSession, checkedToolSnapshot, serverRequestQuote, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate, type ToolGuideMode } from '../supabase/functions/_shared/project-tools/session.ts'
 
 /** The whole available toolbox is offered on every step with its guide. Offering
  * is never authority: policy, version and gate are re-checked on each execution. */
@@ -16,7 +16,7 @@ function fixture(rows = [policy('read_records', true), policy('draw_shape', fals
     gate: () => gates.get(p.name) ?? 'available', execute: async args => { writes++; return { status: 'saved', value: args } },
   }))
   const readPolicy = async () => { reads.n++; if (failure) throw failure; return structuredClone(snap) }
-  const make = () => createToolSession({ definitions, readPolicy })
+  const make = (toolGuideMode?: ToolGuideMode) => createToolSession({ definitions, readPolicy, toolGuideMode })
   return { rows, definitions, make, session: make(), setPhase: (p: string | null) => { snap.phase = p },
     setGate: (name: string, v: ToolGate) => { gates.set(name, v) }, fail: (v: string) => { failure = new Error(v) }, get reads() { return reads.n }, get writes() { return writes } }
 }
@@ -139,4 +139,91 @@ test('the provenance quote is an exact prefix of at most 500 units and never spl
   const quote = serverRequestQuote(long)
   assert(quote.length <= 500); assert(long.startsWith(quote)); assert.equal(quote, '🌲'.repeat(250))
   assert.equal(serverRequestQuote('Kort.'), 'Kort.')
+})
+
+test('manual candidate retains all exact schemas and blocks use until full guides are read in one batch', async () => {
+  const f = fixture(), manual = f.make('manual')
+  const baseline = await f.session.prepare(), short = await manual.prepare()
+  assert.deepEqual(names(short).filter(n => n !== 'read_tool_manuals'), names(baseline))
+  for (const full of baseline) {
+    const brief = short.find(t => t.function.name === full.function.name)!
+    assert.deepEqual(brief.function.parameters, full.function.parameters)
+    assert(!brief.function.description.includes('FULL_GUIDE'))
+    assert.equal((await manual.execute(full.function.name, { value: 1 })).status, 'manual_required')
+  }
+  assert.equal(f.writes, 0)
+  const guides = await manual.execute('read_tool_manuals', { names: names(baseline) })
+  assert.equal(guides.status, 'ok')
+  assert.deepEqual(guides.manuals, baseline.map(t => ({ name: t.function.name, description: t.function.description })))
+  assert.equal((await manual.execute('draw_shape', { value: 1 })).status, 'manual_required', 'a guide fetched in this batch has not reached the model yet')
+  await manual.prepare()
+  for (const name of names(baseline)) assert.equal((await manual.execute(name, { value: 1 })).status, 'saved')
+  assert.equal(f.writes, 3)
+  const fresh = f.make('manual'); await fresh.prepare()
+  assert.equal((await fresh.execute('draw_shape', { value: 1 })).status, 'manual_required')
+})
+
+test('manual batches preserve denied/disabled/waiting/version and offered-step fences without partial guide leaks', async () => {
+  for (const change of ['denied', 'disabled', 'waiting', 'budget', 'version', 'unknown'] as const) {
+    const f = fixture(), s = f.make('manual'); await s.prepare()
+    if (change === 'denied') f.setGate('draw_shape', 'not_allowed')
+    if (change === 'disabled') f.rows[1].active = false
+    if (change === 'waiting') f.setGate('draw_shape', 'missing_context')
+    if (change === 'budget') f.setGate('draw_shape', 'budget_exhausted')
+    if (change === 'version') f.rows[1].schema_version = 2
+    const r = await s.execute('read_tool_manuals', { names: ['read_records', change === 'unknown' ? 'secret_tool' : 'draw_shape'] })
+    assert.equal(r.status, 'not_offered'); assert.equal(r.manuals, undefined)
+    assert.equal((await s.execute('read_records', { value: 1 })).status, 'manual_required')
+    assert.equal(f.writes, 0)
+  }
+  const f = fixture(); f.setGate('draw_shape', 'missing_context')
+  const s = f.make('manual'); await s.prepare(); f.setGate('draw_shape', 'available')
+  assert.equal((await s.execute('read_tool_manuals', { names: ['draw_shape'] })).status, 'not_offered')
+  await s.prepare(); assert.equal((await s.execute('read_tool_manuals', { names: ['draw_shape'] })).status, 'ok')
+  s.closeSurface()
+  assert.equal((await s.execute('read_tool_manuals', { names: ['draw_shape'] })).status, 'not_offered')
+  assert.equal((await s.execute('draw_shape', { value: 1 })).status, 'not_offered')
+  f.fail('private diagnostic'); await assert.rejects(s.execute('read_tool_manuals', { names: ['draw_shape'] }), /tool_catalog_unavailable/)
+})
+
+test('manual receipts invalidate on changed guides or exact schemas and cannot load a changed step contract', async () => {
+  for (const change of ['guide', 'schema'] as const) {
+    const f = fixture(), s = f.make('manual'); await s.prepare()
+    await s.execute('read_tool_manuals', { names: ['draw_shape'] })
+    if (change === 'guide') f.rows[1].how_to += ' NEW_GUIDE'
+    else (f.definitions[1].spec.function.parameters as any).required.push('new_required_field')
+    assert.equal((await s.execute('draw_shape', { value: 1 })).status, 'manual_required')
+    assert.equal((await s.execute('read_tool_manuals', { names: ['draw_shape'] })).status, 'contract_changed')
+    await s.prepare()
+    assert.equal((await s.execute('read_tool_manuals', { names: ['draw_shape'] })).status, 'ok')
+    await s.prepare()
+    assert.equal((await s.execute('draw_shape', { value: 1 })).status, 'saved')
+  }
+})
+
+test('manual reader validates bounded batches and cannot override a registered or catalog tool', async () => {
+  const f = fixture(), s = f.make('manual'); await s.prepare()
+  for (const args of [null, { names: [] }, { names: ['draw_shape', 'draw_shape'] },
+    { names: Array(9).fill('draw_shape') }, { names: [42] }, { names: ['draw_shape'], other: true }])
+    assert.equal((await s.execute('read_tool_manuals', args)).status, 'invalid')
+  assert.equal((await s.execute('draw_shape', { value: 1 })).status, 'manual_required')
+  const empty = createToolSession({ definitions: [], readPolicy: async () => ({ phase: null, tools: [] }), toolGuideMode: 'manual' })
+  assert.deepEqual(await empty.prepare(), [])
+  assert.throws(() => fixture([policy('read_tool_manuals')]).make('manual'), /Reserved/)
+  f.rows.push(policy('read_tool_manuals')); await assert.rejects(s.prepare(), /Reserved/)
+})
+
+test('manual candidate hides provenance and injects the owner quote only at the existing execution boundary', async () => {
+  const f = fixture([policy('save_thing')]), seen: unknown[] = []
+  const def = f.definitions[0]
+  ;(def.spec.function.parameters as any).properties.request_quote = { type: 'string' }
+  ;(def.spec.function.parameters.required as string[]).push('request_quote')
+  def.execute = async args => { seen.push(args); return { status: 'saved' } }
+  const s = createToolSession({ definitions: [def], readPolicy: async () => ({ phase: null, tools: f.rows }),
+    message: 'Spara det här.', toolGuideMode: 'manual' })
+  const tools = await s.prepare()
+  assert(!JSON.stringify(tools).includes('request_quote'))
+  await s.execute('read_tool_manuals', { names: ['save_thing'] }); await s.prepare()
+  assert.equal((await s.execute('save_thing', { value: 1, request_quote: 'invented' })).status, 'saved')
+  assert.deepEqual(seen, [{ value: 1, request_quote: 'Spara det här.' }])
 })

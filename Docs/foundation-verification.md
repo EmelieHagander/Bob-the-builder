@@ -1158,3 +1158,49 @@ All three tests and vocabulary verification pass locally. Network calls are
 blocked during the audit. CI includes this test file through the existing suite.
 [State](bob-delivery-flow.md#state) owns the next work; this baseline does not close
 K2's product-evidence or real-member acceptance.
+
+## K2 tool-guide comparison — 2026-10-03
+
+**Offline candidate only; no migration, deployment, model or budget change.**
+`scripts/compare-bob-tool-guides.ts` compares current inline instructions against
+one manual at a time and a single batch of the needed manuals. The candidates
+use the real `runProjectAnswer` dispatcher and unchanged model-step/tool-call
+ceilings; the extra reads count as actual steps. Every permitted domain tool and
+exact parameter schema remains offered. Production callers omit the opt-in
+`toolGuideMode` option. [The tool owner](ask-bob-tools.md#offline-guide-delivery-candidate--2026-10-03)
+owns its contract and activation boundary.
+
+The [source-hashed report](archive/k2-tool-guides-comparison-2026-10-03.json)
+contains all three reruns, not a comparison of a new candidate with an old
+unhashed snapshot. This is a new rerun of #188's fixtures; its archived baseline
+keeps its original hashes. Network is fenced off. Model replies, guide selections,
+storage and render transports are scripted. Same canonical construction/history
+hash, missing-joint rejection, repaired revision 2, task receipt and unchanged
+CAD review results are asserted across variants. Fabrication readiness remains
+false. This does not prove autonomous tool choice, SQL persistence or design quality.
+
+| Scripted scenario / guide delivery | Model calls | Manual reads | First local input, bytes | Sum of local inputs, bytes | Difference from inline |
+|---|---:|---:|---:|---:|---:|
+| Construction / inline | 7 | 0 | 137,387 | 1,003,532 | — |
+| Construction / single | 10 | 3 | 102,873 | 1,069,452 | +6.57% |
+| Construction / batch | 8 | 1 | 102,873 | 866,884 | −13.62% |
+| Task with history / inline | 3 | 0 | 137,635 | 409,702 | — |
+| Task with history / single | 5 | 2 | 103,121 | 509,978 | +24.48% |
+| Task with history / batch | 4 | 1 | 103,121 | 408,694 | −0.25% |
+
+Each local input is serialized `callModel` options, including tool results.
+The sum counts newly submitted options per call; retained provider context behind
+`previousResponseId`, caching, actual tokens, cost and latency are unknown/null.
+Schema repetition dominates the candidate too. The smaller first input is not
+a whole-run saving: single reads lose in both fixtures, while the batch materially
+shrinks the construction fixture and barely changes the short task. An additional
+real provider round trip may outweigh that short-task difference.
+
+`tests/tool-session.test.ts` covers full-guide retrieval, identical schema/ability
+surface, receipt isolation, changed guide/schema invalidation, unavailable/denied/
+disabled/unknown tools, atomic refused batches, same-step and final-step fences,
+bounded arguments and reserved-name collisions. `tests/runtime-audit.test.ts`
+asserts identical canonical outcomes and the extra actual loop steps. Default
+inline behavior retains the existing regression tests. Local/CI validation is
+recorded in the continuation PR. [State](bob-delivery-flow.md#state) owns review,
+instrumentation and real-member acceptance before any activation decision.

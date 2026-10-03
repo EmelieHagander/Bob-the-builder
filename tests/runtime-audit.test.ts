@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { runRuntimeAudit } from '../scripts/audit-bob-runtime.ts'
 import { measureRuntimeInput, measureRuntimeOutput } from '../scripts/support/runtime-audit-metrics.ts'
+import { compareBobToolGuides } from '../scripts/compare-bob-tool-guides.ts'
 
 test('audit measures UTF-8 content without exposing text or pretending continuation history is local', () => {
   const privateText = 'PRIVATE å🪚'
@@ -54,4 +55,25 @@ test('an explicitly old catalog remains old and cannot pass K2 by silently using
   assert.equal(r.construction.status, 'not_run')
   assert(r.construction.missing_tools.includes('check_construction_draft'))
   assert(r.catalog_source.startsWith('explicit caller-supplied'))
+})
+
+test('single and batched manuals use the actual Bob loop and retain the same canonical outcome', async () => {
+  const comparison = await compareBobToolGuides()
+  const [inline, single, batch] = comparison.reports
+  assert.equal(inline.construction.stop.steps, 7)
+  assert.equal(single.construction.stop.steps, 10)
+  assert.equal(batch.construction.stop.steps, 8)
+  for (const candidate of [single, batch]) {
+    assert.equal(candidate.construction.stop.tool_calls, candidate.construction.stop.steps - 1)
+    assert.equal(candidate.construction.canonical_sha256, inline.construction.canonical_sha256)
+    assert.deepEqual(candidate.task_save, inline.task_save)
+    assert.deepEqual(candidate.cad, inline.cad)
+    for (let i = 0; i < inline.surfaces.length; i++)
+      assert.deepEqual(candidate.surfaces[i].names.filter((n: string) => n !== 'read_tool_manuals'), inline.surfaces[i].names)
+  }
+  assert.equal(comparison.summaries[1].scenarios[0].manual_calls, 3)
+  assert.equal(comparison.summaries[2].scenarios[0].manual_calls, 1)
+  assert(comparison.summaries[1].scenarios[0].difference_from_inline_bytes > 0)
+  assert(comparison.summaries[2].scenarios[0].difference_from_inline_bytes < 0)
+  assert.equal(comparison.summaries[2].scenarios[0].provider_tokens, null)
 })
