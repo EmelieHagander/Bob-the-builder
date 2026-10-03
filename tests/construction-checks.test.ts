@@ -79,3 +79,32 @@ test('tool re-reads canonical revision and catalog; access revocation, forged re
  read:async()=>({...draft,revision:++count===1?1:2}),readCatalog:async()=>({status:'ok',projectId:project,record:catalog.get(material+'@1')})})
  assert.equal((await concurrent.execute('check_construction_draft',{artifact_id:artifact,revision:1})).status,'conflict')
 })
+
+test('caller SQL checkpoint and exact normalized catalog feed a successful real check-tool result',async t=>{
+ const {projectSchema,asProjectUser}=await import('./support/project-schema.ts')
+ const {parameterPlan}=await import('./support/cad-parameter-fixture.ts')
+ const {createProjectWriter}=await import('../supabase/functions/_shared/project-write.ts')
+ const {randomUUID}=await import('node:crypto')
+ const pg=await projectSchema();t.after(()=>pg.close())
+ const owner=randomUUID(),turn=randomUUID(),solution=randomUUID(),message='Create the synthetic concept.'
+ const rpc=async(name:string,args:unknown[],service=false):Promise<any>=>(await asProjectUser(pg,service?null:owner,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,service?'service_role':'authenticated')).rows[0].result
+ await pg.query('insert into auth.users values($1,$2,now())',[owner,'k2-owner@example.test'])
+ const projectId=(await rpc('bob.create_project',[JSON.stringify({name:'K2 fixture'})])).id
+ await rpc('bob.solution_command',[projectId,'create',solution,0,JSON.stringify({area_id:null,title:'Synthetic concept',description:'No physical safety approval',assumptions:'Product checks open',tradeoffs:'Simple',measurements:[]})])
+ await rpc('bob.solution_command',[projectId,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Synthetic test target'})])
+ const claim=await rpc('bob.bob_claim_turn',[projectId,owner,turn,message],true)
+ const write=(payload:any)=>rpc('bob.bob_project_write_v14',[projectId,claim.thread_id,turn,claim.generation,JSON.stringify(payload)])
+ const mat=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'material',kind:'material',name:'Plywood concept',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'1.8',unit:'cm',truth:'provided_spec',parameter:null,note:'Declared synthetic choice'}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
+ const writer=createProjectWriter(projectId,message,async p=>({data:await write(p),error:null}),async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+ const tools=createConstructionTools({projectId,message,writer,hasAccess:async()=>true,now:()=>new Date('2026-10-03'),
+ read:(id,revision,after)=>rpc('bob.read_construction_draft',[projectId,id,revision,after]),
+ readSources:async()=>({project:new Map(),physical:new Map()}),
+ readCatalog:(id,revision)=>rpc('bob.catalog_read',[projectId,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})])})
+ const {draft}=fixture();draft.materials.forEach((m:any)=>m.material_id=mat.recordId)
+ const saved=await tools.execute('save_construction_draft',{key:'initial',record_id:null,expected_revision:0,title:'Five-part concept',description:'Synthetic only',area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameter_plan:parameterPlan(draft.recipe),materials:draft.materials,joints:draft.joints,open_questions:[],request_quote:message})
+ assert.equal(saved.status,'saved',JSON.stringify(saved))
+ const checked=await tools.execute('check_construction_draft',{artifact_id:saved.receipt.recordId,revision:1})
+ assert.equal(checked.status,'checked',JSON.stringify(checked));assert.equal(checked.concept_ready,true,JSON.stringify(checked.issues));assert.equal(checked.fabrication_ready,false)
+ assert.deepEqual(checked.bounds_mm.size,[600,300,800]);assert.equal(checked.joint_count,6)
+ assert.equal((await pg.query('select count(*) n from bob.artifact_cad_revisions where artifact_id=$1',[saved.receipt.recordId])).rows[0].n,0)
+})
