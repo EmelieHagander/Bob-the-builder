@@ -60,3 +60,44 @@ test('diagnostics stay service-only even when a normal user belongs to a project
   const {rows}=await pg.query(`select relrowsecurity from pg_class where oid='bob.execution_events'::regclass`);assert.equal(rows[0].relrowsecurity,true)
  }finally{await pg.close()}
 })
+
+test('CAD research retains its role, usage and journal replay boundary without admitting unknown role text',async()=>{
+ const events:ExecutionEvent[]=[],entries:JournalEntry[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ const run=async()=>{const journal=createBobJournal({entries,save:async e=>{entries.push(e)}},10000,()=>0)
+  await journal.run('model',{role:'cad-research'},async()=>{await metrics.model({aiFunction:'cad-research',prompt:'PRIVATE source'} as any,reply,120);return reply})}
+ await run();await run()
+ assert.equal(events.length,1);assert.equal(events[0].role,'cad-research')
+ assert.equal(events[0].input_tokens,12);assert.equal(events[0].output_tokens,8);assert.equal(events[0].cost_usd,0.01)
+ await metrics.model({aiFunction:'PRIVATE unknown role'} as any,reply,1)
+ assert.equal(events[1].role,'other');assert(!JSON.stringify(events).includes('PRIVATE'))
+})
+
+test('role migration preserves historical rows and service-only access while admitting new research events',async()=>{
+ const legacy=['bob','tool','ask-bob','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-tool-discovery','bob-work-intent','bob-delivery-language','other']
+ const run='50000000-0000-4000-8000-000000000001',turn='50000000-0000-4000-8000-000000000002'
+ const insert=`insert into bob.execution_events(run_id,turn_id,event_key,kind,role,status,duration_ms,counts) values($1,$2,$3,'model',$4,'ok',1,'{}')`
+ const pg=await projectSchema(async(db,name)=>{
+  if(name.endsWith('_cad_research_execution_role.sql')){
+   await assert.rejects(db.query(insert,[run,turn,'before:research','cad-research']),(e:any)=>e.code==='23514')
+   for(const role of legacy)await db.query(insert,[run,turn,'legacy:'+role,role])
+  }
+ })
+ try{
+  const before=await pg.query('select role,event_key from bob.execution_events order by role')
+  assert.deepEqual(before.rows.map((r:any)=>r.role),legacy.slice().sort())
+  await pg.exec('set role service_role')
+  await pg.query(insert,[run,turn,'new:research','cad-research'])
+  await assert.rejects(pg.query(insert,[run,turn,'unknown','unregistered-role']),(e:any)=>e.code==='23514')
+  await pg.exec('reset role')
+  const {rows}=await pg.query("select convalidated from pg_constraint where conrelid='bob.execution_events'::regclass and conname='execution_events_role_check'")
+  assert.equal(rows[0].convalidated,true)
+  assert.equal((await pg.query("select count(*)::integer as n from bob.execution_events where role='other'")).rows[0].n,1,'historical other cannot safely be relabelled')
+  for(const role of ['anon','authenticated']){
+   await pg.exec('set role '+role)
+   await assert.rejects(pg.query('select * from bob.execution_events'),(e:any)=>e.code==='42501')
+   await assert.rejects(pg.query(insert,[run,turn,'denied:'+role,'cad-research']),(e:any)=>e.code==='42501')
+   await pg.exec('reset role')
+  }
+ }finally{await pg.close()}
+})
