@@ -1,0 +1,3062 @@
+{
+  "report_version": 1,
+  "source_sha256": {
+    "scripts/audit-bob-runtime.ts": "b62872308d461988be19fb2b821114f7cf1e98fcf21b3bb86527f04912ad7550",
+    "scripts/support/runtime-audit-metrics.ts": "71686c366ea6ff6e352e9d66cf452fb7fcff986573d17accef9f0cb8638e8341",
+    "supabase/functions/_shared/project-answer.ts": "52516fb3231b62cc878cae7f57e92d6d42889c896b84a19e1bd362e17333a2c5",
+    "supabase/functions/_shared/project-tools/session.ts": "e0af4dc55631a66c2d4f0a9139a411bf15a1f8bd21545c3314811f4c21c42689",
+    "supabase/functions/_shared/project-tools/bob-tools.ts": "c5997e7d470911c5360b423823dc84edc7e8486642ed136dbe1e14fcd30342a2",
+    "supabase/functions/_shared/construction-draft.ts": "b99ea7193abc4a4f713d727c1e560e7432f2200d61c5fdc1f8aa4f870f36d5a6",
+    "supabase/functions/_shared/construction-checks.ts": "ff447d043adc1a2a6948063a07c15bf93a169cee1eae4361954e194026933010",
+    "supabase/functions/_shared/cad-assistant.ts": "8205a17620b9a5661d4c61657e32546403cc0d81873728378165b2c99c907e26",
+    "supabase/functions/_shared/cad-research.ts": "d1a3c3ee399c5a7a9d7b430d1162e820ca99b709801607266a873482a99d57eb",
+    "supabase/functions/_shared/cad-review.ts": "b338693e114a38b90f118e31ea5a5d1bcfb78cdd47d2d8c66bec15598d2931db",
+    "supabase/functions/_shared/execution-metrics.ts": "161f9870c699db69254b23b3cd0354c8c035c21a2720d96f0fce7bbf875f175d"
+  },
+  "fixture_date": "2026-10-03T00:00:00Z",
+  "catalog_sha256": "fa99d1c8a9966459d616793cde7e7556e374a464ed28b703f003cee58b90832d",
+  "evidence_class": "controlled runtime mechanics; model and I/O are synthetic",
+  "catalog_source": "current repository seed (not live policy)",
+  "active_catalog_tools": 62,
+  "measurement_contract": {
+    "units": "UTF-8 bytes; not tokens",
+    "boundary": "Local callModel options before shared provider formatting/configuration",
+    "retained_history": "previousResponseId may carry unmeasured provider context",
+    "content_accounting": "UTF-8 content values; local_input_json_bytes separately includes local serialization overhead",
+    "coverage": "Bob/task/construction and CAD intake/designer/reviewer; plan specialist and memory-fold calls are not exercised",
+    "usage": "Synthetic replies; provider usage, caching, cost and latency unavailable"
+  },
+  "construction": {
+    "status": "scripted_loop_passed",
+    "storage": "in_memory_not_SQL",
+    "stop": {
+      "steps": 7,
+      "tool_calls": 6,
+      "deferred_calls": 0,
+      "completion_checks": 0,
+      "nudges": 0,
+      "end": "answered"
+    },
+    "revisions": 2,
+    "first_check": {
+      "concept_ready": false,
+      "issues": [
+        "contact_without_joint"
+      ]
+    },
+    "corrected_check": {
+      "concept_ready": true,
+      "fabrication_ready": false
+    },
+    "readback_revision": 2,
+    "preserved_geometry": true,
+    "historical_joint_count": 5
+  },
+  "task_save": {
+    "status": "saved",
+    "writes": 1
+  },
+  "calls": [
+    {
+      "scenario": "premature-task",
+      "role": "ask-bob",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 1089,
+        "project_data": 451,
+        "history": 87,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 43
+      },
+      "measured_content_bytes": 131194,
+      "local_input_json_bytes": 137340,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 32,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.09079899999994723,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "premature-plan",
+      "role": "ask-bob",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 1089,
+        "project_data": 451,
+        "history": 87,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 51
+      },
+      "measured_content_bytes": 131202,
+      "local_input_json_bytes": 137348,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 32,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.019971000000055028,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "premature-material",
+      "role": "ask-bob",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 1089,
+        "project_data": 451,
+        "history": 87,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 33
+      },
+      "measured_content_bytes": 131184,
+      "local_input_json_bytes": 137330,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 32,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.018311000000039712,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 1089,
+        "project_data": 451,
+        "history": 87,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 90
+      },
+      "measured_content_bytes": 131241,
+      "local_input_json_bytes": 137387,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 49,
+        "returned_tools": [
+          "read_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.24555799999995997,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 2,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 217,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 129741,
+      "local_input_json_bytes": 135825,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 9166,
+        "returned_tools": [
+          "save_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.11801500000001397,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 3,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 12259,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 141783,
+      "local_input_json_bytes": 149691,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 67,
+        "returned_tools": [
+          "check_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.13000699999997778,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 4,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 4487,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 134011,
+      "local_input_json_bytes": 140437,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 9385,
+        "returned_tools": [
+          "save_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.1068119999999908,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 5,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 12444,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 141968,
+      "local_input_json_bytes": 149908,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 67,
+        "returned_tools": [
+          "check_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.11414100000001781,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 6,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 4735,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 134259,
+      "local_input_json_bytes": 140711,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 80,
+        "returned_tools": [
+          "read_construction_draft"
+        ]
+      },
+      "fixture_elapsed_ms": 0.5477839999999787,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "construction-repair",
+      "role": "ask-bob",
+      "call": 7,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 12149,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 141673,
+      "local_input_json_bytes": 149573,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 102,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.13123499999994692,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "task-save-with-history",
+      "role": "ask-bob",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 1089,
+        "project_data": 451,
+        "history": 307,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 43
+      },
+      "measured_content_bytes": 131414,
+      "local_input_json_bytes": 137635,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 94,
+        "returned_tools": [
+          "search_project_data"
+        ]
+      },
+      "fixture_elapsed_ms": 0.09751300000004903,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "task-save-with-history",
+      "role": "ask-bob",
+      "call": 2,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 413,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 129937,
+      "local_input_json_bytes": 136049,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 147,
+        "returned_tools": [
+          "save_project_task"
+        ]
+      },
+      "fixture_elapsed_ms": 0.028841999999940526,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "task-save-with-history",
+      "role": "ask-bob",
+      "call": 3,
+      "content_utf8_bytes": {
+        "system": 8317,
+        "tool_descriptions": 44896,
+        "parameter_schemas": 76311,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 384,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 129908,
+      "local_input_json_bytes": 136018,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ],
+      "largest_tools": [
+        {
+          "name": "save_construction_draft",
+          "description_bytes": 1759,
+          "parameter_bytes": 15527
+        },
+        {
+          "name": "save_building_context",
+          "description_bytes": 1567,
+          "parameter_bytes": 11213
+        },
+        {
+          "name": "save_catalog_definition",
+          "description_bytes": 3062,
+          "parameter_bytes": 3490
+        },
+        {
+          "name": "save_project_building_plan",
+          "description_bytes": 1376,
+          "parameter_bytes": 4086
+        },
+        {
+          "name": "propose_project_plan",
+          "description_bytes": 740,
+          "parameter_bytes": 3890
+        }
+      ],
+      "system_sections_utf8_bytes": {
+        "persona": 1186,
+        "rules": 3854,
+        "vocabulary": 1233,
+        "toolbox_and_separators": 2044
+      },
+      "execution_metric_role": "ask-bob",
+      "output": {
+        "status": "ok",
+        "text_bytes": 21,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.008769000000029337,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-repair",
+      "role": "cad-research",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 1495,
+        "tool_descriptions": 396,
+        "parameter_schemas": 3452,
+        "response_schema": 0,
+        "working_frame": 2122,
+        "project_data": 3170,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 10635,
+      "local_input_json_bytes": 11703,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "finish_cad_research"
+      ],
+      "largest_tools": [
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "finish_cad_research",
+          "description_bytes": 100,
+          "parameter_bytes": 1224
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "other",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 176,
+        "returned_tools": [
+          "finish_cad_research"
+        ]
+      },
+      "fixture_elapsed_ms": 0.29827899999997953,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-repair",
+      "role": "cad-designer",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 4550,
+        "tool_descriptions": 2168,
+        "parameter_schemas": 19257,
+        "response_schema": 0,
+        "working_frame": 942,
+        "project_data": 3170,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 30087,
+      "local_input_json_bytes": 31229,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 2382,
+        "returned_tools": [
+          "render_cad_candidate"
+        ]
+      },
+      "fixture_elapsed_ms": 0.363386000000105,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-repair",
+      "role": "cad-designer",
+      "call": 2,
+      "content_utf8_bytes": {
+        "system": 4549,
+        "tool_descriptions": 2168,
+        "parameter_schemas": 19257,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 173,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 26147,
+      "local_input_json_bytes": 26777,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 2393,
+        "returned_tools": [
+          "render_cad_candidate"
+        ]
+      },
+      "fixture_elapsed_ms": 0.2581920000000082,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-repair",
+      "role": "cad-designer",
+      "call": 3,
+      "content_utf8_bytes": {
+        "system": 4068,
+        "tool_descriptions": 2168,
+        "parameter_schemas": 19257,
+        "response_schema": 0,
+        "working_frame": 384,
+        "project_data": 408,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 909,
+        "image_carriers": 204,
+        "other_messages": 186
+      },
+      "measured_content_bytes": 27584,
+      "local_input_json_bytes": 28517,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 2,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 33,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.22289100000000417,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-repair",
+      "role": "cad-reviewer",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 5629,
+        "tool_descriptions": 0,
+        "parameter_schemas": 0,
+        "response_schema": 949,
+        "working_frame": 4912,
+        "project_data": 5151,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 204,
+        "other_messages": 52
+      },
+      "measured_content_bytes": 16897,
+      "local_input_json_bytes": 18484,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 2,
+      "offered_tools": [],
+      "largest_tools": [],
+      "execution_metric_role": "cad-reviewer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 133,
+        "tool_argument_bytes": 0,
+        "returned_tools": []
+      },
+      "fixture_elapsed_ms": 0.011377999999922395,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-read-boundary",
+      "role": "cad-research",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 1495,
+        "tool_descriptions": 396,
+        "parameter_schemas": 3452,
+        "response_schema": 0,
+        "working_frame": 2141,
+        "project_data": 3170,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 10654,
+      "local_input_json_bytes": 11722,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "finish_cad_research"
+      ],
+      "largest_tools": [
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "finish_cad_research",
+          "description_bytes": 100,
+          "parameter_bytes": 1224
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "other",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 163,
+        "returned_tools": [
+          "finish_cad_research"
+        ]
+      },
+      "fixture_elapsed_ms": 0.08982500000001892,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-read-boundary",
+      "role": "cad-designer",
+      "call": 1,
+      "content_utf8_bytes": {
+        "system": 4550,
+        "tool_descriptions": 2168,
+        "parameter_schemas": 19257,
+        "response_schema": 0,
+        "working_frame": 948,
+        "project_data": 3170,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 0,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 30093,
+      "local_input_json_bytes": 31235,
+      "previous_response": false,
+      "retained_provider_context_bytes": 0,
+      "image_count": 0,
+      "offered_tools": [
+        "search_project_data",
+        "read_cad_artifact",
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "search_project_data",
+          "description_bytes": 60,
+          "parameter_bytes": 2058
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        },
+        {
+          "name": "read_cad_artifact",
+          "description_bytes": 236,
+          "parameter_bytes": 170
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 80,
+        "returned_tools": [
+          "search_project_data"
+        ]
+      },
+      "fixture_elapsed_ms": 0.011769999999955871,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-read-boundary",
+      "role": "cad-designer",
+      "call": 2,
+      "content_utf8_bytes": {
+        "system": 4556,
+        "tool_descriptions": 1872,
+        "parameter_schemas": 17029,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 266,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 23723,
+      "local_input_json_bytes": 24189,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 80,
+        "returned_tools": [
+          "search_project_data"
+        ]
+      },
+      "fixture_elapsed_ms": 0.03695600000003196,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-read-boundary",
+      "role": "cad-designer",
+      "call": 3,
+      "content_utf8_bytes": {
+        "system": 4556,
+        "tool_descriptions": 1872,
+        "parameter_schemas": 17029,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 52,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 23509,
+      "local_input_json_bytes": 23941,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 80,
+        "returned_tools": [
+          "search_project_data"
+        ]
+      },
+      "fixture_elapsed_ms": 0.004203999999958796,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    },
+    {
+      "scenario": "cad-read-boundary",
+      "role": "cad-designer",
+      "call": 4,
+      "content_utf8_bytes": {
+        "system": 4556,
+        "tool_descriptions": 1872,
+        "parameter_schemas": 17029,
+        "response_schema": 0,
+        "working_frame": 0,
+        "project_data": 0,
+        "history": 0,
+        "tool_arguments": 0,
+        "tool_results": 52,
+        "image_carriers": 0,
+        "other_messages": 0
+      },
+      "measured_content_bytes": 23509,
+      "local_input_json_bytes": 23941,
+      "previous_response": true,
+      "retained_provider_context_bytes": null,
+      "image_count": 0,
+      "offered_tools": [
+        "render_cad_candidate",
+        "render_saved_cad_candidate",
+        "report_cad_blocker"
+      ],
+      "largest_tools": [
+        {
+          "name": "render_cad_candidate",
+          "description_bytes": 1413,
+          "parameter_bytes": 15844
+        },
+        {
+          "name": "render_saved_cad_candidate",
+          "description_bytes": 133,
+          "parameter_bytes": 900
+        },
+        {
+          "name": "report_cad_blocker",
+          "description_bytes": 326,
+          "parameter_bytes": 285
+        }
+      ],
+      "execution_metric_role": "cad-designer",
+      "output": {
+        "status": "ok",
+        "text_bytes": 4,
+        "tool_argument_bytes": 91,
+        "returned_tools": [
+          "report_cad_blocker"
+        ]
+      },
+      "fixture_elapsed_ms": 0.0608150000000478,
+      "provider_usage": null,
+      "provider_cost_usd": null,
+      "provider_latency_ms": null
+    }
+  ],
+  "execution_roles": [
+    "ask-bob",
+    "other",
+    "cad-designer",
+    "cad-reviewer"
+  ],
+  "surfaces": [
+    {
+      "phase": null,
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    },
+    {
+      "phase": "concept",
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    },
+    {
+      "phase": "design",
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    },
+    {
+      "phase": "planning",
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    },
+    {
+      "phase": "build",
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    },
+    {
+      "phase": "complete",
+      "offered": 59,
+      "domain_tools": 59,
+      "system_chars": 8309,
+      "schema_bytes": 127092,
+      "unique_tools": 59,
+      "duplicate_names": [],
+      "cad_initially_offered": true,
+      "largest": [
+        {
+          "name": "save_construction_draft",
+          "bytes": 17386
+        },
+        {
+          "name": "save_building_context",
+          "bytes": 12878
+        },
+        {
+          "name": "save_catalog_definition",
+          "bytes": 6652
+        },
+        {
+          "name": "save_project_building_plan",
+          "bytes": 5565
+        },
+        {
+          "name": "propose_project_plan",
+          "bytes": 4727
+        }
+      ],
+      "names": [
+        "archive_project_area",
+        "archive_project_measurement",
+        "attach_project_image",
+        "audit_project_plan",
+        "cancel_drawing_request",
+        "check_construction_draft",
+        "compile_project_plan",
+        "create_project_room_layout",
+        "decide_project_plan",
+        "delete_project_build_day",
+        "delete_project_task",
+        "delete_shopping_item",
+        "derive_cad_material_requirement",
+        "design_project_cad",
+        "detach_project_image",
+        "edit_project_plan",
+        "edit_project_room_layout",
+        "ensure_drawing_gap_task",
+        "finalize_project_image",
+        "generate_project_image",
+        "inspect_building_projection",
+        "inspect_stair_options",
+        "link_drawing_gap",
+        "link_project_drawing",
+        "link_project_plan_evidence",
+        "link_project_plan_task",
+        "list_project_category",
+        "manage_project_material",
+        "manage_task_readiness",
+        "open_project_item",
+        "propose_project_plan",
+        "read_construction_draft",
+        "read_drawing_request_work",
+        "read_drawing_requests",
+        "read_material_catalog",
+        "read_project_record_section",
+        "read_project_work",
+        "restore_drawing_request",
+        "save_building_context",
+        "save_catalog_definition",
+        "save_construction_draft",
+        "save_project_area",
+        "save_project_build_day",
+        "save_project_building_plan",
+        "save_project_description",
+        "save_project_drawing",
+        "save_project_measurement",
+        "save_project_solution",
+        "save_project_stair",
+        "save_project_task",
+        "search_building_knowledge",
+        "search_conversation_history",
+        "search_material_catalog",
+        "search_project_data",
+        "select_project_target",
+        "set_project_phase",
+        "set_project_plan_focus",
+        "update_project_schedule",
+        "update_project_task_work"
+      ]
+    }
+  ],
+  "toolbox_shelves": {
+    "Project, phases and Areas": [
+      "archive_project_area",
+      "save_project_area",
+      "save_project_description",
+      "set_project_phase",
+      "update_project_schedule"
+    ],
+    "Measurements and design decisions": [
+      "archive_project_measurement",
+      "save_project_measurement",
+      "save_project_solution",
+      "select_project_target"
+    ],
+    "Images and mockups": [
+      "attach_project_image",
+      "detach_project_image",
+      "finalize_project_image",
+      "generate_project_image",
+      "list_project_category",
+      "open_project_item"
+    ],
+    "Living plan": [
+      "audit_project_plan",
+      "compile_project_plan",
+      "decide_project_plan",
+      "edit_project_plan",
+      "link_project_plan_evidence",
+      "link_project_plan_task",
+      "propose_project_plan",
+      "save_compiled_project_plan (waiting)",
+      "set_project_plan_focus"
+    ],
+    "Drawings and CAD": [
+      "cancel_drawing_request",
+      "check_construction_draft",
+      "create_project_room_layout",
+      "design_project_cad",
+      "edit_project_room_layout",
+      "ensure_drawing_gap_task",
+      "inspect_building_projection",
+      "inspect_stair_options",
+      "link_drawing_gap",
+      "link_project_drawing",
+      "read_construction_draft",
+      "read_drawing_request_work",
+      "read_drawing_requests",
+      "restore_drawing_request",
+      "save_cad_design (waiting)",
+      "save_construction_draft",
+      "save_project_building_plan",
+      "save_project_drawing",
+      "save_project_stair"
+    ],
+    "Tasks and build days": [
+      "delete_project_build_day",
+      "delete_project_task",
+      "manage_task_readiness",
+      "save_project_build_day",
+      "save_project_task",
+      "update_project_task_work"
+    ],
+    "Materials, stock and Shopping": [
+      "delete_shopping_item",
+      "derive_cad_material_requirement",
+      "manage_project_material",
+      "read_material_catalog",
+      "save_catalog_definition",
+      "search_material_catalog"
+    ],
+    "Project records and memory": [
+      "read_project_record_section",
+      "read_project_work",
+      "search_conversation_history",
+      "search_project_data"
+    ],
+    "Building and site": [
+      "save_building_context"
+    ],
+    "Building knowledge": [
+      "search_building_knowledge"
+    ]
+  },
+  "premature": [
+    {
+      "message": "Skapa en uppgift för att mäta öppningen.",
+      "model_calls": 1,
+      "writes": 0,
+      "ok": true,
+      "partial": false,
+      "answer": "Jag kan göra det i nästa svar."
+    },
+    {
+      "message": "Ändra planen och flytta uppgiften till rätt steg.",
+      "model_calls": 1,
+      "writes": 0,
+      "ok": true,
+      "partial": false,
+      "answer": "Jag kan göra det i nästa svar."
+    },
+    {
+      "message": "Ta fram och spara materiallistan.",
+      "model_calls": 1,
+      "writes": 0,
+      "ok": true,
+      "partial": false,
+      "answer": "Jag kan göra det i nästa svar."
+    }
+  ],
+  "reserved_image_grounding": {
+    "remaining": 0,
+    "project": "ok",
+    "measurements": "empty",
+    "provider_still_called": true
+  },
+  "cad": {
+    "status": "ready",
+    "calls": 3,
+    "renders": 1,
+    "returned_to_designer": [
+      {
+        "status": "invalid",
+        "reason": "invalid_geometry"
+      },
+      {
+        "status": "rendered",
+        "reason": null
+      }
+    ],
+    "generated_pixels_delivered": true,
+    "svg_bytes_delivered": false,
+    "research_boundary_status": "blocked",
+    "research_tools_on_fourth_call": [
+      "render_cad_candidate",
+      "render_saved_cad_candidate",
+      "report_cad_blocker"
+    ],
+    "unused_lookup_calls": 27
+  },
+  "write_statuses_for_nine_tasks": [
+    "saved",
+    "saved",
+    "saved",
+    "saved",
+    "saved",
+    "saved",
+    "saved",
+    "saved",
+    "saved"
+  ],
+  "drawing_receipt_check_accepts_any_saved_drawing": true
+}
