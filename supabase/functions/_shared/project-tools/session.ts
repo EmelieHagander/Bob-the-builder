@@ -1,9 +1,16 @@
 import { rethrowContinuation } from '../bob-job-journal.ts'
 /** Bob's toolbox. Every registered, active and currently available tool is offered
- * on every model step with its full guide; there is no discovery round. Offering
+ * on every model step; there is no capability discovery round. Offering
  * is not authorization: the catalog policy, schema version and server-owned gate
  * are checked again on every execution. A model never supplies policy. */
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
+/** Internal experiment only. Hosted callers keep the default inline guides. */
+export type ToolInstructions = 'inline' | 'on_demand'
+export const DESCRIBE_TOOL: ToolSpec = { type: 'function', function: {
+  name: 'describe_tool',
+  description: 'Read the current usage manual for a tool on your bench by exact name when you need its detailed workflow. Read-only; does not load, enable or execute the tool.',
+  parameters: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' } }, required: ['name'] },
+} }
 export type ToolGate = 'available' | 'not_allowed' | 'missing_context' | 'budget_exhausted'
 export interface ToolDefinition {
   spec: ToolSpec
@@ -68,17 +75,19 @@ export function serverRequestQuote(message: string): string {
 
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions }) {
+  const onDemand = opts.toolInstructions === 'on_demand'
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
-    if (!NAME.test(name) || handlers.has(name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
+    if (!NAME.test(name) || handlers.has(name) || (onDemand && name === DESCRIBE_TOOL.function.name) || !Number.isSafeInteger(def.version) || def.version < 1) throw new Error('Duplicate/invalid tool registration')
     handlers.set(name, def)
   }
   const quote = opts.message?.trim() ? serverRequestQuote(opts.message) : undefined
   let partial = false
   let snapshot: ToolSnapshot | null = null
   let offered = new Map<string, number>()
+  let visible = new Map<string, number>()
   let shelf: ToolboxEntry[] = []
   const events: { operation: string; name: string; status: string }[] = []
   const record = (operation: string, name: string, status: string) => { if (events.length < 200) events.push({ operation, name, status }) }
@@ -91,9 +100,11 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     if (!row.active || !def || def.version !== row.schema_version) return { state: 'unavailable' as const, def }
     return { state: def.gate(), def }
   }
+  const description = (row: ToolPolicy, def: ToolDefinition, includeManual: boolean) =>
+    [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => ({
     type: 'function', function: { name: row.name,
-      description: [...new Set([row.description, def.spec.function.description, row.how_to].map(s => s?.trim()).filter(Boolean))].join('\n\n'),
+      description: description(row, def, !onDemand),
       parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
@@ -106,20 +117,40 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
       const current = await refresh(), specs: ToolSpec[] = []
-      offered = new Map(); shelf = []
+      offered = new Map(); visible = new Map(); shelf = []
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
         if (!def || state === 'unavailable' || state === 'not_allowed') continue
+        visible.set(row.name, row.schema_version)
         const group = def.group ?? 'Other tools'
         if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version); shelf.push({ name: row.name, group, state: 'offered' }) }
         else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
+      if (onDemand && visible.size) {
+        specs.push(structuredClone(DESCRIBE_TOOL)); offered.set(DESCRIBE_TOOL.function.name, 1)
+        shelf.push({ name: DESCRIBE_TOOL.function.name, group: 'Tool manuals', state: 'offered' })
+      }
       return specs
     },
     /** A final text-only step: nothing from an earlier step remains callable. */
-    closeSurface() { offered.clear() },
+    closeSurface() { offered.clear(); visible.clear() },
     async execute(name: string, args: unknown): Promise<any> {
       const current = await refresh()
+      // Session metadata, not a domain handler or a catalog grant. Resolve the
+      // target afresh, even after its manual was read earlier in this turn.
+      if (onDemand && name === DESCRIBE_TOOL.function.name) {
+        const finish = (result: Record<string, unknown>) => { record('execute', name, String(result.status)); return result }
+        if (!offered.has(name)) return finish(safeStatus('not_offered'))
+        if (!object(args) || Object.keys(args).length !== 1 || typeof args.name !== 'string' || !NAME.test(args.name)) return finish(safeStatus('invalid'))
+        const row = current.tools.find(r => r.name === args.name)
+        const resolved = row ? resolve(row) : null
+        if (!row || !resolved?.def || resolved.state === 'unavailable' || resolved.state === 'not_allowed') return finish(safeStatus('unavailable'))
+        if (!visible.has(row.name)) return finish(safeStatus('not_offered'))
+        if (visible.get(row.name) !== row.schema_version) return finish(safeStatus('contract_changed'))
+        return finish({ status: 'ok', name: row.name, schema_version: row.schema_version, state: resolved.state,
+          manual: description(row, resolved.def, true),
+          ...(resolved.state === 'missing_context' && resolved.def.waitingFor ? { waiting_for: resolved.def.waitingFor } : {}) })
+      }
       const row = current.tools.find(r => r.name === name)
       if (!row) { record('execute', name, 'invalid'); return safeStatus('invalid', 'There is no tool with that name. Use a tool from your toolbox.') }
       const { state, def } = resolve(row)

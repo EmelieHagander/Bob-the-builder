@@ -28,6 +28,9 @@ type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budg
 /** Render only the server-owned toolbox prepared for this model call. */
 export function buildBobHands(tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
   const offered = tools.map(tool => tool.function.name)
+  const hands = offered.includes('describe_tool')
+    ? `Your toolbox\n\nYour whole toolbox is on the bench at every step, sorted onto shelves below. Descriptions show each tool's purpose and implementation limits; schemas give its exact inputs. Use describe_tool when you need the detailed workflow, prerequisites or recovery instructions. Reading a manual does not enable a waiting tool. Choose what the work needs; tools are the only way you change the project.`
+    : BOB_HANDS
   if (!offered.length && !shelf.length) return `${BOB_HANDS}\n\nThe bench is closed for this step. Reply to the owner in text.`
   const entries: Shelf[] = shelf.length ? shelf : offered.map(name => ({ name, group: 'Tools', state: 'offered' as const }))
   const lines: string[] = []
@@ -40,5 +43,5 @@ export function buildBobHands(tools: OpenAIServiceOptions['tools'] = [], shelf: 
   const unshelved = offered.filter(name => !entries.some(e => e.name === name))
   if (unshelved.length) lines.push(`- Other tools: ${unshelved.join(', ')}`)
   if (!offered.length) lines.push('Nothing on the bench can be used in this step. Reply to the owner in text.')
-  return `${BOB_HANDS}\n\n${lines.join('\n')}`
+  return `${hands}\n\n${lines.join('\n')}`
 }

@@ -1158,3 +1158,74 @@ All three tests and vocabulary verification pass locally. Network calls are
 blocked during the audit. CI includes this test file through the existing suite.
 [State](bob-delivery-flow.md#state) owns the next work; this baseline does not close
 K2's product-evidence or real-member acceptance.
+
+
+## K2 tool manual comparison — 2026-10-03
+
+**Opt-in code candidate, offline paired evidence; no deployment or real-model acceptance.**
+Continues the existing #188 audit and #186 plan. The [tool owner](ask-bob-tools.md#opt-in-manual-experiment--2026-10-03)
+defines the candidate and its authority boundary. The baseline's default behavior
+and archived report remain intact. Reproduce with:
+
+```bash
+node --import tsx scripts/audit-bob-runtime.ts --compare
+```
+
+The [archived comparison](archive/k2-tool-manual-comparison-2026-10-03.json)
+records the inline baseline and three scripted retrieval strategies, source/catalog
+hashes, individual call components and scenario totals. Across all six synthetic
+phase surfaces, the same 59 domain names and exact parameter schemas are present
+(matching schema hashes). Each candidate adds the same read-only manual operation.
+Catalog `how_to` is deferred; code descriptions, schema field descriptions, truth
+rules, domain handlers, models and execution budgets are preserved.
+
+| Measurement | Inline | Separate manuals | Batch all needed | Selective batch |
+|---|---:|---:|---:|---:|
+| Initial serialized tools, bytes | 127,092 | 106,451 | 106,451 | 106,451 |
+| Construction model calls | 7 | 10 | 8 | 8 |
+| Construction manual calls / steps | 0 / 0 | 3 / 3 | 3 / 1 | 2 / 1 |
+| Construction summed local input JSON, bytes | 1,003,532 | 1,210,574 | 980,360 | 979,483 |
+| Task model calls | 3 | 5 | 4 | 3 |
+| Task manual calls / steps | 0 / 0 | 2 / 2 | 2 / 1 | 0 / 0 |
+| Task summed local input JSON, bytes | 409,702 | 580,551 | 465,445 | 348,475 |
+
+All candidates reduce the initial tool surface **16.2%**. Separate retrieval
+before each distinct tool increases summed local input **20.6%** for construction
+and **41.7%** for the Task. Grouping those same reads in one native model response
+reduces construction input **2.3%** versus inline, but still increases Task input
+**13.6%**. The selective fixture fetches only construction save/check manuals in
+one step and no Task manuals: **2.4%** and **14.9%** less input respectively.
+
+These are scripted hypotheses, not a tool-selection router or observed model
+judgment. Independent manual requests share the existing native tool-call batch;
+the runtime still executes each separately with fresh policy/authority checks.
+No combined-manual API, extra budget or parallel domain writes were introduced.
+The next model step receives all manual results before any dependent action.
+Selecting fewer manuals barely changes construction payload here; avoiding extra
+model round-trips has the larger effect. A simple Task may need no manual, but
+this fixture cannot establish whether a real model recognizes that correctly.
+
+Returned manuals and execution-budget envelopes count in tool-result bytes.
+Totals are local serialization measurements, not provider billed tokens, cache
+savings, retained continuation context, latency or cost. All four variants
+list/save/check/repair/read revision 2 of the same construction, preserve revision
+1 and leave fabrication readiness false. All save one Task. CAD specialist
+behavior and payload are unchanged. Premature text replies still save nothing;
+manual retrieval does not solve the separate completion gap. All models, storage
+and render inputs are synthetic.
+
+Focused tests cover current manual readback, direct calls without a manual,
+unchanged domain schemas, no writes from manual reads, waiting/exhausted gates,
+revocation, disabled targets, schema changes, invalid inputs, visibility changes,
+policy-read failure and the closed bench. The positive loop verifies that manual
+calls consume the existing model-step/tool-call budget, batched calls are not
+deferred, and all strategies preserve construction, Task and CAD outcomes.
+The focused tests, vocabulary verification and production build pass locally.
+All 129 local test files pass in this continuation. The Edge type-check
+attempt is blocked by the runner's refused connection to `esm.sh`; the prior
+session's pass is not claimed as a new check. CI must verify this candidate.
+The default per-call payloads match the archived #188 baseline exactly;
+candidate source hashes match the measured files.
+Manual review follows Archie's placement rules; no independent subagent review
+is claimed. [State](bob-delivery-flow.md#state) owns remaining validation and the
+next experiment. Do not enable this candidate based on first-call byte reduction.

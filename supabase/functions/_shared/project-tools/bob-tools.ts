@@ -12,7 +12,7 @@ import { HISTORY_TOOL, type WorkingContext } from '../bob-working-context.ts'
 import type { ProjectContext } from '../project-context/dispatcher.ts'
 import type { MaterialCatalogReader } from '../material-catalog.ts'
 import { SAVE_COMPILED_PLAN_TOOL, type createPlanAssistant } from '../plan-assistant.ts'
-import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader } from './session.ts'
+import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyReader, type ToolInstructions } from './session.ts'
 
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
@@ -36,6 +36,7 @@ export function createBobToolSession(opts: {
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   /** The owner's current message; when present, change provenance is server-filled. */
   message?: string;
+  toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
@@ -98,7 +99,7 @@ export function createBobToolSession(opts: {
       },
     }] : []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message })
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions })
 }
 
 /** Present shelves in their fixed order, and tools in shelf order. */

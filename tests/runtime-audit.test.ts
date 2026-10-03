@@ -1,7 +1,46 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runRuntimeAudit } from '../scripts/audit-bob-runtime.ts'
+import { runRuntimeAudit, runRuntimeComparison } from '../scripts/audit-bob-runtime.ts'
 import { measureRuntimeInput, measureRuntimeOutput } from '../scripts/support/runtime-audit-metrics.ts'
+
+test('manual strategies count real retrieval steps and preserve outcomes and domain contracts', async () => {
+  const r = await runRuntimeComparison()
+  assert(r.domain_names_and_schemas_equal)
+  const expected = [
+    { strategy: 'per_tool', steps: [3, 2], reads: ['read_construction_draft', 'save_construction_draft', 'check_construction_draft', 'search_project_data', 'save_project_task'] },
+    { strategy: 'batch_all', steps: [1, 1], reads: ['read_construction_draft', 'save_construction_draft', 'check_construction_draft', 'search_project_data', 'save_project_task'] },
+    { strategy: 'selective', steps: [1, 0], reads: ['save_construction_draft', 'check_construction_draft'] },
+  ]
+  for (const [i, candidate] of r.candidates.entries()) {
+    assert.equal(candidate.manual_strategy, expected[i].strategy)
+    assert(candidate.surfaces[0].schema_bytes < r.baseline.surfaces[0].schema_bytes)
+    assert.deepEqual(candidate.manual_reads, expected[i].reads)
+    for (const [j, scenario] of ['construction-repair', 'task-save-with-history'].entries()) {
+      const before = r.baseline.scenarios.find(s => s.scenario === scenario)!
+      const after = candidate.scenarios.find(s => s.scenario === scenario)!
+      assert.equal(after.model_calls - before.model_calls, expected[i].steps[j])
+      assert.equal(after.manual_steps, expected[i].steps[j])
+      if (after.manual_calls) assert(after.summed_tool_result_bytes > before.summed_tool_result_bytes)
+      else assert.equal(after.summed_tool_result_bytes, before.summed_tool_result_bytes)
+    }
+    const { stop: beforeStop, ...before } = r.baseline.construction
+    const { stop: afterStop, ...after } = candidate.construction
+    assert.deepEqual(after, before)
+    assert.equal(afterStop.steps - beforeStop.steps, expected[i].steps[0])
+    assert.equal(afterStop.tool_calls - beforeStop.tool_calls, i === 2 ? 2 : 3)
+    assert.equal(afterStop.deferred_calls, 0, 'batched manuals fit the actual runtime budget')
+    assert.deepEqual(candidate.task_save, r.baseline.task_save)
+    assert.deepEqual(candidate.cad, r.baseline.cad)
+    assert.deepEqual(candidate.premature, r.baseline.premature)
+  }
+  // Batching removes model round-trips while returning the same manual content.
+  for (const scenario of ['construction-repair', 'task-save-with-history']) {
+    const separate = r.candidates[0].scenarios.find(s => s.scenario === scenario)!
+    const batch = r.candidates[1].scenarios.find(s => s.scenario === scenario)!
+    assert.equal(batch.manual_calls, separate.manual_calls)
+    assert(batch.summed_local_input_json_bytes < separate.summed_local_input_json_bytes)
+  }
+})
 
 test('audit measures UTF-8 content without exposing text or pretending continuation history is local', () => {
   const privateText = 'PRIVATE å🪚'
