@@ -6,7 +6,7 @@ export type ExecutionEvent = {
   duration_ms: number; input_tokens: number | null; output_tokens: number | null; cost_usd: number | null;
   counts: Record<string, number | boolean | string | string[] | null>
 }
-const roles=new Set(['ask-bob','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
+const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const number=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:0
 const code=(s:unknown,fallback:string)=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s)?s:fallback
 const toolNames=(tools:OpenAIServiceOptions['tools'])=>(tools??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name'))

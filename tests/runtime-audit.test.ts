@@ -75,6 +75,8 @@ test('current audit reaches real K1/K2 handlers and CAD review with only scripte
   assert.equal(r.cad.status, 'ready'); assert.equal(r.cad.renders, 1)
   assert(r.cad.generated_pixels_delivered); assert(!r.cad.svg_bytes_delivered)
   for (const role of ['ask-bob', 'cad-research', 'cad-designer', 'cad-reviewer']) assert(r.calls.some((c: any) => c.role === role))
+  assert(r.calls.filter((c: any) => c.role === 'cad-research').every((c: any) => c.execution_metric_role === 'cad-research'))
+  assert(r.execution_roles.includes('cad-research'))
   for (const surface of r.surfaces) for (const name of ['read_construction_draft', 'save_construction_draft', 'check_construction_draft', 'read_drawing_requests']) assert(surface.names.includes(name))
   assert(r.calls.some((c: any) => c.scenario === 'construction-repair' && c.previous_response && c.content_utf8_bytes.tool_results > 0))
   assert(r.calls.some((c: any) => c.scenario === 'task-save-with-history' && c.content_utf8_bytes.history > 100))

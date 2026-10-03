@@ -1229,3 +1229,39 @@ candidate source hashes match the measured files.
 Manual review follows Archie's placement rules; no independent subagent review
 is claimed. [State](bob-delivery-flow.md#state) owns remaining validation and the
 next experiment. Do not enable this candidate based on first-call byte reduction.
+
+## CAD research execution attribution — 2026-10-03
+
+**Prepared and locally verified; not migrated or deployed.** New source-collection
+model calls previously fell into `other` because `execution-metrics.ts` omitted
+`cad-research`; the database constraint also rejected that role. The bounded fix
+adds it to both allowlists through CLI-generated
+`20261003210307_cad_research_execution_role.sql`. All existing roles remain valid.
+Historical `other` rows cannot safely be attributed and are preserved. Model
+selection, prompts, manuals, budgets, user data and authority do not change.
+
+`tests/execution-metrics.test.ts` reproduces the pre-migration constraint rejection,
+installs the complete migrated schema with historical rows, admits research
+events as service role, rejects unknown roles and ordinary-user reads/writes,
+and checks the constraint is validated. The journal test verifies one research
+event across replay with preserved usage/cost and no private content.
+`tests/runtime-audit.test.ts` verifies actual CAD collection reports its own
+execution role. The original dated payload/manual reports retain their hashes
+and their historical `other` observation; rerunning the harness on this source
+does not rewrite those archives. Final local/CI validation belongs in the PR.
+
+Read-only hosted preflight at 2026-10-03 21:05 UTC, target
+`yuobtgoidmmmwfqenkau`: the validated constraint has the exact prior 12 roles,
+research is absent and the new migration is absent. RLS is enabled; anon/member
+SELECT and member INSERT are false, service INSERT is true. Security advisors
+were read as the pre-release baseline; no changes to their reported objects were
+made. The service-only table intentionally has no normal-user RLS policy.
+
+Release order: pass CI/review, reconcile the #187 → #188 → #189 dependency chain,
+recheck hosted constraint/migration/grants, apply this migration, then deploy and
+read back matching immutable `ask-bob`/`bob-worker` bundles. Old runtime remains
+compatible with the additive role. Verify a content-free service event and
+unchanged denied-user access before the real member/model comparison. Manual
+delivery remains optional/offline and must not be activated by this telemetry
+release. [State](bob-delivery-flow.md#state) owns the remaining release and
+authenticated acceptance gates.
