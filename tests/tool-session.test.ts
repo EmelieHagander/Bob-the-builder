@@ -16,11 +16,72 @@ function fixture(rows = [policy('read_records', true), policy('draw_shape', fals
     gate: () => gates.get(p.name) ?? 'available', execute: async args => { writes++; return { status: 'saved', value: args } },
   }))
   const readPolicy = async () => { reads.n++; if (failure) throw failure; return structuredClone(snap) }
-  const make = () => createToolSession({ definitions, readPolicy })
+  const make = (toolInstructions: 'inline' | 'on_demand' = 'inline') => createToolSession({ definitions, readPolicy, toolInstructions })
   return { rows, definitions, make, session: make(), setPhase: (p: string | null) => { snap.phase = p },
     setGate: (name: string, v: ToolGate) => { gates.set(name, v) }, fail: (v: string) => { failure = new Error(v) }, get reads() { return reads.n }, get writes() { return writes } }
 }
 const names = (specs: { function: { name: string } }[]) => specs.map(s => s.function.name)
+
+test('on-demand manuals preserve purpose, implementation boundaries, schemas and direct invocation', async () => {
+  const f = fixture(), compact = f.make('on_demand')
+  const before = await f.session.prepare(), after = await compact.prepare()
+  assert.deepEqual(names(after).filter(n => n !== 'describe_tool'), names(before))
+  assert.equal((await compact.execute('draw_shape', { value: 4 })).status, 'saved', 'manual retrieval is not a prerequisite')
+  assert.equal(f.writes, 1)
+  for (const tool of before) {
+    const short = after.find(t => t.function.name === tool.function.name)!
+    assert.deepEqual(short.function.parameters, tool.function.parameters)
+    assert.match(short.function.description, /Ritning för/)
+    assert.match(short.function.description, /Exact implementation boundary/)
+    assert.doesNotMatch(short.function.description, /FULL_GUIDE/)
+    const manual = await compact.execute('describe_tool', { name: tool.function.name })
+    assert.equal(manual.status, 'ok'); assert.equal(manual.manual, tool.function.description)
+  }
+  assert.equal(f.writes, 1, 'manual reads never execute the target')
+})
+
+test('manual reads obey the live policy, visibility fence, schema version and closed bench', async () => {
+  const f = fixture(), compact = f.make('on_demand')
+  assert.equal((await compact.execute('describe_tool', { name: 'draw_shape' })).status, 'not_offered')
+  f.setGate('draw_shape', 'missing_context')
+  await compact.prepare()
+  const waiting = await compact.execute('describe_tool', { name: 'draw_shape' })
+  assert.equal(waiting.state, 'missing_context'); assert.equal(waiting.waiting_for, 'after a prerequisite')
+  assert.equal((await compact.execute('draw_shape', {})).status, 'missing_context')
+  f.setGate('draw_shape', 'available')
+  assert.equal((await compact.execute('draw_shape', {})).status, 'not_offered', 'reading a manual never loads a capability')
+  await compact.prepare()
+  f.rows[1].how_to = 'Updated current manual'
+  assert.match((await compact.execute('describe_tool', { name: 'draw_shape' })).manual, /Updated current manual/)
+  for (const gate of ['not_allowed', 'budget_exhausted'] as const) {
+    f.setGate('draw_shape', gate)
+    const result = await compact.execute('describe_tool', { name: 'draw_shape' })
+    if (gate === 'not_allowed') { assert.equal(result.status, 'unavailable'); assert.equal(result.manual, undefined) }
+    else assert.equal(result.state, 'budget_exhausted')
+  }
+  f.setGate('draw_shape', 'available')
+  f.rows[1].schema_version = 2; f.definitions[1].version = 2
+  assert.equal((await compact.execute('describe_tool', { name: 'draw_shape' })).status, 'contract_changed')
+  f.rows[1].active = false
+  assert.equal((await compact.execute('describe_tool', { name: 'draw_shape' })).status, 'unavailable')
+  for (const args of [null, {}, { name: 'draw_shape', extra: true }, { name: 42 }, { name: '../secret' }]) {
+    assert.equal((await compact.execute('describe_tool', args)).status, 'invalid')
+  }
+  assert.equal((await compact.execute('describe_tool', { name: 'unknown' })).status, 'unavailable')
+  compact.closeSurface()
+  assert.equal((await compact.execute('describe_tool', { name: 'read_records' })).status, 'not_offered')
+  assert.equal(f.writes, 0)
+})
+
+test('manual lookup cannot disclose a newly allowed tool or survive a failed policy read', async () => {
+  const f = fixture(), compact = f.make('on_demand')
+  f.setGate('draw_shape', 'not_allowed'); await compact.prepare()
+  f.setGate('draw_shape', 'available')
+  assert.equal((await compact.execute('describe_tool', { name: 'draw_shape' })).status, 'not_offered')
+  f.fail('private diagnostic')
+  await assert.rejects(compact.execute('describe_tool', { name: 'read_records' }), /^Error: tool_catalog_unavailable$/)
+  assert.equal(f.writes, 0)
+})
 
 test('every available tool is offered with its full guide, whatever the phase', async () => {
   for (const phase of ['concept', 'design', null, 'unrecognised']) {

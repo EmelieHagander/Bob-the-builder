@@ -26,7 +26,39 @@ Current View and the remaining broader catalog/router/Librarian design are disti
 - **No quote parameters.** Change provenance is filled by the server from the owner's current message ([writes](ask-bob-writes.md#server-owned-change-provenance--2026-09-27)); offered schemas never contain `request_quote`.
 - **Authority is unchanged.** Offering is not authorization. Every execution re-reads policy, re-checks the gate and version, and runs the handler's own validation. The set offered to one step remains a fence: a tool that becomes available during a batch returns `not_offered` and is callable from the next step.
 
-Size, measured with `scripts/audit-bob-runtime.ts --seed`: 50 tools, about 106 KB of schemas and an 8 KB system prompt per step for a named member. The prefix is stable across steps, so provider prompt caching applies.
+The current synthetic payload and its limits are recorded in the [runtime baseline](foundation-verification.md#k2-runtime-payload-baseline--2026-10-03). Stable prefixes may be cacheable; actual provider cache usage and cost require measurement.
+
+
+## Opt-in manual experiment — 2026-10-03
+
+**Implemented comparison candidate; not enabled by hosted callers or deployed.**
+The intended direction is that Bob sees what each permitted tool does and when it
+is useful, and retrieves deeper instructions when needed. Tool availability and
+instruction depth are separate decisions. This experiment moves only the catalog
+`how_to` out of the inline description; the short catalog purpose, complete code
+description and exact parameter schema remain visible. All eligible domain tools
+stay callable without a discovery/load step or mandatory manual read.
+
+Internal callers can pass `toolInstructions: 'on_demand'` to the existing Bob
+loop/session. The default is `inline`; no HTTP request field, database setting or
+hosted call site enables the candidate. The session then offers `describe_tool`
+with one exact `name`. This is a read-only session metadata operation, not a new
+domain handler or catalog permission. It returns the current combined manual and
+schema version for a visible tool. Waiting and exhausted tools can be explained,
+but reading never changes their gates, loads a capability or performs a write.
+Policy and target eligibility are re-read on every manual request; hidden,
+disabled, unregistered and version-mismatched tools reveal no manual. The prepared
+visibility/version fence and final closed bench still apply. Manual calls consume
+the same model-step and per-step call limits as other calls.
+
+Run `node --import tsx scripts/audit-bob-runtime.ts --compare` for the inline/separate/batched/selective
+comparison. Independent manual requests can share one native tool-call batch;
+each request retains its own execution-time policy check. Retrieval strategy is
+scripted only in the audit, with no production router. [Evidence and trade-offs](foundation-verification.md#k2-tool-manual-comparison--2026-10-03)
+include retrieval overhead: a smaller first tool surface does not establish lower
+total cost or better delivery. The candidate retains sizeable schemas and code
+descriptions. Retrieval timing is scripted; real model selection and quality
+remain unverified. [State](bob-delivery-flow.md#state) owns the next decision.
 
 ## Product rule
 
