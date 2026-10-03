@@ -18,7 +18,7 @@ import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { createBobToolSession, sortToolbox } from './project-tools/bob-tools.ts'
-import { type ToolPolicyReader, type ToolboxEntry, checkedToolSnapshot } from './project-tools/session.ts'
+import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Cross-tool working rules. Tool-specific usage lives in each tool's own guide. */
@@ -108,6 +108,8 @@ export async function runProjectAnswer(opts: {
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number }) => void;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
+  /** Internal comparison only; never read from the owner's request body. */
+  toolInstructions?: ToolInstructions;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {

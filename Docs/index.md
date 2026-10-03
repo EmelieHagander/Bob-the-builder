@@ -42,7 +42,7 @@
 | construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
-| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; older discovery design kept as history |
+| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; opt-in manual experiment and its measured trade-offs; older discovery design kept as history |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |

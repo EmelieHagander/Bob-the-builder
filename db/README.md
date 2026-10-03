@@ -827,3 +827,7 @@ baseline. The immutable Edge release is recorded by the verification owner.
 ### K2 construction check registration
 
 `20261002231320_construction_checks.sql` registers the read-only `check_construction_draft` tool and updates the existing save-tool guide. It adds no tables, privileges, RPCs or approved-construction state. The Edge checker reads exact checkpoints/catalog definitions through the existing invoker/RLS boundary and returns transient revision-bound evidence. Invalid checkpoints remain editable drafts. Check results cannot bypass CAD publication or be written as fabrication approval. See [Artifacts](../Docs/artifacts.md#k2--construction-concept-checks) for the checker contract and [verification](../Docs/foundation-verification.md#k2-construction-checks) for release status.
+
+### CAD research execution attribution
+
+`20261003210307_cad_research_execution_role.sql` adds `cad-research` to the existing `bob.execution_events` role constraint. It preserves the original roles, historical `other` rows, RLS and service-only grants. Apply the additive migration before the matching metrics writer. Hosted history records it as `20261003214005`, `cad_research_execution_role`; [verification](../Docs/foundation-verification.md#cad-research-execution-attribution--2026-10-03) owns release/readback evidence and remaining authenticated acceptance.

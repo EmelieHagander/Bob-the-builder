@@ -1081,8 +1081,191 @@ cut/purchasing outputs and recovery/model evaluation remain K2–K5 in [State](b
 
 ## K2 construction checks
 
-**2026-10-03: implementation under release verification; not yet deployed or model-accepted.** Deterministic tests cover a five-part 600 × 800 × 300 mm concept with six joints, missing/reversed joints, bad spans, collisions, unsupported geometry/methods, material dimensions/applicability, stale pins, expired knowledge, and another rotated bracket using the same generic checker. Claimed SQL/tool integration reads a saved K1 checkpoint and exact catalog through caller authority; its intentionally missing joints are rejected. No fixture is proof of autonomous construction.
+**2026-10-03: merged, migrated and deployed; real-model acceptance remains open.** Deterministic tests cover a five-part 600 × 800 × 300 mm concept with six joints, missing/reversed joints, bad spans, collisions, unsupported geometry/methods, material dimensions/applicability, stale pins, expired knowledge, and another rotated bracket using the same generic checker. Caller-scoped SQL/tool integration reads a saved K1 checkpoint and exact catalog through caller authority: the complete construction passes, including catalog unit conversion from 1.8 cm to 18 mm, while missing joints are rejected. No fixture is proof of autonomous construction.
 
-The first local full suite passed 127/128 files; the prompt-size gate caught an overlong permanent instruction. Construction workflow guidance was moved into the existing tool-owned guide, preserving the permanent prompt. Final CI/release evidence will replace this pending status.
+The first local full suite passed 127/128 files; the prompt-size gate caught an overlong permanent instruction. Construction workflow guidance was moved into the existing tool-owned guide, preserving the permanent prompt. Final [CI 37107057471](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37107057471) and [CAD lineage concurrency 37107057476](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37107057476) passed on `195a179a0377ddc89b644093c912da92ede427e0`. [PR #185](https://github.com/EmelieHagander/Bob-the-builder/pull/185) merged as `11e2125dc176f63b83e469db80010b30646f5d8b`; both commits have identical Git tree `ff77fae92e3eb11309d7c98eddce6884cfc43d1f`.
+
+The earlier read-only reconciliation observed K1 Edge versions v74/v42 with the K2 migration already present. The completed deployment and repeated live source readback below supersede that partial-rollout snapshot.
+
+Hosted release readback on 2026-10-03:
+
+- Migration `20261003103107 / construction_checks` was already committed despite the earlier connection error. Its recorded SQL matches source `20261002231320_construction_checks.sql`; it was not replayed. The active checker registration and updated save guide were read back separately.
+- `ask-bob` **v75** and `bob-worker` **v43** both read back immutable imports pinned to merge `11e2125dc176f63b83e469db80010b30646f5d8b`. Existing authentication settings are preserved (`verify_jwt=true` for Ask; custom worker authentication with `verify_jwt=false`). Unauthenticated HTTP POSTs returned **401** for both.
+- Security advisors were inspected after release. Their reported objects are outside this catalog-only change; this release adds no table, function or privilege. Existing shared-database notices remain, including [guarded definer-function exposure](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) and [RLS without direct policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy); this is not a claim that the shared database has no findings.
+- This verifies registration, deployed source and unauthenticated rejection. It does not prove an authenticated model/tool execution in production. Both required named-member runner variables remain absent; no live model request, budget/model change or user-project mutation was made during this release continuation.
+
+The revised orchestration plan already exists in open [#186](https://github.com/EmelieHagander/Bob-the-builder/pull/186), head `09a3ecc0353d79a87f8e2d5b169bfe335fd55f61`; its [build check](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37114117177/job/111177473097) passed. It is documentation only and has not landed in main. Preserve the newer [State](bob-delivery-flow.md#state) when reconciling that PR; do not recreate the plan.
 
 `scripts/check-live-construction.ts` is a prepared, **unrun** real-model acceptance: existing verified named member, disposable project, ordinary Swedish request with no injected parts/tool calls, then independent canonical readback/checks, width 600→700 and thickness 18→21 changes, stable instance IDs and historical geometry/joints. Requires existing secure-runner member configuration plus `BOB_K2_LIVE_CONFIRM=disposable-fixtures-only`; it neither creates Auth users nor mints tokens, substitutes a guest, changes budgets or retries paid failures. The current runner has no member credentials. Actual calls, cost, autonomous outcome and named-participant acceptance remain unverified. General method references do not close the missing manufacturer/product-evidence acceptance.
+
+
+## K2 runtime payload baseline — 2026-10-03
+
+**Implemented offline audit; no runtime, prompt, model or deployment change.**
+`scripts/audit-bob-runtime.ts` now defaults to the current repository catalog seed
+and registers the K1/K2 construction and drawing-lifecycle handlers. An explicit
+older catalog is measured as supplied: missing K2 tools are reported as an unrun
+scenario, never silently replaced by the seed. The seed is not a live policy read.
+
+The former audit stopped with zero renders because its CAD fixture lacked the
+current intake/parameter contracts. The repaired fixture reaches collection,
+rejects invalid geometry before the renderer, renders once, delivers synthetic
+preview carriers to the designer and independent reviewer, and reaches a reviewed
+candidate. A separate scripted Bob loop lists, saves, checks, corrects and re-reads
+the same K1 checkpoint: a missing contact joint is rejected; revision 2 passes
+concept checks while fabrication readiness stays false. Revision 1's geometry and
+five-joint history remain intact. Storage, rendering and model replies are injected
+fixtures; these are not SQL, actual image-quality or autonomous model acceptance.
+
+The [archived report](archive/k2-runtime-baseline-2026-10-03.json) includes source
+hashes, catalog hash, six phase surfaces and individual call measurements for Bob,
+CAD collection, designer and reviewer. A successful small Task flow includes
+nonempty conversation history. Plan specialist, memory-fold and delivery-language
+calls are not exercised; the text-only premature Task/plan/material probes remain
+separate observations, not successful deliveries.
+
+Initial Bob call, current synthetic named-member toolbox:
+
+| Component | UTF-8 bytes |
+|---|---:|
+| Persona | 1,186 |
+| Shared system rules | 3,854 |
+| Domain vocabulary | 1,233 |
+| Toolbox orientation and system separators | 2,044 |
+| Tool descriptions, including catalog guides | 44,896 |
+| Tool parameter schemas | 76,311 |
+
+The 59 unique offered tools occupy **127,092 bytes** including JSON tool metadata;
+`save_construction_draft` is the largest. The system message is **8,317 bytes**.
+These observations support testing tool-guide/schema delivery first; they do not
+establish that less context improves model quality. No production instructions
+were shortened and no tools were removed.
+
+Each call separates system, frame, source data, history, tool descriptions,
+parameter/response schemas, arguments/results and image carriers. Raw UTF-8 content
+and serialised local input are different measures. Continuation calls explicitly
+report unknown retained provider context behind `previousResponseId`. Synthetic
+usage/cost/provider latency are **null**, not zero-price or token estimates;
+fixture timing measures local code only. The existing execution-metrics writer is
+reused in memory. It currently classifies `cad-research` as `other`; the audit
+preserves the actual function role separately, exposing that instrumentation gap
+without changing production diagnostics. Real input/output/cached tokens and
+cost still need provider usage in the member acceptance run.
+
+`tests/runtime-audit.test.ts` verifies UTF-8 accounting and text exclusion, the
+complete scripted repair/render/review paths, and honest old-catalog handling.
+All three tests and vocabulary verification pass locally. Network calls are
+blocked during the audit. CI includes this test file through the existing suite.
+[State](bob-delivery-flow.md#state) owns the next work; this baseline does not close
+K2's product-evidence or real-member acceptance.
+
+
+## K2 tool manual comparison — 2026-10-03
+
+**Opt-in code candidate, offline paired evidence; no deployment or real-model acceptance.**
+Continues the existing #188 audit and #186 plan. The [tool owner](ask-bob-tools.md#opt-in-manual-experiment--2026-10-03)
+defines the candidate and its authority boundary. The baseline's default behavior
+and archived report remain intact. Reproduce with:
+
+```bash
+node --import tsx scripts/audit-bob-runtime.ts --compare
+```
+
+The [archived comparison](archive/k2-tool-manual-comparison-2026-10-03.json)
+records the inline baseline and three scripted retrieval strategies, source/catalog
+hashes, individual call components and scenario totals. Across all six synthetic
+phase surfaces, the same 59 domain names and exact parameter schemas are present
+(matching schema hashes). Each candidate adds the same read-only manual operation.
+Catalog `how_to` is deferred; code descriptions, schema field descriptions, truth
+rules, domain handlers, models and execution budgets are preserved.
+
+| Measurement | Inline | Separate manuals | Batch all needed | Selective batch |
+|---|---:|---:|---:|---:|
+| Initial serialized tools, bytes | 127,092 | 106,451 | 106,451 | 106,451 |
+| Construction model calls | 7 | 10 | 8 | 8 |
+| Construction manual calls / steps | 0 / 0 | 3 / 3 | 3 / 1 | 2 / 1 |
+| Construction summed local input JSON, bytes | 1,003,532 | 1,210,574 | 980,360 | 979,483 |
+| Task model calls | 3 | 5 | 4 | 3 |
+| Task manual calls / steps | 0 / 0 | 2 / 2 | 2 / 1 | 0 / 0 |
+| Task summed local input JSON, bytes | 409,702 | 580,551 | 465,445 | 348,475 |
+
+All candidates reduce the initial tool surface **16.2%**. Separate retrieval
+before each distinct tool increases summed local input **20.6%** for construction
+and **41.7%** for the Task. Grouping those same reads in one native model response
+reduces construction input **2.3%** versus inline, but still increases Task input
+**13.6%**. The selective fixture fetches only construction save/check manuals in
+one step and no Task manuals: **2.4%** and **14.9%** less input respectively.
+
+These are scripted hypotheses, not a tool-selection router or observed model
+judgment. Independent manual requests share the existing native tool-call batch;
+the runtime still executes each separately with fresh policy/authority checks.
+No combined-manual API, extra budget or parallel domain writes were introduced.
+The next model step receives all manual results before any dependent action.
+Selecting fewer manuals barely changes construction payload here; avoiding extra
+model round-trips has the larger effect. A simple Task may need no manual, but
+this fixture cannot establish whether a real model recognizes that correctly.
+
+Returned manuals and execution-budget envelopes count in tool-result bytes.
+Totals are local serialization measurements, not provider billed tokens, cache
+savings, retained continuation context, latency or cost. All four variants
+list/save/check/repair/read revision 2 of the same construction, preserve revision
+1 and leave fabrication readiness false. All save one Task. CAD specialist
+behavior and payload are unchanged. Premature text replies still save nothing;
+manual retrieval does not solve the separate completion gap. All models, storage
+and render inputs are synthetic.
+
+Focused tests cover current manual readback, direct calls without a manual,
+unchanged domain schemas, no writes from manual reads, waiting/exhausted gates,
+revocation, disabled targets, schema changes, invalid inputs, visibility changes,
+policy-read failure and the closed bench. The positive loop verifies that manual
+calls consume the existing model-step/tool-call budget, batched calls are not
+deferred, and all strategies preserve construction, Task and CAD outcomes.
+The focused tests, vocabulary verification and production build pass locally.
+All 129 local test files pass in this continuation. The Edge type-check
+attempt is blocked by the runner's refused connection to `esm.sh`; the prior
+session's pass is not claimed as a new check. CI must verify this candidate.
+The default per-call payloads match the archived #188 baseline exactly;
+candidate source hashes match the measured files.
+Manual review follows Archie's placement rules; no independent subagent review
+is claimed. [State](bob-delivery-flow.md#state) owns remaining validation and the
+next experiment. Do not enable this candidate based on first-call byte reduction.
+
+## CAD research execution attribution — 2026-10-03
+
+**Merged, migrated and deployed; authenticated model acceptance remains open.** New source-collection
+model calls previously fell into `other` because `execution-metrics.ts` omitted
+`cad-research`; the database constraint also rejected that role. The bounded fix
+adds it to both allowlists through CLI-generated
+`20261003210307_cad_research_execution_role.sql`. All existing roles remain valid.
+Historical `other` rows cannot safely be attributed and are preserved. Model
+selection, prompts, manuals, budgets, user data and authority do not change.
+
+`tests/execution-metrics.test.ts` reproduces the pre-migration constraint rejection,
+installs the complete migrated schema with historical rows, admits research
+events as service role, rejects unknown roles and ordinary-user reads/writes,
+and checks the constraint is validated. The journal test verifies one research
+event across replay with preserved usage/cost and no private content.
+`tests/runtime-audit.test.ts` verifies actual CAD collection reports its own
+execution role. The original dated payload/manual reports retain their hashes
+and their historical `other` observation; rerunning the harness on this source
+does not rewrite those archives. Final local/CI validation belongs in the PR.
+
+Read-only hosted preflight at 2026-10-03 21:05 UTC, target
+`yuobtgoidmmmwfqenkau`: the validated constraint has the exact prior 12 roles,
+research is absent and the new migration is absent. RLS is enabled; anon/member
+SELECT and member INSERT are false, service INSERT is true. Security advisors
+were read as the pre-release baseline; no changes to their reported objects were
+made. The service-only table intentionally has no normal-user RLS policy.
+
+### Hosted technical release — 2026-10-03
+
+The #187 → #188 → #189 → #191 dependency chain was merged after every current-head CI check passed. #191's two build checks and two PostgreSQL checks passed on `4e309deda3e3cfbe54364a0b441f8e111927581d`; source SHA `72be4a2a4bb6a2232fe02585f5fdc20620e12ea5` has identical Edge and migration files. [PR #191](https://github.com/EmelieHagander/Bob-the-builder/pull/191) owns the implementation and CI evidence.
+
+- Target `yuobtgoidmmmwfqenkau` was ACTIVE_HEALTHY. The exact prior constraint, migration absence, RLS and service-only grants were checked again before applying the reviewed SQL.
+- Hosted migration `20261003214005`, name `cad_research_execution_role`, applies repository migration `20261003210307_cad_research_execution_role.sql`. The validated constraint now admits the original 12 roles plus `cad-research`; history and grants were read back.
+- `ask-bob` **v76**, ACTIVE, `verify_jwt=true`, bundle SHA-256 `7365af56d8c75634afe2998c8b021a9550e19af262e21df4b3c66be0d2b1198b`; `bob-worker` **v44**, ACTIVE, existing custom authentication with `verify_jwt=false`, bundle SHA-256 `1f57b97c472b1ae2ccbdfdd4555523a8e773f7724e27cf6b9dd6682d328c49d9`. Both source wrappers were read back exactly pinned to the same immutable source SHA above.
+- Unauthenticated HTTP POSTs returned **401** for both functions. The rollback-only hosted smoke inserted and read a content-free service-role research event with exact token/cost values, rejected an unknown role, and denied both SELECT and INSERT for anon and authenticated roles. The transaction rolled back; zero smoke rows remained.
+- Security advisors matched the pre-release baseline: 153 findings before and after, with no new or removed finding. The service-only telemetry table's no-policy notice is intentional and does not authorize member access.
+- [Pages 37155427529](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37155427529) published the source commit successfully. Later documentation-only merges do not change the deployed runtime.
+
+Review used the existing Archie prompt manually, current-head CI evidence, source-diff comparison and live readback; no independent subagent review is claimed. `BOB_TEST_MEMBER_ID` and `BOB_TEST_MEMBER_ACCESS_TOKEN` remain absent in the checked runner environment. No authenticated construction/model comparison was submitted. Hosted callers still use full inline manuals; the optional candidate is not activated by this telemetry release. [State](bob-delivery-flow.md#state) owns the remaining member/model acceptance and next experiment.
