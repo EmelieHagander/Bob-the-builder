@@ -1232,7 +1232,7 @@ next experiment. Do not enable this candidate based on first-call byte reduction
 
 ## CAD research execution attribution — 2026-10-03
 
-**Prepared and locally verified; not migrated or deployed.** New source-collection
+**Merged, migrated and deployed; authenticated model acceptance remains open.** New source-collection
 model calls previously fell into `other` because `execution-metrics.ts` omitted
 `cad-research`; the database constraint also rejected that role. The bounded fix
 adds it to both allowlists through CLI-generated
@@ -1257,11 +1257,15 @@ SELECT and member INSERT are false, service INSERT is true. Security advisors
 were read as the pre-release baseline; no changes to their reported objects were
 made. The service-only table intentionally has no normal-user RLS policy.
 
-Release order: pass CI/review, reconcile the #187 → #188 → #189 dependency chain,
-recheck hosted constraint/migration/grants, apply this migration, then deploy and
-read back matching immutable `ask-bob`/`bob-worker` bundles. Old runtime remains
-compatible with the additive role. Verify a content-free service event and
-unchanged denied-user access before the real member/model comparison. Manual
-delivery remains optional/offline and must not be activated by this telemetry
-release. [State](bob-delivery-flow.md#state) owns the remaining release and
-authenticated acceptance gates.
+### Hosted technical release — 2026-10-03
+
+The #187 → #188 → #189 → #191 dependency chain was merged after every current-head CI check passed. #191's two build checks and two PostgreSQL checks passed on `4e309deda3e3cfbe54364a0b441f8e111927581d`; source SHA `72be4a2a4bb6a2232fe02585f5fdc20620e12ea5` has identical Edge and migration files. [PR #191](https://github.com/EmelieHagander/Bob-the-builder/pull/191) owns the implementation and CI evidence.
+
+- Target `yuobtgoidmmmwfqenkau` was ACTIVE_HEALTHY. The exact prior constraint, migration absence, RLS and service-only grants were checked again before applying the reviewed SQL.
+- Hosted migration `20261003214005`, name `cad_research_execution_role`, applies repository migration `20261003210307_cad_research_execution_role.sql`. The validated constraint now admits the original 12 roles plus `cad-research`; history and grants were read back.
+- `ask-bob` **v76**, ACTIVE, `verify_jwt=true`, bundle SHA-256 `7365af56d8c75634afe2998c8b021a9550e19af262e21df4b3c66be0d2b1198b`; `bob-worker` **v44**, ACTIVE, existing custom authentication with `verify_jwt=false`, bundle SHA-256 `1f57b97c472b1ae2ccbdfdd4555523a8e773f7724e27cf6b9dd6682d328c49d9`. Both source wrappers were read back exactly pinned to the same immutable source SHA above.
+- Unauthenticated HTTP POSTs returned **401** for both functions. The rollback-only hosted smoke inserted and read a content-free service-role research event with exact token/cost values, rejected an unknown role, and denied both SELECT and INSERT for anon and authenticated roles. The transaction rolled back; zero smoke rows remained.
+- Security advisors matched the pre-release baseline: 153 findings before and after, with no new or removed finding. The service-only telemetry table's no-policy notice is intentional and does not authorize member access.
+- [Pages 37155427529](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37155427529) published the source commit successfully. Later documentation-only merges do not change the deployed runtime.
+
+Review used the existing Archie prompt manually, current-head CI evidence, source-diff comparison and live readback; no independent subagent review is claimed. `BOB_TEST_MEMBER_ID` and `BOB_TEST_MEMBER_ACCESS_TOKEN` remain absent in the checked runner environment. No authenticated construction/model comparison was submitted. Hosted callers still use full inline manuals; the optional candidate is not activated by this telemetry release. [State](bob-delivery-flow.md#state) owns the remaining member/model acceptance and next experiment.
