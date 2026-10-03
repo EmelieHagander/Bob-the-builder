@@ -1081,8 +1081,24 @@ cut/purchasing outputs and recovery/model evaluation remain K2–K5 in [State](b
 
 ## K2 construction checks
 
-**2026-10-03: implementation under release verification; not yet deployed or model-accepted.** Deterministic tests cover a five-part 600 × 800 × 300 mm concept with six joints, missing/reversed joints, bad spans, collisions, unsupported geometry/methods, material dimensions/applicability, stale pins, expired knowledge, and another rotated bracket using the same generic checker. Claimed SQL/tool integration reads a saved K1 checkpoint and exact catalog through caller authority; its intentionally missing joints are rejected. No fixture is proof of autonomous construction.
+**2026-10-03: merged implementation; partial hosted rollout, not model-accepted.** Deterministic tests cover a five-part 600 × 800 × 300 mm concept with six joints, missing/reversed joints, bad spans, collisions, unsupported geometry/methods, material dimensions/applicability, stale pins, expired knowledge, and another rotated bracket using the same generic checker. Claimed SQL/tool integration reads a saved K1 checkpoint and exact catalog through caller authority; its intentionally missing joints are rejected. No fixture is proof of autonomous construction.
 
-The first local full suite passed 127/128 files; the prompt-size gate caught an overlong permanent instruction. Construction workflow guidance was moved into the existing tool-owned guide, preserving the permanent prompt. Final CI/release evidence will replace this pending status.
+
+**Read-only release reconciliation — 2026-10-03.** GitHub main is `11e2125dc176f63b83e469db80010b30646f5d8b` (merged #185). On exact PR head `195a179a0377ddc89b644093c912da92ede427e0`, [build CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37107057471/job/111157541895) and [PostgreSQL CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37107057476/job/111157541772) report success. This read verifies check conclusions, not a new execution of their tests.
+
+Hosted project `yuobtgoidmmmwfqenkau` was inspected using migration listing, exact Edge-source readback and a read-only tool-catalog query:
+
+- Migration ledger contains `20261003103107 / construction_checks`; repository source is `20261002231320_construction_checks.sql`. The presence of the ledger entry is not a fresh migration-body equivalence check.
+- `check_construction_draft`, `read_construction_draft` and `save_construction_draft` are active at schema version 1.
+- `ask-bob` remains ACTIVE **v74**, JWT required, bundle `33a8c9ef590e0b6c89f2d1f3575b982abb014b16bfc1e46c8c4541f8d7eff620`.
+- `bob-worker` remains ACTIVE **v42**, existing custom worker authentication, bundle `65bf15c3388ba5bfba0adc650575b2c7247a5a028b6ea7f7c074632ef33cf107`.
+- Both retrieved entrypoints import immutable K1 commit `1d124677419ea5709c4bc496089b94f2527cc202`. The catalog row therefore does not prove a deployed K2 handler. The existing catalog/handler intersection must remain intact.
+
+Do not reapply the recorded migration. Re-read deployment state before finishing the Edge rollout, then verify the K2 runtime/catalog/caller path. No deployment, schema change, user-project write or paid model call was performed during this reconciliation. It does not close real-model or participant acceptance.
+
+The revised orchestration plan already exists in open [#186](https://github.com/EmelieHagander/Bob-the-builder/pull/186), head `09a3ecc0353d79a87f8e2d5b169bfe335fd55f61`; its [build check](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37114117177/job/111177473097) passed. It is documentation only and has not landed in main. Preserve the newer [State](bob-delivery-flow.md#state) when reconciling that PR; do not recreate the plan.
+
+
+The first local full suite passed 127/128 files; the prompt-size gate caught an overlong permanent instruction. Construction workflow guidance was moved into the existing tool-owned guide, preserving the permanent prompt. The CI conclusions above supersede the earlier CI-pending status; complete hosted release verification and real-model acceptance remain open.
 
 `scripts/check-live-construction.ts` is a prepared, **unrun** real-model acceptance: existing verified named member, disposable project, ordinary Swedish request with no injected parts/tool calls, then independent canonical readback/checks, width 600→700 and thickness 18→21 changes, stable instance IDs and historical geometry/joints. Requires existing secure-runner member configuration plus `BOB_K2_LIVE_CONFIRM=disposable-fixtures-only`; it neither creates Auth users nor mints tokens, substitutes a guest, changes budgets or retries paid failures. The current runner has no member credentials. Actual calls, cost, autonomous outcome and named-participant acceptance remain unverified. General method references do not close the missing manufacturer/product-evidence acceptance.
