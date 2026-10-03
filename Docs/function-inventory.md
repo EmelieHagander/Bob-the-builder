@@ -781,3 +781,7 @@ Saved Concept stairs pin an exact parent plan and have lower/upper/section views
 and history. This is not curved/winder design, whole-house circulation solving,
 structural approval or proven live-model recommendation quality. The owner is
 [Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
+
+### K2 construction checker — release pending, 2026-10-03
+
+`check_construction_draft` adds deterministic checks over exact K1 checkpoints and catalog pins, with structured part/joint errors and revision-bound concept readiness. [Artifacts](artifacts.md#k2--construction-concept-checks) owns supported operations and explicit fabrication gaps. A ninth knowledge package covers adhesive concepts. Existing Bob chooses and revises parts through the same tools; no new model or budget is configured. Real-model and product-specific acceptance remain open; [verification](foundation-verification.md#k2-construction-checks) records release status.

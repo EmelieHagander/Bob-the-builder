@@ -241,3 +241,7 @@ Required existing server configuration: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, and Bob's enabled settings/model in
 the shared AI catalogue. Frontend configuration remains
 `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`.
+
+### K2 construction check tool
+
+`check_construction_draft` is registered beside the K1 read/save tools. `ask-openai.ts` supplies caller-scoped `catalog_read` and `read_construction_draft`; the check re-reads the current head and access before reporting. The deterministic implementation in `construction-checks.ts` creates no writes, no approval and no model calls. Schema version 1 registration and the updated save-tool guide are in `20261002231320_construction_checks.sql`. Supported operations and `concept_ready` versus `fabrication_ready` are owned by [Artifacts](../Docs/artifacts.md#k2--construction-concept-checks); [verification](../Docs/foundation-verification.md#k2-construction-checks) owns deployment/model evidence. The permanent system prompt and configured model/budget ceilings are unchanged.

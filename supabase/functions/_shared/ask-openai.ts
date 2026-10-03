@@ -233,6 +233,10 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_read_unavailable');return data
     },
+    readCatalog:async(id,revision)=>{
+      const {data,error}=await rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}},AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_source_unavailable');return data
+    },
     readSources:async pins=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){
