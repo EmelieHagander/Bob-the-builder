@@ -214,6 +214,7 @@ try {
     await (await uploadImage('Entry before work')).waitFor({ state: 'hidden' })
     await page.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
     await page.reload()
+    await page.locator('.project-photo-details > summary').click()
     await page.getByRole('button', { name: 'Open image: Entry before work', exact: true }).click()
     const original = page.getByRole('dialog', { name: 'Entry before work', exact: true })
     await original.getByRole('img').waitFor()
