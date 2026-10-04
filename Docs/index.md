@@ -173,6 +173,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## Archives — historical evidence, not active work
 
+- [K2 live acceptance report, 2026-10-04](archive/k2-live-acceptance-2026-10-04.json) — synthetic saved revisions from the successful three-turn concept test; [verification](foundation-verification.md#k2-live-construction-acceptance--2026-10-04) owns release evidence and limits, and [State](bob-delivery-flow.md#state) owns remaining work.
 - [Delivery-flow review, 2026-09-29](archive/bob-delivery-flow-review-2026-09-29.md) — dated code/data findings, verification limits and the superseded handoff snapshot. Open actions remain in [State](bob-delivery-flow.md#state); archiving this record does not close them.
 - [Archie's resolved findings](../.claude/agents/archive/archie-findings-2026-09-29.md) — historical FINDING-A01–A03 closure records, removed from the open-findings reading path.
 
