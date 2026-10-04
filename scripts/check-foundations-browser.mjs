@@ -374,8 +374,12 @@ try {
     await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
     await page.reload()
     await drawings.scrollIntoViewIfNeeded()
-    await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
-    assert.equal(await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).evaluate(img=>img.complete&&img.naturalWidth>0),true)
+    const drawingPreview=drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true})
+    await drawingPreview.waitFor()
+    // Visibility can precede image decoding after reload. Broken bytes still
+    // reject decode; retain the assertion that the exact preview has pixels.
+    await drawingPreview.evaluate(img=>img.decode())
+    assert.equal(await drawingPreview.evaluate(img=>img.complete&&img.naturalWidth>0),true)
     await page.screenshot({path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()

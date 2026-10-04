@@ -84,10 +84,11 @@ export async function answerWithOpenAi(opts: {
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   const modelBudget = createBobModelBudget()
-  const callModel = async (options: OpenAIServiceOptions) => modelBudget.run(async () => {
+  const callModel = async (options: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
    try{return await memo('model:' + options.functionName, options, async identity => {
+    await beforeDispatch?.()
     const started = performance.now()
     const wall = journal ? journal.remaining() + 8000 : Infinity
     const allowed = Math.max(1000, Math.min(timeout, wall))
@@ -292,9 +293,14 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
-    render:(recipe,source)=>memo('cad:render',source?{recipe,drawing_source:source}:recipe,()=>createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source),45000),
-    checkConstruction:async(id,revision)=>checkedConstructionForDrawing({...constructionOptions,
-      // Freshness gates must not reuse journalled historical reads after a yield.
+    render:(recipe,source,beforeDispatch)=>memo('cad:render',source?{recipe,drawing_source:source}:recipe,async()=>{
+      await beforeDispatch?.()
+      return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
+    },45000),
+    checkConstruction:async(id,revision,fresh)=>{
+     const check=()=>checkedConstructionForDrawing({...constructionOptions,
+      // The actual operation reads fresh caller data. Recorded gate outcomes
+      // reconstruct earlier replies; render/review dispatch guards bypass them.
       read:async(artifact,rev,after)=>{
         const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:artifact,p_revision:rev,p_after:after}).abortSignal(AbortSignal.timeout(12000))
         if(error)throw new Error('construction_read_unavailable');return data
@@ -303,7 +309,9 @@ export async function answerWithOpenAi(opts: {
         const {data,error}=await client.rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id:artifact,revision:rev,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}}).abortSignal(AbortSignal.timeout(12000))
         if(error)throw new Error('construction_source_unavailable');return data
       },
-    },id,revision),
+     },id,revision)
+     return fresh?check():memo('cad:construction_check',{id,revision},check)
+    },
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
       if(error)throw new Error('cad_read_unavailable');
