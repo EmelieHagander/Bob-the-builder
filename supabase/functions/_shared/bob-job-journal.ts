@@ -26,11 +26,11 @@ export interface BobJournal {
  * both before and after persistence, including nested structured model output.
  * Keep every field/value: only object order changes, never array order or truth.
  * Clone on delivery so a caller cannot mutate the journal's recorded result. */
-function stableResult<T>(value: T): T {
-  if (Array.isArray(value)) return value.map(stableResult) as T
+export function stableJsonValue<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(stableJsonValue) as T
   if (value && typeof value === 'object') return Object.fromEntries(
     Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-      .map(([key, v]) => [key, stableResult(v)]),
+      .map(([key, v]) => [key, stableJsonValue(v)]),
   ) as T
   return value
 }
@@ -77,7 +77,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         }
         const outcome = prior.value as { ok: boolean; result?: T; error?: string }
         if (!outcome.ok) throw new Error(outcome.error ?? 'operation_failed')
-        return stableResult(outcome.result) as T
+        return stableJsonValue(outcome.result) as T
       }
       if (replayScopes.some(scope => scope.recordedOnly)) {
         stopped = new BobContinuation('stop', 'continuation_incomplete', undefined, key); throw stopped
@@ -121,7 +121,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       catch { stopped = new BobContinuation('yield', 'checkpoint_unavailable'); throw stopped }
       entries.set(key, entry)
       if (failure) throw new Error(failure)
-      return stableResult(value) as T
+      return stableJsonValue(value) as T
     },
   }
 }
