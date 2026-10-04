@@ -11,6 +11,7 @@ import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
+import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111',material='22222222-2222-4222-8222-222222222222'
 function fixture(projectId='p_fixture'){
@@ -52,6 +53,63 @@ test('K3 cannot render a stale, unchecked, colliding or jointless checkpoint',as
  for(const mutate of [(d:any)=>d.source_state='changed',(d:any)=>d.current_revision=2,(d:any)=>d.recipe.instances[1].placement.x=10,(d:any)=>d.joints=[]]){
   const f=runtime();mutate(f.draft);const a=f.assistant(),result=await a.consult(request)
   assert.equal(result.stage,'construction');assert.equal(a.candidate,null);assert.equal(f.counts().renders,0);assert.equal(f.counts().reviews,0)
+ }
+})
+test('K3 compares journal-normalized and fresh JSON snapshots by values, preserving every construction field',async()=>{
+ const f=runtime(),entries:JournalEntry[]=[],journal=createBobJournal({entries,save:async e=>{entries.push(e)}},Infinity)
+ const a=f.assistant({readArtifact:()=>journal.run('read',{},async()=>structuredClone(f.draft))})
+ assert.equal((await a.consult(request)).status,'ready')
+ assert.equal(f.counts().renders,1);assert.equal(f.counts().reviews,1)
+})
+test('K3 replay preserves a completed failure after a later checkpoint repair without changing the next Bob input',async()=>{
+ for(const checkpoint of [false,true]){
+ const f=runtime(),entries:JournalEntry[]=[];f.draft.joints=[];let bobCalls=0
+ const run=async()=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
+  const a=f.assistant({readArtifact:()=>journal.run('read',{},async()=>structuredClone(f.draft)),
+   checkConstruction:(id:string,revision:number)=>checkpoint?journal.run('check',{id,revision},f.check):f.check()})
+  const reply=await a.consult(request)
+  await journal.run('bob-model',reply,async()=>{bobCalls++;return 'repair checkpoint'})
+  return reply
+ }
+ const first=await run();assert.equal(first.status,'needs_data')
+ f.draft.joints=fixture().draft.joints;f.draft.current_revision=2
+ if(!checkpoint){await assert.rejects(run(),/continuation_changed/);assert.equal(bobCalls,1);continue}
+ assert.deepEqual(await run(),first);assert.equal(bobCalls,1);assert.equal(f.counts().renders,0)
+ }
+})
+test('K3 accepts reordered objects but stops changed geometry, parameters, material pins, joints and targets',async()=>{
+ for(const mutate of [(d:any)=>{d.recipe.definitions.forEach((r:any)=>r.y_mm=81)},(d:any)=>d.parameters.nodes[0].reason='changed',
+  (d:any)=>d.materials.reverse(),(d:any)=>d.joints[0].reason='changed',(d:any)=>d.target_revision=2]){
+  const f=runtime(),original=structuredClone(f.draft);mutate(f.draft)
+  const a=f.assistant({readArtifact:async()=>original})
+  assert.equal((await a.consult(request)).stage,'construction');assert.equal(a.candidate,null);assert.equal(f.counts().renders,0)
+ }
+})
+test('K3 completed replay survives a later source revision, while suspended new render/review dispatch rechecks live sources',async()=>{
+ for(const pause of [null,'render','review']){
+  const f=runtime(),entries:JournalEntry[]=[];let suspended=pause,renders=0,reviews=0
+  const run=async()=>{
+   const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},suspended?1000:Infinity,()=>0)
+   const a=f.assistant({readArtifact:()=>journal.run('read',{},async()=>structuredClone(f.draft)),
+    checkConstruction:(id:string,revision:number,fresh:boolean)=>fresh?f.check():journal.run('gate',{id,revision},f.check),
+    render:(recipe:any,source:any,guard?:()=>Promise<void>)=>journal.run('render',{recipe,source},async()=>{
+     await guard?.();renders++
+     return {recipe,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'}},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map((v:string)=>[v,'Zml4dHVyZQ==']))}
+    },suspended==='render'?1000:0),
+    callModel:(options:any,guard?:()=>Promise<void>)=>journal.run('review',options,async()=>{await guard?.();reviews++;return reviewReply(handoff)},suspended==='review'?1000:0)})
+   const result=await a.consult(request)
+   if(result.status==='ready')await journal.run('next-bob-input',result,async()=> 'continue')
+   return {result,candidate:a.candidate}
+  }
+  let original:any
+  if(pause)await assert.rejects(run(),BobContinuation)
+  else {original=await run();assert.equal(original.result.status,'ready')}
+  f.draft.current_revision=2;suspended=null
+  const resumed=await run()
+  if(pause){assert.equal(resumed.result.stage,'construction');assert.equal(resumed.candidate,null)}
+  else assert.deepEqual(resumed.result,original.result,'historical reply must not rewrite the next recorded Bob model input')
+  assert.equal(renders,pause==='render'?0:1);assert.equal(reviews,pause?0:1)
  }
 })
 test('K3 rechecks after render and after provider review; changed source and lost authority fence publication',async()=>{
