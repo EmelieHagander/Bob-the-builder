@@ -14,6 +14,9 @@ export interface JournalStore {
   save(entry: JournalEntry): Promise<void>
 }
 export interface BobJournal {
+  /** Reconstruct a completed operation from recorded steps only. The scope
+   * must opt in after a fresh lifecycle check; it grants no new dispatch. */
+  replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T>
   run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs?: number): Promise<T>
   check(): void
   /** Milliseconds left in this worker's segment. */
@@ -48,7 +51,14 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
   const entries = new Map(store.entries.map(e => [e.key, e]))
   const positions = new Map<string, number>()
   let stopped: BobContinuation | undefined
+  const replayScopes: { recordedOnly: boolean }[] = []
   return {
+    async replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T> {
+      const scope = { recordedOnly: false }
+      replayScopes.push(scope)
+      try { return await work(() => { scope.recordedOnly = true }) }
+      finally { replayScopes.pop() }
+    },
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
     async run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs = 0): Promise<T> {
@@ -68,6 +78,9 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         const outcome = prior.value as { ok: boolean; result?: T; error?: string }
         if (!outcome.ok) throw new Error(outcome.error ?? 'operation_failed')
         return stableResult(outcome.result) as T
+      }
+      if (replayScopes.some(scope => scope.recordedOnly)) {
+        stopped = new BobContinuation('stop', 'continuation_incomplete', undefined, key); throw stopped
       }
       if (reserveMs && now() + reserveMs + 8000 > segmentDeadline) {
         stopped = new BobContinuation('yield'); throw stopped

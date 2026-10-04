@@ -13,6 +13,7 @@ export function createDrawingRequestStore(opts:{
  journal?:BobJournal;
 }):DrawingRequestStore {
  const restored=new Map<string,any>()
+ let requireRecorded:(()=>void)|undefined
  // Rebuild the same transcript after a worker pause. Our own later saves and
  // paid calls change revisions/budget; they must not rewrite earlier reads.
  // Cancellation/reset checks stay fresh at assertActive below.
@@ -22,6 +23,13 @@ export function createDrawingRequestStore(opts:{
  }
  const read=(id:string|null,after:string|null=null)=>caller('project_drawing_requests',{p_project:opts.projectId,p_id:id,p_after:after})
  return {
+  withReplayScope:async work=>{
+   if(!opts.journal)return work()
+   return opts.journal.replayScope(async restrict=>{
+    const previous=requireRecorded;requireRecorded=restrict
+    try{return await work()}finally{requireRecorded=previous}
+   })
+  },
   atomicSave:true,
   ensureGapTask:(id,expected,gap,requirement,plan)=>caller('ensure_drawing_gap_task',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_requirement:requirement,p_plan_revision:plan}),
   work:id=>caller('drawing_request_work',{p_project:opts.projectId,p_id:id}),
@@ -50,7 +58,13 @@ export function createDrawingRequestStore(opts:{
    const state=await opts.caller('check_drawing_request',{p_project:opts.projectId,p_id:id})
    if(state?.status==='cancelled')throw new Error('drawing_request_cancelled')
    if(state?.status==='paused')throw new Error('drawing_context_cleared')
-   if(state?.status==='saved')throw new Error('drawing_request_complete')
+   if(state?.status==='saved'){
+    // Our later save may already have completed this request. Rebuild only
+    // journaled CAD work in this scope; missing/changed steps stop before any
+    // new model/render/write. Outside reconstruction, completion still stops.
+    if(requireRecorded)requireRecorded()
+    else throw new Error('drawing_request_complete')
+   }
   },
   save:async(id,expected,status,payload)=>{
    if(id===null){

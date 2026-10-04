@@ -65,6 +65,26 @@ test('catalog revise may preserve metadata with null while ensure still requires
   assert.equal(parsed.data.notes,null)
 })
 
+test('catalog source quote rejection explains the exact substring repair without changing the provenance gate',async()=>{
+ const message='Välj plywood 18 mm som arbetsmaterial, två hela gavlar.'
+ let writes=0
+ const writer=createProjectWriter('A',message,async payload=>{
+  writes++
+  return message.includes(payload.data.source_quote)
+   ?noError({...receipt,dataset:'catalog',recordId:'30000000-0000-4000-8000-000000000001',revision:1,record:{id:'30000000-0000-4000-8000-000000000001',revision:1}})
+   :{data:null,error:{code:'22023',message:'catalog_source_quote_required: private database detail'}}
+ },async()=>noError([]),async()=>noError({generation:2,receipts:[]}))
+ const args={action:'ensure',key:'plywood18',kind:'material',record_id:null,expected_revision:0,name:'Plywood 18 mm',aliases:[],
+  profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},
+  material_id:null,material_revision:null,notes:'Synthetic',source_kind:'user_statement',source_quote:'Välj plywood 18 mm som arbetsmaterial.',source_seq:null,request_quote:message}
+ const rejected=await writer.write('save_catalog_definition',args)
+ assert.equal(rejected.status,'invalid')
+ assert.match(rejected.message??'',/source_quote.*exact.*substring/i)
+ assert(!JSON.stringify(rejected).includes('private database detail'));assert.equal(writer.receipts.length,0)
+ assert.equal((await writer.write('save_catalog_definition',{...args,source_quote:'Välj plywood 18 mm som arbetsmaterial'})).status,'saved')
+ assert.equal(writes,2);assert.equal(writer.receipts.length,1)
+})
+
 test('measurement parser enforces canonical units, uncertainty, decimal limits and current revision',()=>{
   const input={record_id:null,create_area_id:null,create_component_id:null,expected_revision:0,subject:'Chosen width',value:'70',unit:'cm',truth:'provided_spec',source:'User selected option A',notes:'Not measured on site',required:false,change_note:'Chosen dimension',request_quote:'A'}
   assert.equal(parseProjectWrite('save_project_measurement',input,'A','A')!.data.truth,'provided_spec')

@@ -5,6 +5,37 @@ import assert from 'node:assert/strict'
 import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 
+test('completed reconstruction permits exact checkpoints, rejects new or changed operations, and keeps cancellation/reset fresh',async()=>{
+ const entries:JournalEntry[]=[]
+ await createBobJournal({entries,save:async e=>{entries.push(e)}},Infinity).run('cad:model',{revision:1},async()=> 'reviewed')
+ for(const status of ['saved','cancelled','paused']){
+  const journal=createBobJournal({entries,save:async()=>{throw Error('must not checkpoint new work')}},Infinity)
+  const store=createDrawingRequestStore({projectId:'A',binding:{},journal,newId:async()=> 'id',privateCall:async()=>null,caller:async()=>({status})})
+  await assert.rejects(store.assertActive!('id'),new RegExp(status==='saved'?'drawing_request_complete':status==='cancelled'?'drawing_request_cancelled':'drawing_context_cleared'))
+  if(status!=='saved'){
+   await assert.rejects(store.withReplayScope!(async()=>{await store.assertActive!('id');throw Error('must stop')}),new RegExp(status==='cancelled'?'drawing_request_cancelled':'drawing_context_cleared'))
+   continue
+  }
+  let dispatches=0
+  await store.withReplayScope!(async()=>{
+   await store.assertActive!('id')
+   assert.equal(await journal.run('cad:model',{revision:1},async()=>{dispatches++;return 'duplicate'}),'reviewed')
+   await assert.rejects(journal.run('cad:render',{},async()=>{dispatches++;return 'new'}),/continuation_incomplete/)
+  })
+  assert.equal(dispatches,0)
+  assert.throws(()=>journal.check(),/continuation_incomplete/)
+  const changed=createBobJournal({entries,save:async()=>{}},Infinity)
+  await assert.rejects(changed.replayScope(async restrict=>{
+   restrict();return changed.run('cad:model',{revision:2},async()=>{dispatches++;return 'changed'})
+  }),/continuation_changed/)
+  assert.equal(dispatches,0)
+ }
+ // The restriction ends with reconstruction; Bob can take its next step.
+ const journal=createBobJournal({entries,save:async e=>{entries.push(e)}},Infinity)
+ await journal.replayScope(async restrict=>{restrict();await journal.run('cad:model',{revision:1},async()=> 'duplicate')})
+ assert.equal(await journal.run('model:ask-bob',{},async()=> 'reply'),'reply')
+})
+
 test('P4: own budget/status changes cannot rewrite a replayed tool reply; cancellation stays live',async()=>{
  for(const checkpoint of [false,true]){
   const entries:JournalEntry[]=[];let revision=1,status='needs_data',calls=0
