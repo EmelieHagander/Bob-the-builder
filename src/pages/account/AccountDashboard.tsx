@@ -113,19 +113,19 @@ export function AccountDashboard() {
             Projects <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {projects?.length ?? 0}</span>
           </SectionTitle>
           {loading ? <Loading /> : projectError ? <div role="alert"><FormError>{projectError.message}</FormError><button className="btn" onClick={reload}>Try again</button></div>
-            : !projects?.length ? <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />
             : <>
+              {!projects?.length && <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />}
               {buildingsLoading && <Loading label="Loading building groups…" />}
               {buildingsError && <div role="alert"><p className="foundation-hint">Building groups could not be loaded. All your projects are listed below.</p><button className="btn" onClick={reload}>Retry building groups</button></div>}
               {overview && overview.buildings.map(building => {
-                const grouped = projects.filter(project => overview.links.some(link => link.buildingId === building.id && link.projectId === project.id))
+                const grouped = (projects ?? []).filter(project => overview.links.some(link => link.buildingId === building.id && link.projectId === project.id))
                 return <details key={building.id} className="account-building-group" open>
                   <summary><Icon name="house" size={18} /><strong>{building.name}</strong><span className="ui-row-meta">{grouped.length} {grouped.length === 1 ? 'project' : 'projects'}</span></summary>
                   {grouped.length ? <List>{grouped.map(projectRow)}</List> : <p className="foundation-hint">No linked projects.</p>}
                   <Link className="project-detail-link" to={`/account/buildings?building=${encodeURIComponent(building.id)}`}>Building &amp; spaces</Link>
                 </details>
               })}
-              {(!overview || otherProjects.length > 0) && <section className="account-building-group" aria-label="Other projects">
+              {projects && projects.length > 0 && (!overview || otherProjects.length > 0) && <section className="account-building-group" aria-label="Other projects">
                 {overview && <h3>Other projects <span className="ui-row-meta">· {otherProjects.length}</span></h3>}
                 <List>{(overview ? otherProjects : projects).map(projectRow)}</List>
               </section>}

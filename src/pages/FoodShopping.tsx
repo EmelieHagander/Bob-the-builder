@@ -61,7 +61,7 @@ export function FoodShopping() {
           <EmptyState icon="basket" title="Nothing on the food list yet" hint="Add what the build day needs — it lands here grouped by category." />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', marginTop: 'var(--section-gap)' }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', marginTop: 'var(--section-gap)' }}>
           {groups.map((g) => (
             <div key={g.category} className="card" style={{ padding: 'var(--panel-padding)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginBottom: 11 }}>

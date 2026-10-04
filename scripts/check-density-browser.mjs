@@ -8,6 +8,8 @@ import { chromium } from 'playwright-core'
 const base = 'http://127.0.0.1:4179/Bob-the-builder/'
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
 let logs = '', browser
+const failures = []
+const check = (condition, message) => { if (!condition) failures.push(message) }
 server.stdout.on('data', data => { logs += data })
 server.stderr.on('data', data => { logs += data })
 try {
@@ -30,16 +32,16 @@ try {
       await page.locator('.page-title').waitFor()
       await page.waitForFunction(()=>!document.querySelector('.ui-loading'))
       await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
-      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${route||'project'} overflows at ${width}px`)
+      check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${route||'project'} overflows at ${width}px`)
       if (width<860) {
         const controls=await page.locator('.btn:visible,.ui-icon-button:visible,.account-project-open:visible,.meal-open:visible').evaluateAll(nodes=>nodes.map(node=>({label:node.getAttribute('aria-label')||node.textContent.trim(),height:node.getBoundingClientRect().height})))
-        assert(controls.every(control=>control.height>=43.5),`${route} lost a touch target: ${JSON.stringify(controls.filter(control=>control.height<43.5))}`)
+        check(controls.every(control=>control.height>=43.5),`${route} lost a touch target: ${JSON.stringify(controls.filter(control=>control.height<43.5))}`)
       }
       const limits={account:140,people:170,events:180,areas:260,food:160}
       if (limits[route]) {
         const rows=await page.locator('.ui-list-item:visible').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height))
-        assert(rows.length>0,`Missing compact rows on ${route}`)
-        assert(Math.max(...rows)<=limits[route],`${route} rows are too tall at ${width}px: ${rows}`)
+        check(rows.length>0,`Missing compact rows on ${route}`)
+        check(Math.max(...rows)<=limits[route],`${route} rows are too tall at ${width}px: ${rows}`)
       }
       if(['account','areas','people','events','shopping','food','announcements','account/settings',''].includes(route)) await page.screenshot({path:`test-results/density-${route.replaceAll('/','-')||'project'}-${width}.png`,fullPage:true})
     }
@@ -66,7 +68,8 @@ try {
     await page.keyboard.press('Space')
     assert.equal(await checkbox.isChecked(),!before,'Compact checklist must stay keyboard-operable')
     assert.deepEqual(errors,[])
-    console.log(`Compact routes, row density, touch targets, edit/search, themes and checklist keyboard: ${width}px OK`)
+    console.log(`Compact routes, row density, touch targets, edit/search, themes and checklist keyboard: ${width}px inspected`)
     await context.close()
   }
+  assert.deepEqual(failures, [], 'App-wide compact UI checks')
 } finally { await browser?.close();server.kill('SIGTERM') }

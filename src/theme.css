@@ -737,7 +737,8 @@ select {
 .solutions-page .btn { min-height: 44px; }
 .facts-entry > div { flex: 1; min-width: 0; }
 .project-facts .page-head { margin-top: var(--section-gap); }
-.fact-list, .fact-history { display: grid; gap: var(--layout-gap); margin: 16px 0; padding: 0; list-style: none; }
+.fact-list, .fact-history { display: grid; margin: var(--section-gap) 0; padding: 0; list-style: none; }
+.fact-history { gap: var(--layout-gap); }
 .fact-card { padding: var(--panel-padding); min-width: 0; overflow-wrap: anywhere; }
 .fact-card h3, .fact-card h4 { margin-bottom: 8px; }
 .fact-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }

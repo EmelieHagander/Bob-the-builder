@@ -61,8 +61,8 @@ export function Events() {
                 <div className="ui-row-meta">{e.day} · {e.time} · {e.spots} spots</div>
               </SummaryRow>
               <div className="ui-row-actions" style={{ justifyContent: 'space-between' }}>
-                <AvatarStack people={resolve(e.attendeeIds)} max={6} size={24} />
-                {going ? <Link to={`/events/${e.slug}`} className="btn no-print"><Icon name="check" size={16} /> You're in — see your tasks</Link>
+                <AvatarStack people={resolve(e.attendeeIds)} max={4} size={24} />
+                {going ? <Link to={`/events/${e.slug}`} className="btn no-print"><Icon name="check" size={16} /> View tasks</Link>
                   : <button type="button" className="btn no-print" onClick={() => join(e.id)} disabled={full}><Icon name={full ? 'prohibit' : 'hand-waving'} size={16} />{full ? 'This day is full' : "I'm coming!"}</button>}
               </div>
             </ListItem>
