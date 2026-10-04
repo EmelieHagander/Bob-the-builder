@@ -34,9 +34,20 @@ try {
     const archivedAreas = new Map()
     let archiveVersion = 0
     let buildingReadDenied = false
+    let blockBootRead = viewport.width === 320
+    const pendingBootReads = []
+    let bootReadStarted
+    const bootRead = new Promise(resolve => { bootReadStarted = resolve })
+    let refreshRequests = 0
     const areaStamp = () => `2026-09-24T12:00:${String(archiveVersion).padStart(2, '0')}Z`
     const errors = []
+    const authWarnings = []
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
+    if (viewport.width === 390) {
+      const expiry = Math.floor(Date.now() / 1000) + 15
+      const nearExpiryToken = [JSON.stringify({alg:'HS256',typ:'JWT'}),JSON.stringify({sub:user.id,exp:expiry,role:'authenticated'}),'fixture-signature'].map(part=>Buffer.from(part).toString('base64url')).join('.')
+      await context.addInitScript(({user,expiry,token}) => localStorage.setItem('sb-pwa-proof-auth-token',JSON.stringify({access_token:token,refresh_token:'fixture-refresh',token_type:'bearer',expires_at:expiry,expires_in:15,user})), {user,expiry,token:nearExpiryToken})
+    }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
       const inboxPath = new URL(route.request().url()).pathname
@@ -69,7 +80,10 @@ try {
         else { assert.equal(body.p_action, 'restore'); archivedAreas.delete(body.p_area) }
         return respond({ json: { id: body.p_area, project_id: 'P', archived_at: archivedAreas.get(body.p_area) ?? null, updated_at: areaStamp() } })
       }
-      if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
+      if (url.pathname === '/auth/v1/token') {
+        if (url.searchParams.get('grant_type') === 'refresh_token') refreshRequests++
+        return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user } })
+      }
       if (url.pathname === '/auth/v1/user') return respond({ json: user })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -101,6 +115,10 @@ try {
         return respond({ json: { scope: body.p_scope, areaId: body.p_area, phase: body.p_phase } })
       }
       if (url.pathname === '/rest/v1/projects') {
+        if (blockBootRead) {
+          bootReadStarted()
+          await new Promise(resolve => pendingBootReads.push(resolve))
+        }
         const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: '2026-09-15', end_date: '2026-10-04' }
         const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
         return respond({ json: single ? project : [project] })
@@ -166,9 +184,26 @@ try {
     const page = await context.newPage()
     page.setDefaultTimeout(12000)
     page.on('pageerror', error => errors.push(error.message))
+    page.on('console', message => { if (message.text().includes('Multiple GoTrueClient')) authWarnings.push(message.text()) })
+    if (viewport.width === 320) await page.clock.install()
     await page.goto(`${base}#/signin`)
-    await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
+    if (viewport.width !== 390) await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
+    if (viewport.width === 320) {
+      await bootRead
+      await page.clock.fastForward(20_001)
+      await page.getByRole('heading', {name:'Could not load your account',exact:true}).waitFor()
+      assert.equal(await page.getByRole('heading',{name:'Sign in',exact:true}).count(),0,'A failed read must not masquerade as signed out')
+      await page.getByRole('button',{name:'Reload app',exact:true}).waitFor()
+      await page.screenshot({path:'test-results/startup-timeout-320.png',fullPage:true})
+      blockBootRead = false
+      pendingBootReads.forEach(resolve=>resolve())
+      await new Promise(resolve=>setTimeout(resolve,100))
+      await page.getByRole('heading', {name:'Could not load your account',exact:true}).waitFor()
+      await page.getByRole('button',{name:'Try again',exact:true}).click()
+    }
     await page.getByRole('heading', { name: 'Phase fixture', exact: true }).waitFor()
+    if (viewport.width === 390) assert.equal(refreshRequests,1,'A nearly expired persisted session refreshes once across account, phase and Bob consumers')
+    assert.deepEqual(authWarnings,[],'Account consumers share one Auth owner')
     const projectCard = page.locator('.account-project-row').filter({ hasText: 'Renovate upstairs' }).first()
     await projectCard.getByLabel('phase: Build').waitFor()
     await projectCard.getByText('3 Areas · 1 Design · 1 Build · 1 Complete', { exact: true }).waitFor()

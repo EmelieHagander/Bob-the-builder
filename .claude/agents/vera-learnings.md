@@ -51,3 +51,8 @@ Changing only the theme cannot override inline geometry. Keep touch targets
 independent from visual padding, and verify representative routes rather than
 assuming one compact screen proves app-wide density. Native checklist controls
 must remain keyboard-operable when visual chrome is removed.
+
+A startup spinner needs a bounded connection failure and a retry path. Test a
+near-expiry persisted session and a stalled read; a fresh one-hour fixture token
+does not exercise the same path. Account, phase and chat data must share one
+Auth owner, while volunteer credentials retain their independent session.

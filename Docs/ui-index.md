@@ -85,6 +85,23 @@ Current pages generally compose:
 
 Use existing classes/primitives before inventing a local dialect.
 
+### Account startup and recovery
+
+`src/data/supabaseClient.ts` owns one persisted account Auth client, shared by
+project data, phases and Bob. The volunteer client keeps its separate storage
+key and non-persistent credentials; it never takes over the account session.
+
+App startup checks the session before reading the selected Project. Session
+errors are failures, not signed-out or empty-account results. The combined
+startup read has a 20-second deadline and offers **Try again** and **Reload app**
+when it cannot complete. Late results from a timed-out attempt cannot replace
+its recovery screen or a newer retry. No session or saved project is cleared by
+this recovery path. AI/background jobs do not use this startup deadline.
+
+The phase browser fixture checks a stalled read, late completion and retry at
+320px, plus a persisted session close to expiry and one shared refresh at 390px.
+Healthy fresh-session fixtures alone do not prove startup recovery.
+
 ### Shared compact density
 
 `src/theme.css` owns the spacing scale and semantic density tokens:

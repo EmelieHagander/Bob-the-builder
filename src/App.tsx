@@ -46,8 +46,13 @@ function ProjectApp() {
   const projectVersion = useProjectVersion()
   const authTick = useAuthTick()
   const [bootVersion, setBootVersion] = useState(0)
-  const { data: project, loading, error } = useAsync(() => db.getProject(), [projectVersion, bootVersion, authTick])
-  const { data: signedIn, loading: sessionLoading } = useAsync(() => db.hasSession(), [authTick])
+  const { data: boot, loading, error } = useAsync(async () => {
+    const signedIn = await db.hasSession()
+    const project = signedIn ? await db.getProject() : null
+    return { signedIn, project }
+  }, [projectVersion, bootVersion, authTick], { timeoutMs: 20_000 })
+  const project = boot?.project ?? null
+  const signedIn = boot?.signedIn
 
   useEffect(() => {
     if (project) document.documentElement.setAttribute('data-theme', project.theme)
@@ -62,17 +67,19 @@ function ProjectApp() {
     }
   }, [signedIn, navigate])
 
-  if (loading || sessionLoading) {
+  if (loading) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loading /></div>
   }
-  if (db.authEnabled() && !signedIn) return <SignIn />
+  if (error) return <div className="page"><section className="card ui-panel" role="alert">
+    <h1 className="page-title">Could not load your account</h1>
+    <p>{error.message}</p>
+    <div className="cluster"><button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
+      <button className="btn" onClick={() => window.location.reload()}>Reload app</button></div>
+  </section></div>
+  if (db.authEnabled() && signedIn === false) return <SignIn />
   if (location.pathname === '/account/buildings') {
     return <BuildingContext key={`account:${authTick}`} projectId="" context={db.buildingContext} />
   }
-  if (error) return <div className="card" role="alert" style={{ margin: 32, padding: 24 }}>
-    <p>Could not load your project. Your access may have changed.</p>
-    <button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
-  </div>
   if (!project && location.pathname.startsWith('/account')) return <Layout key={`account:${authTick}`} project={null}>
     <Routes>
       <Route path="/account" element={<AccountDashboard />} />

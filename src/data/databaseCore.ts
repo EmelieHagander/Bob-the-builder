@@ -22,6 +22,7 @@ import type { DrawingSourceStatus } from './drawingSources'
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { accountClient, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient'
 import { relativeTime } from '../lib/format'
 import type { AnswerEvidence } from './provenance'
 import { createRequestScope } from '../lib/projectRequest'
@@ -65,49 +66,7 @@ import type {
  * Schema + seed live in db/; see db/README.md for setup.
  * ──────────────────────────────────────────────────────────────── */
 
-/**
- * Accepts the full project URL ("https://xyz.supabase.co") or just the bare
- * project ref ("xyz") — a common slip when copying config around. Anything
- * unusable falls back to demo mode with a console warning instead of
- * crashing the whole app at startup.
- */
-function resolveSupabaseUrl(raw: string | undefined): string | null {
-  const value = raw?.trim()
-  if (!value) return null
-  const url = /^[a-z0-9]{16,}$/.test(value) ? `https://${value}.supabase.co` : value
-  try {
-    new URL(url)
-    return url
-  } catch {
-    console.warn(`bob: VITE_SUPABASE_URL is not a usable URL ("${value}") — running on demo data.`)
-    return null
-  }
-}
-
-const SUPABASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-
-function connect() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.info('bob: no database configured — running on the in-memory demo data.')
-    return null
-  }
-  try {
-    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      db: { schema: 'bob' },
-      // PKCE puts the magic-link token in the query string instead of the
-      // URL hash, which would otherwise collide with the HashRouter.
-      auth: { flowType: 'pkce' },
-    })
-    console.info(`bob: live database mode (${new URL(SUPABASE_URL).host}, schema bob)`)
-    return client
-  } catch (err) {
-    console.warn('bob: could not create the database client — running on demo data.', err)
-    return null
-  }
-}
-
-const db = connect()
+const db = accountClient
 
 /** Simulated network latency (ms) so the mock path exercises loading states. */
 const LATENCY = 120
@@ -349,7 +308,8 @@ function mapProject(row: ProjectRow): Project {
 /** Every project on the account — the account dashboard and calendar feed. */
 export async function getProjects(): Promise<Project[]> {
   if (!db) return read(mock.projects)
-  const { data } = await db.auth.getSession()
+  const { data, error: sessionError } = await db.auth.getSession()
+  if (sessionError) throw new Error('Could not check your session. Check your connection and try again.')
   if (!data.session) return []
   const uid = data.session.user.id
   if (claimedUser !== uid) {
@@ -763,7 +723,8 @@ export async function signInWithPassword(email: string, password: string): Promi
 /** Is anyone signed in? Mock mode has no auth, so always "yes". */
 export async function hasSession(): Promise<boolean> {
   if (!db) return true
-  const { data } = await db.auth.getSession()
+  const { data, error } = await db.auth.getSession()
+  if (error) throw new Error('Could not check your session. Check your connection and try again.')
   return data.session !== null
 }
 
