@@ -26,9 +26,12 @@ class CadWorkerTest(unittest.TestCase):
     def test_annotated_views_identify_exact_instances_and_dimensions_before_hashing(self):
         import xml.etree.ElementTree as ET
         r=fixture()
+        # Stable IDs can retain an earlier dimension after a source revision.
+        r['assembly_id']='retained_assembly_600_800_300'
         with tempfile.TemporaryDirectory() as tmp:
             source={'artifact_id':'11111111-1111-4111-8111-111111111111','revision':3}
             result=render_assembly(r,tmp,source)
+            self.assertEqual(result['assembly_id'],r['assembly_id'])
             self.assertEqual(result['drawing_source'],source)
             self.assertEqual(result['annotations']['coverage'],'complete')
             for view in r['views']:
@@ -38,6 +41,8 @@ class CadWorkerTest(unittest.TestCase):
                 self.assertEqual(notes['dimensions'],[{'axis':'xyz'[i],'mm':result['bounding_box_mm']['size'][i]} for i in expected])
                 root=ET.parse(Path(tmp,view+'.svg')).getroot()
                 texts=[e.text for e in root.iter() if e.tag.endswith('}text')]
+                self.assertIn('Assembly / '+view,texts)
+                self.assertFalse(any(r['assembly_id'] in s for s in texts))
                 self.assertTrue(any('Dimensions in mm' in s for s in texts))
                 self.assertTrue(any('P1' in s for s in texts))
                 self.assertTrue(any('revision 3' in s for s in texts))
