@@ -13,7 +13,7 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
   return (
     <div className="start-project">
       <div className="card start-project-card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
           <Icon name="tree-evergreen" weight="fill" size={26} color="var(--accent)" />
           <div>
             <h1 style={{ fontSize: 22, margin: 0 }}>Welcome to bob</h1>
@@ -23,19 +23,19 @@ export function StartProject({ onCreated }: { onCreated: () => void }) {
           </div>
         </div>
 
-        <Link className="btn" to="/account/buildings" style={{ marginTop: 16 }}><Icon name="house" size={16} /> Buildings &amp; family</Link>
+        <Link className="btn" to="/account/buildings" style={{ marginTop: 'var(--section-gap)' }}><Icon name="house" size={16} /> Buildings &amp; family</Link>
         <p className="foundation-hint">Record a building or share it with your household before starting a project.</p>
 
         <ProjectInvitations onChanged={projectId => { if (projectId) onCreated() }} />
 
-        {projects && projects.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+        {projects && projects.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'var(--section-gap)' }}>
           {projects.map(project => <button key={project.id} className="btn" onClick={() => {
             db.setActiveProject(project.id)
             onCreated()
           }}>{project.name}</button>)}
         </div>}
 
-        <div style={{ marginTop: 20 }}><NewProjectForm onCreated={project => {
+        <div style={{ marginTop: 'var(--section-gap)' }}><NewProjectForm onCreated={project => {
           db.setActiveProject(project.id)
           onCreated()
         }} /></div>

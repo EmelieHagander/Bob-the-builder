@@ -23,7 +23,7 @@ export function Today() {
       {next && <p className="page-sub">{next.title} · {next.day} · {next.time}</p>}
 
       {next && (
-        <div style={{ marginTop: 16, background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}>
+        <div style={{ marginTop: 'var(--section-gap)', background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r)', padding: 'var(--row-padding)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', fontSize: 13.5 }}>
           <Icon name="cooking-pot" weight="fill" size={17} color="var(--accent)" />
           <span style={{ color: '#ffffffe0' }}>{next.food}</span>
         </div>
@@ -32,18 +32,18 @@ export function Today() {
       {!orderedTasks ? (
         <Loading />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
           {orderedTasks.map((t) => {
             const chk = statusCheck(t.status)
             const taskPlan = readinessById.get(t.id)
             return (
-              <div key={t.id} className="card" style={{ padding: 15 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
+              <div key={t.id} className="card" style={{ padding: 'var(--panel-padding)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--layout-gap)' }}>
                   <Icon name={chk.icon} size={24} color={chk.color} style={{ marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>{t.areaName}</div>
                     <Link to={'/tasks/' + t.id} className="task-title-link" style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</Link>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 8, flexWrap: 'wrap' }}>
                       <SkillPill level={t.skill} />
                       <StatusPill status={t.status} />
                       {t.areaPhase && <PhasePill phase={t.areaPhase} prefix="Area" />}
@@ -61,7 +61,7 @@ export function Today() {
         </div>
       )}
 
-      <Link to="/areas" className="btn no-print" style={{ marginTop: 18 }}>
+      <Link to="/areas" className="btn no-print" style={{ marginTop: 'var(--section-gap)' }}>
         <Icon name="squares-four" size={15} /> Browse all areas
       </Link>
     </div>

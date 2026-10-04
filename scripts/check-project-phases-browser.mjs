@@ -33,6 +33,7 @@ try {
     const areaPhase = new Map([['bedroom', 'complete'], ['office', 'build'], ['guestroom', 'design']])
     const archivedAreas = new Map()
     let archiveVersion = 0
+    let buildingReadDenied = false
     const areaStamp = () => `2026-09-24T12:00:${String(archiveVersion).padStart(2, '0')}Z`
     const errors = []
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
@@ -52,6 +53,10 @@ try {
         'Content-Type': 'application/json',
       } })
       if (request.method() === 'OPTIONS') return respond({ status: 204, body: '' })
+      if (url.pathname === '/rest/v1/current_buildings') return respond(buildingReadDenied
+        ? {status:403,json:{message:'Building overview access denied'}}
+        : {json:[{id:'house',name:'Stora huset'},{id:'workshop',name:'Workshop'}]})
+      if (url.pathname === '/rest/v1/project_buildings') return respond({json:[{project_id:'P',id:'house',name:'Stora huset'}]})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[...areaPhase].map(([id,phase])=>({id,slug:id,name:id==='guestroom'?'Guestroom':id[0].toUpperCase()+id.slice(1),phase,archived_at:archivedAreas.get(id)??null})),steps:[],unorganised_tasks:[]}})
       if (url.pathname === '/rest/v1/rpc/area_lifecycle_command') {
@@ -164,11 +169,24 @@ try {
     await page.goto(`${base}#/signin`)
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Phase fixture', exact: true }).waitFor()
-    const projectCard = page.locator('.card').filter({ hasText: 'Renovate upstairs' }).first()
+    const projectCard = page.locator('.account-project-row').filter({ hasText: 'Renovate upstairs' }).first()
     await projectCard.getByLabel('phase: Build').waitFor()
     await projectCard.getByText('3 Areas · 1 Design · 1 Build · 1 Complete', { exact: true }).waitFor()
     await page.getByText('Happening now', { exact: true }).first().waitFor()
-    await page.getByRole('button', { name: 'Open', exact: true }).click()
+    const group = page.locator('.account-building-group').filter({hasText:'Stora huset'})
+    await group.locator('summary').click()
+    assert.equal(await projectCard.isVisible(),false,'Building group collapses without losing its Project')
+    await group.locator('summary').click()
+    await projectCard.waitFor()
+    await page.screenshot({path:`test-results/account-building-groups-${viewport.width}.png`,fullPage:true})
+    buildingReadDenied = true
+    await page.reload()
+    await page.getByText('Building groups could not be loaded. All your projects are listed below.',{exact:true}).waitFor()
+    await projectCard.getByLabel('phase: Build').waitFor()
+    buildingReadDenied = false
+    await page.getByRole('button',{name:'Retry building groups',exact:true}).click()
+    await group.locator('summary').waitFor()
+    await page.getByRole('button', { name: 'Open project Renovate upstairs', exact: true }).click()
 
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
     await page.getByLabel('Project phase: Build').waitFor()

@@ -361,6 +361,29 @@ export async function getProjects(): Promise<Project[]> {
   return rows.map(mapProject)
 }
 
+export interface AccountBuildingOverview {
+  buildings: { id: string; name: string }[]
+  links: { projectId: string; buildingId: string }[]
+}
+
+/** Account read: keep the user's chosen Project intact while grouping visible builds. */
+export async function getAccountBuildingOverview(projectIds: string[]): Promise<AccountBuildingOverview> {
+  const guard = captureAccountContext()
+  const ids = [...new Set(projectIds.filter(Boolean))]
+  if (!db) return { buildings: [], links: [] }
+  const [buildingResult, linkResult] = await Promise.all([
+    db.from('current_buildings').select('id,name').eq('archived', false).order('name'),
+    ids.length ? db.from('project_buildings').select('project_id,id,name').in('project_id', ids).eq('archived', false) : Promise.resolve({ data: [], error: null }),
+  ])
+  guard()
+  const buildings = unwrap<{ id: string; name: string }[]>(buildingResult)
+  const rows = unwrap<{ project_id: string; id: string; name: string }[]>(linkResult)
+  if (rows.some(row => !ids.includes(row.project_id))) throw new Error('Building overview project context changed. Reload before continuing.')
+  const byId = new Map(buildings.map(building => [building.id, building]))
+  for (const row of rows) byId.set(row.id, { id: row.id, name: row.name })
+  return { buildings: [...byId.values()].sort((a,b) => a.name.localeCompare(b.name)), links: rows.map(row => ({ projectId: row.project_id, buildingId: row.id })) }
+}
+
 /** Explicitly closed or unavailable projects stay null; only an initial choice defaults. */
 export async function getProject(): Promise<Project | null> {
   const projects = await getProjects()

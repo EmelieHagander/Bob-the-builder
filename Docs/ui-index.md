@@ -85,6 +85,45 @@ Current pages generally compose:
 
 Use existing classes/primitives before inventing a local dialect.
 
+### Shared compact density
+
+`src/theme.css` owns the spacing scale and semantic density tokens:
+`--panel-padding`, `--row-padding`, `--section-gap`, `--layout-gap`,
+`--page-padding-*`, `--control-height`, `--control-padding`, `--field-padding`
+and `--text-*`. Themes change colour; density and component meaning stay shared.
+Mobile/coarse-pointer controls retain a 44px target and editable text is 16px.
+Compact means removing repeated chrome and unnecessary space, not shrinking
+instructions, warning text, drawings or interaction targets until unreadable.
+
+`Panel`, `List`, `ListItem`, `SummaryRow` and `ChecklistRow` in
+`src/components/ui.tsx` compose the common surfaces. Use one list surface with
+row separators for repeated projects, Areas, people, events, meals and physical
+records. Existing `.card` / `.foundation-section` and `.fact-list` consumers use
+the same density tokens; do not restore independent inline padding/gap values.
+`Field`, `SectionTitle`, `Loading`, `EmptyState`, pills and the shared Modal also
+follow these owners. Shopping checklists use visible native checkboxes with a
+whole-row label, including keyboard operation.
+
+Account lists visible Buildings and expands their linked Projects from the
+existing physical-scope projection. Reads do not switch the selected Project.
+A Project linked to several Buildings may appear under each; counts of total
+Projects remain unique. **Other projects** keeps Projects without a visible
+Building link reachable without assuming their physical context is complete.
+An unavailable grouping falls back to the project list with a visible error
+and retry, rather than presenting a failed lookup as an empty Building.
+Project phase, schedule and mixed Area phases remain distinct. Project details
+and scheduling are reached through the row's labelled details action.
+
+Long supporting descriptions and material calculations may expand on demand;
+saved content, purchase quantities, uncertainty and stale-source warnings stay
+available. Phase-specific build metrics remain separate from readiness.
+
+`scripts/check-density-browser.mjs` verifies app-wide demo routes, narrow/desktop
+overflow, row density, touch targets, search/edit flows, themes and keyboard
+checklists. The connected phase/work/sharing/foundations/building fixtures own
+real route/read/write/reload mechanics; browser fixtures are separate from
+physical-phone and named-participant acceptance.
+
 ### Core work modes
 
 | Surface | Primary user job | Important UI constraint |

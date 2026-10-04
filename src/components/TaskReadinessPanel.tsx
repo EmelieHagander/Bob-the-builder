@@ -119,9 +119,9 @@ export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }
 
     {data.readiness.blockers.length > 0 && <div className="fact-details"><h3 style={{ marginTop: 0 }}>What blocks this task</h3>{data.readiness.blockers.map(blocker => <p key={`${blocker.kind}:${blocker.id}`}><Icon name="warning-circle" size={15} /> {blocker.label}</p>)}</div>}
 
-    <details open={data.readiness.state === 'blocked'} style={{ marginTop: 12 }}>
+    <details open={data.readiness.state === 'blocked'} style={{ marginTop: 'var(--section-gap)' }}>
       <summary style={{ cursor: 'pointer', fontWeight: 750 }}>Readiness details</summary>
-      <div style={{ display: 'grid', gap: 14, marginTop: 12 }}>
+      <div style={{ display: 'grid', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         <div className="fact-source">
           <div className="foundation-heading"><strong>Prerequisites</strong><button className="btn" disabled={busy || !(tasks?.some(task => task.id !== taskId))} onClick={() => setDialog('dependency')}><Icon name="plus" size={14} /> Add</button></div>
           {!data.dependencies.length ? <p>No explicit task dependency recorded.</p> : data.dependencies.map(dependency => <div key={dependency.id} style={{ marginTop: 9 }}>

@@ -2,7 +2,7 @@ import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
-import { EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
+import { ChecklistRow, EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
 import { MaterialModal } from '../components/editors'
 import type { Material } from '../data/types'
 
@@ -46,14 +46,12 @@ export function Shopping() {
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
   const sourceByMaterial = new Map((planSources ?? []).filter(item => item.materialId).map(item => [item.materialId!, item]))
 
-  const row = (m: Material, last: boolean) => {
+  const row = (m: Material) => {
     const on = bought[m.id]
     const source = sourceByMaterial.get(m.id)
     const displayStatus = on ? 'delivered' : m.status === 'delivered' ? 'needed' : m.status
     return (
-      <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 2px', borderBottom: last ? 'none' : '1px solid var(--line)', cursor: 'pointer' }}>
-        <input type="checkbox" checked={!!on} onChange={() => toggle(m)} style={{ display: 'none' }} />
-        <Icon name={on ? 'check-square' : 'square'} weight={on ? 'fill' : 'regular'} size={20} color={on ? 'var(--leaf)' : 'var(--ink-faint)'} />
+      <ChecklistRow key={m.id} checked={!!on} onChange={() => toggle(m)} trailing={m.cost}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{m.name}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{m.qty} · {m.area} · {m.supplier}</div>
@@ -61,9 +59,8 @@ export function Shopping() {
             {source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : 'Manual shopping item'}
           </div>
         </div>
-        <span className="no-print"><MaterialPill status={displayStatus} /></span>
-        <span style={{ fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600, width: 78, textAlign: 'right' }}>{m.cost}</span>
-      </label>
+        <div className="ui-row-meta no-print"><MaterialPill status={displayStatus} /></div>
+      </ChecklistRow>
     )
   }
 
@@ -83,8 +80,8 @@ export function Shopping() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13.5, color: 'var(--ink-soft)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', flexWrap: 'wrap', fontSize: 13.5, color: 'var(--ink-soft)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
           <div style={{ width: 200, height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
             <div style={{ width: total ? `${(picked / total) * 100}%` : '0%', height: '100%', background: 'var(--leaf)', borderRadius: 999, transition: 'width .3s ease' }} />
           </div>
@@ -98,19 +95,19 @@ export function Shopping() {
       {!groups ? (
         <Loading />
       ) : groups.length === 0 ? (
-        <div style={{ marginTop: 18 }}>
+        <div style={{ marginTop: 'var(--section-gap)' }}>
           <EmptyState icon="package" title="Nothing on the list yet" hint="Add the first material — it lands here grouped by category." />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', marginTop: 18, alignItems: 'start' }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', marginTop: 'var(--section-gap)', alignItems: 'start' }}>
           {groups.map((g) => (
-            <div key={g.category} className="card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
+            <div key={g.category} className="card" style={{ padding: 'var(--panel-padding)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginBottom: 8 }}>
                 <Icon name={g.icon} weight="fill" size={18} color="var(--accent-2)" />
                 <span style={{ fontSize: 14.5, fontWeight: 700 }}>{g.category}</span>
                 <span style={{ fontSize: 12, color: 'var(--ink-faint)', marginLeft: 'auto' }}>{g.items.length} items</span>
               </div>
-              {g.items.map((m, i) => row(m, i === g.items.length - 1))}
+              {g.items.map(row)}
             </div>
           ))}
         </div>

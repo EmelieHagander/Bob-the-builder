@@ -1,7 +1,7 @@
 import { useBobSurface } from '../lib/bobSurface'
 import { useState, type FormEvent } from 'react'
 import * as db from '../data/database'
-import { Avatar, Icon, Loading, useAsync } from '../components/ui'
+import { Avatar, Icon, List, ListItem, Loading, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { FormError } from '../components/form'
 
@@ -54,7 +54,7 @@ export function Announcements() {
 
       {/* Composer */}
       {me && (
-        <form className="card no-print" onSubmit={post} style={{ padding: 16, marginTop: 18, display: 'flex', gap: 12 }}>
+        <form className="card no-print" onSubmit={post} style={{ padding: 'var(--panel-padding)', marginTop: 'var(--section-gap)', display: 'flex', gap: 'var(--layout-gap)' }}>
           <Avatar person={me} size={38} />
           <div style={{ flex: 1 }}>
             <textarea
@@ -62,7 +62,7 @@ export function Announcements() {
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Share an update with the whole crew…"
               rows={2}
-              style={{ width: '100%', resize: 'vertical', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 13px', fontSize: 14, background: 'var(--surface-2)', color: 'var(--ink)' }}
+              style={{ width: '100%', resize: 'vertical', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 14, background: 'var(--surface-2)', color: 'var(--ink)' }}
             />
             {error && <div style={{ marginTop: 9 }}><FormError>{error}</FormError></div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 9 }}>
@@ -77,15 +77,15 @@ export function Announcements() {
       {!announcements ? (
         <Loading />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 13, marginTop: 18, maxWidth: 760 }}>
+        <List style={{ maxWidth: 760 }}>
           {sorted.map((a) => {
             // The author may belong to another project on the account (or be
             // gone) — show the post anyway rather than dropping it.
             const who = byId.get(a.authorId) ?? { initials: '?', color: 'var(--ink-faint)', name: 'Crew member', role: '' }
             return (
-              <div key={a.id} className="card" style={{ padding: 17, borderColor: a.pinned ? 'var(--accent)' : 'var(--line)' }}>
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <Avatar person={who} size={40} />
+              <ListItem key={a.id} style={{ borderLeft: a.pinned ? '3px solid var(--accent)' : undefined }}>
+                <div style={{ display: 'flex', gap: 'var(--layout-gap)' }}>
+                  <Avatar person={who} size={28} />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: 14 }}>{who.name}</span>
@@ -100,7 +100,7 @@ export function Announcements() {
                       )}
                     </div>
                     <p style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.5, marginTop: 7 }}>{a.text}</p>
-                    <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 11, fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>
+                    <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 11, fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>
                       <button
                         title="React"
                         disabled={!!hearted[a.id]}
@@ -129,10 +129,10 @@ export function Announcements() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </ListItem>
             )
           })}
-        </div>
+        </List>
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import * as db from '../data/database'
-import { Avatar, Icon, Loading, skillDotColor, useAsync } from '../components/ui'
+import { Avatar, EmptyState, Icon, List, ListItem, Loading, SummaryRow, skillDotColor, useAsync } from '../components/ui'
 import { InviteModal } from '../components/InviteModal'
 import { PersonModal } from '../components/editors'
 import { ProjectSharingCard } from '../components/SharingCards'
@@ -46,58 +46,53 @@ export function People() {
         <ProjectSharingCard key={project.id} projectId={project.id} version={version} onChanged={() => setVersion(value => value + 1)} />
       </details>}
 
-      <div className="no-print" style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', maxWidth: 420 }}>
+      <div className="ui-search no-print">
         <Icon name="magnifying-glass" size={16} color="var(--ink-faint)" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name, role or skill…"
           aria-label="Search people"
-          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'var(--ink)' }}
         />
       </div>
 
-      {error ? <div role="alert" style={{ marginTop: 18 }}><FormError>{error.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : loading || !people ? (
+      {error ? <div role="alert" style={{ marginTop: 'var(--section-gap)' }}><FormError>{error.message}</FormError><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div> : loading || !people ? (
         <Loading />
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', marginTop: 18 }}>
+        <List aria-label="Project crew">
+          {filtered.length === 0 && <EmptyState icon="users-three" title="No people found" hint="Try a different name, role or skill." />}
           {filtered.map((p) => {
             const warn = dietWarn.test(p.diet)
             return (
-              <div key={p.id} className="card" style={{ padding: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar person={p} size={44} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15.5, fontWeight: 700 }}>{p.name}</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>{p.role}</div>
-                  </div>
+              <ListItem key={p.id}>
+                <SummaryRow leading={<Avatar person={p} size={28} />} trailing={
                   <button
-                    className="no-print"
+                    className="ui-icon-button no-print"
                     title={`Edit ${p.name.split(' ')[0]}`}
+                    aria-label={`Edit ${p.name}`}
                     onClick={() => setEditing(p)}
-                    style={{ background: 'none', border: 'none', padding: 4, display: 'flex', color: 'var(--ink-faint)', cursor: 'pointer' }}
                   >
                     <Icon name="pencil-simple" size={16} />
                   </button>
-                </div>
+                }><div className="ui-row-title">{p.name}</div><div className="ui-row-meta">{p.role}</div></SummaryRow>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 13 }}>
+                <div className="ui-row-actions">
                   {p.skills.map((s) => (
-                    <span key={s.name} title={SKILL_LABEL[s.level]} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 10px' }}>
+                    <span key={s.name} className="pill" title={SKILL_LABEL[s.level]} style={{ color: 'var(--ink)', background: 'var(--surface-2)' }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: skillDotColor(s.level), flex: '0 0 auto' }} />
                       {s.name}
                     </span>
                   ))}
                 </div>
 
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="ui-row-meta" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Icon name={warn ? 'warning' : 'fork-knife'} weight={warn ? 'fill' : 'regular'} size={15} color={warn ? 'var(--clay)' : 'var(--ink-faint)'} />
                   <span style={{ fontSize: 13, fontWeight: 600, color: warn ? 'var(--clay)' : 'var(--ink-soft)' }}>{p.diet}</span>
                 </div>
-              </div>
+              </ListItem>
             )
           })}
-        </div>
+        </List>
       )}
 
       {editing && (

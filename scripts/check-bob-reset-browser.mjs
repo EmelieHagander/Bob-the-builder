@@ -177,7 +177,7 @@ try {
     await page.goto(`${base}#/signin`)
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
     await page.getByRole('heading', { name: 'Reset fixture', exact: true }).waitFor()
-    await page.locator('.card').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open',exact:true}).click()
+    await page.locator('.account-project-row').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open project Reset project A',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
     if (touch) assert(await drawer.getByRole('button', { name: 'Close Ask bob', exact: true }).evaluate(node => node === document.activeElement), 'Opening a touch conversation does not raise the keyboard')

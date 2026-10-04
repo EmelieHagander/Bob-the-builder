@@ -138,7 +138,7 @@ export function ProjectModal({
       )}
 
       {mode === 'view' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, fontSize: 13.5, fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 'var(--section-gap)', fontSize: 13.5, fontWeight: 600 }}>
           <Icon name="calendar-dots" size={16} color="var(--accent-2)" />
           {project.startDate && project.endDate
             ? formatDateRange(project.startDate, project.endDate)
@@ -147,14 +147,14 @@ export function ProjectModal({
       )}
 
       {mode === 'details' ? (
-        <form onSubmit={saveDetails} style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={saveDetails} style={{ marginTop: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
           <Field label="Project name *">
             <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
           <Field label="What are you building?">
             <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
             <Field label="Location">
               <input style={inputStyle} value={location} onChange={(e) => setLocation(e.target.value)} />
             </Field>
@@ -195,8 +195,8 @@ export function ProjectModal({
           </div>
         </form>
       ) : editing ? (
-        <form onSubmit={save} style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <form onSubmit={save} style={{ marginTop: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
             <Field label="From">
               <input
                 type="date"
@@ -229,8 +229,8 @@ export function ProjectModal({
         </form>
       ) : (
         <>
-          {error && <div style={{ marginTop: 12 }}><FormError>{error}</FormError></div>}
-          <div className="cluster" style={{ justifyContent: 'flex-end', marginTop: 18 }}>
+          {error && <div style={{ marginTop: 'var(--section-gap)' }}><FormError>{error}</FormError></div>}
+          <div className="cluster" style={{ justifyContent: 'flex-end', marginTop: 'var(--section-gap)' }}>
             <button type="button" className="btn" onClick={() => setMode('details')}>
               <Icon name="pencil-simple" size={15} /> Edit details
             </button>

@@ -195,7 +195,7 @@ try {
     await page.locator('input[type="password"]').fill('fixture-password')
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
-    await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
+    await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
     imageBytes = Buffer.from(await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 240
       const ctx = canvas.getContext('2d'); ctx.fillStyle = '#a74632'; ctx.fillRect(0, 0, 120, 240); ctx.fillStyle = '#f4f1e6'; ctx.fillRect(35, 40, 50, 180)
@@ -459,7 +459,7 @@ try {
     await request
     await page.getByRole('dialog', { name: 'Entry before work', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
     await page.getByRole('link', { name: 'Account', exact: true }).click()
-    await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
+    await page.locator('.account-project-row').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open project Porch B', exact: true }).click()
     waiting.resolve()
     await page.locator('.project-photo-details > summary').click()
     await page.getByRole('region', { name: 'Project images', exact: true }).getByText('No images here yet.', { exact: true }).waitFor()

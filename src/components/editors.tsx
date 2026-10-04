@@ -79,7 +79,7 @@ function Actions({
 
 function FormShell({ onSubmit, children }: { onSubmit: (e: FormEvent) => void; children: ReactNode }) {
   return (
-    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
       {children}
     </form>
   )
@@ -218,7 +218,7 @@ export function TaskModal({
         <Field label="Task *">
           <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Paint walls — 2 coats" autoFocus required />
         </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Skill needed">
             <select style={{ ...inputStyle, appearance: 'auto' }} value={skill} onChange={(e) => setSkill(e.target.value as SkillLevel)}>
               {SKILLS.map((s) => (
@@ -288,7 +288,7 @@ export function MaterialModal({
         <Field label="Material *">
           <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Pine board 22×95mm" autoFocus required />
         </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Quantity">
             <input style={inputStyle} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="48 st" />
           </Field>
@@ -296,7 +296,7 @@ export function MaterialModal({
             <input style={inputStyle} value={cost} onChange={(e) => setCost(e.target.value)} placeholder="1 920 kr" />
           </Field>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Area">
             <select style={{ ...inputStyle, appearance: 'auto' }} value={area} onChange={(e) => setArea(e.target.value)}>
               <option value="Several">Several</option>
@@ -364,7 +364,7 @@ export function EventModal({ event, onClose, onDone }: { event?: BuildEvent; onC
         <Field label="Title *">
           <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Råbygge — walls & roof" autoFocus required />
         </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Day *">
             <input style={inputStyle} value={day} onChange={(e) => setDay(e.target.value)} placeholder="Sat 5 Jul" required />
           </Field>
@@ -372,7 +372,7 @@ export function EventModal({ event, onClose, onDone }: { event?: BuildEvent; onC
             <input style={inputStyle} value={time} onChange={(e) => setTime(e.target.value)} placeholder="09:00–16:00" />
           </Field>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Place">
             <input style={inputStyle} value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Skogsstuga, Dalarna" />
           </Field>
@@ -415,7 +415,7 @@ export function MealModal({ meal, onClose, onDone }: { meal?: Meal; onClose: () 
   return (
     <Modal title={meal ? `Edit ${meal.meal}` : 'Add meal'} onClose={onClose}>
       <FormShell onSubmit={submit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Meal *">
             <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Lunch" autoFocus required />
           </Field>
@@ -463,7 +463,7 @@ export function FoodItemModal({ categories, onClose, onDone }: { categories: str
         <Field label="Item *">
           <input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="Potatis" autoFocus required />
         </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Quantity">
             <input style={inputStyle} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="4 kg" />
           </Field>
@@ -509,7 +509,7 @@ export function PersonModal({ person, onClose, onDone }: { person: Person; onClo
   return (
     <Modal title={person.name} onClose={onClose}>
       <FormShell onSubmit={submit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Role">
             <input style={inputStyle} value={role} onChange={(e) => setRole(e.target.value)} placeholder="Volunteer" />
           </Field>
@@ -592,7 +592,7 @@ export function AssignModal({ task, people, onClose, onDone }: { task: Task; peo
           {people.map((p) => {
             const on = selected.has(p.id)
             return (
-              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '7px 6px', borderRadius: 10, cursor: 'pointer', background: on ? 'var(--surface-2)' : 'transparent' }}>
+              <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: '7px 6px', borderRadius: 'var(--r)', cursor: 'pointer', background: on ? 'var(--surface-2)' : 'transparent' }}>
                 <input type="checkbox" checked={on} onChange={() => toggle(p.id)} style={{ display: 'none' }} />
                 <Icon name={on ? 'check-square' : 'square'} weight={on ? 'fill' : 'regular'} size={20} color={on ? 'var(--leaf)' : 'var(--ink-faint)'} />
                 <Avatar person={p} size={30} />

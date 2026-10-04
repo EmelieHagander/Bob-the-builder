@@ -38,6 +38,8 @@ jobs:
       - run: npm run verify:pwa
       - name: Verify settings, phone guide and offline retry
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:install
+      - name: Verify compact shared UI across app routes
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-density-browser.mjs
       - name: Build with a dummy live configuration
         id: live_build
         run: npm run build

@@ -42,3 +42,12 @@ and textarea growth bounded by the available viewport. Observe content and
 viewport resizing for chat follow behavior, but only follow while the reader
 is already at the end. Test both an older answer and the latest answer while
 the composer and text density change.
+
+## 2026-10-04 — Density must propagate through the shared system
+
+**Rule:** spacing tokens need real consumers. Replace inline panel padding and
+section gaps in existing screens, and use shared list rows for repeated entities.
+Changing only the theme cannot override inline geometry. Keep touch targets
+independent from visual padding, and verify representative routes rather than
+assuming one compact screen proves app-wide density. Native checklist controls
+must remain keyboard-operable when visual chrome is removed.

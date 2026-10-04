@@ -103,21 +103,21 @@ export function Dashboard() {
       </div>
 
       {db.authEnabled() && project && (
-        <section aria-label="Planning next steps" style={{ marginTop: 20 }}>
+        <section aria-label="Planning next steps" style={{ marginTop: 'var(--section-gap)' }}>
           {planningLoading ? (
-            <div className="card" style={{ padding: 16 }}><Loading label="Checking what the project needs next…" /></div>
+            <div className="card" style={{ padding: 'var(--panel-padding)' }}><Loading label="Checking what the project needs next…" /></div>
           ) : planningError ? (
-            <div className="card" role="status" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div className="card" role="status" style={{ padding: 'var(--panel-padding)' }}>
+              <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
                 <Icon name="warning-circle" size={20} color="var(--honey)" />
                 <div><strong>Planning status is unavailable</strong><div className="foundation-hint">Your saved project data is unchanged. Open the planning surfaces directly while this summary is unavailable.</div></div>
               </div>
             </div>
           ) : (
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-              <Link to={nextPlanningAction.to} className="card" style={{ padding: 18, display: 'block', borderColor: 'var(--accent-2)' }}>
-                <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--layout-gap)' }}>
+              <Link to={nextPlanningAction.to} className="card" style={{ padding: 'var(--panel-padding)', display: 'block', borderColor: 'var(--accent-2)' }}>
+                <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
                     <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -131,8 +131,8 @@ export function Dashboard() {
                 </div>
               </Link>
 
-              <div className="card" style={{ padding: 18 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+              <div className="card" style={{ padding: 'var(--panel-padding)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'baseline' }}>
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
                     <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>
@@ -145,7 +145,7 @@ export function Dashboard() {
                   <div style={{ display: 'grid', gap: 8 }}>
                     {missingMeasurements.slice(0, 3).map((measurement) => (
                       <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
                         <Icon name={measurement.required ? 'warning-circle' : 'circle-dashed'} size={17} color={measurement.required ? 'var(--clay)' : 'var(--ink-faint)'} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{measurement.subject}</div>
@@ -157,10 +157,10 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No unknown or estimated measurements</div>
-                    {!selectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
-                    {selectedTarget && !hasCurrentDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
-                    {selectedTarget && hasCurrentDrawing && <div style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
+                    <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No unknown or estimated measurements</div>
+                    {!selectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
+                    {selectedTarget && !hasCurrentDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
+                    {selectedTarget && hasCurrentDrawing && <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
                   </div>
                 )}
               </div>
@@ -169,18 +169,18 @@ export function Dashboard() {
         </section>
       )}
 
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 22 }}>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 'var(--section-gap)' }}>
         {stats?.map((s) => (
-          <div key={s.label} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '14px 15px' }}>
+          <div key={s.label} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 'var(--row-padding)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
               <Icon name={s.icon} weight="fill" size={15} color={s.color} /> {s.label}
             </div>
-            <div className="font-display" style={{ fontWeight: 700, fontSize: 24, marginTop: 6 }}>{s.value}</div>
+            <div className="font-display" style={{ fontWeight: 700, fontSize: 'var(--text-title)', marginTop: 6 }}>{s.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 22, marginTop: 24 }}>
+      <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         <section>
           <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 600 }}>View all</Link>}>
             Areas <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areas?.length ?? 0}</span>
@@ -192,9 +192,9 @@ export function Dashboard() {
               {areas.map((a) => {
                 const overall = Math.round((a.assignedPct + a.materialsPct + a.donePct) / 3)
                 return (
-                  <Link key={a.id} to={`/areas/${a.slug}`} className="card" style={{ padding: 15, display: 'block' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Link key={a.id} to={`/areas/${a.slug}`} className="card" style={{ padding: 'var(--panel-padding)', display: 'block' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Icon name={a.icon} size={21} color="var(--brand)" />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -203,7 +203,7 @@ export function Dashboard() {
                       </div>
                       <Ring value={overall} />
                     </div>
-                    <div style={{ marginTop: 13, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    <div style={{ marginTop: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 7 }}>
                       <ProgressBar label="Assigned" value={a.assignedPct} />
                       <ProgressBar label="Materials" value={a.materialsPct} />
                       <ProgressBar label="Done" value={a.donePct} />
@@ -216,31 +216,31 @@ export function Dashboard() {
           )}
         </section>
 
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
           {next && (
             <Link to={`/events/${next.slug}`} style={{ background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r)', padding: '17px 17px 16px', display: 'block' }}>
               <div style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: '#ffffff90', fontWeight: 700 }}>Next build day</div>
               <div className="font-display" style={{ fontWeight: 700, fontSize: 19, marginTop: 4 }}>{next.title}</div>
-              <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 13, color: '#ffffffd0' }}>
+              <div style={{ display: 'flex', gap: 'var(--layout-gap)', marginTop: 10, fontSize: 13, color: '#ffffffd0' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="calendar-dots" size={15} color="var(--accent)" />{next.day}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="clock" size={15} color="var(--accent)" />{next.time}</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
                 <AvatarStack people={resolve(next.attendeeIds)} max={5} />
                 <span style={{ fontSize: 12.5, color: '#ffffffc0', fontWeight: 600 }}>{next.spots} spots</span>
               </div>
-              <div style={{ marginTop: 13, background: '#ffffff14', borderRadius: 10, padding: '9px 11px', fontSize: 12, color: '#ffffffd5', display: 'flex', gap: 8 }}>
+              <div style={{ marginTop: 'var(--section-gap)', background: '#ffffff14', borderRadius: 'var(--r)', padding: '9px 11px', fontSize: 12, color: '#ffffffd5', display: 'flex', gap: 8 }}>
                 <Icon name="cooking-pot" weight="fill" size={15} color="var(--accent)" style={{ marginTop: 1 }} />
                 <span>{next.food}</span>
               </div>
             </Link>
           )}
 
-          <div className="card" style={{ padding: 16 }}>
+          <div className="card" style={{ padding: 'var(--panel-padding)' }}>
             <SectionTitle icon="warning-circle" color="var(--clay)">Needs attention</SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               {attention?.map((x, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div key={i} style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
                   <div style={{ width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto', background: x.tone === 'clay' ? 'var(--clay-bg)' : 'var(--honey-bg)' }}>
                     <Icon name={x.icon} weight="fill" size={14} color={x.tone === 'clay' ? 'var(--clay)' : '#9A6313'} />
                   </div>
@@ -250,15 +250,15 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="card" style={{ padding: 16 }}>
+          <div className="card" style={{ padding: 'var(--panel-padding)' }}>
             <SectionTitle icon="megaphone" color="var(--accent-2)" action={<Link to="/announcements" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 600 }}>All</Link>}>
               Announcements
             </SectionTitle>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               {announcements?.slice(0, 2).map((p) => {
                 const who = byId.get(p.authorId)
                 return (
-                  <div key={p.id} style={{ display: 'flex', gap: 10 }}>
+                  <div key={p.id} style={{ display: 'flex', gap: 'var(--layout-gap)' }}>
                     {who && <AvatarStack people={[who]} />}
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5 }}>

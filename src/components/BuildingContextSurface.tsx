@@ -150,7 +150,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
       <h3>You can’t view {selectedBuilding?.name ?? 'this building'}</h3>
       <p>Your project may reference this building, but your current access does not permit its physical details to be read.</p>
       <p className="foundation-hint">No rooms, elements or relationships are shown as empty because their state could not be verified.</p>
-      {buildings.length > 1 && <label style={{ display: 'block', maxWidth: 360, marginTop: 16 }}>
+      {buildings.length > 1 && <label style={{ display: 'block', maxWidth: 360, marginTop: 'var(--section-gap)' }}>
         <span className="foundation-hint" style={{ display: 'block', marginBottom: 4 }}>Choose another building</span>
         <select style={inputStyle} value={selectedBuildingId} onChange={event => setSelectedBuildingId(event.target.value)}>
           {buildings.map(building => <option key={building.id} value={building.id}>{building.name}</option>)}
@@ -160,7 +160,7 @@ export function BuildingContextSurface({ projectId, context, initialBuildingId }
   </>
 
   return <>
-    {detailError && <div className="card foundation-section" role="alert" style={{ marginBottom: 16 }}>
+    {detailError && <div className="card foundation-section" role="alert" style={{ marginBottom: 'var(--section-gap)' }}>
       <strong>Could not load all details for {selectedBuilding?.name ?? 'this building'}.</strong>
       <p>{detailError}</p>
       <p className="foundation-hint">Physical details are hidden until they can be read back successfully.</p>

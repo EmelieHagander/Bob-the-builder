@@ -58,21 +58,21 @@ export function SignIn() {
   }
 
   const divider = (label: string) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0', color: 'var(--ink-faint)', fontSize: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', margin: '18px 0', color: 'var(--ink-faint)', fontSize: 12 }}>
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} /> {label}{' '}
       <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--panel-padding)' }}>
       <div style={{ width: '100%', maxWidth: 420 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 11, marginBottom: 18 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--layout-gap)', marginBottom: 'var(--section-gap)' }}>
+          <div style={{ width: 44, height: 44, borderRadius: 'var(--r)', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="tree-evergreen" weight="fill" size={25} color="var(--accent)" />
           </div>
           <div style={{ lineHeight: 1 }}>
-            <div className="font-display" style={{ fontWeight: 800, fontSize: 28 }}>bob</div>
+            <div className="font-display" style={{ fontWeight: 800, fontSize: 'var(--text-title)' }}>bob</div>
             <div style={{ fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginTop: 3 }}>build crew</div>
           </div>
         </div>
@@ -81,14 +81,14 @@ export function SignIn() {
           <Link className="btn" to="/install"><Icon name="device-mobile" size={18} /> Installera appen</Link>
         </p>
 
-        <div className="card" style={{ padding: 26 }}>
+        <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           <h1 style={{ fontSize: 20, margin: 0 }}>Sign in</h1>
           <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '4px 0 0' }}>
             Invited? Sign in with your confirmed invitation email to find your project. New? You can start your own project or ask the organiser for an invitation.
           </p>
           <p className="foundation-hint">Volunteering? Open the project link from your organiser to join with just your name. You do not need to sign in here.</p>
 
-          <form onSubmit={magicLink} style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 18 }}>
+          <form onSubmit={magicLink} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
             <Field label="Email">
               <input style={inputStyle} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.se" autoFocus />
             </Field>
@@ -99,7 +99,7 @@ export function SignIn() {
 
           {divider('or with a password')}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
             <Field label="Password">
               <input
                 style={inputStyle}
@@ -138,12 +138,12 @@ export function SignIn() {
           </p>
 
           {notice && (
-            <div style={{ marginTop: 14, background: 'var(--leaf-bg)', border: '1px solid #c4d6ab', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#3f5c22' }}>
+            <div style={{ marginTop: 'var(--section-gap)', background: 'var(--leaf-bg)', border: '1px solid #c4d6ab', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#3f5c22' }}>
               {notice}
             </div>
           )}
           {error && (
-            <div style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 'var(--section-gap)' }}>
               <FormError>{error}</FormError>
             </div>
           )}

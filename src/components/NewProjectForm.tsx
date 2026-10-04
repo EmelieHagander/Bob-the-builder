@@ -26,7 +26,7 @@ export function NewProjectForm({ onCreated, onCancel }: {
     }
   }
 
-  return <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+  return <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
     <Field label="Project name *">
       <input style={inputStyle} value={name} onChange={event => setName(event.target.value)} placeholder="Sommarstugan" required autoFocus />
     </Field>

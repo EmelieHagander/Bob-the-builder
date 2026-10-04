@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { BuildEvent } from '../data/types'
-import { AvatarStack, EmptyState, Icon, Loading, useAsync } from '../components/ui'
+import { AvatarStack, EmptyState, Icon, List, ListItem, Loading, SummaryRow, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { EventModal } from '../components/editors'
 
@@ -39,7 +39,7 @@ export function Events() {
       </div>
 
       {error && (
-        <div style={{ marginTop: 12, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>
+        <div style={{ marginTop: 'var(--section-gap)', background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#8a3b2b' }}>
           {error}
         </div>
       )}
@@ -47,114 +47,27 @@ export function Events() {
       {!events ? (
         <Loading />
       ) : events.length === 0 ? (
-        <div style={{ marginTop: 22 }}>
+        <div style={{ marginTop: 'var(--section-gap)' }}>
           <EmptyState icon="calendar-plus" title="No build days yet" hint="Create the first event and the crew can start signing up." />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', marginTop: 22 }}>
+        <List aria-label="Build days">
           {events.map((e) => {
-            const [taken, cap] = e.spots.split('/').map((s) => parseInt(s, 10))
-            const pct = cap > 0 ? Math.round((taken / cap) * 100) : 0
             const going = db.isAttending(e, me?.id)
             const full = db.isFull(e)
-            return (
-              <div key={e.id} className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                  <Link to={`/events/${e.slug}`} className="font-display" style={{ fontWeight: 700, fontSize: 18, color: 'var(--ink)' }}>{e.title}</Link>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="pill" style={going ? { color: 'var(--leaf)', background: 'var(--leaf-bg)' } : full ? { color: 'var(--clay)', background: 'var(--clay-bg)' } : { color: '#9A6313', background: 'var(--honey-bg)' }}>
-                      {going ? "You're going" : full ? 'Full' : 'Spots open'}
-                    </span>
-                    <button
-                      className="no-print"
-                      title="Edit event"
-                      onClick={() => setModal({ kind: 'edit', event: e })}
-                      style={{ background: 'none', border: 'none', padding: 2, display: 'flex', color: 'var(--ink-faint)', cursor: 'pointer' }}
-                    >
-                      <Icon name="pencil-simple" size={15} />
-                    </button>
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 11, fontSize: 13, color: 'var(--ink-soft)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="calendar-dots" size={15} color="var(--accent)" />{e.day}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="clock" size={15} color="var(--accent)" />{e.time}</span>
-                </div>
-
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ink-soft)', marginBottom: 4 }}>
-                    <span>{e.spots} spots</span>
-                  </div>
-                  <div style={{ height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: pct >= 70 ? 'var(--leaf)' : 'var(--honey)', borderRadius: 999 }} />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 13 }}>
-                  <AvatarStack people={resolve(e.attendeeIds)} max={6} />
-                </div>
-
-                {going ? (
-                  <Link
-                    to={`/events/${e.slug}`}
-                    className="font-display no-print"
-                    style={{ marginTop: 'auto', paddingTop: 14, display: 'block', fontWeight: 800, fontSize: 14.5 }}
-                  >
-                    <span
-                      style={{
-                        width: '100%',
-                        borderRadius: 13,
-                        padding: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 7,
-                        background: 'var(--leaf-bg)',
-                        border: '1px solid var(--leaf)',
-                        color: 'var(--leaf)',
-                      }}
-                    >
-                      <Icon name="check" size={16} weight="bold" />
-                      You're in — see your tasks
-                    </span>
-                  </Link>
-                ) : (
-                  <button
-                    className="font-display no-print"
-                    onClick={() => join(e.id)}
-                    disabled={full}
-                    style={{
-                      marginTop: 'auto',
-                      border: 'none',
-                      background: 'none',
-                      padding: '14px 0 0',
-                      fontWeight: 800,
-                      fontSize: 14.5,
-                      cursor: full ? 'default' : 'pointer',
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: '100%',
-                        borderRadius: 13,
-                        padding: 12,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 7,
-                        ...(full
-                          ? { background: 'var(--surface-2)', color: 'var(--ink-faint)', border: '1px solid var(--line)' }
-                          : { background: 'var(--accent)', color: 'var(--accent-ink)', boxShadow: '0 3px 0 var(--accent-2)' }),
-                      }}
-                    >
-                      <Icon name={full ? 'prohibit' : 'hand-waving'} size={16} weight={full ? 'regular' : 'fill'} />
-                      {full ? 'This day is full' : "I'm coming!"}
-                    </span>
-                  </button>
-                )}
+            return <ListItem key={e.id}>
+              <SummaryRow trailing={<button type="button" className="ui-icon-button no-print" aria-label={`Edit event ${e.title}`} title="Edit event" onClick={() => setModal({ kind: 'edit', event: e })}><Icon name="pencil-simple" size={16} /></button>}>
+                <div className="ui-row-title"><Link to={`/events/${e.slug}`}>{e.title}</Link><span className="pill" style={going ? { color: 'var(--leaf)', background: 'var(--leaf-bg)' } : full ? { color: 'var(--clay)', background: 'var(--clay-bg)' } : { color: 'var(--ink-soft)', background: 'var(--honey-bg)' }}>{going ? "You're going" : full ? 'Full' : 'Spots open'}</span></div>
+                <div className="ui-row-meta">{e.day} · {e.time} · {e.spots} spots</div>
+              </SummaryRow>
+              <div className="ui-row-actions" style={{ justifyContent: 'space-between' }}>
+                <AvatarStack people={resolve(e.attendeeIds)} max={6} size={24} />
+                {going ? <Link to={`/events/${e.slug}`} className="btn no-print"><Icon name="check" size={16} /> You're in — see your tasks</Link>
+                  : <button type="button" className="btn no-print" onClick={() => join(e.id)} disabled={full}><Icon name={full ? 'prohibit' : 'hand-waving'} size={16} />{full ? 'This day is full' : "I'm coming!"}</button>}
               </div>
-            )
+            </ListItem>
           })}
-        </div>
+        </List>
       )}
 
       {modal && (

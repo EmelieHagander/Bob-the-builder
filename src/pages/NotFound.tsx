@@ -3,8 +3,8 @@ import { Icon } from '../components/ui'
 
 export function NotFound() {
   return (
-    <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 12, paddingTop: 80 }}>
-      <div style={{ width: 64, height: 64, borderRadius: 20, background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 'var(--layout-gap)', paddingTop: 80 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 'var(--r-lg)', background: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Icon name="tree-evergreen" weight="fill" size={34} color="var(--accent)" />
       </div>
       <h1 className="page-title">Lost in the woods</h1>
