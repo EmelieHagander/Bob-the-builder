@@ -30,6 +30,7 @@ jobs:
       - run: node --check scripts/check-live-project-phases.mjs
       - run: node --check scripts/check-live-volunteers.mjs
       - run: node --check scripts/check-live-work-plan.mjs
+      - run: node --import tsx --check scripts/check-live-construction-drawing.ts
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).

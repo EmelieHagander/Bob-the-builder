@@ -23,6 +23,27 @@ def fixture():
     }
 
 class CadWorkerTest(unittest.TestCase):
+    def test_annotated_views_identify_exact_instances_and_dimensions_before_hashing(self):
+        import xml.etree.ElementTree as ET
+        r=fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            source={'artifact_id':'11111111-1111-4111-8111-111111111111','revision':3}
+            result=render_assembly(r,tmp,source)
+            self.assertEqual(result['drawing_source'],source)
+            self.assertEqual(result['annotations']['coverage'],'complete')
+            for view in r['views']:
+                notes=result['annotations']['views'][view]
+                self.assertEqual([p['instance_id'] for p in notes['parts']],sorted(i['id'] for i in r['instances']))
+                expected={'front':[0,2],'right':[1,2],'top':[0,1],'isometric':[]}[view]
+                self.assertEqual(notes['dimensions'],[{'axis':'xyz'[i],'mm':result['bounding_box_mm']['size'][i]} for i in expected])
+                root=ET.parse(Path(tmp,view+'.svg')).getroot()
+                texts=[e.text for e in root.iter() if e.tag.endswith('}text')]
+                self.assertTrue(any('Dimensions in mm' in s for s in texts))
+                self.assertTrue(any('P1' in s for s in texts))
+                self.assertTrue(any('revision 3' in s for s in texts))
+                self.assertEqual(hashlib.sha256(Path(tmp,view+'.svg').read_bytes()).hexdigest(),result['previews'][view]['source_sha256'])
+                self.assertEqual(hashlib.sha256(Path(tmp,view+'.png').read_bytes()).hexdigest(),result['previews'][view]['sha256'])
+
     def test_room_and_detail_scale_previews_have_visible_lines(self):
         for size in (10,3970,100000):
             r=fixture()

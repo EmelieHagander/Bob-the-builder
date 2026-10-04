@@ -14,6 +14,15 @@ test('reusable definitions can drive multiple placed instances',()=>{const p=par
 test('arbitrary code and unsupported primitives are rejected',()=>{assert.equal(parseCadAssemblyRequest({...req(),python:'x'}),null);const b:any=req();b.definitions[0]={id:'p',primitive:'python',material_ref:null,source:'x'};assert.equal(parseCadAssemblyRequest(b),null)})
 test('impossible tube and missing definition are rejected',()=>{const a:any=req();a.definitions[1].wall_thickness_mm=16;assert.equal(parseCadAssemblyRequest(a),null);const b:any=req();b.instances[0].definition_id='missing';assert.equal(parseCadAssemblyRequest(b),null)})
 test('result must match engine and assembly identity',async()=>{assert.equal((await createCadAdapter(async r=>result(r)).render(req())).status,'ok');assert.equal((await createCadAdapter(async r=>({...result(r),assembly_id:'other'})).render(req())).status,'unavailable')})
+test('annotation metadata must name exact parts and dimensions, never fabricated labels or sizes',async()=>{
+ const r=req(),p:any=result(r)
+ const parts=r.instances.map((i,index)=>({number:'P'+(index+1),instance_id:i.id,definition_id:i.definition_id,blank_mm:{x_mm:45,y_mm:70,z_mm:1600}}))
+ p.annotations={version:1,coverage:'complete',views:{front:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'z',mm:1600}],parts},top:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'y',mm:70}],parts}}}
+ assert.equal((await createCadAdapter(async()=>p).render(r)).status,'ok')
+ for(const mutate of [(v:any)=>v.annotations.views.front.dimensions[0].mm=999,(v:any)=>v.annotations.views.top.parts[0].instance_id='invented',(v:any)=>v.annotations.coverage='partial']){
+  const wrong=structuredClone(p);mutate(wrong);assert.equal((await createCadAdapter(async()=>wrong).render(r)).status,'unavailable')
+ }
+})
 test('transport errors are unavailable, never empty geometry',async()=>{assert.equal((await createCadAdapter(async()=>{throw new Error('offline')}).render(req())).status,'unavailable')})
 test('saved JSON property order does not invalidate a matching CAD manifest',async()=>{
  const sorted=(v:any):any=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v

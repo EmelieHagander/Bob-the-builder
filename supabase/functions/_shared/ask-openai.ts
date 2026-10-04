@@ -1,5 +1,6 @@
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
-import { createConstructionTools } from './construction-draft.ts'
+import { parameterSourcePins } from './cad-parameters.ts'
+import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
@@ -228,16 +229,16 @@ export async function answerWithOpenAi(opts: {
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
     hasAccess, lookup.sources)
-  const constructionTools = createConstructionTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,
-    read:async(id,revision,after)=>{
+  const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    read:async(id:string|null,revision:number|null,after:string|null)=>{
       const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_read_unavailable');return data
     },
-    readCatalog:async(id,revision)=>{
+    readCatalog:async(id:string,revision:number)=>{
       const {data,error}=await rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_source_unavailable');return data
     },
-    readSources:async pins=>{
+    readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
       const project=new Map<string,Record<string,any>>()
       if(pins.project.length){
         const {data,error}=await client.from('current_measurements').select('*').eq('project_id',opts.projectId).in('id',pins.project.map(p=>p.id)).abortSignal(AbortSignal.timeout(10000))
@@ -246,7 +247,8 @@ export async function answerWithOpenAi(opts: {
       const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64),pins.physical,lookup.sources)
       return {project,physical}
     },
-  })
+  }
+  const constructionTools = createConstructionTools(constructionOptions)
   const planAssistant = createPlanAssistant({
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
@@ -290,10 +292,25 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
-    render:recipe=>memo('cad:render',recipe,()=>createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe),45000),
+    render:(recipe,source)=>memo('cad:render',source?{recipe,drawing_source:source}:recipe,()=>createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source),45000),
+    checkConstruction:async(id,revision)=>checkedConstructionForDrawing({...constructionOptions,
+      // Freshness gates must not reuse journalled historical reads after a yield.
+      read:async(artifact,rev,after)=>{
+        const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:artifact,p_revision:rev,p_after:after}).abortSignal(AbortSignal.timeout(12000))
+        if(error)throw new Error('construction_read_unavailable');return data
+      },
+      readCatalog:async(artifact,rev)=>{
+        const {data,error}=await client.rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id:artifact,revision:rev,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}}).abortSignal(AbortSignal.timeout(12000))
+        if(error)throw new Error('construction_source_unavailable');return data
+      },
+    },id,revision),
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
-      if(error)throw new Error('cad_read_unavailable');if(!data)return null
+      if(error)throw new Error('cad_read_unavailable');
+      if(!data){
+        const draft=await constructionOptions.read(id,revision,null) as Record<string,any>
+        return draft?.status==='ok'?{...draft,source_kind:'construction'}:null
+      }
       const links=await memo('cad:work_scope',{id,revision},async()=>{
         const result=await client.from('current_drawing_steps').select('step_id')
           .eq('project_id',opts.projectId).eq('artifact_id',id).abortSignal(AbortSignal.timeout(10000))

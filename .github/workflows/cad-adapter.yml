@@ -5,6 +5,9 @@ on:
     paths:
       - 'cad-worker/**'
       - 'supabase/functions/_shared/cad-adapter.ts'
+      - 'supabase/functions/_shared/cad-transport.ts'
+      - 'supabase/functions/_shared/cad-assistant.ts'
+      - 'tests/checked-construction-drawing.test.ts'
       - 'tests/cad-adapter.test.ts'
       - 'Docs/cad-adapter.md'
       - '.github/workflows/cad-adapter.yml'
@@ -13,6 +16,9 @@ on:
     paths:
       - 'cad-worker/**'
       - 'supabase/functions/_shared/cad-adapter.ts'
+      - 'supabase/functions/_shared/cad-transport.ts'
+      - 'supabase/functions/_shared/cad-assistant.ts'
+      - 'tests/checked-construction-drawing.test.ts'
       - 'tests/cad-adapter.test.ts'
       - 'Docs/cad-adapter.md'
       - '.github/workflows/cad-adapter.yml'
@@ -41,4 +47,4 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --import tsx --test tests/cad-adapter.test.ts
+      - run: node --import tsx --test tests/cad-adapter.test.ts tests/cad-transport.test.ts tests/checked-construction-drawing.test.ts

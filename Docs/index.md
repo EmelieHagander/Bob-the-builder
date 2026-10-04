@@ -199,3 +199,5 @@ A runtime bug is not a new product decision: fix the bug against the owning cont
 For State, handoff and open-finding maintenance, follow [Archie's forward-looking State/archive rules](../.claude/agents/archie.md#forward-looking-state-and-archives). Current contracts stay with their owners; completed-work history is not an active task list.
 
 September 2026 context extension: `ask-bob-conversations.md` supersedes its earlier provider-only memory plan with five full recent messages, a private incremental older brief, exact history retrieval, paged construction records and compact/expandable chat. Deployment evidence belongs in the merged release PR, not a source-only status claim.
+
+- [K3 exact construction drawings](cad-adapter.md#k3-checked-construction-drawings--2026-10-04) — checked checkpoint rendering, annotations and revision pins; [release/acceptance evidence](foundation-verification.md#k3-checked-construction-drawings--2026-10-04).

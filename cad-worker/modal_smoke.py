@@ -44,7 +44,8 @@ def main():
             return json.loads(data)
 
     started = time.monotonic()
-    packet = request(recipe, os.environ["BOB_CAD_TOKEN"])
+    source = {"artifact_id": "11111111-1111-4111-8111-111111111111", "revision": 3}
+    packet = request({"recipe": recipe, "drawing_source": source}, os.environ["BOB_CAD_TOKEN"])
     elapsed = time.monotonic() - started
     if elapsed >= 45:
         raise RuntimeError("CAD render exceeded the Edge transport deadline")
@@ -54,6 +55,8 @@ def main():
             or manifest["definitions"] != recipe["definitions"]
             or manifest["bounding_box_mm"]["size"] != [45, 70, 900]):
         raise RuntimeError("CAD geometry or engine identity mismatch")
+    if manifest.get('drawing_source') != source or manifest.get('annotations', {}).get('coverage') != 'complete':
+        raise RuntimeError('Missing exact construction revision or annotations')
     expected = {"step", *recipe["views"]}
     if set(packet["files"]) != expected or set(manifest["exports"]) != expected:
         raise RuntimeError("Missing CAD exports")
@@ -63,6 +66,8 @@ def main():
             raise RuntimeError("CAD export hash mismatch")
         if (b"ISO-10303-21" if key == "step" else b"<svg") not in raw:
             raise RuntimeError("Invalid CAD file format")
+        if key != 'step' and (b'revision 3' not in raw or b'Dimensions in mm' not in raw or b'P1' not in raw):
+            raise RuntimeError('Saved SVG lacks source revision, dimensions or part labels')
     if set(packet.get("previews",{})) != set(recipe["views"]):
         raise RuntimeError("Missing CAD PNG previews")
     for view in recipe["views"]:
