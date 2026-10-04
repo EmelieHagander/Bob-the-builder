@@ -6,6 +6,7 @@
 import { useEffect, useState, type ChangeEventHandler, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { PROJECT_CHANGED_EVENT } from '../data/database'
 import type { MaterialStatus, Person, SkillLevel, TaskStatus } from '../data/types'
+import { withLoadDeadline } from '../lib/loadDeadline'
 
 /* ─────────────────────────── Icon ─────────────────────────── */
 
@@ -31,7 +32,7 @@ export function Icon({
 /* ─────────────────────────── Data loading ─────────────────────────── */
 
 /** Run an async loader and track its result + loading state. */
-export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { data: T | null; loading: boolean; error: Error | null } {
+export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = [], options: { timeoutMs?: number } = {}): { data: T | null; loading: boolean; error: Error | null } {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -39,7 +40,9 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): { d
     let alive = true
     setLoading(true)
     setError(null)
-    loader().then((value) => {
+    const read = Promise.resolve().then(loader)
+    const boundedRead = options.timeoutMs ? withLoadDeadline(read, options.timeoutMs) : read
+    boundedRead.then((value) => {
       if (alive) {
         setData(value)
         setLoading(false)

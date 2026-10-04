@@ -1,12 +1,8 @@
 /*
- * Public database seam.
- *
- * The existing data layer is kept byte-for-byte in databaseCore.ts while the
- * phase migration is stacked. This facade adds the new phase reads/commands
- * without teaching screens to query Supabase directly. Once the phase work is
- * merged, this small compatibility split can be folded back into one file.
+ * Canonical public data seam. Core reads, phase commands and Bob conversation
+ * exports all share the same account Auth owner. UI never queries the SDK.
  */
-import { createClient } from '@supabase/supabase-js'
+import { accountClient as phaseDb } from './supabaseClient'
 import * as core from './databaseCore'
 import * as mock from './mockData'
 import type { Area, Project, ProjectPhase } from './types'
@@ -16,22 +12,6 @@ export * from './databaseCore'
 // server-owned conversation state while the rest of databaseCore stays stable.
 export { renewDrawingRequests, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, askBob, getAskBobConversation, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
 export type { BobProgress, BobInbox } from './bobConversation'
-
-function resolveSupabaseUrl(raw: string | undefined): string | null {
-  const value = raw?.trim()
-  if (!value) return null
-  const url = /^[a-z0-9]{16,}$/.test(value) ? `https://${value}.supabase.co` : value
-  try { new URL(url); return url } catch { return null }
-}
-
-const PHASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
-const PHASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-// Uses the same default Auth storage as the existing live client so phase RPCs
-// carry the caller JWT/RLS. It does not install auth listeners or own navigation.
-const phaseDb = PHASE_URL && PHASE_KEY ? createClient(PHASE_URL, PHASE_KEY, {
-  db: { schema: 'bob' },
-  auth: { flowType: 'pkce', detectSessionInUrl: false, autoRefreshToken: false },
-}) : null
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(`database: ${result.error.message}`)

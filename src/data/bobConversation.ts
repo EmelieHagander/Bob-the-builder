@@ -1,24 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
+import { accountClient as bobDb } from './supabaseClient'
 import type { ChatMessage } from './types'
 import type { AnswerEvidence } from './provenance'
 import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
 import { isBobAnswerEvidence } from './bobEvidence'
 import { readBobTranscript } from './bobTranscript'
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
-
-function resolveSupabaseUrl(raw: string | undefined): string | null {
-  const value = raw?.trim()
-  if (!value) return null
-  const url = /^[a-z0-9]{16,}$/.test(value) ? `https://${value}.supabase.co` : value
-  try { new globalThis.URL(url); return url } catch { return null }
-}
-
-const SUPABASE_URL = resolveSupabaseUrl(import.meta.env.VITE_SUPABASE_URL)
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
-const bobDb = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-  db: { schema: 'bob' },
-  auth: { flowType: 'pkce', detectSessionInUrl: true, autoRefreshToken: true, persistSession: true },
-}) : null
 
 const GUEST_EMAIL = 'guest@bob.local'
 
