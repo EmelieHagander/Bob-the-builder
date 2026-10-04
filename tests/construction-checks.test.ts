@@ -15,6 +15,25 @@ function fixture(){
  return {draft,catalog}
 }
 const check=(draft:any,catalog:any)=>checkConstruction(draft,catalog,'2026-10-03')
+test('construction save identifies missing binding paths so the same request can correct them without a lookup retry',async()=>{
+ const {parameterPlan}=await import('./support/cad-parameter-fixture.ts')
+ const {draft}=fixture(),message='Save this shelf concept.'
+ const plan=parameterPlan(draft.recipe),paths=plan.bindings.map(b=>b.path)
+ const dotted=structuredClone(plan);dotted.bindings.forEach(b=>b.path=b.path.replaceAll('/','.'))
+ let writes=0,sourceFailed=false,persisted:any
+ const tools=createConstructionTools({projectId:project,message,hasAccess:async()=>true,read:async()=>null,
+  readSources:async()=>{if(sourceFailed)throw Error('private network diagnostic');return {project:new Map(),physical:new Map()}},
+  writer:{commit:async payload=>{writes++;persisted=payload;return {status:'saved'}}} as any})
+ const input={key:'initial',record_id:null,expected_revision:0,title:'Shelf',description:'Synthetic concept',area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameter_plan:dotted,materials:draft.materials,joints:draft.joints,open_questions:[],request_quote:message}
+ const rejected=await tools.execute('save_construction_draft',input)
+ assert.equal(rejected.status,'invalid');assert.deepEqual(rejected.unbound,paths);assert.equal(writes,0)
+ const corrected=await tools.execute('save_construction_draft',{...input,parameter_plan:plan})
+ assert.equal(corrected.status,'saved');assert.equal(writes,1);assert.equal(persisted.data.parameters.coverage,'complete')
+ assert.deepEqual(persisted.data.recipe,draft.recipe)
+ sourceFailed=true
+ const unavailable=await tools.execute('save_construction_draft',{...input,parameter_plan:plan})
+ assert.equal(unavailable.status,'unavailable');assert(!JSON.stringify(unavailable).includes('private network diagnostic'));assert.equal(writes,1)
+})
 test('complete five-part concept passes with six contacts and physical joint cycles; no product or strength approval',()=>{
  const {draft,catalog}=fixture(),r=check(draft,catalog)
  assert.equal(r.concept_ready,true,JSON.stringify(r.issues));assert.equal(r.fabrication_ready,false)
