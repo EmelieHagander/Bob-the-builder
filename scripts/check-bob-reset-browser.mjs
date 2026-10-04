@@ -23,7 +23,8 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
   await mkdir('test-results', { recursive: true })
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-    const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
+    const touch = viewport.width < 860
+    const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' })
     const histories = new Map(['A', 'B'].map(id => [id, { id: crypto.randomUUID(), next_seq: 3, messages: [{ role: 'user', text: `OLD CHAT ${id}`, delivery_state: 'completed', seq: 1 }, { role: 'assistant', text: `OLD ANSWER ${id}`, delivery_state: 'completed', seq: 2 }] }]))
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
@@ -179,6 +180,7 @@ try {
     await page.locator('.card').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
+    if (touch) assert(await drawer.getByRole('button', { name: 'Close Ask bob', exact: true }).evaluate(node => node === document.activeElement), 'Opening a touch conversation does not raise the keyboard')
     const box = await drawer.getByRole('button', { name: 'New conversation', exact: true }).boundingBox()
     assert(box && box.height >= 43.99 && box.width >= 44 && box.x >= 0 && box.x + box.width <= viewport.width, JSON.stringify({ box, viewport }))
     await drawer.getByRole('textbox').fill('KEEP DRAFT')
