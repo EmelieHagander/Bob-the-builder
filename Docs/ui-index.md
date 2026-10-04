@@ -56,6 +56,27 @@ Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
 separation remain visible. Presentation changes never delete physical records.
 
+### Compact Project home and phone conversation
+
+Project home keeps the Project phase and mixed Area summary in the header,
+with compact links to Measurements, Drawings, Material plan and Solutions.
+The shared Plan comes before drawing previews and planning evidence. Long
+Project descriptions (including any dimensions recorded in that text), lifecycle
+explanations and Project images expand on demand; their saved content remains
+verbatim. The description is not a substitute for sourced Measurements.
+
+Ask bob gives the conversation the remaining viewport height. Page context,
+suggestions, progress and retry explanations scroll with the messages; a retry
+keeps one compact action row above the composer. The composer grows within a
+viewport-dependent limit and leaves room to read. Opening Bob on a touch device
+focuses Close without opening the keyboard. The page behind the drawer cannot
+scroll. Auto-follow handles message and composer resizing only while the reader
+is at the end; reading older answers keeps their position and offers Latest.
+
+The owning browser flows are `check-project-work-browser.mjs`,
+`check-project-browser.mjs` and `check-bob-reset-browser.mjs`; fixture screenshots
+and release evidence belong to the PR/CI, separately from real phone acceptance.
+
 ### Page frame
 
 Current pages generally compose:

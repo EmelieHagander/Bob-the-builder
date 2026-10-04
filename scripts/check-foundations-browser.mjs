@@ -202,6 +202,8 @@ try {
       return canvas.toDataURL('image/png').split(',')[1]
     }), 'base64')
     const uploadImage = async title => {
+      const photos = page.locator('.project-photo-details')
+      if (await photos.getAttribute('open') === null) await photos.locator('summary').first().click()
       await page.getByRole('region', { name: 'Project images', exact: true }).getByRole('button', { name: 'Add image', exact: true }).click()
       const modal = page.getByRole('dialog', { name: 'Add image', exact: true })
       await modal.getByLabel('Image file').setInputFiles({ name: 'entry.png', mimeType: 'image/png', buffer: imageBytes })
@@ -456,6 +458,7 @@ try {
     await page.getByRole('link', { name: 'Account', exact: true }).click()
     await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
     waiting.resolve()
+    await page.locator('.project-photo-details > summary').click()
     await page.getByRole('region', { name: 'Project images', exact: true }).getByText('No images here yet.', { exact: true }).waitFor()
     assert.equal(await page.getByRole('img', { name: 'Entry before work', exact: true }).count(), 0)
     await page.goto(base + '#/facts')

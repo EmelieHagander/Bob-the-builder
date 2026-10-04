@@ -330,6 +330,12 @@ try {
       await page.reload(); drawer = await open()
       await drawer.getByRole('button', { name: 'Retry request', exact: true }).waitFor()
       assert.equal(await drawer.getByText('Bob is working on the project…', { exact: true }).count(), 0)
+      const recovery = await drawer.locator('.bob-recovery').boundingBox()
+      const history = await drawer.locator('.bob-history').boundingBox()
+      assert(recovery && recovery.height <= 60, 'Retry uses one compact row')
+      assert(history && history.height >= viewport.height * 0.45, 'Messages retain useful screen space during retry')
+      assert.equal(await page.evaluate(() => document.body.style.overflow), 'hidden', 'Only the conversation scrolls while open')
+      await page.screenshot({path:`test-results/mobile-chat-retry-${state}-${viewport.width}.png`})
     }
     // Recover the original turn's frozen pointer on a different page after reload.
     const focusedRetry=crypto.randomUUID()

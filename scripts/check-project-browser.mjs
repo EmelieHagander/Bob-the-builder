@@ -220,7 +220,9 @@ try {
     const draftBeforeExpansion = await editor.inputValue()
     await drawer.getByRole('button', { name: 'Expand message editor', exact: true }).click()
     assert.equal(await editor.inputValue(), draftBeforeExpansion, 'Expansion preserves exact draft')
-    assert((await editor.boundingBox()).height >= 200, 'Expanded editor has a real writing surface')
+    const expandedHeight = (await editor.boundingBox()).height
+    assert(expandedHeight >= Math.min(200, viewport.height * 0.3), 'Expanded editor has a real writing surface')
+    assert(expandedHeight <= viewport.height * 0.4, 'Expanded editor leaves room to read the conversation')
     await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-editor-${viewport.width}.png`, fullPage: true })
     await drawer.getByRole('button', { name: 'Collapse message editor', exact: true }).click()
@@ -249,7 +251,7 @@ try {
     await send('Which boards?')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(requests.at(-1).projectId, 'A')
-    await drawer.locator('summary').click()
+    await drawer.locator('.bob-message summary').click()
     await drawer.getByText('Bob’s assessment', { exact: true }).waitFor()
     await drawer.getByText('Stored project information; measurements and specifications are not verified.', { exact: true }).waitFor()
     await drawer.getByText('Some results were limited or unavailable.', { exact: true }).waitFor()
@@ -279,12 +281,13 @@ try {
       await drawer.getByText(message, { exact: true }).last().waitFor()
       if (mode === 'unavailable') {
         const beforeDismiss = requests.length
+        await drawer.getByText('About this retry', { exact: true }).click()
         await drawer.getByRole('button', { name: 'Dismiss retry', exact: true }).click()
         await drawer.getByText('Delivery was not confirmed.', { exact: true }).waitFor()
         assert.equal(requests.length, beforeDismiss, 'Dismissing a local retry must not call the backend')
       }
       assert.equal(await drawer.getByText('WRONG PROJECT ANSWER', { exact: true }).count(), 0)
-      assert.equal(await drawer.locator('summary').count(), 1, 'Failure must not introduce source evidence')
+      assert.equal(await drawer.locator('.bob-message summary').count(), 1, 'Failure must not introduce source evidence')
     }
     responseMode = 'success'
     await send('Slow question')
@@ -292,7 +295,7 @@ try {
     await drawer.getByRole('textbox', { name: 'Question for bob' }).fill('Unsent draft from A')
     drawer = await switchProject('B')
     assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
-    assert.equal(await drawer.locator('summary').count(), 0)
+    assert.equal(await drawer.locator('.bob-message summary').count(), 0)
     assert.equal(await drawer.getByText('Answer for Porch A', { exact: true }).count(), 0)
     assert.equal(await drawer.getByText('Bob is working on the project…', { exact: true }).count(), 0)
     await send('Which boards?')
@@ -302,7 +305,7 @@ try {
     drawer = await switchProject('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     assert.equal(await drawer.getByRole('textbox', { name: 'Question for bob' }).inputValue(), '')
-    assert.equal(await drawer.locator('summary').count(), 1, 'Project A restores its own server-synchronised source disclosure')
+    assert.equal(await drawer.locator('.bob-message summary').count(), 1, 'Project A restores its own server-synchronised source disclosure')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Project B history must not leak into project A')
     const lateResponse = page.waitForResponse(response => response.url() === `${api}/functions/v1/ask-bob` && response.request().postDataJSON().message === 'Slow question')
     slow.resolve()
@@ -314,7 +317,7 @@ try {
     drawer = await openBob('A')
     await drawer.getByText('Answer for Porch A', { exact: true }).waitFor()
     await drawer.getByText('OLD DELAYED ANSWER', { exact: true }).waitFor()
-    assert.equal(await drawer.locator('summary').count(), 2, 'Reload restores the completed server transcript with evidence')
+    assert.equal(await drawer.locator('.bob-message summary').count(), 2, 'Reload restores the completed server transcript with evidence')
     assert.equal(await drawer.getByText('Answer for Porch B', { exact: true }).count(), 0, 'Reload keeps project histories isolated')
 
     await send('Wrong receipt')
@@ -322,6 +325,7 @@ try {
     assert.equal(await drawer.getByText('FORGED SAVED ANSWER', { exact: true }).count(), 0)
     assert.equal(await drawer.getByLabel('Saved project changes').count(), 0)
 
+    await drawer.getByText('About this retry', { exact: true }).click()
     await drawer.getByRole('button', { name: 'Dismiss retry', exact: true }).click()
     await send('Save chosen plan')
     const writeTurnId = requests.at(-1).clientTurnId
@@ -341,8 +345,18 @@ try {
     await history.evaluate(node => { node.scrollTop = 0; node.dispatchEvent(new Event('scroll')) })
     await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).waitFor()
     assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Reading older messages preserves position')
+    await editor.fill('Draft while reading an older answer\n'.repeat(6))
+    await density.click()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert.equal(await history.evaluate(node => node.scrollTop), 0, 'Composer and message resizing must not pull a reader to the end')
+    await editor.fill('')
+    await density.click()
     await drawer.getByRole('button', { name: 'Jump to latest message', exact: true }).click()
     assert(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 100))
+    await editor.fill('Draft grows while following the newest answer\n'.repeat(6))
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    assert(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 64), 'Following the end survives a growing composer')
+    await editor.fill('')
     await settleVisual(page)
     await page.screenshot({ path: `test-results/ask-bob-writes-${viewport.width}.png`, fullPage: true })
     await page.getByRole('button', { name: 'Close Ask bob' }).click()

@@ -65,7 +65,7 @@ export function ProjectHome() {
         ? { to: '/artifacts', icon: 'blueprint', title: 'Turn the Project target into a drawing', text: `“${selectedTarget.title}” is selected. Keep the next Project-level plan tied to that exact version and its evidence.` }
         : { to: '/areas', icon: 'check-circle', title: 'Review the areas', text: 'The Project-level planning foundation is recorded. Review each Area for its local phase, target and next action.' }
 
-  return <div className="page">
+  return <div className="page project-home">
     <div className="page-head">
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
@@ -73,27 +73,33 @@ export function ProjectHome() {
           {project.location && <span className="foundation-hint">{project.location}</span>}
         </div>
         <h1 className="page-title">{project.name}</h1>
-        <p className="page-sub">{project.description || 'Keep the project moving from idea to what was actually built.'}</p>
+        <p className="page-sub project-area-summary">{areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)}</p>
       </div>
       <div className="cluster no-print">
-        <Link to="/building" className="btn"><Icon name="house" size={15} /> Building &amp; spaces</Link>
-        <button className="btn btn-primary" onClick={() => setPhaseOpen(true)}>
+        {db.authEnabled() && <button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
+        <button className="btn" onClick={() => setPhaseOpen(true)}>
           <Icon name="signpost" size={15} /> {project.phase ? 'Review phase' : 'Set project phase'}
         </button>
       </div>
     </div>
 
-    <section aria-label="Project lifecycle" style={{ marginTop: 18 }}>
-      <PhaseRail phase={project.phase} />
-    </section>
+    {project.description && <details className="project-description">
+      <summary>Project description</summary>
+      <p className="instruction-text">{project.description}</p>
+      <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
+    </details>}
 
-    {db.authEnabled() && <>
-      <div className="foundation-actions" style={{ marginTop: 18 }}><button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button></div>
-      <ProjectDrawings key={project.id} projectId={project.id} />
-      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
-    </>}
+    <nav className="project-shortcuts" aria-label="Project tools">
+      <Link className="btn" to="/facts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
+      <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} /><span>Drawings</span></Link>
+      <Link className="btn" to="/material-plan"><Icon name="package" size={18} /><span>Material plan</span></Link>
+      <Link className="btn" to="/solutions"><Icon name="path" size={18} /><span>Solutions &amp; target</span></Link>
+    </nav>
 
-    <section style={{ marginTop: 18 }}>
+    <details className="project-context-details">
+      <summary>Project focus &amp; lifecycle</summary>
+      <section aria-label="Project lifecycle"><PhaseRail phase={project.phase} compact /></section>
+      <section style={{ marginTop: 12 }}>
       <NextActionCard
         eyebrow="Project focus"
         title={focus.title}
@@ -101,7 +107,16 @@ export function ProjectHome() {
         icon={focus.icon}
         action={!project.phase ? <button className="btn btn-primary" onClick={() => setPhaseOpen(true)}>Classify this project</button> : undefined}
       />
-    </section>
+      </section>
+      <Link to="/building" className="project-detail-link"><Icon name="house" size={16} /> Building &amp; spaces <Icon name="arrow-right" size={15} /></Link>
+    </details>
+
+    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
+
+    {db.authEnabled() && <>
+      <ProjectDrawings key={project.id} projectId={project.id} />
+      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
+    </>}
 
     {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 18 }}>
       {planningLoading ? <div className="card" style={{ padding: 16 }}><Loading label="Checking project evidence…" /></div>
@@ -138,10 +153,10 @@ export function ProjectHome() {
           </div>}
     </section>}
 
-    <section className="card" style={{ marginTop: 20, padding: 16 }}>
-      {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
+    <details className="card project-photo-details">
+      <summary>Project images</summary>
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
-    </section>
+    </details>
 
     {!db.authEnabled() && <section style={{ marginTop: 24 }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
@@ -174,17 +189,6 @@ export function ProjectHome() {
           })}
         </div>}
     </section>}
-
-    <section style={{ marginTop: 24 }} aria-label="Project tools">
-      <SectionTitle>Project tools</SectionTitle>
-      <div className="cluster" style={{ gap: 8 }}>
-        <Link className="btn" to="/facts"><Icon name="ruler" size={15} /> Measurements &amp; existing parts</Link>
-        <Link className="btn" to="/solutions"><Icon name="path" size={15} /> Solutions &amp; target</Link>
-        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={15} /> Drawings</Link>
-        <Link className="btn" to="/material-plan"><Icon name="package" size={15} /> Material plan</Link>
-      </div>
-      <p className="foundation-hint" style={{ marginBottom: 0 }}>These stay available across phases. The current phase changes emphasis, not access to project truth.</p>
-    </section>
 
     <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 20, marginTop: 26 }}>
       <section>
