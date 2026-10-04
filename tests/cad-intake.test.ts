@@ -7,6 +7,8 @@ import {createProjectContext} from '../supabase/functions/_shared/project-contex
 import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
+import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 const id='30000000-0000-4000-8000-000000000001'
 const measurement='30000000-0000-4000-8000-000000000002'
 const request={request_id:null,handoff,brief:'Draw the construction using current measures',area_id:null,component_id:null,step_id:null,artifact_id:null}
@@ -15,6 +17,36 @@ const assessment={checks:[check('shape')],additional_needs:[]}
 const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixture',responseId:'r',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
 const recipe={contract_version:1 as const,units:'mm' as const,assembly_id:'bed',definitions:[{id:'panel',primitive:'box' as const,material_ref:null,x_mm:999,y_mm:600,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front' as const,'top' as const]}
 const candidate={purpose:'project',recipe,dimension_bindings:[],title:'Bed',description:'Concept',assumptions:'Unverified site fit',target_revision:1,measurements:[]}
+test('a completed CAD save replays its original reviewed result after a worker pause, without more CAD calls or writes',async()=>{
+ const entries:JournalEntry[]=[];let completed=false,cadCalls=0,renderCalls=0,writes=0,bobCalls=0,replyReady=false
+ const f=fixture()
+ const run=async()=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
+  const store=createDrawingRequestStore({projectId:'A',binding:{},journal,newId:async()=>id,
+   caller:async name=>name==='check_drawing_request'?{status:completed?'saved':'collecting'}:{id,reused:false},
+   privateCall:args=>journal.run('cad:request',args,async()=>args.p_operation==='save'
+    ?f.opts.requestStore.save(f.row?.id??null,args.p_expected as number,args.p_status as string,args.p_payload as any):null),
+  })
+  const a=createCadAssistant({...f.opts,requestStore:store,
+   callModel:o=>journal.run('model:'+o.functionName,o,async()=>{cadCalls++;return f.opts.callModel(o)}),
+   render:r=>journal.run('cad:render',r,async()=>{renderCalls++;return f.opts.render(r)}),
+  })
+  const outcome=await a.consult(request)
+  assert.equal(outcome.status,'ready','own completed save must not replace the original ready result with stopped')
+  await journal.run('model:ask-bob',{outcome,candidate:a.candidate},async()=>{bobCalls++;return 'save_cad_design'})
+  await journal.run('write',a.candidate,async()=>{writes++;completed=true;return 'verified receipt'})
+  await journal.run('model:ask-bob',{saved:true},async()=>{
+   if(!replyReady)throw new BobContinuation('yield','ai_wait')
+   bobCalls++;return 'Finished'
+  })
+ }
+ await assert.rejects(run(),e=>e instanceof BobContinuation&&e.kind==='yield')
+ const paid=cadCalls
+ // Simulate the next response becoming available; all earlier work replays.
+ replyReady=true
+ await run()
+ assert.equal(cadCalls,paid);assert.equal(renderCalls,1);assert.equal(writes,1);assert.equal(bobCalls,2)
+})
 function fixture(){
  let row:DrawingRequest|null=null,target=true,readError=false,design=0,renders=0,revision=2;const reads:string[]=[]
  const store:DrawingRequestStore={list:async()=>row?[{id:row.id,status:row.status}]:[],load:async key=>key===row?.id?structuredClone(row):null,save:async(key,expected,status,payload)=>{assert.equal(expected,row?.revision??0);assert.equal(key,row?.id??null);row={id,revision:expected+1,status,payload:structuredClone(payload)};return structuredClone(row)}}
