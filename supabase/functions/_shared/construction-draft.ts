@@ -1,7 +1,7 @@
 import { checkConstruction } from './construction-checks.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
-import { CAD_PARAMETERS_SCHEMA, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriter } from './project-write.ts'
@@ -88,6 +88,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,recipe,parameters}})
   }catch(error){
    rethrowContinuation(error)
+   if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    const known=/^(invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
    return known.test(message)?{status:'invalid',message}:{status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}

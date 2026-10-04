@@ -24,6 +24,9 @@ export class CadParameterSourceError extends Error {
 export class CadParameterGap extends Error {
  constructor(readonly gaps:{id:string;unit:ParameterUnit;reason:string}[]){super('unknown_required_parameters')}
 }
+export class CadParameterBindingGap extends Error {
+ constructor(readonly unbound:string[]){super('parameter_gaps:'+JSON.stringify({unbound}))}
+}
 function decimal(v:unknown):bigint{
  if(typeof v!=='number'||!Number.isFinite(v)||Math.abs(v)>1e9||Number(v.toFixed(6))!==v)throw new Error('parameter_precision')
  const [whole,fraction]=Math.abs(v).toFixed(6).split('.')
@@ -106,7 +109,7 @@ export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,
  const unknown=plan.nodes.filter((n):n is Extract<ParameterInput,{role:'unknown'}>=>n.role==='unknown')
  const frameGaps=plan.frames.filter(f=>f.required&&f.placement===null).map(f=>({id:f.id,unit:'scalar' as const,reason:f.reason}))
  if(unknown.length||frameGaps.length)throw new CadParameterGap([...unknown.map(({id,unit,reason})=>({id,unit,reason})),...frameGaps])
- if(missing.length)throw new Error('parameter_gaps:'+JSON.stringify({unbound:missing}))
+ if(missing.length)throw new CadParameterBindingGap(missing)
  function evaluate(key:string):CadParameters['nodes'][number]{
   if(result.has(key))return result.get(key)!
   if(active.has(key))throw new Error('parameter_cycle')
@@ -193,5 +196,5 @@ export const CAD_PARAMETERS_SCHEMA=object({version:{type:'integer',enum:[1]},fra
   object({id:identifier,role:{type:'string',enum:['decision','estimate']},value:{type:'number',minimum:-1e9,maximum:1e9},unit:units,reason:explanation}),
   object({id:identifier,role:{type:'string',enum:['derived']},operation:{type:'string',enum:['add_v1','subtract_v1','multiply_v1','divide_v1']},operands:{type:'array',minItems:2,maxItems:2,items:identifier},rounding:{type:'string',enum:['exact','half_away_6']}}),
   object({id:identifier,role:{type:'string',enum:['unknown']},unit:units,reason:explanation}),
- ]}},bindings:{type:'array',minItems:1,maxItems:8192,items:object({path:{type:'string',maxLength:240},node:identifier})},
+ ]}},bindings:{type:'array',minItems:1,maxItems:8192,items:object({path:{type:'string',maxLength:240,description:'Exact slash-separated recipe path using stable IDs, e.g. definitions/side/x_mm or instances/left/placement/rz. Use no dot notation or array positions. Bind every controlling numeric field, including zero coordinates and rotations.'},node:identifier})},
 })
