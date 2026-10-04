@@ -1,5 +1,6 @@
 import type { WritePayload } from './project-write.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
+import { schemaIssues } from './schema-issues.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 
 /** Generic catalog API: material/form/profile are DATA, never object-name handlers. */
@@ -19,7 +20,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   } } }
 }
 export const CATALOG_SEARCH_TOOL = tool('search_material_catalog',
-  'Browse categories/profiles, or search current reusable material/part definitions. Metadata first, read exact definitions/profiles next. Not inventory or a Shopping list. Follow next_cursor. A failed request is not absence.', {
+  'Browse categories/profiles, or search current reusable material/part definitions. Supply every required field, using null for unused nullable filters. For entity=categories or profiles use categories=[], profile_code=null, profile_revision=null, properties={}. query=null browses all; never use an empty string. Copy returned codes/revisions, then read the exact profile before saving; do not guess vocabulary. Not inventory or a Shopping list. Follow next_cursor. A failed request is not absence.', {
     entity: { type: 'string', enum: ['categories', 'profiles', 'materials', 'parts'] }, query: nullableText,
     categories: { type: 'array', maxItems: 12, uniqueItems: true, items: { type: 'string' }, description: 'Exact category codes, e.g. wood and sheet. Parent categories include descendants. Empty for vocabulary browsing.' },
     profile_code: nullableText, profile_revision: { type: ['integer', 'null'] },
@@ -31,7 +32,7 @@ export const CATALOG_READ_TOOL = tool('read_material_catalog',
     entity: { type: 'string', enum: ['definition', 'profile'] }, id: { type: 'string' }, revision: { type: ['integer', 'null'] },
   })
 export const CATALOG_WRITE_TOOL = tool('save_catalog_definition',
-  'Ensure/reuse or revise a material/part definition in this project. Read the exact profile first. Parts pin an exact material revision; compatible material properties used by the part profile are inherited server-side. Supply the remaining required part properties explicitly. Complete equivalents are reused atomically; uncertain definitions are not automatically equivalent. No stock, drawing, order or global publication.', {
+  'Ensure/reuse or revise a material/part definition in this project. Browse profiles/categories and read the exact published profile first; never invent profile codes. Select exactly one category with axis=material and one with axis=form, matching the exact profile record.form. Parts pin an exact material revision; compatible material properties used by the part profile are inherited server-side. Supply remaining required properties explicitly. Complete equivalents are reused atomically; uncertain definitions are not automatically equivalent. No stock, drawing, order or global publication.', {
     action: { type: 'string', enum: ['ensure', 'revise'] },
     key: { type: 'string', description: 'Stable short operation key for this intended definition in this turn; reuse for an exact retry. Letters, numbers, _ and - only.' },
     kind: { type: 'string', enum: ['material', 'part'] },
@@ -125,7 +126,29 @@ export function parseCatalogRead(name: string, value: unknown): Record<string, u
   return { ...base, action: dictionary ? v.entity : 'search', kind: dictionary ? null : v.entity === 'materials' ? 'material' : 'part',
     query: v.query, after: v.after, profile_code: v.profile_code, revision: v.profile_revision, categories: v.categories, properties: v.properties }
 }
-export type CatalogTransport = (input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string } | null }>
+/** Diagnose a rejected call without accepting defaults or exposing field values. */
+function catalogReadIssue(name: string, value: unknown): Record<string, unknown> {
+  const spec = name === CATALOG_READ_TOOL.function.name ? CATALOG_READ_TOOL : CATALOG_SEARCH_TOOL
+  const issues = schemaIssues(spec.function.parameters, value)
+  const invalid = (fields: string[], message: string) => ({ status: 'invalid', validation: { code: 'domain_fields', fields }, message })
+  if (issues.length) return { ...invalid(issues.map(i => i.path), 'Supply every required field and remove unsupported fields. Use null for unused nullable filters, [] for categories, and {} for properties. Correct the reported fields and retry.'), issues }
+  if (isObject(value) && name === CATALOG_SEARCH_TOOL.function.name) {
+    if (value.query !== null && !text(value.query, 200)) return invalid(['query'], 'Use query=null to browse all entries, or a non-empty search string of at most 200 characters. Empty or whitespace-only query is invalid.')
+    if (value.entity === 'categories' || value.entity === 'profiles') return invalid(['categories','profile_code','profile_revision','properties'], 'Vocabulary browsing requires categories=[], profile_code=null, profile_revision=null, properties={}. Use query=null to browse all categories/profiles, then copy exact codes and revisions from the result.')
+    if (isObject(value.properties) && Object.keys(value.properties).length && (value.profile_code === null || value.profile_revision === null)) return invalid(['profile_code','profile_revision'], 'Typed property filters require both profile_code and profile_revision from an exact published profile. Browse profiles and read that profile first, or use properties={} for an untyped search.')
+    if (value.after !== null && (typeof value.after !== 'string' || !uuid.test(value.after))) return invalid(['after'], 'For materials/parts, after must be the exact next_cursor UUID from the previous result, or null for the first page.')
+  }
+  return invalid([], 'Use the loaded schema and exact profile, category or item references. Property filters must have known non-parameter values; read the exact profile for valid fields and units.')
+}
+/** Fixed public guidance only. Never forward raw database messages or details. */
+export function catalogRejection(message = ''): { fields: string[]; message: string } | null {
+  if (/\bcatalog_invalid_categories\b/.test(message)) return { fields: ['categories','profile_code','profile_revision'], message: 'No change made: category/profile combination is invalid. Use search_material_catalog with entity=categories and entity=profiles, then read_material_catalog with entity=profile and the returned code/revision. Choose exactly one category with axis=material and one with axis=form matching that profile record.form; optional extras must have axis=function. Do not invent codes; use the returned category axes and profile form. Correct the same intended definition and retry.' }
+  if (/\bcatalog_invalid_profile_or_properties\b/.test(message)) return { fields: ['profile_code','profile_revision','properties'], message: 'No change made: profile or properties are invalid. Use search_material_catalog with entity=profiles, then read_material_catalog with entity=profile and its returned code/revision. Use only that published profile and its exact fields, required properties, types and units; do not invent profile codes. Correct the same intended definition and retry.' }
+  if (/\bcatalog_(unknown_property|missing_property)\b/.test(message)) return { fields: ['properties'], message: 'No change made: a profile property is missing or unsupported. Read the exact profile and use its field keys, required properties, types and units. For parts, read the pinned material revision; compatible material properties are inherited, while remaining part dimensions must be in properties, never only notes. Correct and retry.' }
+  if (/\bcatalog_unknown_category\b/.test(message)) return { fields: ['categories'], message: 'No change made: an unknown category was supplied. Browse search_material_catalog with entity=categories and copy returned codes; do not guess category names.' }
+  return null
+}
+export type CatalogTransport = (input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
 export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000) {
   let used = 0, partial = false
   return {
@@ -134,7 +157,7 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
     async read(name: string, value: unknown): Promise<Record<string, unknown>> {
       if (++used > 12) { partial = true; return { status: 'budget_exhausted' } }
       const input = parseCatalogRead(name, value)
-      if (!input) { partial = true; return { status: 'invalid', message: 'Use the loaded schema and exact profile, category or item references.' } }
+      if (!input) { partial = true; return catalogReadIssue(name, value) }
       if (!await hasAccess()) return { status: 'denied' }
       const controller = new AbortController()
       let timer: ReturnType<typeof setTimeout> | undefined
@@ -145,7 +168,11 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
         ])
         if (!await hasAccess()) return { status: 'denied' }
         if (error?.code === '42501') return { status: 'denied' }
-        if (error?.code === '22023' || error?.code === '22P02') { partial = true; return { status: 'invalid', message: 'Invalid catalog filter, field, unit or reference. Read the profile before supplying properties.' } }
+        if (error?.code === '22023' || error?.code === '22P02') {
+          partial = true
+          const issue = catalogRejection(error.message)
+          return { status: 'invalid', ...(issue ? { message: issue.message, validation: { code: 'domain_fields', fields: issue.fields } } : { message: 'Invalid catalog filter, field, unit or reference. Read the profile before supplying properties.' }) }
+        }
         if (error || !isObject(data) || data.projectId !== projectId || !['ok','empty','not_found'].includes(String(data.status))
           || new TextEncoder().encode(JSON.stringify(data)).length > 32000) throw new Error('unavailable')
         if (Array.isArray(data.items)) {

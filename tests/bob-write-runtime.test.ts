@@ -85,6 +85,24 @@ test('catalog source quote rejection explains the exact substring repair without
  assert.equal(writes,2);assert.equal(writer.receipts.length,1)
 })
 
+test('catalog category/profile rejection names the actual correction and keeps unknown database details private',async()=>{
+ const args={action:'ensure',key:'material',kind:'material',record_id:null,expected_revision:0,name:'Plywood',aliases:[],
+  profile_code:'guessed_profile',profile_revision:1,categories:['wood','sheet'],properties:{},material_id:null,material_revision:null,
+  notes:'',source_kind:'design_choice',source_quote:'A',source_seq:null,request_quote:'A'}
+ for(const reason of ['catalog_invalid_categories','catalog_invalid_profile_or_properties']){
+  const writer=createProjectWriter('A','A',async()=>({data:null,error:{code:'22023',message:reason+': PRIVATE_DETAIL'}}),async()=>noError([]),async()=>noError([]))
+  const result=await writer.write('save_catalog_definition',args)
+  assert.equal(result.status,'invalid');assert.equal(result.validation?.code,'domain_fields')
+  assert(result.validation?.fields.includes('profile_code'))
+  assert.match(result.message??'',/search_material_catalog.*profiles/)
+  assert.match(result.message??'',/read_material_catalog.*profile/)
+  if(reason==='catalog_invalid_categories')assert.match(result.message??'',/axis.*material.*axis.*form.*record\.form/)
+  assert.doesNotMatch(JSON.stringify(result),/PRIVATE_DETAIL/);assert.equal(writer.receipts.length,0)
+ }
+ const writer=createProjectWriter('A','A',async()=>({data:null,error:{code:'22023',message:'PRIVATE_DETAIL'}}),async()=>noError([]),async()=>noError([]))
+ assert.doesNotMatch(JSON.stringify(await writer.write('save_catalog_definition',args)),/PRIVATE_DETAIL/)
+})
+
 test('measurement parser enforces canonical units, uncertainty, decimal limits and current revision',()=>{
   const input={record_id:null,create_area_id:null,create_component_id:null,expected_revision:0,subject:'Chosen width',value:'70',unit:'cm',truth:'provided_spec',source:'User selected option A',notes:'Not measured on site',required:false,change_note:'Chosen dimension',request_quote:'A'}
   assert.equal(parseProjectWrite('save_project_measurement',input,'A','A')!.data.truth,'provided_spec')

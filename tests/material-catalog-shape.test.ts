@@ -75,3 +75,22 @@ test('all write arguments are explicit and finite; no hidden ownership fields',(
   assert.equal(parseCatalogWrite({...write(),expected_revision:NaN}),null)
   assert.equal(parseCatalogWrite({...write(),profile_revision:Infinity}),null)
 })
+
+test('captured K2 catalog mistakes return actionable fields and repair within the same read budget',async()=>{
+ let calls=0
+ const sources:any[]=[],reader=createMaterialCatalogReader('A',async()=>{calls++;return {data:{status:'ok',projectId:'A',items:[],truncated:false,next_cursor:null},error:null}},async()=>true,sources)
+ const missing:any={...query(),entity:'profiles',query:'sheet'};delete missing.profile_code
+ const shape:any=await reader.read('search_material_catalog',missing)
+ assert.equal(shape.status,'invalid');assert(shape.issues.some((i:any)=>i.path==='$.profile_code'))
+ assert.match(shape.message,/every required field/i)
+ const dictionary:any=await reader.read('search_material_catalog',{...query(),entity:'profiles',categories:['sheet']})
+ assert.equal(dictionary.status,'invalid');assert.deepEqual(dictionary.validation.fields,['categories','profile_code','profile_revision','properties'])
+ assert.match(dictionary.message,/categories=\[\].*profile_code=null.*profile_revision=null.*properties=\{\}/)
+ const empty:any=await reader.read('search_material_catalog',{...query(),entity:'categories',query:''})
+ assert.equal(empty.status,'invalid');assert.deepEqual(empty.validation.fields,['query']);assert.match(empty.message,/query=null/)
+ const filter:any=await reader.read('search_material_catalog',{...query(),properties:{thickness:value('18')}})
+ assert.equal(filter.status,'invalid');assert.match(filter.message,/profile_code.*profile_revision/)
+ assert.equal(calls,0);assert.equal(sources.length,0);assert.equal(reader.remaining,8)
+ assert.equal((await reader.read('search_material_catalog',{...query(),entity:'profiles'})).status,'ok')
+ assert.equal(calls,1);assert.equal(reader.remaining,7)
+})

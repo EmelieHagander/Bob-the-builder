@@ -116,6 +116,8 @@ Unknown is an explicit null with `truth=unknown` and a note, never zero or a sea
 
 ## Search → read → ensure/revise
 
+Catalog tools keep their strict schemas. Vocabulary browsing (`categories` / `profiles`) requires every field, with `categories=[]`, `profile_code=null`, `profile_revision=null`, `properties={}` and `query=null` for an unfiltered page. Rejected shapes return field paths; rejected filter combinations explain the correction without filling in missing inputs or increasing the existing read budget. For definitions, copy published profile codes/revisions and category axes from reads; the exact profile exposes its form category as `record.form`. Known SQL category/profile/property rejections return fixed public repair guidance, never raw database details. These critical rules live in the code descriptions offered in both inline and optional manual modes; the hosted catalog policy and schemas are unchanged.
+
 Three tools are registered through the existing tool session, not hardwired into the model loop:
 
 - `search_material_catalog`: bounded categories/profiles listing or material/part search by literal name/alias, descendant category and normalized typed property filters.

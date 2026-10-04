@@ -244,6 +244,8 @@ the shared AI catalogue. Frontend configuration remains
 
 ### K2 construction check tool
 
+The construction save tool owns a requested construction concept with parts, pinned materials and typed joints. Bob saves, checks and corrects that exact draft before any downstream drawing; `design_project_cad` owns requested CAD drawing intake and cannot substitute for the construction or repair a failed catalog save. This distinction is offered in the existing code tool descriptions, without forced tool choice, new orchestration, schema changes or a catalog migration. Catalog correction guidance is owned by [Material catalog](../Docs/material-catalog.md#search--read--ensurerevise). Real model delivery remains an acceptance gate.
+
 `check_construction_draft` is registered beside the K1 read/save tools. `ask-openai.ts` supplies caller-scoped `catalog_read` and `read_construction_draft`; the check re-reads the current head and access before reporting. The deterministic implementation in `construction-checks.ts` creates no writes, no approval and no model calls. Schema version 1 registration and the updated save-tool guide are in `20261002231320_construction_checks.sql`. Supported operations and `concept_ready` versus `fabrication_ready` are owned by [Artifacts](../Docs/artifacts.md#k2--construction-concept-checks); [verification](../Docs/foundation-verification.md#k2-construction-checks) owns deployment/model evidence. The permanent system prompt and configured model/budget ceilings are unchanged.
 
 

@@ -6,6 +6,7 @@ import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
+import {createMaterialCatalogReader} from '../supabase/functions/_shared/material-catalog.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
@@ -58,6 +59,26 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   open_questions:['Fastener size/count and joint fit unchecked'],request_quote:message}
  const payload=(v:any)=>{const {record_id,expected_revision,request_quote,parameter_plan,...data}=structuredClone(v);return {kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,parameters:compileCadParameters(project,data.recipe,parameter_plan,new Map(),new Map())}}}
  const writer=createProjectWriter(project,message,async p=>{try{return {data:await save(p),error:null}}catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+ await t.test('captured guessed profile is rejected by migrated SQL, then dictionary reads repair the same material without a duplicate',async()=>{
+  const reader=createMaterialCatalogReader(project,async input=>{
+   try{return {data:await call(owner,'bob.catalog_read',[project,JSON.stringify(input)]),error:null}}
+   catch(e:any){return {data:null,error:{code:e.code,message:e.message}}}
+  },async()=>true,[])
+  const bad={...catalog.data,record_id:null,expected_revision:0,request_quote:message,key:'repair-material',profile_code:'sheet_material_v1',categories:['wood','sheet']}
+  const rejected=await writer.write('save_catalog_definition',bad)
+  assert.equal(rejected.status,'invalid');assert.match(rejected.message??'',/category\/profile/);assert.equal(writer.receipts.length,0)
+  const search={query:null,categories:[],profile_code:null,profile_revision:null,properties:{},after:null}
+  const profiles:any=await reader.read('search_material_catalog',{...search,entity:'profiles'})
+  assert.equal(profiles.status,'ok');const profile=profiles.items.find((p:any)=>p.code==='sheet_stock');assert(profile)
+  const exact:any=await reader.read('read_material_catalog',{entity:'profile',id:profile.code,revision:profile.revision})
+  assert.equal(exact.status,'ok')
+  const categories:any=await reader.read('search_material_catalog',{...search,entity:'categories',query:'plywood'})
+  assert.equal(categories.status,'ok');assert.equal(categories.items[0].axis,'material')
+  const fixed=await writer.write('save_catalog_definition',{...bad,profile_code:profile.code,profile_revision:profile.revision,categories:[categories.items[0].code,exact.record.form]})
+  assert.equal(fixed.status,'saved',JSON.stringify(fixed));assert.equal(fixed.receipt?.recordId,material.recordId);assert.equal(fixed.receipt?.operation,'reused')
+  assert.equal(writer.hasUnresolvedWrites,false)
+  assert.equal((await pg.query('select count(*) n from bob.catalog_items where project_id=$1',[project])).rows[0].n,1)
+ })
  const tools=createConstructionTools({projectId:project,message,writer,hasAccess:async()=>true,read:(id,revision)=>read(id,revision),readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]),readSources:async()=>({project:new Map(),physical:new Map()})})
  const session=createBobToolSession({message,writer,constructionTools:tools,lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy})
  // Real handler registration and seed policy; no renderer/model call required.
