@@ -24,8 +24,20 @@ export function SheetLayerFields({ value, onChange }: { value: SheetLayerForm; o
   </div>
 }
 
-export function SheetLayerSummary({ value, purchaseQuantity, purchaseIncrement }: {
+export function SheetLayerPurchaseSummary({ value, purchaseQuantity, purchaseIncrement }: {
   value: SheetLayerSnapshot; purchaseQuantity: string; purchaseIncrement: string
+}) {
+  const count = sheetPurchaseCount(purchaseQuantity, purchaseIncrement)
+  const unit = value.coverage_kind === 'sheet_dimensions' ? 'sheet' : 'pack'
+  return <div className="ui-row-meta">
+    <p><strong>{count} {unit}{count === '1' ? '' : 's'} to buy</strong> · {purchaseQuantity} m² purchasing coverage.</p>
+    <p>{COVERAGE_TRUTH_LABELS[value.coverage_truth]} · {value.coverage_source}</p>
+    <p>Area-based quantity, not a cut/layout plan or suitability approval.</p>
+  </div>
+}
+
+export function SheetLayerSummary({ value, purchaseQuantity, purchaseIncrement, showPurchase = true }: {
+  value: SheetLayerSnapshot; purchaseQuantity: string; purchaseIncrement: string; showPurchase?: boolean
 }) {
   const count = sheetPurchaseCount(purchaseQuantity, purchaseIncrement)
   const unit = value.coverage_kind === 'sheet_dimensions' ? 'sheet' : 'pack'
@@ -33,7 +45,7 @@ export function SheetLayerSummary({ value, purchaseQuantity, purchaseIncrement }
     <strong>Saved sheet layer · {value.layer_count} {value.layer_count === 1 ? 'layer' : 'layers'}</strong>
     <p>{value.net_wall_area_m2} m² net wall area × {value.layer_count} layers, before allowance.</p>
     <p>{value.coverage_kind === 'sheet_dimensions' ? `${value.sheet_width_mm} × ${value.sheet_height_mm} mm` : 'Declared pack coverage'} · {value.unit_coverage_m2} m² per {unit}.</p>
-    <p><strong>{count} {unit}{count === '1' ? '' : 's'} to buy</strong> · {purchaseQuantity} m² purchasing coverage.</p>
+    {showPurchase && <p><strong>{count} {unit}{count === '1' ? '' : 's'} to buy</strong> · {purchaseQuantity} m² purchasing coverage.</p>}
     <p>{COVERAGE_TRUTH_LABELS[value.coverage_truth]} · {value.coverage_source}</p>
     <p className="foundation-hint">Area-based purchase quantity, not a cut/layout plan or suitability approval. Estimates remain estimates.</p>
   </div>
