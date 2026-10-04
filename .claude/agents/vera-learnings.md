@@ -33,3 +33,12 @@
 **Lesson:** people, skills, build-day attendance, task assignment, food/allergies and announcements are core product surfaces.
 
 **Rule:** new planning/AI experiences must integrate with the collaborative loop rather than turning bob into a single-user planning tool with collaboration bolted on later.
+
+## 2026-10-04 — Reserve phone space for the actual work
+
+**Rule:** long descriptions and supporting controls must not displace the shared
+Plan or chat transcript. Keep retry actions compact, explanations scrollable,
+and textarea growth bounded by the available viewport. Observe content and
+viewport resizing for chat follow behavior, but only follow while the reader
+is already at the end. Test both an older answer and the latest answer while
+the composer and text density change.

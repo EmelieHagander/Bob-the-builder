@@ -195,7 +195,7 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
       }}
     >
       {items.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} style={{ flex: 1 }}>
+        <NavLink key={n.to} to={n.to} end={n.end} style={{ flex: 1, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {({ isActive }) => (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, color: isActive ? 'var(--accent)' : '#ffffffb0', fontSize: 10, fontWeight: 600 }}>
               <Icon name={n.icon} weight={isActive ? 'fill' : 'regular'} size={21} />
@@ -263,7 +263,7 @@ export function Layout({ children, project }: { children: ReactNode; project: Pr
       <div className="main-col">{children}</div>
 
       {showBob && <button
-        className="no-print"
+        className="no-print bob-launcher"
         aria-label="Ask bob"
         aria-describedby={bobUnread ? 'bob-unread-status' : undefined}
         onClick={() => { setBobStarted(true); setBobOpen(true) }}

@@ -12,7 +12,8 @@ server.stdout.on('data',d=>logs+=d);server.stderr.on('data',d=>logs+=d)
 const user={id:'00000000-0000-4000-8000-000000000001',email:'work@example.test',aud:'authenticated',role:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-09-24T00:00:00Z'}
 const expiresAt=Math.floor(Date.now()/1000)+3600
 const token=[{alg:'HS256',typ:'JWT'},{sub:user.id,exp:expiresAt,role:'authenticated'},'fixture'].map(p=>Buffer.from(typeof p==='string'?p:JSON.stringify(p)).toString('base64url')).join('.')
-const project={id:'P',slug:'build',name:'Build together',description:'One shared plan',location:'',type:'Renovation',theme:'birch',phase:'build',start_label:'',start_date:null,end_date:null}
+const description = ['One shared plan', ...Array.from({length:24},(_,i)=>`Recorded note ${i+1}: panel 1200 × 600 mm; verify against Measurements.`)].join('\n')
+const project={id:'P',slug:'build',name:'Build together',description,location:'',type:'Renovation',theme:'birch',phase:'build',start_label:'',start_date:null,end_date:null}
 const area={id:'kitchen',slug:'kitchen',name:'Kitchen',phase:'design',description:'',icon:'hammer',lead_id:null,assigned_pct:0,materials_pct:0,done_pct:0,task_summary:'',area_crew:[],area_reference_images:[]}
 const step=(id,title,area_id,phase)=>({id,title,area_id,phase,position:1,goal:`Complete ${title.toLowerCase()}`,notes:'',state:'active',responsible_kind:'bob',responsible_person_id:null,tasks:[],related_tasks:[],requirements:[]})
 try{
@@ -97,6 +98,20 @@ try{
   await page.getByRole('button',{name:'Open',exact:true}).click()
   const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('.work-step').filter({hasText:'Complete drawers'})
   await drawers.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
+  const projectDescription=page.locator('.project-description')
+  assert.equal(await projectDescription.getAttribute('open'),null,'Long saved notes do not push the Plan off the opening screen')
+  const planBox=await plan.boundingBox()
+  assert(planBox && planBox.y<520,`Plan is easy to reach at ${width}px: ${JSON.stringify(planBox)}`)
+  const shortcuts=page.getByRole('navigation',{name:'Project tools',exact:true})
+  for(const link of await shortcuts.getByRole('link').all()){
+   const box=await link.boundingBox()
+   assert(box && box.height>=44 && box.x>=0 && box.x+box.width<=width,'Every project shortcut remains touchable and inside the phone')
+  }
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
+  await page.screenshot({path:`test-results/mobile-project-overview-${width}.png`})
+  await projectDescription.getByText('Project description',{exact:true}).click()
+  assert.equal(await projectDescription.locator('.instruction-text').textContent(),description,'All saved notes and dimensions remain available verbatim')
+  await projectDescription.getByText('Project description',{exact:true}).click()
   await page.getByRole('button',{name:'Go to Plan',exact:true}).click()
   assert.equal(await plan.evaluate(el=>el===document.activeElement),true)
   assert.equal(await page.getByRole('heading',{name:'Workstreams',exact:true}).count(),0)

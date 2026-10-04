@@ -131,6 +131,7 @@ try {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
     await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
+    await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()
     await page.getByRole('heading', { name: 'Building & spaces', exact: true }).waitFor()
 
@@ -198,6 +199,7 @@ try {
 
     await page.goto(base + '#/account')
     await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
+    await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()
     await page.getByText('Not linked to this project', { exact: true }).waitFor()
     state.deny = true

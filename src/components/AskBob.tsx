@@ -272,7 +272,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const input = composer.current
     if (!input) return
     const available = viewport?.height ?? window.innerHeight
-    const cap = expanded ? Math.max(80, Math.min(420, available * 0.5)) : Math.max(64, Math.min(160, available * 0.28))
+    const cap = Math.max(44, Math.min(expanded ? 240 : 104, available * (expanded ? 0.35 : 0.22), available - 270))
     input.style.height = 'auto'
     input.style.height = `${expanded ? cap : Math.min(Math.max(44, input.scrollHeight), cap)}px`
   }, [draft, expanded, open, viewport])
@@ -319,8 +319,16 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [open, needsRefresh, working, project.id])
   useEffect(() => {
     if (!open) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = previousOverflow }
+  }, [open])
+  useEffect(() => {
+    if (!open) return
     const previous = document.activeElement as HTMLElement | null
-    composer.current?.focus()
+    // Opening a conversation on a phone should show the answer before the keyboard.
+    if (window.matchMedia('(pointer: fine)').matches) composer.current?.focus({ preventScroll: true })
+    else overlay.current?.querySelector<HTMLButtonElement>('[aria-label="Close Ask bob"]')?.focus({ preventScroll: true })
     return () => { if (previous?.isConnected) previous.focus() }
   }, [open])
   useEffect(() => {
@@ -341,9 +349,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [open, confirmReset, needsRefresh, working])
   const scope = useRef(createRequestScope())
   const historyScroll = useRef<HTMLDivElement>(null)
-  useEffect(() => {
+  const historyContent = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
     if (open && historyScroll.current && stickToEnd.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
-  }, [open, extra.length, working, viewport])
+  }, [open, extra, working, workingLabel, historyNotice, retry, viewport])
+  useEffect(() => {
+    if (!open || !historyScroll.current || !historyContent.current) return
+    // Follow new content and viewport/composer resizing only while at the end.
+    // Reading an older answer must survive polling and late image/font layout.
+    const observer = new ResizeObserver(() => {
+      if (stickToEnd.current && historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight
+    })
+    observer.observe(historyScroll.current)
+    observer.observe(historyContent.current)
+    return () => observer.disconnect()
+  }, [open])
   useEffect(() => {
     const mark = () => {
       if (!open || showJump || !stickToEnd.current || !readTarget || document.visibilityState !== 'visible') return
@@ -591,9 +611,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     <div ref={overlay} role="dialog" aria-modal="true" aria-label={`Bob conversation for ${project.name}`} className="no-print bob-overlay" style={{ ...(viewport ? { top: viewport.top, height: viewport.height } : {}) }}>
       <div onClick={close} style={{ position: 'absolute', inset: 0, background: 'rgba(30,26,14,.34)', animation: 'fadeUp .2s ease' }} />
       <aside aria-label={`Ask bob for ${project.name}`} className={`bob-drawer ${compact ? 'bob-compact' : 'bob-comfortable'}`}>
-        <header style={{ display: 'flex', alignItems: 'center', gap: 11, padding: 'max(8px, env(safe-area-inset-top)) 12px 8px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
+        <header className="bob-header" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: 'max(8px, env(safe-area-inset-top)) 12px 8px', borderBottom: '1px solid var(--line)', background: 'var(--brand)', color: 'var(--brand-ink)' }}>
           <span style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="tree-evergreen" weight="fill" size={21} color="var(--accent-ink)" /></span>
-          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div style={{ fontSize: 12, color: '#ffffffaa' }}>{project.name}</div></div>
+          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}><div className="font-display" style={{ fontWeight: 800, fontSize: 18 }}>Ask bob</div><div className="bob-project-name" title={project.name}>{project.name}</div></div>
           <button aria-label="Close Ask bob" onClick={close} style={{ background: '#ffffff1c', border: 'none', borderRadius: 10, padding: '0 12px', minHeight: 44, gap: 6, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-ink)' }}><Icon name="x" size={18} /><span>Close</span></button>
         </header>
 
@@ -603,30 +623,25 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           </button>
           <button type="button" className="btn bob-density" aria-label="Comfortable text spacing" aria-pressed={!compact} title={compact ? 'Use larger text and spacing' : 'Use compact text and spacing'} onClick={() => setCompact(value => !value)}>Aa</button>
         </div>
-        <div className="bob-context" aria-label="Bob page context">
-          <strong>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</strong>
-          <span>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</span>
-        </div>
-
+        <div className="bob-transcript">
         <div ref={historyScroll} className="bob-history" onScroll={e => {
           const el = e.currentTarget
           stickToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64
           setShowJump(!stickToEnd.current)
         }}>
+          <div ref={historyContent} className="bob-history-content">
+          <details className="bob-context" aria-label="Bob page context">
+            <summary>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</summary>
+            <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
+          </details>
           {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
-          {historyNotice && <div role="status" style={{ fontSize: 12, color: 'var(--ink-soft)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px' }}>{historyNotice}</div>}
           {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
-        </div>
-
-        {working && <WorkingBubble label={workingLabel} />}
-
-        {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; stickToEnd.current = true; setShowJump(false) }}><Icon name="arrow-down" size={18} /> {readTarget && readAck.current !== `${project.id}/${readTarget.threadId}/${readTarget.seq}` ? 'New message' : 'Latest'}</button>}
-
+          {historyNotice && <div role="status" className="bob-history-notice">{historyNotice}</div>}
+          {working && <WorkingBubble label={workingLabel} />}
         {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
-
-        {retry && <div role="status" style={{ padding: '8px 18px', fontSize: 12.5, color: 'var(--ink-soft)' }}>
+        {retry && <details className="bob-retry-details">
+          <summary>About this retry</summary>
           <p>{outgoing.current ? 'Your new message has not been confirmed. Retry this message when Bob is free.' : 'Retry the same request to check its result without duplicating saved changes.'}</p>
-          <button className="btn btn-secondary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)} style={{ marginTop: 6, minHeight: 44 }}>Retry request</button>
           {outgoing.current && <>
             <button className="btn" disabled={working || resetting || confirmReset} style={{ marginTop: 6, minHeight: 44 }} onClick={() => {
               const held = outgoing.current
@@ -636,6 +651,14 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             }}>Dismiss retry</button>
             <p>Dismissing the retry removes the temporary copy. It does not cancel work Bob may already have received.</p>
           </>}
+        </details>}
+          </div>
+        </div>
+        {showJump && <button className="btn bob-jump" type="button" aria-label="Jump to latest message" onClick={() => { stickToEnd.current = true; if (historyScroll.current) historyScroll.current.scrollTop = historyScroll.current.scrollHeight; setShowJump(false) }}><Icon name="arrow-down" size={18} /> {readTarget && readAck.current !== `${project.id}/${readTarget.threadId}/${readTarget.seq}` ? 'New message' : 'Latest'}</button>}
+        </div>
+        {retry && <div className="bob-recovery" role="status">
+          <span>{outgoing.current ? 'Receipt not confirmed' : 'Answer interrupted'}</span>
+          <button className="btn btn-primary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)}>Retry request</button>
         </div>}
         <form onSubmit={e => { e.preventDefault(); void send() }} className={`bob-composer ${expanded ? 'bob-composer-expanded' : ''}`}>
           <textarea ref={composer} rows={1} disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" onKeyDown={e => {
