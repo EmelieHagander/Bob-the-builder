@@ -90,7 +90,7 @@ export function ProjectHome() {
     </details>}
 
     <nav className="project-shortcuts" aria-label="Project tools">
-      <Link className="btn" to="/facts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
+      <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
       <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} /><span>Drawings</span></Link>
       <Link className="btn" to="/material-plan"><Icon name="package" size={18} /><span>Material plan</span></Link>
       <Link className="btn" to="/solutions"><Icon name="path" size={18} /><span>Solutions &amp; target</span></Link>
