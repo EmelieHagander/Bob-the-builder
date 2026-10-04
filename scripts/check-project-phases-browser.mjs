@@ -268,7 +268,7 @@ try {
     await page.locator('article').filter({ hasText: 'Bedroom' }).waitFor()
     await page.reload()
     await page.locator('article').filter({ hasText: 'Bedroom' }).waitFor()
-    await page.getByRole('link', { name: 'Open Area', exact: true }).click()
+    await page.getByRole('link', { name: /^Open Area / }).click()
     await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1))
     await page.locator('.page').evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })

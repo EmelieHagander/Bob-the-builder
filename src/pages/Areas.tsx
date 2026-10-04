@@ -51,8 +51,8 @@ export function Areas() {
             const next = areaNextAction(area)
             return (
               <ListItem key={area.id}>
-                <SummaryRow leading={<Icon name={area.icon} size={20} color="var(--brand)" />}>
-                  <div className="ui-row-title"><Link to={`/areas/${area.slug}`}>{area.name}</Link>{archived ? <span className="pill">Archived</span> : <PhasePill phase={area.phase} />}</div>
+                <SummaryRow leading={<Icon name={area.icon} size={20} color="var(--brand)" />} trailing={!archived && <button className="ui-icon-button no-print" aria-label={area.phase ? 'Review phase' : 'Set phase'} title={area.phase ? 'Review phase' : 'Set phase'} onClick={() => setPhaseArea(area)}><Icon name="flag" size={16} /></button>}>
+                  <div className="ui-row-title"><Link to={`/areas/${area.slug}`} aria-label={`Open Area ${area.name}`}>{area.name}</Link>{archived ? <span className="pill">Archived</span> : <PhasePill phase={area.phase} />}</div>
                   <div className="ui-row-meta">{byId.get(area.leadId ?? '')?.name.split(' ')[0] ?? 'Unassigned'} leads · {area.taskSummary}</div>
                 </SummaryRow>
 
@@ -62,15 +62,10 @@ export function Areas() {
                     <ProgressBar label="Materials ready" value={area.materialsPct} />
                     <ProgressBar label="Done" value={area.donePct} />
                   </div>
-                ) : (
-                  <p className="ui-row-meta">{next.text}</p>
-                )}
+                ) : null}
 
-                <div className="ui-row-actions no-print">
-                  <Link to={archived ? `/areas/${area.slug}` : next.to} className="btn">{archived || !area.phase ? 'Open Area' : next.title}</Link>
-                  {!archived && <button className="btn" onClick={() => setPhaseArea(area)}>{area.phase ? 'Review phase' : 'Set phase'}</button>}
-                </div>
-                {area.description && <details className="ui-row-details"><summary>Description</summary><p className="instruction-text">{area.description}</p></details>}
+                {!archived && area.phase && <div className="ui-row-actions no-print"><Link to={next.to} className="btn">{next.title}</Link></div>}
+                {(area.description || !archived) && <details className="ui-row-details"><summary>Details</summary>{!archived && <p className="ui-row-meta">{next.text}</p>}{area.description && <p className="instruction-text">{area.description}</p>}</details>}
               </ListItem>
             )
           })}

@@ -79,26 +79,24 @@ export function AccountDashboard() {
         </div>
         <div className="cluster no-print">
           {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
-          {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
-            <Icon name="sign-out" size={16} /> Close project
+          {active && <button className="ui-icon-button" aria-label="Close project" title="Close project" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
+            <Icon name="sign-out" size={18} />
           </button>}
-          <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings &amp; family</Link>
+          <Link to="/account/buildings" className="ui-icon-button" aria-label="Buildings & family" title="Buildings & family"><Icon name="house" size={18} /></Link>
           <Link to="/account/calendar" className="btn">
             <Icon name="calendar-dots" size={16} /> Calendar
           </Link>
-          <Link to="/account/settings" className="btn">
-            <Icon name="gear-six" size={16} /> Settings
+          <Link to="/account/settings" className="ui-icon-button" aria-label="Settings" title="Settings">
+            <Icon name="gear-six" size={18} />
           </Link>
-          <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
-            <Icon name="user-plus" size={16} /> Invite
+          <button className="ui-icon-button" aria-label="Invite" title="Invite" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
+            <Icon name="user-plus" size={18} />
           </button>
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
             <Icon name="plus" weight="bold" size={15} /> New project
           </button>
         </div>
       </div>
-
-      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
 
       <div className="account-stats">
         {stats.map((s) => (
@@ -164,6 +162,8 @@ export function AccountDashboard() {
           {account ? <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} /> : <div className="card" style={{ padding: 'var(--panel-padding)' }}><SectionTitle icon="note-pencil">Household notes</SectionTitle><p className="foundation-hint">Household notes need access to the household account.</p><Link className="btn" to="/account/settings">Account settings</Link></div>}
         </section>
       </div>
+
+      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
 
       {modal?.kind === 'new' && (
         <NewProjectModal
