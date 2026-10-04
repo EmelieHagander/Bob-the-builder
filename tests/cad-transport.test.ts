@@ -28,3 +28,12 @@ test('missing or corrupted previews cannot masquerade as visual feedback',async(
  const p=await packet();p.previews.front='not png'
  await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',(async()=>new Response(JSON.stringify(p))) as typeof fetch)(recipe),/invalid_cad_preview/)
 })
+test('construction envelope preserves recipe and refuses a different source revision',async()=>{
+ const p:any=await packet(),source={artifact_id:'11111111-1111-4111-8111-111111111111',revision:3}
+ p.manifest.drawing_source=source
+ const fetcher=(async(_url:any,init:any)=>{assert.deepEqual(JSON.parse(init.body),{recipe,drawing_source:source});return new Response(JSON.stringify(p))}) as typeof fetch
+ const render=createCadTransport('https://fixture.invalid/render','fixture',fetcher)
+ assert.equal((await render(recipe,source)).manifest.drawing_source.revision,3)
+ p.manifest.drawing_source={...source,revision:2}
+ await assert.rejects(render(recipe,source),/cad_construction_source_mismatch/)
+})

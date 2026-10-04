@@ -7,6 +7,7 @@ export type CadPrimitive=CadSolid&{id:string;material_ref:string|null;cuts?:CadC
 export type CadPlacement={x:number;y:number;z:number;rx:number;ry:number;rz:number}
 export type CadInstance={id:string;definition_id:string;placement:CadPlacement}
 export type CadView='front'|'right'|'top'|'isometric'
+export type CadDrawingSource={artifact_id:string;revision:number}
 export type CadClearance={id:string;first_id:string;second_id:string;min_mm:number}
 export type CadMotion={id:string;moving_ids:string[];obstacle_ids:string[];delta:{x:number;y:number;z:number}}
 export type CadAssemblyRequest={contract_version:1;units:'mm';assembly_id:string;definitions:CadPrimitive[];instances:CadInstance[];views:CadView[];clearances?:CadClearance[];motions?:CadMotion[]}
@@ -68,12 +69,28 @@ function checkedGeometry(v:unknown,r:CadAssemblyRequest){
     ||x.status!==(x.pairs.length?'potential_obstruction':'clear_envelope')||x.pairs.some(p=>!obj(p)||!expected.moving_ids.includes(p.moving_id as string)||!expected.obstacle_ids.includes(p.obstacle_id as string))}))return false
   return true
 }
+function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<string,any>) {
+ if(!obj(value)||!exact(value,['version','coverage','views'])||value.version!==1||value.coverage!==(recipe.instances.length<=24?'complete':'partial')||!obj(value.views)
+  ||Object.keys(value.views).sort().join(',')!==[...recipe.views].sort().join(','))return false
+ const definitions=new Map(recipe.definitions.map(d=>[d.id,d]))
+ const parts=[...recipe.instances].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0).map((i,index)=>{
+  const d=definitions.get(i.definition_id)! as unknown as Record<string,unknown>
+  return {number:'P'+(index+1),instance_id:i.id,definition_id:i.definition_id,blank_mm:Object.fromEntries(['x_mm','y_mm','z_mm','diameter_mm','outside_diameter_mm','wall_thickness_mm','length_mm'].filter(k=>k in d).map(k=>[k,d[k]]))}
+ })
+ for(const view of recipe.views){
+  const entry=value.views[view],axes=({front:[0,2],right:[1,2],top:[0,1],isometric:[]} as const)[view]
+  if(!obj(entry)||!exact(entry,['coverage','dimensions','parts'])||entry.coverage!==value.coverage||stable(entry.parts)!==stable(parts)
+   ||stable(entry.dimensions)!==stable(axes.map(axis=>({axis:'xyz'[axis],mm:box.size[axis]}))))return false
+ }
+ return true
+}
 export function parseCadAssemblyResult(v:unknown,r:CadAssemblyRequest):CadAssemblyResult|null{
   if(!obj(v)||v.contract_version!==1||v.assembly_id!==r.assembly_id||!obj(v.engine)||v.engine.name!=='build123d'||v.engine.version!=='0.13.0'||v.engine.units!=='mm'
     ||!bounds(v.bounding_box_mm)||!Array.isArray(v.instances)||v.instances.length!==r.instances.length||!obj(v.exports))return null
   if(stable(v.definitions)!==stable(r.definitions))return null
   if((r.clearances?.length||r.motions?.length)&&!obj(v.checks))return null
   if(v.checks!==undefined&&!checkedGeometry(v.checks,r))return null
+  if(v.annotations!==undefined&&!checkedAnnotations(v.annotations,r,v.bounding_box_mm as Record<string,any>))return null
   const seen=new Set<string>()
   for(const row of v.instances){if(!obj(row)||typeof row.id!=='string'||seen.has(row.id)||!r.instances.some(i=>i.id===row.id&&i.definition_id===row.definition_id)||!bounds(row.bounding_box_mm))return null;seen.add(row.id)}
   for(const key of ['step',...r.views]){const e=v.exports[key];if(!obj(e)||!exact(e,['file','sha256'])||typeof e.file!=='string'||!/^[A-Za-z0-9_.-]{1,100}$/.test(e.file)||typeof e.sha256!=='string'||!/^[0-9a-f]{64}$/.test(e.sha256))return null}

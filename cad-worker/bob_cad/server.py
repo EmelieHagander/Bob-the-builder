@@ -14,8 +14,11 @@ MAX_RESPONSE = 6 * 1024 * 1024
 def render_to_pipe(recipe, connection):
     try:
         from .worker import render_assembly
+        source=None
+        if isinstance(recipe,dict) and set(recipe)=={'recipe','drawing_source'}:
+            recipe,source=recipe['recipe'],recipe['drawing_source']
         with TemporaryDirectory() as directory:
-            manifest = render_assembly(recipe, directory)
+            manifest = render_assembly(recipe, directory, source)
             files = {}
             for key, export in manifest['exports'].items():
                 path = Path(directory) / export['file']

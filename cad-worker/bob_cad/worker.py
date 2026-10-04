@@ -7,6 +7,7 @@ from PIL import Image
 from pathlib import Path
 from typing import Any
 from build123d import Align, Box, Compound, Cylinder, ExportSVG, LineType, Location, Unit, export_step
+from .annotations import annotate
 
 ID=re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,79}$")
 class CadContractError(ValueError): pass
@@ -110,11 +111,13 @@ def _render_preview(path:Path,preview:Path):
     tree=ET.parse(path); root=tree.getroot()
     width,height=[float(n) for n in root.attrib['viewBox'].replace(',',' ').split()][2:]
     factor=1024/max(width,height)
+    geometry=root.find('{http://www.w3.org/2000/svg}g[@id="Geometry"]')
+    model_scale=float(geometry.attrib['data-model-scale']) if geometry is not None else 1
     for layer in root.iter():
         if layer.attrib.get('id') in ('Visible','Hidden'):
             hidden=layer.attrib['id']=='Hidden'
-            layer.set('stroke-width',str((0.8 if hidden else 1.25)/factor))
-            if hidden: layer.set('stroke-dasharray',f'{4/factor} {3/factor}')
+            layer.set('stroke-width',str((0.8 if hidden else 1.25)/(factor*model_scale)))
+            if hidden: layer.set('stroke-dasharray',f'{4/(factor*model_scale)} {3/(factor*model_scale)}')
     ET.register_namespace('', 'http://www.w3.org/2000/svg')
     tree.write(path,encoding='utf-8',xml_declaration=True)
     svg2png(bytestring=path.read_bytes(),write_to=str(preview),background_color='white',
@@ -157,7 +160,10 @@ def _checks(req,children,rows):
         motions.append({"id":c["id"],"method":"swept_aabb_translation","status":"potential_obstruction" if hits else "clear_envelope","pairs":hits})
     return {"collisions":{"status":"partial" if skipped else "complete","tested_pairs":tested,"skipped_pairs":skipped,"overlaps":overlaps},"clearances":clearances,"motions":motions}
 
-def render_assembly(raw:Any,output_dir:str|Path)->dict[str,Any]:
+def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None)->dict[str,Any]:
+    if drawing_source is not None and (not isinstance(drawing_source,dict) or set(drawing_source)!={'artifact_id','revision'}
+        or not isinstance(drawing_source['artifact_id'],str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',drawing_source['artifact_id'],re.I)
+        or type(drawing_source['revision']) is not int or not 1<=drawing_source['revision']<=999999999): raise CadContractError('drawing_source')
     req=validate_request(raw); defs={d["id"]:_shape(d) for d in req["definitions"]}; children=[]; rows=[]
     for i in req["instances"]:
         p=i["placement"]; located=_location(p)*defs[i["definition_id"]]
@@ -166,16 +172,18 @@ def render_assembly(raw:Any,output_dir:str|Path)->dict[str,Any]:
     assembly=Compound(children=children); bb=assembly.bounding_box(); size=_vec(bb.size)
     center=[(bb.min.X+bb.max.X)/2,(bb.min.Y+bb.max.Y)/2,(bb.min.Z+bb.max.Z)/2]; distance=max(max(size)*4,1000)
     out=Path(output_dir); out.mkdir(parents=True,exist_ok=True); step=out/"assembly.step"; export_step(assembly,str(step))
-    previews={}
+    previews={};annotations={}
     exports={"step":{"file":step.name,"sha256":_hash(step)}}
     for view in req["views"]:
         origin,up=_camera(view,center,distance); visible,hidden=assembly.project_to_viewport(origin,viewport_up=up,look_at=center)
         path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
+        annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source)
         # Rasterize the exact exported SVG, never an independently generated image.
         preview=out/f"{view}.png"
         _render_preview(path,preview)
         exports[view]={"file":path.name,"sha256":_hash(path)}
         previews[view]={"file":preview.name,"sha256":_hash(preview),"source_sha256":exports[view]["sha256"]}
-    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows)}
+    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows),"annotations":{"version":1,"coverage":"complete" if len(rows)<=24 else "partial","views":annotations}}
+    if drawing_source is not None: manifest['drawing_source']=drawing_source
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     return manifest
