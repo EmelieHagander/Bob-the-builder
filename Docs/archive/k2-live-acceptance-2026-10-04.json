@@ -1,0 +1,2669 @@
+{
+  "projectId": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+  "startedAt": "2026-10-04T10:39:55.311Z",
+  "turns": [
+    {
+      "turn": "2ad1b389-c20b-47fc-873b-6f0d1776d170",
+      "jobId": "4d43a2ee-ceff-43ea-b976-a31099c10d5f",
+      "message": "Ta fram och spara ett konstruktionskoncept för en fristående hylla, 600 mm bred, 800 mm hög och 300 mm djup som yttermått. Välj plywood 18 mm som arbetsmaterial, två hela gavlar samt botten, topp och ett hyllplan mitt emellan, alla tre mellan gavlarna. Välj skruvade stumförband för detta syntetiska koncept och kontrollera att delarna passar. Välj och spara den lösningen; du får själv bestämma vanliga konstruktionsdetaljer. Produktval, belastning och tippsäkring är ännu inte verifierade. Ingen bild, ritning eller inköpsorder behövs nu.",
+      "status": "completed"
+    },
+    {
+      "turn": "5cc8d23e-88ec-4d89-adce-dc6d7f5feee8",
+      "jobId": "8963979e-c7dd-40f6-9535-0da8b28aff18",
+      "message": "Ändra samma konstruktion till 700 mm ytterbredd. Behåll höjd, djup, material och byggsätt, räkna om de beroende måtten och kontrollera igen.",
+      "status": "completed"
+    },
+    {
+      "turn": "9ca37bde-2132-4f23-bc75-bd30e3f3e7c8",
+      "jobId": "816254c9-318f-43d0-9f3e-aef2c4b423f2",
+      "message": "Byt nu till 21 mm plywood som arbetsmaterial i samma konstruktion. Behåll alla yttermått och byggsätt. Uppdatera materialbindningar, beroende mått och kontrollera igen.",
+      "status": "completed"
+    }
+  ],
+  "notProven": [
+    "manufacturing",
+    "strength",
+    "annotated rendering",
+    "purchasing",
+    "named participant/mobile acceptance"
+  ],
+  "initial": {
+    "draft": {
+      "title": "Konstruktionskoncept – fristående hylla 600×800×300 i 18 mm plywood",
+      "joints": [
+        {
+          "id": "j_bottom_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "middle_shelf"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "middle_shelf"
+          }
+        }
+      ],
+      "limits": [
+        "joint_fit_and_strength_unchecked",
+        "hardware_not_derived",
+        "no_drawing_or_purchase_output"
+      ],
+      "recipe": {
+        "units": "mm",
+        "views": [
+          "front",
+          "right",
+          "top",
+          "isometric"
+        ],
+        "motions": [],
+        "instances": [
+          {
+            "id": "left_side",
+            "placement": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "right_side",
+            "placement": {
+              "x": 582,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "bottom_panel",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "top_panel",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 782,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "middle_shelf",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 391,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          }
+        ],
+        "clearances": [],
+        "assembly_id": "freestanding_shelf_600_800_300",
+        "definitions": [
+          {
+            "id": "side_panel",
+            "x_mm": 18,
+            "y_mm": 300,
+            "z_mm": 800,
+            "primitive": "box",
+            "material_ref": null
+          },
+          {
+            "id": "shelf_panel",
+            "x_mm": 564,
+            "y_mm": 300,
+            "z_mm": 18,
+            "primitive": "box",
+            "material_ref": null
+          }
+        ],
+        "contract_version": 1
+      },
+      "status": "ok",
+      "area_id": null,
+      "archived": false,
+      "rendered": false,
+      "reviewed": false,
+      "revision": 1,
+      "materials": [
+        {
+          "part_id": null,
+          "material_id": "4a5e99ce-059d-4ec3-b061-7b7da1a03829",
+          "definition_id": "side_panel",
+          "part_revision": null,
+          "material_revision": 1
+        },
+        {
+          "part_id": null,
+          "material_id": "4a5e99ce-059d-4ec3-b061-7b7da1a03829",
+          "definition_id": "shelf_panel",
+          "part_revision": null,
+          "material_revision": 1
+        }
+      ],
+      "projectId": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+      "parameters": {
+        "nodes": [
+          {
+            "id": "panel_thickness",
+            "role": "decision",
+            "unit": "mm",
+            "value": 18,
+            "reason": "Angett arbetsmaterial plywood 18 mm.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 18
+            }
+          },
+          {
+            "id": "total_depth",
+            "role": "decision",
+            "unit": "mm",
+            "value": 300,
+            "reason": "Angett yttermått djup.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 300
+            }
+          },
+          {
+            "id": "total_height",
+            "role": "decision",
+            "unit": "mm",
+            "value": 800,
+            "reason": "Angett yttermått höjd.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 800
+            }
+          },
+          {
+            "id": "total_width",
+            "role": "decision",
+            "unit": "mm",
+            "value": 600,
+            "reason": "Angett yttermått bredd.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 600
+            }
+          },
+          {
+            "id": "two_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 36
+            }
+          },
+          {
+            "id": "shelf_width",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "two_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 564
+            }
+          },
+          {
+            "id": "zero_mm",
+            "role": "decision",
+            "unit": "mm",
+            "value": 0,
+            "reason": "Gemensam nollplacering i modellen.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 0
+            }
+          },
+          {
+            "id": "zero_deg",
+            "role": "decision",
+            "unit": "deg",
+            "value": 0,
+            "reason": "Ingen rotation används i konceptet.",
+            "sources": [],
+            "normalized": {
+              "unit": "deg",
+              "value": 0
+            }
+          },
+          {
+            "id": "right_side_x",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 582
+            }
+          },
+          {
+            "id": "top_panel_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 782
+            }
+          },
+          {
+            "id": "three_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "two_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 54
+            }
+          },
+          {
+            "id": "remaining_openings_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "three_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 746
+            }
+          },
+          {
+            "id": "two_scalar",
+            "role": "decision",
+            "unit": "scalar",
+            "value": 2,
+            "reason": "Halvering och dubblering i härledda mått.",
+            "sources": [],
+            "normalized": {
+              "unit": "scalar",
+              "value": 2
+            }
+          },
+          {
+            "id": "half_opening_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "remaining_openings_height",
+              "two_scalar"
+            ],
+            "rounding": "exact",
+            "operation": "divide_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 373
+            }
+          },
+          {
+            "id": "middle_shelf_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "half_opening_height"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 391
+            }
+          }
+        ],
+        "frames": [],
+        "version": 1,
+        "bindings": [
+          {
+            "node": "panel_thickness",
+            "path": "definitions/side_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/side_panel/y_mm"
+          },
+          {
+            "node": "total_height",
+            "path": "definitions/side_panel/z_mm"
+          },
+          {
+            "node": "shelf_width",
+            "path": "definitions/shelf_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/shelf_panel/y_mm"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "definitions/shelf_panel/z_mm"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rz"
+          },
+          {
+            "node": "right_side_x",
+            "path": "instances/right_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/bottom_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/top_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/top_panel/placement/y"
+          },
+          {
+            "node": "top_panel_z",
+            "path": "instances/top_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/middle_shelf/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/middle_shelf/placement/y"
+          },
+          {
+            "node": "middle_shelf_z",
+            "path": "instances/middle_shelf/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rz"
+          }
+        ],
+        "coverage": "complete",
+        "precision": "decimal_6",
+        "project_id": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+        "coordinate_system": {
+          "id": "freestanding_shelf_600_800_300",
+          "views": {
+            "top": {
+              "up": [
+                0,
+                1,
+                0
+              ],
+              "toward_camera": [
+                0,
+                0,
+                1
+              ]
+            },
+            "front": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                0,
+                -1,
+                0
+              ]
+            },
+            "right": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                0,
+                0
+              ]
+            },
+            "isometric": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                -1,
+                1
+              ]
+            }
+          },
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "version": 1,
+          "rotation": "build123d_0.13_intrinsic_xyz",
+          "angle_unit": "deg",
+          "cut_parent": "definition",
+          "length_unit": "mm",
+          "positive_axes": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "frame_identity": "artifact_revision_and_recipe_path",
+          "instance_parent": "assembly",
+          "definition_origins": {
+            "box": "minimum_corner",
+            "tube": "xy_center_z_min",
+            "cylinder": "xy_center_z_min"
+          }
+        }
+      },
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "description": "Fristående öppen hylla som syntetiskt konstruktionskoncept. Yttermått 600 mm bred, 800 mm hög och 300 mm djup. Två hela gavlar i full höjd och full djup. Botten, topp och ett fast hyllplan ligger mellan gavlarna. Material valt som 18 mm plywood. Förbandstyp vald som skruvade stumförband mellan varje liggande plan och respektive gavel. Hyllplanet är placerat mitt emellan topp och botten med lika fria öppningar ovan och under.",
+      "source_state": "current",
+      "open_questions": [
+        "Exakt produktval och plywoodkvalitet är inte verifierade.",
+        "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade.",
+        "Belastning, nedböjning och lokal hållfasthet är inte verifierade.",
+        "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+      ],
+      "target_revision": 1,
+      "current_revision": 1,
+      "construction_status": "draft"
+    },
+    "result": {
+      "status": "checked",
+      "checker_version": "orthogonal-butt-v1",
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "revision": 1,
+      "concept_ready": true,
+      "fabrication_ready": false,
+      "rendered": false,
+      "reviewed": false,
+      "issues": [],
+      "issue_count": 0,
+      "fabrication_gaps": [
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "side_panel",
+            "4a5e99ce-059d-4ec3-b061-7b7da1a03829"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "shelf_panel",
+            "4a5e99ce-059d-4ec3-b061-7b7da1a03829"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_left",
+            "left_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_right",
+            "right_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_left",
+            "left_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_right",
+            "right_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_left",
+            "left_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_right",
+            "right_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Exakt produktval och plywoodkvalitet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Belastning, nedböjning och lokal hållfasthet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+        }
+      ],
+      "fabrication_gap_count": 12,
+      "references": [
+        {
+          "id": "timber.fasteners",
+          "title": "Förband och infästningar",
+          "url": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/dimensionering-av-trakonstruktioner2-2019.pdf",
+          "version": "2026-09-30.1",
+          "reviewed_at": "2026-09-25",
+          "limitations": [
+            "Den äldre källan ger begreppslig vägledning, inte aktuellt produktgodkännande.",
+            "Paketet dimensionerar inte förbandet eller bevisar dess bärförmåga."
+          ]
+        },
+        {
+          "id": "timber.adhesives",
+          "title": "Limförband i trä och skivmaterial",
+          "url": "https://research.fs.usda.gov/treesearch/62250",
+          "version": "2026-10-02.1",
+          "reviewed_at": "2026-10-02",
+          "limitations": [
+            "Inga numeriska dimensioneringsregler eller produktgodkännanden ingår i detta paket.",
+            "Ett plant stumförband är en konceptmetod; paketet godkänner inte fogens bärförmåga."
+          ]
+        }
+      ],
+      "limits": [
+        "Declared requirements still need comparison with the reported bounds and part count.",
+        "No strength, stability, tip resistance, raw-stock nesting, fastener layout or manufacturer-product approval.",
+        "A check result is revision-bound evidence, not a saved drawing or permission to manufacture."
+      ],
+      "part_count": 5,
+      "joint_count": 6,
+      "joint_checks": [
+        {
+          "id": "j_bottom_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        }
+      ],
+      "bounds_mm": {
+        "min": [
+          0,
+          0,
+          0
+        ],
+        "max": [
+          600,
+          300,
+          800
+        ],
+        "size": [
+          600,
+          300,
+          800
+        ]
+      }
+    }
+  },
+  "widthChange": {
+    "draft": {
+      "title": "Konstruktionskoncept – fristående hylla 700×800×300 i 18 mm plywood",
+      "joints": [
+        {
+          "id": "j_bottom_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "middle_shelf"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "middle_shelf"
+          }
+        }
+      ],
+      "limits": [
+        "joint_fit_and_strength_unchecked",
+        "hardware_not_derived",
+        "no_drawing_or_purchase_output"
+      ],
+      "recipe": {
+        "units": "mm",
+        "views": [
+          "front",
+          "right",
+          "top",
+          "isometric"
+        ],
+        "motions": [],
+        "instances": [
+          {
+            "id": "left_side",
+            "placement": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "right_side",
+            "placement": {
+              "x": 682,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "bottom_panel",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "top_panel",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 782,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "middle_shelf",
+            "placement": {
+              "x": 18,
+              "y": 0,
+              "z": 391,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          }
+        ],
+        "clearances": [],
+        "assembly_id": "freestanding_shelf_600_800_300",
+        "definitions": [
+          {
+            "id": "side_panel",
+            "x_mm": 18,
+            "y_mm": 300,
+            "z_mm": 800,
+            "primitive": "box",
+            "material_ref": null
+          },
+          {
+            "id": "shelf_panel",
+            "x_mm": 664,
+            "y_mm": 300,
+            "z_mm": 18,
+            "primitive": "box",
+            "material_ref": null
+          }
+        ],
+        "contract_version": 1
+      },
+      "status": "ok",
+      "area_id": null,
+      "archived": false,
+      "rendered": false,
+      "reviewed": false,
+      "revision": 2,
+      "materials": [
+        {
+          "part_id": null,
+          "material_id": "4a5e99ce-059d-4ec3-b061-7b7da1a03829",
+          "definition_id": "side_panel",
+          "part_revision": null,
+          "material_revision": 1
+        },
+        {
+          "part_id": null,
+          "material_id": "4a5e99ce-059d-4ec3-b061-7b7da1a03829",
+          "definition_id": "shelf_panel",
+          "part_revision": null,
+          "material_revision": 1
+        }
+      ],
+      "projectId": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+      "parameters": {
+        "nodes": [
+          {
+            "id": "panel_thickness",
+            "role": "decision",
+            "unit": "mm",
+            "value": 18,
+            "reason": "Arbetsmaterial plywood 18 mm.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 18
+            }
+          },
+          {
+            "id": "total_depth",
+            "role": "decision",
+            "unit": "mm",
+            "value": 300,
+            "reason": "Yttermått djup enligt vald lösning.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 300
+            }
+          },
+          {
+            "id": "total_height",
+            "role": "decision",
+            "unit": "mm",
+            "value": 800,
+            "reason": "Yttermått höjd enligt vald lösning.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 800
+            }
+          },
+          {
+            "id": "total_width",
+            "role": "decision",
+            "unit": "mm",
+            "value": 700,
+            "reason": "Reviderat yttermått bredd enligt instruktion.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 700
+            }
+          },
+          {
+            "id": "two_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 36
+            }
+          },
+          {
+            "id": "shelf_width",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "two_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 664
+            }
+          },
+          {
+            "id": "zero_mm",
+            "role": "decision",
+            "unit": "mm",
+            "value": 0,
+            "reason": "Gemensam nollplacering i modellen.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 0
+            }
+          },
+          {
+            "id": "zero_deg",
+            "role": "decision",
+            "unit": "deg",
+            "value": 0,
+            "reason": "Ingen rotation används i konceptet.",
+            "sources": [],
+            "normalized": {
+              "unit": "deg",
+              "value": 0
+            }
+          },
+          {
+            "id": "right_side_x",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 682
+            }
+          },
+          {
+            "id": "top_panel_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 782
+            }
+          },
+          {
+            "id": "three_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "two_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 54
+            }
+          },
+          {
+            "id": "remaining_openings_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "three_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 746
+            }
+          },
+          {
+            "id": "two_scalar",
+            "role": "decision",
+            "unit": "scalar",
+            "value": 2,
+            "reason": "Halvering av fri höjd för lika öppningar ovan och under mellanhyllan.",
+            "sources": [],
+            "normalized": {
+              "unit": "scalar",
+              "value": 2
+            }
+          },
+          {
+            "id": "half_opening_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "remaining_openings_height",
+              "two_scalar"
+            ],
+            "rounding": "exact",
+            "operation": "divide_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 373
+            }
+          },
+          {
+            "id": "middle_shelf_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "half_opening_height"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 391
+            }
+          }
+        ],
+        "frames": [],
+        "version": 1,
+        "bindings": [
+          {
+            "node": "panel_thickness",
+            "path": "definitions/side_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/side_panel/y_mm"
+          },
+          {
+            "node": "total_height",
+            "path": "definitions/side_panel/z_mm"
+          },
+          {
+            "node": "shelf_width",
+            "path": "definitions/shelf_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/shelf_panel/y_mm"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "definitions/shelf_panel/z_mm"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rz"
+          },
+          {
+            "node": "right_side_x",
+            "path": "instances/right_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/bottom_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/top_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/top_panel/placement/y"
+          },
+          {
+            "node": "top_panel_z",
+            "path": "instances/top_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/middle_shelf/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/middle_shelf/placement/y"
+          },
+          {
+            "node": "middle_shelf_z",
+            "path": "instances/middle_shelf/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rz"
+          }
+        ],
+        "coverage": "complete",
+        "precision": "decimal_6",
+        "project_id": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+        "coordinate_system": {
+          "id": "freestanding_shelf_600_800_300",
+          "views": {
+            "top": {
+              "up": [
+                0,
+                1,
+                0
+              ],
+              "toward_camera": [
+                0,
+                0,
+                1
+              ]
+            },
+            "front": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                0,
+                -1,
+                0
+              ]
+            },
+            "right": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                0,
+                0
+              ]
+            },
+            "isometric": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                -1,
+                1
+              ]
+            }
+          },
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "version": 1,
+          "rotation": "build123d_0.13_intrinsic_xyz",
+          "angle_unit": "deg",
+          "cut_parent": "definition",
+          "length_unit": "mm",
+          "positive_axes": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "frame_identity": "artifact_revision_and_recipe_path",
+          "instance_parent": "assembly",
+          "definition_origins": {
+            "box": "minimum_corner",
+            "tube": "xy_center_z_min",
+            "cylinder": "xy_center_z_min"
+          }
+        }
+      },
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "description": "Fristående öppen hylla som syntetiskt konstruktionskoncept. Yttermått 700 mm bred, 800 mm hög och 300 mm djup. Två hela gavlar i full höjd och full djup. Botten, topp och ett fast hyllplan ligger mellan gavlarna. Material valt som 18 mm plywood. Förbandstyp vald som skruvade stumförband mellan varje liggande plan och respektive gavel. Hyllplanet är placerat mitt emellan topp och botten med lika fria öppningar ovan och under.",
+      "source_state": "current",
+      "open_questions": [
+        "Exakt produktval och plywoodkvalitet är inte verifierade.",
+        "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade.",
+        "Belastning, nedböjning och lokal hållfasthet är inte verifierade.",
+        "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+      ],
+      "target_revision": 2,
+      "current_revision": 2,
+      "construction_status": "draft"
+    },
+    "result": {
+      "status": "checked",
+      "checker_version": "orthogonal-butt-v1",
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "revision": 2,
+      "concept_ready": true,
+      "fabrication_ready": false,
+      "rendered": false,
+      "reviewed": false,
+      "issues": [],
+      "issue_count": 0,
+      "fabrication_gaps": [
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "side_panel",
+            "4a5e99ce-059d-4ec3-b061-7b7da1a03829"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "shelf_panel",
+            "4a5e99ce-059d-4ec3-b061-7b7da1a03829"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_left",
+            "left_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_right",
+            "right_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_left",
+            "left_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_right",
+            "right_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_left",
+            "left_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_right",
+            "right_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Exakt produktval och plywoodkvalitet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Belastning, nedböjning och lokal hållfasthet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+        }
+      ],
+      "fabrication_gap_count": 12,
+      "references": [
+        {
+          "id": "timber.fasteners",
+          "title": "Förband och infästningar",
+          "url": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/dimensionering-av-trakonstruktioner2-2019.pdf",
+          "version": "2026-09-30.1",
+          "reviewed_at": "2026-09-25",
+          "limitations": [
+            "Den äldre källan ger begreppslig vägledning, inte aktuellt produktgodkännande.",
+            "Paketet dimensionerar inte förbandet eller bevisar dess bärförmåga."
+          ]
+        },
+        {
+          "id": "timber.adhesives",
+          "title": "Limförband i trä och skivmaterial",
+          "url": "https://research.fs.usda.gov/treesearch/62250",
+          "version": "2026-10-02.1",
+          "reviewed_at": "2026-10-02",
+          "limitations": [
+            "Inga numeriska dimensioneringsregler eller produktgodkännanden ingår i detta paket.",
+            "Ett plant stumförband är en konceptmetod; paketet godkänner inte fogens bärförmåga."
+          ]
+        }
+      ],
+      "limits": [
+        "Declared requirements still need comparison with the reported bounds and part count.",
+        "No strength, stability, tip resistance, raw-stock nesting, fastener layout or manufacturer-product approval.",
+        "A check result is revision-bound evidence, not a saved drawing or permission to manufacture."
+      ],
+      "part_count": 5,
+      "joint_count": 6,
+      "joint_checks": [
+        {
+          "id": "j_bottom_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        }
+      ],
+      "bounds_mm": {
+        "min": [
+          0,
+          0,
+          0
+        ],
+        "max": [
+          700,
+          300,
+          800
+        ],
+        "size": [
+          700,
+          300,
+          800
+        ]
+      }
+    }
+  },
+  "thicknessChange": {
+    "draft": {
+      "title": "Konstruktionskoncept – fristående hylla 700×800×300 i 21 mm plywood",
+      "joints": [
+        {
+          "id": "j_bottom_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Botten skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "bottom_panel"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Topp skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "top_panel"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "first": {
+            "face": "x_max",
+            "instance_id": "left_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot vänster gavels insida.",
+          "second": {
+            "face": "x_min",
+            "instance_id": "middle_shelf"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "first": {
+            "face": "x_min",
+            "instance_id": "right_side"
+          },
+          "method": "screwed_butt",
+          "reason": "Mellanhyllan skruvas stumt mot höger gavels insida.",
+          "second": {
+            "face": "x_max",
+            "instance_id": "middle_shelf"
+          }
+        }
+      ],
+      "limits": [
+        "joint_fit_and_strength_unchecked",
+        "hardware_not_derived",
+        "no_drawing_or_purchase_output"
+      ],
+      "recipe": {
+        "units": "mm",
+        "views": [
+          "front",
+          "right",
+          "top",
+          "isometric"
+        ],
+        "motions": [],
+        "instances": [
+          {
+            "id": "left_side",
+            "placement": {
+              "x": 0,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "right_side",
+            "placement": {
+              "x": 679,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "side_panel"
+          },
+          {
+            "id": "bottom_panel",
+            "placement": {
+              "x": 21,
+              "y": 0,
+              "z": 0,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "top_panel",
+            "placement": {
+              "x": 21,
+              "y": 0,
+              "z": 779,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          },
+          {
+            "id": "middle_shelf",
+            "placement": {
+              "x": 21,
+              "y": 0,
+              "z": 389.5,
+              "rx": 0,
+              "ry": 0,
+              "rz": 0
+            },
+            "definition_id": "shelf_panel"
+          }
+        ],
+        "clearances": [],
+        "assembly_id": "freestanding_shelf_600_800_300",
+        "definitions": [
+          {
+            "id": "side_panel",
+            "x_mm": 21,
+            "y_mm": 300,
+            "z_mm": 800,
+            "primitive": "box",
+            "material_ref": null
+          },
+          {
+            "id": "shelf_panel",
+            "x_mm": 658,
+            "y_mm": 300,
+            "z_mm": 21,
+            "primitive": "box",
+            "material_ref": null
+          }
+        ],
+        "contract_version": 1
+      },
+      "status": "ok",
+      "area_id": null,
+      "archived": false,
+      "rendered": false,
+      "reviewed": false,
+      "revision": 3,
+      "materials": [
+        {
+          "part_id": null,
+          "material_id": "766d4e1a-db42-4a0e-af25-da2739783fc4",
+          "definition_id": "side_panel",
+          "part_revision": null,
+          "material_revision": 1
+        },
+        {
+          "part_id": null,
+          "material_id": "766d4e1a-db42-4a0e-af25-da2739783fc4",
+          "definition_id": "shelf_panel",
+          "part_revision": null,
+          "material_revision": 1
+        }
+      ],
+      "projectId": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+      "parameters": {
+        "nodes": [
+          {
+            "id": "panel_thickness",
+            "role": "decision",
+            "unit": "mm",
+            "value": 21,
+            "reason": "Arbetsmaterial plywood 21 mm.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 21
+            }
+          },
+          {
+            "id": "total_depth",
+            "role": "decision",
+            "unit": "mm",
+            "value": 300,
+            "reason": "Yttermått djup enligt vald lösning.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 300
+            }
+          },
+          {
+            "id": "total_height",
+            "role": "decision",
+            "unit": "mm",
+            "value": 800,
+            "reason": "Yttermått höjd enligt vald lösning.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 800
+            }
+          },
+          {
+            "id": "total_width",
+            "role": "decision",
+            "unit": "mm",
+            "value": 700,
+            "reason": "Yttermått bredd enligt vald lösning.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 700
+            }
+          },
+          {
+            "id": "two_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 42
+            }
+          },
+          {
+            "id": "shelf_width",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "two_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 658
+            }
+          },
+          {
+            "id": "zero_mm",
+            "role": "decision",
+            "unit": "mm",
+            "value": 0,
+            "reason": "Gemensam nollplacering i modellen.",
+            "sources": [],
+            "normalized": {
+              "unit": "mm",
+              "value": 0
+            }
+          },
+          {
+            "id": "zero_deg",
+            "role": "decision",
+            "unit": "deg",
+            "value": 0,
+            "reason": "Ingen rotation används i konceptet.",
+            "sources": [],
+            "normalized": {
+              "unit": "deg",
+              "value": 0
+            }
+          },
+          {
+            "id": "right_side_x",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_width",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 679
+            }
+          },
+          {
+            "id": "top_panel_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 779
+            }
+          },
+          {
+            "id": "three_thickness",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "two_thickness",
+              "panel_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 63
+            }
+          },
+          {
+            "id": "remaining_openings_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "total_height",
+              "three_thickness"
+            ],
+            "rounding": "exact",
+            "operation": "subtract_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 737
+            }
+          },
+          {
+            "id": "two_scalar",
+            "role": "decision",
+            "unit": "scalar",
+            "value": 2,
+            "reason": "Halvering av fri höjd för lika öppningar ovan och under mellanhyllan.",
+            "sources": [],
+            "normalized": {
+              "unit": "scalar",
+              "value": 2
+            }
+          },
+          {
+            "id": "half_opening_height",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "remaining_openings_height",
+              "two_scalar"
+            ],
+            "rounding": "exact",
+            "operation": "divide_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 368.5
+            }
+          },
+          {
+            "id": "middle_shelf_z",
+            "role": "derived",
+            "sources": [],
+            "operands": [
+              "panel_thickness",
+              "half_opening_height"
+            ],
+            "rounding": "exact",
+            "operation": "add_v1",
+            "normalized": {
+              "unit": "mm",
+              "value": 389.5
+            }
+          }
+        ],
+        "frames": [],
+        "version": 1,
+        "bindings": [
+          {
+            "node": "panel_thickness",
+            "path": "definitions/side_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/side_panel/y_mm"
+          },
+          {
+            "node": "total_height",
+            "path": "definitions/side_panel/z_mm"
+          },
+          {
+            "node": "shelf_width",
+            "path": "definitions/shelf_panel/x_mm"
+          },
+          {
+            "node": "total_depth",
+            "path": "definitions/shelf_panel/y_mm"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "definitions/shelf_panel/z_mm"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/left_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/left_side/placement/rz"
+          },
+          {
+            "node": "right_side_x",
+            "path": "instances/right_side/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/right_side/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/right_side/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/bottom_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/y"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/bottom_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/bottom_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/top_panel/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/top_panel/placement/y"
+          },
+          {
+            "node": "top_panel_z",
+            "path": "instances/top_panel/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/top_panel/placement/rz"
+          },
+          {
+            "node": "panel_thickness",
+            "path": "instances/middle_shelf/placement/x"
+          },
+          {
+            "node": "zero_mm",
+            "path": "instances/middle_shelf/placement/y"
+          },
+          {
+            "node": "middle_shelf_z",
+            "path": "instances/middle_shelf/placement/z"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rx"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/ry"
+          },
+          {
+            "node": "zero_deg",
+            "path": "instances/middle_shelf/placement/rz"
+          }
+        ],
+        "coverage": "complete",
+        "precision": "decimal_6",
+        "project_id": "p_43702f4cbdfb40f0907f5cd0c12a5143",
+        "coordinate_system": {
+          "id": "freestanding_shelf_600_800_300",
+          "views": {
+            "top": {
+              "up": [
+                0,
+                1,
+                0
+              ],
+              "toward_camera": [
+                0,
+                0,
+                1
+              ]
+            },
+            "front": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                0,
+                -1,
+                0
+              ]
+            },
+            "right": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                0,
+                0
+              ]
+            },
+            "isometric": {
+              "up": [
+                0,
+                0,
+                1
+              ],
+              "toward_camera": [
+                1,
+                -1,
+                1
+              ]
+            }
+          },
+          "origin": [
+            0,
+            0,
+            0
+          ],
+          "version": 1,
+          "rotation": "build123d_0.13_intrinsic_xyz",
+          "angle_unit": "deg",
+          "cut_parent": "definition",
+          "length_unit": "mm",
+          "positive_axes": [
+            [
+              1,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "frame_identity": "artifact_revision_and_recipe_path",
+          "instance_parent": "assembly",
+          "definition_origins": {
+            "box": "minimum_corner",
+            "tube": "xy_center_z_min",
+            "cylinder": "xy_center_z_min"
+          }
+        }
+      },
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "description": "Fristående öppen hylla som syntetiskt konstruktionskoncept. Yttermått 700 mm bred, 800 mm hög och 300 mm djup. Två hela gavlar i full höjd och full djup. Botten, topp och ett fast hyllplan ligger mellan gavlarna. Material uppdaterat till 21 mm plywood. Förbandstyp vald som skruvade stumförband mellan varje liggande plan och respektive gavel. Hyllplanet är placerat mitt emellan topp och botten med lika fria öppningar ovan och under.",
+      "source_state": "current",
+      "open_questions": [
+        "Exakt produktval och plywoodkvalitet är inte verifierade.",
+        "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade.",
+        "Belastning, nedböjning och lokal hållfasthet är inte verifierade.",
+        "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+      ],
+      "target_revision": 3,
+      "current_revision": 3,
+      "construction_status": "draft"
+    },
+    "result": {
+      "status": "checked",
+      "checker_version": "orthogonal-butt-v1",
+      "artifact_id": "01349f1c-100b-4ac2-a5b9-de4c839b51a4",
+      "revision": 3,
+      "concept_ready": true,
+      "fabrication_ready": false,
+      "rendered": false,
+      "reviewed": false,
+      "issues": [],
+      "issue_count": 0,
+      "fabrication_gaps": [
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "side_panel",
+            "766d4e1a-db42-4a0e-af25-da2739783fc4"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "product_specification_unverified",
+          "ids": [
+            "shelf_panel",
+            "766d4e1a-db42-4a0e-af25-da2739783fc4"
+          ],
+          "message": "Catalog dimensions are declared inputs, not verified manufacturer instructions, stock availability or product suitability."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_left",
+            "left_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_bottom_right",
+            "right_side",
+            "bottom_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_left",
+            "left_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_top_right",
+            "right_side",
+            "top_panel"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_left",
+            "left_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "joint_product_and_capacity_unverified",
+          "ids": [
+            "j_mid_right",
+            "right_side",
+            "middle_shelf"
+          ],
+          "message": "Select documented fasteners and verify quantity, diameter, length, penetration, spacing, edge/end distances, access, environment and load."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Exakt produktval och plywoodkvalitet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Skruvtyp, skruvdimension, kantavstånd och skruvbild är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Belastning, nedböjning och lokal hållfasthet är inte verifierade."
+        },
+        {
+          "code": "open_design_question",
+          "ids": [],
+          "message": "Tippsäkring eller annan förankring är inte verifierad trots att hyllan är fristående."
+        }
+      ],
+      "fabrication_gap_count": 12,
+      "references": [
+        {
+          "id": "timber.fasteners",
+          "title": "Förband och infästningar",
+          "url": "https://www.svenskttra.se/siteassets/5-publikationer/pdfer/dimensionering-av-trakonstruktioner2-2019.pdf",
+          "version": "2026-09-30.1",
+          "reviewed_at": "2026-09-25",
+          "limitations": [
+            "Den äldre källan ger begreppslig vägledning, inte aktuellt produktgodkännande.",
+            "Paketet dimensionerar inte förbandet eller bevisar dess bärförmåga."
+          ]
+        },
+        {
+          "id": "timber.adhesives",
+          "title": "Limförband i trä och skivmaterial",
+          "url": "https://research.fs.usda.gov/treesearch/62250",
+          "version": "2026-10-02.1",
+          "reviewed_at": "2026-10-02",
+          "limitations": [
+            "Inga numeriska dimensioneringsregler eller produktgodkännanden ingår i detta paket.",
+            "Ett plant stumförband är en konceptmetod; paketet godkänner inte fogens bärförmåga."
+          ]
+        }
+      ],
+      "limits": [
+        "Declared requirements still need comparison with the reported bounds and part count.",
+        "No strength, stability, tip resistance, raw-stock nesting, fastener layout or manufacturer-product approval.",
+        "A check result is revision-bound evidence, not a saved drawing or permission to manufacture."
+      ],
+      "part_count": 5,
+      "joint_count": 6,
+      "joint_checks": [
+        {
+          "id": "j_bottom_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_bottom_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_top_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_left",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        },
+        {
+          "id": "j_mid_right",
+          "fit": true,
+          "method": "screwed_butt",
+          "reference": {
+            "id": "timber.fasteners",
+            "version": "2026-09-30.1",
+            "content_sha256": "d3d60692c0a5a4d8e493443fe977ef58795e4254978cf535a8ba379a0e4b1d5f"
+          }
+        }
+      ],
+      "bounds_mm": {
+        "min": [
+          0,
+          0,
+          0
+        ],
+        "max": [
+          700,
+          300,
+          800
+        ],
+        "size": [
+          700,
+          300,
+          800
+        ]
+      }
+    }
+  },
+  "passed": true
+}
