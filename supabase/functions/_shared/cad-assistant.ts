@@ -288,7 +288,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     await persist(failure.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
     return failure
    }
-   const reviewCurrentCandidate=async()=>{
+   const reviewCurrentCandidate=async():Promise<Record<string,any>>=>{
      if(!candidate)throw new Error('missing_candidate')
      if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
      if(!reviewPending){partial=true;candidate=null;return {status:'incomplete',stage:'review',reason:'no_progress',saved:false}}
@@ -403,7 +403,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     const parameters=inheritCadParameters(opts.projectId,construction.recipe,construction.parameters,recipe)
     const measurements=parameterSourcePins(parameters).project
     const lineage=buildCadLineage(opts.projectId,recipe,[],new Map(),handoff.coordinates)
-    const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:selected.revision,measurements,
+    const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
      source_artifact_id:null,source_revision:null,part_ids:[],area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:drawingArtifactId,expected_revision:expected}
     const pin={version:1,project_id:opts.projectId,artifact_id:construction.artifact_id,revision:construction.revision,check:ready.checked}
     researchEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
