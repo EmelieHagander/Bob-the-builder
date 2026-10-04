@@ -434,6 +434,8 @@ try {
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true
     await page.goto(base)
+    // Preview bytes are loaded only when this region enters the viewport.
+    await drawings.scrollIntoViewIfNeeded()
     await drawings.getByText('Preview unavailable. Open the saved drawing.',{exact:true}).first().waitFor()
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
