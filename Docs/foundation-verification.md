@@ -1269,3 +1269,12 @@ The #187 → #188 → #189 → #191 dependency chain was merged after every curr
 - [Pages 37155427529](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37155427529) published the source commit successfully. Later documentation-only merges do not change the deployed runtime.
 
 Review used the existing Archie prompt manually, current-head CI evidence, source-diff comparison and live readback; no independent subagent review is claimed. `BOB_TEST_MEMBER_ID` and `BOB_TEST_MEMBER_ACCESS_TOKEN` remain absent in the checked runner environment. No authenticated construction/model comparison was submitted. Hosted callers still use full inline manuals; the optional candidate is not activated by this telemetry release. [State](bob-delivery-flow.md#state) owns the remaining member/model acceptance and next experiment.
+
+
+## K2 manual runner — 2026-10-04
+
+**Prepared operator workflow; real-model acceptance remains unrun.** `.github/workflows/live-construction.yml` wraps the existing named-member K2 probe with a manual-only main guard, immutable checkout, read-only repository permission and `github-pages` environment secrets. It verifies local session configuration and at least 40 minutes of remaining token lifetime before the existing probe verifies the actual Auth identity and creates any disposable data. It preserves the probe's requests, runtime model/manual configuration and no-automatic-retry behavior.
+
+The workflow uploads only the existing synthetic construction report for seven days, including failed-run evidence when present. It retains the printed fixture for inspection and scoped cleanup. No private session/configuration files are uploaded; member secrets are provided only to the probe step after dependency installation. [AI owner](../supabase/README.md#live-k2-acceptance-runner) owns setup and operation; [State](bob-delivery-flow.md#state) owns next action.
+
+Local validation covers YAML/manual-only/main/checkout controls, the actual inline preflight with positive and missing/mismatched/expired/privileged synthetic credential cases, and existing named-member config/Auth-denial tests. These are offline guards, not successful Auth/model calls. The local runner still lacks `BOB_TEST_MEMBER_ID` and `BOB_TEST_MEMBER_ACCESS_TOKEN`; GitHub environment secret values were neither read nor changed. No live construction workflow was dispatched, no model turn submitted and no test project created in this preparation. The manual candidate still needs a real comparison runner and evidence before activation.

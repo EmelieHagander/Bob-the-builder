@@ -1,0 +1,64 @@
+name: Live K2 construction acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Run the three real-model turns in a new disposable test project
+        required: true
+        type: choice
+        default: disposable-fixtures-only
+        options:
+          - disposable-fixtures-only
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-k2-construction
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify the existing member session and run K2 acceptance
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          BOB_TEST_MEMBER_ID: ${{ secrets.BOB_TEST_MEMBER_ID }}
+          BOB_TEST_MEMBER_ACCESS_TOKEN: ${{ secrets.BOB_TEST_MEMBER_ACCESS_TOKEN }}
+          BOB_K2_LIVE_CONFIRM: ${{ inputs.scope }}
+          BOB_K2_REPORT: test-results/live-construction.json
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { planTestConfig } from './scripts/check-live-plan-assistant.mjs'
+          const { token, memberId } = planTestConfig({ ...process.env, BOB_PLAN_LIVE_CONFIRM: process.env.BOB_K2_LIVE_CONFIRM })
+          const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString())
+          assert(claims.sub === memberId, 'Use the access token of the configured test member')
+          assert(Number.isFinite(claims.exp) && claims.exp * 1000 > Date.now() + 40 * 60000,
+            'Supply a fresh existing member session with at least 40 minutes remaining; never put it in logs or chat')
+          console.log('Member configuration is present and has enough session time. Auth identity is verified by the existing live probe before fixture writes.')
+          NODE
+          node --import tsx scripts/check-live-construction.ts
+      - name: Retain only the synthetic construction report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-k2-construction-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/live-construction.json
+          if-no-files-found: ignore
+          retention-days: 7
