@@ -488,13 +488,13 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.screenshot({ path: `test-results/material-plan-${width}.png`, fullPage: true })
 
   await page.getByRole('link', { name: 'Account', exact: true }).click()
-  await page.locator('.card').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Open project Porch B', exact: true }).click()
   await page.goto(base + '#/material-plan')
   await page.getByText('Choose a target for the Project before recording material requirements.', { exact: true }).waitFor()
   assert.equal(await page.getByRole('article', { name: 'Spare matching window', exact: true }).count(), 0)
   assert.equal(await page.getByRole('article', { name: 'Windows 1180×1700', exact: true }).count(), 0)
   await page.getByRole('link', { name: 'Account', exact: true }).click()
-  await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Open project Porch A', exact: true }).click()
 
   assert.equal(fixture.materials.size, 2)
   console.log(`Material plan Project/Area target scope + manual/deterministic quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
