@@ -32,7 +32,9 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None):
     corners=[point(c) for c in itertools.product(*zip(bounds['min'],bounds['max']))]
     x0,x1=min(p[0] for p in corners),max(p[0] for p in corners)
     y0,y1=min(p[1] for p in corners),max(p[1] for p in corners)
-    text(30,32,f'{req["assembly_id"]} / {view}',20)
+    # An immutable identity may contain obsolete dimensions after a revision;
+    # it is not a presentation title. Keep it in the manifest, not the heading.
+    text(30,32,f'Assembly / {view}',20)
     text(30,56,'Concept | Dimensions in mm | Not to scale | Product, fixing and strength checks remain open',13)
     view_axes={'front':(0,2),'right':(1,2),'top':(0,1)}
     dimensions=[]

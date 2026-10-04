@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 
 import modal
 
@@ -68,6 +69,10 @@ def main():
             raise RuntimeError("Invalid CAD file format")
         if key != 'step' and (b'revision 3' not in raw or b'Dimensions in mm' not in raw or b'P1' not in raw):
             raise RuntimeError('Saved SVG lacks source revision, dimensions or part labels')
+        if key != 'step':
+            texts=[e.text or '' for e in ET.fromstring(raw).iter() if e.tag.endswith('}text')]
+            if 'Assembly / '+key not in texts or any(recipe['assembly_id'] in t for t in texts):
+                raise RuntimeError('Visible CAD heading uses a stable identity instead of a neutral label')
     if set(packet.get("previews",{})) != set(recipe["views"]):
         raise RuntimeError("Missing CAD PNG previews")
     for view in recipe["views"]:
