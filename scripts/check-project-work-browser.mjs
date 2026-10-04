@@ -95,7 +95,7 @@ try{
   const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message))
   await page.goto(base+'#/signin');await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
   await page.getByRole('heading',{name:'Work fixture',exact:true}).waitFor()
-  await page.getByRole('button',{name:'Open',exact:true}).click()
+  await page.getByRole('button',{name:'Open project Build together',exact:true}).click()
   const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('.work-step').filter({hasText:'Complete drawers'})
   await drawers.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
   const projectDescription=page.locator('.project-description')

@@ -78,9 +78,9 @@ export function AreaDetail() {
         <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{area.name}</span>
       </div>
 
-      <div className="page-head" style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="page-head" style={{ marginTop: 'var(--section-gap)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 'var(--r-lg)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name={area.icon} size={30} color="var(--brand)" />
           </div>
           <div>
@@ -101,14 +101,14 @@ export function AreaDetail() {
       </div>
 
       {error && (
-        <div style={{ marginTop: 12, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>
+        <div style={{ marginTop: 'var(--section-gap)', background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#8a3b2b' }}>
           {error}
         </div>
       )}
 
       <AreaArchiveNotice area={area} onChanged={reload} />
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginTop: 18, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 4, marginTop: 'var(--section-gap)', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
         {tabs.map((t) => {
           const active = tab === t.key
           return (
@@ -132,17 +132,17 @@ export function AreaDetail() {
         })}
       </div>
 
-      <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 22, marginTop: 18 }}>
+      <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         <div>
           {tab === 'tasks' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               {tasks.length === 0 && <EmptyState icon="list-plus" title="No tasks yet" hint="Add the first task so the crew knows where to start." />}
               {tasks.map((t) => {
                 const chk = statusCheck(t.status)
                 const [got, total] = t.materials.split('/').map((s) => s.trim())
                 const matReady = got === total
                 return (
-                  <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
+                  <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: 'var(--row-padding)' }}>
                     <button
                       className="no-print"
                       title={area.archivedAt ? 'Restore this Area before reopening work' : `Mark as ${NEXT_TASK_STATUS[t.status]}`}
@@ -156,7 +156,7 @@ export function AreaDetail() {
                       <Link to={'/tasks/' + t.id} className="task-title-link">
                         {t.name}
                       </Link>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 6, flexWrap: 'wrap' }}>
                         <SkillPill level={t.skill} />
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--ink-soft)' }}><Icon name="clock" size={13} />{t.hours}</span>
                         {/* authored "x / y" readiness from the seed content — hide when there's nothing behind it */}
@@ -165,7 +165,7 @@ export function AreaDetail() {
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="task-right">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }} className="task-right">
                       <button
                         title="Choose who's on this task"
                         onClick={() => setModal({ kind: 'assign', task: t })}
@@ -188,10 +188,10 @@ export function AreaDetail() {
           )}
 
           {tab === 'materials' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               {materials.length === 0 && <EmptyState icon="package" title="No materials yet" hint="Add what this area needs and it flows into the shopping list." />}
               {materials.map((m) => (
-                <div key={m.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
+                <div key={m.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: 'var(--row-padding)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <button
                       title="Edit material"
@@ -219,21 +219,21 @@ export function AreaDetail() {
         </div>
 
         {/* Side column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Area at a glance</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
+          <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: 'var(--panel-padding)' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 'var(--section-gap)' }}>Area at a glance</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               <ProgressBar label="Assigned" value={area.assignedPct} />
               <ProgressBar label="Materials ready" value={area.materialsPct} />
               <ProgressBar label="Done" value={area.donePct} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 14, paddingTop: 13, borderTop: '1px solid var(--line)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)', paddingTop: 'var(--section-gap)', borderTop: '1px solid var(--line)' }}>
               <AvatarStack people={resolve(area.crewIds)} />
               <span style={{ fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{area.crewIds.length} in the crew</span>
             </div>
           </div>
 
-          {area.referenceImages.length > 0 && <div className="card" style={{ padding: 16 }}>
+          {area.referenceImages.length > 0 && <div className="card" style={{ padding: 'var(--panel-padding)' }}>
             <h3 style={{ fontSize: 14, marginTop: 0 }}>Reference notes</h3>
             <p className="foundation-hint">Descriptions saved during earlier project setup.</p>
             <ul>{area.referenceImages.map((item, index) => <li key={index}>{item.label}</li>)}</ul>

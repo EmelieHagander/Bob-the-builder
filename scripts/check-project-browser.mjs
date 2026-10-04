@@ -171,7 +171,7 @@ try {
     const switchProject = async id => {
       await page.getByRole('button', { name: 'Close Ask bob' }).click()
       await page.getByRole('link', { name: 'Account', exact: true }).click()
-      await page.locator('.card').filter({ hasText: `Porch ${id}` }).getByRole('button', { name: 'Open', exact: true }).click()
+      await page.locator('.account-project-row').filter({ hasText: `Porch ${id}` }).getByRole('button', { name: `Open project Porch ${id}`, exact: true }).click()
       return openBob(id)
     }
     await page.goto(`${base}#/signin`)
@@ -200,11 +200,11 @@ try {
     await page.screenshot({ path: `test-results/new-project-${viewport.width}.png`, fullPage: true })
     await createButton.click()
     await createModal.waitFor({ state: 'hidden' })
-    await page.locator('.card').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open', exact: true }).waitFor()
+    await page.locator('.account-project-row').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open project Name only', exact: true }).waitFor()
     assert.equal(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating from account does not secretly select a project')
     await settleVisual(page)
     await page.screenshot({ path: `test-results/projectless-account-${viewport.width}.png`, fullPage: true })
-    await page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).click()
+    await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
     let drawer = await openBob('A')
     const editor = drawer.getByRole('textbox', { name: 'Question for bob' })
     assert.equal(await editor.evaluate(node => node.tagName), 'TEXTAREA')

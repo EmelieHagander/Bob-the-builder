@@ -102,19 +102,19 @@ export function AccountCalendar() {
       )}
 
       {!loading && scheduled.length === 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 'var(--section-gap)' }}>
           <EmptyState icon="calendar-plus" title="Nothing scheduled yet" hint="Give a project below a build window and it shows up here." />
         </div>
       )}
 
       {!loading && unscheduled.length > 0 && (
-        <section style={{ marginTop: 26 }}>
+        <section style={{ marginTop: 'var(--section-gap)' }}>
           <SectionTitle icon="calendar-slash" color="var(--ink-faint)">
             Not on the calendar yet
           </SectionTitle>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
             {unscheduled.map((p) => (
-              <div key={p.id} className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div key={p.id} className="card" style={{ padding: 'var(--panel-padding)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14.5, fontWeight: 700 }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{[p.type, p.location].filter(Boolean).join(' · ')}</div>

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Area } from '../data/types'
-import { EmptyState, Icon, Loading, ProgressBar, Ring, useAsync, useProjectVersion } from '../components/ui'
+import { EmptyState, Icon, List, ListItem, Loading, ProgressBar, SummaryRow, useAsync, useProjectVersion } from '../components/ui'
 import { AreaModal } from '../components/editors'
 import { PhasePill, PhaseTransitionDialog } from '../components/PhaseUI'
 import { areaNextAction, areaPhaseSummary } from '../lib/projectPhase'
@@ -42,57 +42,34 @@ export function Areas() {
       {error ? <p role="alert">Areas could not be loaded. <button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></p> : !areas ? (
         <Loading />
       ) : areas.length === 0 ? (
-        <div style={{ marginTop: 22 }}>
+        <div style={{ marginTop: 'var(--section-gap)' }}>
           <EmptyState icon="squares-four" title={archived ? 'No archived Areas' : 'No active Areas'} hint={archived ? 'Archived Areas keep their saved work and can be restored.' : 'Add Areas when the project needs larger groups of related steps. Smaller projects can keep steps directly in the Plan.'} />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginTop: 22 }}>
+        <List aria-label={archived ? 'Archived Areas' : 'Active Areas'}>
           {areas.map((area) => {
-            const overall = Math.round((area.assignedPct + area.materialsPct + area.donePct) / 3)
             const next = areaNextAction(area)
             return (
-              <article key={area.id} className="card" style={{ padding: 17 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 13 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
-                    <Icon name={area.icon} size={25} color="var(--brand)" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Link to={`/areas/${area.slug}`} style={{ fontSize: 16, fontWeight: 800, color: 'var(--ink)' }}>{area.name}</Link>
-                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>{byId.get(area.leadId ?? '')?.name.split(' ')[0] ?? 'Unassigned'} leads</div>
-                    <div style={{ marginTop: 7 }}>{archived ? <span className="badge">Archived</span> : <PhasePill phase={area.phase} />}</div>
-                  </div>
-                  {area.phase === 'build' && <Ring value={overall} size={50} />}
-                </div>
-
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '12px 0 0', lineHeight: 1.4 }}>{area.description}</p>
+              <ListItem key={area.id}>
+                <SummaryRow leading={<Icon name={area.icon} size={20} color="var(--brand)" />} trailing={!archived && <button className="ui-icon-button no-print" aria-label={area.phase ? 'Review phase' : 'Set phase'} title={area.phase ? 'Review phase' : 'Set phase'} onClick={() => setPhaseArea(area)}><Icon name="flag" size={16} /></button>}>
+                  <div className="ui-row-title"><Link to={`/areas/${area.slug}`} aria-label={`Open Area ${area.name}`}>{area.name}</Link>{archived ? <span className="pill">Archived</span> : <PhasePill phase={area.phase} />}</div>
+                  <div className="ui-row-meta">{byId.get(area.leadId ?? '')?.name.split(' ')[0] ?? 'Unassigned'} leads · {area.taskSummary}</div>
+                </SummaryRow>
 
                 {archived ? <p className="foundation-hint">Saved work and history are kept. Open this Area to view its records or restore it.</p> : area.phase === 'build' ? (
-                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div className="area-progress-summary">
                     <ProgressBar label="Assigned" value={area.assignedPct} />
                     <ProgressBar label="Materials ready" value={area.materialsPct} />
                     <ProgressBar label="Done" value={area.donePct} />
                   </div>
-                ) : (
-                  <div style={{ marginTop: 12, padding: '10px 11px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 750 }}>
-                      <Icon name={next.icon} size={15} color="var(--accent-2)" /> {next.title}
-                    </div>
-                    <p className="foundation-hint" style={{ margin: '4px 0 0' }}>{next.text}</p>
-                  </div>
-                )}
+                ) : null}
 
-                <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--ink-faint)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="list-checks" size={14} /> {area.taskSummary}
-                </div>
-
-                <div className="foundation-actions no-print" style={{ marginTop: 13 }}>
-                  <Link to={archived ? `/areas/${area.slug}` : next.to} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>{archived || !area.phase ? 'Open Area' : next.title}</Link>
-                  {!archived && <button className="btn" onClick={() => setPhaseArea(area)}>{area.phase ? 'Review phase' : 'Set phase'}</button>}
-                </div>
-              </article>
+                {!archived && area.phase && <div className="ui-row-actions no-print"><Link to={next.to} className="btn">{next.title}</Link></div>}
+                {(area.description || !archived) && <details className="ui-row-details"><summary>Details</summary>{!archived && <p className="ui-row-meta">{next.text}</p>}{area.description && <p className="instruction-text">{area.description}</p>}</details>}
+              </ListItem>
             )
           })}
-        </div>
+        </List>
       )}
 
       {adding && (

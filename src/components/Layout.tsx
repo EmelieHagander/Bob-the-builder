@@ -59,7 +59,7 @@ function Sidebar({ project }: { project: Project | null }) {
         flex: '0 0 var(--sidebar-w)',
         background: 'var(--brand)',
         color: 'var(--brand-ink)',
-        padding: '18px 14px',
+        padding: 'var(--row-padding)',
         display: 'flex',
         flexDirection: 'column',
         gap: 3,
@@ -68,12 +68,12 @@ function Sidebar({ project }: { project: Project | null }) {
         height: '100vh',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 8px 16px' }}>
-        <div style={{ width: 40, height: 40, borderRadius: 13, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 0 rgba(0,0,0,.14)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: '6px 8px 16px' }}>
+        <div style={{ width: 40, height: 40, borderRadius: 'var(--r)', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 0 rgba(0,0,0,.14)' }}>
           <Icon name="tree-evergreen" weight="fill" size={23} color="var(--accent-ink)" />
         </div>
         <div style={{ lineHeight: 1 }}>
-          <div className="font-display" style={{ fontWeight: 800, fontSize: 24, color: 'var(--brand-ink)' }}>bob</div>
+          <div className="font-display" style={{ fontWeight: 800, fontSize: 'var(--text-title)', color: 'var(--brand-ink)' }}>bob</div>
           <div style={{ fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: '#ffffff80', marginTop: 3 }}>build crew</div>
         </div>
       </div>
@@ -84,15 +84,15 @@ function Sidebar({ project }: { project: Project | null }) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: 'var(--layout-gap)',
           width: '100%',
           textAlign: 'left',
           background: '#ffffff14',
           border: '1px solid #ffffff24',
-          borderRadius: 13,
+          borderRadius: 'var(--r)',
           padding: '9px 11px',
           color: 'var(--brand-ink)',
-          marginBottom: 12,
+          marginBottom: 'var(--section-gap)',
         }}
       >
         <div style={{ width: 26, height: 26, borderRadius: 8, background: '#ffffff26', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -113,9 +113,9 @@ function Sidebar({ project }: { project: Project | null }) {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 11,
+                  gap: 'var(--layout-gap)',
                   padding: '9px 11px',
-                  borderRadius: 11,
+                  borderRadius: 'var(--r)',
                   fontSize: 13.5,
                   fontWeight: isActive ? 700 : 600,
                   background: isActive ? 'var(--accent)' : 'transparent',
@@ -130,8 +130,8 @@ function Sidebar({ project }: { project: Project | null }) {
         ))}
       </nav>
 
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {project && <div style={{ background: '#ffffff12', border: '1px solid #ffffff1f', borderRadius: 14, padding: '13px 13px 14px' }}>
+      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
+        {project && <div style={{ background: '#ffffff12', border: '1px solid #ffffff1f', borderRadius: 'var(--r)', padding: '13px 13px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}>
             <Icon name="tree-evergreen" weight="fill" size={16} color="var(--accent)" /> Stuck on something?
           </div>
@@ -140,7 +140,7 @@ function Sidebar({ project }: { project: Project | null }) {
           </div>
         </div>}
         {me ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4, borderTop: '1px solid #ffffff1f' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', paddingTop: 4, borderTop: '1px solid #ffffff1f' }}>
             <Avatar person={me} size={32} />
             <div style={{ lineHeight: 1.2, flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{me.name.split(' ')[0]}</div>
@@ -160,7 +160,7 @@ function Sidebar({ project }: { project: Project | null }) {
           db.authEnabled() && (
             <Link
               to="/account/settings"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 12, borderTop: '1px solid #ffffff1f', fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 'var(--section-gap)', borderTop: '1px solid #ffffff1f', fontSize: 13, fontWeight: 700, color: 'var(--brand-ink)' }}
             >
               <Icon name="gear-six" size={16} /> Account settings
             </Link>
@@ -274,7 +274,7 @@ export function Layout({ children, project }: { children: ReactNode; project: Pr
           zIndex: 50,
           display: 'flex',
           alignItems: 'center',
-          gap: 9,
+          gap: 'var(--layout-gap)',
           background: 'var(--accent)',
           border: 'none',
           borderRadius: 999,

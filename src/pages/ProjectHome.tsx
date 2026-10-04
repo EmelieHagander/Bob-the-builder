@@ -99,7 +99,7 @@ export function ProjectHome() {
     <details className="project-context-details">
       <summary>Project focus &amp; lifecycle</summary>
       <section aria-label="Project lifecycle"><PhaseRail phase={project.phase} compact /></section>
-      <section style={{ marginTop: 12 }}>
+      <section style={{ marginTop: 'var(--section-gap)' }}>
       <NextActionCard
         eyebrow="Project focus"
         title={focus.title}
@@ -118,15 +118,15 @@ export function ProjectHome() {
       <DrawingRequests key={project.id+':requests'} projectId={project.id} />
     </>}
 
-    {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 18 }}>
-      {planningLoading ? <div className="card" style={{ padding: 16 }}><Loading label="Checking project evidence…" /></div>
-        : planningError ? <div className="card" role="status" style={{ padding: 16 }}>
+    {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 'var(--section-gap)' }}>
+      {planningLoading ? <div className="card" style={{ padding: 'var(--panel-padding)' }}><Loading label="Checking project evidence…" /></div>
+        : planningError ? <div className="card" role="status" style={{ padding: 'var(--panel-padding)' }}>
           <strong>Planning status is unavailable</strong><div className="foundation-hint">Your saved project data is unchanged. Open the project tools directly while this summary is unavailable.</div>
         </div>
-          : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-            <Link to={nextPlanningAction.to} className="card" style={{ padding: 18, display: 'block', borderColor: 'var(--accent-2)' }}>
-              <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+          : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 'var(--layout-gap)' }}>
+            <Link to={nextPlanningAction.to} className="card" style={{ padding: 'var(--panel-padding)', display: 'block', borderColor: 'var(--accent-2)' }}>
+              <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
                   <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -137,12 +137,12 @@ export function ProjectHome() {
                 </div>
               </div>
             </Link>
-            <div className="card" style={{ padding: 18 }}>
+            <div className="card" style={{ padding: 'var(--panel-padding)' }}>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
               <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>{missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'No recorded measurement blockers'}</h2>
               {missingMeasurements.length ? <div style={{ display: 'grid', gap: 8 }}>
                 {missingMeasurements.slice(0, 3).map(measurement => <Link key={measurement.id} to={`/facts?kind=measurement&status=missing${measurement.areaId ? `&area=${measurement.areaId}` : ''}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: '8px 0', borderTop: '1px solid var(--line)', color: 'inherit' }}>
                   <Icon name={measurement.required ? 'warning-circle' : 'circle-dashed'} size={17} color={measurement.required ? 'var(--clay)' : 'var(--ink-faint)'} />
                   <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700 }}>{measurement.subject}</div>
                     <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div></div>
@@ -158,21 +158,21 @@ export function ProjectHome() {
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
     </details>
 
-    {!db.authEnabled() && <section style={{ marginTop: 24 }}>
+    {!db.authEnabled() && <section style={{ marginTop: 'var(--section-gap)' }}>
       <SectionTitle action={<Link to="/areas" style={{ fontSize: 13, color: 'var(--accent-2)', fontWeight: 700 }}>All Areas</Link>}>
         Areas <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {areaPhaseSummary(areaItems)}</span>
       </SectionTitle>
-      {areasLoading ? <Loading label="Loading Areas…" /> : areasError ? <div className="card" role="status" style={{ padding: 16 }}>Area phase status is unavailable. Your saved project data is unchanged.</div>
-        : !areaItems.length ? <div className="card" style={{ padding: 18 }}>
+      {areasLoading ? <Loading label="Loading Areas…" /> : areasError ? <div className="card" role="status" style={{ padding: 'var(--panel-padding)' }}>Area phase status is unavailable. Your saved project data is unchanged.</div>
+        : !areaItems.length ? <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           <strong>No Areas yet</strong><p className="foundation-hint">Group related steps into Areas when the project needs them. Each Area can progress through phases independently.</p>
           <Link to="/areas" className="btn btn-primary">Add the first Area</Link>
         </div> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
           {areaItems.map(area => {
             const action = areaNextAction(area)
             const buildProgress = area.phase === 'build' ? area.donePct : null
-            return <article key={area.id} className="card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+            return <article key={area.id} className="card" style={{ padding: 'var(--panel-padding)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--layout-gap)' }}>
+                <div style={{ width: 40, height: 40, borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
                   <Icon name={area.icon} size={20} color="var(--brand)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -190,22 +190,22 @@ export function ProjectHome() {
         </div>}
     </section>}
 
-    <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 20, marginTop: 26 }}>
+    <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
       <section>
         <SectionTitle icon="megaphone" color="var(--accent-2)" action={<Link to="/announcements" style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-2)' }}>Announcements</Link>}>Project updates</SectionTitle>
-        <div className="card" style={{ padding: 16 }}>
+        <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           {announcements?.[0] ? <><p style={{ margin: 0, lineHeight: 1.45 }}>{announcements[0].text}</p><p className="foundation-hint" style={{ marginBottom: 0 }}>{announcements[0].time}</p></>
             : <p className="foundation-hint" style={{ margin: 0 }}>No announcements yet.</p>}
         </div>
       </section>
       <section>
         <SectionTitle icon="calendar-dots" color="var(--honey)">Next build day</SectionTitle>
-        <div className="card" style={{ padding: 16 }}>
+        <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           {next ? <>
             <strong>{next.title}</strong>
             <p className="foundation-hint">{next.day} · {next.time} · {next.place}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><AvatarStack people={resolve(next.attendeeIds)} max={5} /><span className="foundation-hint">{next.spots} spots</span></div>
-            <Link to={`/events/${next.slug}`} className="btn" style={{ marginTop: 12 }}>Open build day</Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}><AvatarStack people={resolve(next.attendeeIds)} max={5} /><span className="foundation-hint">{next.spots} spots</span></div>
+            <Link to={`/events/${next.slug}`} className="btn" style={{ marginTop: 'var(--section-gap)' }}>Open build day</Link>
           </> : <><p className="foundation-hint">Nothing scheduled yet. Calendar timing is separate from lifecycle phase.</p><Link to="/events" className="btn">Events</Link></>}
         </div>
       </section>

@@ -12,7 +12,7 @@ export function BuildingContext(props: SurfaceProps) {
   const building = params.get('building') ?? undefined
   return <div className="page building-context-page">
     <Link className="btn" to={props.projectId ? '/' : '/account'}><Icon name="arrow-left" size={15} /> {props.projectId ? 'Dashboard' : 'Account & projects'}</Link>
-    <div className="page-head" style={{ marginTop: 18 }}>
+    <div className="page-head" style={{ marginTop: 'var(--section-gap)' }}>
       <div>
         <h1 className="page-title">Building & spaces</h1>
         <p className="page-sub">
@@ -21,6 +21,6 @@ export function BuildingContext(props: SurfaceProps) {
       </div>
     </div>
 
-    <div style={{ marginTop: 18 }}><BuildingContextSurface key={`${props.projectId}:${building ?? ""}`} {...props} initialBuildingId={building} /></div>
+    <div style={{ marginTop: 'var(--section-gap)' }}><BuildingContextSurface key={`${props.projectId}:${building ?? ""}`} {...props} initialBuildingId={building} /></div>
   </div>
 }

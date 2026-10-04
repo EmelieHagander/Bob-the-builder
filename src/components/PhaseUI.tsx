@@ -1,20 +1,13 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { ProjectPhase } from '../data/types'
 import { PHASE_META, PROJECT_PHASES, phaseLabel } from '../lib/projectPhase'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon } from './ui'
 
-const pillStyle: CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 26,
-  padding: '4px 9px', borderRadius: 999, border: '1px solid var(--line)',
-  background: 'var(--surface-2)', color: 'var(--ink)', fontSize: 12, fontWeight: 750,
-  whiteSpace: 'nowrap',
-}
-
 export function PhasePill({ phase, prefix }: { phase?: ProjectPhase | null; prefix?: string }) {
   const meta = phase ? PHASE_META[phase] : null
-  return <span style={pillStyle} aria-label={`${prefix ? prefix + ' ' : ''}phase: ${phaseLabel(phase)}`}>
+  return <span className="pill phase-pill" aria-label={`${prefix ? prefix + ' ' : ''}phase: ${phaseLabel(phase)}`}>
     <Icon name={meta?.icon ?? 'signpost'} size={13} color={phase ? 'var(--accent-2)' : 'var(--ink-faint)'} />
     {prefix && <span style={{ color: 'var(--ink-soft)', fontWeight: 650 }}>{prefix}</span>}
     {meta?.label ?? 'Not classified'}
@@ -48,11 +41,9 @@ export function PhaseRail({ phase, compact = false }: { phase?: ProjectPhase | n
 export function NextActionCard({ eyebrow = 'What next?', title, text, icon, action }: {
   eyebrow?: string; title: string; text: string; icon: string; action?: ReactNode
 }) {
-  return <div className="card" style={{ padding: 17, borderColor: 'var(--accent-2)' }}>
-    <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
-      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
-        <Icon name={icon} size={21} color="var(--accent-2)" />
-      </div>
+  return <div className="card" style={{ padding: 'var(--panel-padding)', borderColor: 'var(--accent-2)' }}>
+    <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
+      <Icon name={icon} size={22} color="var(--accent-2)" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{eyebrow}</div>
         <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{title}</h2>

@@ -240,7 +240,7 @@ export function ProjectFacts() {
   const saved = () => { setModal(null); setOffset(0); setVersion(n => n + 1) }
   return <div className="page project-facts">
     <Link to="/" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Dashboard</Link>
-    <div className="page-head" style={{ gap: 12 }}>
+    <div className="page-head" style={{ gap: 'var(--layout-gap)' }}>
       <div><h1 className="page-title">Measurements & existing parts</h1>
         <p className="page-sub">Keep what you know, what needs measuring and what may be reused.</p></div>
       <button className="btn btn-primary" style={compactPrimary} disabled={!db.authEnabled() || Boolean(areasError) || !areas || Boolean(componentId && (partLoading || !component || component.archived))}
@@ -269,8 +269,8 @@ export function ProjectFacts() {
       {!data?.items.length && <p className="card fact-card">
         {status === 'archived' ? 'No archived records in this selection.' : status === 'missing' ? 'Nothing is waiting to be measured in this selection.' : kind === 'measurement' ? 'No measurements in this selection. Add a known length or an unknown one to collect later.' : 'No existing parts in this selection. Record what you already have.'}
       </p>}
-      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)} style={{ padding: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+      <div className="fact-list">{data?.items.map(record => <article key={record.id} className="card fact-card" aria-label={name(record)} style={{ padding: 'var(--panel-padding)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h3 style={{ margin: 0, lineHeight: 1.18 }}>{name(record)}</h3>
             <FactSummary record={record} />

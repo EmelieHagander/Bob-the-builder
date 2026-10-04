@@ -11,7 +11,7 @@ import type {
 } from '../data/buildingContext'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
-import { Icon } from './ui'
+import { Icon, List, ListItem } from './ui'
 
 type NodeKind = 'level' | 'space' | 'element' | 'relationship'
 type EditorMode = 'site' | 'building' | NodeKind | 'link' | null
@@ -97,13 +97,13 @@ export function BuildingContextEditor({
       </label>}
     </div>
 
-    {!selected ? <div className="card foundation-section" style={{ marginTop: 16 }}>
+    {!selected ? <div className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
       <h3>No building recorded yet</h3>
       <p className="foundation-hint">Start with one building and only the room you need. The rest can stay unknown until it becomes useful.</p>
       <button className="btn btn-primary" type="button" onClick={() => setMode('building')}>Create first building</button>
     </div> : <>
-      <div className="card foundation-section" style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
             <p className="foundation-hint" style={{ margin: 0 }}>{selected.siteId ? sites.find(site => site.id === selected.siteId)?.name ?? 'Site' : 'Standalone building'}</p>
             <h2 style={{ margin: '3px 0 4px' }}>{selected.name}</h2>
@@ -121,17 +121,17 @@ export function BuildingContextEditor({
 
       {sharing}
 
-      <section className="card foundation-section" style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <section className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'center', flexWrap: 'wrap' }}>
           <div><h3 style={{ marginBottom: 3 }}>Spaces</h3><p className="foundation-hint" style={{ margin: 0 }}>Rooms and other spaces in this building.</p></div>
           {canDirectEdit && <div className="cluster" style={{ flexWrap: 'wrap' }}>
             <button className="btn" type="button" onClick={() => setMode('level')}>Add level</button>
             <button className="btn btn-primary" type="button" onClick={() => setMode('space')}>Add space</button>
           </div>}
         </div>
-        {spaces.length === 0 ? <p style={{ marginTop: 14 }}>No spaces yet. Add only the room or space you know about.</p> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', marginTop: 14 }}>
-          {spaces.filter(space => !space.archived).map(space => <div key={space.id} className="card" style={{ padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        {spaces.length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No spaces yet. Add only the room or space you know about.</p> : <List>
+          {spaces.filter(space => !space.archived).map(space => <ListItem key={space.id}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div><strong>{space.name}</strong><div className="foundation-hint">{space.kind || 'Space'}{space.levelId ? ` · ${levelNames.get(space.levelId) ?? 'Level'}` : ''}</div></div>
               <span className="image-purpose">{truthLabel(space.truth)}</span>
             </div>
@@ -139,34 +139,34 @@ export function BuildingContextEditor({
               <summary>Notes</summary><p style={{ marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{space.notes}</p>
             </details>}
             {space.hasProposal && <p className="foundation-hint" style={{ marginBottom: 0 }}>Proposed change available.</p>}
-          </div>)}
-        </div>}
+          </ListItem>)}
+        </List>}
       </section>
 
-      <section className="card foundation-section" style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <section className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'center', flexWrap: 'wrap' }}>
           <div><h3 style={{ marginBottom: 3 }}>Known elements</h3><p className="foundation-hint" style={{ margin: 0 }}>Windows, doors and other building parts.</p></div>
           {canDirectEdit && <button className="btn" type="button" onClick={() => setMode('element')}>Add element</button>}
         </div>
-        {elements.filter(element => !element.archived).length === 0 ? <p style={{ marginTop: 14 }}>No building elements recorded.</p> : <div style={{ display: 'grid', gap: 9, marginTop: 14 }}>
-          {elements.filter(element => !element.archived).map(element => <div key={element.id} className="card" style={{ padding: 12 }}>
+        {elements.filter(element => !element.archived).length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No building elements recorded.</p> : <List>
+          {elements.filter(element => !element.archived).map(element => <ListItem key={element.id}>
             <strong>{element.name}</strong> <span className="foundation-hint">· {element.kind || 'element'}{element.spaceId ? ` · ${spaceNames.get(element.spaceId) ?? 'Space'}` : ''}</span>
             <div className="foundation-hint">{truthLabel(element.truth)}{element.source ? ` · ${element.source}` : ''}</div>
-          </div>)}
-        </div>}
+          </ListItem>)}
+        </List>}
       </section>
 
-      <section className="card foundation-section" style={{ marginTop: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <section className="card foundation-section" style={{ marginTop: 'var(--section-gap)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--layout-gap)', alignItems: 'center', flexWrap: 'wrap' }}>
           <div><h3 style={{ marginBottom: 3 }}>Spatial relationships</h3><p className="foundation-hint" style={{ margin: 0 }}>How the rooms connect or sit beside each other.</p></div>
           {canDirectEdit && spaces.length >= 2 && <button className="btn" type="button" onClick={() => setMode('relationship')}>Add relationship</button>}
         </div>
-        {relationships.filter(relation => !relation.archived).length === 0 ? <p style={{ marginTop: 14 }}>No room relationships recorded yet.</p> : <div style={{ display: 'grid', gap: 9, marginTop: 14 }}>
-          {relationships.filter(relation => !relation.archived).map(relation => <div key={relation.id} className="card" style={{ padding: 12 }}>
+        {relationships.filter(relation => !relation.archived).length === 0 ? <p style={{ marginTop: 'var(--section-gap)' }}>No room relationships recorded yet.</p> : <List>
+          {relationships.filter(relation => !relation.archived).map(relation => <ListItem key={relation.id}>
             <strong>{spaceNames.get(relation.subjectSpaceId) ?? 'Space'}</strong> {relationLabel(relation.relation).toLowerCase()} <strong>{spaceNames.get(relation.objectSpaceId) ?? 'Space'}</strong>
             <div className="foundation-hint">{truthLabel(relation.truth)}{relation.source ? ` · ${relation.source}` : ''}</div>
-          </div>)}
-        </div>}
+          </ListItem>)}
+        </List>}
       </section>
     </>}
 

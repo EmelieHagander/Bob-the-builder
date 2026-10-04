@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { FoodItem } from '../data/types'
-import { EmptyState, Icon, Loading, useAsync } from '../components/ui'
+import { ChecklistRow, EmptyState, Icon, Loading, useAsync } from '../components/ui'
 import { FoodItemModal } from '../components/editors'
 
 export function FoodShopping() {
@@ -47,7 +47,7 @@ export function FoodShopping() {
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: 'var(--ink-soft)' }}>
+      <div style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', fontSize: 13.5, color: 'var(--ink-soft)' }}>
         <div style={{ flex: 1, maxWidth: 280, height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
           <div style={{ width: total ? `${(picked / total) * 100}%` : '0%', height: '100%', background: 'var(--leaf)', borderRadius: 999, transition: 'width .3s ease' }} />
         </div>
@@ -57,31 +57,28 @@ export function FoodShopping() {
       {!groups ? (
         <Loading />
       ) : groups.length === 0 ? (
-        <div style={{ marginTop: 18 }}>
+        <div style={{ marginTop: 'var(--section-gap)' }}>
           <EmptyState icon="basket" title="Nothing on the food list yet" hint="Add what the build day needs — it lands here grouped by category." />
         </div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', marginTop: 18 }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', marginTop: 'var(--section-gap)' }}>
           {groups.map((g) => (
-            <div key={g.category} className="card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 11 }}>
+            <div key={g.category} className="card" style={{ padding: 'var(--panel-padding)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginBottom: 11 }}>
                 <Icon name={g.icon} weight="fill" size={18} color="var(--accent-2)" />
                 <span style={{ fontSize: 14.5, fontWeight: 700 }}>{g.category}</span>
                 <span style={{ fontSize: 12, color: 'var(--ink-faint)', marginLeft: 'auto' }}>{g.items.length} items</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {g.items.map((it, ii) => {
+                {g.items.map((it) => {
                   const on = checked[it.id]
                   return (
-                    <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 2px', borderTop: ii ? '1px solid var(--line)' : 'none', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!on} onChange={() => toggle(it)} style={{ display: 'none' }} />
-                      <Icon name={on ? 'check-square' : 'square'} weight={on ? 'fill' : 'regular'} size={20} color={on ? 'var(--leaf)' : 'var(--ink-faint)'} />
+                    <ChecklistRow key={it.id} checked={!!on} onChange={() => toggle(it)} trailing={it.qty}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{it.name}</div>
                         {it.note && <div style={{ fontSize: 12, color: 'var(--clay)' }}>{it.note}</div>}
                       </div>
-                      <span style={{ fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>{it.qty}</span>
-                    </label>
+                    </ChecklistRow>
                   )
                 })}
               </div>

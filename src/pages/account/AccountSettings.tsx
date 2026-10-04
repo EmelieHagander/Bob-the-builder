@@ -56,14 +56,14 @@ export function AccountSettings() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 520, marginTop: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ maxWidth: 520, marginTop: 'var(--section-gap)', display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
         <InstallSettingsCard />
-        <div className="card" style={{ padding: 20 }}>
+        <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           {loading ? (
             <Loading />
           ) : loadError ? <div role="alert"><p>Could not load household settings.</p><button className="btn" onClick={() => setVersion(value => value + 1)}>Try again</button></div>
           : !form ? <HouseholdAccountSetup onBound={() => setVersion(value => value + 1)} /> : (
-            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
               <Field label="Account name *">
                 <input style={inputStyle} value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Skogsfolket" />
               </Field>
@@ -88,7 +88,7 @@ export function AccountSettings() {
           )}
         </div>
 
-        <div className="card" style={{ padding: 16, display: 'flex', gap: 10 }}>
+        <div className="card" style={{ padding: 'var(--panel-padding)', display: 'flex', gap: 'var(--layout-gap)' }}>
           <Icon name="info" weight="fill" size={18} color="var(--accent-2)" style={{ marginTop: 1 }} />
           <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>
             {db.authEnabled()

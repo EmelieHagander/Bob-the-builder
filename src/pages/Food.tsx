@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Meal } from '../data/types'
-import { Avatar, EmptyState, Icon, Loading, SectionTitle, useAsync } from '../components/ui'
+import { Avatar, EmptyState, Icon, List, ListItem, Loading, SectionTitle, SummaryRow, useAsync } from '../components/ui'
 import { MealModal } from '../components/editors'
 
 export function Food() {
@@ -65,66 +65,51 @@ export function Food() {
       </div>
 
       {summary && (
-        <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 9, background: 'var(--honey-bg)', border: '1px solid #e7d3a8', borderRadius: 'var(--r)', padding: '12px 15px', color: '#7c5410', fontSize: 13.5, fontWeight: 600 }}>
+        <div style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', background: 'var(--honey-bg)', border: '1px solid #e7d3a8', borderRadius: 'var(--r)', padding: 'var(--row-padding)', color: '#7c5410', fontSize: 13.5, fontWeight: 600 }}>
           <Icon name="users-three" weight="fill" size={17} />
           {summary}
         </div>
       )}
 
       {error && (
-        <div style={{ marginTop: 12, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#8a3b2b' }}>
+        <div style={{ marginTop: 'var(--section-gap)', background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#8a3b2b' }}>
           {error}
         </div>
       )}
 
       {/* Meal plan */}
-      <div style={{ marginTop: 22 }}>
+      <div style={{ marginTop: 'var(--section-gap)' }}>
         <SectionTitle icon="fork-knife">Meal plan</SectionTitle>
         {!meals ? (
           <Loading />
         ) : meals.length === 0 ? (
           <EmptyState icon="cooking-pot" title="No meals planned yet" hint="Add breakfast, lunch and fika so the crew knows what's cooking." />
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
-            {meals.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                className="card"
-                title="Edit meal"
-                onClick={() => setMealModal({ meal: m })}
-                style={{ padding: 16, textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={m.icon} weight="fill" size={19} color="var(--accent-2)" />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{m.meal}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{m.time}</div>
-                  </div>
-                  <Icon name="pencil-simple" size={14} color="var(--ink-faint)" />
-                </div>
-                <div style={{ fontSize: 14.5, fontWeight: 700, marginTop: 12 }}>{m.dish}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4, lineHeight: 1.4 }}>{m.notes}</div>
+          <List aria-label="Meal plan">
+            {meals.map((m) => <ListItem key={m.id}>
+              <button type="button" className="meal-open" aria-label={`Edit meal ${m.meal}`} title="Edit meal" onClick={() => setMealModal({ meal: m })}>
+                <SummaryRow leading={<Icon name={m.icon} size={20} color="var(--accent-2)" />} trailing={<Icon name="pencil-simple" size={14} color="var(--ink-soft)" />}>
+                  <div className="ui-row-title"><span>{m.meal} · {m.dish}</span><span className="ui-row-meta">{m.time}</span></div>
+                  {m.notes && <p className="ui-row-meta">{m.notes}</p>}
+                </SummaryRow>
               </button>
-            ))}
-          </div>
+            </ListItem>)}
+          </List>
         )}
       </div>
 
-      {hasFood && notes.length > 0 && <section style={{ marginTop: 24 }} aria-label="Allergy and dietary notes">
+      {hasFood && notes.length > 0 && <section style={{ marginTop: 'var(--section-gap)' }} aria-label="Allergy and dietary notes">
         <SectionTitle icon="warning" color="var(--clay)">Allergy &amp; dietary notes</SectionTitle>
-        <div className="grid">{notes.map(person => <article className="card" key={person.id} style={{ padding: 16 }}><strong>{person.name}</strong><p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginBottom: 0 }}>{person.diet}</p></article>)}</div>
+        <div className="grid">{notes.map(person => <article className="card" key={person.id} style={{ padding: 'var(--panel-padding)' }}><strong>{person.name}</strong><p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', marginBottom: 0 }}>{person.diet}</p></article>)}</div>
       </section>}
 
       {/* Allergy matrix */}
-      <div style={{ marginTop: 28 }}>
+      <div style={{ marginTop: 'var(--section-gap)' }}>
         <SectionTitle icon="warning" color="var(--clay)">Allergy & dietary matrix</SectionTitle>
         {!matrix || !columns || !people ? (
           <Loading />
         ) : columns.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
             <EmptyState icon="warning" title="No dietary columns yet" hint="Set up the standard set (vegetarian, vegan, gluten-free…) and tick who's who." />
             <button className="btn no-print" onClick={() => void seedColumns()}>
               <Icon name="plus" weight="bold" size={14} /> Set up the standard columns
@@ -139,9 +124,9 @@ export function Food() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 540 }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left', padding: '12px 14px', fontSize: 12.5, color: 'var(--ink-soft)', position: 'sticky', left: 0, background: 'var(--surface)' }}>Person</th>
+                    <th style={{ textAlign: 'left', padding: 'var(--row-padding)', fontSize: 12.5, color: 'var(--ink-soft)', position: 'sticky', left: 0, background: 'var(--surface)' }}>Person</th>
                     {columns.map((c) => (
-                      <th key={c.id} style={{ padding: '12px 10px', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>{c.name}</th>
+                      <th key={c.id} style={{ padding: 'var(--row-padding)', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>{c.name}</th>
                     ))}
                   </tr>
                 </thead>
@@ -151,8 +136,8 @@ export function Food() {
                     if (!person) return null
                     return (
                       <tr key={row.personId} style={{ borderTop: '1px solid var(--line)' }}>
-                        <td style={{ padding: '10px 14px', position: 'sticky', left: 0, background: 'var(--surface)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <td style={{ padding: 'var(--row-padding)', position: 'sticky', left: 0, background: 'var(--surface)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
                             <Avatar person={person} size={28} />
                             <span style={{ fontSize: 13.5, fontWeight: 600 }}>{person.name.split(' ')[0]}</span>
                           </div>

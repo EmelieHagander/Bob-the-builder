@@ -61,43 +61,43 @@ export function EventDetail() {
         </button>
       </div>
 
-      <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 22, marginTop: 16 }}>
+      <div className="area-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         <div>
-          <div style={{ background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r-lg)', padding: 22 }}>
+          <div style={{ background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r-lg)', padding: 'var(--panel-padding)' }}>
             <div style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: '#ffffff90', fontWeight: 700 }}>Build day</div>
-            <h1 className="font-display" style={{ fontSize: 28, fontWeight: 700, marginTop: 5 }}>{event.title}</h1>
-            <div style={{ display: 'flex', gap: 18, marginTop: 12, fontSize: 14, color: '#ffffffd5', flexWrap: 'wrap' }}>
+            <h1 className="font-display" style={{ fontSize: 'var(--text-title)', fontWeight: 700, marginTop: 5 }}>{event.title}</h1>
+            <div style={{ display: 'flex', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)', fontSize: 14, color: '#ffffffd5', flexWrap: 'wrap' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="calendar-dots" size={16} color="var(--accent)" />{event.day}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="clock" size={16} color="var(--accent)" />{event.time}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="map-pin" size={16} color="var(--accent)" />{event.place}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
               <AvatarStack people={resolve(event.attendeeIds)} max={8} />
               <span style={{ fontSize: 13, color: '#ffffffc8', fontWeight: 600 }}>{event.spots} spots filled</span>
             </div>
-            <div style={{ marginTop: 14, background: '#ffffff14', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#ffffffe0', display: 'flex', gap: 8 }}>
+            <div style={{ marginTop: 'var(--section-gap)', background: '#ffffff14', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#ffffffe0', display: 'flex', gap: 8 }}>
               <Icon name="cooking-pot" weight="fill" size={16} color="var(--accent)" style={{ marginTop: 1 }} />
               <span>{event.food}</span>
             </div>
           </div>
 
-          <div style={{ marginTop: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{going ? 'The plan for the day' : 'Tasks open this day'}</h3>
+          <div style={{ marginTop: 'var(--section-gap)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 'var(--section-gap)' }}>{going ? 'The plan for the day' : 'Tasks open this day'}</h3>
             {tasksLoading ? <Loading /> : tasksError ? <p role="alert">Could not load this day's tasks. <button className="btn" onClick={()=>setVersion(v=>v+1)}>Try again</button></p> : tasks.length === 0 ? (
               <EmptyState icon="list-checks" title="No tasks scheduled yet" hint="The organiser can ask Bob to schedule existing tasks for this build day." />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
                 {tasks.map((t) => {
                   const chk = statusCheck(t.status)
                   return (
-                    <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 15px' }}>
+                    <div key={t.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', padding: 'var(--row-padding)' }}>
                       <Icon name={chk.icon} size={22} color={chk.color} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontWeight: 600 }}>{t.areaName}</div>
                         <Link to={`/tasks/${encodeURIComponent(t.id)}`} style={{ fontSize: 14.5, fontWeight: 700 }}>{t.name}</Link>
                         <div style={{ marginTop: 6 }}><SkillPill level={t.skill} /></div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} className="task-right">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }} className="task-right">
                         <AvatarStack people={resolve(t.assigneeIds)} max={3} />
                         <StatusPill status={t.status} />
                       </div>
@@ -109,8 +109,8 @@ export function EventDetail() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-          <div className="card" style={{ padding: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
+          <div className="card" style={{ padding: 'var(--panel-padding)' }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Will you be there?</div>
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>One tap. We'll remind you the day before and show your tasks on the day.</p>
             <button
@@ -119,9 +119,9 @@ export function EventDetail() {
               onClick={() => act(() => db.joinEvent(event.id))}
               style={{
                 width: '100%',
-                marginTop: 13,
-                borderRadius: 13,
-                padding: 12,
+                marginTop: 'var(--section-gap)',
+                borderRadius: 'var(--r)',
+                padding: 'var(--panel-padding)',
                 fontSize: 14.5,
                 fontWeight: 800,
                 display: 'flex',
@@ -149,7 +149,7 @@ export function EventDetail() {
               </button>
             )}
             {error && (
-              <div style={{ marginTop: 10, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 10, padding: '9px 11px', fontSize: 12.5, color: '#8a3b2b' }}>
+              <div style={{ marginTop: 10, background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 'var(--r)', padding: '9px 11px', fontSize: 12.5, color: '#8a3b2b' }}>
                 {error}
               </div>
             )}
@@ -160,7 +160,7 @@ export function EventDetail() {
             )}
           </div>
 
-          <Link to="/food" className="card" style={{ padding: 16, display: 'block' }}>
+          <Link to="/food" className="card" style={{ padding: 'var(--panel-padding)', display: 'block' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700 }}>
               <Icon name="cooking-pot" weight="fill" size={17} color="var(--accent-2)" /> Food & allergies
             </div>

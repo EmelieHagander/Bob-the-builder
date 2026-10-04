@@ -3,7 +3,7 @@
  * rendering — they hold no data and never call the database layer.
  */
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useState, type ChangeEventHandler, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { PROJECT_CHANGED_EVENT } from '../data/database'
 import type { MaterialStatus, Person, SkillLevel, TaskStatus } from '../data/types'
 
@@ -75,7 +75,7 @@ export function useProjectVersion(): number {
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ink-faint)', fontSize: 14, padding: '40px 0' }}>
+    <div className="ui-loading" role="status">
       <Icon name="spinner-gap" size={18} />
       {label}
     </div>
@@ -201,18 +201,6 @@ export function Ring({ value, size = 46 }: { value: number; size?: number }) {
 
 /* ─────────────────────────── Status / skill / material pills ─────────────────────────── */
 
-const pillBase: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 5,
-  padding: '3px 9px',
-  borderRadius: 999,
-  fontSize: 12,
-  fontWeight: 700,
-  lineHeight: 1,
-  whiteSpace: 'nowrap',
-}
-
 const STATUS_META: Record<TaskStatus, { label: string; icon: string; color: string; bg: string }> = {
   done: { label: 'Done', icon: 'check-circle', color: 'var(--leaf)', bg: 'var(--leaf-bg)' },
   doing: { label: 'In progress', icon: 'circle-half', color: '#9A6313', bg: 'var(--honey-bg)' },
@@ -223,7 +211,7 @@ const STATUS_META: Record<TaskStatus, { label: string; icon: string; color: stri
 export function StatusPill({ status }: { status: TaskStatus }) {
   const m = STATUS_META[status]
   return (
-    <span style={{ ...pillBase, color: m.color, background: m.bg }}>
+    <span className="pill" style={{ color: m.color, background: m.bg }}>
       <Icon name={m.icon} size={13} /> {m.label}
     </span>
   )
@@ -251,7 +239,7 @@ const SKILL_META: Record<SkillLevel, { label: string; icon: string; color: strin
 export function SkillPill({ level }: { level: SkillLevel }) {
   const m = SKILL_META[level]
   return (
-    <span style={{ ...pillBase, color: m.color, background: m.bg }}>
+    <span className="pill" style={{ color: m.color, background: m.bg }}>
       <Icon name={m.icon} size={13} /> {m.label}
     </span>
   )
@@ -270,15 +258,36 @@ const MATERIAL_META: Record<MaterialStatus, { label: string; color: string; bg: 
 
 export function MaterialPill({ status }: { status: MaterialStatus }) {
   const m = MATERIAL_META[status]
-  return <span style={{ ...pillBase, color: m.color, background: m.bg }}>{m.label}</span>
+  return <span className="pill" style={{ color: m.color, background: m.bg }}>{m.label}</span>
 }
 
 /* ─────────────────────────── Layout helpers ─────────────────────────── */
 
+/** Density is owned by theme tokens; callers supply content, not card padding. */
+export function Panel({ as: Tag = 'div', className = '', ...props }: HTMLAttributes<HTMLElement> & { as?: 'div' | 'section' | 'article' }) {
+  return <Tag className={`card ui-panel ${className}`} {...props} />
+}
+
+export function List({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={`ui-list ${className}`} {...props} />
+}
+
+export function ListItem({ className = '', ...props }: HTMLAttributes<HTMLElement>) {
+  return <article className={`ui-list-item ${className}`} {...props} />
+}
+
+export function SummaryRow({ leading, children, trailing }: { leading?: ReactNode; children: ReactNode; trailing?: ReactNode }) {
+  return <div className="ui-summary-row">{leading && <div className="ui-row-leading">{leading}</div>}<div className="ui-row-content">{children}</div>{trailing && <div className="ui-row-trailing">{trailing}</div>}</div>
+}
+
+export function ChecklistRow({ checked, onChange, children, trailing }: { checked: boolean; onChange: ChangeEventHandler<HTMLInputElement>; children: ReactNode; trailing?: ReactNode }) {
+  return <label className="ui-checklist-row"><input type="checkbox" checked={checked} onChange={onChange} /><div className="ui-row-content">{children}</div>{trailing && <div className="ui-checklist-trailing">{trailing}</div>}</label>
+}
+
 export function SectionTitle({ icon, color, children, action }: { icon?: string; color?: string; children: ReactNode; action?: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 11 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>
+    <div className="ui-section-title">
+      <div>
         {icon && <Icon name={icon} weight="fill" size={17} color={color} />}
         {children}
       </div>
@@ -289,19 +298,9 @@ export function SectionTitle({ icon, color, children, action }: { icon?: string;
 
 export function EmptyState({ icon, title, hint }: { icon: string; title: string; hint: string }) {
   return (
-    <div
-      style={{
-        textAlign: 'center',
-        padding: '34px 20px',
-        border: '1.5px dashed var(--line)',
-        borderRadius: 'var(--r)',
-        background: 'var(--surface-2)',
-        color: 'var(--ink-soft)',
-      }}
-    >
-      <Icon name={icon} size={30} color="var(--ink-faint)" />
-      <div style={{ fontWeight: 700, color: 'var(--ink)', marginTop: 8 }}>{title}</div>
-      <div style={{ fontSize: 13.5, marginTop: 3 }}>{hint}</div>
+    <div className="ui-empty">
+      <Icon name={icon} size={20} color="var(--ink-soft)" />
+      <div><strong>{title}</strong><p>{hint}</p></div>
     </div>
   )
 }

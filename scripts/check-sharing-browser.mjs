@@ -381,7 +381,7 @@ try {
     assert.equal(await fresh.page.getByText('Porch B', { exact: true }).count(), 0, 'Declining does not grant the other project')
     await fresh.page.reload()
     await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
-    await fresh.page.locator('.card').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open', exact: true }).waitFor()
+    await fresh.page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).waitFor()
     assert.deepEqual(fresh.state.errors, [])
     await fresh.context.close()
     console.log(`Sharing ${viewport.width}px: opt-in building/projects, inherited source, direct household, conflict/reload, friends/email, family editing, incoming accept/decline/recovery and no-project entry: OK`)

@@ -9,7 +9,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../../data/database'
 import type { AccountNote, Project } from '../../data/types'
-import { EmptyState, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../../components/ui'
+import { EmptyState, Icon, List, ListItem, Loading, Panel, SectionTitle, useAsync, useProjectVersion } from '../../components/ui'
 import { Modal } from '../../components/Modal'
 import { FormError, inputStyle } from '../../components/form'
 import { InviteModal } from '../../components/InviteModal'
@@ -27,12 +27,13 @@ export function AccountDashboard() {
   const [version, setVersion] = useState(0)
   const [notesVersion, setNotesVersion] = useState(0)
   const { data: account } = useAsync(() => db.getAccount(), [])
-  const { data: projects, loading } = useAsync(() => db.getProjects(), [version, projectVersion])
+  const { data: projects, loading, error: projectError } = useAsync(() => db.getProjects(), [version, projectVersion])
   const { data: active } = useAsync(() => db.getProject(), [version, projectVersion])
   const { data: notes } = useAsync(() => db.getNotes(), [notesVersion])
   const projectIds = (projects ?? []).map(project => project.id)
   const projectIdsKey = projectIds.join('|')
   const { data: accountAreaPhases } = useAsync(() => db.getAccountAreaPhases(projectIds), [projectIdsKey, version, projectVersion])
+  const { data: overview, loading: buildingsLoading, error: buildingsError } = useAsync(() => db.getAccountBuildingOverview(projectIds), [projectIdsKey, version, projectVersion])
   const [modal, setModal] = useState<
     { kind: 'new' } | { kind: 'invite' } | { kind: 'project'; project: Project; editing: boolean } | null
   >(null)
@@ -56,6 +57,19 @@ export function AccountDashboard() {
     { icon: 'note-pencil', value: String(notes?.length ?? 0), label: 'Notes', color: 'var(--clay)' },
   ]
 
+  const otherProjects = (projects ?? []).filter(project => !overview?.links.some(link => link.projectId === project.id))
+  const projectRow = (p: Project) => {
+    const phases = (accountAreaPhases ?? []).filter(item => item.projectId === p.id)
+    return <ListItem key={p.id} className="account-project-row">
+      <button type="button" className="account-project-open" aria-label={`Open project ${p.name}`} onClick={() => openProject(p)}>
+        <span className="ui-row-title"><span>{p.name}</span><PhasePill phase={p.phase} /></span>
+        <span className="ui-row-meta">{active?.id === p.id ? 'Selected · ' : ''}<SchedulePill project={p} />{p.startDate && p.endDate ? ` · ${formatDateRange(p.startDate, p.endDate)}` : ''}</span>
+        {phases.length > 0 && <span className="ui-row-meta">{phases.length} {phases.length === 1 ? 'Area' : 'Areas'} · {areaPhaseSummary(phases)}</span>}
+      </button>
+      <button type="button" className="ui-icon-button no-print" aria-label={`Project details ${p.name}`} onClick={() => setModal({ kind: 'project', project: p, editing: false })}><Icon name="dots-three" size={20} /></button>
+    </ListItem>
+  }
+
   return (
     <div className="page">
       <div className="page-head">
@@ -65,18 +79,18 @@ export function AccountDashboard() {
         </div>
         <div className="cluster no-print">
           {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
-          {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
-            <Icon name="sign-out" size={16} /> Close project
+          {active && <button className="ui-icon-button" aria-label="Close project" title="Close project" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
+            <Icon name="sign-out" size={18} />
           </button>}
-          <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings &amp; family</Link>
+          <Link to="/account/buildings" className="ui-icon-button" aria-label="Buildings & family" title="Buildings & family"><Icon name="house" size={18} /></Link>
           <Link to="/account/calendar" className="btn">
             <Icon name="calendar-dots" size={16} /> Calendar
           </Link>
-          <Link to="/account/settings" className="btn">
-            <Icon name="gear-six" size={16} /> Settings
+          <Link to="/account/settings" className="ui-icon-button" aria-label="Settings" title="Settings">
+            <Icon name="gear-six" size={18} />
           </Link>
-          <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
-            <Icon name="user-plus" size={16} /> Invite
+          <button className="ui-icon-button" aria-label="Invite" title="Invite" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
+            <Icon name="user-plus" size={18} />
           </button>
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
             <Icon name="plus" weight="bold" size={15} /> New project
@@ -84,95 +98,41 @@ export function AccountDashboard() {
         </div>
       </div>
 
-      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
-
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 22 }}>
+      <div className="account-stats">
         {stats.map((s) => (
-          <div key={s.label} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '14px 15px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-              <Icon name={s.icon} weight="fill" size={15} color={s.color} /> {s.label}
-            </div>
-            <div className="font-display" style={{ fontWeight: 700, fontSize: 24, marginTop: 6 }}>{s.value}</div>
-          </div>
+          <span key={s.label}><strong>{s.value}</strong> {s.label}</span>
         ))}
       </div>
 
-      <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 22, marginTop: 24 }}>
+      <div className="dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>
         {/* Projects */}
         <section>
           <SectionTitle>
             Projects <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {projects?.length ?? 0}</span>
           </SectionTitle>
-          {loading ? (
-            <Loading />
-          ) : (projects ?? []).length === 0 ? (
-            <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />
-          ) : (
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-              {projects!.map((p) => {
-                const areaPhases = (accountAreaPhases ?? []).filter(item => item.projectId === p.id)
-                return <div
-                  key={p.id}
-                  className="card"
-                  style={{ padding: 15, cursor: 'pointer' }}
-                  onClick={() => setModal({ kind: 'project', project: p, editing: false })}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
-                      <Icon name="hammer" size={20} color="var(--brand)" />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 15, fontWeight: 700 }}>{p.name}</span>
-                        {active?.id === p.id && (
-                          <span className="pill" style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>Active</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{[p.type, p.location.split(',')[0]].filter(Boolean).join(' · ')}</div>
-                    </div>
-                  </div>
-                  <div className="cluster" style={{ marginTop: 11, alignItems: 'center' }}>
-                    <PhasePill phase={p.phase} />
-                    <SchedulePill project={p} />
-                  </div>
-                  {areaPhases.length > 0 && <div style={{ marginTop: 9, fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 650 }}>
-                    {areaPhases.length} {areaPhases.length === 1 ? 'Area' : 'Areas'} · {areaPhaseSummary(areaPhases)}
-                  </div>}
-                  <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>
-                    <Icon name="calendar-dots" size={15} color="var(--accent-2)" />
-                    {p.startDate && p.endDate ? formatDateRange(p.startDate, p.endDate) : 'Not scheduled yet'}
-                  </div>
-                  <div className="cluster" style={{ marginTop: 12 }}>
-                    <button
-                      className="btn"
-                      style={{ padding: '7px 12px', fontSize: 12.5 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openProject(p)
-                      }}
-                    >
-                      <Icon name="arrow-right" weight="bold" size={13} /> Open
-                    </button>
-                    <button
-                      className="btn"
-                      style={{ padding: '7px 12px', fontSize: 12.5 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setModal({ kind: 'project', project: p, editing: true })
-                      }}
-                    >
-                      <Icon name="calendar-plus" size={13} /> {p.startDate ? 'Reschedule' : 'Schedule'}
-                    </button>
-                  </div>
-                </div>
+          {loading ? <Loading /> : projectError ? <div role="alert"><FormError>{projectError.message}</FormError><button className="btn" onClick={reload}>Try again</button></div>
+            : <>
+              {!projects?.length && <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />}
+              {buildingsLoading && <Loading label="Loading building groups…" />}
+              {buildingsError && <div role="alert"><p className="foundation-hint">Building groups could not be loaded. All your projects are listed below.</p><button className="btn" onClick={reload}>Retry building groups</button></div>}
+              {overview && overview.buildings.map(building => {
+                const grouped = (projects ?? []).filter(project => overview.links.some(link => link.buildingId === building.id && link.projectId === project.id))
+                return <details key={building.id} className="account-building-group" open>
+                  <summary><Icon name="house" size={18} /><strong>{building.name}</strong><span className="ui-row-meta">{grouped.length} {grouped.length === 1 ? 'project' : 'projects'}</span></summary>
+                  {grouped.length ? <List>{grouped.map(projectRow)}</List> : <p className="foundation-hint">No linked projects.</p>}
+                  <Link className="project-detail-link" to={`/account/buildings?building=${encodeURIComponent(building.id)}`}>Building &amp; spaces</Link>
+                </details>
               })}
-            </div>
-          )}
+              {projects && projects.length > 0 && (!overview || otherProjects.length > 0) && <section className="account-building-group" aria-label="Other projects">
+                {overview && <h3>Other projects <span className="ui-row-meta">· {otherProjects.length}</span></h3>}
+                <List>{(overview ? otherProjects : projects).map(projectRow)}</List>
+              </section>}
+            </>}
         </section>
 
         {/* Right column: coming up + notes */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card" style={{ padding: 16 }}>
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
+          <Panel>
             <SectionTitle
               icon="calendar-dots"
               color="var(--accent-2)"
@@ -183,7 +143,7 @@ export function AccountDashboard() {
             {[...happeningNow, ...nextUp].length === 0 ? (
               <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Nothing scheduled — put a project on the calendar.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
                 {[...happeningNow, ...nextUp].slice(0, 3).map((p) => (
                   <button
                     key={p.id}
@@ -197,11 +157,13 @@ export function AccountDashboard() {
                 ))}
               </div>
             )}
-          </div>
+          </Panel>
 
-          {account ? <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} /> : <div className="card" style={{ padding: 16 }}><SectionTitle icon="note-pencil">Household notes</SectionTitle><p className="foundation-hint">Household notes need access to the household account.</p><Link className="btn" to="/account/settings">Account settings</Link></div>}
+          {account ? <NotesCard notes={notes} onChanged={() => setNotesVersion((v) => v + 1)} /> : <div className="card" style={{ padding: 'var(--panel-padding)' }}><SectionTitle icon="note-pencil">Household notes</SectionTitle><p className="foundation-hint">Household notes need access to the household account.</p><Link className="btn" to="/account/settings">Account settings</Link></div>}
         </section>
       </div>
+
+      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
 
       {modal?.kind === 'new' && (
         <NewProjectModal
@@ -252,9 +214,9 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
   }
 
   return (
-    <div className="card" style={{ padding: 16 }}>
+    <div className="card" style={{ padding: 'var(--panel-padding)' }}>
       <SectionTitle icon="note-pencil" color="var(--clay)">Notes</SectionTitle>
-      <form onSubmit={add} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <form onSubmit={add} style={{ display: 'flex', gap: 8, marginBottom: 'var(--section-gap)' }}>
         <input
           style={{ ...inputStyle, padding: '8px 11px', fontSize: 13.5 }}
           value={text}
@@ -272,9 +234,9 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
       ) : notes.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Nothing noted yet — things that span projects live here.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
           {notes.map((note) => (
-            <div key={note.id} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+            <div key={note.id} style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
               <button
                 type="button"
                 title={note.pinned ? 'Unpin' : 'Pin'}

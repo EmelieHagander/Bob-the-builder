@@ -129,13 +129,13 @@ try {
     const switchProject=async id=>{
       await page.getByRole('button',{name:'Close Ask bob',exact:true}).click()
       await page.getByRole('link',{name:'Account',exact:true}).click()
-      await page.locator('.card').filter({hasText:`Catalog ${id}`}).getByRole('button',{name:'Open',exact:true}).click()
+      await page.getByRole('button',{name:`Open project Catalog ${id}`,exact:true}).click()
       return openBob(id)
     }
     await page.goto(`${base}#/signin`)
     await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
     await page.getByRole('heading',{name:'Catalog fixture account',exact:true}).waitFor()
-    await page.locator('.card').filter({hasText:'Catalog A'}).getByRole('button',{name:'Open',exact:true}).click()
+    await page.getByRole('button',{name:'Open project Catalog A',exact:true}).click()
     let drawer=await openBob('A')
     await send('Create catalog definition')
     await drawer.getByText('Material definition created.',{exact:true}).waitFor()
