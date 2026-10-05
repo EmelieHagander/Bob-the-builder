@@ -119,7 +119,7 @@ try {
           bootReadStarted()
           await new Promise(resolve => pendingBootReads.push(resolve))
         }
-        const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: '2026-09-15', end_date: '2026-10-04' }
+        const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: new Date(Date.now()-86400000).toISOString().slice(0,10), end_date: new Date(Date.now()+86400000).toISOString().slice(0,10) }
         const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
         return respond({ json: single ? project : [project] })
       }
@@ -201,7 +201,7 @@ try {
       await page.getByRole('heading', {name:'Could not load your account',exact:true}).waitFor()
       await page.getByRole('button',{name:'Try again',exact:true}).click()
     }
-    await page.getByRole('heading', { name: 'Phase fixture', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     if (viewport.width === 390) assert.equal(refreshRequests,1,'A nearly expired persisted session refreshes once across account, phase and Bob consumers')
     assert.deepEqual(authWarnings,[],'Account consumers share one Auth owner')
     const projectCard = page.locator('.account-project-row').filter({ hasText: 'Renovate upstairs' }).first()
@@ -249,7 +249,7 @@ try {
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Readiness not reviewed', { exact: true }).waitFor()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByRole('button', { name: 'Confirm ready', exact: true }).click()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Ready to start', { exact: true }).waitFor()
-    await page.goto(`${base}#/`)
+    await page.goto(`${base}#/project`)
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
 
     await page.getByRole('button', { name: 'Review phase', exact: true }).first().click()
@@ -260,7 +260,7 @@ try {
     await page.reload()
     await page.getByLabel('Project phase: Planning').waitFor()
 
-    await page.getByRole('link', { name: 'Areas', exact: true }).first().click()
+    await plan.getByRole('link', { name: 'Manage areas', exact: true }).click()
     await page.getByRole('heading', { name: 'Areas', exact: true }).waitFor()
     const office = page.locator('article').filter({ hasText: 'Office' })
     await office.getByText('Done', { exact: true }).waitFor()
@@ -293,7 +293,7 @@ try {
     await page.reload()
     await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Add task', exact: true }).count(), 0)
-    await page.goto(`${base}#/`)
+    await page.goto(`${base}#/project`)
     await page.getByText('Archived Areas · 1', { exact: true }).click()
     await plan.getByRole('region', { name: 'Bedroom', exact: true }).waitFor()
     await page.goto(`${base}#/areas`)

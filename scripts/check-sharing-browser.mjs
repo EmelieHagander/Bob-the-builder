@@ -80,7 +80,7 @@ async function fixture(viewport, fresh = false) {
       const member = { id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }
       return respond({ json: url.searchParams.has('auth_user_id') ? member : [member, ...state.emails] })
     }
-    if (['account_notes', 'areas', 'tasks', 'materials', 'events', 'announcements', 'current_sites', 'current_levels', 'current_elements', 'current_relationships'].some(name => path === '/rest/v1/' + name)) return respond({ json: [] })
+    if (['account_notes', 'project_thumbnails', 'areas', 'tasks', 'materials', 'events', 'announcements', 'current_sites', 'current_levels', 'current_elements', 'current_relationships'].some(name => path === '/rest/v1/' + name)) return respond({ json: [] })
     if (path === '/rest/v1/current_buildings') return respond({ json: buildings })
     if (path === '/rest/v1/project_buildings') return respond({ json: buildings.map(building => ({ ...building, project_id: url.searchParams.get('project_id')?.replace(/^eq\./, '') })) })
     if (['/rest/v1/current_drawing_overview', '/rest/v1/media_assets', '/rest/v1/current_measurements', '/rest/v1/current_target', '/rest/v1/current_artifacts', '/rest/v1/current_drawing_steps'].includes(path) && method === 'GET') return respond({ json: [] })
@@ -182,7 +182,7 @@ async function signIn(page) {
   await page.getByPlaceholder('you@example.se').fill(user.email)
   await page.locator('input[type="password"]').fill('fixture-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
 }
 
 async function openProjectSharing(page) {
@@ -236,7 +236,7 @@ try {
     await page.getByLabel('Account name *', { exact: true }).waitFor()
     assert.equal(await page.getByLabel('Account name *', { exact: true }).inputValue(), 'Family account')
     await page.goto(base + '#/account')
-    await page.getByRole('heading', { name: 'Family account', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.getByRole('link', { name: 'Buildings & family', exact: true }).click()
     await page.getByRole('heading', { name: 'Main house', exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Use in this project', exact: true }).count(), 0)
@@ -377,10 +377,10 @@ try {
     await inbox.getByRole('button', { name: 'Refresh project access', exact: true }).click()
     await fresh.page.getByRole('heading', { name: 'Porch A', exact: true }).waitFor()
     await fresh.page.goto(base + '#/account')
-    await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+    await fresh.page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     assert.equal(await fresh.page.getByText('Porch B', { exact: true }).count(), 0, 'Declining does not grant the other project')
     await fresh.page.reload()
-    await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+    await fresh.page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await fresh.page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).waitFor()
     assert.deepEqual(fresh.state.errors, [])
     await fresh.context.close()

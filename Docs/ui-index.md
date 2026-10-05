@@ -20,7 +20,7 @@ bob should feel like a warm, practical site office: clear enough to use outdoors
 
 Current implementation anchors:
 
-- `birch` is the default theme; `forest` and `dusk` are supported alternatives.
+- The shared forest workbench uses deep green chrome, warm ivory surfaces, amber actions, strong display headings and compact divided lists across all routes. `birch` is the default theme; `forest` and `dusk` are supported alternatives.
 - `src/theme.css` owns reusable palette, semantic state colors, radii, shadows, shell dimensions and responsive behavior.
 - Baloo 2 is used for display character; Hanken Grotesk/system sans is used for working text.
 - Semantic status color remains meaningful: green/leaf = ready/done, honey/amber = pending/in progress, clay/red = blocked/warning.
@@ -35,6 +35,7 @@ Current implementation anchors:
 Owned by `src/components/Layout.tsx`:
 
 - desktop sidebar;
+- permanent Home (`/`, with `/account` retained as an alias), separate Project plan (`/project`), and shared Plan / Reference / Together workspace doors;
 - active-project entry/account switch; **Close project** on Account clears the active choice without deleting the Project or changing membership, including after reload;
 - mobile bottom navigation;
 - floating Ask bob control and drawer host on project surfaces; Account routes hide the project composer and remain usable with no active Project;
@@ -145,7 +146,7 @@ physical-phone and named-participant acceptance.
 
 | Surface | Primary user job | Important UI constraint |
 |---|---|---|
-| Project Home / Dashboard (`/`) | understand overall Project phase, mixed Area phases and what deserves attention next | scan quickly; Project focus must not pretend one global planning step applies to every Area |
+| Project Plan (`/project`) | understand overall Project phase, mixed Area phases and what deserves attention next | scan quickly; Project focus must not pretend one global planning step applies to every Area |
 | Areas / Area detail | understand each workstream's phase and act locally | Area phase + one primary next action first; Build-oriented progress only dominates when useful |
 | Task detail (`/tasks/:taskId`) | follow instructions and illustrated steps | keep required checks visible; lightweight Area context only; do not turn into a phase dashboard |
 | Project facts (`/facts`) | record lengths, unknowns and existing parts | reached from Project/Area; source labels and version history stay explicit; phase provides context, not truth promotion |
@@ -270,3 +271,19 @@ Loading, empty, missing-server and revoked states remain in the participant flow
 [Artifacts](artifacts.md#volunteer-task-drawings--september-24-deployed) owns
 render scope; [Data/auth](../db/README.md#area-archive-and-volunteer-drawing-reader--september-24-deployed)
 owns permissions and deployment. Phone/desktop browser proof is in the implementing PR.
+
+### Home identity and optional metadata
+
+Home groups visible Projects under saved Buildings. Groups expand/collapse; opening
+a Project chooses its existing scope and opens `/project`. A compact resume row
+uses the saved active choice. Home never displays the project Bob composer.
+`ProjectThumbnail`, `ProjectMetadata` and `ProjectWorkspaceNav` are shared components;
+palette, hierarchy, rows, panels and controls remain owned by `src/theme.css`.
+Participants and the first saved event with a day/time appear only when present.
+Task duration is labelled **task estimate** and only appears when every saved Task
+has a recognised positive authored hour value/range. This does not assert that all
+Project work has been captured. Missing metadata renders no placeholder.
+Overview images have no camera/edit control. Project images offers **Pin as
+thumbnail** / **Unpin thumbnail**; private authorised image reads retain their
+existing permissions. The default building illustration is decorative identity,
+not evidence of the actual building. See `Docs/media-and-steps.md` for persistence.

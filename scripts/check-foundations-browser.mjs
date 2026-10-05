@@ -39,7 +39,7 @@ try {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
     const errors = [], assets = new Map(), objects = new Map(), steps = [], focusedTurns = []
     let imageBytes, failUpload = false, slowDownload = null
-    let clock = 0, currentPlan = null
+    let clock = 0, currentPlan = null, pinnedThumbnail = null
     const timestamp = () => new Date(Date.UTC(2026, 8, 9, 12, 0, ++clock)).toISOString()
     const facts = createFactsFixture(timestamp, assets)
     const solutions = createSolutionsFixture(timestamp, assets, facts)
@@ -49,7 +49,7 @@ try {
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
     const materialPlanning = createMaterialPlanningFixture(timestamp, facts, solutions, artifacts)
     installSheetLayerFixture(materialPlanning, timestamp, solutions)
-    const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
+    const task = { id: 'taskA', project_id: 'A', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
     const area = { id: 'areaA', project_id: 'A', slug: 'entry', name: 'Entry', description: 'Entry work', icon: 'house', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: '', area_crew: [], area_reference_images: [{ label: 'Old reference note', sort_order: 1 }] }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(api + '/**', async route => {
@@ -99,7 +99,7 @@ try {
       if (path === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (path === '/rest/v1/projects') return respond({ json: projects })
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
-      if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
+      if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', project_id: 'A', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (path === '/rest/v1/areas') return respond({ json: eq('project_id') === 'B' ? [] : [area] })
       if (path === '/rest/v1/tasks') {
         if (method === 'PATCH') {
@@ -133,6 +133,12 @@ try {
           step.revision++
         }
         return respond({ json: { saved: true } })
+      }
+      if (path === '/rest/v1/project_thumbnails') return respond({json:pinnedThumbnail && assets.get(pinnedThumbnail)?.state==='ready' ? [{project_id:'A',media_id:pinnedThumbnail,media_assets:{state:'ready'}}] : []})
+      if (path === '/rest/v1/rpc/pin_project_thumbnail') {
+        const {p_project,p_media} = request.postDataJSON()
+        assert.equal(p_project,'A'); if(p_media) assert.equal(assets.get(p_media)?.state,'ready')
+        pinnedThumbnail=p_media; return respond({json:null})
       }
       if (path === '/rest/v1/media_assets') {
         let rows = [...assets.values()].filter(a => a.project_id === eq('project_id'))
@@ -194,7 +200,7 @@ try {
     await page.getByPlaceholder('you@example.se').fill(user.email)
     await page.locator('input[type="password"]').fill('fixture-password')
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-    await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
     imageBytes = Buffer.from(await page.evaluate(() => {
       const canvas = document.createElement('canvas'); canvas.width = 120; canvas.height = 240
@@ -213,9 +219,19 @@ try {
     }
     await (await uploadImage('Entry before work')).waitFor({ state: 'hidden' })
     await page.getByRole('img', { name: 'Entry before work', exact: true }).waitFor()
+    await page.getByRole('button',{name:'Pin as thumbnail',exact:true}).click()
+    await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).waitFor()
+    assert(pinnedThumbnail,'Thumbnail choice is saved through the project command')
     await page.reload()
     await page.locator('.project-photo-details > summary').click()
-    await page.getByRole('button', { name: 'Open image: Entry before work', exact: true }).click()
+    await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).waitFor()
+    const headerThumb=page.locator('.project-header-identity .ui-thumbnail img')
+    await page.waitForFunction(()=>document.querySelector('.project-header-identity .ui-thumbnail img')?.src.startsWith('blob:'))
+    await headerThumb.evaluate(img=>img.decode())
+    assert.equal(await headerThumb.evaluate(img=>img.naturalWidth),120,'Pinned original persists after reload')
+    await page.getByRole('button',{name:'Unpin thumbnail',exact:true}).click()
+    await page.getByRole('button',{name:'Pin as thumbnail',exact:true}).waitFor()
+    await page.getByRole('button', { name: 'Open image: Entry before work' , exact: true }).click()
     const original = page.getByRole('dialog', { name: 'Entry before work', exact: true })
     await original.getByRole('img').waitFor()
     assert.deepEqual(await original.getByRole('img').evaluate(img => [img.naturalWidth, img.naturalHeight, getComputedStyle(img).objectFit]), [120, 240, 'contain'])
@@ -368,7 +384,7 @@ try {
     currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
     artifacts.cad.get(`${cadId}:1`).step_id=planStepId
     artifacts.workLinks.set(cadId,[{id:planStepId,title:'Assemble the shelf'}])
-    await page.goto(base)
+    await page.goto(base+'#/project')
     const drawings=page.getByRole('region',{name:'Project drawings',exact:true})
     await drawings.scrollIntoViewIfNeeded()
     await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
@@ -383,7 +399,7 @@ try {
     await page.screenshot({path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
-    await page.goto(base)
+    await page.goto(base+'#/project')
     await drawings.getByRole('link',{name:'Assemble the shelf',exact:true}).click()
     const workspace=page.getByRole('region',{name:'Project plan',exact:true})
     await workspace.getByText('Join the panel to its supports',{exact:true}).waitFor()
@@ -397,7 +413,7 @@ try {
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     // The server's source assessment must survive navigation/reload in every surface.
     artifacts.sources.set(cadId,{source_state:'changed',source_reasons:['measurement_changed'],changes:[{kind:'project_measurement',id:'90000000-0000-4000-8000-000000000002',saved_revision:2,current_revision:5,parameter_ids:['width','inside'],state:'changed'}]})
-    await page.goto(base)
+    await page.goto(base+'#/project')
     await drawings.getByText('Sources changed — review drawing',{exact:true}).waitFor()
     await page.reload()
     await drawings.getByText('Sources changed — review drawing',{exact:true}).waitFor()
@@ -414,7 +430,7 @@ try {
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByText('Sources changed — review drawing',{exact:true}).waitFor()
     artifacts.sources.set(cadId,{source_state:'unavailable',source_reasons:['source_unavailable'],changes:[{kind:'project_measurement',id:null,saved_revision:2,current_revision:null,parameter_ids:['width','inside'],state:'unavailable'}]})
-    await page.goto(base)
+    await page.goto(base+'#/project')
     await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert.equal(await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).count(),0)
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
@@ -426,14 +442,16 @@ try {
     assert(!(await sourceMap.textContent()).includes('90000000-0000-4000-8000-000000000002'))
     assert(!(await sourceMap.textContent()).includes('Saved value: 980'))
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
-    await page.goto(base)
+    await page.goto(base+'#/project')
     await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
     await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
     await page.screenshot({path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true
-    await page.goto(base)
+    // Reload the restored source assessment before testing a separate preview transport failure.
+    // Navigating to the same hash can retain the previous unavailable-source overview.
+    await page.reload()
     // Preview bytes are loaded only when this region enters the viewport.
     await drawings.scrollIntoViewIfNeeded()
     await drawings.getByText('Preview unavailable. Open the saved drawing.',{exact:true}).first().waitFor()
@@ -441,13 +459,13 @@ try {
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     artifacts.rejectPreview=false
     cadRow.archived=true
-    await page.goto(base)
+    await page.goto(base+'#/project')
     await drawings.getByRole('heading',{name:'Drawings',exact:true}).waitFor()
     await page.waitForFunction(()=>!document.querySelector('[aria-label="Project drawings"]')?.textContent.includes('CAD shelf detail'))
     assert.equal(await page.getByRole('link',{name:'CAD shelf detail · v1',exact:true}).count(),0)
     cadRow.archived=false
     currentPlan=null
-    await page.goto(base)
+    await page.goto(base+'#/project')
     failUpload = true
     const failed = await uploadImage('Interrupted upload')
     await failed.getByText(/Upload interrupted/).waitFor()

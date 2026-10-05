@@ -49,7 +49,7 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
     </Link>
     <DrawingSourceNotice source={drawing} />
     {drawing.steps.length > 0 && <ul className="project-drawing-steps" aria-label="Related steps">
-      {drawing.steps.map(step => <li key={step.id}><Link to={`/?step=${encodeURIComponent(step.id)}`}>{step.title}</Link></li>)}
+      {drawing.steps.map(step => <li key={step.id}><Link to={`/project?step=${encodeURIComponent(step.id)}`}>{step.title}</Link></li>)}
     </ul>}
   </article>
 }

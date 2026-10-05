@@ -2,10 +2,12 @@ import { useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
+import { ProjectThumbnail } from '../components/ProjectThumbnail'
+import { ProjectMetadata } from '../components/ProjectMetadata'
 import { ProjectImages } from '../components/ProjectImages'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
@@ -20,6 +22,14 @@ export function ProjectHome() {
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
   const projectId = project?.id ?? ''
+  const [mediaVersion, setMediaVersion] = useState(0)
+  useEffect(() => {
+    const refresh = () => setMediaVersion(v => v + 1)
+    window.addEventListener(db.MEDIA_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(db.MEDIA_CHANGED_EVENT, refresh)
+  }, [])
+  const { data: overview } = useAsync(() => db.getAccountProjectOverview(projectId ? [projectId] : []), [projectId, projectVersion, version, mediaVersion])
+  const { data: thumbnailId } = useAsync(() => projectId ? db.getProjectThumbnail(projectId) : Promise.resolve(null), [projectId, projectVersion, mediaVersion])
   useBobSurface(projectId, { surface: 'project' }, 'Project')
   const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
@@ -67,14 +77,17 @@ export function ProjectHome() {
 
   return <div className="page project-home">
     <div className="page-head">
+      <div className="project-header-identity">
+        <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
           <PhasePill phase={project.phase} prefix="Project" />
           {project.location && <span className="foundation-hint">{project.location}</span>}
         </div>
         <h1 className="page-title">{project.name}</h1>
+        <ProjectMetadata overview={overview?.[0]} />
         <p className="page-sub project-area-summary">{areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)}</p>
-      </div>
+      </div></div>
       <div className="cluster no-print">
         {db.authEnabled() && <button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
         <button className="btn" onClick={() => setPhaseOpen(true)}>
@@ -88,6 +101,8 @@ export function ProjectHome() {
       <p className="instruction-text">{project.description}</p>
       <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
     </details>}
+
+    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
     <nav className="project-shortcuts" aria-label="Project tools">
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
@@ -110,8 +125,6 @@ export function ProjectHome() {
       </section>
       <Link to="/building" className="project-detail-link"><Icon name="house" size={16} /> Building &amp; spaces <Icon name="arrow-right" size={15} /></Link>
     </details>
-
-    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
     {db.authEnabled() && <>
       <ProjectDrawings key={project.id} projectId={project.id} />
@@ -155,7 +168,7 @@ export function ProjectHome() {
 
     <details className="card project-photo-details">
       <summary>Project images</summary>
-      <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload />
+      <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />
     </details>
 
     {!db.authEnabled() && <section style={{ marginTop: 'var(--section-gap)' }}>

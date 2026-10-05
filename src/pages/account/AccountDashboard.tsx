@@ -18,6 +18,8 @@ import { scheduleStatus } from '../../lib/calendarGrid'
 import { formatDate, formatDateRange } from '../../lib/format'
 import { ProjectModal, SchedulePill } from './ProjectModal'
 import { NewProjectForm } from '../../components/NewProjectForm'
+import { ProjectThumbnail } from '../../components/ProjectThumbnail'
+import { ProjectMetadata } from '../../components/ProjectMetadata'
 import { PhasePill } from '../../components/PhaseUI'
 import { areaPhaseSummary } from '../../lib/projectPhase'
 
@@ -34,6 +36,7 @@ export function AccountDashboard() {
   const projectIdsKey = projectIds.join('|')
   const { data: accountAreaPhases } = useAsync(() => db.getAccountAreaPhases(projectIds), [projectIdsKey, version, projectVersion])
   const { data: overview, loading: buildingsLoading, error: buildingsError } = useAsync(() => db.getAccountBuildingOverview(projectIds), [projectIdsKey, version, projectVersion])
+  const { data: projectOverview, error: overviewError } = useAsync(() => db.getAccountProjectOverview(projectIds), [projectIdsKey, version, projectVersion])
   const [modal, setModal] = useState<
     { kind: 'new' } | { kind: 'invite' } | { kind: 'project'; project: Project; editing: boolean } | null
   >(null)
@@ -41,7 +44,7 @@ export function AccountDashboard() {
   const reload = () => setVersion((v) => v + 1)
   const openProject = (p: Project) => {
     db.setActiveProject(p.id)
-    navigate('/')
+    navigate('/project')
   }
 
   const scheduled = (projects ?? []).filter((p) => p.startDate && p.endDate)
@@ -61,9 +64,11 @@ export function AccountDashboard() {
   const projectRow = (p: Project) => {
     const phases = (accountAreaPhases ?? []).filter(item => item.projectId === p.id)
     return <ListItem key={p.id} className="account-project-row">
+      <ProjectThumbnail projectId={p.id} mediaId={projectOverview?.find(item => item.projectId === p.id)?.thumbnailId} />
       <button type="button" className="account-project-open" aria-label={`Open project ${p.name}`} onClick={() => openProject(p)}>
         <span className="ui-row-title"><span>{p.name}</span><PhasePill phase={p.phase} /></span>
-        <span className="ui-row-meta">{active?.id === p.id ? 'Selected · ' : ''}<SchedulePill project={p} />{p.startDate && p.endDate ? ` · ${formatDateRange(p.startDate, p.endDate)}` : ''}</span>
+        {p.startDate && p.endDate && <span className="ui-row-meta"><SchedulePill project={p} /> · {formatDateRange(p.startDate, p.endDate)}</span>}
+        <ProjectMetadata overview={projectOverview?.find(item => item.projectId === p.id)} />
         {phases.length > 0 && <span className="ui-row-meta">{phases.length} {phases.length === 1 ? 'Area' : 'Areas'} · {areaPhaseSummary(phases)}</span>}
       </button>
       <button type="button" className="ui-icon-button no-print" aria-label={`Project details ${p.name}`} onClick={() => setModal({ kind: 'project', project: p, editing: false })}><Icon name="dots-three" size={20} /></button>
@@ -74,8 +79,8 @@ export function AccountDashboard() {
     <div className="page">
       <div className="page-head">
         <div>
-          <h1 className="page-title">{account?.name ?? 'Your account'}</h1>
-          <p className="page-sub">Every build in one place — projects, shared notes and settings.</p>
+          <h1 className="page-title">Home</h1>
+          <p className="page-sub">{account?.name ? `${account.name} · ` : ''}Your places, your projects. Let’s build something.</p>
         </div>
         <div className="cluster no-print">
           {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
@@ -98,6 +103,11 @@ export function AccountDashboard() {
         </div>
       </div>
 
+      {active && <button type="button" className="workbench-resume" onClick={() => openProject(active)}>
+        <ProjectThumbnail projectId={active.id} mediaId={projectOverview?.find(item => item.projectId === active.id)?.thumbnailId} />
+        <div><small>Pick up where you left off</small><strong>{active.name}</strong><span className="ui-row-meta">{active.phase ? `Open ${active.phase} plan` : 'Open project plan'}</span></div>
+        <Icon name="arrow-right" size={20} />
+      </button>}
       <div className="account-stats">
         {stats.map((s) => (
           <span key={s.label}><strong>{s.value}</strong> {s.label}</span>
@@ -110,6 +120,7 @@ export function AccountDashboard() {
           <SectionTitle>
             Projects <span style={{ color: 'var(--ink-faint)', fontWeight: 600 }}>· {projects?.length ?? 0}</span>
           </SectionTitle>
+          {overviewError && <p className="foundation-hint" role="status">Extra project details could not be loaded. <button className="btn" onClick={reload}>Retry details</button></p>}
           {loading ? <Loading /> : projectError ? <div role="alert"><FormError>{projectError.message}</FormError><button className="btn" onClick={reload}>Try again</button></div>
             : <>
               {!projects?.length && <EmptyState icon="squares-four" title="No projects yet" hint="Start one with the button above." />}
@@ -118,7 +129,7 @@ export function AccountDashboard() {
               {overview && overview.buildings.map(building => {
                 const grouped = (projects ?? []).filter(project => overview.links.some(link => link.buildingId === building.id && link.projectId === project.id))
                 return <details key={building.id} className="account-building-group" open>
-                  <summary><Icon name="house" size={18} /><strong>{building.name}</strong><span className="ui-row-meta">{grouped.length} {grouped.length === 1 ? 'project' : 'projects'}</span></summary>
+                  <summary><ProjectThumbnail /><strong>{building.name}</strong><span className="ui-row-meta">{grouped.length} {grouped.length === 1 ? 'project' : 'projects'}</span></summary>
                   {grouped.length ? <List>{grouped.map(projectRow)}</List> : <p className="foundation-hint">No linked projects.</p>}
                   <Link className="project-detail-link" to={`/account/buildings?building=${encodeURIComponent(building.id)}`}>Building &amp; spaces</Link>
                 </details>
@@ -163,7 +174,7 @@ export function AccountDashboard() {
         </section>
       </div>
 
-      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/') }} />
+      <ProjectInvitations onChanged={projectId => { reload(); if (projectId) navigate('/project') }} />
 
       {modal?.kind === 'new' && (
         <NewProjectModal

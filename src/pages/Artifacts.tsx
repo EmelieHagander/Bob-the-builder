@@ -394,7 +394,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
   const targetQuery = area ? `/solutions?area=${encodeURIComponent(area)}` : '/solutions'
 
   return <div className="page project-artifacts">
-    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/'}>{selectedArea ? `← ${selectedArea.name}` : '← Project'}</Link>
+    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/project'}>{selectedArea ? `← ${selectedArea.name}` : '← Project'}</Link>
     <div className="page-head"><div>
       {selectedArea && <div style={{ marginBottom: 6 }}><PhasePill phase={selectedArea.phase} prefix="Area" /></div>}
       <h1 className="page-title">Drawings</h1>
@@ -490,6 +490,6 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
 export function Artifacts() {
   const id = db.getActiveProjectId()
   if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Drawings</h1>
-    <p>This demo does not save plans and drawings. Open a connected project to use them.</p><Link className="btn" to="/">Project</Link></div>
+    <p>This demo does not save plans and drawings. Open a connected project to use them.</p><Link className="btn" to="/project">Project</Link></div>
   return <ConnectedArtifacts key={id} projectId={id} />
 }

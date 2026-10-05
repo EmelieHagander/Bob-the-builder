@@ -86,6 +86,7 @@ try{
     const row={...tasks[0],id:'new-task',name:b.p_name,status:'todo'};tasks.push(row);creates++;return respond(row)
    }
    if(path==='/rest/v1/tasks'){
+    if(url.searchParams.get('project_id')==='in.(P)')return respond(tasks)
     assert.equal(url.searchParams.get('project_id'),'eq.P');assert(!url.searchParams.get('select')?.includes('areas!inner'))
     return respond(req.headers().accept?.includes('object+json')?tasks.find(t=>'eq.'+t.id===url.searchParams.get('id')):tasks)
    }
@@ -94,7 +95,7 @@ try{
   })
   const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>errors.push(e.message))
   await page.goto(base+'#/signin');await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
-  await page.getByRole('heading',{name:'Work fixture',exact:true}).waitFor()
+  await page.getByRole('heading',{name:'Home',exact:true}).waitFor()
   await page.getByRole('button',{name:'Open project Build together',exact:true}).click()
   const plan=page.getByRole('region',{name:'Project plan',exact:true}),drawers=plan.locator('.work-step').filter({hasText:'Complete drawers'})
   await drawers.getByRole('link',{name:'Cut panels',exact:true}).waitFor()
@@ -151,15 +152,18 @@ try{
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Build day has no horizontal overflow')
   await page.screenshot({path:`test-results/build-day-${width}.png`,fullPage:true})
   requestsVisible=true
-  await page.goto(base+'#/');await page.reload()
+  await page.goto(base+'#/project');await page.reload()
   const requests=page.getByRole('region',{name:'Drawing requests',exact:true})
   await requests.getByRole('heading',{name:'Waiting for information',exact:true}).waitFor()
   await requests.getByText('Record panel width',{exact:true}).waitFor()
   await requests.getByText('Responsible: Bob',{exact:true}).waitFor()
   await requests.getByRole('link',{name:'Open linked task',exact:true}).waitFor()
   const requestDestination=requests.locator('.drawing-request-card > p').getByRole('link',{name:root.title,exact:true})
-  assert.equal(await requestDestination.getAttribute('href'),'#/?step='+encodeURIComponent(root.id),'Destination label belongs to the request Step, even when its first prerequisite belongs to another Step')
-  assert.equal(await requests.getByRole('link',{name:grouped.title,exact:true}).getAttribute('href'),'#/?step='+encodeURIComponent(grouped.id),'The prerequisite retains its own linked Step')
+  assert.equal(await requestDestination.getAttribute('href'),'#/project?step='+encodeURIComponent(root.id),'Destination label belongs to the request Step, even when its first prerequisite belongs to another Step')
+  assert.equal(await requests.getByRole('link',{name:grouped.title,exact:true}).getAttribute('href'),'#/project?step='+encodeURIComponent(grouped.id),'The prerequisite retains its own linked Step')
+  await page.goto(base+'#/?step='+encodeURIComponent(root.id))
+  await page.waitForURL('**/#/project?step='+encodeURIComponent(root.id))
+  await page.getByRole('region',{name:'Project plan',exact:true}).waitFor()
   await requests.getByRole('button',{name:'Add request budget',exact:true}).click()
   const budgetDialog=page.getByRole('dialog',{name:'Add request budget',exact:true})
   assert.equal(grants,0,'opening the budget decision never spends money')

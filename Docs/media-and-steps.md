@@ -365,3 +365,19 @@ capability. The database advisor's private-table/no-policy and guarded
 SECURITY DEFINER reader notices are intentional and covered by those checks;
 see the [database advisor guidance](https://supabase.com/docs/guides/database/database-linter).
 The owner's fresh visual/CAD run and actual cost improvement remain to be tested.
+
+
+## Project thumbnails
+
+`bob.project_thumbnails` stores one optional ready image per Project. The composite
+foreign key enforces same-Project identity and cascades image deletion to the pin.
+`pin_project_thumbnail` applies the same current membership authority as image
+uploads, validates a ready image, serialises against removal, and supports explicit
+unpin. Authenticated clients have scoped SELECT only; anon and direct writes are
+denied. Pending/deleting images are not displayed as overview thumbnails.
+
+Pin controls live only in the Project image gallery. Home and Project headers use
+`ProjectThumbnail` with protected downloads and a decorative fallback, without
+public URLs or storage permission changes. Account reads never switch the active
+Project. Blob URLs are revoked on unmount/scope changes; failed/revoked downloads
+fall back without blocking navigation. Original uploads remain unchanged.

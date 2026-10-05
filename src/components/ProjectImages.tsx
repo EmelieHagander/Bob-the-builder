@@ -64,9 +64,10 @@ function UploadImage({ projectId, target, onClose, onSaved }: { projectId: strin
   </Modal>
 }
 
-export function ProjectImages({ projectId, target, title = 'Images', selectImage, allowUpload = false }: {
-  projectId: string; target: MediaTarget; title?: string; selectImage?: (image: MediaAsset) => Promise<void>; allowUpload?: boolean
+export function ProjectImages({ projectId, target, title = 'Images', selectImage, allowUpload = false, allowThumbnail = false }: {
+  projectId: string; target: MediaTarget; title?: string; selectImage?: (image: MediaAsset) => Promise<void>; allowUpload?: boolean; allowThumbnail?: boolean
 }) {
+  const [thumbnailId, setThumbnailId] = useState<string | null>(null)
   const [items, setItems] = useState<MediaAsset[]>([])
   const [more, setMore] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -90,6 +91,11 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
       .finally(() => { if (generation.current === current) setLoading(false) })
     return () => { generation.current++ }
   }, [projectId, target.kind, target.id, version])
+  useEffect(() => {
+    let active = true
+    if (allowThumbnail) db.getProjectThumbnail(projectId).then(id => { if (active) setThumbnailId(id) }).catch(err => { if (active) setError(message(err)) })
+    return () => { active = false }
+  }, [projectId, allowThumbnail, version])
   async function act(action: () => Promise<unknown>, close = false, refresh = true) {
     if (busy) return
     setBusy(true); setError('')
@@ -104,6 +110,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
         <button className="btn btn-primary" disabled={!db.authEnabled() || busy} onClick={() => setDialog({ kind: 'upload' })}><Icon name="plus" size={16} /> Add image</button>
       </div>}
     </div>
+    {allowThumbnail && <p className="foundation-hint">Pin a project image to use it as the thumbnail on Home. Unpin to use the default illustration.</p>}
     {!db.authEnabled() && <p className="foundation-hint">This demo does not save images. Open a connected project to add them.</p>}
     {error && <div role="alert"><FormError>{error}</FormError><button className="btn" onClick={reload}>Reload images</button></div>}
     {loading && <p role="status">Loading images…</p>}
@@ -119,6 +126,9 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
           <span className="foundation-hint">Uploaded {new Date(image.createdAt).toLocaleDateString()}</span>
         </div>
         <div className="foundation-actions">
+          {allowThumbnail && image.state === 'ready' && <button type="button" className="btn" aria-pressed={thumbnailId === image.id} disabled={busy} onClick={() => void act(() => db.pinProjectThumbnail(projectId, thumbnailId === image.id ? null : image.id))}>
+            <Icon name="push-pin" weight={thumbnailId === image.id ? 'fill' : 'regular'} size={15} />{thumbnailId === image.id ? 'Unpin thumbnail' : 'Pin as thumbnail'}
+          </button>}
           {selectImage && image.state === 'ready' ? <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => selectImage(image))}>Use image</button> : <>
             {image.state === 'pending' && <button className="btn" disabled={busy} onClick={() => void act(() => db.finalizeProjectImage(projectId, image.id))}>Check upload</button>}
             {image.state === 'ready' && target.kind !== 'project' && image.links.filter(l => l.kind === target.kind && l.targetId === target.id).map(link =>

@@ -30,7 +30,7 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
     return <article className="card drawing-request-card" key={r.id} style={{padding:'var(--panel-padding)'}}>
      <h3>{labels[r.status]??'Status unavailable'}</h3>
      <p className="foundation-hint">Request {r.id.slice(0,8)}</p>
-     {r.scope.step_id&&<p><Link to={'/?step='+encodeURIComponent(r.scope.step_id)}>{scopeStep??'Open destination Step'}</Link></p>}
+     {r.scope.step_id&&<p><Link to={'/project?step='+encodeURIComponent(r.scope.step_id)}>{scopeStep??'Open destination Step'}</Link></p>}
      {!terminal&&<p>{stateText}</p>}
      {b?.legacy_untracked&&<p>Earlier charges were not tracked against this request. A new allocation covers only further work.</p>}
      {b&&<p className="foundation-hint">{b.calls} / {b.call_limit} calls · ${Number(b.spent_usd).toFixed(2)} / ${Number(b.usd_limit).toFixed(2)}</p>}
@@ -41,13 +41,13 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
       <div className="foundation-actions">
        {g.task_id&&<Link className="btn" to={'/tasks/'+encodeURIComponent(g.task_id)}>Open linked task</Link>}
        {g.action==='measurement'&&<Link className="btn" to={'/facts?kind=measurement'+(g.area_id?'&area='+encodeURIComponent(g.area_id):'')}>Record measurements</Link>}
-       {g.step_id&&<Link className="btn" to={'/?step='+encodeURIComponent(g.step_id)}>{g.step_title??'Open linked Step'}</Link>}
+       {g.step_id&&<Link className="btn" to={'/project?step='+encodeURIComponent(g.step_id)}>{g.step_title??'Open linked Step'}</Link>}
       </div>
      </li>)}</ul>}
      {r.status==='saved'&&r.artifact_id&&<Link className="btn" to={'/artifacts?drawing='+encodeURIComponent(r.artifact_id)+'&revision='+r.artifact_revision}>Open saved drawing</Link>}
      {r.status==='saved'&&<p className="foundation-hint">Saved revision {r.artifact_revision}. {work.artifact_source_state==='current'?'Its linked sources are current; the saved classification still applies.':work.artifact_source_state==='changed'?'Its sources changed. Review this saved version before use.':'Its source freshness could not be checked. Open the drawing before use.'}</p>}
      {!terminal&&<div className="foundation-actions">
-      <button className="btn" onClick={()=>{if(r.scope.step_id)navigate('/?step='+encodeURIComponent(r.scope.step_id));openBobForCurrentSurface()}}>{r.scope.step_id?'Ask Bob from this Step':'Ask Bob about project work'}</button>
+      <button className="btn" onClick={()=>{if(r.scope.step_id)navigate('/project?step='+encodeURIComponent(r.scope.step_id));openBobForCurrentSurface()}}>{r.scope.step_id?'Ask Bob from this Step':'Ask Bob about project work'}</button>
       {work.can_manage&&work.resume_state==='authorization_needed'&&r.status!=='paused'&&<button className="btn" disabled={busy} onClick={()=>void act(()=>db.renewDrawingRequests(projectId))}>Reconnect request</button>}
       {work.can_manage&&stopped&&!b?.outcome_unknown&&<button className="btn" disabled={busy} onClick={()=>setGrant({work,id:crypto.randomUUID()})}>Add request budget</button>}
       {work.can_manage&&<button className="btn" disabled={busy} onClick={()=>void act(()=>db.cancelDrawingRequest(projectId,r.id,r.revision))}>Cancel request</button>}

@@ -27,7 +27,7 @@ try {
     const page=await context.newPage()
     page.setDefaultTimeout(12000)
     page.on('pageerror',error=>errors.push(error.message))
-    for (const route of ['account','', 'areas','people','events','today','shopping','food','food/shopping','announcements','account/calendar','account/settings','facts','solutions','artifacts','material-plan']) {
+    for (const route of ['account','', 'project', 'areas','people','events','today','shopping','food','food/shopping','announcements','account/calendar','account/settings','facts','solutions','artifacts','material-plan']) {
       await page.goto(`${base}#/${route}`)
       await page.locator('.page-title').waitFor()
       await page.waitForFunction(()=>!document.querySelector('.ui-loading'))

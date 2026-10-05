@@ -69,6 +69,20 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
   }
   return {
     getMedia,
+    async getThumbnail(projectId: string): Promise<string | null> {
+      if (!client) return null
+      const { db, assertCurrent } = connection(projectId)
+      const rows = value(await db.from('project_thumbnails').select('media_id,media_assets!inner(state)').eq('project_id', projectId).eq('media_assets.state', 'ready')) as unknown as Row[]
+      assertCurrent()
+      return rows[0]?.media_id ?? null
+    },
+    async pinThumbnail(projectId: string, mediaId: string | null): Promise<void> {
+      const { db, assertCurrent } = connection(projectId)
+      const result = await db.rpc('pin_project_thumbnail', { p_project: projectId, p_media: mediaId })
+      if (result.error) throw new Error(result.error.message)
+      assertCurrent()
+      changed()
+    },
     async uploadImage(projectId: string, target: MediaTarget, file: File, purpose: MediaPurpose, title: string): Promise<void> {
       const { db, assertCurrent } = connection(projectId)
       if (!IMAGE_TYPES.includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP image. Export HEIC images as JPEG first.')

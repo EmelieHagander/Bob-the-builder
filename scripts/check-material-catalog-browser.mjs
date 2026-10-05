@@ -134,7 +134,7 @@ try {
     }
     await page.goto(`${base}#/signin`)
     await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
-    await page.getByRole('heading',{name:'Catalog fixture account',exact:true}).waitFor()
+    await page.getByRole('heading',{name:'Home',exact:true}).waitFor()
     await page.getByRole('button',{name:'Open project Catalog A',exact:true}).click()
     let drawer=await openBob('A')
     await send('Create catalog definition')

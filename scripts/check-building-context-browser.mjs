@@ -129,7 +129,7 @@ try {
     await page.getByPlaceholder('you@example.se').fill(user.email)
     await page.locator('input[type="password"]').fill('fixture-password')
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-    await page.getByRole('heading', { name: 'Fixture account', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()
     await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()

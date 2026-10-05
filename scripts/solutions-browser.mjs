@@ -71,7 +71,7 @@ export function createSolutionsFixture(timestamp, assets, facts) {
 }
 
 export async function verifySolutionsBrowser(page, base, fixture, facts, width) {
-  await page.goto(base)
+  await page.goto(base+'#/project')
   await page.getByRole('link', { name: /Solutions & target/ }).click()
   await page.getByText('No target selected for the Project. Add alternatives, then choose one version for this scope.', { exact: true }).waitFor()
   async function add(title, evidence = false) {

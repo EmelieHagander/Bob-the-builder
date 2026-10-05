@@ -77,24 +77,27 @@ function ProjectApp() {
       <button className="btn" onClick={() => window.location.reload()}>Reload app</button></div>
   </section></div>
   if (db.authEnabled() && signedIn === false) return <SignIn />
+  // Retain previously shared Step links while root becomes the permanent Home.
+  if (location.pathname === '/' && new URLSearchParams(location.search).has('step')) return <Navigate to={`/project${location.search}`} replace />
   if (location.pathname === '/account/buildings') {
-    return <BuildingContext key={`account:${authTick}`} projectId="" context={db.buildingContext} />
+    return <Layout key={`account:${authTick}`} project={project}><BuildingContext projectId="" context={db.buildingContext} /></Layout>
   }
-  if (!project && location.pathname.startsWith('/account')) return <Layout key={`account:${authTick}`} project={null}>
+  if (!project && (location.pathname.startsWith('/account') || location.pathname === '/')) return <Layout key={`account:${authTick}`} project={null}>
     <Routes>
+      <Route path="/" element={<AccountDashboard />} />
       <Route path="/account" element={<AccountDashboard />} />
       <Route path="/account/calendar" element={<AccountCalendar />} />
       <Route path="/account/settings" element={<AccountSettings />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Layout>
-  if (!project && location.pathname === '/' && db.getActiveProjectId() === null) return <Navigate to="/account" replace />
   if (!project) return <StartProject onCreated={() => setBootVersion(v => v + 1)} />
 
   return (
     <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project}>
       <Routes>
-        <Route path="/" element={<ProjectHome />} />
+        <Route path="/" element={<AccountDashboard />} />
+        <Route path="/project" element={<ProjectHome />} />
         <Route path="/account" element={<AccountDashboard />} />
         <Route path="/account/calendar" element={<AccountCalendar />} />
         <Route path="/account/settings" element={<AccountSettings />} />
