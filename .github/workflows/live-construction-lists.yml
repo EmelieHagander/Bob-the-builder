@@ -1,6 +1,9 @@
 name: Live K4 construction blank acceptance
 
 on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/live-construction-lists.yml]
   workflow_dispatch:
     inputs:
       scope:
