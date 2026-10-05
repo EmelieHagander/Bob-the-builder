@@ -239,7 +239,7 @@ export function ProjectFacts() {
   }
   const saved = () => { setModal(null); setOffset(0); setVersion(n => n + 1) }
   return <div className="page project-facts">
-    <Link to="/" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Dashboard</Link>
+    <Link to="/project" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Dashboard</Link>
     <div className="page-head" style={{ gap: 'var(--layout-gap)' }}>
       <div><h1 className="page-title">Measurements & existing parts</h1>
         <p className="page-sub">Keep what you know, what needs measuring and what may be reused.</p></div>

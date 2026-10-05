@@ -66,7 +66,7 @@ export function createFactsFixture(timestamp, assets) {
 }
 
 export async function verifyFactsBrowser(page, base, fixture, width) {
-  await page.goto(base)
+  await page.goto(base+'#/project')
   await page.getByRole('link', { name: /Measurements & existing parts/ }).click()
   await page.getByRole('heading', { name: 'Measurements & existing parts', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Add measurement', exact: true }).click()
@@ -83,7 +83,7 @@ export async function verifyFactsBrowser(page, base, fixture, width) {
 
   // The home Dashboard is the fast planning path: the saved unknown must surface
   // as the next step and drill directly into the To measure selection.
-  await page.goto(base)
+  await page.goto(base+'#/project')
   const nextStep = page.getByRole('link').filter({ hasText: 'Measure 1 missing dimension' })
   await nextStep.getByText('Opening width', { exact: false }).waitFor()
   const missingCard = page.getByRole('region', { name: 'Planning next steps' })

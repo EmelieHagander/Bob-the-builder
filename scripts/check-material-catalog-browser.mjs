@@ -95,7 +95,7 @@ try {
       if(url.pathname==='/rest/v1/rpc/claim_project_invites') return respond({json:0})
       if(url.pathname==='/rest/v1/rpc/project_invitations') return respond({json:[]})
       if(url.pathname==='/rest/v1/projects') return respond({json:projects})
-      if(url.pathname==='/rest/v1/account') return respond({json:{id:'account',name:'Catalog fixture account',owner_name:'',email:''}})
+      if(url.pathname==='/rest/v1/account') return respond({json:{id:'account',name:'Home',owner_name:'',email:''}})
       if(url.pathname==='/rest/v1/people') {
         // getCurrentUser resolves actual project membership before chat hydration.
         // A missing member would exercise join_project, not this receipt journey.
@@ -134,7 +134,7 @@ try {
     }
     await page.goto(`${base}#/signin`)
     await page.getByRole('button',{name:'Continue as guest',exact:true}).click()
-    await page.getByRole('heading',{name:'Catalog fixture account',exact:true}).waitFor()
+    await page.getByRole('heading',{name:'Home',exact:true}).waitFor()
     await page.getByRole('button',{name:'Open project Catalog A',exact:true}).click()
     let drawer=await openBob('A')
     await send('Create catalog definition')

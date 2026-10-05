@@ -187,7 +187,7 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
   const exactExpected = area && target?.inherited ? 0 : target?.decision.revision ?? 0
   const targetTitle = area ? `Selected for ${areaName}` : 'Selected Project target'
   return <div className="page solutions-page">
-    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/'}>{selectedArea ? `← ${areaName}` : '← Project'}</Link>
+    <Link className="btn" to={selectedArea ? `/areas/${selectedArea.slug}` : '/project'}>{selectedArea ? `← ${areaName}` : '← Project'}</Link>
     <div className="page-head"><div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{selectedArea && <PhasePill phase={selectedArea.phase} prefix="Area" />}</div>
       <h1 className="page-title">Solutions & target</h1>
@@ -239,6 +239,6 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
 }
 export function Solutions() {
   const id = db.getActiveProjectId()
-  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Solutions & target</h1><p>This demo does not save solutions. Open a connected project to use them.</p><Link className="btn" to="/">Project</Link></div>
+  if (!db.authEnabled() || !id) return <div className="page"><h1 className="page-title">Solutions & target</h1><p>This demo does not save solutions. Open a connected project to use them.</p><Link className="btn" to="/project">Project</Link></div>
   return <ConnectedSolutions key={id} projectId={id} />
 }

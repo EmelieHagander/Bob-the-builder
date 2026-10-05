@@ -91,7 +91,7 @@ export function AreaWorkstream() {
 
   return <div className="page">
     <div style={{ fontSize: 13, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 7 }}>
-      <Link to="/">Project</Link><Icon name="caret-right" size={12} />
+      <Link to="/project">Project</Link><Icon name="caret-right" size={12} />
       <Link to="/areas">Areas</Link><Icon name="caret-right" size={12} />
       <span style={{ color: 'var(--ink)', fontWeight: 700 }}>{area.name}</span>
     </div>

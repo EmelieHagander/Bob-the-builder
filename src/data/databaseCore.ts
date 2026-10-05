@@ -1,3 +1,4 @@
+import { readProjectOverview } from './projectOverview'
 import type { DrawingSourceStatus } from './drawingSources'
 /*
  * ┌──────────────────────────────────────────────────────────────────────────┐
@@ -212,6 +213,12 @@ export const getProjectFacts = projectFacts.list
 export const getProjectFact = projectFacts.get
 export const getProjectFactHistory = projectFacts.history
 export const editProjectFact = projectFacts.command
+export const getProjectThumbnail = projectFiles.getThumbnail
+export const pinProjectThumbnail = projectFiles.pinThumbnail
+// Read-only account access keeps the active project untouched; Storage/RLS still
+// checks the requested image's project and fresh session membership.
+const overviewFiles = createProjectFiles(db, () => captureAccountContext())
+export const downloadOverviewImage = overviewFiles.downloadImage
 export const getProjectImages = projectFiles.getMedia
 export const uploadProjectImage = projectFiles.uploadImage
 export const downloadProjectImage = projectFiles.downloadImage
@@ -325,6 +332,8 @@ export interface AccountBuildingOverview {
   buildings: { id: string; name: string }[]
   links: { projectId: string; buildingId: string }[]
 }
+
+export const getAccountProjectOverview = (ids: string[]) => readProjectOverview(db, ids, captureAccountContext())
 
 /** Account read: keep the user's chosen Project intact while grouping visible builds. */
 export async function getAccountBuildingOverview(projectIds: string[]): Promise<AccountBuildingOverview> {

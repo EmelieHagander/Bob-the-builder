@@ -103,7 +103,7 @@ export function TaskDetail() {
   const planStep = work?.steps.find(s => s.id === task.primaryStepId)
   const editable = db.authEnabled()
   return <div className="page task-detail">
-    <Link to={planStep ? '/?step='+planStep.id : area ? '/areas/' + area.slug : '/'} className="task-back"><Icon name="arrow-left" size={16} /> {planStep?.title ?? area?.name ?? 'Project plan'}</Link>
+    <Link to={planStep ? '/project?step='+planStep.id : area ? '/areas/' + area.slug : '/project'} className="task-back"><Icon name="arrow-left" size={16} /> {planStep?.title ?? area?.name ?? 'Project plan'}</Link>
     <div className="page-head"><div><h1 className="page-title">{task.name}</h1>
       <div className="foundation-actions"><SkillPill level={task.skill} /><span>{task.hours}</span>{area && <PhasePill phase={area.phase} prefix="Area" />}</div></div>
       <button className="btn" onClick={() => setDialog({ kind: 'task' })}>Edit task</button>

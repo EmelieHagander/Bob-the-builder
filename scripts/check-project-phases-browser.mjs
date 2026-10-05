@@ -123,7 +123,7 @@ try {
         const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
         return respond({ json: single ? project : [project] })
       }
-      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Phase fixture', owner_name: '', email: '' } })
+      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Home', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/account_notes') return respond({ json: [] })
       if (url.pathname === '/rest/v1/people') return respond({ json: [{ id: 'member', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (url.pathname === '/rest/v1/areas') {
@@ -201,7 +201,7 @@ try {
       await page.getByRole('heading', {name:'Could not load your account',exact:true}).waitFor()
       await page.getByRole('button',{name:'Try again',exact:true}).click()
     }
-    await page.getByRole('heading', { name: 'Phase fixture', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     if (viewport.width === 390) assert.equal(refreshRequests,1,'A nearly expired persisted session refreshes once across account, phase and Bob consumers')
     assert.deepEqual(authWarnings,[],'Account consumers share one Auth owner')
     const projectCard = page.locator('.account-project-row').filter({ hasText: 'Renovate upstairs' }).first()
@@ -249,7 +249,7 @@ try {
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Readiness not reviewed', { exact: true }).waitFor()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByRole('button', { name: 'Confirm ready', exact: true }).click()
     await page.getByRole('region', { name: 'Task readiness', exact: true }).getByText('Ready to start', { exact: true }).waitFor()
-    await page.goto(`${base}#/`)
+    await page.goto(`${base}#/project`)
     await page.getByRole('heading', { name: 'Renovate upstairs', exact: true }).waitFor()
 
     await page.getByRole('button', { name: 'Review phase', exact: true }).first().click()
@@ -293,7 +293,7 @@ try {
     await page.reload()
     await page.getByRole('region', { name: 'Archived Area', exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Add task', exact: true }).count(), 0)
-    await page.goto(`${base}#/`)
+    await page.goto(`${base}#/project`)
     await page.getByText('Archived Areas · 1', { exact: true }).click()
     await plan.getByRole('region', { name: 'Bedroom', exact: true }).waitFor()
     await page.goto(`${base}#/areas`)

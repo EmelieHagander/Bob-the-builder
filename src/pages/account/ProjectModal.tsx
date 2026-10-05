@@ -92,7 +92,7 @@ export function ProjectModal({
 
   const open = () => {
     db.setActiveProject(project.id)
-    navigate('/')
+    navigate('/project')
   }
 
   const save = async (event: FormEvent) => {

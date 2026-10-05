@@ -9,6 +9,7 @@ import * as db from '../data/database'
 import type { Project } from '../data/types'
 import { phaseLabel } from '../lib/projectPhase'
 import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
+import { ProjectWorkspaceNav } from './ProjectWorkspaceNav'
 import { AskBob } from './AskBob'
 import { BOB_OPEN_EVENT, useBobSurface } from '../lib/bobSurface'
 import type { BobScreenSurface } from '../domain/bobScreen'
@@ -28,7 +29,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', icon: 'house', label: 'Project', end: true },
+  { to: '/project', icon: 'hammer', label: 'Project', end: true },
   { to: '/areas', icon: 'squares-four', label: 'Areas' },
   { to: '/people', icon: 'users-three', label: 'People' },
   { to: '/events', icon: 'calendar-dots', label: 'Events' },
@@ -40,7 +41,7 @@ const NAV: NavItem[] = [
 ]
 
 const ACCOUNT_NAV: NavItem[] = [
-  { to: '/account', icon: 'user-circle', label: 'Account', end: true },
+  { to: '/', icon: 'house', label: 'Home', end: true },
   { to: '/account/calendar', icon: 'calendar-dots', label: 'Calendar' },
   { to: '/account/buildings', icon: 'house', label: 'Buildings' },
   { to: '/account/settings', icon: 'gear-six', label: 'Settings' },
@@ -106,7 +107,7 @@ function Sidebar({ project }: { project: Project | null }) {
       </Link>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {(project ? NAV : ACCOUNT_NAV).map((n) => (
+        {(project ? [ACCOUNT_NAV[0], ...NAV] : ACCOUNT_NAV).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} style={{ display: 'block' }}>
             {({ isActive }) => (
               <div
@@ -175,7 +176,7 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
   // Field work stays one tap away. Stable tabs are easier to learn than
   // phase-dependent navigation, so Today replaces People here; People remains
   // available from the full project navigation.
-  const items = hasProject ? [NAV[0], NAV[1], NAV[7], NAV[3], NAV[NAV.length - 1]] : ACCOUNT_NAV
+  const items = hasProject ? [ACCOUNT_NAV[0], NAV[0], NAV[7], NAV[3], NAV[NAV.length - 1]] : ACCOUNT_NAV
   return (
     <nav
       className="no-print mobile-nav"
@@ -210,8 +211,8 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
 
 export function Layout({ children, project }: { children: ReactNode; project: Project | null }) {
   const location = useLocation()
-  const surfaces: Record<string, BobScreenSurface> = { '/': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
-  const showBob = !!project && !location.pathname.startsWith('/account')
+  const surfaces: Record<string, BobScreenSurface> = { '/project': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
+  const showBob = !!project && location.pathname !== '/' && !location.pathname.startsWith('/account')
   const surface = surfaces[location.pathname] ?? 'project'
   useBobSurface(project?.id ?? '', showBob ? { surface } : null, 'Project context', 0)
   const [bobOpen, setBobOpen] = useState(false)
@@ -260,7 +261,7 @@ export function Layout({ children, project }: { children: ReactNode; project: Pr
   return (
     <div className="app-shell">
       <Sidebar project={project} />
-      <div className="main-col">{children}</div>
+      <div className="main-col">{showBob && <div className="workspace-nav-frame"><ProjectWorkspaceNav /></div>}{children}</div>
 
       {showBob && <button
         className="no-print bob-launcher"

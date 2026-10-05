@@ -75,7 +75,7 @@ try {
         revision: 0, canManage: false, buildings: [], invitations: [],
       } })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
-      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Reset fixture', owner_name: '', email: '' } })
+      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Home', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
         const id = url.searchParams.get('project_id')?.replace('eq.', '') ?? 'A'
         return respond({ json: [{ id: `member${id}`, name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
@@ -176,7 +176,7 @@ try {
     }
     await page.goto(`${base}#/signin`)
     await page.getByRole('button', { name: 'Continue as guest', exact: true }).click()
-    await page.getByRole('heading', { name: 'Reset fixture', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.locator('.account-project-row').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open project Reset project A',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
@@ -225,7 +225,7 @@ try {
     const other = await context.newPage()
     other.setDefaultTimeout(12000)
     other.on('pageerror', e => errors.push(e.message))
-    await other.goto(base); const otherDrawer = await open(other)
+    await other.goto(base+'#/project'); const otherDrawer = await open(other)
     await otherDrawer.getByText('FRESH ANSWER', { exact: true }).waitFor()
     // Session restoration in a new tab legitimately closes existing auth-scoped
     // drawers. Reopen after that event, then exercise two genuinely open drawers.

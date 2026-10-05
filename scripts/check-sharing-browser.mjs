@@ -73,7 +73,7 @@ async function fixture(viewport, fresh = false) {
       if (state.failAccountBind) return respond({ status: 403, json: { message: 'Household account setup denied.' } })
       assert.equal(body.p_household, 'H1')
       state.writes.push({ command: 'bind_account_household', ...body })
-      state.account = { id: 'account', name: 'Family account', owner_name: '', email: '' }
+      state.account = { id: 'account', name: 'Home', owner_name: '', email: '' }
       return respond({ json: { householdId: body.p_household } })
     }
     if (path === '/rest/v1/people') {
@@ -182,7 +182,7 @@ async function signIn(page) {
   await page.getByPlaceholder('you@example.se').fill(user.email)
   await page.locator('input[type="password"]').fill('fixture-password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
 }
 
 async function openProjectSharing(page) {
@@ -236,7 +236,7 @@ try {
     await page.getByLabel('Account name *', { exact: true }).waitFor()
     assert.equal(await page.getByLabel('Account name *', { exact: true }).inputValue(), 'Family account')
     await page.goto(base + '#/account')
-    await page.getByRole('heading', { name: 'Family account', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.getByRole('link', { name: 'Buildings & family', exact: true }).click()
     await page.getByRole('heading', { name: 'Main house', exact: true }).waitFor()
     assert.equal(await page.getByRole('button', { name: 'Use in this project', exact: true }).count(), 0)
@@ -377,10 +377,10 @@ try {
     await inbox.getByRole('button', { name: 'Refresh project access', exact: true }).click()
     await fresh.page.getByRole('heading', { name: 'Porch A', exact: true }).waitFor()
     await fresh.page.goto(base + '#/account')
-    await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+    await fresh.page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     assert.equal(await fresh.page.getByText('Porch B', { exact: true }).count(), 0, 'Declining does not grant the other project')
     await fresh.page.reload()
-    await fresh.page.getByRole('heading', { name: 'Your account', exact: true }).waitFor()
+    await fresh.page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await fresh.page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).waitFor()
     assert.deepEqual(fresh.state.errors, [])
     await fresh.context.close()

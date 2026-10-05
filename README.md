@@ -26,7 +26,8 @@ A React + TypeScript single-page app built with Vite. Screens:
 | --- | --- |
 | `/install` | Public Swedish home-screen installation guide, available before sign-in |
 | `/account/settings` | Account details and a prominent **Installera appen** entry |
-| `/` | Project — shared Plan, Steps and Tasks, drawing previews, evidence and next build day; Areas are optional |
+| `/` (also `/account`) | Home — building groups, projects, saved participant/event/task-estimate details and household notes |
+| `/project` | Project — shared Plan, Steps and Tasks, drawing previews, evidence and next build day; Areas are optional |
 | `/areas`, `/areas/:slug` | Areas list and area detail (tasks / materials / reference images) |
 | `/facts` | Measurements and existing parts — sources, dimensions and retained history, reached from Project or an Area |
 | `/artifacts` | Drawings — versioned outputs, exact source lineage and links to the work Steps that use them |
