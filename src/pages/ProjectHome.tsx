@@ -29,6 +29,7 @@ export function ProjectHome() {
     return () => window.removeEventListener(db.MEDIA_CHANGED_EVENT, refresh)
   }, [])
   const { data: overview } = useAsync(() => db.getAccountProjectOverview(projectId ? [projectId] : []), [projectId, projectVersion, version, mediaVersion])
+  const { data: thumbnailId } = useAsync(() => projectId ? db.getProjectThumbnail(projectId) : Promise.resolve(null), [projectId, projectVersion, mediaVersion])
   useBobSurface(projectId, { surface: 'project' }, 'Project')
   const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
@@ -77,7 +78,7 @@ export function ProjectHome() {
   return <div className="page project-home">
     <div className="page-head">
       <div className="project-header-identity">
-        <ProjectThumbnail projectId={project.id} mediaId={overview?.[0]?.thumbnailId} />
+        <ProjectThumbnail projectId={project.id} mediaId={thumbnailId} />
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 7 }}>
           <PhasePill phase={project.phase} prefix="Project" />

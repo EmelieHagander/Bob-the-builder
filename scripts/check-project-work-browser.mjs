@@ -86,6 +86,7 @@ try{
     const row={...tasks[0],id:'new-task',name:b.p_name,status:'todo'};tasks.push(row);creates++;return respond(row)
    }
    if(path==='/rest/v1/tasks'){
+    if(url.searchParams.get('project_id')==='in.(P)')return respond(tasks)
     assert.equal(url.searchParams.get('project_id'),'eq.P');assert(!url.searchParams.get('select')?.includes('areas!inner'))
     return respond(req.headers().accept?.includes('object+json')?tasks.find(t=>'eq.'+t.id===url.searchParams.get('id')):tasks)
    }

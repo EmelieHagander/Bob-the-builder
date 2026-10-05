@@ -49,7 +49,7 @@ try {
     const roomLayout = createRoomLayoutFixture(timestamp, artifacts, solutions)
     const materialPlanning = createMaterialPlanningFixture(timestamp, facts, solutions, artifacts)
     installSheetLayerFixture(materialPlanning, timestamp, solutions)
-    const task = { id: 'taskA', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
+    const task = { id: 'taskA', project_id: 'A', area_id: 'areaA', name: 'Prepare opening', skill: 'novice', hours: '1h', status: 'todo', materials: '0 / 0', instructions: '', updated_at: timestamp(), task_assignees: [], areas: { project_id: 'A' } }
     const area = { id: 'areaA', project_id: 'A', slug: 'entry', name: 'Entry', description: 'Entry work', icon: 'house', lead_id: null, assigned_pct: 0, materials_pct: 0, done_pct: 0, task_summary: '', area_crew: [], area_reference_images: [{ label: 'Old reference note', sort_order: 1 }] }
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(api + '/**', async route => {
@@ -99,7 +99,7 @@ try {
       if (path === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
       if (path === '/rest/v1/projects') return respond({ json: projects })
       if (path === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Fixture account', owner_name: '', email: '' } })
-      if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
+      if (path === '/rest/v1/people') return respond({ json: [{ id: 'memberA', project_id: 'A', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (path === '/rest/v1/areas') return respond({ json: eq('project_id') === 'B' ? [] : [area] })
       if (path === '/rest/v1/tasks') {
         if (method === 'PATCH') {

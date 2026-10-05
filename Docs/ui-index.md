@@ -146,7 +146,7 @@ physical-phone and named-participant acceptance.
 
 | Surface | Primary user job | Important UI constraint |
 |---|---|---|
-| Project Home / Dashboard (`/`) | understand overall Project phase, mixed Area phases and what deserves attention next | scan quickly; Project focus must not pretend one global planning step applies to every Area |
+| Project Plan (`/project`) | understand overall Project phase, mixed Area phases and what deserves attention next | scan quickly; Project focus must not pretend one global planning step applies to every Area |
 | Areas / Area detail | understand each workstream's phase and act locally | Area phase + one primary next action first; Build-oriented progress only dominates when useful |
 | Task detail (`/tasks/:taskId`) | follow instructions and illustrated steps | keep required checks visible; lightweight Area context only; do not turn into a phase dashboard |
 | Project facts (`/facts`) | record lengths, unknowns and existing parts | reached from Project/Area; source labels and version history stay explicit; phase provides context, not truth promotion |
