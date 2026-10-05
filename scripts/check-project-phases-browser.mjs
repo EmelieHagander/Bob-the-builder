@@ -119,11 +119,11 @@ try {
           bootReadStarted()
           await new Promise(resolve => pendingBootReads.push(resolve))
         }
-        const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: '2026-09-15', end_date: '2026-10-04' }
+        const project = { id: 'P', slug: 'renovate-upstairs', name: 'Renovate upstairs', description: 'Three rooms moving at different speeds.', location: 'Djuvanäs', type: 'Renovation', theme: 'birch', phase: projectPhase, start_label: '', start_date: new Date(Date.now()-86400000).toISOString().slice(0,10), end_date: new Date(Date.now()+86400000).toISOString().slice(0,10) }
         const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
         return respond({ json: single ? project : [project] })
       }
-      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Home', owner_name: '', email: '' } })
+      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Phase fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/account_notes') return respond({ json: [] })
       if (url.pathname === '/rest/v1/people') return respond({ json: [{ id: 'member', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       if (url.pathname === '/rest/v1/areas') {

@@ -102,6 +102,8 @@ export function ProjectHome() {
       <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
     </details>}
 
+    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
+
     <nav className="project-shortcuts" aria-label="Project tools">
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
       <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} /><span>Drawings</span></Link>
@@ -123,8 +125,6 @@ export function ProjectHome() {
       </section>
       <Link to="/building" className="project-detail-link"><Icon name="house" size={16} /> Building &amp; spaces <Icon name="arrow-right" size={15} /></Link>
     </details>
-
-    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
     {db.authEnabled() && <>
       <ProjectDrawings key={project.id} projectId={project.id} />

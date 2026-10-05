@@ -57,7 +57,7 @@ try{
    }
    if(path==='/rest/v1/bob_threads')return respond(null)
    if(path==='/rest/v1/projects')return respond(req.headers().accept?.includes('object+json')?project:[project])
-   if(path==='/rest/v1/account')return respond({id:'account',name:'Home',owner_name:'',email:''})
+   if(path==='/rest/v1/account')return respond({id:'account',name:'Work fixture',owner_name:'',email:''})
    if(path==='/rest/v1/areas')return respond([area])
    if(path==='/rest/v1/events')return respond(['one','two'].map(id=>({id:`day-${id}`,project_id:'P',slug:`day-${id}`,title:`Build day ${id}`,day:'Saturday',time:'10:00',place:'Workshop',spots:'0 / 8',status:'open',food:'Bring lunch',event_attendees:[]})))
    if(path==='/rest/v1/event_tasks'){

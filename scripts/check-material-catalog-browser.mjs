@@ -95,7 +95,7 @@ try {
       if(url.pathname==='/rest/v1/rpc/claim_project_invites') return respond({json:0})
       if(url.pathname==='/rest/v1/rpc/project_invitations') return respond({json:[]})
       if(url.pathname==='/rest/v1/projects') return respond({json:projects})
-      if(url.pathname==='/rest/v1/account') return respond({json:{id:'account',name:'Home',owner_name:'',email:''}})
+      if(url.pathname==='/rest/v1/account') return respond({json:{id:'account',name:'Catalog fixture account',owner_name:'',email:''}})
       if(url.pathname==='/rest/v1/people') {
         // getCurrentUser resolves actual project membership before chat hydration.
         // A missing member would exercise join_project, not this receipt journey.

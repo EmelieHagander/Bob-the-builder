@@ -73,7 +73,7 @@ async function fixture(viewport, fresh = false) {
       if (state.failAccountBind) return respond({ status: 403, json: { message: 'Household account setup denied.' } })
       assert.equal(body.p_household, 'H1')
       state.writes.push({ command: 'bind_account_household', ...body })
-      state.account = { id: 'account', name: 'Home', owner_name: '', email: '' }
+      state.account = { id: 'account', name: 'Family account', owner_name: '', email: '' }
       return respond({ json: { householdId: body.p_household } })
     }
     if (path === '/rest/v1/people') {

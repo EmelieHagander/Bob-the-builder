@@ -75,7 +75,7 @@ try {
         revision: 0, canManage: false, buildings: [], invitations: [],
       } })
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
-      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Home', owner_name: '', email: '' } })
+      if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Reset fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
         const id = url.searchParams.get('project_id')?.replace('eq.', '') ?? 'A'
         return respond({ json: [{ id: `member${id}`, name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })

@@ -449,7 +449,9 @@ try {
     await page.screenshot({path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true
-    await page.goto(base+'#/project')
+    // Reload the restored source assessment before testing a separate preview transport failure.
+    // Navigating to the same hash can retain the previous unavailable-source overview.
+    await page.reload()
     // Preview bytes are loaded only when this region enters the viewport.
     await drawings.scrollIntoViewIfNeeded()
     await drawings.getByText('Preview unavailable. Open the saved drawing.',{exact:true}).first().waitFor()
