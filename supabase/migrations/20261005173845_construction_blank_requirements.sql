@@ -58,10 +58,10 @@ begin
  select d into def from jsonb_array_elements(source.recipe->'definitions') d where d->>'id'=p_data->>'definition_id';
  select m into binding from jsonb_array_elements(source.materials) m where m->>'definition_id'=p_data->>'definition_id';
  select count(*),jsonb_agg(i->>'id' order by i->>'id') into n,instances from jsonb_array_elements(source.recipe->'instances') i where i->>'definition_id'=p_data->>'definition_id';
- if p_action='create' and exists(
+ if exists(
   select 1 from bob.material_requirement_construction_sources cs join bob.current_material_requirements r
    on r.id=cs.requirement_id and r.revision=cs.requirement_revision and r.project_id=cs.project_id
-  where cs.project_id=p_project and cs.artifact_id=source.artifact_id and cs.definition_id=p_data->>'definition_id'
+  where cs.project_id=p_project and cs.requirement_id<>p_requirement and cs.artifact_id=source.artifact_id and cs.definition_id=p_data->>'definition_id'
    and cs.quantity_mode=mode and not r.archived)
   then raise exception 'construction_requirement_exists' using errcode='PT409'; end if;
  if p_action='revise' and exists(

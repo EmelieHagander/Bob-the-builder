@@ -47,6 +47,11 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
  await t.test('second paid-turn create cannot duplicate an active need; forged quantities, stock allocation and publish cannot pass', async () => {
   const helper = (f: any, uid = user) => call('bob.material_requirement_cad_command', [project, 'create', randomUUID(), 0, JSON.stringify(f)], uid)
   await assert.rejects(helper(fields), /construction_requirement_exists/)
+  const manualId = randomUUID(), manual = { ...fields, artifact_id: null, artifact_revision: null, required_quantity: '1', unit: 'pcs', basis: 'Manual fixture' }
+  delete manual.definition_id; delete manual.quantity_mode
+  await call('bob.material_requirement_command', [project, 'create', manualId, 0, JSON.stringify(manual)])
+  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', manualId, 1, JSON.stringify(fields)]), /construction_requirement_exists/)
+  await call('bob.material_requirement_command', [project, 'archive', manualId, 1, '{}'])
   await assert.rejects(helper({ ...fields, required_quantity: '999' }), /invalid_cad_requirement/)
   await assert.rejects(helper({ ...fields, stock_allocations: [{ id: randomUUID(), revision: 1, quantity: '1' }] }), /construction_cut_fit_required/)
   await assert.rejects(call('bob.material_requirement_command', [project, 'publish', requirement.recordId, 1, '{}']), /construction_cut_fit_required/)
