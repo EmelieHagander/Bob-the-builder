@@ -260,7 +260,7 @@ try {
     await page.reload()
     await page.getByLabel('Project phase: Planning').waitFor()
 
-    await page.getByRole('link', { name: 'Areas', exact: true }).first().click()
+    await plan.getByRole('link', { name: 'Manage areas', exact: true }).click()
     await page.getByRole('heading', { name: 'Areas', exact: true }).waitFor()
     const office = page.locator('article').filter({ hasText: 'Office' })
     await office.getByText('Done', { exact: true }).waitFor()

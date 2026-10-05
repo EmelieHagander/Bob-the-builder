@@ -80,7 +80,7 @@ async function fixture(viewport, fresh = false) {
       const member = { id: 'memberA', name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }
       return respond({ json: url.searchParams.has('auth_user_id') ? member : [member, ...state.emails] })
     }
-    if (['account_notes', 'areas', 'tasks', 'materials', 'events', 'announcements', 'current_sites', 'current_levels', 'current_elements', 'current_relationships'].some(name => path === '/rest/v1/' + name)) return respond({ json: [] })
+    if (['account_notes', 'project_thumbnails', 'areas', 'tasks', 'materials', 'events', 'announcements', 'current_sites', 'current_levels', 'current_elements', 'current_relationships'].some(name => path === '/rest/v1/' + name)) return respond({ json: [] })
     if (path === '/rest/v1/current_buildings') return respond({ json: buildings })
     if (path === '/rest/v1/project_buildings') return respond({ json: buildings.map(building => ({ ...building, project_id: url.searchParams.get('project_id')?.replace(/^eq\./, '') })) })
     if (['/rest/v1/current_drawing_overview', '/rest/v1/media_assets', '/rest/v1/current_measurements', '/rest/v1/current_target', '/rest/v1/current_artifacts', '/rest/v1/current_drawing_steps'].includes(path) && method === 'GET') return respond({ json: [] })
