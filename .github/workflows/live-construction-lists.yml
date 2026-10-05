@@ -1,4 +1,5 @@
 name: Live K4 construction blank acceptance
+# New first-attempt run after Actions recovery; the prior run executed no steps.
 
 on:
   push:
