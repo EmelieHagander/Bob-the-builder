@@ -1,0 +1,63 @@
+name: Live K3 construction drawing acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Use only the retained K2 verification project
+        required: true
+        type: choice
+        default: disposable-fixtures-only
+        options:
+          - disposable-fixtures-only
+  # Installing this reviewed runner starts the requested recovery probe. Its
+  # pinned conversation checkpoint blocks later automatic paid repetitions.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/live-construction-drawing.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-k3-construction-drawing
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Sign in as the existing member and run K3 acceptance once
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          BOB_USER_EMAIL: ${{ secrets.BOB_USER_EMAIL }}
+          BOB_USER_PASSWORD: ${{ secrets.BOB_USER_PASSWORD }}
+          BOB_K3_PROJECT_ID: p_43702f4cbdfb40f0907f5cd0c12a5143
+          BOB_K3_LIVE_CONFIRM: ${{ inputs.scope || 'disposable-fixtures-only' }}
+          BOB_K3_REPORT: test-results/live-construction-drawing.json
+        run: node --import tsx scripts/run-live-construction-drawing.mjs
+      - name: Retain the synthetic acceptance reports and annotated views
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-k3-construction-drawing-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/k3-preflight.json
+            test-results/live-construction-drawing.json
+            test-results/k3-*.svg
+          if-no-files-found: ignore
+          retention-days: 7
