@@ -34,7 +34,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
  const fields: any = { name: 'Base blank', category: 'Timber', area_id: null, task_id: null, waste_percent: '0', purchase_increment: '1', assumptions: 'Concept only',
   artifact_id: construction.recordId, artifact_revision: 1, target_revision: 1, definition_id: 'base', quantity_mode: 'pieces', stock_allocations: [], component_allocations: [], change_note: 'Counted blank' }
  const payload: any = { ...base, kind: 'operational', data: { resource: 'cad_requirement', action: 'create', fields } }
- let requirement: any
+ let requirement: any, currentExpected = 1
  await t.test('canonical write receipt and independent caller read pin quantity, local cut dimensions, material and actual instance', async () => {
   requirement = await write(payload); assert(requirement.recordId); assert.equal(requirement.revision, 1)
   assert.deepEqual(await write(payload), requirement)
@@ -62,18 +62,31 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   await assert.rejects(asProjectUser(pg, user, 'delete from bob.material_requirement_construction_sources'), /permission denied/)
   const views: any = (await pg.query("select reloptions from pg_class where oid='bob.current_material_requirements'::regclass")).rows[0]; assert(views.reloptions.includes('security_invoker=true'))
  })
+ await t.test('archive/restore carry exact provenance, restored duplicates are fenced, and manual edits cannot strip it', async () => {
+  await assert.rejects(call('bob.material_requirement_command', [project, 'revise', requirement.recordId, 1, JSON.stringify({...fields,unit:'pcs',required_quantity:'99',basis:'manual'})]), /construction_derive_required/)
+  const archived=await call('bob.material_requirement_command',[project,'archive',requirement.recordId,1,'{}']);assert.equal(archived.revision,2)
+  const source:any=(await asProjectUser(pg,user,'select * from bob.material_requirement_construction_sources where requirement_id=$1 and requirement_revision=2',[requirement.recordId])).rows[0]
+  assert.deepEqual(source.instance_ids,['foot']);assert.equal(source.artifact_revision,1)
+  const duplicateId=randomUUID()
+  await call('bob.material_requirement_cad_command',[project,'create',duplicateId,0,JSON.stringify(fields)])
+  await assert.rejects(call('bob.material_requirement_command',[project,'restore',requirement.recordId,2,'{}']),/construction_requirement_exists/)
+  await call('bob.material_requirement_command',[project,'archive',duplicateId,1,'{}'])
+  const restored=await call('bob.material_requirement_command',[project,'restore',requirement.recordId,2,'{}']);assert.equal(restored.revision,3);currentExpected=3
+  const read:any=(await asProjectUser(pg,user,'select * from bob.material_requirement_construction_sources where requirement_id=$1 and requirement_revision=3',[requirement.recordId])).rows[0]
+  assert.deepEqual(read.blank_mm,{x:200,y:100,z:18})
+ })
  await t.test('changed construction marks the need stale; revise the same need to the new source, keeping old history and dimensions', async () => {
   const changed = structuredClone(data); changed.key = 'construction2'; changed.recipe.definitions[0].x_mm = 250
   changed.parameters = compileCadParameters(project, changed.recipe, parameterPlan(changed.recipe), new Map(), new Map())
   await write({ ...base, kind: 'construction', record_id: construction.recordId, expected_revision: 1, data: changed })
   const current = async () => (await asProjectUser(pg, user, 'select * from bob.current_material_requirements where id=$1', [requirement.recordId])).rows[0] as any
   assert.equal((await current()).artifact_changed, true)
-  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, 1, JSON.stringify(fields)]), /construction_source_changed/)
-  const next = await call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, 1, JSON.stringify({ ...fields, artifact_revision: 2 })])
-  assert.equal(next.revision, 2); assert.equal((await current()).artifact_changed, false)
+  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, currentExpected, JSON.stringify(fields)]), /construction_source_changed/)
+  const next = await call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, currentExpected, JSON.stringify({ ...fields, artifact_revision: 2 })])
+  assert.equal(next.revision, 4);currentExpected=4; assert.equal((await current()).artifact_changed, false)
   const history: any[] = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1 order by requirement_revision', [requirement.recordId])).rows as any[]
-  assert.deepEqual(history.map(h => h.blank_mm.x), [200, 250]); assert.deepEqual(history.map(h => h.artifact_revision), [1, 2])
-  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, 2, JSON.stringify({ ...fields, artifact_revision: 2, definition_id: 'upright' })]), /construction_requirement_identity_changed/)
+  assert.deepEqual(history.map(h => h.blank_mm.x), [200, 200, 200, 250]); assert.deepEqual(history.map(h => h.artifact_revision), [1, 1, 1, 2])
+  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, currentExpected, JSON.stringify({ ...fields, artifact_revision: 2, definition_id: 'upright' })]), /construction_requirement_identity_changed/)
  })
  await t.test('catalog change without a construction revision still marks the saved need stale and stops derivation', async () => {
   await call('bob.bob_fail_turn_v2', [project, user, claim.thread_id, turn, claim.generation], null, 'service_role')
@@ -83,8 +96,10 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
    properties: { ...original.properties, thickness: { value: '21', unit: 'mm', truth: 'provided_spec', parameter: null, note: '' } }, material_id: null, material_revision: null, notes: original.notes, source_kind: 'design_choice', source_quote: 'concept blanks', source_seq: null } })
   const current: any = (await asProjectUser(pg, user, 'select * from bob.current_material_requirements where id=$1', [requirement.recordId])).rows[0]
   assert.equal(current.artifact_changed, true); assert.equal(current.artifact_revision, 2)
-  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, 2, JSON.stringify({ ...fields, artifact_revision: 2 })]), /construction_source_changed/)
+  await assert.rejects(call('bob.material_requirement_cad_command', [project, 'revise', requirement.recordId, currentExpected, JSON.stringify({ ...fields, artifact_revision: 2 })]), /construction_source_changed/)
   const old: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_revisions where requirement_id=$1 and revision=1', [requirement.recordId])).rows[0]
   assert.equal(Number(old.required_quantity), 1); assert.match(old.basis, /200 x 100 x 18/)
+  await call('bob.material_requirement_command',[project,'archive',requirement.recordId,currentExpected,'{}'])
+  await assert.rejects(call('bob.material_requirement_command',[project,'restore',requirement.recordId,currentExpected+1,'{}']),/construction_source_changed/)
  })
 })

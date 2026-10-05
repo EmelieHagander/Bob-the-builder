@@ -139,6 +139,7 @@ left join bob.artifact_revisions ar on ar.artifact_id=ah.id and ar.revision=ah.c
 alter function bob_private.material_requirement_command(text,text,uuid,integer,jsonb) rename to material_requirement_before_construction_fit;
 create function bob_private.material_requirement_command(p_project text,p_action text,p_requirement uuid,p_expected integer,p_data jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
+declare prior bob.material_requirement_construction_sources; saved jsonb; state text;
 begin
  if auth.uid() is null or not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
  perform 1 from bob.projects where id=p_project for no key update;
@@ -146,10 +147,42 @@ begin
   where c.project_id=p_project and c.artifact_id=nullif(p_data->>'artifact_id','')::uuid and c.artifact_revision=nullif(p_data->>'artifact_revision','')::integer)
   and (p_data->'stock_allocations' is distinct from '[]'::jsonb or p_data->'component_allocations' is distinct from '[]'::jsonb)
   then raise exception 'construction_cut_fit_required' using errcode='22023'; end if;
- return bob_private.material_requirement_before_construction_fit(p_project,p_action,p_requirement,p_expected,p_data);
+ select * into prior from bob.material_requirement_construction_sources where project_id=p_project and requirement_id=p_requirement and requirement_revision=p_expected;
+ if found and p_action='restore' then
+  select s.source_state into state from bob_private.artifact_source_assessment(p_project,prior.artifact_id,prior.artifact_revision) s;
+  if state is distinct from 'current' then raise exception 'construction_source_changed' using errcode='PT409'; end if;
+  if exists(select 1 from bob.material_requirement_construction_sources cs join bob.current_material_requirements r
+   on r.id=cs.requirement_id and r.revision=cs.requirement_revision and r.project_id=cs.project_id
+   where cs.project_id=p_project and cs.requirement_id<>p_requirement and cs.artifact_id=prior.artifact_id
+    and cs.definition_id=prior.definition_id and cs.quantity_mode=prior.quantity_mode and not r.archived)
+   then raise exception 'construction_requirement_exists' using errcode='PT409'; end if;
+ end if;
+ saved:=bob_private.material_requirement_before_construction_fit(p_project,p_action,p_requirement,p_expected,p_data);
+ if prior.requirement_id is not null and p_action in ('archive','restore') then
+  insert into bob.material_requirement_construction_sources values(prior.project_id,prior.requirement_id,(saved->>'revision')::integer,
+   prior.artifact_id,prior.artifact_revision,prior.definition_id,prior.quantity_mode,prior.instance_ids,prior.blank_mm,prior.material_binding);
+ end if;
+ return saved;
 end $$;
 revoke all on function bob_private.material_requirement_command(text,text,uuid,integer,jsonb) from public,anon,service_role;
 grant execute on function bob_private.material_requirement_command(text,text,uuid,integer,jsonb) to authenticated;
+
+-- Public manual revisions must not strip deterministic construction provenance.
+-- The CAD/construction derive path calls the private arithmetic helper instead.
+create or replace function bob.material_requirement_command(p_project text,p_action text,p_requirement uuid,p_expected integer,p_data jsonb default '{}'::jsonb)
+returns jsonb language plpgsql security invoker set search_path='' as $$
+begin
+ if auth.uid() is null or not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
+ if p_action='revise' and exists(select 1 from bob.material_requirement_construction_sources where project_id=p_project and requirement_id=p_requirement and requirement_revision=p_expected)
+  then raise exception 'construction_derive_required' using errcode='22023'; end if;
+ if p_action='publish' then
+  if p_data is null or jsonb_typeof(p_data)<>'object' or p_data<>'{}'::jsonb then raise exception 'Shopping publish does not accept client-authored fields.'; end if;
+  return bob_private.material_requirement_publish(p_project,p_requirement,p_expected);
+ end if;
+ return bob_private.material_requirement_command(p_project,p_action,p_requirement,p_expected,p_data);
+end $$;
+revoke all on function bob.material_requirement_command(text,text,uuid,integer,jsonb) from public,anon,service_role;
+grant execute on function bob.material_requirement_command(text,text,uuid,integer,jsonb) to authenticated;
 
 -- Incomplete blank needs cannot be mistaken for raw stock or buy-ready packages.
 alter function bob_private.material_requirement_publish(text,uuid,integer) rename to material_requirement_publish_before_construction;
