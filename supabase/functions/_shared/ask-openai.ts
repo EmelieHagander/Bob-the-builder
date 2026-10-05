@@ -231,6 +231,12 @@ export async function answerWithOpenAi(opts: {
     (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
     hasAccess, lookup.sources)
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    // Earlier RPC results reconstruct a resumed turn. A current-source gate
+    // must bypass that journal before it calls a list/check result current.
+    readCurrent:async(id:string)=>{
+      const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:null,p_after:null}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_read_unavailable');return data
+    },
     read:async(id:string|null,revision:number|null,after:string|null)=>{
       const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_read_unavailable');return data

@@ -123,8 +123,20 @@
   },
   {
     "name": "derive_cad_material_requirement",
-    "description": "Derive a versioned material requirement from a saved CAD part and its actual instance count.",
-    "how_to": "Read the saved drawing, target and existing requirements. Choose explicit part definition and blank quantity mode. The server calculates quantity; confirm stock specification/fit before allocating and publish to Shopping separately.",
+    "description": "Derive a versioned blank material requirement from a saved CAD drawing or construction checkpoint.",
+    "how_to": "Read the exact current drawing/construction, target and existing requirements. Choose an actual used definition and blank quantity mode; the server counts instances and copies computed dimensions. Preserve existing requirement IDs. Construction needs pin the construction/material revisions and are concept quantities: raw-stock fit, kerf, grain, hardware and access remain open, so stock/reuse allocations and Shopping are blocked. Ordinary CAD requirements retain their existing allocation/publish path. Read the saved requirement to verify its exact source and quantity.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
+  },
+  {
+    "name": "derive_construction_lists",
+    "description": "Derive concept part quantities, blank cut dimensions and a proposed assembly order from the exact checked construction.",
+    "how_to": "Read/check the exact current construction. assembly_dependencies=[] reports the missing order; otherwise specify every joint once with prerequisite joint IDs. The code counts actual instances and validates a separate acyclic assembly graph. Blank cuts are not a raw-stock layout, product approval or saved delivery. Preserve explicit raw-format, kerf, grain, hardware and assembly-access gaps. Save blank needs through derive_cad_material_requirement using this construction revision, then read_project_work(requirement) to verify. Shopping and stock/reuse allocation are blocked until cut fit is supported.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [

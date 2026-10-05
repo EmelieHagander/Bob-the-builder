@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -12,11 +12,13 @@ const config = () => ({ VITE_SUPABASE_URL: 'https://yuobtgoidmmmwfqenkau.supabas
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
+  const prior = change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
-    bob_messages: { data: { turn_id: K3_PREVIOUS_TURN, delivery_state: 'completed' } },
-    artifact_cad_revisions: { data: [] }, ...change.results,
+    bob_messages: { data: { turn_id: prior, delivery_state: 'completed' } },
+    artifact_cad_revisions: { data: change.k4 ? [{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}] : [] },
+    current_material_requirements:{data:[]}, ...change.results,
   }
   const client = {
     auth: {
@@ -33,8 +35,8 @@ function fixture(change = {}) {
       return query
     },
     rpc: async (name, args) => { calls.push(name); assert.equal(name, 'bob_job_status');
-      assert.deepEqual(args, { p_project: K3_PROJECT, p_turn: K3_PREVIOUS_TURN });
-      return { data: { status: change.jobStatus ?? 'failed' } } },
+      assert.deepEqual(args, { p_project: K3_PROJECT, p_turn: prior });
+      return { data: { status: change.jobStatus ?? (change.k4 ? 'completed' : 'failed') } } },
   }
   const deps = {
     makeClient: (url, key, opts) => { assert.equal(opts.auth.persistSession, false); assert.equal(opts.auth.autoRefreshToken, false); return client },
@@ -99,4 +101,32 @@ test('failed or uncertain probe is never retried and still clears only its own s
   const f = fixture({ probeFails: true }), result = await runAuthenticatedK3(config(), f.deps)
   assert.equal(result.passed, false); assert.equal(result.phase, 'probe'); assert.equal(f.probes.length, 1)
   assert.deepEqual(f.signouts, [{ scope: 'local' }]); assert.doesNotMatch(JSON.stringify(result), /SECRET|private-password|private-session/)
+})
+
+const configK4=()=>{
+ const {BOB_K3_PROJECT_ID,BOB_K3_LIVE_CONFIRM,...rest}=config()
+ return {...rest,BOB_K4_PROJECT_ID:BOB_K3_PROJECT_ID,BOB_K4_LIVE_CONFIRM:BOB_K3_LIVE_CONFIRM}
+}
+test('K4 reuses the credential boundary and requires the completed K3 checkpoint/drawing and no existing needs',async()=>{
+ const f=fixture({k4:true}),r=await runAuthenticatedK4(configK4(),f.deps)
+ assert.equal(r.passed,true);assert.equal(f.probes.length,1)
+ assert.equal(f.probes[0].BOB_K4_PROJECT_ID,K3_PROJECT);assert.equal(f.probes[0].BOB_TEST_MEMBER_ACCESS_TOKEN,token)
+ assert(!('BOB_USER_PASSWORD' in f.probes[0]));assert.deepEqual(f.signouts,[{scope:'local'}])
+})
+test('K4 cannot repeat or continue a changed, failed, mismatched or already-delivered fixture',async()=>{
+ for(const change of [
+  {jobStatus:'failed'},{jobStatus:'running'},
+  {results:{bob_messages:{data:{turn_id:K3_PREVIOUS_TURN,delivery_state:'completed'}}}},
+  {results:{artifact_cad_revisions:{data:[]}}},
+  {results:{artifact_cad_revisions:{data:[{artifact_id:K4_DRAWING,artifact_revision:2,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}]}}},
+  {results:{artifact_cad_revisions:{data:[{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:3}}}]}}},
+  {results:{current_material_requirements:{data:[{id:'existing'}]}}},
+  {results:{current_material_requirements:{error:{message:'SECRET private-password'}}}},
+ ]){
+  const f=fixture({k4:true,...change}),r=await runAuthenticatedK4(configK4(),f.deps)
+  assert.equal(r.passed,false);assert.equal(f.probes.length,0);assert.doesNotMatch(JSON.stringify(r),/SECRET|private-password|private-session/)
+  assert.deepEqual(f.signouts,[{scope:'local'}])
+ }
+ const f=fixture({k4:true}),r=await runAuthenticatedK4({...configK4(),GITHUB_RUN_ATTEMPT:'2'},f.deps)
+ assert.equal(r.phase,'configuration');assert.equal(f.calls.length,0)
 })
