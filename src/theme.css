@@ -941,6 +941,26 @@ select {
 .page-head { padding-bottom: var(--space-3); border-bottom: 2px solid var(--brand); margin-bottom: var(--section-gap); }
 .ui-row-title { font-size: 15px; font-weight: 800; }
 .ui-list-item:hover { background: var(--surface-2); }
+.account-hub-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--section-gap); align-items: start; }
+.account-hub-column { display: grid; gap: var(--section-gap); min-width: 0; }
+.account-household { display: grid; gap: var(--layout-gap); }
+.account-household-heading { display: flex; align-items: center; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); }
+.account-household-heading > div { min-width: 0; }
+.account-household-heading small { color: var(--ink-soft); font-size: var(--text-small); }
+.account-household-heading h2 { font-family: 'Baloo 2', sans-serif; font-size: 24px; line-height: 1.2; overflow-wrap: anywhere; }
+.account-household-icon { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex: 0 0 auto; border-radius: var(--r); background: var(--surface-2); color: var(--brand); }
+.account-contact { display: grid; gap: var(--space-2); }
+.account-contact dt { color: var(--ink-soft); font-size: var(--text-small); }
+.account-contact dd { font-weight: 600; overflow-wrap: anywhere; }
+.account-household > .btn { justify-self: start; }
+.account-tool-link { display: flex; align-items: center; gap: var(--space-3); min-height: 52px; color: var(--ink); }
+.account-tool-link > .ph { flex-shrink: 0; color: var(--brand); }
+.account-tool-link > div { flex: 1; min-width: 0; }
+.account-tool-link strong, .account-tool-link span { display: block; }
+.account-tool-link span { margin-top: var(--space-1); color: var(--ink-soft); font-size: var(--text-small); }
+.account-workspace-name { display: block; margin: var(--space-1) 0 var(--space-3); overflow-wrap: anywhere; }
+.account-sign-out { margin-top: var(--section-gap); padding-top: var(--section-gap); border-top: 1px solid var(--line); }
+@media (max-width: 720px) { .account-hub-grid { grid-template-columns: minmax(0, 1fr); } }
 .card, .ui-list { border-color: var(--line); box-shadow: 0 2px 0 color-mix(in srgb, var(--brand) 8%, transparent); }
 .ui-section-title .ph { color: var(--brand); }
 .btn-primary { box-shadow: 0 2px 0 var(--accent-2); }

@@ -482,7 +482,7 @@ try {
     await page.getByRole('button', { name: 'Open image: Entry before work', exact: true }).click()
     await request
     await page.getByRole('dialog', { name: 'Entry before work', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
-    await page.getByRole('link', { name: 'Account', exact: true }).click()
+    await page.getByRole('link', { name: 'Home', exact: true }).click()
     await page.locator('.account-project-row').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open project Porch B', exact: true }).click()
     waiting.resolve()
     await page.locator('.project-photo-details > summary').click()

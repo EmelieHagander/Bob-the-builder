@@ -32,12 +32,16 @@ try {
       await page.locator('.page-title').waitFor()
       await page.waitForFunction(()=>!document.querySelector('.ui-loading'))
       await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
+      if(route==='account') {
+        await page.getByRole('heading',{name:'Account',exact:true}).waitFor()
+        assert.equal(await page.locator('.account-project-row').count(),0,'Account must not repeat the Home project overview')
+      }
       check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${route||'project'} overflows at ${width}px`)
       if (width<860) {
         const controls=await page.locator('.btn:visible,.ui-icon-button:visible,.account-project-open:visible,.meal-open:visible').evaluateAll(nodes=>nodes.map(node=>({label:node.getAttribute('aria-label')||node.textContent.trim(),height:node.getBoundingClientRect().height})))
         check(controls.every(control=>control.height>=43.5),`${route} lost a touch target: ${JSON.stringify(controls.filter(control=>control.height<43.5))}`)
       }
-      const limits={account:140,people:170,events:180,areas:260,food:160}
+      const limits={'':140,account:140,people:170,events:180,areas:260,food:160}
       if (limits[route]) {
         const rows=await page.locator('.ui-list-item:visible').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height))
         check(rows.length>0,`Missing compact rows on ${route}`)

@@ -84,7 +84,7 @@ export function AccountDashboard() {
         </div>
         <div className="cluster no-print">
           {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
-          {active && <button className="ui-icon-button" aria-label="Close project" title="Close project" onClick={() => { db.setActiveProject(null); navigate('/account') }}>
+          {active && <button className="ui-icon-button" aria-label="Close project" title="Close project" onClick={() => { db.setActiveProject(null); navigate('/') }}>
             <Icon name="sign-out" size={18} />
           </button>}
           <Link to="/account/buildings" className="ui-icon-button" aria-label="Buildings & family" title="Buildings & family"><Icon name="house" size={18} /></Link>

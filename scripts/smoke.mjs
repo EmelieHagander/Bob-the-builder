@@ -225,7 +225,7 @@ try {
   step('removed person gone from task assignments', si === 0, `SI avatars left: ${si}`)
 
   // ── 10. Project details edit (theme + name) ──
-  await page.goto(BASE + '/#/account')
+  await page.goto(BASE + '/#/')
   await page.waitForSelector('h1')
   await page.click('.card:has-text("Växthuset")')
   await page.waitForSelector('.modal')

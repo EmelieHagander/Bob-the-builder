@@ -47,7 +47,7 @@ export function AccountSettings() {
       <div className="page-head">
         <div>
           <h1 className="page-title">Account settings</h1>
-          <p className="page-sub">Household details and shared account notes.</p>
+          <p className="page-sub">Edit the contact details shared with your household.</p>
         </div>
         <div className="cluster no-print">
           <Link to="/account" className="btn">
@@ -67,10 +67,10 @@ export function AccountSettings() {
               <Field label="Account name *">
                 <input style={inputStyle} value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="Skogsfolket" />
               </Field>
-              <Field label="Your name">
+              <Field label="Contact name">
                 <input style={inputStyle} value={form.ownerName} onChange={(e) => set({ ownerName: e.target.value })} />
               </Field>
-              <Field label="Email">
+              <Field label="Contact email">
                 <input style={inputStyle} type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} />
               </Field>
               {error && <FormError>{error}</FormError>}

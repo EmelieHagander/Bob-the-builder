@@ -36,6 +36,7 @@ async function fixture(viewport, fresh = false) {
     unavailable: false,
     failProjectList: false,
     failAccountBind: false,
+    failAccountRead: false,
     account: null,
     writes: [],
     errors: [],
@@ -67,7 +68,7 @@ async function fixture(viewport, fresh = false) {
     if (path === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
     if (path === '/rest/v1/projects') return state.failProjectList ? respond({ status: 503, json: { message: 'Project list temporarily unavailable' } }) : respond({ json: projects.filter(project => state.accessible.includes(project.id)) })
     // An invited collaborator must not see or edit another household's notes.
-    if (path === '/rest/v1/account') return respond({ json: state.account ? [state.account] : [] })
+    if (path === '/rest/v1/account') return state.failAccountRead ? respond({status:503,json:{message:'Account read unavailable'}}) : respond({ json: state.account ? [state.account] : [] })
     if (path === '/rest/v1/rpc/bind_account_household') {
       const body = request.postDataJSON()
       if (state.failAccountBind) return respond({ status: 403, json: { message: 'Household account setup denied.' } })
@@ -222,6 +223,19 @@ try {
     const { page, context, state } = await fixture(viewport)
     await signIn(page)
     assert.equal(await page.getByPlaceholder('Jot something down…').count(), 0, 'Unrelated household notes must have no write controls')
+    await page.getByRole('link',{name:'Account',exact:true}).click()
+    await page.getByRole('heading',{name:'Account',exact:true}).waitFor()
+    const householdAccount=page.getByRole('region',{name:'Household account',exact:true})
+    const noAccount='No shared household account is connected to this login. You can still use the projects you have access to.'
+    await householdAccount.getByText(noAccount,{exact:true}).waitFor()
+    assert.equal(await page.locator('.account-project-row').count(),0)
+    state.failAccountRead=true
+    await page.reload()
+    await householdAccount.getByText('Account details could not be loaded.',{exact:true}).waitFor()
+    assert.equal(await householdAccount.getByText(noAccount,{exact:true}).count(),0,'A denied/failed read does not pretend there is no household')
+    state.failAccountRead=false
+    await householdAccount.getByRole('button',{name:'Try again',exact:true}).click()
+    await householdAccount.getByText(noAccount,{exact:true}).waitFor()
     await page.getByRole('link', { name: 'Settings', exact: true }).click()
     await page.getByLabel('Household for account settings').selectOption('H1')
     state.failAccountBind = true
@@ -235,7 +249,7 @@ try {
     await page.reload()
     await page.getByLabel('Account name *', { exact: true }).waitFor()
     assert.equal(await page.getByLabel('Account name *', { exact: true }).inputValue(), 'Family account')
-    await page.goto(base + '#/account')
+    await page.goto(base + '#/')
     await page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     await page.getByRole('link', { name: 'Buildings & family', exact: true }).click()
     await page.getByRole('heading', { name: 'Main house', exact: true }).waitFor()
@@ -366,7 +380,7 @@ try {
     await fresh.page.getByRole('link', { name: 'Buildings & family', exact: true }).click()
     await fresh.page.getByRole('heading', { name: 'Main house', exact: true }).waitFor()
     assert.equal(await fresh.page.getByRole('button', { name: 'Use in this project', exact: true }).count(), 0)
-    await fresh.page.getByRole('link', { name: 'Account & projects', exact: true }).click()
+    await fresh.page.locator('.building-context-page').getByRole('link', { name: 'Home', exact: true }).click()
     await inbox.locator('li').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Decline', exact: true }).click()
     await inbox.getByText('Invitation declined.', { exact: true }).waitFor()
     fresh.state.failProjectList = true
@@ -376,7 +390,7 @@ try {
     fresh.state.failProjectList = false
     await inbox.getByRole('button', { name: 'Refresh project access', exact: true }).click()
     await fresh.page.getByRole('heading', { name: 'Porch A', exact: true }).waitFor()
-    await fresh.page.goto(base + '#/account')
+    await fresh.page.goto(base + '#/')
     await fresh.page.getByRole('heading', { name: 'Home', exact: true }).waitFor()
     assert.equal(await fresh.page.getByText('Porch B', { exact: true }).count(), 0, 'Declining does not grant the other project')
     await fresh.page.reload()

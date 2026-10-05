@@ -35,7 +35,7 @@ Current implementation anchors:
 Owned by `src/components/Layout.tsx`:
 
 - desktop sidebar;
-- permanent Home (`/`, with `/account` retained as an alias), separate Project plan (`/project`), and shared Plan / Reference / Together workspace doors;
+- permanent Home (`/`), separate Account (`/account`) and Project plan (`/project`), and shared Plan / Reference / Together workspace doors;
 - active-project entry/account switch; **Close project** on Account clears the active choice without deleting the Project or changing membership, including after reload;
 - mobile bottom navigation;
 - floating Ask bob control and drawer host on project surfaces; Account routes hide the project composer and remain usable with no active Project;
@@ -161,7 +161,8 @@ physical-phone and named-participant acceptance.
 | Food | feed the crew safely | allergy/dietary information must never be buried |
 | Announcements | share changes with the whole crew | pinned/current updates should dominate old noise |
 | Ask bob | ask about the current build | honest working/failure states; phase/current view may guide prompts but must not become hidden authority |
-| Account | choose/manage projects | Project phase and schedule are distinct; mixed Area phase summary may appear on project cards |
+| Home (`/`) | choose/manage projects | Project phase and schedule are distinct; mixed Area phase summary may appear on project cards |
+| Account (`/account`) | manage household details, shared spaces, installation and session | use real household contact data; no duplicate project overview; usable with no active Project |
 | Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; Swedish phone steps |
 
 `Docs/project-phase-ui.md` owns the detailed page-by-page lifecycle composition and implementation impact map.
