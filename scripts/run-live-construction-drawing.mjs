@@ -8,12 +8,18 @@ export const K3_MEMBER = '9aa569c3-32f3-4f22-a457-0b145e8850dc'
 export const K3_PREVIOUS_TURN = '8099b36e-c906-4727-b05d-023b5bedbbf4'
 const URL = 'https://yuobtgoidmmmwfqenkau.supabase.co'
 
-export async function runAuthenticatedK3(env, { makeClient, probe, progress = () => {}, now = Date.now }) {
+export const K4_PREVIOUS_TURN = 'bb5c6de6-59a4-496c-819e-4d70ef07f700'
+export const K4_DRAWING = '150f78be-dd33-42e8-8d4f-5af62926a15c'
+export const K4_SOURCE = '01349f1c-100b-4ac2-a5b9-de4c839b51a4'
+export const runAuthenticatedK3 = (env, deps) => runAuthenticatedConstruction(env, deps, 'K3')
+export const runAuthenticatedK4 = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4')
+async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage) {
+  const previousTurn = stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
   let phase = 'configuration', client, acquired = false
   try {
     assert.equal(env.VITE_SUPABASE_URL?.replace(/\/$/, ''), URL)
-    assert.equal(env.BOB_K3_PROJECT_ID, K3_PROJECT)
-    assert.equal(env.BOB_K3_LIVE_CONFIRM, 'disposable-fixtures-only')
+    assert.equal(env[`BOB_${stage}_PROJECT_ID`], K3_PROJECT)
+    assert.equal(env[`BOB_${stage}_LIVE_CONFIRM`], 'disposable-fixtures-only')
     assert.equal(env.GITHUB_RUN_ATTEMPT ?? '1', '1', 'Inspect the existing job before any retry')
     assert(env.BOB_USER_EMAIL?.trim() && env.BOB_USER_PASSWORD)
     const key = env.VITE_SUPABASE_ANON_KEY?.trim()
@@ -45,24 +51,35 @@ export async function runAuthenticatedK3(env, { makeClient, probe, progress = ()
     assert(!thread.error && thread.data?.id)
     const previous = await client.from('bob_messages').select('turn_id,delivery_state').eq('thread_id', thread.data.id)
       .eq('role', 'user').order('seq', { ascending: false }).limit(1).single()
-    assert(!previous.error && previous.data?.turn_id === K3_PREVIOUS_TURN && previous.data.delivery_state !== 'pending')
-    const job = await client.rpc('bob_job_status', { p_project: K3_PROJECT, p_turn: K3_PREVIOUS_TURN })
+    assert(!previous.error && previous.data?.turn_id === previousTurn && previous.data.delivery_state !== 'pending')
+    const job = await client.rpc('bob_job_status', { p_project: K3_PROJECT, p_turn: previousTurn })
     assert(!job.error && ['failed', 'completed'].includes(job.data?.status))
-    const drawings = await client.from('artifact_cad_revisions').select('artifact_id').eq('project_id', K3_PROJECT).limit(1)
-    assert(!drawings.error && Array.isArray(drawings.data) && drawings.data.length === 0)
-    progress('Existing member, project and conversation verified; invoking the unchanged K3 probe once.')
+    const drawings = await client.from('artifact_cad_revisions').select(stage === 'K3' ? 'artifact_id' : 'artifact_id,artifact_revision,manifest').eq('project_id', K3_PROJECT).limit(2)
+    assert(!drawings.error && Array.isArray(drawings.data))
+    if (stage === 'K3') assert.equal(drawings.data.length, 0)
+    else {
+      assert.equal(job.data.status, 'completed')
+      assert.equal(drawings.data.length, 1)
+      assert.equal(drawings.data[0].artifact_id, K4_DRAWING)
+      assert.equal(drawings.data[0].artifact_revision, 1)
+      assert.equal(drawings.data[0].manifest?.bob_construction?.artifact_id, K4_SOURCE)
+      assert.equal(drawings.data[0].manifest?.bob_construction?.revision, 4)
+      const requirements = await client.from('current_material_requirements').select('id').eq('project_id', K3_PROJECT).limit(1)
+      assert(!requirements.error && Array.isArray(requirements.data) && requirements.data.length === 0)
+    }
+    progress(`Existing member, project and conversation verified; invoking the ${stage} probe once.`)
     phase = 'probe'
     await probe({
       VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: key,
       BOB_TEST_MEMBER_ID: K3_MEMBER, BOB_TEST_MEMBER_ACCESS_TOKEN: session.access_token,
-      BOB_K3_PROJECT_ID: K3_PROJECT, BOB_K3_LIVE_CONFIRM: 'disposable-fixtures-only',
-      BOB_K3_REPORT: env.BOB_K3_REPORT ?? 'test-results/live-construction-drawing.json',
+      [`BOB_${stage}_PROJECT_ID`]: K3_PROJECT, [`BOB_${stage}_LIVE_CONFIRM`]: 'disposable-fixtures-only',
+      [`BOB_${stage}_REPORT`]: env[`BOB_${stage}_REPORT`] ?? (stage === 'K3' ? 'test-results/live-construction-drawing.json' : 'test-results/live-construction-lists.json'),
     })
     return { passed: true, phase: 'completed', projectId: K3_PROJECT }
   } catch {
     // SDK/provider errors may contain private data. Only expose the failed stage.
     return { passed: false, phase, projectId: K3_PROJECT,
-      error: `K3 stopped at ${phase}; inspect this checkpoint before any new request.` }
+      error: `${stage} stopped at ${phase}; inspect this checkpoint before any new request.` }
   } finally {
     if (acquired) {
       try {

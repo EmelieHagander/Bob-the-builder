@@ -1,4 +1,5 @@
 import { checkConstruction } from './construction-checks.ts'
+import { constructionLists } from './construction-lists.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
 import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
@@ -31,15 +32,19 @@ export const CONSTRUCTION_READ_TOOL=tool('read_construction_draft','List current
 export const CONSTRUCTION_CHECK_TOOL=tool('check_construction_draft','Check an exact current saved construction before drawing. Reads canonical geometry and catalog revisions server-side. Supports uncut wooden boxes, right-angle rotations and planar screwed/glued butt-joint concepts. Reports collisions, wrong local faces, missing joints, disconnected parts and material dimension mismatches with stable IDs. Compare returned bounds/count against the original request. concept_ready permits concept development only; fabrication_ready is always false until product, hardware, load and manufacturing checks exist. Unsupported operations and stale sources stop this check.',{
  artifact_id:uuid,revision:rev,
 })
+export const CONSTRUCTION_LIST_TOOL=tool('derive_construction_lists','Derive a concept BOM, one blank cut row per actual instance and joint references from the exact current checked construction, without redesign or rendering. Code counts instances and copies the server-computed local mm dimensions. assembly_dependencies=[] leaves order unresolved; otherwise name every saved joint once and its prerequisite joints. Code rejects cycles in this separate order graph; it does not verify physical tool access. No raw-sheet purchase count, hardware count or stock reservation is inferred. Use derive_cad_material_requirement to save blank requirements from the same construction revision, then read them back. This read tool does not save lists or approve fabrication.',{
+ artifact_id:uuid,revision:rev,
+ assembly_dependencies:{type:'array',maxItems:1024,items:obj({joint_id:id,depends_on:{type:'array',maxItems:64,uniqueItems:true,items:id}})},
+})
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12)return {status:'budget_exhausted'}
-  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:null
+  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:null
   if(!spec)return {status:'invalid'}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
@@ -52,7 +57,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!result||result.projectId!==opts.projectId||!['ok','not_found'].includes(result.status)||JSON.stringify(result).length>600000)throw new Error('construction_read_unavailable')
     return result
    }
-   if(name===CONSTRUCTION_CHECK_TOOL.function.name){
+   if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name){
     if(!opts.readCatalog)return {status:'unavailable'}
     const draft=await opts.read(v.artifact_id,v.revision,null) as Record<string,any>
     if(!draft||draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||draft.revision!==v.revision)return {status:'unavailable'}
@@ -70,7 +75,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!await opts.hasAccess())return {status:'denied'}
     if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.artifact_id)throw new Error('construction_source_unavailable')
     if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',message:'Construction or sources changed; read and revise before checking.'}
-    return {projectId:opts.projectId,...checkConstruction(draft,catalog,(opts.now?.()??new Date()).toISOString().slice(0,10))}
+    const checked=checkConstruction(draft,catalog,(opts.now?.()??new Date()).toISOString().slice(0,10))
+    if(name===CONSTRUCTION_CHECK_TOOL.function.name)return {projectId:opts.projectId,...checked}
+    if(!checked.concept_ready)return {status:'needs_data',checked,message:'Correct the same construction before deriving lists; no quantities or fabrication approval returned.'}
+    return {projectId:opts.projectId,...constructionLists(draft,catalog,v.assembly_dependencies),checked}
    }
    if(!opts.writer)return {status:'denied'}
    if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact expected revision.'}
