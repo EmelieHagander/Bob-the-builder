@@ -85,3 +85,12 @@ test('list schema rejects model supplied quantities or extra plan fields', () =>
  assert(schemaIssues(CONSTRUCTION_LIST_TOOL.function.parameters, { ...input, bom: [{ quantity: 100 }] }).length)
  assert(schemaIssues(CONSTRUCTION_LIST_TOOL.function.parameters, { ...input, assembly_dependencies: [{ joint_id: 'left0', depends_on: [], quantity: 10 }] }).length)
 })
+test('a resumed turn cannot use an earlier journal head as proof that list sources are still current', async () => {
+ const { draft, catalog } = listFixture(); let liveReads = 0
+ const tools = createConstructionTools({ projectId: draft.projectId, message: '', hasAccess: async () => true,
+  read: async () => draft, readCurrent: async () => { liveReads++; return { ...draft, revision: 5, current_revision: 5 } },
+  readCatalog: async () => ({ projectId: draft.projectId, status: 'ok', record: [...catalog.values()][0] }),
+  readSources: async () => ({ project: new Map(), physical: new Map() }) })
+ const result = await tools.execute('derive_construction_lists', input)
+ assert.equal(result.status, 'conflict'); assert.equal(result.bom, undefined); assert.equal(liveReads, 1)
+})

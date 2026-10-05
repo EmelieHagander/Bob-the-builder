@@ -38,6 +38,7 @@ export const CONSTRUCTION_LIST_TOOL=tool('derive_construction_lists','Derive a c
 })
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
+ readCurrent?:(id:string)=>Promise<unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
@@ -71,7 +72,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      catalog.set(key,result.record)
     }
     // Do not present results assembled across a changed head/source as current.
-    const current=await opts.read(v.artifact_id,null,null) as Record<string,any>
+    const current=await (opts.readCurrent?.(v.artifact_id)??opts.read(v.artifact_id,null,null)) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}
     if(current?.projectId!==opts.projectId||current.status!=='ok'||current.artifact_id!==v.artifact_id)throw new Error('construction_source_unavailable')
     if(current.revision!==v.revision||current.source_state!=='current'||current.archived)return {status:'conflict',message:'Construction or sources changed; read and revise before checking.'}
