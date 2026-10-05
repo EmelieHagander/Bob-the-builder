@@ -197,7 +197,7 @@ try {
 
     await verifyBuildingIntakeBrowser(page, base, intake, state, viewport.width)
 
-    await page.goto(base + '#/account')
+    await page.goto(base + '#/')
     await page.locator('.account-project-row').filter({ hasText: 'Porch B' }).getByRole('button', { name: 'Open project Porch B', exact: true }).click()
     await page.getByText('Project focus & lifecycle', { exact: true }).click()
     await page.getByRole('link', { name: /Building & spaces/ }).click()

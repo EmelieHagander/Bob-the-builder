@@ -44,7 +44,7 @@ const ACCOUNT_NAV: NavItem[] = [
   { to: '/', icon: 'house', label: 'Home', end: true },
   { to: '/account/calendar', icon: 'calendar-dots', label: 'Calendar' },
   { to: '/account/buildings', icon: 'house', label: 'Buildings' },
-  { to: '/account/settings', icon: 'gear-six', label: 'Settings' },
+  { to: '/account', icon: 'user-circle', label: 'Account', end: true },
 ]
 
 function Sidebar({ project }: { project: Project | null }) {
@@ -80,8 +80,8 @@ function Sidebar({ project }: { project: Project | null }) {
       </div>
 
       <Link
-        to="/account"
-        title="All projects — account dashboard"
+        to="/"
+        title="Choose project — Home"
         style={{
           display: 'flex',
           alignItems: 'center',

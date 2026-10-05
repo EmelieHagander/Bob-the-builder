@@ -128,7 +128,7 @@ try {
     }
     const switchProject=async id=>{
       await page.getByRole('button',{name:'Close Ask bob',exact:true}).click()
-      await page.getByRole('link',{name:'Account',exact:true}).click()
+      await page.getByRole('link',{name:'Home',exact:true}).click()
       await page.getByRole('button',{name:`Open project Catalog ${id}`,exact:true}).click()
       return openBob(id)
     }

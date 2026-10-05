@@ -5,6 +5,7 @@ import { Loading, useAsync, useProjectVersion } from './components/ui'
 import { Layout, useAuthTick } from './components/Layout'
 import { StartProject } from './pages/StartProject'
 import { AccountDashboard } from './pages/account/AccountDashboard'
+import { Account } from './pages/account/Account'
 import { AccountCalendar } from './pages/account/AccountCalendar'
 import { AccountSettings } from './pages/account/AccountSettings'
 import { ProjectHome } from './pages/ProjectHome'
@@ -63,7 +64,7 @@ function ProjectApp() {
     if (signedIn === false) wasSignedOut.current = true
     if (signedIn && wasSignedOut.current) {
       wasSignedOut.current = false
-      navigate('/account')
+      navigate('/')
     }
   }, [signedIn, navigate])
 
@@ -85,7 +86,7 @@ function ProjectApp() {
   if (!project && (location.pathname.startsWith('/account') || location.pathname === '/')) return <Layout key={`account:${authTick}`} project={null}>
     <Routes>
       <Route path="/" element={<AccountDashboard />} />
-      <Route path="/account" element={<AccountDashboard />} />
+      <Route path="/account" element={<Account />} />
       <Route path="/account/calendar" element={<AccountCalendar />} />
       <Route path="/account/settings" element={<AccountSettings />} />
       <Route path="*" element={<NotFound />} />
@@ -98,7 +99,7 @@ function ProjectApp() {
       <Routes>
         <Route path="/" element={<AccountDashboard />} />
         <Route path="/project" element={<ProjectHome />} />
-        <Route path="/account" element={<AccountDashboard />} />
+        <Route path="/account" element={<Account />} />
         <Route path="/account/calendar" element={<AccountCalendar />} />
         <Route path="/account/settings" element={<AccountSettings />} />
         <Route path="/areas" element={<Areas />} />
@@ -117,7 +118,7 @@ function ProjectApp() {
         <Route path="/shopping" element={<Shopping />} />
         <Route path="/announcements" element={<Announcements />} />
         <Route path="/today" element={<Today />} />
-        <Route path="/signin" element={<Navigate to="/account" replace />} />
+        <Route path="/signin" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Layout>
