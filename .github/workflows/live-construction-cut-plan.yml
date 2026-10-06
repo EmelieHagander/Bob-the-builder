@@ -1,7 +1,10 @@
 name: Live K4 saved cut plan readback
-# Manual-only repair installation; activate read-only verification after reviewed bounded-read release.
+# Read-only verification of the retained completed model turn; no new model request.
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/live-construction-cut-plan.yml']
   workflow_dispatch:
     inputs:
       scope:
