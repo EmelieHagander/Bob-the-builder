@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -9,16 +10,29 @@ const config = () => ({ VITE_SUPABASE_URL: 'https://yuobtgoidmmmwfqenkau.supabas
   VITE_SUPABASE_ANON_KEY: 'sb_publishable_test', BOB_USER_EMAIL: 'private@example.test',
   BOB_USER_PASSWORD: 'private-password', BOB_K3_PROJECT_ID: K3_PROJECT, BOB_K3_LIVE_CONFIRM: 'disposable-fixtures-only' })
 
+function recoveryRows() {
+ const r = { id: K4_SAVED_REQUIREMENT, project_id: K3_PROJECT, revision: 1, artifact_id: K4_SOURCE, artifact_revision: 4, target_revision: 3,
+  unit: 'pcs', source_kind: 'deterministic', method_key: 'construction_blank_pieces', method_version: '1', archived: false,
+  target_changed: false, artifact_changed: false, stock_changed: false, component_changed: false,
+  required_quantity: 2, required_with_waste: 2, purchase_quantity: 2, stock_quantity: 0, component_quantity: 0, waste_percent: 0, purchase_increment: 1,
+  recorded_at: '2026-10-05T22:32:47.129181+00:00' }
+ const s = { project_id: K3_PROJECT, requirement_id: K4_SAVED_REQUIREMENT, requirement_revision: 1, artifact_id: K4_SOURCE, artifact_revision: 4,
+  definition_id: 'side_panel', quantity_mode: 'pieces', instance_ids: ['left_side', 'right_side'], blank_mm: { x: 21, y: 300, z: 800 },
+  material_binding: { definition_id: 'side_panel', material_id: '766d4e1a-db42-4a0e-af25-da2739783fc4', material_revision: 1, part_id: null, part_revision: null } }
+ return { current_material_requirements: { data: [r] }, material_requirement_construction_sources: { data: [s] },
+  material_requirement_revisions: { data: [{ requirement_id: r.id, project_id: K3_PROJECT, revision: 1, recorded_at: r.recorded_at }] } }
+}
+
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
-  const prior = change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
+  const prior = change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
     bob_messages: { data: { turn_id: prior, delivery_state: 'completed' } },
     artifact_cad_revisions: { data: change.k4 ? [{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}] : [] },
-    current_material_requirements:{data:[]}, ...change.results,
+    current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...change.results,
   }
   const client = {
     auth: {
@@ -129,4 +143,38 @@ test('K4 cannot repeat or continue a changed, failed, mismatched or already-deli
  }
  const f=fixture({k4:true}),r=await runAuthenticatedK4({...configK4(),GITHUB_RUN_ATTEMPT:'2'},f.deps)
  assert.equal(r.phase,'configuration');assert.equal(f.calls.length,0)
+})
+
+test('K4 recovery uses the completed partial turn, exact retained need and original history before one model call', async () => {
+ const f = fixture({ k4: true, recovery: true }), r = await runAuthenticatedK4Recovery(configK4(), f.deps)
+ assert.equal(r.passed, true); assert.equal(f.probes.length, 1)
+ assert(f.calls.includes('material_requirement_construction_sources')); assert(f.calls.includes('material_requirement_revisions'))
+ assert(!('BOB_USER_PASSWORD' in f.probes[0])); assert.deepEqual(f.signouts, [{ scope: 'local' }])
+})
+
+test('K4 recovery fences a changed turn, need, quantity, source, allocation, stale state or history without a paid call', async () => {
+ const invalid = []
+ for (const [key, value] of Object.entries({ id: 'other', project_id: 'other', revision: 2, artifact_revision: 3,
+  required_quantity: 3, purchase_quantity: 3, waste_percent: 5, purchase_increment: 2, stock_quantity: 1,
+  archived: true, artifact_changed: true, target_changed: true, recorded_at: '2026-10-06T00:00:00Z' })) {
+  const rows = recoveryRows(); rows.current_material_requirements.data[0][key] = value; invalid.push({ results: rows })
+ }
+ for (const [key, value] of Object.entries({ definition_id: 'shelf_panel', quantity_mode: 'area_xy', artifact_revision: 3,
+  instance_ids: ['left_side'], blank_mm: { x: 21, y: 300, z: 801 }, material_binding: {} })) {
+  const rows = recoveryRows(); rows.material_requirement_construction_sources.data[0][key] = value; invalid.push({ results: rows })
+ }
+ const extra = recoveryRows(); extra.current_material_requirements.data.push({ ...extra.current_material_requirements.data[0], id: 'another' })
+ const revised = recoveryRows(); revised.material_requirement_revisions.data.push({ ...revised.material_requirement_revisions.data[0], revision: 2 })
+ invalid.push({ results: extra }, { results: revised }, { results: { current_material_requirements: { data: [] } } },
+  { results: { material_requirement_construction_sources: { data: [] } } },
+  { results: { material_requirement_revisions: { error: { message: 'SECRET private-password' } } } },
+  { results: { bob_messages: { data: { turn_id: K4_PREVIOUS_TURN, delivery_state: 'completed' } } } },
+  { jobStatus: 'running' }, { jobStatus: 'failed' })
+ for (const change of invalid) {
+  const f = fixture({ k4: true, recovery: true, ...change }), r = await runAuthenticatedK4Recovery(configK4(), f.deps)
+  assert.equal(r.passed, false); assert.equal(f.probes.length, 0)
+  assert.deepEqual(f.signouts, [{ scope: 'local' }]); assert.doesNotMatch(JSON.stringify(r), /SECRET|private-password|private-session/)
+ }
+ const f = fixture({ k4: true, recovery: true }), r = await runAuthenticatedK4Recovery({ ...configK4(), GITHUB_RUN_ATTEMPT: '2' }, f.deps)
+ assert.equal(r.phase, 'configuration'); assert.equal(f.calls.length, 0)
 })

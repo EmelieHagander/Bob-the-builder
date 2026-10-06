@@ -2,6 +2,7 @@
 // probe. No account creation, grants, seeded construction or privileged tokens.
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
+import { K4_RECOVERY_TURN, assertK4RecoveryCheckpoint } from './k4-recovery-checkpoint.mjs'
 
 export const K3_PROJECT = 'p_43702f4cbdfb40f0907f5cd0c12a5143'
 export const K3_MEMBER = '9aa569c3-32f3-4f22-a457-0b145e8850dc'
@@ -13,8 +14,9 @@ export const K4_DRAWING = '150f78be-dd33-42e8-8d4f-5af62926a15c'
 export const K4_SOURCE = '01349f1c-100b-4ac2-a5b9-de4c839b51a4'
 export const runAuthenticatedK3 = (env, deps) => runAuthenticatedConstruction(env, deps, 'K3')
 export const runAuthenticatedK4 = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4')
-async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage) {
-  const previousTurn = stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
+export const runAuthenticatedK4Recovery = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', true)
+async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage, recovery = false) {
+  const previousTurn = recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
   let phase = 'configuration', client, acquired = false
   try {
     assert.equal(env.VITE_SUPABASE_URL?.replace(/\/$/, ''), URL)
@@ -64,8 +66,14 @@ async function runAuthenticatedConstruction(env, { makeClient, probe, progress =
       assert.equal(drawings.data[0].artifact_revision, 1)
       assert.equal(drawings.data[0].manifest?.bob_construction?.artifact_id, K4_SOURCE)
       assert.equal(drawings.data[0].manifest?.bob_construction?.revision, 4)
-      const requirements = await client.from('current_material_requirements').select('id').eq('project_id', K3_PROJECT).limit(1)
-      assert(!requirements.error && Array.isArray(requirements.data) && requirements.data.length === 0)
+      const requirements = await client.from('current_material_requirements').select(recovery ? '*' : 'id').eq('project_id', K3_PROJECT).limit(2)
+      assert(!requirements.error && Array.isArray(requirements.data))
+      if (recovery) {
+        const sources = await client.from('material_requirement_construction_sources').select('*').eq('project_id', K3_PROJECT).limit(2)
+        const history = await client.from('material_requirement_revisions').select('*').eq('project_id', K3_PROJECT).limit(2)
+        assert(!sources.error && Array.isArray(sources.data) && !history.error && Array.isArray(history.data))
+        assertK4RecoveryCheckpoint(requirements.data, sources.data, history.data)
+      } else assert.equal(requirements.data.length, 0)
     }
     progress(`Existing member, project and conversation verified; invoking the ${stage} probe once.`)
     phase = 'probe'
