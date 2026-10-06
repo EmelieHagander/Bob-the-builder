@@ -44,6 +44,23 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [requirement.recordId])).rows[0]
   assert.deepEqual(source.instance_ids, ['foot']); assert.deepEqual(source.blank_mm, { x: 200, y: 100, z: 18 }); assert.equal(source.material_binding.material_id, material.recordId)
  })
+ await t.test('a second used definition saves in the same claimed turn without changing the first receipt or history', async () => {
+  const read = () => call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])
+  const first = await read()
+  const secondPayload = structuredClone(payload)
+  Object.assign(secondPayload.data.fields, { name: 'Upright blank', definition_id: 'upright' })
+  const second = await write(secondPayload)
+  assert.notEqual(second.recordId, requirement.recordId); assert.equal(second.revision, 1)
+  assert.deepEqual(await write(secondPayload), second)
+  assert.deepEqual(await read(), first)
+  const current = (await call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: second.recordId, after_id: null })])).records[0]
+  assert.equal(current.required_quantity, 1); assert.equal(current.artifact_changed, false); assert.match(current.basis, /18 x 100 x 100/)
+  const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [second.recordId])).rows[0]
+  assert.equal(source.definition_id, 'upright'); assert.deepEqual(source.instance_ids, ['back'])
+  assert.deepEqual(source.blank_mm, { x: 18, y: 100, z: 100 })
+  assert.equal((await pg.query('select count(*)::int n from bob.material_requirement_revisions where requirement_id=$1', [requirement.recordId])).rows[0].n, 1)
+  await call('bob.material_requirement_command', [project, 'archive', second.recordId, 1, '{}'])
+ })
  await t.test('second paid-turn create cannot duplicate an active need; forged quantities, stock allocation and publish cannot pass', async () => {
   const helper = (f: any, uid = user) => call('bob.material_requirement_cad_command', [project, 'create', randomUUID(), 0, JSON.stringify(f)], uid)
   await assert.rejects(helper(fields), /construction_requirement_exists/)

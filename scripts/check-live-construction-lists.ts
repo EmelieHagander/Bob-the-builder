@@ -7,6 +7,7 @@ import { dirname } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { planTestConfig, requirePlanTestMember } from './check-live-plan-assistant.mjs'
 import { K3_PROJECT, K4_SOURCE, K4_DRAWING } from './run-live-construction-drawing.mjs'
+import { K4_SAVED_REQUIREMENT, K4_RECOVERY_TURN, assertK4RecoveryCheckpoint } from './k4-recovery-checkpoint.mjs'
 
 const { url, key, token, memberId } = planTestConfig({ ...process.env, BOB_PLAN_LIVE_CONFIRM: process.env.BOB_K4_LIVE_CONFIRM })
 const projectId = process.env.BOB_K4_PROJECT_ID
@@ -19,14 +20,19 @@ const project = checked(await client.from('projects').select('id,name,type').eq(
 assert(project.type === 'Verification' && project.name.startsWith('K2 model acceptance '))
 const original = checked(await client.rpc('read_construction_draft', { p_project: projectId, p_artifact: K4_SOURCE, p_revision: 4 }))
 assert(original.source_state === 'current' && original.current_revision === 4 && !original.archived)
-const before = checked(await client.from('current_material_requirements').select('id').eq('project_id', projectId))
-assert.equal(before.length, 0, 'Inspect existing requirements rather than submitting a duplicate turn')
+const before = checked(await client.from('current_material_requirements').select('*').eq('project_id', projectId))
+const beforeSources = checked(await client.from('material_requirement_construction_sources').select('*').eq('project_id', projectId))
+const beforeHistory = checked(await client.from('material_requirement_revisions').select('*').eq('project_id', projectId))
+assertK4RecoveryCheckpoint(before, beforeSources, beforeHistory)
+for (const table of ['material_requirement_stock', 'material_requirement_components', 'materials'])
+ assert.equal(checked(await client.from(table).select('*').eq('project_id', projectId)).length, 0)
 const report: any = { projectId, sourceArtifact: K4_SOURCE, sourceRevision: 4, startedAt: new Date().toISOString(),
+ recoveryOf: K4_RECOVERY_TURN, preservedRequirement: K4_SAVED_REQUIREMENT,
  notProven: ['raw-stock cutting fit/kerf/grain', 'hardware quantities/products', 'assembly tool access', 'fabrication/strength', 'Shopping', 'another participant/mobile'] }
 const reportPath = process.env.BOB_K4_REPORT ?? 'test-results/live-construction-lists.json'
 try {
  const turn = randomUUID()
- const message = 'Fortsätt med samma nuvarande sparade hyllkonstruktion och dess ritning. Ta fram en stycklista och kapmått per faktisk del från konstruktionen, samt en föreslagen monteringsordning för dess förband. Spara ett materialbehov per använd deldefinition i Material plan, räknat i antal obearbetade delar utan extra spill eller avrundning, och återläs de sparade behoven. Behåll konstruktionens, delarnas och förbandens identiteter och mått; gör ingen ny konstruktion eller ritning. Råformat, sågspår, fiberriktning, skruvprodukter och verktygsåtkomst är inte bestämda och ska vara tydliga kvarstående luckor. Antal delar är inte antal inköpsskivor. Reservera inget lager och skicka inget till Shopping. Detta är fortsatt ett koncept, inte tillverkningsklart.'
+ const message = 'Fortsätt samma uppdrag för den sparade hyllkonstruktionen och dess ritning efter förra skrivfelet. Gavlarnas behov om två obearbetade delar är redan sparat och ska behålla samma identitet, version och innehåll. Läs aktuella behov och slutför enbart det saknade behovet om tre liggande skivor i Material plan, räknat i antal obearbetade delar utan extra spill eller avrundning. Återläs båda behoven och redovisa stycklista, lokala kapmått och föreslagen monteringsordning för samma konstruktion. Behåll konstruktionens, delarnas och förbandens identiteter och mått; gör ingen ny konstruktion eller ritning och skriv inte om gavelbehovet. Råformat, sågspår, fiberriktning, skruvprodukter och verktygsåtkomst är inte bestämda och ska vara tydliga kvarstående luckor. Antal delar är inte antal inköpsskivor. Reservera inget lager och skicka inget till Shopping. Detta är fortsatt ett koncept, inte tillverkningsklart.'
  const accepted = checked(await client.functions.invoke('ask-bob', { body: { action: 'send', projectId, clientTurnId: turn, message, background: true } }))
  assert.equal(accepted.status, 'accepted'); assert(accepted.jobId)
  Object.assign(report, { turn, jobId: accepted.jobId })
@@ -44,6 +50,11 @@ try {
  assert(completed, 'Timed out: inspect this same job, never submit a duplicate')
  const requirements = checked(await client.from('current_material_requirements').select('*').eq('project_id', projectId))
  const sources = checked(await client.from('material_requirement_construction_sources').select('*').eq('project_id', projectId))
+ const retained = requirements.find((r: any) => r.id === K4_SAVED_REQUIREMENT)
+ assert.deepEqual(retained, before[0], 'Recovery must not rewrite the retained need')
+ assert.deepEqual(sources.filter((s: any) => s.requirement_id === K4_SAVED_REQUIREMENT), beforeSources)
+ const retainedHistory = checked(await client.from('material_requirement_revisions').select('*').eq('project_id', projectId).eq('requirement_id', K4_SAVED_REQUIREMENT))
+ assert.deepEqual(retainedHistory, beforeHistory, 'Recovery must preserve the original history exactly')
  const used = original.recipe.definitions.filter((d: any) => original.recipe.instances.some((i: any) => i.definition_id === d.id))
  assert.equal(requirements.length, used.length); assert.equal(sources.length, used.length)
  for (const d of used) {
@@ -72,8 +83,12 @@ try {
  const thread = checked(await client.from('bob_threads').select('id').eq('project_id', projectId).eq('owner_user_id', memberId).eq('status', 'active').single())
  const answer = checked(await client.from('bob_messages').select('evidence,delivery_state').eq('thread_id', thread.id).eq('turn_id', turn).eq('role', 'assistant').single())
  assert.equal(answer.delivery_state, 'completed')
+ // This flag also covers truncated context reads; exact delivery is checked
+ // above against caller-visible records, provenance and unchanged history.
+ report.answerPartial = answer.evidence?.partial ?? null
  const receiptData = answer.evidence?.writes
- assert(Array.isArray(receiptData)); assert(requirements.every((r: any) => receiptData.some((receipt: any) => receipt.recordId === r.id && receipt.revision === r.revision)))
+ assert(Array.isArray(receiptData)); assert(!receiptData.some((r: any) => r.recordId === K4_SAVED_REQUIREMENT), 'No new write receipt for the retained need')
+ assert(requirements.filter((r: any) => r.id !== K4_SAVED_REQUIREMENT).every((r: any) => receiptData.some((receipt: any) => receipt.recordId === r.id && receipt.revision === r.revision)))
  report.requirements = requirements.map((r: any) => ({ id: r.id, revision: r.revision, quantity: r.required_quantity, source: r.artifact_id, sourceRevision: r.artifact_revision }))
  report.sources = sources; report.passed = true; report.receipts = receiptData
 } catch (error) {
