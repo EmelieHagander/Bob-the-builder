@@ -33,11 +33,13 @@ const manualFields=(stockId:string,revision=1,quantity='1')=>({name:'Manual shee
 
 test('whole-sheet reservations preserve blank needs/history, use normal receipts and require explicit release',async t=>{
  const f=await boundFixture(t)
+ await assert.rejects(f.rpc('bob.material_cut_plan_shopping_command',[f.project,'publish',f.saved.recordId,1,0,'No catalog portion']),/catalog_required/)
  const before=(await f.pg.query('select to_jsonb(r) row from bob.material_requirement_revisions r where project_id=$1 order by requirement_id,revision',[f.project])).rows
  await t.test('one sheet covers both needs without revising blank quantities',async()=>{
   const receipt=await f.writeStock(f.reservePayload());assert.equal(receipt.dataset,'cut_plans');assert.equal(receipt.revision,1)
   assert.deepEqual(await f.writeStock(f.reservePayload()),receipt)
   const plan=await f.read(f.saved.recordId);assert.equal(plan.stock_reserved,true);assert.equal(plan.reservation_revision,1)
+  assert.equal(plan.supply.stock_sheets,1);assert.equal(plan.supply.catalog_sheets,0);assert.equal(plan.supply.commitments_current,true)
   assert.equal(plan.reservation.allocations.length,1);assert.equal(plan.reservation.allocations[0].quantity,1)
   assert.equal(plan.requirements.length,2);assert.deepEqual(plan.layout,f.payload.data.layout)
   for(const k of ['shopping_ready','fabrication_ready','input_evidence_verified'])assert.equal(plan[k],false)

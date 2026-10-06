@@ -37,6 +37,15 @@ export interface MaterialCutPlan {
   shopping_revision: number
   shopping: { revision: number; plan_revision: number; published: boolean; contributions: Row[] } | null
   shopping_ready: boolean
+  supply: {
+    used_sheets: number
+    stock_sheets: number
+    catalog_sheets: number
+    hypothetical_sheets: number
+    stock_commitment_current: boolean
+    purchase_commitment_current: boolean
+    commitments_current: boolean
+  }
   fabrication_ready: false
   input_evidence_verified: false
 }
