@@ -320,7 +320,7 @@ for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first
  for(const key of ['first','second']){
   const recipe=structuredClone(f.payload.data.packet.recipe);recipe.definitions.forEach((d:any)=>d.material_ref=null)
   const construction=await call(write({...base,kind:'construction',data:{key:'reserve-'+key,title:'Stock-bound race construction',description:'Isolated',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters:f.payload.data.packet.manifest.bob_parameters,materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[],open_questions:['Hardware/access unknown']}}))
-  const need=await call(write({...base,kind:'operational',data:{resource:'cad_requirement',action:'create',fields:{name:'Race blank',category:'Timber',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Isolated',artifact_id:construction.recordId,artifact_revision:1,target_revision:1,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[],component_allocations:[],change_note:'Initial'}}}))
+  const need=await call(write({...base,kind:'operational',data:{resource:'cad_requirement',action:'create',fields:{name:'Race blank '+key,category:'Timber',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Isolated',artifact_id:construction.recordId,artifact_revision:1,target_revision:1,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[],component_allocations:[],change_note:'Initial'}}}))
   const draft=await call(`select bob.read_construction_draft(${literal(f.project)},${literal(construction.recordId)},1,null)`)
   const catalog=(await call(`select bob.catalog_read(${literal(f.project)},${literal(JSON.stringify({action:'read',id:material.recordId,revision:1,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}))})`)).record
   const candidates=[{id:'sheet',...fmt,count:1,kerf_mm:3,trim_mm:5}],grains=[{definition_id:'panel',axis:'x'}]
@@ -330,7 +330,8 @@ for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first
   plans.push(plan)
  }
  const reservePayload=(index=0,action='reserve',revision=0)=>({...base,kind:'cut_plan_stock',record_id:plans[index].recordId,expected_revision:1,data:{action,reservation_revision:revision,change_note:'Explicit isolated shared-sheet commitment'}})
- const reserve=write(reservePayload()),otherReserve=write(reservePayload(1))
+ const directReserve=(index:number)=>`select bob.material_cut_plan_stock_command(${literal(f.project)},'reserve',${literal(plans[index].recordId)},1,0,'Independent shared-sheet commitment')`
+ const reserve=kind==='cut-plan-competing'?directReserve(0):write(reservePayload()),otherReserve=directReserve(1)
  const manual=`select bob.material_requirement_command(${literal(f.project)},'create',${literal(randomUUID())},0,${literal(JSON.stringify({name:'Manual race sheet need',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'1',waste_percent:'0',purchase_increment:'1',basis:'Isolated sheet count',assumptions:'Fixture',artifact_id:null,artifact_revision:null,target_revision:1,stock_allocations:[{id:stock,revision:1,quantity:'1'}],component_allocations:[],change_note:'Initial'}))})`
  const stockChange=stockCall('revise',1,{...stockData,notes:'Concurrent current-stock edit'})
  const sourceChange=mutations.space(f)
