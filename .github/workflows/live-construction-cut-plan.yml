@@ -1,5 +1,6 @@
 name: Live K4 saved cut plan readback
 # Read-only verification of the retained completed model turn; no new model request.
+# K4 reservation release readback: migration 20261006163926, reviewed merge d596a1d.
 
 on:
   push:
