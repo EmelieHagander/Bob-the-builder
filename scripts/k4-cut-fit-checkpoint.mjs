@@ -21,3 +21,6 @@ export function assertK4CutFitCheckpoint(requirements, sources, history) {
   material_binding: { definition_id: 'shelf_panel', material_id: '766d4e1a-db42-4a0e-af25-da2739783fc4', material_revision: 1, part_id: null, part_revision: null } })
  assert.equal(h.requirement_id, r.id); assert.equal(h.project_id, r.project_id); assert.equal(h.revision, 1); assert.equal(h.recorded_at, r.recorded_at)
 }
+
+// The completed read-only trial is the sole starting turn for saved-plan acceptance.
+export const K4_CUT_PLAN_PREVIOUS_TURN = '58d32191-8ac0-4847-8df7-8083f96c75e3'

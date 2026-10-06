@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
-import { K4_CUT_FIT_PREVIOUS_TURN, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -35,13 +35,13 @@ function cutFitRows() {
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
-  const prior = change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
+  const prior = change.cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
     bob_messages: { data: { turn_id: prior, delivery_state: 'completed' } },
     artifact_cad_revisions: { data: change.k4 ? [{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}] : [] },
-    current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...(change.cutFit ? cutFitRows() : {}), ...change.results,
+    material_cut_plans:{data:[]}, current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...(change.cutFit || change.cutPlan ? cutFitRows() : {}), ...change.results,
   }
   const client = {
     auth: {
@@ -222,4 +222,18 @@ test('cut-fit refuses wrong/pending conversation, job uncertainty and workflow r
  }
  const f = fixture({ k4: true, cutFit: true }), r = await runAuthenticatedK4CutFit({ ...configK4(), GITHUB_RUN_ATTEMPT: '2' }, f.deps)
  assert.equal(r.phase, 'configuration'); assert.equal(f.calls.length, 0)
+})
+
+
+test('saved-plan login pins the completed read-only turn, both exact needs and zero existing plans', async () => {
+ const f=fixture({k4:true,cutPlan:true}),env={...config(),BOB_K4_PROJECT_ID:K3_PROJECT,BOB_K4_LIVE_CONFIRM:'disposable-fixtures-only'}
+ const r=await runAuthenticatedK4CutPlan(env,f.deps)
+ assert.equal(r.passed,true);assert.equal(f.probes.length,1);assert.equal(f.probes[0].BOB_K4_REPORT,'test-results/live-construction-cut-plan.json')
+ assert(!('BOB_USER_PASSWORD' in f.probes[0]));assert(!('BOB_USER_EMAIL' in f.probes[0]));assert.deepEqual(f.signouts,[{scope:'local'}])
+})
+test('existing/unknown saved plans or changed conversation stop before a new paid save',async()=>{
+ for(const results of [{material_cut_plans:{data:[{id:'existing-plan'}]}},{material_cut_plans:{error:{message:'private'}}},{bob_messages:{data:{turn_id:K4_CUT_FIT_PREVIOUS_TURN,delivery_state:'completed'}}},{bob_messages:{data:{turn_id:K4_CUT_PLAN_PREVIOUS_TURN,delivery_state:'pending'}}}]){
+  const f=fixture({k4:true,cutPlan:true,results}),r=await runAuthenticatedK4CutPlan({...config(),BOB_K4_PROJECT_ID:K3_PROJECT,BOB_K4_LIVE_CONFIRM:'disposable-fixtures-only'},f.deps)
+  assert.equal(r.passed,false);assert.equal(f.probes.length,0);assert.doesNotMatch(JSON.stringify(r),/private/)
+ }
 })

@@ -63,7 +63,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -165,7 +165,7 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   const r = value as WriteReadback
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))
-    || (['catalog','plan'].includes(r.dataset) && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
+    || (['catalog','plan','cut_plans'].includes(r.dataset) && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
   return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
@@ -237,7 +237,9 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (error.code === '42501') return { status: 'denied', reason: 'access' }
           if (payload.kind === 'operational' && error.message?.includes('construction_requirement_exists')) return { status: 'conflict', message: 'A current blank requirement already exists for this construction definition and quantity mode. Read requirements and revise that same identity; do not create a duplicate.' }
           if (payload.kind === 'operational' && error.message?.includes('construction_derive_required')) return { status: 'invalid', message: 'Recalculate this existing construction blank requirement with derive_cad_material_requirement and the same record_id/current revision. Manual revision cannot replace its deterministic source proof.' }
-          if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Raw-stock format, kerf, grain and cutting fit are not supported yet; do not reserve stock/reuse or send these blanks to Shopping. Keep that gap explicit.' }
+          if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Raw-stock reservation and Shopping still require shared whole-sheet accounting beyond a saved cut plan; do not reserve stock/reuse or send these blanks to Shopping. Keep that gap explicit.' }
+          if (payload.kind === 'cut_plan' && error.code === 'PT409') return { status: 'conflict', message: 'Cut plan, construction, saved piece needs, material/format revision or remaining whole-sheet capacity changed. Read current cut_plan, requirements and sources; preserve existing identities and update the same plan.' }
+          if (payload.kind === 'cut_plan' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No cut plan saved. Use the exact current piece needs, explicit valid sheet inputs, and matching versioned stock/catalog format. Unknown inputs or an unexecutable layout cannot be saved. Stock reservation and Shopping remain separate.' }
           if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
             if (payload.kind === 'catalog' && /\bcatalog_source_quote_required\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No change made: source_quote must be an exact, unmodified substring of its source message, including punctuation. Use source_seq=null for this current owner message; an older source_seq must identify the exact message you quoted. Do not paraphrase, add a final period, or change source_kind to bypass the quote check. Correct the quote and retry.' }

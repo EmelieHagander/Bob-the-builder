@@ -15,14 +15,14 @@ export const OPERATION_WRITE_TOOLS=[
   }),
   tool('manage_project_material','Create/revise/archive/restore stock or a material requirement, or publish a current requirement to Shopping. Uses the existing material arithmetic, allocations, version checks and explicit Shopping handoff. Read resources first. Never report purchase or delivery from a planned Shopping entry.',{
     ...common,resource:{type:'string',enum:['stock','requirement']},action:{type:'string',enum:['create','revise','archive','restore','publish']},
-    data:{type:'object',additionalProperties:true,description:'stock create/revise: name, specification, quantity(decimal string), unit(pcs|m|m2|m3|kg|l), status(available|inspect|unavailable), area_id, notes, change_note. requirement create/revise: name, category, area_id, task_id, unit, required_quantity, waste_percent, purchase_increment, basis, assumptions, artifact_id, artifact_revision, target_revision, stock_allocations:[{id,revision,quantity}], component_allocations:[{id,revision,quantity}], change_note. These are full revisions: preserve existing allocations and fields. Other actions: {}. New record_id=null, expected_revision=0; otherwise exact UUID/current revision. expected_updated_at=null. Quantities supplied here have manual basis, never forged deterministic provenance.'},
+    data:{type:'object',additionalProperties:true,description:'stock create/revise: name, specification, quantity(decimal string), unit(pcs|m|m2|m3|kg|l), status(available|inspect|unavailable), area_id, notes, change_note, optional sheet_format:{material_id,material_revision,length_mm,width_mm,thickness_mm,grain(length|width|none),basis(measured|provided_spec|estimated),note}. Sheet stock uses whole pcs; omitted format preserves an existing one on revise, explicit null clears it. Never invent physical stock/inspection. requirement create/revise: name, category, area_id, task_id, unit, required_quantity, waste_percent, purchase_increment, basis, assumptions, artifact_id, artifact_revision, target_revision, stock_allocations:[{id,revision,quantity}], component_allocations:[{id,revision,quantity}], change_note. These are full revisions: preserve existing allocations and fields. Other actions: {}. New record_id=null, expected_revision=0; otherwise exact UUID/current revision. expected_updated_at=null. Quantities supplied here have manual basis, never forged deterministic provenance.'},
   }),
   tool('save_project_build_day','Create/revise a build day and its explicit scheduled Tasks. Does not change anyone\'s RSVP or imply completed work. Read the existing event and preserve its task list when editing. Task IDs must belong to this project.',{
     ...common,title:{type:'string'},day:{type:'string'},time:{type:'string'},place:{type:'string'},food:{type:'string'},task_ids:{type:'array',maxItems:100,uniqueItems:true,items:{type:'string'}},
   }),
 ]
-export const READ_OPERATIONS_TOOL=tool('read_project_work','Read current task readiness/dependencies/needs, stock, material requirements with allocations, Shopping, or build days with scheduled tasks. Project scope is bound by the server. Follow next_cursor; exact record_id reads detail.',{
-  resource:{type:'string',enum:['task_work','stock','requirement','shopping','build_day']},record_id:nullable,after_id:nullable,
+export const READ_OPERATIONS_TOOL=tool('read_project_work','Read current task readiness/dependencies/needs, stock, material requirements with allocations, saved cut plans with current source/capacity checks, Shopping, or build days with scheduled tasks. Project scope is bound by the server. Follow next_cursor; exact record_id reads detail.',{
+  resource:{type:'string',enum:['task_work','stock','requirement','cut_plan','shopping','build_day']},record_id:nullable,after_id:nullable,
 })
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n=200)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -58,7 +58,7 @@ export function createOperationalReader(projectId:string,read:(v:Record<string,u
   let used=0,partial=false
   return{tools:[READ_OPERATIONS_TOOL],get remaining(){return Math.max(0,16-used)},get partial(){return partial},async execute(v:unknown){
     if(++used>16)return{status:'budget_exhausted'}
-    if(!object(v)||Object.keys(v).sort().join(',')!=='after_id,record_id,resource'||!['task_work','stock','requirement','shopping','build_day'].includes(v.resource)
+    if(!object(v)||Object.keys(v).sort().join(',')!=='after_id,record_id,resource'||!['task_work','stock','requirement','cut_plan','shopping','build_day'].includes(v.resource)
       ||[v.record_id,v.after_id].some(x=>x!==null&&!text(x)))return{status:'invalid'}
     if(!await hasAccess())return{status:'denied'}
     try{
