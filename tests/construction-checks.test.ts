@@ -125,5 +125,12 @@ test('caller SQL checkpoint and exact normalized catalog feed a successful real 
  const checked=await tools.execute('check_construction_draft',{artifact_id:saved.receipt.recordId,revision:1})
  assert.equal(checked.status,'checked',JSON.stringify(checked));assert.equal(checked.concept_ready,true,JSON.stringify(checked.issues));assert.equal(checked.fabrication_ready,false)
  assert.deepEqual(checked.bounds_mm.size,[600,300,800]);assert.equal(checked.joint_count,6)
+ const before=await rpc('bob.read_construction_draft',[projectId,saved.receipt.recordId,1,null])
+ const fit=await tools.execute('check_construction_cut_fit',{artifact_id:saved.receipt.recordId,revision:1,
+  candidates:[{id:'candidate',material_id:mat.recordId,material_revision:1,length_mm:2440,width_mm:1220,thickness_mm:18,count:1,kerf_mm:3,trim_mm:5,grain:'length',basis:'design_choice',note:'Synthetic candidate, not physical stock'}],
+  blank_grain:before.recipe.definitions.map((d:any)=>({definition_id:d.id,axis:d.x_mm===18?'z':'x'}))})
+ assert.equal(fit.status,'feasible',JSON.stringify(fit));assert.equal(fit.placements.length,5);assert.equal(fit.stock_reserved,false)
+ assert.deepEqual(await rpc('bob.read_construction_draft',[projectId,saved.receipt.recordId,1,null]),before)
+ assert.equal((await asProjectUser(pg,owner,"select active from bob.tool_catalog where name='check_construction_cut_fit'")).rows[0].active,true)
  assert.equal((await pg.query('select count(*) n from bob.artifact_cad_revisions where artifact_id=$1',[saved.receipt.recordId])).rows[0].n,0)
 })
