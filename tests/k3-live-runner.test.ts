@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -23,16 +24,24 @@ function recoveryRows() {
   material_requirement_revisions: { data: [{ requirement_id: r.id, project_id: K3_PROJECT, revision: 1, recorded_at: r.recorded_at }] } }
 }
 
+function cutFitRows() {
+ const data = recoveryRows()
+ const r = { ...data.current_material_requirements.data[0], id: K4_SHELF_REQUIREMENT, required_quantity: 3, required_with_waste: 3, purchase_quantity: 3, recorded_at: '2026-10-06T07:46:56.68927+00:00' }
+ data.current_material_requirements.data.push(r)
+ data.material_requirement_construction_sources.data.push({ ...data.material_requirement_construction_sources.data[0], requirement_id: K4_SHELF_REQUIREMENT, definition_id: 'shelf_panel', instance_ids: ['bottom_panel', 'middle_shelf', 'top_panel'], blank_mm: { x: 658, y: 300, z: 21 }, material_binding: { ...data.material_requirement_construction_sources.data[0].material_binding, definition_id: 'shelf_panel' } })
+ data.material_requirement_revisions.data.push({ requirement_id: r.id, project_id: K3_PROJECT, revision: 1, recorded_at: r.recorded_at })
+ return data
+}
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
-  const prior = change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
+  const prior = change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
     bob_messages: { data: { turn_id: prior, delivery_state: 'completed' } },
     artifact_cad_revisions: { data: change.k4 ? [{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}] : [] },
-    current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...change.results,
+    current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...(change.cutFit ? cutFitRows() : {}), ...change.results,
   }
   const client = {
     auth: {
@@ -176,5 +185,41 @@ test('K4 recovery fences a changed turn, need, quantity, source, allocation, sta
   assert.deepEqual(f.signouts, [{ scope: 'local' }]); assert.doesNotMatch(JSON.stringify(r), /SECRET|private-password|private-session/)
  }
  const f = fixture({ k4: true, recovery: true }), r = await runAuthenticatedK4Recovery({ ...configK4(), GITHUB_RUN_ATTEMPT: '2' }, f.deps)
+ assert.equal(r.phase, 'configuration'); assert.equal(f.calls.length, 0)
+})
+
+test('cut-fit login pins both completed needs and latest recovery turn, passes no password to the probe and signs out locally', async () => {
+ const f = fixture({ k4: true, cutFit: true }), r = await runAuthenticatedK4CutFit(configK4(), f.deps)
+ assert.equal(r.passed, true); assert.equal(f.probes.length, 1)
+ assert.equal(f.probes[0].BOB_K4_REPORT, 'test-results/live-construction-cut-fit.json')
+ assert(!('BOB_USER_PASSWORD' in f.probes[0])); assert.deepEqual(f.signouts, [{ scope: 'local' }])
+ assert.doesNotMatch(JSON.stringify({ r, logs: f.logs }), /private-password|private-session|private@example/)
+ const rows = cutFitRows(); assertK4CutFitCheckpoint(rows.current_material_requirements.data.reverse(), rows.material_requirement_construction_sources.data.reverse(), rows.material_requirement_revisions.data.reverse())
+})
+test('cut-fit refuses altered/missing/extra need identities, quantities, provenance and history before a paid call', async () => {
+ const changes = [
+  r => { r.current_material_requirements.data[1].required_quantity = 4 },
+  r => { r.current_material_requirements.data[1].artifact_changed = true },
+  r => { r.current_material_requirements.data[1].revision = 2 },
+  r => { r.current_material_requirements.data[1].id = 'another' },
+  r => { r.material_requirement_construction_sources.data[1].blank_mm.x = 600 },
+  r => { r.material_requirement_construction_sources.data[1].instance_ids.pop() },
+  r => { r.material_requirement_revisions.data[1].revision = 2 },
+  r => { r.current_material_requirements.data.pop() },
+  r => { r.current_material_requirements.data.push({ ...r.current_material_requirements.data[1] }) },
+ ]
+ for (const change of changes) {
+  const results = cutFitRows(); change(results)
+  const f = fixture({ k4: true, cutFit: true, results }), r = await runAuthenticatedK4CutFit(configK4(), f.deps)
+  assert.equal(r.passed, false); assert.equal(f.probes.length, 0); assert.deepEqual(f.signouts, [{ scope: 'local' }])
+ }
+})
+test('cut-fit refuses wrong/pending conversation, job uncertainty and workflow reruns without retrying', async () => {
+ for (const change of [{ results: { bob_messages: { data: { turn_id: K4_RECOVERY_TURN, delivery_state: 'completed' } } } },
+  { results: { bob_messages: { data: { turn_id: K4_CUT_FIT_PREVIOUS_TURN, delivery_state: 'pending' } } } }, { jobStatus: 'running' }, { jobStatus: 'failed' }]) {
+  const f = fixture({ k4: true, cutFit: true, ...change }), r = await runAuthenticatedK4CutFit(configK4(), f.deps)
+  assert.equal(r.passed, false); assert.equal(f.probes.length, 0)
+ }
+ const f = fixture({ k4: true, cutFit: true }), r = await runAuthenticatedK4CutFit({ ...configK4(), GITHUB_RUN_ATTEMPT: '2' }, f.deps)
  assert.equal(r.phase, 'configuration'); assert.equal(f.calls.length, 0)
 })
