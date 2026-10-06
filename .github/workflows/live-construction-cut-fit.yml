@@ -1,7 +1,10 @@
 name: Live K4 cut fit acceptance
-# Manual-only installation; activation requires reviewed code and checkpoint.
+# One-shot activation after PR #210 exact-head CI and retained checkpoint review.
 
 on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/live-construction-cut-fit.yml]
   workflow_dispatch:
     inputs:
       scope:
