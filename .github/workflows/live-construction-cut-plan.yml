@@ -1,7 +1,10 @@
 name: Live K4 saved cut plan acceptance
-# Manual-only installation; activate after exact-head CI and fresh checkpoint review.
+# One-time activation after reviewed #211 CI, migration and both immutable Edge releases.
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/live-construction-cut-plan.yml']
   workflow_dispatch:
     inputs:
       scope:
