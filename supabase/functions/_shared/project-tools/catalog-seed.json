@@ -134,6 +134,15 @@
     "active": true
   },
   {
+    "name": "check_construction_cut_fit",
+    "description": "Check rectangular blank placement against explicit candidate sheets with kerf, trim and grain.",
+    "how_to": "Read the exact current construction and material pins. Supply candidate sheet dimensions/count, kerf, trim per edge and sheet grain with an honest specification/design-choice basis and note. Name each used definition once with its local in-plane grain axis; null remains unknown and none is an explicit no-grain constraint. Code derives ALL actual instance blanks and returns placements, executable guillotine cuts and offcuts. Feasible is geometric evidence for these inputs only, not verified physical stock, product suitability, an optimal purchase count or a saved plan. no_layout_found/search_limit are not general impossibility proofs. Keep existing requirement IDs/history. Allocation and Shopping stay blocked until a persisted cut plan is bound to current real stock/product capacity.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": ["planning", "build"],
+    "active": true
+  },
+  {
     "name": "derive_construction_lists",
     "description": "Derive concept part quantities, blank cut dimensions and a proposed assembly order from the exact checked construction.",
     "how_to": "Read/check the exact current construction. assembly_dependencies=[] reports the missing order; otherwise specify every joint once with prerequisite joint IDs. The code counts actual instances and validates a separate acyclic assembly graph. Blank cuts are not a raw-stock layout, product approval or saved delivery. Preserve explicit raw-format, kerf, grain, hardware and assembly-access gaps. Save blank needs through derive_cad_material_requirement using this construction revision, then read_project_work(requirement) to verify. Shopping and stock/reuse allocation are blocked until cut fit is supported.",

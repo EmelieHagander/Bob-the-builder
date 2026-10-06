@@ -49,7 +49,7 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
    hardware_quantity: null, hardware_product: null, adhesive_quantity: null })),
   assembly: { status: dependencies.length ? 'proposed_order' : 'needs_dependencies', provenance: 'design_choice', steps, access_verified: false },
   gaps: [
-   { code: 'raw_stock_cutting_unverified', ids: bom.map(row => row.definition_id), message: 'Raw format, saw kerf, grain direction and a feasible stock cutting layout are not verified. These are blank cut dimensions, not a raw-sheet count or stock reservation.' },
+   { code: 'raw_stock_cutting_unverified', ids: bom.map(row => row.definition_id), message: 'Raw format, saw kerf, grain direction and a feasible stock cutting layout are not verified by this list. Use check_construction_cut_fit for an explicit candidate-sheet layout; that read assessment does not reserve stock or unlock Shopping. These are blank dimensions, not a raw-sheet purchase count.' },
    { code: 'joint_hardware_unverified', ids: joints.map(j => j.id), message: 'Joint methods do not specify screw/adhesive products, quantities, spacing or capacity. No hardware purchase quantity has been inferred.' },
    { code: 'assembly_access_unverified', ids: joints.map(j => j.id), message: 'Acyclic order is a design proposal; tool access, clamping, machining and stability during assembly still require evidence.' },
    ...(!dependencies.length ? [{ code: 'assembly_dependencies_missing', ids: joints.map(j => j.id), message: 'Supply an explicit dependency entry for every joint to validate a proposed order.' }] : []),

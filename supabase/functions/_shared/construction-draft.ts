@@ -1,5 +1,6 @@
 import { checkConstruction } from './construction-checks.ts'
 import { constructionLists } from './construction-lists.ts'
+import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
 import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
@@ -36,16 +37,25 @@ export const CONSTRUCTION_LIST_TOOL=tool('derive_construction_lists','Derive a c
  artifact_id:uuid,revision:rev,
  assembly_dependencies:{type:'array',maxItems:1024,items:obj({joint_id:id,depends_on:{type:'array',maxItems:64,uniqueItems:true,items:id}})},
 })
+const candidateMm=(minimum:number)=>({anyOf:[{type:'number',minimum,maximum:1000000},{type:'null'}]})
+export const CONSTRUCTION_CUT_FIT_TOOL=tool('check_construction_cut_fit','Check actual rectangular blank placement for ALL instances in the exact current checked construction against explicit candidate sheet formats. Supply exact used material pins, sheet count, mm length/width/thickness, saw kerf, trim per edge, sheet grain direction and each definition’s LOCAL in-plane grain axis. null means unknown and blocks a layout; none is an explicit decision that grain imposes no constraint. Candidate dimensions/grain are supplied specifications or design choices with an honest basis/note, not verified physical stock. Code returns a bounded guillotine cutting layout with placements, cut order and offcuts, or a concrete gap. No summed-area shortcut or optimal purchase count. This read-only result is not saved and cannot unlock stock/reuse allocation or Shopping. Keep existing need identities and history.',{
+ artifact_id:uuid,revision:rev,
+ candidates:{type:'array',minItems:1,maxItems:8,items:obj({id,material_id:uuid,material_revision:rev,
+  length_mm:candidateMm(0.000001),width_mm:candidateMm(0.000001),thickness_mm:candidateMm(0.000001),
+  count:{type:'integer',minimum:1,maximum:16},kerf_mm:candidateMm(0),trim_mm:candidateMm(0),
+  grain:{type:['string','null'],enum:['length','width','none',null]},basis:{type:'string',enum:['design_choice','provided_spec']},note:{type:'string',minLength:1,maxLength:1000}})},
+ blank_grain:{type:'array',minItems:1,maxItems:128,items:obj({definition_id:id,axis:{type:['string','null'],enum:['x','y','z','none',null]}})},
+})
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12)return {status:'budget_exhausted'}
-  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:null
+  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:null
   if(!spec)return {status:'invalid'}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
@@ -58,7 +68,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!result||result.projectId!==opts.projectId||!['ok','not_found'].includes(result.status)||JSON.stringify(result).length>600000)throw new Error('construction_read_unavailable')
     return result
    }
-   if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name){
+   if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name||name===CONSTRUCTION_CUT_FIT_TOOL.function.name){
     if(!opts.readCatalog)return {status:'unavailable'}
     const draft=await opts.read(v.artifact_id,v.revision,null) as Record<string,any>
     if(!draft||draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||draft.revision!==v.revision)return {status:'unavailable'}
@@ -79,6 +89,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const checked=checkConstruction(draft,catalog,(opts.now?.()??new Date()).toISOString().slice(0,10))
     if(name===CONSTRUCTION_CHECK_TOOL.function.name)return {projectId:opts.projectId,...checked}
     if(!checked.concept_ready)return {status:'needs_data',checked,message:'Correct the same construction before deriving lists; no quantities or fabrication approval returned.'}
+    if(name===CONSTRUCTION_CUT_FIT_TOOL.function.name){
+     if([...catalog.values()].some(r=>r.kind==='material'&&r.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock material only; profile/bar cutting needs a separate capability.'}
+     return {projectId:opts.projectId,...constructionCutFit(constructionLists(draft,catalog,[]),v.candidates,v.blank_grain),checked}
+    }
     return {projectId:opts.projectId,...constructionLists(draft,catalog,v.assembly_dependencies),checked}
    }
    if(!opts.writer)return {status:'denied'}
