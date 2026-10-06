@@ -303,7 +303,7 @@ for(const kind of ['construction-duplicate','construction-revise','construction-
  console.log(`PASS ${kind}: observed real lock wait; checkpoint CAS/replay/source freshness verified`);cases++
 }
 // K4: the same disposable PostgreSQL harness exercises shared sheet capacity.
-for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first','cut-plan-before-manual','cut-plan-stock-first','cut-plan-before-stock','cut-plan-source-first','cut-plan-before-source','cut-plan-release-first','shopping-competing','shopping-replay','shopping-edit-first','shopping-before-edit','shopping-source-first','shopping-before-source','shopping-withdraw-first']){
+for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first','cut-plan-before-manual','cut-plan-stock-first','cut-plan-before-stock','cut-plan-source-first','cut-plan-before-source','cut-plan-release-first','shopping-competing','shopping-replay','shopping-edit-first','shopping-before-edit','shopping-source-first','shopping-before-source','shopping-withdraw-first','mixed-reserve-first','mixed-publish-first','mixed-release-publish','mixed-withdraw-reserve','mixed-competing','mixed-stock-first','mixed-before-stock']){
  await query('drop table if exists public.cad_race_fixture;'+fixture)
  const f=await json('select data from public.cad_race_fixture')
  const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
@@ -312,24 +312,53 @@ for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first
  const write=(p:any)=>`select bob.bob_project_write_v16(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
  const base={record_id:null,expected_updated_at:null,expected_revision:0,request_quote:f.payload.request_quote}
  const material=await call(write({...base,kind:'catalog',data:{action:'ensure',key:'reserve-material',kind:'material',name:'K4 race plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'Isolated race fixture',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}))
- const stock=randomUUID(),fmt={material_id:material.recordId,material_revision:1,length_mm:2440,width_mm:1220,thickness_mm:18,grain:'length',basis:'provided_spec',note:'Isolated specified stock, not physical inspection'}
+ const mixedCase=kind.startsWith('mixed-')
+ const stock=randomUUID(),fmt={material_id:material.recordId,material_revision:1,length_mm:mixedCase?1000:2440,width_mm:mixedCase?320:1220,thickness_mm:18,grain:'length',basis:'provided_spec',note:'Isolated specified stock, not physical inspection'}
  const stockData={name:'Race sheet',specification:'Fixture',quantity:'1',unit:'pcs',status:'available',area_id:null,notes:'Fixture',change_note:'Initial',sheet_format:fmt}
  const stockCall=(action:string,revision:number,data:any)=>`select bob.stock_command(${literal(f.project)},${literal(action)},${literal(stock)},${revision},${literal(JSON.stringify(data))})`
  await call(stockCall('create',0,stockData))
  const shoppingCase=kind.startsWith('shopping-')
- const part=shoppingCase?await call(write({...base,kind:'catalog',data:{action:'ensure',key:'shopping-part',kind:'part',name:'K4 race raw panel',aliases:[],profile_code:'panel',profile_revision:1,categories:['wood','sheet'],properties:{length:{value:'2440',unit:'mm',truth:'provided_spec',parameter:null,note:''},width:{value:'1220',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:material.recordId,material_revision:1,notes:'Isolated specified format',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}})):null
+ const part=shoppingCase||mixedCase?await call(write({...base,kind:'catalog',data:{action:'ensure',key:'shopping-part',kind:'part',name:'K4 race raw panel',aliases:[],profile_code:'panel',profile_revision:1,categories:['wood','sheet'],properties:{length:{value:String(fmt.length_mm),unit:'mm',truth:'provided_spec',parameter:null,note:''},width:{value:String(fmt.width_mm),unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:material.recordId,material_revision:1,notes:'Isolated specified format',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}})):null
  const plans:any[]=[]
  for(const key of ['first','second']){
   const recipe=structuredClone(f.payload.data.packet.recipe);recipe.definitions.forEach((d:any)=>d.material_ref=null)
-  const construction=await call(write({...base,kind:'construction',data:{key:'reserve-'+key,title:'Stock-bound race construction',description:'Isolated',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters:f.payload.data.packet.manifest.bob_parameters,materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[],open_questions:['Hardware/access unknown']}}))
+  if(mixedCase)recipe.instances.push({...structuredClone(recipe.instances[0]),id:'second-panel',placement:{...recipe.instances[0].placement,x:1100}})
+  const construction=await call(write({...base,kind:'construction',data:{key:'reserve-'+key,title:'Stock-bound race construction',description:'Isolated',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters:mixedCase?parameterPacket(f.project,recipe):f.payload.data.packet.manifest.bob_parameters,materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[],open_questions:['Hardware/access unknown']}}))
   const need=await call(write({...base,kind:'operational',data:{resource:'cad_requirement',action:'create',fields:{name:'Race blank '+key,category:'Timber',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Isolated',artifact_id:construction.recordId,artifact_revision:1,target_revision:1,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[],component_allocations:[],change_note:'Initial'}}}))
   const draft=await call(`select bob.read_construction_draft(${literal(f.project)},${literal(construction.recordId)},1,null)`)
   const catalog=(await call(`select bob.catalog_read(${literal(f.project)},${literal(JSON.stringify({action:'read',id:material.recordId,revision:1,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}))})`)).record
   const candidates=[{id:'sheet',...fmt,count:1,kerf_mm:3,trim_mm:5}],grains=[{definition_id:'panel',axis:'x'}]
+  if(mixedCase)candidates.push({...candidates[0],id:'purchase'})
   const fit:any=constructionCutFit(constructionLists(draft,new Map([[material.recordId+'@1',catalog]]),[]),candidates,grains)
   assert.equal(fit.status,'feasible')
-  const plan=await call(write({...base,kind:'cut_plan',data:{key:'plan-'+key,artifact_id:construction.recordId,artifact_revision:1,requirements:[{id:need.recordId,revision:1}],candidates,blank_grain:grains,candidate_sources:[{candidate_id:'sheet',kind:shoppingCase?'catalog_part':'stock',record_id:shoppingCase?part.recordId:stock,revision:1}],layout:Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,fit[k]])),change_note:'Checked race plan'}}))
+  const plan=await call(write({...base,kind:'cut_plan',data:{key:'plan-'+key,artifact_id:construction.recordId,artifact_revision:1,requirements:[{id:need.recordId,revision:1}],candidates,blank_grain:grains,candidate_sources:[{candidate_id:'sheet',kind:shoppingCase?'catalog_part':'stock',record_id:shoppingCase?part.recordId:stock,revision:1},...(mixedCase?[{candidate_id:'purchase',kind:'catalog_part',record_id:part.recordId,revision:1}]:[])],layout:Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,fit[k]])),change_note:'Checked race plan'}}))
   plans.push(plan)
+ }
+ if(mixedCase){
+  const stockCommand=(action='reserve',revision=0,index=0)=>`select bob.material_cut_plan_stock_command(${literal(f.project)},${literal(action)},${literal(plans[index].recordId)},1,${revision},'Mixed stock commitment')`
+  const purchase=(action='publish',revision=0)=>`select bob.material_cut_plan_shopping_command(${literal(f.project)},${literal(action)},${literal(plans[0].recordId)},1,${revision},'Mixed purchase commitment')`
+  const change=stockCall('revise',1,{...stockData,notes:'Concurrent stock source change'})
+  if(['mixed-release-publish','mixed-stock-first','mixed-before-stock'].includes(kind))await call(stockCommand())
+  if(['mixed-release-publish','mixed-withdraw-reserve'].includes(kind))await call(purchase())
+  const first=kind==='mixed-publish-first'?purchase():kind==='mixed-release-publish'?stockCommand('release',1):kind==='mixed-withdraw-reserve'?purchase('withdraw',1):kind==='mixed-stock-first'?change:kind==='mixed-before-stock'?purchase():stockCommand()
+  const second=kind==='mixed-publish-first'||kind==='mixed-withdraw-reserve'?stockCommand():kind==='mixed-release-publish'?purchase('publish',1):kind==='mixed-competing'?stockCommand('reserve',0,1):kind==='mixed-before-stock'?change:purchase()
+  const barrier=await gate(770000+cases),leader=start(tx(first,`select pg_advisory_xact_lock(${770000+cases});`))
+  let follower:ReturnType<typeof start>|undefined
+  try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(second));await waiting(follower.app,pid)}finally{await barrier.close()}
+  const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+  if(['mixed-competing','mixed-stock-first'].includes(kind)){assert.notEqual(follow.code,0);assert.match(follow.stderr,/stock_capacity_changed|stock_changed/)}else assert.equal(follow.code,0,follow.stderr)
+  const head=await call(`select bob.read_material_cut_plan(${literal(f.project)},${literal(plans[0].recordId)},1)`)
+  assert.equal(head.supply.stock_sheets,1);assert.equal(head.supply.catalog_sheets,1);assert.equal(head.stock_reserved,false)
+  assert.equal(head.supply.commitments_current,['mixed-reserve-first','mixed-publish-first'].includes(kind))
+  const rows=await json(`select coalesce(jsonb_agg(qty),'[]') from bob.materials where project_id=${literal(f.project)}`)
+  assert.deepEqual(rows,['mixed-competing','mixed-stock-first'].includes(kind)?[]:[kind==='mixed-withdraw-reserve'?'0 pcs':'1 pcs'])
+  assert.equal(head.reservation.reserved,kind!=='mixed-release-publish')
+  if(kind==='mixed-release-publish')assert.equal(head.supply.purchase_commitment_current,true)
+  if(kind==='mixed-withdraw-reserve')assert.equal(head.supply.stock_commitment_current,true)
+  if(kind==='mixed-before-stock'){assert.equal(head.source_state,'changed');assert.equal(head.shopping.published,true)}
+  const held=await call(`select bob_private.read_stock_reservations(${literal(f.project)},${literal(stock)})`)
+  assert.equal(held,kind==='mixed-release-publish'?0:1)
+  console.log(`PASS ${kind}: observed lock wait; mixed portions, partial coverage and independent commitments checked`);cases++;continue
  }
  if(shoppingCase){
   const shoppingPayload={...base,kind:'cut_plan_shopping',record_id:plans[0].recordId,expected_revision:1,data:{action:'publish',shopping_revision:0,change_note:'Explicit catalog sheets'}}

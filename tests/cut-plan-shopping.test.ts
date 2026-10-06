@@ -24,10 +24,12 @@ async function purchaseFixture(t:any){
 
 test('catalog cut plan publishes actual whole sheets, normal receipts and immutable provenance',async t=>{
  const f=await purchaseFixture(t)
+ await assert.rejects(f.rpc('bob.material_cut_plan_stock_command',[f.project,'reserve',f.saved.recordId,1,0,'No stock portion']),/stock_sources_required/)
  const before=(await f.pg.query('select to_jsonb(r) row from bob.material_requirement_revisions r where project_id=$1 order by requirement_id,revision',[f.project])).rows
  const used=f.p.data.layout.used_sheets.length;assert(used>0 && used<3)
  const receipt=await f.writeShopping(f.purchasePayload())
  assert.equal(receipt.record.shopping_revision,1);assert.equal(receipt.record.shopping_ready,true)
+ assert.equal(receipt.record.supply.stock_sheets,0);assert.equal(receipt.record.supply.catalog_sheets,used);assert.equal(receipt.record.supply.commitments_current,true)
  assert.equal(receipt.record.stock_reserved,false);assert.equal(receipt.record.fabrication_ready,false);assert.equal(receipt.record.input_evidence_verified,false)
  assert.deepEqual(await f.writeShopping(f.purchasePayload()),receipt)
  const pub=(await f.read(f.saved.recordId)).shopping

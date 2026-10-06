@@ -309,3 +309,8 @@ Both active endpoints now pin reviewed #213 merge `d596a1db90d02014467e395756728
 The existing Materials tool adds cut_plan publish/withdraw through the unchanged caller-JWT v16 endpoint; migration and matching shared tool source must precede capability claims. Normal claims, quote/replay checks and write limits remain. Both Edge functions must be deployed from the same reviewed source with ask-bob JWT true and worker JWT false/custom authentication. No model/manual baseline change or new model trial is included. [Material planning](../Docs/material-planning.md#k4-catalog-sheet-shopping-contributions--2026-10-06) owns the catalog-only boundary and honest Shopping provenance.
 
 The matching immutable #214 merge `2f9e395d3d8ca397f94a516b2b1b2a111ac1f4eb` is deployed as ask-bob 86 / JWT true and bob-worker 54 / JWT false with unchanged custom authentication. [Release evidence](../Docs/foundation-verification.md#k4-catalog-sheet-shopping-release--2026-10-06) distinguishes hosted SQL-role checks from actual model/product acceptance.
+
+
+### K4 mixed sheet supply — implementation, release pending
+
+The existing `manage_project_material` reserve/release and publish/withdraw inputs and v16 writer remain unchanged. Tool schema guidance, failure recovery and offline/hosted manuals now describe each portion of a mixed plan and honest partial success. Apply the reviewed SQL before deploying both matching Bob endpoints with ask-bob JWT true and worker JWT false/existing capability authentication. [Material planning](../Docs/material-planning.md#k4-mixed-stockcatalog-supply--implementation-release-pending) owns the contract; no model or manual-loading experiment is activated.
