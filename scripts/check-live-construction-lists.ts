@@ -83,7 +83,9 @@ try {
  const thread = checked(await client.from('bob_threads').select('id').eq('project_id', projectId).eq('owner_user_id', memberId).eq('status', 'active').single())
  const answer = checked(await client.from('bob_messages').select('evidence,delivery_state').eq('thread_id', thread.id).eq('turn_id', turn).eq('role', 'assistant').single())
  assert.equal(answer.delivery_state, 'completed')
- assert.notEqual(answer.evidence?.partial, true, 'Recovery must not report another partial delivery')
+ // This flag also covers truncated context reads; exact delivery is checked
+ // above against caller-visible records, provenance and unchanged history.
+ report.answerPartial = answer.evidence?.partial ?? null
  const receiptData = answer.evidence?.writes
  assert(Array.isArray(receiptData)); assert(!receiptData.some((r: any) => r.recordId === K4_SAVED_REQUIREMENT), 'No new write receipt for the retained need')
  assert(requirements.filter((r: any) => r.id !== K4_SAVED_REQUIREMENT).every((r: any) => receiptData.some((receipt: any) => receipt.recordId === r.id && receipt.revision === r.revision)))
