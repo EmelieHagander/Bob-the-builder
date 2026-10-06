@@ -196,3 +196,19 @@ test('Bob computes saved layout, normal receipts survive the toolbox, and the op
  const impossible=structuredClone(input);impossible.key='impossible';impossible.candidates[0].width_mm=99;const failed=await tools.execute('save_construction_cut_plan',impossible)
  assert.equal(failed.status,'infeasible');assert.equal(writer.remaining,initialBudget-1)
 })
+
+
+test('reopening a multi-need plan assesses its source graph once while preserving freshness fences',async t=>{
+ const f=await fixture(t),saved=await f.write(f.payload)
+ await f.pg.exec('create sequence bob_private.cut_plan_freshness_probe')
+ const def=(await f.pg.query<{definition:string}>("select pg_get_functiondef('bob_private.artifact_source_assessment(text,uuid,integer)'::regprocedure) definition")).rows[0].definition
+ const instrumented=def.replace(/\bbegin\b/i,"begin\n perform nextval('bob_private.cut_plan_freshness_probe');")
+ assert.notEqual(instrumented,def)
+ await f.pg.exec(instrumented)
+ assert.equal((await f.read(saved.recordId)).source_state,'current')
+ assert.equal(Number((await f.pg.query('select last_value from bob_private.cut_plan_freshness_probe')).rows[0].last_value),1,'one shared graph assessment for both exact need pins')
+ await f.rpc('bob.material_requirement_command',[f.project,'archive',f.needs[0].recordId,1,'{}'])
+ assert.equal((await f.read(saved.recordId)).source_state,'changed')
+ assert.deepEqual((await f.read(saved.recordId)).layout,f.payload.data.layout)
+ await f.pg.exec(def)
+})

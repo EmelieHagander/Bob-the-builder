@@ -1,10 +1,7 @@
-name: Live K4 saved cut plan acceptance
-# One-time activation after reviewed #211 CI, migration and both immutable Edge releases.
+name: Live K4 saved cut plan readback
+# Manual-only repair installation; activate read-only verification after reviewed bounded-read release.
 
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/live-construction-cut-plan.yml']
   workflow_dispatch:
     inputs:
       scope:
@@ -37,7 +34,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Verify the existing member and save and reopen one hypothetical cut plan
+      - name: Verify the existing member and reopen the same saved plan without a model request
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
@@ -45,7 +42,8 @@ jobs:
           BOB_USER_PASSWORD: ${{ secrets.BOB_USER_PASSWORD }}
           BOB_K4_PROJECT_ID: p_43702f4cbdfb40f0907f5cd0c12a5143
           BOB_K4_LIVE_CONFIRM: ${{ inputs.scope || 'disposable-fixtures-only' }}
-          BOB_K4_REPORT: test-results/live-construction-cut-plan.json
+          BOB_K4_VERIFY_ONLY: saved-plan
+          BOB_K4_REPORT: test-results/live-construction-cut-plan-readback.json
         run: node --import tsx scripts/run-live-construction-cut-plan.mjs
       - name: Retain the synthetic saved-plan report for manual semantic review
         if: ${{ !cancelled() }}
@@ -54,6 +52,6 @@ jobs:
           name: live-k4-cut-plan-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-results/k4-cut-plan-preflight.json
-            test-results/live-construction-cut-plan.json
+            test-results/live-construction-cut-plan-readback.json
           if-no-files-found: ignore
           retention-days: 7

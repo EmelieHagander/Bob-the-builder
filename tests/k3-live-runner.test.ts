@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
-import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -35,13 +35,13 @@ function cutFitRows() {
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
-  const prior = change.cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
+  const prior = change.readback ? K4_SAVED_CUT_PLAN_TURN : change.cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
     bob_messages: { data: { turn_id: prior, delivery_state: 'completed' } },
     artifact_cad_revisions: { data: change.k4 ? [{artifact_id:K4_DRAWING,artifact_revision:1,manifest:{bob_construction:{artifact_id:K4_SOURCE,revision:4}}}] : [] },
-    material_cut_plans:{data:[]}, current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...(change.cutFit || change.cutPlan ? cutFitRows() : {}), ...change.results,
+    material_cut_plans:{data:[]}, current_material_requirements:{data:[]}, ...(change.recovery ? recoveryRows() : {}), ...(change.cutFit || change.cutPlan || change.readback ? cutFitRows() : {}), ...change.results,
   }
   const client = {
     auth: {
@@ -235,5 +235,17 @@ test('existing/unknown saved plans or changed conversation stop before a new pai
  for(const results of [{material_cut_plans:{data:[{id:'existing-plan'}]}},{material_cut_plans:{error:{message:'private'}}},{bob_messages:{data:{turn_id:K4_CUT_FIT_PREVIOUS_TURN,delivery_state:'completed'}}},{bob_messages:{data:{turn_id:K4_CUT_PLAN_PREVIOUS_TURN,delivery_state:'pending'}}}]){
   const f=fixture({k4:true,cutPlan:true,results}),r=await runAuthenticatedK4CutPlan({...config(),BOB_K4_PROJECT_ID:K3_PROJECT,BOB_K4_LIVE_CONFIRM:'disposable-fixtures-only'},f.deps)
   assert.equal(r.passed,false);assert.equal(f.probes.length,0);assert.doesNotMatch(JSON.stringify(r),/private/)
+ }
+})
+
+
+test('read-only saved-plan verification pins the completed turn and exact existing plan without forwarding credentials',async()=>{
+ const f=fixture({k4:true,readback:true,results:{material_cut_plans:{data:[{id:K4_SAVED_CUT_PLAN_ID,current_revision:1,artifact_id:K4_SOURCE}]}}})
+ const r=await runAuthenticatedK4CutPlanReadback(configK4(),f.deps)
+ assert.equal(r.passed,true);assert.equal(f.probes.length,1);assert.equal(f.probes[0].BOB_K4_VERIFY_ONLY,'saved-plan')
+ assert(!('BOB_USER_PASSWORD' in f.probes[0]));assert.deepEqual(f.signouts,[{scope:'local'}])
+ for(const results of [{material_cut_plans:{data:[]}},{material_cut_plans:{data:[{id:'wrong-plan',current_revision:1,artifact_id:K4_SOURCE}]}},{bob_messages:{data:{turn_id:K4_CUT_PLAN_PREVIOUS_TURN,delivery_state:'completed'}}}]){
+  const bad=fixture({k4:true,readback:true,results}),stopped=await runAuthenticatedK4CutPlanReadback(configK4(),bad.deps)
+  assert.equal(stopped.passed,false);assert.equal(bad.probes.length,0)
  }
 })

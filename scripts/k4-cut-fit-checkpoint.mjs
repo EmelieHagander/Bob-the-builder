@@ -24,3 +24,7 @@ export function assertK4CutFitCheckpoint(requirements, sources, history) {
 
 // The completed read-only trial is the sole starting turn for saved-plan acceptance.
 export const K4_CUT_PLAN_PREVIOUS_TURN = '58d32191-8ac0-4847-8df7-8083f96c75e3'
+
+// Recheck only this completed saved turn/plan; never submit a replacement turn.
+export const K4_SAVED_CUT_PLAN_TURN = 'cdcbb834-91a9-4aee-9dff-98c847ee4d86'
+export const K4_SAVED_CUT_PLAN_ID = '7c9d8791-001e-4b6b-a85b-a3971ebd5842'
