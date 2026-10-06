@@ -34,9 +34,21 @@ export interface MaterialCutPlan {
   stock_reserved: boolean
   reservation_revision: number
   reservation: { revision: number; plan_revision: number; reserved: boolean; allocations: Row[] } | null
-  shopping_ready: false
+  shopping_revision: number
+  shopping: { revision: number; plan_revision: number; published: boolean; contributions: Row[] } | null
+  shopping_ready: boolean
   fabrication_ready: false
   input_evidence_verified: false
+}
+
+export interface CutPlanPurchaseSource {
+  part_id: string
+  part_revision: number
+  grain: string
+  shopping_edited: boolean
+  contribution_count: number
+  truncated: boolean
+  contributions: { plan_id: string; plan_revision: number; quantity: number; artifact_id: string; artifact_revision: number }[]
 }
 
 export interface StockItem {
@@ -414,6 +426,22 @@ export function createMaterialPlanning(
       })) as Row
       guard()
       return { materialId: saved.material_id as string, revision: saved.revision as number }
+    },
+    async cutPlanShopping(projectId: string): Promise<{ materialId: string; source: CutPlanPurchaseSource }[]> {
+      const { db, guard } = connection(projectId)
+      const rows: { materialId: string; source: CutPlanPurchaseSource }[] = []
+      let cursor: string | null = null
+      const seen = new Set<string>()
+      do {
+        const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'shopping', record_id: null, after_id: cursor } })) as Row
+        guard()
+        if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Shopping source project mismatch.')
+        for (const row of result.records) if (row.cut_plan_source) rows.push({ materialId: row.id, source: row.cut_plan_source })
+        cursor = result.next_cursor ?? null
+        if (result.truncated && !cursor || cursor && seen.has(cursor)) throw new Error('Shopping source list incomplete. Retry.')
+        if (cursor) seen.add(cursor)
+      } while (cursor)
+      return rows
     },
     async shopping(projectId: string): Promise<RequirementShoppingState[]> {
       const { db, guard } = connection(projectId)

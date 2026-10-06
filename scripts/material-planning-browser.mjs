@@ -66,12 +66,13 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
 
   const fixture = {
     stocks, stockHistory, requirements, requirementHistory, allocations, shoppingLinks, materials, artifacts,
+    cutPlanSources: new Map(), failCutPlanSources: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = new Set([
         'current_stock_items', 'stock_revisions', 'current_material_requirements', 'material_requirement_revisions',
         'material_requirement_stock_details', 'material_requirement_component_details', 'material_requirement_shopping_state',
-        'stock_command', 'material_requirement_command', 'material_requirement_geometry_command', 'materials',
+        'stock_command', 'material_requirement_command', 'material_requirement_geometry_command', 'materials', 'read_project_work',
       ])
       if (!handled.has(table)) return false
       const eq = field => url.searchParams.get(field)?.replace(/^eq\./, '')
@@ -79,6 +80,13 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
       const fail = message => reply({ status: 409, json: { message } })
       const projectId = eq('project_id') ?? request.postDataJSON?.()?.p_project
 
+      if (table === 'read_project_work') {
+        const { p_project, p_input } = request.postDataJSON()
+        if (p_input.resource !== 'shopping') return false
+        if (fixture.failCutPlanSources) return fail('Source read unavailable')
+        const records = [...materials.values()].filter(r => r.project_id === p_project).map(r => ({ ...r, cut_plan_source: fixture.cutPlanSources.get(r.id) ?? null }))
+        return reply({ json: { projectId: p_project, records, truncated: false, next_cursor: null } })
+      }
       if (table === 'materials') {
         if (request.method() === 'PATCH') {
           const row = materials.get(eq('id'))
@@ -496,6 +504,29 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.getByRole('link', { name: 'Home', exact: true }).click()
   await page.getByRole('button', { name: 'Open project Porch A', exact: true }).click()
 
+  const sourceId = randomUUID(), constructionId = randomUUID()
+  const sourceRow = { id: sourceId, project_id: 'A', name: 'Plywood raw sheets', qty: '3 pcs', area_label: '', supplier: '', status: 'needed', cost: '', category: 'Timber', category_icon: 'package', sort_order: 1 }
+  fixture.materials.set(sourceId, sourceRow)
+  fixture.cutPlanSources.set(sourceId, { part_id: randomUUID(), part_revision: 1, grain: 'length', shopping_edited: false, contribution_count: 2, truncated: false,
+    contributions: [{ plan_id: randomUUID(), plan_revision: 2, quantity: 1, artifact_id: constructionId, artifact_revision: 4 }, { plan_id: randomUUID(), plan_revision: 1, quantity: 2, artifact_id: randomUUID(), artifact_revision: 1 }] })
+  await page.goto(base + '#/shopping')
+  await page.getByText('From cut plans · 2 active contributions', { exact: true }).waitFor()
+  await page.getByText('Sheet quantities and sources', { exact: true }).click()
+  await page.getByText(/Check the saved plan sources, supplier product and pack size/).waitFor()
+  assert.equal(sourceRow.status, 'needed', 'Opening provenance must not tick a Shopping checkbox')
+  assert.equal(await page.getByRole('link', { name: 'Construction revision 4', exact: true }).getAttribute('href'), `#/artifacts?drawing=${constructionId}&revision=4`)
+  await page.screenshot({ path: `test-results/cut-plan-shopping-${width}.png`, fullPage: true })
+  await page.reload()
+  await page.getByText('From cut plans · 2 active contributions', { exact: true }).waitFor()
+  fixture.failCutPlanSources = true
+  await page.reload()
+  await page.getByText('Shopping sources could not be checked.', { exact: false }).waitFor()
+  assert.equal(await page.getByText('Manual shopping item', { exact: true }).count(), 0, 'A failed source read must not relabel a generated item as manual')
+  fixture.failCutPlanSources = false
+  await page.getByRole('button', { name: 'Retry sources', exact: true }).click()
+  await page.getByText('From cut plans · 2 active contributions', { exact: true }).waitFor()
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Shopping sources must fit mobile')
+  fixture.materials.delete(sourceId); fixture.cutPlanSources.clear()
   assert.equal(fixture.materials.size, 2)
   console.log(`Material plan Project/Area target scope + manual/deterministic quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
 }

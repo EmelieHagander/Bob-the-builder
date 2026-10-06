@@ -206,6 +206,7 @@ export const editMaterialRequirement = materialPlanning.editRequirement
 export const editDeterministicMaterialRequirement = materialPlanning.editDeterministicRequirement
 export const publishMaterialRequirement = materialPlanning.publish
 export const getMaterialShoppingSources = materialPlanning.shopping
+export const getCutPlanShoppingSources = materialPlanning.cutPlanShopping
 export const getTaskReadiness = workPlan.readiness
 export const getTaskWorkPlan = workPlan.detail
 export const editTaskWorkPlan = workPlan.command

@@ -19,7 +19,8 @@ export function Shopping() {
   const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [version])
   const { data: materials } = useAsync(() => db.getMaterials(), [version])
   const { data: areas } = useAsync(() => db.getAreas(), [])
-  const { data: planSources } = useAsync(() => db.getMaterialShoppingSources(projectId), [projectId, version])
+  const { data: planSources, error: planSourceError } = useAsync(() => db.getMaterialShoppingSources(projectId), [projectId, version])
+  const { data: cutPlanSources, error: cutPlanSourceError } = useAsync(() => db.getCutPlanShoppingSources(projectId), [projectId, version])
   const [adding, setAdding] = useState(false)
   const [bought, setBought] = useState<Record<string, boolean>>({})
 
@@ -46,21 +47,33 @@ export function Shopping() {
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
   const sourceByMaterial = new Map((planSources ?? []).filter(item => item.materialId).map(item => [item.materialId!, item]))
 
+  const cutSourceByMaterial = new Map((cutPlanSources ?? []).map(item => [item.materialId, item.source]))
+
   const row = (m: Material) => {
     const on = bought[m.id]
     const source = sourceByMaterial.get(m.id)
+    const cutSource = cutSourceByMaterial.get(m.id)
     const displayStatus = on ? 'delivered' : m.status === 'delivered' ? 'needed' : m.status
     return (
-      <ChecklistRow key={m.id} checked={!!on} onChange={() => toggle(m)} trailing={m.cost}>
+      <div key={m.id}><ChecklistRow checked={!!on} onChange={() => toggle(m)} trailing={m.cost}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{m.name}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{m.qty} · {m.area} · {m.supplier}</div>
           <div style={{ marginTop: 4, fontSize: 11.5, color: source?.sourceOutdated || source?.sourceStale || source?.shoppingEdited ? 'var(--clay)' : 'var(--ink-faint)' }}>
-            {source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : 'Manual shopping item'}
+            {cutSource ? `From cut plans · ${cutSource.contribution_count} active contribution${cutSource.contribution_count === 1 ? '' : 's'}${cutSource.shopping_edited ? ' · shopping row edited' : ''}` : source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : planSourceError || cutPlanSourceError ? 'Source unavailable' : !planSources || !cutPlanSources ? 'Checking source…' : 'Manual shopping item'}
           </div>
+
         </div>
         <div className="ui-row-meta no-print"><MaterialPill status={displayStatus} /></div>
       </ChecklistRow>
+          {cutSource && <details style={{ marginTop: 6, fontSize: 12 }}>
+            <summary>Sheet quantities and sources</summary>
+            <p>Whole sheets, not finished blanks. Check the saved plan sources, supplier product and pack size before ordering.</p>
+            <ul>{cutSource.contributions.map(c => <li key={c.plan_id}>{c.quantity} sheet{c.quantity === 1 ? '' : 's'} · plan revision {c.plan_revision} · <Link to={`/artifacts?drawing=${encodeURIComponent(c.artifact_id)}&revision=${c.artifact_revision}`}>Construction revision {c.artifact_revision}</Link></li>)}</ul>
+            {cutSource.truncated && <p>Showing {cutSource.contributions.length} of {cutSource.contribution_count} contributions. Ask Bob to read the remaining plans.</p>}
+            {!cutSource.contribution_count && <p>All plan contributions withdrawn. This row is retained for reference.</p>}
+          </details>}
+      </div>
     )
   }
 
@@ -92,6 +105,9 @@ export function Shopping() {
         </span>
       </div>
 
+      {(planSourceError || cutPlanSourceError) && <div role="alert" className="card" style={{ padding: 'var(--panel-padding)', marginTop: 'var(--section-gap)' }}>
+        Shopping sources could not be checked. <button className="btn" onClick={() => setVersion(v => v + 1)}>Retry sources</button>
+      </div>}
       {!groups ? (
         <Loading />
       ) : groups.length === 0 ? (
