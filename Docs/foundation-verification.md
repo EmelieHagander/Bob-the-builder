@@ -1535,3 +1535,65 @@ Independent readback after rollback and again after ordinary Auth verification m
 The existing read-only password workflow was reactivated by a comment-only change at `5a838827ac437ec534aca7c8ec07104e0c173379`, tree `e9303cffb66dd68725c1e20e88345a44f92ccd3b`. [Run 37498120561](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37498120561), job `112387812176`, passed on attempt 1 using the existing github-pages secrets/member/project. The downloaded report independently confirms `readOnly=true`, `modelSubmitted=false`, `recordPreservationPassed=true`, `answerPartial=false`, the original plan/turn/job and three equal ordinary HTTP reads in **449, 396 and 438 ms**. Plan `7c9d8791-001e-4b6b-a85b-a3971ebd5842` remains current revision 1, hypothetical, `reservation_revision=0`, `reservation=null`, with all stock/Shopping/fabrication/evidence flags false. The unchanged helper recomputed the five placements, ten cuts, offcuts and used sheets; the original complete answer was reviewed again. This is new readback evidence, not a new model trial. Artifact `11427674302`, `live-k4-cut-plan-37498120561-1`, SHA-256 `e2d7cd376bbe293d38398f8fbb04eba53185c82905b00fc8d39c6550671f054f`, is retained until 2026-10-13; its operational report and credentials stay outside Git.
 
 [State](bob-delivery-flow.md#state) owns subsequent work. Preserve the original hypothetical plan; compatible Shopping, actual physical-stock/product/member/model reservation, hardware and linked/access-checked assembly remain open.
+
+
+## K4 catalog-sheet Shopping release — 2026-10-06
+
+**Backend technical release complete; frontend publication blocked by the existing GitHub Pages queue.** [PR #214](https://github.com/EmelieHagander/Bob-the-builder/pull/214) adds catalog-bound whole-sheet contributions to existing Shopping. Reviewed head `38590b9f930489b2de222a78f104acd10fc4ed43`, tree `cc1d87056121183932738ecdfd3d695f3c29ea91`, merge `2f9e395d3d8ca397f94a516b2b1b2a111ac1f4eb`; independent merge-tree readback matched. Direct code/SQL/owner/UI review followed Archie, Vera and verify guidance; no independent subagent review is claimed. [Material planning](material-planning.md#k4-catalog-sheet-shopping-contributions--2026-10-06) owns the contract, and [State](bob-delivery-flow.md#state) owns the outstanding publication gate.
+
+[Exact-head CI 37515839422](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37515839422), job `112448392253`, passed **973/973 tests**, vocabulary, Edge types, normal/live-config builds/PWA and all browser gates. [PostgreSQL concurrency 37515839541](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37515839541), job `112448389709`, passed **48 observed-lock races**, including seven new Shopping races. Six new SQL/tool tests exercise aggregation, grain separation, replacement/withdrawal, replay/CAS, stale sources, ordered/manual/deleted-row fences and authority. The initial local full run was 972/973 because its grain fixture contradicted the selected format; the corrected fixture and final CI pass. Local focused Shopping/saved-plan tests passed 19/19. Local Edge checking could not fetch an external dependency; the required CI Edge check passed.
+
+Intercepted browser fixtures verify contribution provenance, exact construction links, reload, retryable read errors and opening disclosure without toggling the purchased checkbox. Screenshots were inspected at 320, 390 and 1280 px. CI artifact `11438115946`, `installation-screenshots`, SHA-256 `b0dede3574c30591dcc6c09f2fffc53524aa2f8593ac069909f817026c26226a`, contains this evidence. These are browser fixtures, not proof that the production frontend has been published or that Bob has performed a real Shopping model delivery.
+
+### Hosted installation and endpoints
+
+Fresh preflight checked main, the exact reviewed merge tree, migration ledger, current Edge endpoints, zero active project jobs and original full-row fingerprints. The first `apply_migration` for this change succeeded on existing `yuobtgoidmmmwfqenkau`: **20261006192055 / cut_plan_shopping**, from reviewed `supabase/migrations/20261006184919_cut_plan_shopping.sql`, source SHA-256 **e97838195929fe1247958e46f156b5bbcd45a143228845e1b70b308e44d1cf83**. The seven new function bodies match reviewed source exactly; three wrapped prior bodies are preserved. Public commands remain invoker functions, private helpers retain their reviewed definer/empty-search-path settings, and the renamed prior private writers/readers no longer expose direct authenticated execution. The four new tables have RLS and project-scoped authenticated SELECT only; direct member writes and anon/service-role execution remain denied. Authenticated **statement_timeout=8s** is unchanged. Offline and deployed manual contracts match.
+
+Security advisor findings match the immediate pre-release baseline exactly: 147 findings across seven categories. Existing findings were not repaired or represented as a clean security report. Performance findings change only by one new INFO unused-index notice for `cut_plan_shopping_contributions_revision_idx` and disappearance of the pre-existing `catalog_profile_rules_right_idx` unused notice after probe usage; all other finding identities/details match. No index was removed.
+
+Both endpoints were deployed after installation/authority verification and independently read back ACTIVE, importing immutable merge `2f9e395d3d8ca397f94a516b2b1b2a111ac1f4eb`:
+
+| Endpoint | Version | Authentication | Bundle SHA-256 |
+|---|---|---|---|
+| ask-bob | 86 | JWT true | `dce3662dfa5e81c7a2d24a2ca8cb2fe1b9f2b5f5b77a3f3f0be48426b6b76f54` |
+| bob-worker | 54 | JWT false; existing job capability authentication | `a5b5f3f61bc547f46657a378f42f58cbc4cf07117c70a0ab0e1a0bebf242958c` |
+
+Unauthenticated ask-bob GET and worker POST returned 401; worker GET returned 405. Existing secrets were reused without printing or changing them. No model/provider configuration changed.
+
+### Rollback probe and preservation
+
+The locally validated hosted probe passed once within a single transaction, with local statement timeout 8 seconds and lock timeout 5 seconds. It first rejects hypothetical publication, creates a temporary exact catalog format, and temporarily revises the original saved plan to bind that format while retaining the five placements, ten cuts and both need pins. Normal claimed-turn v16 commands publish one actually used sheet, preserve exact receipt replay, reject changed replay/stale Shopping revision, expose Shopping provenance, block direct quantity edits and ordered withdrawal, then withdraw after restoring temporary status to needed. The existing Shopping row reaches `0 pcs`. Raw new-table writes, outsider reads/commands and anon access are denied. The entire transaction rolls back. An ambiguous diagnostic variable was corrected during local probe validation; no failed hosted probe is counted as passed.
+
+Independent full-row readback after rollback and again after ordinary Auth verification matches all **17 protected project-scoped row sets**. Digests use `md5(coalesce(jsonb_agg(to_jsonb(row) order by to_jsonb(row)::text),'[]')::text)`; different historical ordering/scopes must not be compared as if identical.
+
+| Row set | Count | Before/after digest |
+|---|---:|---|
+| current_material_requirements | 2 | `5f0688a002e1e8300c792192acba811c` |
+| material_requirement_revisions | 2 | `d17d86d8914c2d379a635ff28915c69e` |
+| material_requirement_construction_sources | 2 | `f8668367bf5851b9728fe9df2af4a6bd` |
+| artifact_construction_revisions | 4 | `f0c60c487da6553c90675c4bbce5965d` |
+| material_requirement_stock | 0 | `d751713988987e9331980363e24189ce` |
+| material_requirement_shopping | 0 | `d751713988987e9331980363e24189ce` |
+| material_cut_plans | 1 | `81173ad578ebbb91176e569b616e29a2` |
+| material_cut_plan_revisions | 1 | `341613b9ef747eaa06574d6addd1c20e` |
+| material_cut_plan_requirements | 2 | `4f1d7738bbb4033e855fe687e56d25ac` |
+| stock_revisions | 0 | `d751713988987e9331980363e24189ce` |
+| materials | 0 | `d751713988987e9331980363e24189ce` |
+| catalog_items | 2 | `02eefe7f4609c9e91ecff235abf7f351` |
+| catalog_item_revisions | 2 | `4d4cfa149f61a663e76a1276f6aa1d05` |
+| bob_threads | 1 | `39ffdbd6bfc16b89d9f0e098b071e64c` |
+| bob_messages | 19 | `e5ac08905b76e648c3fdcb6f4a5e1fd2` |
+| bob_write_receipts | 22 | `4e529e9b1d47ce881c6f14105d5a45d1` |
+| provider_state | 1 | `b93e290cfd1ab2835189de448e772bdb` |
+
+All four new Shopping tables and all three reservation tables remain empty; no active project job remains. Original project `p_43702f4cbdfb40f0907f5cd0c12a5143`, construction `01349f1c-100b-4ac2-a5b9-de4c839b51a4`, plan `7c9d8791-001e-4b6b-a85b-a3971ebd5842` revision 1, completed turn `cdcbb834-91a9-4aee-9dff-98c847ee4d86` and job `1babf718-a586-4bf0-973a-9af75d08084f` are preserved. No temporary catalog/Shopping/stock, plan revision, diagnostic message, receipt or claim persisted. This is positive SQL-role Shopping verification, not physical-stock/product or ordinary member/model Shopping acceptance.
+
+### Ordinary read-only acceptance and frontend blocker
+
+The existing fixed-turn password helper was activated by comment-only workflow commit `e860bfad41777dd59d33ac8a177990044ec79bb4`, keeping `BOB_K4_VERIFY_ONLY=saved-plan`, existing secrets and all guards. [Readback run 37518521714](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37518521714), job `112457575332`, passed attempt 1. The downloaded report confirms `readOnly=true`, `modelSubmitted=false`, `recordPreservationPassed=true`, `answerPartial=false` and the same completed turn/job. Three equal ordinary HTTP plan reads took **673, 609 and 331 ms**. The original plan remains current, hypothetical, revision 1 with `shopping_revision=0`, `shopping=null`, `reservation_revision=0`, `reservation=null`; all readiness/evidence flags remain false. Five placements, ten cuts, offcuts and used sheets still match independent recomputation. The helper used the same existing member and closed its own session; no new paid model turn ran.
+
+Artifact `11437942858`, `live-k4-cut-plan-37518521714-1`, SHA-256 `d5f0e296886d169f13e53f0e5604a877793cd155fb9c96cd57b319ded485dfac`, is retained until 2026-10-13T19:23:22Z. Operational reports and credentials remain outside Git.
+
+**Frontend publication is not complete.** The existing `pages` concurrency group has `cancel-in-progress: false`. Older [Pages run 37372469242](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37372469242), head `f1f9a3db18ed888d463229f78ccd8a0d039882a0`, was created 2026-10-05T20:52:59Z: build job `111972755371` succeeded, but deploy job `111976511274` remains queued. Newer main releases wait pending; activation run `37518521697` has no jobs, while superseded pending merge run `37517636345` was cancelled. Current workflow/job state and the concurrency configuration indicate that the older run blocks the queue; no outage cause is asserted. The GitHub connector has no cancellation operation. Browser fallback requires user approval under the browser tool's connection-fallback rule, so no browser cancellation, alternate concurrency group or replacement deploy workflow was used.
+
+**Resume:** recheck current Pages runs, obtain approval for the browser fallback, cancel only the obsolete blocking run if still queued, and observe the latest main Pages deployment and published Shopping UI. Do not rerun migrations, Edge deploys or the completed model save/readback. After frontend publication, mixed stock/purchase fulfillment, actual physical-stock/product/pack/member/model acceptance, hardware and linked/access-checked assembly remain separate K4 gates. Broader K2/K3 acceptance and K5 remain open.
