@@ -346,7 +346,7 @@ for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first
  if(failed){assert.notEqual(follow.code,0);assert.match(follow.stderr,/capacity_changed|already reserved|stock_changed|physical_source_changed|sources_changed/)}else assert.equal(follow.code,0,follow.stderr)
  const head=await call(`select bob.read_material_cut_plan(${literal(f.project)},${literal(plans[0].recordId)},1)`)
  const counts=await call(`select jsonb_build_object('reserved',bob_private.read_stock_reservations(${literal(f.project)},${literal(stock)}),'history',(select count(*) from bob.material_cut_plan_reservation_revisions where project_id=${literal(f.project)}),'plans',(select count(*) from bob.material_cut_plan_revisions where project_id=${literal(f.project)}))`)
- assert.equal(counts.reserved,1);assert.equal(counts.plans,2)
+ assert.equal(counts.reserved,['cut-plan-stock-first','cut-plan-source-first'].includes(kind)?0:1);assert.equal(counts.plans,2)
  assert.equal(counts.history,['cut-plan-manual-first','cut-plan-stock-first','cut-plan-source-first'].includes(kind)?0:kind==='cut-plan-release-first'?2:1)
  if(['cut-plan-before-stock','cut-plan-before-source'].includes(kind)){assert.equal(head.stock_reserved,false);assert.equal(head.reservation.reserved,true)}
  if(kind==='cut-plan-replay'){
