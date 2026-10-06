@@ -1,0 +1,56 @@
+name: Live K4 cut fit acceptance
+# Manual-only installation; activation requires reviewed code and checkpoint.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: Use only the retained K2/K3 verification project
+        required: true
+        type: choice
+        default: disposable-fixtures-only
+        options: [disposable-fixtures-only]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-k4-construction-lists
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: github-pages
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify the existing member and run one read-only cut-fit trial
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+          BOB_USER_EMAIL: ${{ secrets.BOB_USER_EMAIL }}
+          BOB_USER_PASSWORD: ${{ secrets.BOB_USER_PASSWORD }}
+          BOB_K4_PROJECT_ID: p_43702f4cbdfb40f0907f5cd0c12a5143
+          BOB_K4_LIVE_CONFIRM: ${{ inputs.scope || 'disposable-fixtures-only' }}
+          BOB_K4_REPORT: test-results/live-construction-cut-fit.json
+        run: node --import tsx scripts/run-live-construction-cut-fit.mjs
+      - name: Retain the synthetic cut-fit report for manual semantic review
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-k4-cut-fit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/k4-cut-fit-preflight.json
+            test-results/live-construction-cut-fit.json
+          if-no-files-found: ignore
+          retention-days: 7
