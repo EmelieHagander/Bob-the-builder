@@ -1,6 +1,8 @@
 /** Real multi-connection test. Only an empty, disposable local PostgreSQL DB. */
 import assert from 'node:assert/strict'
 import {parameterPacket} from '../tests/support/cad-parameter-fixture.ts'
+import {constructionLists} from '../supabase/functions/_shared/construction-lists.ts'
+import {constructionCutFit} from '../supabase/functions/_shared/construction-cut-fit.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {spawn} from 'node:child_process'
 import {readFile} from 'node:fs/promises'
@@ -299,5 +301,57 @@ for(const kind of ['construction-duplicate','construction-revise','construction-
  assert.equal(await query(`select count(*) from bob.artifact_construction_revisions where project_id=${literal(f.project)}`),sourceFirst||kind==='construction-duplicate'?'1':'2')
  if(sourceFirst||saveFirst){const read=JSON.parse((await query(tx(`select bob.read_construction_draft(${literal(f.project)},${literal(baseline.recordId)},1,null)`))).split('\n').at(-1)!);assert.equal(read.source_state,'changed')}
  console.log(`PASS ${kind}: observed real lock wait; checkpoint CAS/replay/source freshness verified`);cases++
+}
+// K4: the same disposable PostgreSQL harness exercises shared sheet capacity.
+for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first','cut-plan-before-manual','cut-plan-stock-first','cut-plan-before-stock','cut-plan-source-first','cut-plan-before-source','cut-plan-release-first']){
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture')
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${auth}${sql};${tail}commit;`
+ const call=async(sql:string)=>JSON.parse((await query(tx(sql))).split('\n').at(-1)!)
+ const write=(p:any)=>`select bob.bob_project_write_v16(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
+ const base={record_id:null,expected_updated_at:null,expected_revision:0,request_quote:f.payload.request_quote}
+ const material=await call(write({...base,kind:'catalog',data:{action:'ensure',key:'reserve-material',kind:'material',name:'K4 race plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'Isolated race fixture',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}))
+ const stock=randomUUID(),fmt={material_id:material.recordId,material_revision:1,length_mm:2440,width_mm:1220,thickness_mm:18,grain:'length',basis:'provided_spec',note:'Isolated specified stock, not physical inspection'}
+ const stockData={name:'Race sheet',specification:'Fixture',quantity:'1',unit:'pcs',status:'available',area_id:null,notes:'Fixture',change_note:'Initial',sheet_format:fmt}
+ const stockCall=(action:string,revision:number,data:any)=>`select bob.stock_command(${literal(f.project)},${literal(action)},${literal(stock)},${revision},${literal(JSON.stringify(data))})`
+ await call(stockCall('create',0,stockData))
+ const plans:any[]=[]
+ for(const key of ['first','second']){
+  const recipe=structuredClone(f.payload.data.packet.recipe);recipe.definitions.forEach((d:any)=>d.material_ref=null)
+  const construction=await call(write({...base,kind:'construction',data:{key:'reserve-'+key,title:'Stock-bound race construction',description:'Isolated',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters:f.payload.data.packet.manifest.bob_parameters,materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[],open_questions:['Hardware/access unknown']}}))
+  const need=await call(write({...base,kind:'operational',data:{resource:'cad_requirement',action:'create',fields:{name:'Race blank',category:'Timber',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Isolated',artifact_id:construction.recordId,artifact_revision:1,target_revision:1,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[],component_allocations:[],change_note:'Initial'}}}))
+  const draft=await call(`select bob.read_construction_draft(${literal(f.project)},${literal(construction.recordId)},1,null)`)
+  const catalog=(await call(`select bob.catalog_read(${literal(f.project)},${literal(JSON.stringify({action:'read',id:material.recordId,revision:1,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}))})`)).record
+  const candidates=[{id:'sheet',...fmt,count:1,kerf_mm:3,trim_mm:5}],grains=[{definition_id:'panel',axis:'x'}]
+  const fit:any=constructionCutFit(constructionLists(draft,new Map([[material.recordId+'@1',catalog]]),[]),candidates,grains)
+  assert.equal(fit.status,'feasible')
+  const plan=await call(write({...base,kind:'cut_plan',data:{key:'plan-'+key,artifact_id:construction.recordId,artifact_revision:1,requirements:[{id:need.recordId,revision:1}],candidates,blank_grain:grains,candidate_sources:[{candidate_id:'sheet',kind:'stock',record_id:stock,revision:1}],layout:Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,fit[k]])),change_note:'Checked race plan'}}))
+  plans.push(plan)
+ }
+ const reservePayload=(index=0,action='reserve',revision=0)=>({...base,kind:'cut_plan_stock',record_id:plans[index].recordId,expected_revision:1,data:{action,reservation_revision:revision,change_note:'Explicit isolated shared-sheet commitment'}})
+ const reserve=write(reservePayload()),otherReserve=write(reservePayload(1))
+ const manual=`select bob.material_requirement_command(${literal(f.project)},'create',${literal(randomUUID())},0,${literal(JSON.stringify({name:'Manual race sheet need',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'1',waste_percent:'0',purchase_increment:'1',basis:'Isolated sheet count',assumptions:'Fixture',artifact_id:null,artifact_revision:null,target_revision:1,stock_allocations:[{id:stock,revision:1,quantity:'1'}],component_allocations:[],change_note:'Initial'}))})`
+ const stockChange=stockCall('revise',1,{...stockData,notes:'Concurrent current-stock edit'})
+ const sourceChange=mutations.space(f)
+ if(kind==='cut-plan-release-first')await call(reserve)
+ const first=kind==='cut-plan-manual-first'?manual:kind==='cut-plan-stock-first'?stockChange:kind==='cut-plan-source-first'?sourceChange:kind==='cut-plan-release-first'?write(reservePayload(0,'release',1)):reserve
+ const second=kind==='cut-plan-competing'?otherReserve:kind==='cut-plan-before-manual'||kind==='cut-plan-release-first'?manual:kind==='cut-plan-before-stock'?stockChange:kind==='cut-plan-before-source'?sourceChange:reserve
+ const barrier=await gate(770000+cases),leader=start(tx(first,`select pg_advisory_xact_lock(${770000+cases});`))
+ let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(second));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ const failed=['cut-plan-competing','cut-plan-manual-first','cut-plan-before-manual','cut-plan-stock-first','cut-plan-source-first'].includes(kind)
+ if(failed){assert.notEqual(follow.code,0);assert.match(follow.stderr,/capacity_changed|already reserved|stock_changed|physical_source_changed|sources_changed/)}else assert.equal(follow.code,0,follow.stderr)
+ const head=await call(`select bob.read_material_cut_plan(${literal(f.project)},${literal(plans[0].recordId)},1)`)
+ const counts=await call(`select jsonb_build_object('reserved',bob_private.read_stock_reservations(${literal(f.project)},${literal(stock)}),'history',(select count(*) from bob.material_cut_plan_reservation_revisions where project_id=${literal(f.project)}),'plans',(select count(*) from bob.material_cut_plan_revisions where project_id=${literal(f.project)}))`)
+ assert.equal(counts.reserved,1);assert.equal(counts.plans,2)
+ assert.equal(counts.history,['cut-plan-manual-first','cut-plan-stock-first','cut-plan-source-first'].includes(kind)?0:kind==='cut-plan-release-first'?2:1)
+ if(['cut-plan-before-stock','cut-plan-before-source'].includes(kind)){assert.equal(head.stock_reserved,false);assert.equal(head.reservation.reserved,true)}
+ if(kind==='cut-plan-replay'){
+  const receipt=(output:string)=>JSON.parse(output.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+  assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout))
+ }
+ console.log(`PASS ${kind}: observed real lock wait; shared sheet capacity/CAS/history checked`);cases++
 }
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

@@ -31,7 +31,9 @@ export interface MaterialCutPlan {
   candidate_sources: Row[]
   capacity: Row[]
   saved: true
-  stock_reserved: false
+  stock_reserved: boolean
+  reservation_revision: number
+  reservation: { revision: number; plan_revision: number; reserved: boolean; allocations: Row[] } | null
   shopping_ready: false
   fabrication_ready: false
   input_evidence_verified: false
