@@ -75,7 +75,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   assert.equal((await pg.query('select count(*)::int n from bob.materials where project_id=$1', [project])).rows[0].n, 0)
   assert.equal((await pg.query('select count(*)::int n from bob.material_requirement_stock where project_id=$1', [project])).rows[0].n, 0)
   const writer = createProjectWriter(project, message, async () => ({ data: null, error: { code: '22023', message: 'construction_cut_fit_required PRIVATE' } }), async () => ({ data: [], error: null }), async () => ({ data: [], error: null }))
-  const rejected = await writer.commit(payload); assert.equal(rejected.status, 'invalid'); assert.match(rejected.message!, /Raw-stock/); assert(!JSON.stringify(rejected).includes('PRIVATE'))
+  const rejected = await writer.commit(payload); assert.equal(rejected.status, 'invalid'); assert.match(rejected.message!, /Reserve only an exact saved cut_plan/); assert(!JSON.stringify(rejected).includes('PRIVATE'))
  })
  await t.test('outsider/guest cannot read provenance or derive; authenticated API has select only and invoker views', async () => {
   assert.equal((await asProjectUser(pg, other, 'select * from bob.material_requirement_construction_sources')).rows.length, 0)
