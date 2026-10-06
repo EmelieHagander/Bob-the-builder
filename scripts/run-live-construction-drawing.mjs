@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { K4_RECOVERY_TURN, assertK4RecoveryCheckpoint } from './k4-recovery-checkpoint.mjs'
-import { K4_CUT_FIT_PREVIOUS_TURN, assertK4CutFitCheckpoint } from './k4-cut-fit-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, assertK4CutFitCheckpoint } from './k4-cut-fit-checkpoint.mjs'
 
 export const K3_PROJECT = 'p_43702f4cbdfb40f0907f5cd0c12a5143'
 export const K3_MEMBER = '9aa569c3-32f3-4f22-a457-0b145e8850dc'
@@ -17,9 +17,11 @@ export const runAuthenticatedK3 = (env, deps) => runAuthenticatedConstruction(en
 export const runAuthenticatedK4 = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4')
 export const runAuthenticatedK4Recovery = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', true)
 export const runAuthenticatedK4CutFit = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-fit')
+export const runAuthenticatedK4CutPlan = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-plan')
 async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage, recovery = false) {
-  const cutFit = recovery === 'cut-fit'
-  const previousTurn = cutFit ? K4_CUT_FIT_PREVIOUS_TURN : recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
+  const cutPlan = recovery === 'cut-plan'
+  const cutFit = recovery === 'cut-fit' || cutPlan
+  const previousTurn = cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : cutFit ? K4_CUT_FIT_PREVIOUS_TURN : recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
   let phase = 'configuration', client, acquired = false
   try {
     assert.equal(env.VITE_SUPABASE_URL?.replace(/\/$/, ''), URL)
@@ -79,13 +81,17 @@ async function runAuthenticatedConstruction(env, { makeClient, probe, progress =
         else assertK4RecoveryCheckpoint(requirements.data, sources.data, history.data)
       } else assert.equal(requirements.data.length, 0)
     }
+    if (cutPlan) {
+      const plans = await client.from('material_cut_plans').select('id').eq('project_id', K3_PROJECT).limit(1)
+      assert(!plans.error && plans.data?.length === 0, 'Inspect the existing saved plan before any new model turn')
+    }
     progress(`Existing member, project and conversation verified; invoking the ${stage} probe once.`)
     phase = 'probe'
     await probe({
       VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: key,
       BOB_TEST_MEMBER_ID: K3_MEMBER, BOB_TEST_MEMBER_ACCESS_TOKEN: session.access_token,
       [`BOB_${stage}_PROJECT_ID`]: K3_PROJECT, [`BOB_${stage}_LIVE_CONFIRM`]: 'disposable-fixtures-only',
-      [`BOB_${stage}_REPORT`]: env[`BOB_${stage}_REPORT`] ?? (stage === 'K3' ? 'test-results/live-construction-drawing.json' : cutFit ? 'test-results/live-construction-cut-fit.json' : 'test-results/live-construction-lists.json'),
+      [`BOB_${stage}_REPORT`]: env[`BOB_${stage}_REPORT`] ?? (stage === 'K3' ? 'test-results/live-construction-drawing.json' : cutPlan ? 'test-results/live-construction-cut-plan.json' : cutFit ? 'test-results/live-construction-cut-fit.json' : 'test-results/live-construction-lists.json'),
     })
     return { passed: true, phase: 'completed', projectId: K3_PROJECT }
   } catch {

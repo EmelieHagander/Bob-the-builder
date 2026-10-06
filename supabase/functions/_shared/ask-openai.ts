@@ -208,9 +208,9 @@ export async function answerWithOpenAi(opts: {
       return { ok: false, error: 'context_unavailable' }
     }
   }
-  // The v14 wrapper preserves all older write kinds and the same claimed-turn ledger.
+  // The v15 wrapper preserves all older write kinds and the same claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc('bob_project_write_v14', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc('bob_project_write_v15', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined

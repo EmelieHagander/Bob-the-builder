@@ -46,16 +46,23 @@ export const CONSTRUCTION_CUT_FIT_TOOL=tool('check_construction_cut_fit','Check 
   grain:{type:['string','null'],enum:['length','width','none',null]},basis:{type:'string',enum:['design_choice','provided_spec']},note:{type:'string',minLength:1,maxLength:1000}})},
  blank_grain:{type:'array',minItems:1,maxItems:128,items:obj({definition_id:id,axis:{type:['string','null'],enum:['x','y','z','none',null]}})},
 })
+export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save a feasible sheet cutting plan under ALL existing piece needs from this exact current construction. Code computes the layout and SQL independently replays the cuts; never supply placements or claim that an area sum proves fit. Read existing cut_plan and requirement resources first. Reuse record_id/current revision when updating; key names one intended write in the turn. candidate_sources names every candidate: hypothetical uses null record_id/revision; stock pins an existing current stock revision with sheet_format and available whole sheets; catalog_part pins a current panel part with exact material and dimensions, not a verified supplier/product. Preserve hypothetical/estimated evidence. This saves a plan only: no stock reservation, Shopping handoff, optimal purchase count or fabrication approval. Read_project_work(cut_plan) to reopen the receipt and inspect source_state.',{
+ key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:nullableUuid,expected_revision:{type:'integer',minimum:0,maximum:999999999},
+ ...CONSTRUCTION_CUT_FIT_TOOL.function.parameters.properties,
+ requirements:{type:'array',minItems:1,maxItems:24,items:obj({id:uuid,revision:rev})},
+ candidate_sources:{type:'array',minItems:1,maxItems:8,items:obj({candidate_id:id,kind:{type:'string',enum:['hypothetical','stock','catalog_part']},record_id:nullableUuid,revision:nullableRev})},
+ change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
+})
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12)return {status:'budget_exhausted'}
-  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:null
+  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:name===CONSTRUCTION_CUT_SAVE_TOOL.function.name?CONSTRUCTION_CUT_SAVE_TOOL:null
   if(!spec)return {status:'invalid'}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
@@ -68,7 +75,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!result||result.projectId!==opts.projectId||!['ok','not_found'].includes(result.status)||JSON.stringify(result).length>600000)throw new Error('construction_read_unavailable')
     return result
    }
-   if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name||name===CONSTRUCTION_CUT_FIT_TOOL.function.name){
+   if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name||(name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
     if(!opts.readCatalog)return {status:'unavailable'}
     const draft=await opts.read(v.artifact_id,v.revision,null) as Record<string,any>
     if(!draft||draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||draft.revision!==v.revision)return {status:'unavailable'}
@@ -89,9 +96,17 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     const checked=checkConstruction(draft,catalog,(opts.now?.()??new Date()).toISOString().slice(0,10))
     if(name===CONSTRUCTION_CHECK_TOOL.function.name)return {projectId:opts.projectId,...checked}
     if(!checked.concept_ready)return {status:'needs_data',checked,message:'Correct the same construction before deriving lists; no quantities or fabrication approval returned.'}
-    if(name===CONSTRUCTION_CUT_FIT_TOOL.function.name){
+    if((name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
      if([...catalog.values()].some(r=>r.kind==='material'&&r.profile_code!=='sheet_stock'))return {status:'unsupported',message:'This cutting assessment supports sheet_stock material only; profile/bar cutting needs a separate capability.'}
-     return {projectId:opts.projectId,...constructionCutFit(constructionLists(draft,catalog,[]),v.candidates,v.blank_grain),checked}
+     const fit=constructionCutFit(constructionLists(draft,catalog,[]),v.candidates,v.blank_grain)
+     if(name===CONSTRUCTION_CUT_FIT_TOOL.function.name)return {projectId:opts.projectId,...fit,checked}
+     if(!opts.writer)return {status:'denied'}
+     if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact cut-plan revision.'}
+     if(fit.status!=='feasible')return {projectId:opts.projectId,...fit,checked}
+     if(!await opts.hasAccess())return {status:'denied'}
+     return await opts.writer.commit({kind:'cut_plan',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+      data:{key:v.key,artifact_id:v.artifact_id,artifact_revision:v.revision,requirements:v.requirements,candidates:v.candidates,blank_grain:v.blank_grain,
+       candidate_sources:v.candidate_sources,layout:Object.fromEntries(['placements','cuts','offcuts','used_sheets'].map(k=>[k,(fit as any)[k]])),change_note:v.change_note}})
     }
     return {projectId:opts.projectId,...constructionLists(draft,catalog,v.assembly_dependencies),checked}
    }

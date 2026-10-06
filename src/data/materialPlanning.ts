@@ -6,12 +6,44 @@ export type QuantityUnit = 'pcs' | 'm' | 'm2' | 'm3' | 'kg' | 'l'
 export type StockStatus = 'available' | 'inspect' | 'unavailable'
 export type RequirementSourceKind = 'manual' | 'deterministic'
 
+export interface StockSheetFormat {
+  material_id: string
+  material_revision: number
+  length_mm: number
+  width_mm: number
+  thickness_mm: number
+  grain: 'length' | 'width' | 'none'
+  basis: 'measured' | 'provided_spec' | 'estimated'
+  note: string
+}
+
+export interface MaterialCutPlan {
+  id: string
+  project_id: string
+  revision: number
+  current_revision: number
+  artifact_id: string
+  artifact_revision: number
+  source_state: 'current' | 'changed'
+  requirements: { id: string; revision: number }[]
+  layout: { placements: Row[]; cuts: Row[]; offcuts: Row[]; used_sheets: string[] }
+  candidates: Row[]
+  candidate_sources: Row[]
+  capacity: Row[]
+  saved: true
+  stock_reserved: false
+  shopping_ready: false
+  fabrication_ready: false
+  input_evidence_verified: false
+}
+
 export interface StockItem {
   id: string
   projectId: string
   revision: number
   name: string
   specification: string
+  sheetFormat?: StockSheetFormat | null
   quantity: string
   unit: QuantityUnit
   status: StockStatus
@@ -127,6 +159,7 @@ function stockItem(row: Row): StockItem {
     revision: row.revision,
     name: row.name,
     specification: row.specification ?? '',
+    sheetFormat: row.sheet_format ?? null,
     quantity: textNumber(row.quantity),
     unit: row.unit,
     status: row.status,
@@ -269,6 +302,20 @@ export function createMaterialPlanning(
   return {
     stockVersion,
     requirementVersion,
+    async cutPlanVersion(projectId: string, id: string, revision: number | null = null): Promise<MaterialCutPlan> {
+      const { db, guard } = connection(projectId)
+      const row = checked(await db.rpc('read_material_cut_plan', { p_project: projectId, p_plan: id, p_revision: revision })) as MaterialCutPlan | null
+      guard()
+      if (!row || row.id !== id || row.project_id !== projectId || (revision !== null && row.revision !== revision)) throw new Error('Cut plan unavailable. Reload to check access and source changes.')
+      return row
+    },
+    async cutPlans(projectId: string, afterId: string | null = null) {
+      const { db, guard } = connection(projectId)
+      const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'cut_plan', record_id: null, after_id: afterId } })) as Row
+      guard()
+      if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Cut plan project mismatch.')
+      return { items: scoped(result.records, projectId) as MaterialCutPlan[], nextCursor: result.next_cursor as string | null, hasMore: Boolean(result.truncated) }
+    },
     async stock(projectId: string, archived = false, offset = 0) {
       const { db, guard } = connection(projectId)
       const rows = checked(await db.from('current_stock_items').select('*')

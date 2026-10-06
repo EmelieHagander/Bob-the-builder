@@ -14,7 +14,7 @@ export interface ProjectSource {
 
 export interface ProjectWriteReceipt {
   projectId: string
-  dataset: 'project' | 'areas' | 'tasks' | 'measurements' | 'artifacts' | 'building_context' | 'catalog' | 'plan' | 'solutions' | 'target' | 'media' | 'stock' | 'requirements' | 'materials' | 'events'
+  dataset: 'project' | 'areas' | 'tasks' | 'measurements' | 'artifacts' | 'building_context' | 'catalog' | 'plan' | 'solutions' | 'target' | 'media' | 'stock' | 'requirements' | 'cut_plans' | 'materials' | 'events'
   recordId: string
   label: string
   /** reused is permitted only for an unchanged catalog definition. */
