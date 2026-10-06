@@ -135,7 +135,7 @@ create trigger cut_plan_stock_capacity before insert on bob.material_cut_plan_st
 create function bob_private.cut_plan_sources(p_project text,candidates jsonb,sources jsonb,p_lock boolean,p_exclude_plan uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare s jsonb; f jsonb; fmt jsonb; stock bob.current_stock_items; item bob.catalog_items; part bob.catalog_item_revisions;
- reserved numeric; requested numeric; capacity jsonb:='[]'; k text;
+ reserved numeric; requested numeric; held numeric; capacity jsonb:='[]'; k text;
 begin
  if auth.uid() is null or not bob_private.has_project_access(p_project) then raise exception 'project_denied' using errcode='42501'; end if;
  if jsonb_typeof(sources) is distinct from 'array' or jsonb_array_length(sources)<>jsonb_array_length(candidates)
@@ -163,6 +163,16 @@ begin
    reserved:=bob_private.material_stock_reserved(p_project,stock.id,null,p_exclude_plan);
    select sum((c->>'count')::numeric) into requested from jsonb_array_elements(sources) sr join jsonb_array_elements(candidates) c on c->'id'=sr->'candidate_id'
     where sr->>'kind'='stock' and sr->'record_id'=s->'record_id';
+   -- A held plan needs its actual committed sheets, not every unused sheet
+   -- offered when fitting. Other plans/manual needs may use those spares.
+   held:=0;
+   if p_exclude_plan is not null then
+    select coalesce(sum(a.quantity),0) into held from bob.material_cut_plan_stock a
+     join bob.material_cut_plan_reservations h on h.project_id=a.project_id and h.plan_id=a.plan_id and h.current_revision=a.reservation_revision
+     join bob.material_cut_plan_reservation_revisions rr on rr.project_id=h.project_id and rr.plan_id=h.plan_id and rr.revision=h.current_revision
+     where a.project_id=p_project and a.plan_id=p_exclude_plan and a.stock_id=stock.id and rr.reserved;
+    if held>0 then requested:=held; end if;
+   end if;
    if requested>greatest(0,stock.quantity-reserved) then raise exception 'cut_plan_stock_capacity_changed' using errcode='PT409'; end if;
    if fmt->'material_id' is distinct from f->'material_id' or fmt->'material_revision' is distinct from f->'material_revision' or fmt->'grain' is distinct from f->'grain'
     then raise exception 'cut_plan_format_mismatch' using errcode='22023'; end if;

@@ -104,6 +104,12 @@ test('offered spare candidate counts never replace actual used-sheet quantities'
  const reserved=await f.rpc('bob.material_cut_plan_stock_command',[f.project,'reserve',rev.recordId,2,0,'Explicit used sheets'])
  assert.equal(reserved.reservation.allocations[0].quantity,fit.used_sheets.length)
  assert(fit.used_sheets.length<3)
+ await f.rpc('bob.material_requirement_command',[f.project,'create',randomUUID(),0,JSON.stringify(manualFields(f.stockId,1,String(3-fit.used_sheets.length)))])
+ assert.equal((await f.stockRead()).reserved_quantity,3)
+ const held=await f.read(f.saved.recordId)
+ assert.equal(held.source_state,'current','other commitments of unused offered sheets must not invalidate the exact held sheet')
+ assert.equal(held.stock_reserved,true);assert.equal(held.reservation.allocations[0].quantity,fit.used_sheets.length)
+ assert.deepEqual(held.layout,p.data.layout)
 })
 
 test('duplicate stock aliases reserve actual used sheets once per shared stock identity',async t=>{
