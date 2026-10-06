@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
-import { runAuthenticatedK4CutPlan } from './run-live-construction-drawing.mjs'
+import { runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback } from './run-live-construction-drawing.mjs'
 
-const report = await runAuthenticatedK4CutPlan(process.env, {
+const verify = process.env.BOB_K4_VERIFY_ONLY === 'saved-plan' ? runAuthenticatedK4CutPlanReadback : runAuthenticatedK4CutPlan
+const report = await verify(process.env, {
  makeClient: createClient, progress: value => console.log(value),
  probe: async sessionEnv => {
   const saved = new Map(Object.keys(sessionEnv).map(key => [key, process.env[key]]))
