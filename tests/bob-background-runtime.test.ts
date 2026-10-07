@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { BobContinuation, createBobJournal, fingerprint, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { sealCredential, openCredential } from '../supabase/functions/_shared/bob-job-credentials.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
 import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
@@ -65,19 +65,45 @@ test('provider retry count survives workers and stops the failing call without l
   assert.equal(attempts,3);assert.equal(saved,1)
 })
 
-test('provider failures and segment timeouts share one retry budget across workers', async () => {
-  for (const reasons of [['segment_wall', 'segment_wall', 'segment_wall'], ['provider_retry', 'segment_wall', 'provider_retry']]) {
+test('provider failures and segment timeouts share one retry budget across workers; unknown outcomes re-send once', async () => {
+  for (const [reasons, dispatches] of [
+    [['segment_wall', 'segment_wall', 'segment_wall'], 2],
+    [['provider_uncertain', 'provider_uncertain'], 2],
+    [['provider_retry', 'segment_wall', 'provider_retry'], 3],
+    [['provider_retry', 'provider_retry', 'provider_retry'], 3],
+  ] as const) {
     const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
     let attempts = 0
     const run = () => createBobJournal(store, Infinity).run('model:cad', { input: 'same' }, async () => {
       throw new BobContinuation('yield', reasons[attempts++])
     })
-    for (let i = 0; i < 2; i++) await assert.rejects(run(), e => e instanceof BobContinuation && e.kind === 'yield')
+    for (let i = 0; i < dispatches - 1; i++) await assert.rejects(run(), e => e instanceof BobContinuation && e.kind === 'yield')
     await assert.rejects(run(), /provider_retry_exhausted/)
     await assert.rejects(run(), /provider_retry_exhausted/)
-    assert.equal(attempts, 3, 'restarting the worker cannot reset the paid-call budget')
-    assert.deepEqual(entries.filter(e => e.key.includes(':retry:')).map(e => (e.value as any).reason), reasons.slice(0, 2))
+    assert.equal(attempts, dispatches, 'restarting the worker cannot reset the paid-call budget')
+    assert.deepEqual(entries.filter(e => e.key.includes(':retry:')).map(e => (e.value as any).reason), reasons.slice(0, dispatches - 1))
   }
+})
+
+test('an uncertain re-send is counted across workers so the answer can report it', async () => {
+  const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+  let attempts = 0
+  const run = () => createBobJournal(store, Infinity).run('model:ask-bob', { input: 'same' }, async identity => {
+    if (++attempts === 1) throw new BobContinuation('yield', 'provider_uncertain')
+    assert.equal(identity.attempt, 1)
+    return 'answer'
+  })
+  await assert.rejects(run(), BobContinuation)
+  assert.equal(await run(), 'answer')
+  assert.equal(createBobJournal(store, Infinity).uncertainResends(), 1)
+  const definite: JournalEntry[] = []
+  let tries = 0
+  const again = () => createBobJournal({ entries: definite, save: async e => { definite.push(e) } }, Infinity).run('model:x', {}, async () => {
+    if (++tries === 1) throw new BobContinuation('yield', 'provider_retry')
+    return 'ok'
+  })
+  await assert.rejects(again(), BobContinuation); await again()
+  assert.equal(createBobJournal({ entries: definite, save: async () => {} }, Infinity).uncertainResends(), 0, 'a definite 429/5xx was never billed and is not reported')
 })
 
 test('waiting for an accepted AI job and yielding before dispatch do not spend retries', async () => {
@@ -139,4 +165,20 @@ test('opted-in HTTP requests return accepted without running the synchronous mod
   assert.equal(sync, 0); assert.equal(queued, 1)
   assert.equal((await handler(request('true'))).status, 400)
   assert.equal((await handler(request(false))).status, 503); assert.equal(sync, 1)
+})
+
+test('a retried turn reuses an earlier successful model result with identical input and dispatches the rest', async () => {
+  const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+  const same = { input: 'same' }, reusable = new Map([[await fingerprint(same), { ok: true, result: { success: true, text: 'paid once' } }]])
+  let sent = 0
+  const journal = createBobJournal(store, Infinity, Date.now, reusable)
+  assert.deepEqual(await journal.run('model:ask-bob', same, async () => { sent++; return { success: true, text: 'again' } }), { success: true, text: 'paid once' })
+  assert.deepEqual(await journal.run('model:ask-bob', { input: 'changed' }, async () => { sent++; return { success: true, text: 'new' } }), { success: true, text: 'new' })
+  // Tools are never answered from the earlier attempt.
+  await journal.run('tool:lookup', same, async () => { sent++; return 'fresh' })
+  assert.equal(sent, 2)
+  assert.equal(journal.reusedModelCalls(), 1)
+  // The reused result is this job's own step: a later segment replays it, not the map.
+  assert.deepEqual(await createBobJournal(store, Infinity).run('model:ask-bob', same, async () => { sent++; return null }), { success: true, text: 'paid once' })
+  assert.equal(sent, 2)
 })

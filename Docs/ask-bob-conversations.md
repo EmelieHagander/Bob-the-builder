@@ -204,9 +204,41 @@ record identity; it does not certify all task semantics. CAD review is a separat
 concept-quality signal. Unknown intent/cost remains unknown. Actual user follow-up
 frequency and construction correctness are not inferred from these counters.
 
+**Unknown provider outcomes (K5, code 2026-10-07; owner decision).** In a durable
+turn, a definite 429/5xx provider answer is retried up to twice. A lost connection
+(`Network error`, including a client abort) or a segment-wall cutoff after dispatch may
+already be billed: the journal re-sends it at most once, and the delivered answer ends
+with a fixed Swedish notice that one call was re-sent and may have cost extra. The
+delivery event records `uncertain_resends`. OpenAI background mode, which avoids the
+re-send entirely, stays behind the receiver rollout in
+[shared AI background](shared-ai-background.md#rollout-and-rollback).
+
+**Retry reuses paid model work (K5, code 2026-10-07; migration
+`20261007180000_bob_retry_model_reuse.sql` not yet applied).** When a chat job finishes
+as failed, its successful model results (`model:<function>:<position>` steps whose
+result has `success: true`) are kept privately for that owner, thread and turn. An
+explicit retry of the same turn answers a model call from them only when the input
+fingerprint is byte-identical and the call has no retry markers; tools, writes and any
+changed input still run normally. The kept results are deleted when the turn completes,
+with the thread, or after seven days. The delivery event records `reused_model_calls`.
+Jobs that expire without a worker finishing them keep nothing. Drawing requests keep
+their own model-result ledger.
+
+**Turn review reserve (K5, code 2026-10-07).** The in-memory turn threshold ($1 / 24
+calls) holds back $0.15 and 3 calls for `cad-reviewer` and `bob-delivery-language`.
+Other roles stop at $0.85 / 21 calls with budget-stop reason `review_reserve`; reserved
+roles may use the whole limit, which still stops them. The drawing-request SQL budget is
+unchanged.
+
 Elapsed time runs from first admitted execution through the final result, including
 worker waits but excluding initial queue delay. `scripts/report-bob-execution.sql`
-reports outcome distribution, p50/p95 time, retries/repairs and per-role usage/cost.
+reports outcome distribution, p50/p95 time, re-sent model calls and per-role usage/cost,
+plus a role × model × reasoning-effort table (K5 comparison input). Each model row
+records the returned model, the effort actually sent (null when none was applied),
+cached-input and reasoning tokens, its journal step (`model:<function>:<position>`)
+and `attempt` (0 = first dispatch; >0 = a re-send of the same input, which may also
+have been billed). Rows written before 2026-10-07 have no model label. Cost per
+correct delivery still needs a reviewed outcome per run joined on `run_id`.
 Runs with model events but no terminal event remain unfinished/unobserved. Events
 lost to a process kill before their insert are not an exactly-once billing ledger;
 shared AI accounting remains authoritative. Compare identical ordinary-language

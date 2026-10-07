@@ -101,3 +101,26 @@ test('role migration preserves historical rows and service-only access while adm
   }
  }finally{await pg.close()}
 })
+test('model rows carry model, applied effort, cached/reasoning tokens, journal step and re-send attempt for comparison',async()=>{
+ const {BobContinuation}=await import('../supabase/functions/_shared/bob-job-journal.ts')
+ const events:ExecutionEvent[]=[],entries:JournalEntry[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ const priced={...reply,model:'gpt-5.1-mini',reasoningEffort:'low',usage:{input_tokens:100,output_tokens:40,total_tokens:140,cached_input_tokens:60,reasoning_tokens:25}}
+ const send=async(fail:boolean)=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(e)}},10000,()=>0)
+  return journal.run('model:ask-bob',{same:true},async identity=>{
+   await metrics.model({aiFunction:'ask-bob'} as any,fail?{...priced,success:false,error:'OpenAI API error: 503'}:priced,10,{step:identity.key,attempt:identity.attempt})
+   if(fail)throw new BobContinuation('yield','provider_retry')
+   return priced
+  })
+ }
+ await assert.rejects(send(true));await send(false)
+ assert.equal(events.length,2)
+ assert.deepEqual(events.map(e=>[e.counts.step,e.counts.attempt,e.status]),[['model:ask-bob:0',0,'failed'],['model:ask-bob:0',1,'ok']])
+ const c=events[1].counts
+ assert.equal(c.model,'gpt-5.1-mini');assert.equal(c.reasoning_effort,'low');assert.equal(c.cached_input_tokens,60);assert.equal(c.reasoning_tokens,25)
+ await metrics.model({aiFunction:'ask-bob'} as any,{...reply,model:'PRIVATE model; drop',reasoningEffort:null},1)
+ assert.equal(events[2].counts.model,null);assert.equal(events[2].counts.reasoning_effort,null)
+ assert.equal(events[2].counts.step,null);assert.equal(events[2].counts.attempt,0);assert.equal(events[2].counts.cached_input_tokens,0)
+ assert(!JSON.stringify(events).includes('PRIVATE'))
+})

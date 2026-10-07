@@ -134,7 +134,31 @@ test('Bob tool parser routes product and pack_purchase commands with exact keys 
  const pub=parseOperationalWrite('manage_project_material',{...common,resource:'pack_purchase',action:'publish',record_id:aid,expected_revision:1,data:{purchase_revision:0,needs:[{id:aid,revision:1}],change_note:'x'}})
  assert.equal(pub?.kind,'pack_purchase');assert.deepEqual(pub?.data,{action:'publish',purchase_revision:0,needs:[{id:aid,revision:1}],change_note:'x'})
  assert.equal(parseOperationalWrite('manage_project_material',{...common,resource:'pack_purchase',action:'publish',record_id:aid,expected_revision:1,data:{purchase_revision:0,needs:[],change_note:'x',quantity:5}}),null)
- const created=parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'create',record_id:null,expected_revision:0,data:{title:'x'}})
- assert.equal(created?.kind,'supplier_article');assert.deepEqual(created?.data,{action:'create',fields:{title:'x'}})
+ const issues:any[]=[]
+ assert.equal(parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'create',record_id:null,expected_revision:0,data:{title:'x'}},i=>issues.push(i)),null)
+ assert.deepEqual(issues[0].fields,['data.catalog_item_id','data.catalog_item_revision'])
+ // A source-only product: unstated text omitted or null, unstated date omitted.
+ const item=randomUUID(),source={catalog_item_id:item,catalog_item_revision:1,title:'Träskruv 5,0x80 mm C4',supplier:'Byggmax',manufacturer:null,article_number:'249687',variant:'15 st',
+  source_url:'https://www.byggmax.se/traskruv-5-0x80-mm-c4-249581',supported_fields:['title','article_number','purchase_unit','content_per_purchase_unit','content_unit'],purchase_unit:'pack',content_per_purchase_unit:15,content_unit:'pcs',change_note:'Från produktsidan'}
+ const created=parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'create',record_id:null,expected_revision:0,data:source})
+ assert.equal(created?.kind,'supplier_article')
+ assert.deepEqual(created?.data,{action:'create',fields:{catalog_item_id:item,catalog_item_revision:1,title:'Träskruv 5,0x80 mm C4',supplier:'Byggmax',manufacturer:'',article_number:'249687',variant:'15 st',
+  source_url:'https://www.byggmax.se/traskruv-5-0x80-mm-c4-249581',source_document:'',source_version:'',source_date:null,supported_fields:['title','article_number','purchase_unit','content_per_purchase_unit','content_unit'],
+  purchase_unit:'pack',content_per_purchase_unit:'15',content_unit:'pcs',notes:'',change_note:'Från produktsidan'}})
+ // Never filled in: a missing article number or an unsupported pack size is named back to the model.
+ for(const [patch,field] of [[{article_number:null},'data.article_number'],[{supported_fields:['title']},'data.supported_fields'],[{content_per_purchase_unit:'7.5'},'data.content_per_purchase_unit'],[{colour:'zinc'},'data.colour']] as const){
+  const seen:any[]=[]
+  assert.equal(parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'create',record_id:null,expected_revision:0,data:{...source,...patch}},i=>seen.push(i)),null)
+  assert.deepEqual(seen[0].fields.includes(field),true,field)
+ }
  assert.equal(parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'publish',record_id:aid,expected_revision:1,data:{}}),null)
+})
+
+test('a source-only product parsed from a model call saves: unstated text is empty, unstated date null',async t=>{
+ const f=await fixture(t),common={request_quote:f.base.request_quote,expected_updated_at:null}
+ const {manufacturer,variant,source_document,source_version,source_date,notes,...stated}=f.fields({title:'Wood screw source only'})
+ const parsed=parseOperationalWrite('manage_project_material',{...common,resource:'product',action:'create',record_id:null,expected_revision:0,data:{...stated,manufacturer:null,content_per_purchase_unit:100}})
+ assert(parsed)
+ const saved=await f.write({...f.base,...parsed})
+ assert.equal(saved.dataset,'catalog');assert.equal(saved.record.manufacturer,'');assert.equal(saved.record.source_date,null);assert.equal(Number(saved.record.content_per_purchase_unit),100)
 })

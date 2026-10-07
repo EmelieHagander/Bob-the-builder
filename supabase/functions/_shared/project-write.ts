@@ -104,7 +104,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   const keys = definition.function.parameters.required
   if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', keys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'The change could not be tied to the current owner message. Retry the call once; if it fails again, report it.')
-  if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v)
+  if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v,report)
   if (LIFECYCLE_TOOL_NAMES.has(name)) return parseLifecycleWrite(name, v, projectId)
   if (name === 'link_project_drawing') {
     if (typeof v.record_id !== 'string' || !uuid.test(v.record_id) || typeof v.step_id !== 'string' || !uuid.test(v.step_id)

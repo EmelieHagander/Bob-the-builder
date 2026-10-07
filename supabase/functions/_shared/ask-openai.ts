@@ -16,7 +16,8 @@ import { hasImageContent } from './openai-content.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
-import { BobContinuation, type BobJournal } from './bob-job-journal.ts'
+import { BobContinuation, type BobJournal, type JournalIdentity } from './bob-job-journal.ts'
+export const RESEND_NOTICE = 'Obs: ett modellanrop tappade kontakten innan svaret kom fram och skickades om en gång. Det första försöket kan ha debiterats, så den här turen kan ha kostat något mer än vanligt.'
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
@@ -59,7 +60,10 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
-  const memo = async <T>(stream: string, input: unknown, work: (identity?: { key: string; fingerprint: string }) => Promise<T>, reserve = 0): Promise<T> =>
+  // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
+  const withResendNotice = (answer: string) => journal && journal.uncertainResends() > 0 && !answer.includes(RESEND_NOTICE)
+    ? answer + '\n\n' + RESEND_NOTICE : answer
+  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0): Promise<T> =>
     journal ? journal.run(stream, input, work, reserve) : work()
   const rpc = async (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
     const { p_generation: _generation, ...stable } = args
@@ -107,17 +111,20 @@ export async function answerWithOpenAi(opts: {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
     }
-    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started)
+    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0})
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
-    if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
+    // A definite provider rejection produced no billable output; a lost
+    // connection may have been billed, so the journal re-sends it once and reports it.
+    if (journal && !result.success && /OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')
+    if (journal && !result.success && /Network error/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_uncertain')
     return result
    }, asyncModels ? (options.images?.length || hasImageContent(options.messages) ? 45000 : 25000)
      : Math.min(timeout, RESERVE_MS[options.aiFunction] ?? 45000))}catch(error){
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  }).then(result=>{
+  },options.aiFunction).then(result=>{
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result
@@ -429,13 +436,13 @@ export async function answerWithOpenAi(opts: {
     },
     ...(threadId ? { commit: async (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => {
       await conversations.commit({ projectId: opts.projectId, userId: opts.userId, threadId,
-        turnId: opts.clientTurnId, answer: result.answer, evidence: result.evidence,
+        turnId: opts.clientTurnId, answer: withResendNotice(result.answer), evidence: result.evidence,
         providerResponseId: result.providerResponseId ?? null, generation })
     } } : {}),
   })
   await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
-    recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
-  return result
+    recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics,uncertainResends:journal?.uncertainResends()??0,reusedModelCalls:journal?.reusedModelCalls()??0})
+  return result.ok ? { ...result, answer: withResendNotice(result.answer) } : result
   }catch(error){
     rethrowContinuation(error)
     await metrics.finish({ok:false,writes:writer?.receipts.length??0,uncertain:writer?.uncertain,cad:cadAssistant.metrics})
