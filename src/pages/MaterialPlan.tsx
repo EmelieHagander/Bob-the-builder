@@ -13,9 +13,10 @@ import type {
 } from '../data/materialPlanning'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
-import { Loading, useAsync } from '../components/ui'
+import { Icon, Loading, useAsync } from '../components/ui'
 import { SheetLayerFields, SheetLayerPurchaseSummary, SheetLayerSummary } from '../components/SheetLayerFields'
 import { SHEET_LAYER_METHOD, sheetLayerForm, sheetLayerInput } from '../data/sheetLayers'
+import { formatDateTime } from '../lib/format'
 
 const UNIT_LABELS: Record<QuantityUnit, string> = { pcs: 'pcs', m: 'm', m2: 'm²', m3: 'm³', kg: 'kg', l: 'l' }
 const STOCK_LABELS: Record<StockStatus, string> = { available: 'Available', inspect: 'Inspect first', unavailable: 'Unavailable' }
@@ -330,7 +331,7 @@ function RequirementVersionDialog({ projectId, id, revision, scopeArea, edit, ar
   return <Modal title={record ? `${record.name} · Version ${record.revision}` : 'Material requirement version'} onClose={onClose}>
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : record && <>
       <Calculation value={record} />
-      <div className="fact-source"><strong>Lineage</strong><p>{record.solutionTitle} · solution version {record.solutionRevision} · target decision {record.targetRevision}</p>{record.artifactTitle && <p>{constructionBlank(record) ? 'Construction' : 'Drawing'}: {record.artifactTitle} · Version {record.artifactRevision}</p>}<span>{record.actor} · {new Date(record.recordedAt).toLocaleString()} · {record.reason}</span></div>
+      <div className="fact-source"><strong>Lineage</strong><p>{record.solutionTitle} · solution version {record.solutionRevision} · target decision {record.targetRevision}</p>{record.artifactTitle && <p>{constructionBlank(record) ? 'Construction' : 'Drawing'}: {record.artifactTitle} · Version {record.artifactRevision}</p>}<span>{record.actor} · {formatDateTime(record.recordedAt)} · {record.reason}</span></div>
       {record.assumptions && <p><strong>Assumptions:</strong> {record.assumptions}</p>}
       <StaleNotice value={record} />
       <div className="fact-details"><h4>Saved allocations</h4>{!record.stock.length && !record.components.length && <p>No stock or reusable component allocated.</p>}{record.stock.map(item => <p key={item.id}>{item.name}: {formatQuantity(item.quantity, item.unit)} from stock version {item.revision}{item.latestRevision !== item.revision ? ' · newer stock version exists' : ''}</p>)}{record.components.map(item => <p key={item.id}>{item.name}: {item.quantity} pcs from component version {item.revision}{item.latestRevision !== item.revision ? ' · newer component version exists' : ''}</p>)}</div>
@@ -343,7 +344,7 @@ function History({ projectId, record, onClose, onVersion }: { projectId: string;
   const [attempt, setAttempt] = useState(0)
   const { data, loading, error } = useAsync(() => db.getMaterialRequirementHistory(projectId, record.id, offset), [projectId, record.id, offset, attempt])
   return <Modal title="Material requirement history" onClose={onClose}>
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : <><ol className="fact-history">{data?.items.map(item => <li key={item.revision} className="card fact-card"><h4>{item.name} · Version {item.revision}</h4><p>{formatQuantity(item.purchaseQuantity, item.unit)} {constructionBlank(item) ? 'unallocated blanks' : 'to buy'} · {item.reason}</p><p className="foundation-hint">{item.actor} · {new Date(item.recordedAt).toLocaleString()}</p><button className="btn" onClick={() => onVersion(item.revision)}>View version</button></li>)}</ol><Pager offset={offset} size={12} more={Boolean(data?.hasMore)} move={setOffset} /></>}
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : <><ol className="fact-history">{data?.items.map(item => <li key={item.revision} className="card fact-card"><h4>{item.name} · Version {item.revision}</h4><p>{formatQuantity(item.purchaseQuantity, item.unit)} {constructionBlank(item) ? 'unallocated blanks' : 'to buy'} · {item.reason}</p><p className="foundation-hint">{item.actor} · {formatDateTime(item.recordedAt)}</p><button className="btn" onClick={() => onVersion(item.revision)}>View version</button></li>)}</ol><Pager offset={offset} size={12} more={Boolean(data?.hasMore)} move={setOffset} /></>}
   </Modal>
 }
 
@@ -419,9 +420,10 @@ export function MaterialPlan() {
   const scopeLabel = activeArea?.name ?? 'Project'
   const scopeQuery = areaFilter ? `?area=${encodeURIComponent(areaFilter)}` : ''
 
-  return <div className="page material-plan foundation-actions">
-    <div className="page-head"><div>{activeArea ? <Link to={`/areas/${activeArea.slug}`} className="back-link">{activeArea.name}</Link> : <Link to="/shopping" className="back-link">Shopping</Link>}<h1 className="page-title">Material plan</h1><p className="page-sub">Keep required, already available and still-to-buy quantities connected to the exact selected target for {scopeLabel}.</p></div><div className="foundation-actions"><button className="btn btn-primary" disabled={!selected} onClick={() => setEditor('new')}>Add requirement</button><button className="btn" disabled={!selected || !generatedArtifacts.length} onClick={() => setCalculator(true)}>Calculate from drawing</button></div></div>
-    {loading && !data ? <Loading /> : error && !data ? <Retry error={error} retry={() => setAttempt(value => value + 1)} label="Reload material plan" /> : data && <>
+  return <div className="page material-plan">
+    <Link to={activeArea ? `/areas/${activeArea.slug}` : '/shopping'} className="btn" style={{ marginBottom: 'var(--space-3)' }}><Icon name="arrow-left" size={16} /> {activeArea ? activeArea.name : 'Shopping'}</Link>
+    <div className="page-head"><div><h1 className="page-title">Material plan</h1><p className="page-sub">Keep required, already available and still-to-buy quantities connected to the exact selected target for {scopeLabel}.</p></div><div className="foundation-actions"><button className="btn btn-primary" disabled={!db.authEnabled() || !selected} onClick={() => setEditor('new')}>Add requirement</button><button className="btn" disabled={!selected || !generatedArtifacts.length} onClick={() => setCalculator(true)}>Calculate from drawing</button></div></div>
+    {!db.authEnabled() ? <p className="card fact-card">This demo does not save material plans. Open a connected project to use them.</p> : loading && !data ? <Loading /> : error && !data ? <Retry error={error} retry={() => setAttempt(value => value + 1)} label="Reload material plan" /> : data && <>
       <div className="card" style={{ padding: 'var(--panel-padding)', marginTop: 'var(--section-gap)' }}><h2 style={{ marginTop: 0 }}>{activeArea ? `${activeArea.name} target` : 'Project target'}</h2>{selected ? <><p><strong>{selected.title} · Version {selected.revision}</strong></p><p>{data.target.inherited ? 'Inherited from Project. ' : ''}Target decision {data.target.decision.revision}. New material versions pin this exact decision for this scope.</p><Link className="btn" to={`/solutions${scopeQuery}`}>Review target</Link></> : <><p>Choose a target for {activeArea?.name ?? 'the Project'} before recording material requirements.</p><Link className="btn btn-primary" to={`/solutions${scopeQuery}`}>Choose target</Link></>}</div>
 
       <StockSection projectId={projectId} areas={data.areas} version={version} bump={bump} />

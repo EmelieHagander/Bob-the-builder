@@ -25,6 +25,7 @@ import { generationGeometry, STUD_WALL_ROLE_LABELS, StudWallPreview } from '../c
 import { RoomLayoutDrawing } from '../components/RoomLayoutDrawing'
 import { StorageBoxDrawing } from '../components/StorageBoxDrawing'
 import { StorageBoxEditor } from '../components/StorageBoxEditor'
+import { formatDateTime } from '../lib/format'
 
 const KIND_LABELS = { plan: 'Plan', elevation: 'Elevation', section: 'Section', detail: 'Detail' } as const
 const STATUS_LABELS = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' } as const
@@ -104,7 +105,7 @@ function VersionDetails({ value, target }: { value: ArtifactVersion; target: Sel
     <p>{value.description}</p>
     <DrawingSourceNotice source={value.sourceStatus} />
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
-    <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
+    <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
     {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
@@ -316,7 +317,7 @@ function History({ projectId, record, target, onClose, onVersion }: {
         <p>{STATUS_LABELS[item.status]} · {item.reason}</p>
         <div className="foundation-actions">{item.generator && <span className="image-purpose">Generated</span>}</div>
         <TargetLineage value={item} current={target} />
-        <p className="foundation-hint">{item.actor} · {new Date(item.recordedAt).toLocaleString()}</p>
+        <p className="foundation-hint">{item.actor} · {formatDateTime(item.recordedAt)}</p>
         <button className="btn" onClick={() => onVersion(item.id, item.revision)}>View version</button>
       </li>)}</ol>
       <Pager offset={offset} more={Boolean(data?.hasMore)} move={setOffset} />

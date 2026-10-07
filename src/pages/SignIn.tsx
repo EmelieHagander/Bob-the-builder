@@ -77,8 +77,8 @@ export function SignIn() {
           </div>
         </div>
 
-        <p className="install-signin" lang="sv">
-          <Link className="btn" to="/install"><Icon name="device-mobile" size={18} /> Installera appen</Link>
+        <p className="install-signin">
+          <Link className="btn" to="/install"><Icon name="device-mobile" size={18} /> Install the app</Link>
         </p>
 
         <div className="card" style={{ padding: 'var(--panel-padding)' }}>

@@ -161,11 +161,11 @@ on conflict (id) do nothing;
 -- ─────────────── events ───────────────
 
 insert into bob.events (id, project_id, slug, title, day, time, place, spots, status, food, sort_order) values
-  ('e_rabygge', 'p_skogsstuga', 'rabygge',        'Råbygge — walls & roof',  'Lör 5 juli',  '09:00–16:00', 'Skogsstuga, Dalarna', '12 / 20', 'going',
+  ('e_rabygge', 'p_skogsstuga', 'rabygge',        'Råbygge — walls & roof',  'Sat 5 July',  '09:00–16:00', 'Skogsstuga, Dalarna', '12 / 20', 'going',
    'Lunch 12:30 — köttbullar & potatis (veg + GF sorted) · Fika 15:00', 1),
-  ('e_sauna',   'p_skogsstuga', 'sauna-cladding', 'Sauna cladding day',      'Sön 13 juli', '10:00–15:00', 'Skogsstuga, Dalarna', '4 / 8',   'open',
+  ('e_sauna',   'p_skogsstuga', 'sauna-cladding', 'Sauna cladding day',      'Sun 13 July', '10:00–15:00', 'Skogsstuga, Dalarna', '4 / 8',   'open',
    'Lunch: soppa & smörgås (GF bread set aside)', 2),
-  ('e_garden',  'p_skogsstuga', 'garden-porch',   'Garden & porch finish',   'Lör 26 juli', '09:00–14:00', 'Skogsstuga, Dalarna', '2 / 10',  'open',
+  ('e_garden',  'p_skogsstuga', 'garden-porch',   'Garden & porch finish',   'Sat 26 July', '09:00–14:00', 'Skogsstuga, Dalarna', '2 / 10',  'open',
    'Grilllunch by the porch', 3)
 on conflict (id) do nothing;
 

@@ -84,19 +84,17 @@ export function AccountDashboard() {
         </div>
         <div className="cluster no-print">
           {!active && db.authEnabled() && <button className="btn" onClick={() => void db.signOut()}><Icon name="sign-out" size={16} /> Sign out</button>}
-          {active && <button className="ui-icon-button" aria-label="Close project" title="Close project" onClick={() => { db.setActiveProject(null); navigate('/') }}>
-            <Icon name="sign-out" size={18} />
-          </button>}
-          <Link to="/account/buildings" className="ui-icon-button" aria-label="Buildings & family" title="Buildings & family"><Icon name="house" size={18} /></Link>
           <Link to="/account/calendar" className="btn">
             <Icon name="calendar-dots" size={16} /> Calendar
           </Link>
-          <Link to="/account/settings" className="ui-icon-button" aria-label="Settings" title="Settings">
-            <Icon name="gear-six" size={18} />
-          </Link>
-          <button className="ui-icon-button" aria-label="Invite" title="Invite" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
-            <Icon name="user-plus" size={18} />
+          <Link to="/account/buildings" className="btn"><Icon name="house" size={16} /> Buildings & family</Link>
+          <button className="btn" onClick={() => setModal({ kind: 'invite' })} disabled={(projects ?? []).length === 0}>
+            <Icon name="user-plus" size={16} /> Invite
           </button>
+          <Link to="/account/settings" className="btn"><Icon name="gear-six" size={16} /> Settings</Link>
+          {active && <button className="btn" onClick={() => { db.setActiveProject(null); navigate('/') }}>
+            <Icon name="x-circle" size={16} /> Close project
+          </button>}
           <button className="btn btn-primary" onClick={() => setModal({ kind: 'new' })}>
             <Icon name="plus" weight="bold" size={15} /> New project
           </button>
