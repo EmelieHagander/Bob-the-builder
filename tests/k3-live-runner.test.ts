@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback, runAuthenticatedK4PackPurchase, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback, runAuthenticatedK4PackPurchase, runAuthenticatedK4PackReadback, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
-import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, K4_SHELF_REQUIREMENT, K4_PACK_RETRY_TURN, K4_PACK_LEFTOVER_NEED, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, K4_SHELF_REQUIREMENT, K4_PACK_RETRY_TURN, K4_PACK_TURN, K4_PACK_LEFTOVER_NEED, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
 
 const NOW = Date.UTC(2026, 9, 5)
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -41,7 +41,7 @@ function packRows() {
 function fixture(change = {}) {
   const calls = [], probes = [], logs = [], signouts = []
   const user = { id: K3_MEMBER, email: 'private@example.test', email_confirmed_at: 'confirmed', is_anonymous: false, ...change.user }
-  const prior = change.pack ? K4_PACK_RETRY_TURN : change.readback ? K4_SAVED_CUT_PLAN_TURN : change.cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
+  const prior = change.packReadback ? K4_PACK_TURN : change.pack ? K4_PACK_RETRY_TURN : change.readback ? K4_SAVED_CUT_PLAN_TURN : change.cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : change.cutFit ? K4_CUT_FIT_PREVIOUS_TURN : change.recovery ? K4_RECOVERY_TURN : change.k4 ? K4_PREVIOUS_TURN : K3_PREVIOUS_TURN
   const results = {
     projects: { data: { id: K3_PROJECT, name: 'K2 model acceptance fixture', type: 'Verification' } },
     bob_threads: { data: { id: 'thread' } },
@@ -266,5 +266,16 @@ test('pack-purchase run pins the saved plan and leftover screw need, requires no
  for(const results of [{...saved,supplier_articles:{data:[{id:'existing'}]}},{...saved,supplier_articles:{error:{message:'private'}}},{...saved,material_cut_plans:{data:[]}},{...saved,bob_messages:{data:{turn_id:K4_SAVED_CUT_PLAN_TURN,delivery_state:'completed'}}},{...saved,...cutFitRows()}]){
   const bad=fixture({k4:true,readback:true,pack:true,results}),stopped=await runAuthenticatedK4PackPurchase(configK4(),bad.deps)
   assert.equal(stopped.passed,false);assert.equal(bad.probes.length,0);assert.doesNotMatch(JSON.stringify(stopped),/private/)
+ }
+})
+
+test('pack readback rechecks the saved pack turn read-only and never submits without the saved product',async()=>{
+ const saved={material_cut_plans:{data:[{id:K4_SAVED_CUT_PLAN_ID,current_revision:1,artifact_id:K4_SOURCE}]},supplier_articles:{data:[{id:'saved'}]}}
+ const f=fixture({k4:true,readback:true,pack:true,packReadback:true,results:saved})
+ const r=await runAuthenticatedK4PackReadback(configK4(),f.deps)
+ assert.equal(r.passed,true);assert.equal(f.probes.length,1);assert.equal(f.probes[0].BOB_K4_VERIFY_ONLY,'pack-purchase')
+ for(const results of [{...saved,supplier_articles:{data:[]}},{...saved,bob_messages:{data:{turn_id:K4_PACK_RETRY_TURN,delivery_state:'completed'}}}]){
+  const bad=fixture({k4:true,readback:true,pack:true,packReadback:true,results}),stopped=await runAuthenticatedK4PackReadback(configK4(),bad.deps)
+  assert.equal(stopped.passed,false);assert.equal(bad.probes.length,0)
  }
 })

@@ -12,6 +12,12 @@ on:
         type: choice
         default: disposable-fixtures-only
         options: [disposable-fixtures-only]
+      mode:
+        description: verify-saved rechecks the saved pack turn without a model request; submit-once pays for one new turn
+        required: true
+        type: choice
+        default: verify-saved
+        options: [verify-saved, submit-once]
 
 permissions:
   contents: read
@@ -45,6 +51,7 @@ jobs:
           BOB_K4_PROJECT_ID: p_43702f4cbdfb40f0907f5cd0c12a5143
           BOB_K4_LIVE_CONFIRM: ${{ inputs.scope }}
           BOB_K4_REPORT: test-results/live-pack-purchase.json
+          BOB_K4_PACK_MODE: ${{ inputs.mode }}
         run: node --import tsx scripts/run-live-pack-purchase.mjs
       - name: Retain the pack report for manual semantic review
         if: ${{ !cancelled() }}
