@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
+import { runAuthenticatedK3, runAuthenticatedK4, runAuthenticatedK4Recovery, runAuthenticatedK4CutFit, runAuthenticatedK4CutPlan, runAuthenticatedK4CutPlanReadback, runAuthenticatedK4PackPurchase, K3_PROJECT, K3_MEMBER, K3_PREVIOUS_TURN, K4_PREVIOUS_TURN, K4_DRAWING, K4_SOURCE } from '../scripts/run-live-construction-drawing.mjs'
 import { K4_RECOVERY_TURN, K4_SAVED_REQUIREMENT } from '../scripts/k4-recovery-checkpoint.mjs'
 import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, K4_SHELF_REQUIREMENT, assertK4CutFitCheckpoint } from '../scripts/k4-cut-fit-checkpoint.mjs'
 
@@ -247,5 +247,18 @@ test('read-only saved-plan verification pins the completed turn and exact existi
  for(const results of [{material_cut_plans:{data:[]}},{material_cut_plans:{data:[{id:'wrong-plan',current_revision:1,artifact_id:K4_SOURCE}]}},{bob_messages:{data:{turn_id:K4_CUT_PLAN_PREVIOUS_TURN,delivery_state:'completed'}}}]){
   const bad=fixture({k4:true,readback:true,results}),stopped=await runAuthenticatedK4CutPlanReadback(configK4(),bad.deps)
   assert.equal(stopped.passed,false);assert.equal(bad.probes.length,0)
+ }
+})
+
+test('pack-purchase run pins the saved plan, requires no existing product and submits through the probe once',async()=>{
+ const saved={material_cut_plans:{data:[{id:K4_SAVED_CUT_PLAN_ID,current_revision:1,artifact_id:K4_SOURCE}]},supplier_articles:{data:[]}}
+ const f=fixture({k4:true,readback:true,results:saved})
+ const r=await runAuthenticatedK4PackPurchase(configK4(),f.deps)
+ assert.equal(r.passed,true);assert.equal(f.probes.length,1);assert(!('BOB_K4_VERIFY_ONLY' in f.probes[0]))
+ assert.equal(f.probes[0].BOB_K4_REPORT,'test-results/live-pack-purchase.json')
+ assert(!('BOB_USER_PASSWORD' in f.probes[0]));assert(!('BOB_USER_EMAIL' in f.probes[0]));assert.deepEqual(f.signouts,[{scope:'local'}])
+ for(const results of [{...saved,supplier_articles:{data:[{id:'existing'}]}},{...saved,supplier_articles:{error:{message:'private'}}},{...saved,material_cut_plans:{data:[]}},{...saved,bob_messages:{data:{turn_id:K4_CUT_PLAN_PREVIOUS_TURN,delivery_state:'completed'}}}]){
+  const bad=fixture({k4:true,readback:true,results}),stopped=await runAuthenticatedK4PackPurchase(configK4(),bad.deps)
+  assert.equal(stopped.passed,false);assert.equal(bad.probes.length,0);assert.doesNotMatch(JSON.stringify(stopped),/private/)
  }
 })
