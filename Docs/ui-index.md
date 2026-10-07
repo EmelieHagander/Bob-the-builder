@@ -57,6 +57,16 @@ to build?** (`ProjectStart`): the idea goes into the Bob composer as an unsent
 draft, never auto-sent, followed by an optional manual path (photos,
 measurements, Areas, build day).
 
+**Start this build** moves a Project into Build. It is a person's explicit
+action, never automatic. While the Project is not yet Build or Complete:
+with an upcoming build day, Project Home leads with a large **Start this build**
+card and starting opens Today; without one, a small header button appears once
+the Project reaches Planning. In Build, Project Home leads with a **Build mode**
+card (next build day, crew, **What needs doing** → Today), drawings and the Plan
+stay visible, and measurements, materials, target and project focus fold under
+**Planning tools**. The desktop sidebar moves Today next to Project. Covered by
+`scripts/check-build-start-browser.mjs`.
+
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
 separation remain visible. Presentation changes never delete physical records.
