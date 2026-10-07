@@ -1,6 +1,6 @@
 import type { OpenAIServiceResponse } from './openai-service.ts'
 
-const reasons = ['usd_limit','call_limit','unpriced_usage','pending_outcome','context_cleared','unknown'] as const
+const reasons = ['usd_limit','call_limit','unpriced_usage','pending_outcome','context_cleared','review_reserve','unknown'] as const
 export type BobBudgetStop = {
  scope:'turn'|'drawing_request'; reasons:(typeof reasons[number])[];
  calls?:number; call_limit?:number; spent_usd?:number; usd_limit?:number; pending_calls?:number; unpriced?:boolean;
@@ -28,6 +28,7 @@ export class BobBudgetError extends Error {
 export function budgetStopMessage(stop:BobBudgetStop|undefined) {
  if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Ritförsöket pausades eftersom kostnaden eller utfallet för ett tidigare modellanrop ännu inte är klarlagt.'
  if(stop?.reasons.includes('context_cleared'))return 'Ritförsöket pausades eftersom ett tidigare arbetsresultat inte längre finns kvar i samtalet.'
+ if(stop?.reasons.includes('review_reserve'))return 'Ritförsöket stoppades innan granskning och svar, eftersom resten av turens budget är reserverad för dem.'
  if(stop?.reasons.includes('usd_limit'))return 'Ritförsöket stoppades av kostnadsgränsen.'
  if(stop?.reasons.includes('call_limit'))return 'Ritförsöket stoppades av gränsen för antal modellanrop.'
  return 'Ritförsöket stoppades av en resursgräns; den exakta orsaken är inte tillgänglig.'
@@ -35,6 +36,7 @@ export function budgetStopMessage(stop:BobBudgetStop|undefined) {
 export function budgetResumeAction(stop:BobBudgetStop|undefined) {
  if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Reconcile the prior provider outcome and cost before another dispatch. Do not release or replace its reservation.'
  if(stop?.reasons.includes('context_cleared'))return 'Restore the same request through its existing context-recovery path. A new request must not bypass previous accounting.'
+ if(stop?.reasons.includes('review_reserve'))return 'Design/research reached the turn limit minus the review/delivery reserve. Review or deliver what exists; do not dispatch more design work in this turn.'
  if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return 'Review the recorded allocation at the indicated scope and preserve the same request. Resume only after an authorised budget change; do not retry unchanged or increase limits automatically.'
  return 'Inspect the current budget boundary before retrying. The unavailable diagnostic is not evidence that more money or more input is needed.'
 }

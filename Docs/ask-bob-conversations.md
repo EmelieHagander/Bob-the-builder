@@ -204,6 +204,12 @@ record identity; it does not certify all task semantics. CAD review is a separat
 concept-quality signal. Unknown intent/cost remains unknown. Actual user follow-up
 frequency and construction correctness are not inferred from these counters.
 
+**Turn review reserve (K5, code 2026-10-07).** The in-memory turn threshold ($1 / 24
+calls) holds back $0.15 and 3 calls for `cad-reviewer` and `bob-delivery-language`.
+Other roles stop at $0.85 / 21 calls with budget-stop reason `review_reserve`; reserved
+roles may use the whole limit, which still stops them. The drawing-request SQL budget is
+unchanged.
+
 Elapsed time runs from first admitted execution through the final result, including
 worker waits but excluding initial queue delay. `scripts/report-bob-execution.sql`
 reports outcome distribution, p50/p95 time, re-sent model calls and per-role usage/cost,

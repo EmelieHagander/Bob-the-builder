@@ -7,7 +7,7 @@ import {createDrawingBudget} from '../supabase/functions/_shared/drawing-budget.
 const reply=(cost:number|null)=>({success:true,data:'ok',model:'fixture',estimatedCostUsd:cost,usage:{input_tokens:1,output_tokens:1,total_tokens:2}})
 test('turn stops preserve every exhausted constraint, without another model call',async()=>{
  for(const [cost,limit,expected] of [[1.1,24,['usd_limit']],[0,1,['call_limit']],[null,24,['unpriced_usage']],[1.1,1,['usd_limit','call_limit']]] as const){
-  const budget=createBobModelBudget(1,limit);await budget.run(async()=>reply(cost))
+  const budget=createBobModelBudget(1,limit,{usd:0,calls:0,roles:[]});await budget.run(async()=>reply(cost))
   const stopped=await budget.run(async()=>{throw new Error('must not dispatch')})
   assert.deepEqual(readBudgetStop(stopped)?.reasons,expected)
   assert.equal(readBudgetStop(stopped)?.scope,'turn');assert.equal(readBudgetStop(stopped)?.calls,1)

@@ -117,7 +117,7 @@ export async function answerWithOpenAi(opts: {
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  }).then(result=>{
+  },options.aiFunction).then(result=>{
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result

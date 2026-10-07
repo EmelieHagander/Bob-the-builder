@@ -39,3 +39,21 @@ test('failed charged results rebuild the spending threshold across durable repla
  }
  await run();await run();assert.equal(calls,1)
 })
+
+test('design work stops at the limit minus the review reserve; review and delivery can still run from it',async()=>{
+ const budget=createBobModelBudget(1,24)
+ assert((await budget.run(async()=>reply(.86),'cad-designer')).success)
+ const held=await budget.run(async()=>{throw new Error('must not dispatch design')},'cad-designer')
+ assert.equal(held.error,'turn_budget_exhausted')
+ const stop=(held as any).budget_stop
+ assert.deepEqual(stop.reasons,['usd_limit','review_reserve']);assert.equal(stop.usd_limit,.85)
+ assert((await budget.run(async()=>reply(.1),'cad-reviewer')).success)
+ assert((await budget.run(async()=>reply(.05),'bob-delivery-language')).success)
+ const spent=await budget.run(async()=>{throw new Error('must not dispatch')},'bob-delivery-language')
+ assert.deepEqual((spent as any).budget_stop.reasons,['usd_limit'],'the whole turn limit still holds for reserved roles')
+ const calls=createBobModelBudget(1,5)
+ for(let i=0;i<2;i++)assert((await calls.run(async()=>reply(0),'ask-bob')).success)
+ assert.deepEqual(((await calls.run(async()=>reply(0),'ask-bob')) as any).budget_stop.reasons,['call_limit','review_reserve'])
+ for(let i=0;i<3;i++)assert((await calls.run(async()=>reply(0),'cad-reviewer')).success)
+ assert.deepEqual(((await calls.run(async()=>reply(0),'cad-reviewer')) as any).budget_stop.reasons,['call_limit'])
+})
