@@ -62,7 +62,7 @@ action, never automatic. While the Project is not yet Build or Complete:
 with an upcoming build day, Project Home leads with a large **Start this build**
 card and starting opens Today; without one, a small header button appears once
 the Project reaches Planning. In Build, Project Home leads with a **Build mode**
-card (next build day, crew, **What needs doing** → Today), drawings and the Plan
+card (next build day on one line, **What needs doing** → Today), drawings and the Plan
 stay visible, and measurements, materials, target and project focus fold under
 **Planning tools**. The desktop sidebar moves Today next to Project. Covered by
 `scripts/check-build-start-browser.mjs`.

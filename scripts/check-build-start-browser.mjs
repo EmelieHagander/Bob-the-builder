@@ -73,6 +73,7 @@ try {
     assert.equal(await page.getByRole('button', { name: 'Start this build' }).count(), 0, 'Start disappears once building')
     const tools = page.locator('details.planning-tools')
     assert.equal(await tools.getAttribute('open'), null, 'Planning tools are folded in Build mode')
+    await page.screenshot({ path: `test-results/build-mode-top-${width}.png` })
     await tools.locator(':scope > summary').click()
     await tools.getByRole('link', { name: 'Measurements & existing parts' }).waitFor()
     if (width >= 860) {

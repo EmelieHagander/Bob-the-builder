@@ -4,7 +4,7 @@ import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
 import { useEffect, useState, type ReactNode } from 'react'
-import type { BuildEvent, Person } from '../data/types'
+import type { BuildEvent } from '../data/types'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../data/database'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
@@ -132,7 +132,7 @@ export function ProjectHome() {
       </button>
     </section>}
 
-    {building && <BuildFocus next={next} people={resolve(next?.attendeeIds ?? [])} />}
+    {building && <BuildFocus next={next} />}
 
     {!building && areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
 
@@ -281,17 +281,15 @@ function PlanningTools({ folded, children }: { folded: boolean; children: ReactN
   </details>
 }
 
-function BuildFocus({ next, people }: { next: BuildEvent | null | undefined; people: Person[] }) {
+// Compact on purpose: one line for the build day keeps the Plan on a small
+// phone's opening screen.
+function BuildFocus({ next }: { next: BuildEvent | null | undefined }) {
   return <section className="card build-focus" aria-labelledby="build-focus-title">
-    <div className="build-focus-label"><Icon name="hammer" size={16} /> Build mode</div>
-    {next ? <>
-      <h2 id="build-focus-title" className="font-display">{next.title}</h2>
-      <p className="foundation-hint">{formatEventDay(next.day)}{next.time ? ` · ${next.time}` : ''}{next.place ? ` · ${next.place}` : ''}</p>
-      {people.length > 0 && <AvatarStack people={people} max={6} />}
-    </> : <>
-      <h2 id="build-focus-title" className="font-display">No build day scheduled</h2>
-      <p className="foundation-hint">Work can still go ahead. Plan a build day so people know when to come.</p>
-    </>}
+    <div className="build-focus-head">
+      <h2 id="build-focus-title" className="build-focus-label"><Icon name="hammer" size={16} /> Build mode</h2>
+      {next && <span className="build-focus-next">{next.title} · {formatEventDay(next.day)}</span>}
+    </div>
+    {!next && <p className="foundation-hint">No build day scheduled. Work can still go ahead; plan one so people know when to come.</p>}
     <div className="cluster build-focus-actions">
       <Link className="btn btn-primary" to="/today"><Icon name="sun-horizon" size={16} /> What needs doing</Link>
       {next ? <Link className="btn" to={`/events/${next.slug}`}>Build day</Link> : <Link className="btn" to="/events">Plan a build day</Link>}
