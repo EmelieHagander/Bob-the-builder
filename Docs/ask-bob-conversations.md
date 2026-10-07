@@ -213,6 +213,17 @@ delivery event records `uncertain_resends`. OpenAI background mode, which avoids
 re-send entirely, stays behind the receiver rollout in
 [shared AI background](shared-ai-background.md#rollout-and-rollback).
 
+**Retry reuses paid model work (K5, code 2026-10-07; migration
+`20261007180000_bob_retry_model_reuse.sql` not yet applied).** When a chat job finishes
+as failed, its successful model results (`model:<function>:<position>` steps whose
+result has `success: true`) are kept privately for that owner, thread and turn. An
+explicit retry of the same turn answers a model call from them only when the input
+fingerprint is byte-identical and the call has no retry markers; tools, writes and any
+changed input still run normally. The kept results are deleted when the turn completes,
+with the thread, or after seven days. The delivery event records `reused_model_calls`.
+Jobs that expire without a worker finishing them keep nothing. Drawing requests keep
+their own model-result ledger.
+
 **Turn review reserve (K5, code 2026-10-07).** The in-memory turn threshold ($1 / 24
 calls) holds back $0.15 and 3 calls for `cad-reviewer` and `bob-delivery-language`.
 Other roles stop at $0.85 / 21 calls with budget-stop reason `review_reserve`; reserved

@@ -44,7 +44,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
         duration_ms:Math.round(number(input.ms)),input_tokens:null,output_tokens:null,cost_usd:null,
         counts:{tool:code(input.name,'invalid_name'),step:number(input.step)}})
     },
-    async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;uncertainResends?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
+    async finish(input:{ok:boolean;partial?:boolean;uncertain?:boolean;recovered?:boolean;writes:number;error?:string;uncertainResends?:number;reusedModelCalls?:number;cad?:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number;review_passed:boolean}}){
       const end=turn?.end
       const status=!input.ok?'failed':input.uncertain?'uncertain':input.recovered?'recovered':input.partial?'partial'
         :end==='asked'?'asked':end==='step_budget'||end==='time_budget'?end:input.writes>0?'saved':input.cad?.review_passed?'candidate_ready':'answered'
@@ -53,7 +53,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,saved_records:number(input.writes),
           cad_consultations:input.cad?.consultations??0,cad_renders:input.cad?.renders??0,cad_input_corrections:input.cad?.input_corrections??0,
           cad_reviews:input.cad?.reviews??0,cad_review_rejections:input.cad?.review_rejections??0,cad_review_unavailable:input.cad?.review_unavailable??0,cad_review_passed:input.cad?.review_passed??false,
-          uncertain_resends:number(input.uncertainResends)}})
+          uncertain_resends:number(input.uncertainResends),reused_model_calls:number(input.reusedModelCalls)}})
     },
   }
 }

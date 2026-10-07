@@ -30,6 +30,8 @@ export interface BobJournal {
   remaining(): number
   /** Re-sends after an unknown provider outcome, recorded across all segments. */
   uncertainResends(): number
+  /** Model calls answered from an earlier failed attempt of this turn. */
+  reusedModelCalls(): number
 }
 /** JSONB checkpoints reorder object keys. Return the same JSON representation
  * both before and after persistence, including nested structured model output.
@@ -56,7 +58,10 @@ export async function fingerprint(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical(value))))
   return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('')
 }
-export function createBobJournal(store: JournalStore, segmentDeadline: number, now = Date.now): BobJournal {
+/** reusable: successful model results from an earlier failed attempt of the
+ * same turn, keyed by exact input fingerprint. A match is recorded as this
+ * job's own step without dispatching; anything else runs normally. */
+export function createBobJournal(store: JournalStore, segmentDeadline: number, now = Date.now, reusable: ReadonlyMap<string, unknown> = new Map()): BobJournal {
   const entries = new Map(store.entries.map(e => [e.key, e]))
   const positions = new Map<string, number>()
   let stopped: BobContinuation | undefined
@@ -70,6 +75,9 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
     },
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
+    reusedModelCalls() {
+      return [...entries.values()].filter(e => (e.value as { reused?: unknown } | null)?.reused === true).length
+    },
     uncertainResends() {
       return [...entries.values()].filter(e => /:retry:\d+$/.test(e.key)
         && UNCERTAIN_RETRY_REASONS.has(String((e.value as { reason?: unknown } | null)?.reason))).length
@@ -104,6 +112,14 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         if (entries.has(marker.key)) { stopped = new BobContinuation('stop', 'image_outcome_unknown'); throw stopped }
         try { await store.save(marker) } catch { stopped = new BobContinuation('yield'); throw stopped }
         entries.set(marker.key, marker)
+      }
+      const earlier = stream.startsWith('model:') && !retries.length ? reusable.get(hash) as { ok?: unknown; result?: unknown } | undefined : undefined
+      if (earlier?.ok === true) {
+        const entry = { key, fingerprint: hash, value: { ok: true, result: earlier.result, reused: true } }
+        try { await store.save(entry) }
+        catch { stopped = new BobContinuation('yield', 'checkpoint_unavailable'); throw stopped }
+        entries.set(key, entry)
+        return stableJsonValue(earlier.result) as T
       }
       let value: T | undefined, failure: string | undefined
       try { value = await operation({ key, fingerprint: hash, attempt: retries.length }) }

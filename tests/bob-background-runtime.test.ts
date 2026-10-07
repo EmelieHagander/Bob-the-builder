@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { BobContinuation, createBobJournal, fingerprint, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { sealCredential, openCredential } from '../supabase/functions/_shared/bob-job-credentials.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
 import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
@@ -165,4 +165,20 @@ test('opted-in HTTP requests return accepted without running the synchronous mod
   assert.equal(sync, 0); assert.equal(queued, 1)
   assert.equal((await handler(request('true'))).status, 400)
   assert.equal((await handler(request(false))).status, 503); assert.equal(sync, 1)
+})
+
+test('a retried turn reuses an earlier successful model result with identical input and dispatches the rest', async () => {
+  const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+  const same = { input: 'same' }, reusable = new Map([[await fingerprint(same), { ok: true, result: { success: true, text: 'paid once' } }]])
+  let sent = 0
+  const journal = createBobJournal(store, Infinity, Date.now, reusable)
+  assert.deepEqual(await journal.run('model:ask-bob', same, async () => { sent++; return { success: true, text: 'again' } }), { success: true, text: 'paid once' })
+  assert.deepEqual(await journal.run('model:ask-bob', { input: 'changed' }, async () => { sent++; return { success: true, text: 'new' } }), { success: true, text: 'new' })
+  // Tools are never answered from the earlier attempt.
+  await journal.run('tool:lookup', same, async () => { sent++; return 'fresh' })
+  assert.equal(sent, 2)
+  assert.equal(journal.reusedModelCalls(), 1)
+  // The reused result is this job's own step: a later segment replays it, not the map.
+  assert.deepEqual(await createBobJournal(store, Infinity).run('model:ask-bob', same, async () => { sent++; return null }), { success: true, text: 'paid once' })
+  assert.equal(sent, 2)
 })

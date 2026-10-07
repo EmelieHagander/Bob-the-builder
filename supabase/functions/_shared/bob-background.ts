@@ -93,9 +93,18 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       phase = 'authentication'
       const auth = await caller.auth.getUser(token)
       if (auth.error || auth.data.user?.id !== job.userId) throw new Error('unauthorized')
+      // An explicit retry of a failed turn reuses its paid model results with
+      // identical input. Unavailable means the ordinary paid path, never a guess.
+      let reusable = new Map<string, unknown>()
+      if (!job.drawingRequestId) {
+        try {
+          const rows = await s.rpc('bob_job_reusable_models', args)
+          if (Array.isArray(rows)) reusable = new Map(rows.filter((r: any) => typeof r?.fingerprint === 'string').map((r: any) => [r.fingerprint, r.value]))
+        } catch { /* reuse is an optimisation */ }
+      }
       const journal = createBobJournal({ entries: job.entries, save: async entry => {
         await s.rpc('bob_save_job_step', { ...args, p_key: entry.key, p_fingerprint: entry.fingerprint, p_value: entry.value })
-      } }, started + 140000)
+      } }, started + 140000, Date.now, reusable)
       phase = 'answer'
       // Content-free progress for the owner's chat, at most every 1.5 s. Advisory:
       // a lost update never affects the turn.

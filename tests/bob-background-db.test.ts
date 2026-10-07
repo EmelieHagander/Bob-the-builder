@@ -195,3 +195,28 @@ test('image descriptions are private derived cache, claim-bound and hidden after
   await pg.query('delete from bob.media_assets where id=$1',[media])
   assert.equal((await pg.query<any>('select count(*)::int n from bob_private.image_descriptions where media_id=$1',[media])).rows[0].n,0)
 })
+
+test('explicit retry reuses only the failed turn\'s successful model results, claim-bound, and forgets them on completion',async()=>{
+  const q=await enqueue(),c=await claimJob(q.jobId),fp='c'.repeat(64)
+  await service('bob_save_job_step',[q.jobId,c.claimToken,'model:chat:0',fp,{ok:true,result:{success:true,text:'paid once'}}])
+  await service('bob_save_job_step',[q.jobId,c.claimToken,'model:chat:1','d'.repeat(64),{ok:true,result:{success:false}}])
+  await service('bob_save_job_step',[q.jobId,c.claimToken,'model:chat:2:retry:1','e'.repeat(64),{reason:'provider_retry'}])
+  await service('bob_save_job_step',[q.jobId,c.claimToken,'tool:0','f'.repeat(64),{ok:true,result:{success:true}}])
+  await service('bob_finish_job',[q.jobId,c.claimToken,'provider_retry_exhausted'])
+  await assert.rejects(as(one,'select * from bob_private.bob_turn_model_results'),/permission denied/)
+  await assert.rejects(as(one,'select bob.bob_job_reusable_models($1,$2)',[q.jobId,c.claimToken]),/permission denied/)
+  const retry=await enqueue(one,'A',q.turn),r=await claimJob(retry.jobId)
+  await assert.rejects(service('bob_job_reusable_models',[retry.jobId,newId()]),/job_not_claimed/)
+  const reusable=await service('bob_job_reusable_models',[retry.jobId,r.claimToken])
+  assert.deepEqual(reusable,[{fingerprint:fp,value:{ok:true,result:{success:true,text:'paid once'}}}])
+  const settled=(await as(one,'select bob.bob_settle_project_writes($1,$2,$3,$4) result',['A',r.threadId,q.turn,r.generation])).rows[0].result
+  await service('bob_commit_turn_v2',['A',one,r.threadId,q.turn,settled.generation,'Done',{kind:'ai_assessment',sources:[],partial:false,writes:[]},'resp_fixture'])
+  await service('bob_finish_job',[retry.jobId,r.claimToken,null])
+  assert.equal((await secret(retry.jobId)).status,'completed')
+  assert.equal((await pg.query<any>('select count(*)::int n from bob_private.bob_turn_model_results where turn_id=$1',[q.turn])).rows[0].n,0)
+
+  // A later turn of the same owner and thread starts empty.
+  const other=await enqueue(),o=await claimJob(other.jobId)
+  assert.deepEqual(await service('bob_job_reusable_models',[other.jobId,o.claimToken]),[])
+  await service('bob_finish_job',[other.jobId,o.claimToken,'fixture_done'])
+})

@@ -441,7 +441,7 @@ export async function answerWithOpenAi(opts: {
     } } : {}),
   })
   await metrics.finish({ok:result.ok,error:result.ok?undefined:result.error,partial:result.ok&&result.evidence.partial,uncertain:writer?.uncertain,
-    recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics,uncertainResends:journal?.uncertainResends()??0})
+    recovered:result.ok&&!result.providerResponseId,writes:writer?.receipts.length??0,cad:cadAssistant.metrics,uncertainResends:journal?.uncertainResends()??0,reusedModelCalls:journal?.reusedModelCalls()??0})
   return result.ok ? { ...result, answer: withResendNotice(result.answer) } : result
   }catch(error){
     rethrowContinuation(error)
