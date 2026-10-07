@@ -1679,5 +1679,6 @@ The [material owner's prepared acceptance gate](material-planning.md#k4-product-
 
 - `tests/supplier-article-packs.test.ts` 6/6 on PGlite: AC-14 (90 pcs → 1 pack, 10 surplus, stock subtracted once, both need links), receipt replay and `operation_reused`, unknown pack size unresolved and unpublishable, source-unsupported pack size rejected, unit mismatch, competing article and ordinary Shopping double-route rejection, changed article/need staleness, stale CAS, edited/ordered/deleted Shopping rows, withdrawn article, outsider/anonymous/direct-table denial, Bob tool parser.
 - Full local suite 983/983; `npm run typecheck`; `npm run verify:foundations` with Playwright Chromium passed at 320/390/1280 px including the new Shopping pack-source fixture (`test-results/pack-purchase-shopping-*.png`). Browser fixtures are HTTP-intercepted, not live data.
-- Not covered: real PostgreSQL concurrent publication races, hosted installation and an actual member/model trial with real stock/product inputs.
+- `scripts/check-cad-lineage-concurrency.ts` adds seven pack races with an observed lock wait each: competing articles on one need, writer replay, same-article stale CAS, ordinary Shopping before/after a pack claim, need revision first and an ordered row before a changed-evidence republish. Locally on disposable PostgreSQL 16 all 62 races passed; CI runs PostgreSQL 17.
+- Not covered: hosted installation and an actual member/model trial with real stock/product inputs.
 

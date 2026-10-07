@@ -414,4 +414,49 @@ for(const kind of ['cut-plan-competing','cut-plan-replay','cut-plan-manual-first
  }
  console.log(`PASS ${kind}: observed real lock wait; shared sheet capacity/CAS/history checked`);cases++
 }
+// K4 pack purchases: the project lock serializes claims on the same needs and Shopping row.
+for(const kind of ['pack-competing','pack-replay','pack-same-article','pack-legacy-first','pack-before-legacy','pack-revise-first','pack-edit-first']){
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture')
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${auth}${sql};${tail}commit;`
+ const call=async(sql:string)=>JSON.parse((await query(tx(sql))).split('\n').at(-1)!)
+ const write=(p:any)=>`select bob.bob_project_write_v16(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
+ const base={record_id:null,expected_updated_at:null,expected_revision:0,request_quote:f.payload.request_quote}
+ const screw=await call(write({...base,kind:'catalog',data:{action:'ensure',key:'pack-screw',kind:'material',name:'K4 race screw 5×50',aliases:[],profile_code:'fastener',profile_revision:1,categories:['metal','fastener'],properties:{diameter:{value:'5',unit:'mm',truth:'provided_spec',parameter:null,note:''},length:{value:'50',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'Isolated race fixture',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}))
+ const article=async(number:string)=>(await call(`select bob.supplier_article_command(${literal(f.project)},'create',${literal(randomUUID())},0,${literal(JSON.stringify({catalog_item_id:screw.recordId,catalog_item_revision:1,title:'Race screw '+number,supplier:'Fixture supplier',manufacturer:'',article_number:number,variant:'',source_url:'https://supplier.test.example/'+number,source_document:'',source_version:'',source_date:null,supported_fields:['article_number','purchase_unit','content_per_purchase_unit'],purchase_unit:'pack',content_per_purchase_unit:'100',content_unit:'pcs',notes:'Synthetic',change_note:'Bind source'}))})`)).id
+ const needData=(qty:string)=>({name:'Race screws',category:'Fasteners & glue',area_id:null,task_id:null,unit:'pcs',required_quantity:qty,waste_percent:'0',purchase_increment:'1',basis:'Isolated count',assumptions:'Fixture',artifact_id:null,artifact_revision:null,target_revision:1,stock_allocations:[],component_allocations:[],change_note:'Initial'})
+ const need=randomUUID()
+ await call(`select bob.material_requirement_command(${literal(f.project)},'create',${literal(need)},0,${literal(JSON.stringify(needData('60')))})`)
+ const [a,b]=[await article('RACE-A'),await article('RACE-B')]
+ const pack=(aid:string,action='publish',rev=0,articleRev=1)=>`select bob.pack_purchase_command(${literal(f.project)},${literal(action)},${literal(aid)},${articleRev},${rev},${literal(JSON.stringify(action==='withdraw'?[]:[{id:need,revision:1}]))},'Race pack')`
+ const payload={...base,kind:'pack_purchase',record_id:a,expected_revision:1,data:{action:'publish',purchase_revision:0,needs:[{id:need,revision:1}],change_note:'Race pack'}}
+ const legacy=`select bob.material_requirement_command(${literal(f.project)},'publish',${literal(need)},1,'{}')`
+ const revise=`select bob.material_requirement_command(${literal(f.project)},'revise',${literal(need)},1,${literal(JSON.stringify({...needData('120'),change_note:'Recount'}))})`
+ let materialId:string|undefined
+ if(kind==='pack-edit-first'){
+  materialId=(await call(pack(a))).material_id
+  await call(`select bob.supplier_article_command(${literal(f.project)},'revise',${literal(a)},1,${literal(JSON.stringify({catalog_item_id:screw.recordId,catalog_item_revision:1,title:'Race screw RACE-A',supplier:'Fixture supplier',manufacturer:'',article_number:'RACE-A',variant:'',source_url:'https://supplier.test.example/RACE-A',source_document:'',source_version:'',source_date:null,supported_fields:['article_number','purchase_unit','content_per_purchase_unit'],purchase_unit:'pack',content_per_purchase_unit:'50',content_unit:'pcs',notes:'Synthetic',change_note:'Now 50-packs'}))})`)
+ }
+ const edit=`update bob.materials set status='ordered' where project_id=${literal(f.project)} and id=${literal(materialId)}`
+ const first=kind==='pack-replay'?write(payload):kind==='pack-legacy-first'?legacy:kind==='pack-revise-first'?revise:kind==='pack-edit-first'?edit:pack(a)
+ const second=kind==='pack-competing'?pack(b):kind==='pack-replay'?write(payload):kind==='pack-same-article'?pack(a):kind==='pack-before-legacy'?legacy:kind==='pack-edit-first'?pack(a,'publish',1,2):pack(a)
+ const barrier=await gate(780000+cases),leader=start(tx(first,`select pg_advisory_xact_lock(${780000+cases});`))
+ let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(second));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ const expected:Record<string,RegExp>={'pack-competing':/pack_requirement_claimed/,'pack-same-article':/pack_purchase_changed/,'pack-legacy-first':/pack_requirement_in_shopping/,'pack-before-legacy':/pack_requirement_claimed/,'pack-revise-first':/pack_requirement_changed/,'pack-edit-first':/pack_purchase_shopping_committed/}
+ if(expected[kind]){assert.notEqual(follow.code,0);assert.match(follow.stderr,expected[kind])}else assert.equal(follow.code,0,follow.stderr)
+ const rows=await json(`select coalesce(jsonb_agg(jsonb_build_object('qty',qty,'status',status) order by id),'[]') from bob.materials where project_id=${literal(f.project)}`)
+ const revisions=Number(await query(`select count(*) from bob.pack_purchase_revisions p join bob.supplier_articles s on s.id=p.article_id where s.project_id=${literal(f.project)}`))
+ if(kind==='pack-legacy-first'){assert.equal(revisions,0);assert.deepEqual(rows,[{qty:'60 pcs',status:'needed'}])}
+ else if(kind==='pack-revise-first'){assert.equal(revisions,0);assert.deepEqual(rows,[])}
+ else if(kind==='pack-edit-first'){assert.equal(revisions,1);assert.deepEqual(rows,[{qty:'1 pack',status:'ordered'}])}
+ else{assert.equal(revisions,1,'exactly one pack purchase revision');assert.deepEqual(rows,[{qty:'1 pack',status:'needed'}])}
+ if(kind==='pack-replay'){
+  const receipt=(out:string)=>JSON.parse(out.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+  assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout))
+ }
+ console.log(`PASS ${kind}: observed lock wait; one purchase route per need, CAS, replay and committed-row guard checked`);cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

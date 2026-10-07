@@ -308,5 +308,5 @@ Needs must be current, unarchived, share the article content unit, have current 
 
 **Bob and UI.** `manage_project_material` adds `resource=product` (create/revise/withdraw) and `resource=pack_purchase` (publish/withdraw) through the existing v16 claimed-turn writer with normal receipts and replay. `read_project_work` adds `product` and `pack_purchase`, and Shopping rows carry `pack_source`. Shopping shows the pack count, content, total need after stock, surplus, declared article/source and the pinned needs. Direct clients have project-scoped SELECT only.
 
-**Still open in K4:** applying this migration to the hosted project, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. Real PostgreSQL race coverage for pack publication is not yet added to `scripts/check-cad-lineage-concurrency.ts`; the project lock is the serialization boundary.
+**Still open in K4:** applying this migration to the hosted project, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. The project lock is the serialization boundary; `scripts/check-cad-lineage-concurrency.ts` covers it with seven real PostgreSQL pack races.
 
