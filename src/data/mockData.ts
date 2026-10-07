@@ -23,7 +23,6 @@ import type {
   Person,
   Project,
   Task,
-  TodayTask,
 } from './types'
 
 /*
@@ -471,15 +470,6 @@ export const foodShopping: FoodGroup[] = foodShoppingSeeds.map((g, gi) => ({
   ...g,
   items: g.items.map((it, ii) => ({ ...it, id: `fi_${gi}_${ii}` })),
 }))
-
-/** "My tasks today" — the day-of view for the next build day. */
-export const todayTasks: TodayTask[] = [
-  { id: 'td1', areaId: 'a_taket', areaName: 'Taket', areaPhase: null, name: 'Set the ridge beam', skill: 'expert', status: 'todo', assigneeIds: ['he'] },
-  { id: 'td2', areaId: 'a_taket', areaName: 'Taket', areaPhase: null, name: 'Fit the roof battens', skill: 'intermediate', status: 'doing', assigneeIds: ['he', 'si'] },
-  { id: 'td3', areaId: 'a_koket', areaName: 'Köket', areaPhase: null, name: 'Fit the base cabinets', skill: 'intermediate', status: 'doing', assigneeIds: ['la'] },
-  { id: 'td4', areaId: 'a_koket', areaName: 'Köket', areaPhase: null, name: 'Paint walls — 2 coats', skill: 'novice', status: 'doing', assigneeIds: ['ma'] },
-  { id: 'td5', areaId: 'a_verandan', areaName: 'Verandan', areaPhase: null, name: 'Oil the decking', skill: 'novice', status: 'todo', assigneeIds: ['os'] },
-]
 
 /** Scripted "Ask bob" conversation from the mockup. */
 export const askBobChat: ChatMessage[] = [
