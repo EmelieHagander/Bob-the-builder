@@ -167,7 +167,7 @@ physical-phone and named-participant acceptance.
 | Ask bob | ask about the current build | honest working/failure states; phase/current view may guide prompts but must not become hidden authority |
 | Home (`/`) | choose/manage projects | Project phase and schedule are distinct; mixed Area phase summary may appear on project cards |
 | Account (`/account`) | manage household details, shared spaces, installation and session | use real household contact data; no duplicate project overview; usable with no active Project |
-| Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; Swedish phone steps |
+| Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; English phone steps |
 
 `Docs/project-phase-ui.md` owns the detailed page-by-page lifecycle composition and implementation impact map.
 

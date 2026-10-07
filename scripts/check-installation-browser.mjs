@@ -31,7 +31,7 @@ try {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${base}#/install`)
-  await page.getByRole('heading', { name: 'Installera appen', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Install the app', exact: true }).waitFor()
   assert.equal(projectReads, 0, 'Public guide must not wait for a project query or login')
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 1280, height: 900 }]) {
@@ -55,11 +55,11 @@ try {
     assert(box && box.height >= 44 && box.y >= 0 && box.y + box.height < viewport.height, 'Installation entry must be visible without scrolling')
     await entry.click()
     await page.waitForURL('**/#/install')
-    await page.getByRole('heading', { name: 'Installera appen', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Install the app', exact: true }).waitFor()
     await page.getByRole('button', { name: 'Android', exact: true }).click()
-    await page.getByText('Öppna den här sidan i Chrome.', { exact: true }).waitFor()
+    await page.getByText('Open this page in Chrome.', { exact: true }).waitFor()
     await page.getByRole('button', { name: 'iPhone / iPad', exact: true }).click()
-    await page.getByText('Välj Lägg till på hemskärmen.', { exact: true }).waitFor()
+    await page.getByText('Choose Add to Home Screen.', { exact: true }).waitFor()
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'No horizontal overflow')
     console.log(`${live ? 'Sign-in' : 'Account → Settings'} → phone guide: ${viewport.width}px, entry height ${box.height}px`)
     if (!live && viewport.width === 390) {
@@ -79,14 +79,14 @@ try {
     window.dispatchEvent(event)
   })
   await page.getByRole('link', { name: 'Install the app', exact: true }).click()
-  await page.getByRole('button', { name: 'Installera appen', exact: true }).click()
-  await page.getByRole('status').filter({ hasText: 'Du har godkänt installationen' }).waitFor()
+  await page.getByRole('button', { name: 'Install the app', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'You accepted the installation' }).waitFor()
   assert.equal(await page.evaluate(() => window.installPromptCalls), 1)
-  assert.equal(await page.getByText('Klart! Bob är installerad på den här enheten.', { exact: true }).count(), 0)
+  assert.equal(await page.getByText('Done! Bob is installed on this device.', { exact: true }).count(), 0)
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')))
-  await page.getByRole('status').filter({ hasText: 'Klart!' }).waitFor()
+  await page.getByRole('status').filter({ hasText: 'Done!' }).waitFor()
   if (!live) {
-    await page.getByRole('link', { name: 'Fortsätt till Bob', exact: false }).click()
+    await page.getByRole('link', { name: 'Continue to Bob', exact: false }).click()
     await page.goto(`${base}#/account/settings`)
     // A reload cannot know whether an app is installed elsewhere; simulate
     // iOS standalone before the next document starts, not a persistent flag.
@@ -108,9 +108,9 @@ try {
   assert.deepEqual(cached, [`${base}offline.html`])
   await context.setOffline(true)
   await page.reload({ waitUntil: 'domcontentloaded' })
-  await page.getByRole('heading', { name: 'Bob behöver internet', exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Bob needs internet', exact: true }).waitFor()
   await context.setOffline(false)
-  await page.getByRole('link', { name: 'Försök igen', exact: true }).click()
+  await page.getByRole('link', { name: 'Try again', exact: true }).click()
   // Offline retry returns to permanent Home (or Sign in in connected mode).
   await page.getByRole('heading', { name: live ? /^Sign in$/ : /^Home$/ }).waitFor()
   assert.deepEqual(errors, [], 'No runtime exceptions in the installation flow')
