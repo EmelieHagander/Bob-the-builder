@@ -235,8 +235,14 @@ try {
     await page.screenshot({ path: `test-results/new-project-${viewport.width}.png`, fullPage: true })
     await createButton.click()
     await createModal.waitFor({ state: 'hidden' })
+    // A new project opens straight away, visibly, so the creator lands where the work starts.
+    await page.waitForURL('**/#/project')
+    await page.getByRole('heading', { name: 'Name only', exact: true }).waitFor()
+    // An empty project leads with the plain-language start, which hands the idea to Bob as a draft.
+    await page.getByRole('heading', { name: 'What do you want to build?', exact: true }).waitFor()
+    assert.notEqual(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating a project opens it')
+    await page.goto(`${base}#/`)
     await page.locator('.account-project-row').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open project Name only', exact: true }).waitFor()
-    assert.equal(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating from account does not secretly select a project')
     await settleVisual(page)
     await page.screenshot({ path: `test-results/projectless-account-${viewport.width}.png`, fullPage: true })
     await page.locator('.account-project-row').filter({ hasText: 'Porch A' }).getByRole('button', { name: 'Open project Porch A', exact: true }).click()

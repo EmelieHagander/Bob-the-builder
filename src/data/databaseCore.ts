@@ -1928,7 +1928,15 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 /* ─────────────────────────── DAY-OF / TODAY ─────────────────────────── */
 
 export async function getTodayTasks(): Promise<TodayTask[]> {
-  if (!db) return readScoped(mock.todayTasks)
+  if (!db) {
+    // Same rule as the bob.today_tasks view: every open task, with real task ids.
+    const [tasks, areas] = await Promise.all([getTasks(), getAreas()])
+    return tasks.filter(t => t.status === 'todo' || t.status === 'doing').map(t => {
+      const area = areas.find(a => a.id === t.areaId)
+      return { id: t.id, areaId: t.areaId, areaName: area?.name ?? 'Project', areaPhase: area?.phase ?? null,
+        name: t.name, skill: t.skill, status: t.status, assigneeIds: t.assigneeIds }
+    })
+  }
   const pid = await activeProjectId()
   if (!pid) return []
   const rows = unwrap<TodayTaskRow[]>(

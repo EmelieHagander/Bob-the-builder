@@ -203,11 +203,8 @@ function mockReadiness(projectId: string): TaskReadiness[] {
       taskStatus: task.status, state: 'complete' as const, blockerCount: 0, blockers: [],
       reviewedAt: review?.at ?? null, reviewedBy: review?.by ?? '', reviewNote: review?.note ?? '',
     }
+    // Matches the backend readiness view: lifecycle phase alone never blocks a Task.
     const blockers: TaskBlocker[] = []
-    if (area?.phase !== 'build') blockers.push({
-      kind: 'phase', id: area?.id ?? task.areaId ?? task.id,
-      label: area?.phase ? `Area is in ${area.phase}; move to Build when work is actually ready` : 'Set Area phase before starting',
-    })
     if (task.status === 'blocked') blockers.push({ kind: 'status', id: task.id, label: 'Task is manually marked Blocked' })
     for (const dependency of mockDependencyRows(projectId, task.id)) {
       if (!dependency.satisfied) blockers.push({ kind: 'dependency', id: dependency.id, label: `Finish ${dependency.prerequisiteTaskName}` })

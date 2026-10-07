@@ -113,7 +113,7 @@ export function EventDetail() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)' }}>
           <div className="card" style={{ padding: 'var(--panel-padding)' }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Will you be there?</div>
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>One tap. We'll remind you the day before and show your tasks on the day.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.45 }}>One tap tells the organiser to expect you. Your tasks show under Today › My tasks.</p>
             <button
               className="font-display no-print"
               disabled={busy || going || (full && !going)}
@@ -155,8 +155,8 @@ export function EventDetail() {
               </div>
             )}
             {going && (
-              <Link to="/today" className="btn no-print" style={{ width: '100%', justifyContent: 'center', marginTop: 9 }}>
-                <Icon name="sun-horizon" size={15} /> See my tasks today
+              <Link to="/today?mine=1" className="btn no-print" style={{ width: '100%', justifyContent: 'center', marginTop: 9 }}>
+                <Icon name="sun-horizon" size={15} /> See my tasks
               </Link>
             )}
           </div>

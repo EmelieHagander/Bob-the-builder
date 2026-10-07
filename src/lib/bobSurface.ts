@@ -31,6 +31,16 @@ export function createBobSurfaceStore() {
 const store = createBobSurfaceStore()
 export const BOB_OPEN_EVENT = 'bob:open-current-view'
 export const openBobForCurrentSurface = () => window.dispatchEvent(new Event(BOB_OPEN_EVENT))
+/** A draft waits here until the composer takes it, so it survives the drawer's first mount. */
+export const BOB_DRAFT_EVENT = 'bob:draft'
+let pendingDraft = ''
+export const takePendingBobDraft = () => { const draft = pendingDraft; pendingDraft = ''; return draft }
+/** Opens Bob with text in the composer; the person still reviews it and taps Send. */
+export function openBobWithDraft(text: string) {
+  pendingDraft = text
+  window.dispatchEvent(new Event(BOB_OPEN_EVENT))
+  window.dispatchEvent(new Event(BOB_DRAFT_EVENT))
+}
 const browserRoute = () => typeof window === 'undefined' ? '' : window.location.hash.slice(1) || '/'
 export const getBobSurface = (projectId: string) => store.read(projectId, browserRoute())?.pointer ?? null
 

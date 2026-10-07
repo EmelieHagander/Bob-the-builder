@@ -177,9 +177,9 @@ export function AccountDashboard() {
       {modal?.kind === 'new' && (
         <NewProjectModal
           onClose={() => setModal(null)}
-          onCreated={() => {
+          onCreated={(project) => {
             setModal(null)
-            reload()
+            openProject(project)
           }}
         />
       )}
@@ -276,7 +276,7 @@ function NotesCard({ notes, onChanged }: { notes: AccountNote[] | null; onChange
 
 /* ─────────────────────────── New project ─────────────────────────── */
 
-function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function NewProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (project: Project) => void }) {
   return <Modal title="New project" layer={100} onClose={onClose}>
     <NewProjectForm onCreated={onCreated} onCancel={onClose} />
   </Modal>
