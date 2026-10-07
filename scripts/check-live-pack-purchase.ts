@@ -9,7 +9,7 @@ import { dirname } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { planTestConfig, requirePlanTestMember } from './check-live-plan-assistant.mjs'
 import { K3_PROJECT, K4_SOURCE } from './run-live-construction-drawing.mjs'
-import { K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, assertK4CutFitCheckpoint } from './k4-cut-fit-checkpoint.mjs'
+import { K4_SAVED_CUT_PLAN_ID, K4_PACK_RETRY_TURN, K4_PACK_LEFTOVER_NEED, assertK4PackRetryCheckpoint } from './k4-cut-fit-checkpoint.mjs'
 
 const SOURCE_URL = 'https://www.byggmax.se/traskruv-5-0x80-mm-c4-249581'
 const { url, key, token, memberId } = planTestConfig({ ...process.env, BOB_PLAN_LIVE_CONFIRM: process.env.BOB_K4_LIVE_CONFIRM })
@@ -24,8 +24,9 @@ await requirePlanTestMember(client, token, memberId)
 const project = checked(await client.from('projects').select('id,name,type').eq('id', projectId).single())
 assert(project.type === 'Verification' && project.name.startsWith('K2 model acceptance '))
 const before = await rows('current_material_requirements'), beforeSources = await rows('material_requirement_construction_sources'), beforeHistory = await rows('material_requirement_revisions')
-assertK4CutFitCheckpoint(before, beforeSources, beforeHistory)
-const beforeIds = new Set(before.map((r: any) => r.id))
+assertK4PackRetryCheckpoint(before, beforeSources, beforeHistory)
+// The leftover screw need may be revised or reused by this turn; the blanks may not.
+const beforeIds = new Set(before.filter((r: any) => r.id !== K4_PACK_LEFTOVER_NEED).map((r: any) => r.id))
 // Physical stock, reservations and construction geometry must not move.
 const protectedTables = ['material_requirement_stock', 'material_requirement_components', 'material_requirement_shopping', 'stock_revisions', 'artifact_cad_revisions', 'material_cut_plans', 'material_cut_plan_revisions', 'material_cut_plan_requirements']
 const snapshots = new Map<string, any[]>()
@@ -36,7 +37,7 @@ assert(original.source_state === 'current' && original.current_revision === 4)
 const screwed = original.joints.filter((j: any) => j.method === 'screwed_butt').length
 const thread = checked(await client.from('bob_threads').select('id').eq('project_id', projectId).eq('owner_user_id', memberId).eq('status', 'active').single())
 const previous = checked(await client.from('bob_messages').select('turn_id,delivery_state').eq('thread_id', thread.id).eq('role', 'user').order('seq', { ascending: false }).limit(1).single())
-assert.equal(previous.turn_id, K4_SAVED_CUT_PLAN_TURN); assert.equal(previous.delivery_state, 'completed')
+assert.equal(previous.turn_id, K4_PACK_RETRY_TURN); assert.equal(previous.delivery_state, 'completed')
 const report: any = { projectId, sourceArtifact: K4_SOURCE, sourceRevision: 4, savedCutPlan: K4_SAVED_CUT_PLAN_ID, screwedJoints: screwed,
  startedAt: new Date().toISOString(), priorTurn: previous.turn_id, modelSubmitted: true, modelSemanticsReviewRequired: true,
  notProven: ['screw count per joint (estimate)', 'screw suitability/strength', 'price/availability', 'physical stock', 'purchase/delivery'] }
@@ -44,7 +45,7 @@ const reportPath = process.env.BOB_K4_REPORT ?? 'test-results/live-pack-purchase
 try {
  const turn = randomUUID(); report.turn = turn
  const message = 'Fortsätt med samma sparade hylla. Den ska skruvas ihop och jag vill att du gör skruvbehovet till en del av planen. '
-  + 'Räkna fram hur många träskruvar 5,0 × 80 mm som behövs utifrån de skruvade fogarna i den aktuella sparade konstruktionen. Gör en egen rimlig uppskattning per fog och spara den som ett nytt materialbehov i styck, med uppskattningen och dess antaganden tydligt angivna som uppskattning. '
+  + 'Räkna fram hur många träskruvar 5,0 × 80 mm som behövs utifrån de skruvade fogarna i den aktuella sparade konstruktionen. Gör en egen rimlig uppskattning per fog och spara den som ett materialbehov i styck, med uppskattningen och dess antaganden tydligt angivna som uppskattning. Ett tidigare försök sparade redan ett skruvbehov men ingen produkt; använd eller revidera det behovet i stället för att skapa ett till. '
   + `Produktkälla, avläst från Byggmax produktsida ${SOURCE_URL} i dag: Träskruv 5,0x80 mm C4, härdad träskruv med försänkt huvud för användning inomhus och utomhus. `
   + 'Sidan visar förpackningarna 15 st, 200 st och 700 st. Bara 15-styckspaketet visar artikelnummer: ART.NR 249687, 40,95 kr. För 200 och 700 st visas inget artikelnummer. '
   + 'Välj förpackning själv, spara produkten med bara de uppgifter som källan faktiskt anger, och publicera ett förpackningsköp till Shopping för skruvbehovet. '
@@ -71,9 +72,9 @@ try {
  report.answer = answer.text; report.answerPartial = answer.evidence?.partial ?? null
  // Existing blanks, construction, cut plan and physical stock are unchanged.
  const requirements = await rows('current_material_requirements'), history = await rows('material_requirement_revisions')
- assert.deepEqual(stable(requirements.filter((r: any) => beforeIds.has(r.id))), stable(before))
+ assert.deepEqual(stable(requirements.filter((r: any) => beforeIds.has(r.id))), stable(before.filter((r: any) => beforeIds.has(r.id))))
  assert.deepEqual(stable(await rows('material_requirement_construction_sources')), stable(beforeSources))
- assert.deepEqual(stable(history.filter((r: any) => beforeIds.has(r.requirement_id))), stable(beforeHistory))
+ assert.deepEqual(stable(history.filter((r: any) => beforeIds.has(r.requirement_id))), stable(beforeHistory.filter((r: any) => beforeIds.has(r.requirement_id))))
  for (const table of protectedTables) assert.deepEqual(stable(await rows(table)), stable(snapshots.get(table)!), `${table} changed`)
  const after = checked(await client.rpc('read_construction_draft', { p_project: projectId, p_artifact: K4_SOURCE, p_revision: 4 }))
  assert.equal(after.current_revision, 4)
@@ -98,8 +99,9 @@ try {
  assert.equal(purchase.published, true); assert.equal(purchase.source_state, 'current'); assert.equal(purchase.shopping_ready, true)
  assert.equal(purchase.physical_verified, false); assert.equal(purchase.suitability_verified, false)
  assert(purchase.needs.length >= 1)
+ // The screw need: the leftover from the first run (reused or revised) or a new one, never both active.
  const added = requirements.filter((r: any) => !beforeIds.has(r.id))
- assert(added.length >= 1)
+ assert.equal(added.filter((r: any) => !r.archived && r.unit === 'pcs').length, 1, 'Exactly one active screw need')
  for (const need of purchase.needs) {
   const r = added.find((x: any) => x.id === need.requirement_id)
   assert(r, 'Pack needs must be the new screw need, not a construction blank')

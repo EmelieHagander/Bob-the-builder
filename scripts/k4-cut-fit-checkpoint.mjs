@@ -28,3 +28,16 @@ export const K4_CUT_PLAN_PREVIOUS_TURN = '58d32191-8ac0-4847-8df7-8083f96c75e3'
 // Recheck only this completed saved turn/plan; never submit a replacement turn.
 export const K4_SAVED_CUT_PLAN_TURN = 'cdcbb834-91a9-4aee-9dff-98c847ee4d86'
 export const K4_SAVED_CUT_PLAN_ID = '7c9d8791-001e-4b6b-a85b-a3971ebd5842'
+
+// The first paid pack run (2026-10-07) saved its screw need but no product.
+// A retry starts from that turn and that need; the two blanks stay unchanged.
+export const K4_PACK_RETRY_TURN = '7436d801-7e5c-456a-8035-e7a848d319f1'
+export const K4_PACK_LEFTOVER_NEED = '305b4985-d860-4fde-9302-877c1b9a42e0'
+export function assertK4PackRetryCheckpoint(requirements, sources, history) {
+ const leftover = requirements.find(r => r.id === K4_PACK_LEFTOVER_NEED)
+ assert(leftover && leftover.unit === 'pcs' && !leftover.archived && Number(leftover.stock_quantity) === 0 && Number(leftover.component_quantity) === 0,
+  'Inspect the leftover screw need before a new model test')
+ assert(history.some(h => h.requirement_id === K4_PACK_LEFTOVER_NEED))
+ assertK4CutFitCheckpoint(requirements.filter(r => r.id !== K4_PACK_LEFTOVER_NEED), sources.filter(s => s.requirement_id !== K4_PACK_LEFTOVER_NEED),
+  history.filter(h => h.requirement_id !== K4_PACK_LEFTOVER_NEED))
+}
