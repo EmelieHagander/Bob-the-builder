@@ -10,6 +10,7 @@ import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
 import { ProjectImages } from '../components/ProjectImages'
+import { ProjectStart } from '../components/ProjectStart'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
 
@@ -20,6 +21,7 @@ export function ProjectHome() {
   const { data: project, loading: projectLoading, error: projectError } = useAsync(() => db.getProject(), [projectVersion, version])
   const { data: areas, loading: areasLoading, error: areasError } = useAsync(() => db.getAreas(), [projectVersion, version])
   const { data: people } = useAsync(() => db.getPeople(), [projectVersion])
+  const { data: tasks } = useAsync(() => db.getTasks(), [projectVersion, version])
   const { data: next } = useAsync(() => db.getNextEvent(), [projectVersion])
   const { data: announcements } = useAsync(() => db.getAnnouncements(), [projectVersion])
   const projectId = project?.id ?? ''
@@ -97,6 +99,8 @@ export function ProjectHome() {
       </div>
     </div>
 
+    {areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
+
     {project.description && <details className="project-description">
       <summary>Project description</summary>
       <p className="instruction-text">{project.description}</p>
@@ -167,7 +171,7 @@ export function ProjectHome() {
           </div>}
     </section>}
 
-    <details className="card project-photo-details">
+    <details className="card project-photo-details" id="project-images">
       <summary>Project images</summary>
       <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />
     </details>
@@ -179,7 +183,7 @@ export function ProjectHome() {
       {areasLoading ? <Loading label="Loading Areas…" /> : areasError ? <div className="card" role="status" style={{ padding: 'var(--panel-padding)' }}>Area phase status is unavailable. Your saved project data is unchanged.</div>
         : !areaItems.length ? <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           <strong>No Areas yet</strong><p className="foundation-hint">Group related steps into Areas when the project needs them. Each Area can progress through phases independently.</p>
-          <Link to="/areas" className="btn btn-primary">Add the first Area</Link>
+          <Link to="/areas" className="btn">Add the first Area</Link>
         </div> : <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
           {areaItems.map(area => {
             const action = areaNextAction(area)

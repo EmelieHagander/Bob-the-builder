@@ -51,7 +51,11 @@ Project phases are **state**, not routes: do not add Concept / Design / Planning
 only for a Project name; empty details and an unscheduled build can be enriched
 later through the existing Project detail/schedule editor. Account navigation
 hides an already-open Bob composer without discarding its unsent project draft.
-The project creation modal renders above the Bob drawer.
+The project creation modal renders above the Bob drawer. Creating a Project
+opens it. An empty Project (no Areas and no Tasks) leads with **What do you want
+to build?** (`ProjectStart`): the idea goes into the Bob composer as an unsent
+draft, never auto-sent, followed by an optional manual path (photos,
+measurements, Areas, build day).
 
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
@@ -156,7 +160,7 @@ physical-phone and named-participant acceptance.
 | Building context (`/building`, `/account/buildings`) | maintain persistent physical truth | Building state stays separate from Project/Area lifecycle phase |
 | People | understand crew skills/needs | skills and safety-relevant dietary info must be easy to scan |
 | Events / Event detail | organise a build day | attendance and day plan must be obvious |
-| Today | know what to do now | volunteer-facing, minimal, phone-first; no phase rail/setup controls |
+| Today | know what to do now | volunteer-facing, minimal, phone-first; no phase rail/setup controls; next build day's planned Tasks first, **Everyone / My tasks** (`?mine=1`) |
 | Shopping | buy what the build needs | checkbox interaction and print cleanliness matter |
 | Food | feed the crew safely | allergy/dietary information must never be buried |
 | Announcements | share changes with the whole crew | pinned/current updates should dominate old noise |

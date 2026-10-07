@@ -238,6 +238,8 @@ try {
     // A new project opens straight away, visibly, so the creator lands where the work starts.
     await page.waitForURL('**/#/project')
     await page.getByRole('heading', { name: 'Name only', exact: true }).waitFor()
+    // An empty project leads with the plain-language start, which hands the idea to Bob as a draft.
+    await page.getByRole('heading', { name: 'What do you want to build?', exact: true }).waitFor()
     assert.notEqual(await page.evaluate(() => localStorage.getItem('bob:active-project')), '', 'Creating a project opens it')
     await page.goto(`${base}#/`)
     await page.locator('.account-project-row').filter({ hasText: 'Name only' }).getByRole('button', { name: 'Open project Name only', exact: true }).waitFor()

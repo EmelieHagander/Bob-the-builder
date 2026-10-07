@@ -12,7 +12,7 @@ import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
 import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
-import { getBobSurface, useBobSurfaceSnapshot } from '../lib/bobSurface'
+import { BOB_DRAFT_EVENT, getBobSurface, takePendingBobDraft, useBobSurfaceSnapshot } from '../lib/bobSurface'
 import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
 import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
 import { formatDateTime } from '../lib/format'
@@ -250,6 +250,15 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const surface = useBobSurfaceSnapshot(project.id)
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
+  useEffect(() => {
+    const take = () => {
+      const text = takePendingBobDraft()
+      if (text) setDraft(previous => previous.trim() ? `${previous}\n\n${text}` : text)
+    }
+    take()
+    window.addEventListener(BOB_DRAFT_EVENT, take)
+    return () => window.removeEventListener(BOB_DRAFT_EVENT, take)
+  }, [])
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('bob:chat-density') !== 'comfortable' } catch { return true } })
   const [expanded, setExpanded] = useState(false)
   const [showJump, setShowJump] = useState(false)
