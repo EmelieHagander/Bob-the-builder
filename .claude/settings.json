@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sS https://api.supabase.com/v1/projects/yuobtgoidmmmwfqenkau/database/query:*)",
+      "Bash(npx -y supabase@2.117.0 functions deploy:*)"
+    ]
+  }
+}
