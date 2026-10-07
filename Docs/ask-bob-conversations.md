@@ -206,7 +206,13 @@ frequency and construction correctness are not inferred from these counters.
 
 Elapsed time runs from first admitted execution through the final result, including
 worker waits but excluding initial queue delay. `scripts/report-bob-execution.sql`
-reports outcome distribution, p50/p95 time, retries/repairs and per-role usage/cost.
+reports outcome distribution, p50/p95 time, re-sent model calls and per-role usage/cost,
+plus a role × model × reasoning-effort table (K5 comparison input). Each model row
+records the returned model, the effort actually sent (null when none was applied),
+cached-input and reasoning tokens, its journal step (`model:<function>:<position>`)
+and `attempt` (0 = first dispatch; >0 = a re-send of the same input, which may also
+have been billed). Rows written before 2026-10-07 have no model label. Cost per
+correct delivery still needs a reviewed outcome per run joined on `run_id`.
 Runs with model events but no terminal event remain unfinished/unobserved. Events
 lost to a process kill before their insert are not an exactly-once billing ledger;
 shared AI accounting remains authoritative. Compare identical ordinary-language

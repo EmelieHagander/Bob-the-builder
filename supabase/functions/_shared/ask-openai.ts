@@ -16,7 +16,7 @@ import { hasImageContent } from './openai-content.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
-import { BobContinuation, type BobJournal } from './bob-job-journal.ts'
+import { BobContinuation, type BobJournal, type JournalIdentity } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
@@ -59,7 +59,7 @@ export async function answerWithOpenAi(opts: {
   })
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
-  const memo = async <T>(stream: string, input: unknown, work: (identity?: { key: string; fingerprint: string }) => Promise<T>, reserve = 0): Promise<T> =>
+  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0): Promise<T> =>
     journal ? journal.run(stream, input, work, reserve) : work()
   const rpc = async (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
     const { p_generation: _generation, ...stable } = args
@@ -107,7 +107,7 @@ export async function answerWithOpenAi(opts: {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
     }
-    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started)
+    await metrics?.model({...options,timeoutMs:allowed},result,performance.now()-started,{step:identity?.key??null,attempt:identity?.attempt??0})
     console.log('[Bob model]', JSON.stringify({ role:options.aiFunction, success:result.success, elapsed_ms:Math.round(performance.now()-started), input_tokens:result.usage.input_tokens, output_tokens:result.usage.output_tokens }))
     if (journal && !result.success && allowed < timeout && performance.now() - started >= allowed - 1500) throw new BobContinuation('yield', 'segment_wall')
     if (journal && !result.success && /Network error|OpenAI API error: (429|5[0-9]{2})/.test(result.error ?? '')) throw new BobContinuation('yield', 'provider_retry')

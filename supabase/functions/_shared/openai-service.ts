@@ -190,8 +190,11 @@ export interface OpenAIServiceResponse<T = unknown> {
     output_tokens: number;
     total_tokens: number;
     reasoning_tokens?: number;
+    cached_input_tokens?: number;
   };
   model: string;
+  /** Effort actually sent to a reasoning-capable model; null when none was applied. */
+  reasoningEffort?: string | null;
   error?: string;
   responseId?: string;
   toolCalls?: Array<{
@@ -534,8 +537,9 @@ export async function callOpenAIResponses<T = unknown>(
     // model choice in shared.ai_settings rather than compiled into each function.
     // Call sites that pass reasoningEffort still work as a fallback.
     const effectiveEffort = settings?.reasoning_effort || options.reasoningEffort;
-    if (effectiveEffort && modelRow.supports_reasoning) {
-      requestBody.reasoning = { effort: effectiveEffort };
+    const appliedEffort = effectiveEffort && modelRow.supports_reasoning ? effectiveEffort : null;
+    if (appliedEffort) {
+      requestBody.reasoning = { effort: appliedEffort };
     } else if (effectiveEffort) {
       console.log(`[OpenAI Service] Skipping reasoning.effort for ${currentModel} (not reasoning-capable)`);
     }
@@ -667,14 +671,17 @@ export async function callOpenAIResponses<T = unknown>(
     // (photo import, URL import, nutrition, shopping lists, meal plans, store
     // offers) recorded nothing at all. That is most of the AI spend in this
     // app, and it was invisible.
+    const cachedInputTokens = responseData.usage?.input_tokens_details?.cached_tokens || 0;
+    const reasoningTokens = responseData.usage?.output_tokens_details?.reasoning_tokens || 0;
+    // Callers' execution metrics need the same split the ledger records.
     const usage = {
       input_tokens: responseData.usage?.input_tokens || 0,
       output_tokens: responseData.usage?.output_tokens || 0,
-      total_tokens: responseData.usage?.total_tokens || 0
+      total_tokens: responseData.usage?.total_tokens || 0,
+      cached_input_tokens: cachedInputTokens,
+      reasoning_tokens: reasoningTokens,
     };
-    const cachedInputTokens = responseData.usage?.input_tokens_details?.cached_tokens || 0;
-    const reasoningTokens = responseData.usage?.output_tokens_details?.reasoning_tokens || 0;
-    const estimatedCostUsd = computeCostUsd(modelRow, { ...usage, cached_input_tokens: cachedInputTokens });
+    const estimatedCostUsd = computeCostUsd(modelRow, usage);
     console.log(`[OpenAI Service] Cost: ${estimatedCostUsd === null ? 'unknown (no price row)' : `$${estimatedCostUsd}`}`);
 
     /** Everything the usage ledger needs that is constant for this call. */
@@ -701,7 +708,7 @@ export async function callOpenAIResponses<T = unknown>(
       const error = responseData.status === 'incomplete' && responseData.incomplete_details?.reason === 'max_output_tokens'
         ? 'model_output_limit' : 'model_response_' + responseData.status;
       await logAIUsage(aiClient, { ...usageBase, success: false });
-      return { success: false, data: null, usage, model: currentModel, estimatedCostUsd, error };
+      return { success: false, data: null, usage, model: currentModel, reasoningEffort: appliedEffort, estimatedCostUsd, error };
     }
 
     // Check for tool calls
@@ -724,7 +731,7 @@ export async function callOpenAIResponses<T = unknown>(
         toolCalls,
         responseId: responseData.id,
         usage,
-        model: currentModel,
+        model: currentModel, reasoningEffort: appliedEffort,
         estimatedCostUsd,
       };
     }
@@ -783,8 +790,8 @@ export async function callOpenAIResponses<T = unknown>(
         return {
           success: false,
           data: null,
-          usage: { ...usage, reasoning_tokens: reasoningTokens },
-          model: currentModel,
+          usage,
+          model: currentModel, reasoningEffort: appliedEffort,
           estimatedCostUsd,
           error: 'model_reasoning_only'
         };
@@ -795,7 +802,7 @@ export async function callOpenAIResponses<T = unknown>(
         success: false,
         data: null,
         usage,
-        model: currentModel,
+        model: currentModel, reasoningEffort: appliedEffort,
         estimatedCostUsd,
         error: 'No content in OpenAI response'
       };
@@ -812,7 +819,7 @@ export async function callOpenAIResponses<T = unknown>(
         success: true,
         data: content as T,
         usage,
-        model: currentModel,
+        model: currentModel, reasoningEffort: appliedEffort,
         responseId: responseData.id,
         estimatedCostUsd
       };
@@ -966,7 +973,7 @@ export async function callOpenAIResponses<T = unknown>(
         success: true,
         data: parsedData,
         usage,
-        model: currentModel,
+        model: currentModel, reasoningEffort: appliedEffort,
         responseId: responseData.id,
         estimatedCostUsd
       };
@@ -975,7 +982,7 @@ export async function callOpenAIResponses<T = unknown>(
         success: false,
         data: null,
         usage,
-        model: currentModel,
+        model: currentModel, reasoningEffort: appliedEffort,
         error: 'Failed to parse JSON response',
         estimatedCostUsd
       };

@@ -9,6 +9,7 @@ export type ExecutionEvent = {
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const number=(n:unknown)=>typeof n==='number'&&Number.isFinite(n)&&n>=0?n:0
 const code=(s:unknown,fallback:string)=>typeof s==='string'&&/^[a-z][a-z0-9_]{0,39}$/.test(s)?s:fallback
+const label=(s:unknown)=>typeof s==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(s)?s:null
 const toolNames=(tools:OpenAIServiceOptions['tools'])=>(tools??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name'))
 const failureKind=(result:OpenAIServiceResponse<unknown>)=>result.success?null
   :/abort|timed?\s*out|timeout/i.test(result.error??'')?'request_aborted'
@@ -25,13 +26,17 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
   const write=async(e:ExecutionEvent)=>{try{await opts.write(e)}catch{console.warn('[Bob metrics] unavailable')}}
   return {
     observe(value:TurnObservation){turn=structuredClone(value)},
-    async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number){
+    /** step is the journal key (model:<function>:<position>); attempt>0 marks a re-sent call. */
+    async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number,call:{step:string|null;attempt:number}={step:null,attempt:0}){
       await write({...base(),event_key:'model:'+crypto.randomUUID(),kind:'model',role:roles.has(options.aiFunction)?options.aiFunction:'other',status:result.success?'ok':'failed',
         duration_ms:Math.round(number(elapsed)),input_tokens:number(result.usage?.input_tokens),output_tokens:number(result.usage?.output_tokens),
         cost_usd:typeof result.estimatedCostUsd==='number'?number(result.estimatedCostUsd):null,
         counts:{offered_tool_count:options.tools?.length??0,offered_tools:toolNames(options.tools),
           returned_tool_count:result.toolCalls?.length??0,returned_tools:(result.toolCalls??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name')),
-          timeout_ms:number(options.timeoutMs),failure_kind:failureKind(result)}})
+          timeout_ms:number(options.timeoutMs),failure_kind:failureKind(result),
+          model:label(result.model),reasoning_effort:label(result.reasoningEffort),
+          cached_input_tokens:number(result.usage?.cached_input_tokens),reasoning_tokens:number(result.usage?.reasoning_tokens),
+          step:label(call.step),attempt:number(call.attempt)}})
     },
     /** One row per executed tool call: which tool, its status and the step. */
     tool(input:{name:string;status:string;step:number;index:number;ms:number}){

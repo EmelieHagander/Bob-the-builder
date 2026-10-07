@@ -9,6 +9,8 @@ export function rethrowContinuation(error: unknown): void {
 export type JournalEntry = { key: string; fingerprint: string; value: unknown }
 // Initial dispatch plus at most two retries of the same logical operation.
 const MAX_OPERATION_RETRIES = 2
+/** attempt counts earlier dispatched retries of this exact operation (0 = first send). */
+export type JournalIdentity = { key: string; fingerprint: string; attempt: number }
 export interface JournalStore {
   entries: JournalEntry[]
   save(entry: JournalEntry): Promise<void>
@@ -17,7 +19,7 @@ export interface BobJournal {
   /** Reconstruct a completed operation from recorded steps only. The scope
    * must opt in after a fresh lifecycle check; it grants no new dispatch. */
   replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T>
-  run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs?: number): Promise<T>
+  run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs?: number): Promise<T>
   check(): void
   /** Milliseconds left in this worker's segment. */
   remaining(): number
@@ -61,7 +63,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
     },
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
-    async run<T>(stream: string, input: unknown, operation: (identity: { key: string; fingerprint: string }) => Promise<T>, reserveMs = 0): Promise<T> {
+    async run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs = 0): Promise<T> {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
@@ -93,7 +95,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         entries.set(marker.key, marker)
       }
       let value: T | undefined, failure: string | undefined
-      try { value = await operation({ key, fingerprint: hash }) }
+      try { value = await operation({ key, fingerprint: hash, attempt: retries.length }) }
       catch (error) {
         if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','segment_wall'].includes(error.message)){
           // A durable queue must not retry the same failing model call until
