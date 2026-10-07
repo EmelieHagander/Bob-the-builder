@@ -8,6 +8,7 @@ import { Icon, Loading, useAsync } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { VolunteerDrawings } from '../components/VolunteerDrawings'
 import { IMAGE_PURPOSES } from '../components/ProjectImages'
+import { formatDate } from '../lib/format'
 
 const message = (reason: unknown) => reason instanceof Error ? reason.message : String(reason)
 const statusName = { todo: 'To do', doing: 'In progress', blocked: 'Blocked', done: 'Done' }
@@ -172,7 +173,7 @@ function VolunteerFeedView({ secret, projectId, section, openTask, onDenied }: {
       }
       if (section === 'updates') {
         const update = item as VolunteerUpdate
-        return <article className="card volunteer-item" key={update.id}>{update.pinned && <span className="badge">Pinned</span>}<p className="volunteer-text">{update.text}</p><time className="foundation-hint">{new Date(update.createdAt).toLocaleDateString()}</time></article>
+        return <article className="card volunteer-item" key={update.id}>{update.pinned && <span className="badge">Pinned</span>}<p className="volunteer-text">{update.text}</p><time className="foundation-hint">{formatDate(update.createdAt)}</time></article>
       }
       const meal = item as VolunteerMeal
       return <article className="card volunteer-item" key={meal.id}><h2>{meal.meal}</h2><p className="foundation-hint">{meal.time}</p><strong>{meal.dish}</strong><p className="volunteer-text">{meal.notes}</p></article>

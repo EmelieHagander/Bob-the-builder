@@ -141,7 +141,8 @@ h1,
 h2,
 h3,
 .font-display {
-  font-family: 'Baloo 2', cursive;
+  /* Sans fallback: offline or blocked web fonts must not turn headings cursive. */
+  font-family: 'Baloo 2', system-ui, -apple-system, sans-serif;
 }
 
 button {
@@ -266,6 +267,24 @@ select {
 }
 .btn:active {
   transform: translateY(1px);
+}
+/* Selected toggle: brand green, so it never reads as the amber main action. */
+.btn[aria-pressed='true'],
+.btn[aria-pressed='true']:hover {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+  box-shadow: none;
+}
+/* Disabled controls must look unavailable, including the amber primary. */
+.btn:disabled,
+.btn:disabled:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-faint);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Pills */
@@ -437,7 +456,7 @@ select {
 .foundation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: var(--section-gap); }
 .foundation-heading h2, .foundation-heading h3 { margin: 0; font-size: 18px; }
 .foundation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.foundation-actions .btn, .task-detail .btn, .project-images .btn, .project-facts .btn, .modal .btn { min-height: 44px; min-width: 44px; }
+.foundation-actions .btn, .material-plan .btn, .task-detail .btn, .project-images .btn, .project-facts .btn, .modal .btn { min-height: 44px; min-width: 44px; }
 .foundation-form { display: flex; flex-direction: column; gap: var(--layout-gap); }
 .foundation-form input[type='file'] { max-width: 100%; min-height: 44px; }
 .foundation-hint { font-size: 13px; line-height: 1.5; color: var(--ink-soft); margin: 8px 0; overflow-wrap: anywhere; }
@@ -761,7 +780,6 @@ select {
 /* Household and friend sharing extend the same field, card and action grammar. */
 .sharing-card, .sharing-invite { min-width: 0; overflow-wrap: anywhere; }
 .sharing-card .btn, .sharing-invite .btn, .sharing-card select, .sharing-invite select, .start-project .btn { min-height: 44px; }
-.sharing-card .btn:disabled, .sharing-invite .btn:disabled { cursor: default; opacity: .6; }
 .sharing-card :focus-visible, .sharing-invite :focus-visible, .sharing-disclosure > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 .sharing-label { font-size: 13px; font-weight: 700; }
 .sharing-projects { display: grid; gap: 8px; }
@@ -862,7 +880,6 @@ select {
 .bob-composer-actions { display: flex; flex-direction: row; gap: 4px; }
 .bob-composer-actions .btn { min-width: 44px; min-height: 44px; padding: 8px; }
 .bob-composer textarea:focus-visible, .bob-drawer button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.bob-composer .btn:disabled { opacity: .55; }
 @media (min-width: 480px) { .bob-composer-actions { flex-direction: row; } }
 
 .bob-saved-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 13px; }

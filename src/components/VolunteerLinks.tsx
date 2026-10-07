@@ -3,6 +3,7 @@ import * as db from '../data/database'
 import { volunteerSecret } from '../data/volunteers'
 import { Field, FormError, inputStyle } from './form'
 import { Loading, useAsync } from './ui'
+import { formatDate } from '../lib/format'
 
 export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string; onBusyChange: (busy: boolean) => void }) {
   const [version, setVersion] = useState(0)
@@ -55,12 +56,12 @@ export function VolunteerLinks({ projectId, onBusyChange }: { projectId: string;
           try { await navigator.clipboard.writeText(created.url); setNotice('Volunteer link copied.') }
           catch { setError('Copy the link from the field above. Automatic copying is unavailable.') }
         }}>Copy volunteer link</button>
-        <p className="foundation-hint">Save this link now; its full address is shown only here. It expires {new Date(created.expiresAt).toLocaleDateString()}.</p>
+        <p className="foundation-hint">Save this link now; its full address is shown only here. It expires {formatDate(created.expiresAt)}.</p>
       </div>}
       <div className="sharing-divider"><h3>Existing volunteer links</h3>
         <p className="foundation-hint">Anyone you give a link to can register a name in this project. Revoking a link also ends access for everyone who joined through it.</p>
         {!data.links.length ? <p className="foundation-hint">No volunteer links yet.</p> : <ul className="sharing-list">{data.links.map(link => <li key={link.id} className="sharing-row">
-          <div><strong>{link.label}</strong><p className="foundation-hint">{link.participants} participants · {link.revokedAt ? 'Revoked' : new Date(link.expiresAt).getTime() <= Date.now() ? 'Expired' : 'Expires ' + new Date(link.expiresAt).toLocaleDateString()}</p></div>
+          <div><strong>{link.label}</strong><p className="foundation-hint">{link.participants} participants · {link.revokedAt ? 'Revoked' : new Date(link.expiresAt).getTime() <= Date.now() ? 'Expired' : 'Expires ' + formatDate(link.expiresAt)}</p></div>
           {!link.revokedAt && new Date(link.expiresAt).getTime() > Date.now() && <button type="button" className="btn" disabled={busy} onClick={() => setRemoving({ linkId: link.id, sessionId: null })}>Revoke link</button>}
         </li>)}</ul>}
       </div>

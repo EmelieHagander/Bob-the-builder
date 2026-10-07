@@ -9,6 +9,7 @@ import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { Icon, Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
+import { formatDateTime } from '../lib/format'
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error)
 const name = (record: ProjectFact) => record.kind === 'measurement' ? record.subject : record.name
@@ -48,7 +49,7 @@ function FactDetails({ record }: { record: ProjectFact }) {
       <p><strong>Specification:</strong> {record.specification || 'Not recorded'}</p>
     </>}
     {record.notes && <p><strong>Notes:</strong> {record.notes}</p>}
-    <p className="foundation-hint">Recorded by {record.actor} · {new Date(record.recordedAt).toLocaleString()}</p>
+    <p className="foundation-hint">Recorded by {record.actor} · {formatDateTime(record.recordedAt)}</p>
     <SourceImage projectId={record.projectId} imageId={record.sourceImageId} title={record.sourceImageTitle} />
   </div>
 }
@@ -239,7 +240,7 @@ export function ProjectFacts() {
   }
   const saved = () => { setModal(null); setOffset(0); setVersion(n => n + 1) }
   return <div className="page project-facts">
-    <Link to="/project" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Dashboard</Link>
+    <Link to="/project" className="btn" style={compactPrimary}><Icon name="arrow-left" size={16} /> Project</Link>
     <div className="page-head" style={{ gap: 'var(--layout-gap)' }}>
       <div><h1 className="page-title">Measurements & existing parts</h1>
         <p className="page-sub">Keep what you know, what needs measuring and what may be reused.</p></div>

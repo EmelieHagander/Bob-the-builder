@@ -4,6 +4,7 @@ import type { MediaAsset, MediaPurpose, MediaTarget } from '../data/types'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon } from './ui'
+import { formatDate } from '../lib/format'
 
 export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
   current_state: 'Current state', reference: 'Reference', instruction: 'Instruction',
@@ -123,7 +124,7 @@ export function ProjectImages({ projectId, target, title = 'Images', selectImage
         </div> : <div className="image-loading" role="status">{image.state === 'pending' ? 'Upload incomplete' : 'Removal in progress'}</div>}
         <div className="project-image-caption"><strong>{image.title}</strong>
           <span className="image-purpose">{IMAGE_PURPOSES[image.purpose]}{image.sourceKind==='ai_generated' ? ' · AI illustration' : ''}</span>
-          <span className="foundation-hint">Uploaded {new Date(image.createdAt).toLocaleDateString()}</span>
+          <span className="foundation-hint">Uploaded {formatDate(image.createdAt)}</span>
         </div>
         <div className="foundation-actions">
           {allowThumbnail && image.state === 'ready' && <button type="button" className="btn" aria-pressed={thumbnailId === image.id} disabled={busy} onClick={() => void act(() => db.pinProjectThumbnail(projectId, thumbnailId === image.id ? null : image.id))}>

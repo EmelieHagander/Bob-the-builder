@@ -45,7 +45,7 @@ try {
       await page.locator('.page-head').getByRole('link', { name: 'Settings', exact: true }).click()
       await page.getByRole('heading', { name: 'Account settings', exact: true }).waitFor()
     }
-    const entry = page.getByRole('link', { name: 'Installera appen', exact: true })
+    const entry = page.getByRole('link', { name: 'Install the app', exact: true })
     await entry.waitFor({ state: 'visible' })
     await page.evaluate(async () => {
       await document.fonts.ready
@@ -70,7 +70,7 @@ try {
 
   // Capture a prompt on another route, then consume it from the public guide.
   await page.goto(`${base}#/${live ? 'signin' : 'account/settings'}`)
-  await page.getByRole('link', { name: 'Installera appen', exact: true }).waitFor()
+  await page.getByRole('link', { name: 'Install the app', exact: true }).waitFor()
   await page.evaluate(() => {
     window.installPromptCalls = 0
     const event = new Event('beforeinstallprompt', { cancelable: true })
@@ -78,7 +78,7 @@ try {
     event.userChoice = Promise.resolve({ outcome: 'accepted' })
     window.dispatchEvent(event)
   })
-  await page.getByRole('link', { name: 'Installera appen', exact: true }).click()
+  await page.getByRole('link', { name: 'Install the app', exact: true }).click()
   await page.getByRole('button', { name: 'Installera appen', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Du har godkänt installationen' }).waitFor()
   assert.equal(await page.evaluate(() => window.installPromptCalls), 1)
@@ -92,7 +92,7 @@ try {
     // iOS standalone before the next document starts, not a persistent flag.
     await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }))
     await page.reload()
-    await page.getByRole('link', { name: 'Installationshjälp', exact: true }).waitFor()
+    await page.getByRole('link', { name: 'Installation help', exact: true }).waitFor()
   }
   console.log('Early native prompt and accepted/installed/standalone presentation: OK')
 

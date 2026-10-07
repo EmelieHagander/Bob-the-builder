@@ -15,6 +15,7 @@ import { createRequestScope } from '../lib/projectRequest'
 import { getBobSurface, useBobSurfaceSnapshot } from '../lib/bobSurface'
 import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
 import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
+import { formatDateTime } from '../lib/format'
 
 type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null }
 
@@ -29,7 +30,7 @@ function ViewEvidence({ view }: { view: CurrentView }) {
     f.drawing && `${f.drawing.name} · v${f.drawing.revision}`, f.event?.name].filter(Boolean)
   return <details className="bob-context-evidence">
     <summary>Page records used{labels.length ? ` · ${labels.join(' / ')}` : ''}</summary>
-    <p className="foundation-hint">Read from the project at {new Date(view.retrievedAt).toLocaleString()}. Page focus does not approve measurements or drawings.</p>
+    <p className="foundation-hint">Read from the project at {formatDateTime(view.retrievedAt)}. Page focus does not approve measurements or drawings.</p>
     {f.drawing && <p>Viewed drawing v{f.drawing.revision} · {f.drawing.status.replace(/_/g, ' ')} · {f.drawing.sourceState === 'current' ? 'linked sources current' : f.drawing.sourceState === 'changed' ? 'sources changed — review before use' : 'sources could not be checked'}</p>}
     {view.warnings.length > 0 && <ul>{view.warnings.map((warning, i) => <li key={i}>{warnings[warning] ?? 'Some page context was limited. Open the saved source for its complete details.'}</li>)}</ul>}
   </details>
@@ -222,7 +223,7 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
           <p>Stored project information; measurements and specifications are not verified.</p>
           {msg.evidence.partial && <p>Some results were limited or unavailable.</p>}
-          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i}><strong>{source.label}</strong> · {source.dataset}<br />Record {source.recordId}<br />Retrieved {new Date(source.retrievedAt).toLocaleString()}{source.updatedAt ? ` · updated ${new Date(source.updatedAt).toLocaleString()}` : ' · update time unknown'}</li>)}</ul>
+          <ul style={{ paddingLeft: 18 }}>{msg.evidence.sources.map((source, i) => <li key={i} title={`Record ${source.recordId}`}><strong>{source.label}</strong> · {source.dataset}<br />Retrieved {formatDateTime(source.retrievedAt)}{source.updatedAt ? ` · updated ${formatDateTime(source.updatedAt)}` : ' · update time unknown'}</li>)}</ul>
         </details>}
         {!!msg.evidence?.references?.length && <details className="bob-evidence">
           <summary>Building references ({msg.evidence.references.length})</summary>

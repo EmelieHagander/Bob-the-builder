@@ -11,6 +11,7 @@ import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
 import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
 import { Icon, Loading, SkillPill, useAsync } from '../components/ui'
+import { formatDateTime } from '../lib/format'
 
 const errorText = (err: unknown) => err instanceof Error ? err.message : String(err)
 
@@ -144,7 +145,7 @@ export function TaskDetail() {
           {step.isCheckpoint && <p className="checkpoint-label">{step.required ? 'Required completion check' : 'Optional check'}</p>}
           {focusedInstruction?.id === step.id && <div className="foundation-actions"><span className="foundation-hint">Bob’s selected instruction</span><button className="btn" onClick={() => setBobInstruction(null)}>Use whole Task</button></div>}
           {step.instructions && <p className="instruction-text">{step.instructions}</p>}
-          {step.completedAt && <p className="foundation-hint">Completed {new Date(step.completedAt).toLocaleString()}</p>}
+          {step.completedAt && <p className="foundation-hint">Completed {formatDateTime(step.completedAt)}</p>}
           <StepImages projectId={projectId} stepId={step.id} />
         </li>)}
       </ol>

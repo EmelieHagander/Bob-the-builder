@@ -9,6 +9,7 @@ import { Modal } from '../components/Modal'
 import { PhasePill } from '../components/PhaseUI'
 import { Loading, useAsync } from '../components/ui'
 import { ProjectImages, StoredImage } from '../components/ProjectImages'
+import { formatDateTime } from '../lib/format'
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e)
 function Retry({ error, retry }: { error: Error; retry: () => void }) {
@@ -30,7 +31,7 @@ function VersionDetails({ value }: { value: SolutionVersion }) {
   return <div className="fact-details">
     <p>{value.description}</p><p><strong>Assumptions:</strong> {value.assumptions || 'Not recorded'}</p>
     <p><strong>Trade-offs:</strong> {value.tradeoffs || 'Not recorded'}</p>
-    <p className="foundation-hint">{value.actor} · {new Date(value.recordedAt).toLocaleString()} · {value.reason}</p>
+    <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View reference image</button>
       : value.imageTitle && <p>Reference image removed: {value.imageTitle}</p>}
@@ -136,7 +137,7 @@ function History({ projectId, record, areaId, onClose, onVersion }: {
       {!data?.items.length && <p>No recorded history for this target scope.</p>}
       <ol className="fact-history">{data?.items.map((r: Solution | TargetDecision) => <li key={r.revision} className="card fact-card">
         <h4>{'title' in r ? r.title + ' · Version ' + r.revision : 'Decision ' + r.revision + (r.solutionId ? ' · Selected version ' + r.solutionRevision : ' · Target cleared')}</h4>
-        <p>{r.reason}</p><p className="foundation-hint">{r.actor} · {new Date(r.recordedAt).toLocaleString()}</p>
+        <p>{r.reason}</p><p className="foundation-hint">{r.actor} · {formatDateTime(r.recordedAt)}</p>
         {'title' in r ? <button className="btn" onClick={() => onVersion(r.id, r.revision)}>View version</button>
           : r.solutionId && <button className="btn" onClick={() => onVersion(r.solutionId!, r.solutionRevision!)}>View selected version</button>}
       </li>)}</ol><Pager offset={offset} more={Boolean(data?.hasMore)} move={setOffset} />
@@ -199,7 +200,7 @@ function ConnectedSolutions({ projectId }: { projectId: string }) {
         <h2>{targetTitle}</h2>
         {target?.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
           {area && target.inherited && <p className="solution-attention">This Area currently inherits the Project target. Selecting an Area target here will create an independent decision for {areaName} without changing sibling Areas.</p>}
-          <p>{target.decision.reason}</p><p className="foundation-hint">Selected by {target.decision.actor} · {target.decision.recordedAt ? new Date(target.decision.recordedAt).toLocaleString() : 'time not recorded'}</p>
+          <p>{target.decision.reason}</p><p className="foundation-hint">Selected by {target.decision.actor} · {target.decision.recordedAt ? formatDateTime(target.decision.recordedAt) : 'time not recorded'}</p>
           <VersionDetails value={target.solution} />
           {(!area || !target.inherited) && <button className="btn" onClick={() => setDialog({ kind: 'clear' })}>Clear {area ? 'Area ' : ''}target</button>}
         </> : <p>No target selected for {area ? areaName : 'the Project'}. Add alternatives, then choose one version for this scope.</p>}

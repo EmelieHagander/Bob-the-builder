@@ -10,6 +10,14 @@ const dateFormatter = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 })
 
+const dateTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 const monthFormatter = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
   year: 'numeric',
@@ -29,6 +37,14 @@ export function formatDate(iso: string | null): string {
   const date = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso)
   if (Number.isNaN(date.getTime())) return iso
   return dateFormatter.format(date)
+}
+
+/** ISO timestamp → "9 Sept 2026, 18:00", matching the app's date language. */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return dateTimeFormatter.format(date)
 }
 
 /** "July 2026" for a calendar month. */

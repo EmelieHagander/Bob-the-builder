@@ -6,6 +6,7 @@ import type { TaskNeedKind, TaskReadinessState } from '../data/workPlan'
 import { Field, FormError, inputStyle } from './form'
 import { Modal } from './Modal'
 import { Icon, Loading, useAsync } from './ui'
+import { formatDateTime } from '../lib/format'
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 
@@ -114,7 +115,7 @@ export function TaskReadinessPanel({ projectId, taskId, areaId, refreshKey = 0 }
       {data.readiness.state === 'unreviewed' && <button className="btn btn-primary" disabled={busy} onClick={() => void act(() => db.editTaskWorkPlan(projectId, taskId, 'confirm_readiness', null, 0, {}))}>Confirm ready</button>}
     </div>
     <p className="foundation-hint">{copy.text}</p>
-    {data.readiness.reviewedAt && <p className="foundation-hint">Last confirmed {new Date(data.readiness.reviewedAt).toLocaleString()}{data.readiness.reviewedBy ? ` by ${data.readiness.reviewedBy}` : ''}.</p>}
+    {data.readiness.reviewedAt && <p className="foundation-hint">Last confirmed {formatDateTime(data.readiness.reviewedAt)}{data.readiness.reviewedBy ? ` by ${data.readiness.reviewedBy}` : ''}.</p>}
     {actionError && <div role="alert"><FormError>{actionError}</FormError></div>}
 
     {data.readiness.blockers.length > 0 && <div className="fact-details"><h3 style={{ marginTop: 0 }}>What blocks this task</h3>{data.readiness.blockers.map(blocker => <p key={`${blocker.kind}:${blocker.id}`}><Icon name="warning-circle" size={15} /> {blocker.label}</p>)}</div>}
