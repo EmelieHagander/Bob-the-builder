@@ -19,8 +19,10 @@ export const runAuthenticatedK4Recovery = (env, deps) => runAuthenticatedConstru
 export const runAuthenticatedK4CutFit = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-fit')
 export const runAuthenticatedK4CutPlan = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-plan')
 export const runAuthenticatedK4CutPlanReadback = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-plan-readback')
+export const runAuthenticatedK4PackPurchase = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'pack-purchase')
 async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage, recovery = false) {
-  const readback = recovery === 'cut-plan-readback'
+  const pack = recovery === 'pack-purchase'
+  const readback = recovery === 'cut-plan-readback' || pack
   const cutPlan = recovery === 'cut-plan' || readback
   const cutFit = recovery === 'cut-fit' || cutPlan
   const previousTurn = readback ? K4_SAVED_CUT_PLAN_TURN : cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : cutFit ? K4_CUT_FIT_PREVIOUS_TURN : recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
@@ -88,14 +90,18 @@ async function runAuthenticatedConstruction(env, { makeClient, probe, progress =
       assert(!plans.error && plans.data?.length === (readback ? 1 : 0), 'Inspect the existing saved plan before any new model turn')
       if (readback) assert(plans.data[0].id === K4_SAVED_CUT_PLAN_ID && plans.data[0].current_revision === 1 && plans.data[0].artifact_id === K4_SOURCE)
     }
-    progress(readback ? `Existing member, completed turn and saved plan verified; reading the same result without a model request.` : `Existing member, project and conversation verified; invoking the ${stage} probe once.`)
+    if (pack) {
+      const articles = await client.from('supplier_articles').select('id').eq('project_id', K3_PROJECT).limit(1)
+      assert(!articles.error && articles.data?.length === 0, 'Inspect the existing supplier product before any new model turn')
+    }
+    progress(pack ? 'Existing member, saved plan and empty product state verified; invoking the K4 pack probe once.' : readback ? `Existing member, completed turn and saved plan verified; reading the same result without a model request.` : `Existing member, project and conversation verified; invoking the ${stage} probe once.`)
     phase = 'probe'
     await probe({
-      ...(readback ? { BOB_K4_VERIFY_ONLY: 'saved-plan' } : {}),
+      ...(readback && !pack ? { BOB_K4_VERIFY_ONLY: 'saved-plan' } : {}),
       VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: key,
       BOB_TEST_MEMBER_ID: K3_MEMBER, BOB_TEST_MEMBER_ACCESS_TOKEN: session.access_token,
       [`BOB_${stage}_PROJECT_ID`]: K3_PROJECT, [`BOB_${stage}_LIVE_CONFIRM`]: 'disposable-fixtures-only',
-      [`BOB_${stage}_REPORT`]: env[`BOB_${stage}_REPORT`] ?? (stage === 'K3' ? 'test-results/live-construction-drawing.json' : readback ? 'test-results/live-construction-cut-plan-readback.json' : cutPlan ? 'test-results/live-construction-cut-plan.json' : cutFit ? 'test-results/live-construction-cut-fit.json' : 'test-results/live-construction-lists.json'),
+      [`BOB_${stage}_REPORT`]: env[`BOB_${stage}_REPORT`] ?? (stage === 'K3' ? 'test-results/live-construction-drawing.json' : pack ? 'test-results/live-pack-purchase.json' : readback ? 'test-results/live-construction-cut-plan-readback.json' : cutPlan ? 'test-results/live-construction-cut-plan.json' : cutFit ? 'test-results/live-construction-cut-fit.json' : 'test-results/live-construction-lists.json'),
     })
     return { passed: true, phase: 'completed', projectId: K3_PROJECT }
   } catch {

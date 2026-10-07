@@ -60,6 +60,23 @@ export interface CutPlanPurchaseSource {
   contributions: { plan_id: string; plan_revision: number; quantity: number; artifact_id: string; artifact_revision: number }[]
 }
 
+/** Pack purchase owning a Shopping row: declared supplier article, pinned needs and server-derived pack count. */
+export interface PackPurchaseSource {
+  article_id: string
+  revision: number
+  published: boolean
+  total_quantity: string | number
+  content_unit: string
+  content_per_purchase_unit: string | number | null
+  purchase_unit: string
+  purchase_count: number | null
+  surplus_quantity: string | number | null
+  source_state: 'current' | 'changed'
+  shopping_edited: boolean
+  article: { title: string; supplier: string; manufacturer: string; article_number: string; variant: string; source_url: string | null; source_document: string; revision: number; source_state: string }
+  needs: { requirement_id: string; requirement_revision: number; quantity: string | number; name: string | null; requirement_changed: boolean }[]
+}
+
 export interface StockItem {
   id: string
   projectId: string
@@ -436,16 +453,16 @@ export function createMaterialPlanning(
       guard()
       return { materialId: saved.material_id as string, revision: saved.revision as number }
     },
-    async cutPlanShopping(projectId: string): Promise<{ materialId: string; source: CutPlanPurchaseSource }[]> {
+    async cutPlanShopping(projectId: string): Promise<{ materialId: string; source?: CutPlanPurchaseSource; pack?: PackPurchaseSource }[]> {
       const { db, guard } = connection(projectId)
-      const rows: { materialId: string; source: CutPlanPurchaseSource }[] = []
+      const rows: { materialId: string; source?: CutPlanPurchaseSource; pack?: PackPurchaseSource }[] = []
       let cursor: string | null = null
       const seen = new Set<string>()
       do {
         const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'shopping', record_id: null, after_id: cursor } })) as Row
         guard()
         if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Shopping source project mismatch.')
-        for (const row of result.records) if (row.cut_plan_source) rows.push({ materialId: row.id, source: row.cut_plan_source })
+        for (const row of result.records) if (row.cut_plan_source || row.pack_source) rows.push({ materialId: row.id, ...(row.cut_plan_source ? { source: row.cut_plan_source } : {}), ...(row.pack_source ? { pack: row.pack_source } : {}) })
         cursor = result.next_cursor ?? null
         if (result.truncated && !cursor || cursor && seen.has(cursor)) throw new Error('Shopping source list incomplete. Retry.')
         if (cursor) seen.add(cursor)

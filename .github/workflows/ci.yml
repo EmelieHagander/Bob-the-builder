@@ -38,6 +38,8 @@ jobs:
       - run: node --import tsx --check scripts/check-live-construction-cut-plan.ts
       - run: node --check scripts/run-live-construction-cut-fit.mjs
       - run: node --check scripts/run-live-construction-cut-plan.mjs
+      - run: node --import tsx --check scripts/check-live-pack-purchase.ts
+      - run: node --check scripts/run-live-pack-purchase.mjs
       - run: npm run check:edge
       # Type-check + production build; no env needed — the build is
       # backend-agnostic (Supabase config is injected at deploy time).
