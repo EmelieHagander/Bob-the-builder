@@ -65,19 +65,45 @@ test('provider retry count survives workers and stops the failing call without l
   assert.equal(attempts,3);assert.equal(saved,1)
 })
 
-test('provider failures and segment timeouts share one retry budget across workers', async () => {
-  for (const reasons of [['segment_wall', 'segment_wall', 'segment_wall'], ['provider_retry', 'segment_wall', 'provider_retry']]) {
+test('provider failures and segment timeouts share one retry budget across workers; unknown outcomes re-send once', async () => {
+  for (const [reasons, dispatches] of [
+    [['segment_wall', 'segment_wall', 'segment_wall'], 2],
+    [['provider_uncertain', 'provider_uncertain'], 2],
+    [['provider_retry', 'segment_wall', 'provider_retry'], 3],
+    [['provider_retry', 'provider_retry', 'provider_retry'], 3],
+  ] as const) {
     const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
     let attempts = 0
     const run = () => createBobJournal(store, Infinity).run('model:cad', { input: 'same' }, async () => {
       throw new BobContinuation('yield', reasons[attempts++])
     })
-    for (let i = 0; i < 2; i++) await assert.rejects(run(), e => e instanceof BobContinuation && e.kind === 'yield')
+    for (let i = 0; i < dispatches - 1; i++) await assert.rejects(run(), e => e instanceof BobContinuation && e.kind === 'yield')
     await assert.rejects(run(), /provider_retry_exhausted/)
     await assert.rejects(run(), /provider_retry_exhausted/)
-    assert.equal(attempts, 3, 'restarting the worker cannot reset the paid-call budget')
-    assert.deepEqual(entries.filter(e => e.key.includes(':retry:')).map(e => (e.value as any).reason), reasons.slice(0, 2))
+    assert.equal(attempts, dispatches, 'restarting the worker cannot reset the paid-call budget')
+    assert.deepEqual(entries.filter(e => e.key.includes(':retry:')).map(e => (e.value as any).reason), reasons.slice(0, dispatches - 1))
   }
+})
+
+test('an uncertain re-send is counted across workers so the answer can report it', async () => {
+  const entries: JournalEntry[] = [], store = { entries, save: async (e: JournalEntry) => { entries.push(structuredClone(e)) } }
+  let attempts = 0
+  const run = () => createBobJournal(store, Infinity).run('model:ask-bob', { input: 'same' }, async identity => {
+    if (++attempts === 1) throw new BobContinuation('yield', 'provider_uncertain')
+    assert.equal(identity.attempt, 1)
+    return 'answer'
+  })
+  await assert.rejects(run(), BobContinuation)
+  assert.equal(await run(), 'answer')
+  assert.equal(createBobJournal(store, Infinity).uncertainResends(), 1)
+  const definite: JournalEntry[] = []
+  let tries = 0
+  const again = () => createBobJournal({ entries: definite, save: async e => { definite.push(e) } }, Infinity).run('model:x', {}, async () => {
+    if (++tries === 1) throw new BobContinuation('yield', 'provider_retry')
+    return 'ok'
+  })
+  await assert.rejects(again(), BobContinuation); await again()
+  assert.equal(createBobJournal({ entries: definite, save: async () => {} }, Infinity).uncertainResends(), 0, 'a definite 429/5xx was never billed and is not reported')
 })
 
 test('waiting for an accepted AI job and yielding before dispatch do not spend retries', async () => {

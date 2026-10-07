@@ -9,6 +9,11 @@ export function rethrowContinuation(error: unknown): void {
 export type JournalEntry = { key: string; fingerprint: string; value: unknown }
 // Initial dispatch plus at most two retries of the same logical operation.
 const MAX_OPERATION_RETRIES = 2
+/** Dispatched calls whose provider outcome is unknown (connection lost, segment
+ * wall). They may already be billed, so they are re-sent at most once and the
+ * re-send is reported to the owner. A definite 429/5xx keeps two retries. */
+const UNCERTAIN_RETRY_REASONS = new Set(['provider_uncertain', 'segment_wall'])
+const MAX_UNCERTAIN_RETRIES = 1
 /** attempt counts earlier dispatched retries of this exact operation (0 = first send). */
 export type JournalIdentity = { key: string; fingerprint: string; attempt: number }
 export interface JournalStore {
@@ -23,6 +28,8 @@ export interface BobJournal {
   check(): void
   /** Milliseconds left in this worker's segment. */
   remaining(): number
+  /** Re-sends after an unknown provider outcome, recorded across all segments. */
+  uncertainResends(): number
 }
 /** JSONB checkpoints reorder object keys. Return the same JSON representation
  * both before and after persistence, including nested structured model output.
@@ -63,6 +70,10 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
     },
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
+    uncertainResends() {
+      return [...entries.values()].filter(e => /:retry:\d+$/.test(e.key)
+        && UNCERTAIN_RETRY_REASONS.has(String((e.value as { reason?: unknown } | null)?.reason))).length
+    },
     async run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs = 0): Promise<T> {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0
@@ -97,13 +108,15 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       let value: T | undefined, failure: string | undefined
       try { value = await operation({ key, fingerprint: hash, attempt: retries.length }) }
       catch (error) {
-        if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','segment_wall'].includes(error.message)){
+        if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','provider_uncertain','segment_wall'].includes(error.message)){
           // A durable queue must not retry the same failing model call until
           // the twenty-minute turn expires. Keep the retry count with its
           // exact input, across workers, then return an honest failure. A
           // segment_wall happens AFTER dispatch and can cost money too.
           // Pre-dispatch yields and waiting on the same AI job are excluded.
-          if(retries.length<MAX_OPERATION_RETRIES){
+          const uncertainSoFar=retries.filter(e=>UNCERTAIN_RETRY_REASONS.has(String((e.value as {reason?:unknown}|null)?.reason))).length
+          const allowed=UNCERTAIN_RETRY_REASONS.has(error.message)?uncertainSoFar<MAX_UNCERTAIN_RETRIES:true
+          if(allowed&&retries.length<MAX_OPERATION_RETRIES){
             const marker={key:key+':retry:'+(retries.length+1),fingerprint:hash,value:{reason:error.message}}
             try{await store.save(marker)}catch{stopped=new BobContinuation('yield','checkpoint_unavailable');throw stopped}
             entries.set(marker.key,marker);stopped=error;throw stopped
