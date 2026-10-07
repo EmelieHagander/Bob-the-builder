@@ -40,6 +40,13 @@ const NAV: NavItem[] = [
   { to: '/account', icon: 'user-circle', label: 'Account' },
 ]
 
+// In Build, Today is the crew's working screen, so it moves up next to Project.
+function projectNav(project: Project): NavItem[] {
+  if (project.phase !== 'build') return NAV
+  const today = NAV.find(item => item.to === '/today')!
+  return [NAV[0], today, ...NAV.slice(1).filter(item => item !== today)]
+}
+
 const ACCOUNT_NAV: NavItem[] = [
   { to: '/', icon: 'house', label: 'Home', end: true },
   { to: '/account/calendar', icon: 'calendar-dots', label: 'Calendar' },
@@ -107,7 +114,7 @@ function Sidebar({ project }: { project: Project | null }) {
       </Link>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {(project ? [ACCOUNT_NAV[0], ...NAV] : ACCOUNT_NAV).map((n) => (
+        {(project ? [ACCOUNT_NAV[0], ...projectNav(project)] : ACCOUNT_NAV).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} style={{ display: 'block' }}>
             {({ isActive }) => (
               <div

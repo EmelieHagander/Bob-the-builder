@@ -1018,3 +1018,19 @@ select {
 .project-start-steps li > .foundation-hint { display: block; margin: -8px 0 0; }
 .project-start-steps a, .project-start-link { font-weight: 700; color: var(--accent-2); min-height: 44px; display: inline-flex; align-items: center; }
 .project-start-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* Start this build / Build mode on Project Home. */
+.build-start { padding: var(--panel-padding); margin-bottom: var(--section-gap); display: flex; flex-wrap: wrap; align-items: center; gap: var(--layout-gap); border-color: var(--accent-2); }
+.build-start-copy { flex: 1 1 260px; min-width: 0; }
+.build-start-copy h2 { font-size: var(--text-section); margin: 0 0 4px; }
+.build-start-copy p { margin: 0; }
+.build-start-button { flex: 1 1 220px; min-height: 56px; font-size: 18px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; justify-content: center; }
+.build-focus { padding: var(--space-2) var(--panel-padding); margin-bottom: var(--layout-gap); border-color: var(--accent-2); display: grid; gap: var(--space-1); }
+.build-focus p { margin: 0; }
+.build-focus-label { margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 750; color: var(--accent-2); }
+.build-focus-head { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.build-focus-label { flex: 0 0 auto; }
+.build-focus-next { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.build-focus-actions .btn { min-height: 44px; }
+.planning-tools { padding: var(--panel-padding); margin-top: var(--section-gap); }
+.planning-tools > summary { min-height: 44px; line-height: 44px; font-weight: 800; cursor: pointer; }

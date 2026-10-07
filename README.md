@@ -24,7 +24,7 @@ A React + TypeScript single-page app built with Vite. Screens:
 
 | Route | Screen |
 | --- | --- |
-| `/install` | Public Swedish home-screen installation guide, available before sign-in |
+| `/install` | Public home-screen installation guide, available before sign-in |
 | `/account/settings` | Account details and a prominent **Installera appen** entry |
 | `/` | Home — building groups, projects, saved participant/event/task-estimate details and household notes |
 | `/account` | Account — household details, building/family and calendar tools, installation and session controls |
@@ -53,9 +53,9 @@ npm run preview    # serve the production build
 
 ## Install Bob on a phone
 
-Open **Account → Settings → Installera appen**, or use the same button above
+Open **Account → Settings → Install the app**, or use the same button above
 the sign-in form. The [public installation guide](https://emeliehagander.github.io/Bob-the-builder/#/install)
-walks users through Safari on iPhone/iPad and Chrome on Android in Swedish.
+walks users through Safari on iPhone/iPad and Chrome on Android.
 Supporting browsers offer a native installation prompt after a user clicks.
 Other browsers keep the manual instructions available. No app-store account
 or paid store licence is required.
@@ -95,7 +95,7 @@ configuration; it never uses a real account or writes to the database.
 The device's final installation dialog still belongs to iOS/Android and
 should be checked on a real phone when changing the installation instructions.
 
-Guide references: [Apple's Swedish iPhone instructions](https://support.apple.com/sv-se/guide/iphone/iph42ab2f3a7/ios)
+Guide references: [Apple's iPhone instructions](https://support.apple.com/en-gb/guide/iphone/iph42ab2f3a7/ios)
 and [Google's Android installation instructions](https://support.google.com/chrome/answer/9658361?co=GENIE.Platform%3DAndroid&hl=en-GB).
 
 ## Architecture — the database layer

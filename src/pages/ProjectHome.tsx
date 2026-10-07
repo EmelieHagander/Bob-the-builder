@@ -3,14 +3,16 @@ import { useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
 import { ProjectDrawings } from '../components/ProjectDrawings'
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import type { BuildEvent } from '../data/types'
+import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../data/database'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
 import { ProjectImages } from '../components/ProjectImages'
 import { ProjectStart } from '../components/ProjectStart'
+import { FormError } from '../components/form'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
 
@@ -18,6 +20,9 @@ export function ProjectHome() {
   const projectVersion = useProjectVersion()
   const [version, setVersion] = useState(0)
   const [phaseOpen, setPhaseOpen] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState('')
+  const navigate = useNavigate()
   const { data: project, loading: projectLoading, error: projectError } = useAsync(() => db.getProject(), [projectVersion, version])
   const { data: areas, loading: areasLoading, error: areasError } = useAsync(() => db.getAreas(), [projectVersion, version])
   const { data: people } = useAsync(() => db.getPeople(), [projectVersion])
@@ -49,6 +54,21 @@ export function ProjectHome() {
   if (!project || projectError) return <div className="page"><h1 className="page-title">Project unavailable</h1><p role="alert">{projectError?.message ?? 'This project may no longer be available.'}</p></div>
 
   const areaItems = areas ?? []
+  const building = project.phase === 'build'
+  // Start this build: big when a build day exists, small once planning is reached.
+  const startable = !building && project.phase !== 'complete'
+  const startSize = !startable ? null : next ? 'large' : project.phase === 'planning' ? 'small' : null
+  const startBuild = async () => {
+    if (starting) return
+    setStarting(true); setStartError('')
+    try {
+      await db.setProjectPhase('build', next ? `Build started for ${next.title}.` : 'Build started from Project Home.')
+      setVersion(value => value + 1)
+      if (next) navigate('/today')
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err))
+    } finally { setStarting(false) }
+  }
   const focus = projectFocus(project.phase, areaItems)
   const byId = new Map((people ?? []).map(person => [person.id, person]))
   const areaById = new Map(areaItems.map(area => [area.id, area.name]))
@@ -92,14 +112,29 @@ export function ProjectHome() {
         <p className="page-sub project-area-summary">{areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)}</p>
       </div></div>
       <div className="cluster no-print">
-        {db.authEnabled() && <button className="btn btn-primary" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
+        {db.authEnabled() && <button className={`btn ${startSize || building ? '' : 'btn-primary'}`} onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
+        {startSize === 'small' && <button className="btn btn-primary" disabled={starting} onClick={() => void startBuild()}><Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}</button>}
         <button className="btn" onClick={() => setPhaseOpen(true)}>
           <Icon name="signpost" size={15} /> {project.phase ? 'Review phase' : 'Set project phase'}
         </button>
       </div>
     </div>
 
-    {areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
+    {startError && <FormError>Could not start the build: {startError}</FormError>}
+
+    {startSize === 'large' && next && <section className="card build-start" aria-labelledby="build-start-title">
+      <div className="build-start-copy">
+        <h2 id="build-start-title" className="font-display">Ready to build?</h2>
+        <p className="foundation-hint">{next.title} · {formatEventDay(next.day)}{next.time ? ` · ${next.time}` : ''}. Starting switches this project to Build mode and puts the build-day work first.</p>
+      </div>
+      <button className="btn btn-primary build-start-button" disabled={starting} onClick={() => void startBuild()}>
+        <Icon name="hammer" size={22} /> {starting ? 'Starting…' : 'Start this build'}
+      </button>
+    </section>}
+
+    {building && <BuildFocus next={next} />}
+
+    {!building && areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
 
     {project.description && <details className="project-description">
       <summary>Project description</summary>
@@ -109,6 +144,13 @@ export function ProjectHome() {
 
     {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
 
+    {/* Drawings and open drawing requests stay visible on site. */}
+    {db.authEnabled() && <>
+      <ProjectDrawings key={project.id} projectId={project.id} />
+      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
+    </>}
+
+    <PlanningTools folded={building}>
     <nav className="project-shortcuts" aria-label="Project tools">
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
       <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} /><span>Drawings</span></Link>
@@ -130,11 +172,6 @@ export function ProjectHome() {
       </section>
       <Link to="/building" className="project-detail-link"><Icon name="house" size={16} /> Building &amp; spaces <Icon name="arrow-right" size={15} /></Link>
     </details>
-
-    {db.authEnabled() && <>
-      <ProjectDrawings key={project.id} projectId={project.id} />
-      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
-    </>}
 
     {db.authEnabled() && <section aria-label="Planning next steps" style={{ marginTop: 'var(--section-gap)' }}>
       {planningLoading ? <div className="card" style={{ padding: 'var(--panel-padding)' }}><Loading label="Checking project evidence…" /></div>
@@ -170,6 +207,7 @@ export function ProjectHome() {
             </div>
           </div>}
     </section>}
+    </PlanningTools>
 
     <details className="card project-photo-details" id="project-images">
       <summary>Project images</summary>
@@ -216,7 +254,7 @@ export function ProjectHome() {
             : <p className="foundation-hint" style={{ margin: 0 }}>No announcements yet.</p>}
         </div>
       </section>
-      <section>
+      {!building && <section>
         <SectionTitle icon="calendar-dots" color="var(--honey)">Next build day</SectionTitle>
         <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           {next ? <>
@@ -226,10 +264,35 @@ export function ProjectHome() {
             <Link to={`/events/${next.slug}`} className="btn" style={{ marginTop: 'var(--section-gap)' }}>Open build day</Link>
           </> : <><p className="foundation-hint">Nothing scheduled yet. Calendar timing is separate from lifecycle phase.</p><Link to="/events" className="btn">Events</Link></>}
         </div>
-      </section>
+      </section>}
     </div>
 
     {phaseOpen && <PhaseTransitionDialog title="Review Project phase" current={project.phase} onClose={() => setPhaseOpen(false)}
       onSave={async (phase, reason) => { await db.setProjectPhase(phase, reason); setPhaseOpen(false); setVersion(value => value + 1) }} />}
   </div>
+}
+
+function PlanningTools({ folded, children }: { folded: boolean; children: ReactNode }) {
+  if (!folded) return <>{children}</>
+  return <details className="card planning-tools">
+    <summary>Planning tools</summary>
+    <p className="foundation-hint">Measurements, drawings, materials and the project target. Still here while you build.</p>
+    {children}
+  </details>
+}
+
+// Compact on purpose: one line for the build day keeps the Plan on a small
+// phone's opening screen.
+function BuildFocus({ next }: { next: BuildEvent | null | undefined }) {
+  return <section className="card build-focus" aria-labelledby="build-focus-title">
+    <div className="build-focus-head">
+      <h2 id="build-focus-title" className="build-focus-label"><Icon name="hammer" size={16} /> Build mode</h2>
+      {next && <span className="build-focus-next">{next.title} · {formatEventDay(next.day)}</span>}
+    </div>
+    {!next && <p className="foundation-hint">No build day scheduled. Work can still go ahead; plan one so people know when to come.</p>}
+    <div className="cluster build-focus-actions">
+      <Link className="btn btn-primary" to="/today"><Icon name="sun-horizon" size={16} /> What needs doing</Link>
+      {next ? <Link className="btn" to={`/events/${next.slug}`}>Build day</Link> : <Link className="btn" to="/events">Plan a build day</Link>}
+    </div>
+  </section>
 }

@@ -222,6 +222,8 @@ Stable navigation is more important than saving one phase-specific tap.
 
 ## 4.5 Project Home — `src/pages/Dashboard.tsx`
 
+> **Implemented slice:** the Build entry (**Start this build**) and the Build-mode layout of Project Home are current behavior, owned by [`ui-index.md`](ui-index.md). The rest of this section remains direction.
+
 This is the largest change.
 
 ### Remove as primary logic

@@ -57,6 +57,16 @@ to build?** (`ProjectStart`): the idea goes into the Bob composer as an unsent
 draft, never auto-sent, followed by an optional manual path (photos,
 measurements, Areas, build day).
 
+**Start this build** moves a Project into Build. It is a person's explicit
+action, never automatic. While the Project is not yet Build or Complete:
+with an upcoming build day, Project Home leads with a large **Start this build**
+card and starting opens Today; without one, a small header button appears once
+the Project reaches Planning. In Build, Project Home leads with a **Build mode**
+card (next build day on one line, **What needs doing** → Today), drawings and the Plan
+stay visible, and measurements, materials, target and project focus fold under
+**Planning tools**. The desktop sidebar moves Today next to Project. Covered by
+`scripts/check-build-start-browser.mjs`.
+
 Building & spaces uses practical labels. Space notes are collapsed under
 **Notes**, retained verbatim and expandable; truth labels and proposed/current
 separation remain visible. Presentation changes never delete physical records.
@@ -167,7 +177,7 @@ physical-phone and named-participant acceptance.
 | Ask bob | ask about the current build | honest working/failure states; phase/current view may guide prompts but must not become hidden authority |
 | Home (`/`) | choose/manage projects | Project phase and schedule are distinct; mixed Area phase summary may appear on project cards |
 | Account (`/account`) | manage household details, shared spaces, installation and session | use real household contact data; no duplicate project overview; usable with no active Project |
-| Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; Swedish phone steps |
+| Install Bob (`/#/install`) | put Bob on the phone's home screen | public before project/auth loading; reached from account settings and sign-in; English phone steps |
 
 `Docs/project-phase-ui.md` owns the detailed page-by-page lifecycle composition and implementation impact map.
 
