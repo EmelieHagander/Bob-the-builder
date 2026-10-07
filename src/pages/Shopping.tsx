@@ -2,7 +2,7 @@ import { useBobSurface } from '../lib/bobSurface'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
-import { ChecklistRow, EmptyState, Icon, Loading, MaterialPill, useAsync } from '../components/ui'
+import { ChecklistRow, EmptyState, Icon, LoadFailed, Loading, MaterialPill, useAsync } from '../components/ui'
 import { MaterialModal } from '../components/editors'
 import type { Material } from '../data/types'
 
@@ -16,9 +16,10 @@ export function Shopping() {
   useBobSurface(db.getActiveProjectId() ?? '', { surface: 'shopping' }, 'Shopping')
   const [version, setVersion] = useState(0)
   const projectId = db.getActiveProjectId() ?? ''
-  const { data: groups } = useAsync(() => db.getMaterialsGrouped(), [version])
-  const { data: materials } = useAsync(() => db.getMaterials(), [version])
-  const { data: areas } = useAsync(() => db.getAreas(), [])
+  const { data: groups, error: groupsError } = useAsync(() => db.getMaterialsGrouped(), [version])
+  const { data: materials, error: materialsError } = useAsync(() => db.getMaterials(), [version])
+  const { data: areas } = useAsync(() => db.getAreas(), [version])
+  const listError = groupsError ?? materialsError
   const { data: planSources, error: planSourceError } = useAsync(() => db.getMaterialShoppingSources(projectId), [projectId, version])
   const { data: cutPlanSources, error: cutPlanSourceError } = useAsync(() => db.getCutPlanShoppingSources(projectId), [projectId, version])
   const [adding, setAdding] = useState(false)
@@ -93,7 +94,8 @@ export function Shopping() {
         </div>
       </div>
 
-      <div style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', flexWrap: 'wrap', fontSize: 13.5, color: 'var(--ink-soft)' }}>
+      {listError ? <LoadFailed what="The shopping list" onRetry={() => setVersion(v => v + 1)} /> : <>
+      {materials && <div style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', flexWrap: 'wrap', fontSize: 13.5, color: 'var(--ink-soft)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}>
           <div style={{ width: 200, height: 8, background: 'var(--surface-2)', borderRadius: 999, overflow: 'hidden' }}>
             <div style={{ width: total ? `${(picked / total) * 100}%` : '0%', height: '100%', background: 'var(--leaf)', borderRadius: 999, transition: 'width .3s ease' }} />
@@ -103,7 +105,7 @@ export function Shopping() {
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Icon name="receipt" size={15} color="var(--accent-2)" /> Est. total <strong style={{ color: 'var(--ink)' }}>{estTotal.toLocaleString('sv-SE')} kr</strong>
         </span>
-      </div>
+      </div>}
 
       {(planSourceError || cutPlanSourceError) && <div role="alert" className="card" style={{ padding: 'var(--panel-padding)', marginTop: 'var(--section-gap)' }}>
         Shopping sources could not be checked. <button className="btn" onClick={() => setVersion(v => v + 1)}>Retry sources</button>
@@ -128,6 +130,7 @@ export function Shopping() {
           ))}
         </div>
       )}
+      </>}
 
       {adding && (
         <MaterialModal

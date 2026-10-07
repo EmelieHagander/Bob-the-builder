@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { BuildEvent } from '../data/types'
-import { AvatarStack, EmptyState, Icon, List, ListItem, Loading, SummaryRow, useAsync } from '../components/ui'
+import { formatEventDay } from '../lib/eventDay'
+import { AvatarStack, EmptyState, Icon, List, ListItem, LoadFailed, Loading, SummaryRow, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { EventModal } from '../components/editors'
 
@@ -11,7 +12,7 @@ export function Events() {
   useBobSurface(db.getActiveProjectId() ?? '', { surface: 'events' }, 'Build days')
   const tick = useAuthTick()
   const [version, setVersion] = useState(0)
-  const { data: events } = useAsync(() => db.getEvents(), [version])
+  const { data: events, error: eventsError } = useAsync(() => db.getEvents(), [version])
   const { data: people } = useAsync(() => db.getPeople(), [version])
   const { data: me } = useAsync(() => db.getCurrentUser(), [tick])
   const [modal, setModal] = useState<{ kind: 'new' } | { kind: 'edit'; event: BuildEvent } | null>(null)
@@ -44,7 +45,9 @@ export function Events() {
         </div>
       )}
 
-      {!events ? (
+      {eventsError ? (
+        <LoadFailed what="Build days" onRetry={() => setVersion((v) => v + 1)} />
+      ) : !events ? (
         <Loading />
       ) : events.length === 0 ? (
         <div style={{ marginTop: 'var(--section-gap)' }}>
@@ -58,7 +61,7 @@ export function Events() {
             return <ListItem key={e.id}>
               <SummaryRow trailing={<button type="button" className="ui-icon-button no-print" aria-label={`Edit event ${e.title}`} title="Edit event" onClick={() => setModal({ kind: 'edit', event: e })}><Icon name="pencil-simple" size={16} /></button>}>
                 <div className="ui-row-title"><Link to={`/events/${e.slug}`}>{e.title}</Link><span className="pill" style={going ? { color: 'var(--leaf)', background: 'var(--leaf-bg)' } : full ? { color: 'var(--clay)', background: 'var(--clay-bg)' } : { color: 'var(--ink-soft)', background: 'var(--honey-bg)' }}>{going ? "You're going" : full ? 'Full' : 'Spots open'}</span></div>
-                <div className="ui-row-meta">{e.day} · {e.time} · {e.spots} spots</div>
+                <div className="ui-row-meta">{formatEventDay(e.day)} · {e.time} · {e.spots} spots</div>
               </SummaryRow>
               <div className="ui-row-actions" style={{ justifyContent: 'space-between' }}>
                 <AvatarStack people={resolve(e.attendeeIds)} max={4} size={24} />

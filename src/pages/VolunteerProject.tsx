@@ -1,3 +1,4 @@
+import { formatEventDay } from '../lib/eventDay'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import * as db from '../data/database'
@@ -168,7 +169,7 @@ function VolunteerFeedView({ secret, projectId, section, openTask, onDenied }: {
       }
       if (section === 'events') {
         const event = item as VolunteerEvent
-        return <article className="card volunteer-item" key={event.id}><h2>{event.title}</h2><p>{[event.day, event.time].filter(Boolean).join(' · ')}</p><p className="foundation-hint">{event.place}</p>{event.food && <p className="foundation-hint"><Icon name="fork-knife" /> {event.food}</p>}<button className={'btn' + (event.going ? '' : ' btn-primary')} disabled={!!busy} onClick={() => void attend(event)}>{busy === event.id ? 'Saving…' : event.going ? 'Cancel my attendance' : 'I’m coming'}</button></article>
+        return <article className="card volunteer-item" key={event.id}><h2>{event.title}</h2><p>{[formatEventDay(event.day), event.time].filter(Boolean).join(' · ')}</p><p className="foundation-hint">{event.place}</p>{event.food && <p className="foundation-hint"><Icon name="fork-knife" /> {event.food}</p>}<button className={'btn' + (event.going ? '' : ' btn-primary')} disabled={!!busy} onClick={() => void attend(event)}>{busy === event.id ? 'Saving…' : event.going ? 'Cancel my attendance' : 'I’m coming'}</button></article>
       }
       if (section === 'updates') {
         const update = item as VolunteerUpdate

@@ -85,6 +85,16 @@ export function Loading({ label = 'Loading…' }: { label?: string }) {
   )
 }
 
+/** A read failed: say so instead of showing an empty or zero state, and offer a retry. */
+export function LoadFailed({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <div className="ui-form-error" role="alert" style={{ marginTop: 'var(--section-gap)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', flexWrap: 'wrap' }}>
+      <span style={{ flex: 1, minWidth: 0 }}>{what} could not be loaded. Nothing shown here is current.</span>
+      <button type="button" className="btn" onClick={onRetry}><Icon name="arrow-clockwise" size={15} /> Retry</button>
+    </div>
+  )
+}
+
 /* ─────────────────────────── Avatars ─────────────────────────── */
 
 export function Avatar({ person, size = 27, overlap = false }: { person: Pick<Person, 'initials' | 'color'>; size?: number; overlap?: boolean }) {
