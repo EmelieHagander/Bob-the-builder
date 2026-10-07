@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
-import { runAuthenticatedK4PackPurchase } from './run-live-construction-drawing.mjs'
+import { runAuthenticatedK4PackPurchase, runAuthenticatedK4PackReadback } from './run-live-construction-drawing.mjs'
 
-const verify = runAuthenticatedK4PackPurchase
+const verify = process.env.BOB_K4_PACK_MODE === 'verify-saved' ? runAuthenticatedK4PackReadback : runAuthenticatedK4PackPurchase
 const report = await verify(process.env, {
  makeClient: createClient, progress: value => console.log(value),
  probe: async sessionEnv => {

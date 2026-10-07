@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { pathToFileURL } from 'node:url'
 import { K4_RECOVERY_TURN, assertK4RecoveryCheckpoint } from './k4-recovery-checkpoint.mjs'
-import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, assertK4CutFitCheckpoint, assertK4PackRetryCheckpoint, K4_PACK_RETRY_TURN } from './k4-cut-fit-checkpoint.mjs'
+import { K4_CUT_FIT_PREVIOUS_TURN, K4_CUT_PLAN_PREVIOUS_TURN, K4_SAVED_CUT_PLAN_TURN, K4_SAVED_CUT_PLAN_ID, assertK4CutFitCheckpoint, assertK4PackRetryCheckpoint, K4_PACK_RETRY_TURN, K4_PACK_TURN } from './k4-cut-fit-checkpoint.mjs'
 
 export const K3_PROJECT = 'p_43702f4cbdfb40f0907f5cd0c12a5143'
 export const K3_MEMBER = '9aa569c3-32f3-4f22-a457-0b145e8850dc'
@@ -20,12 +20,15 @@ export const runAuthenticatedK4CutFit = (env, deps) => runAuthenticatedConstruct
 export const runAuthenticatedK4CutPlan = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-plan')
 export const runAuthenticatedK4CutPlanReadback = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'cut-plan-readback')
 export const runAuthenticatedK4PackPurchase = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'pack-purchase')
+// Read-only recheck of the saved pack turn; never submits a model request.
+export const runAuthenticatedK4PackReadback = (env, deps) => runAuthenticatedConstruction(env, deps, 'K4', 'pack-readback')
 async function runAuthenticatedConstruction(env, { makeClient, probe, progress = () => {}, now = Date.now }, stage, recovery = false) {
-  const pack = recovery === 'pack-purchase'
+  const packReadback = recovery === 'pack-readback'
+  const pack = recovery === 'pack-purchase' || packReadback
   const readback = recovery === 'cut-plan-readback' || pack
   const cutPlan = recovery === 'cut-plan' || readback
   const cutFit = recovery === 'cut-fit' || cutPlan
-  const previousTurn = pack ? K4_PACK_RETRY_TURN : readback ? K4_SAVED_CUT_PLAN_TURN : cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : cutFit ? K4_CUT_FIT_PREVIOUS_TURN : recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
+  const previousTurn = packReadback ? K4_PACK_TURN : pack ? K4_PACK_RETRY_TURN : readback ? K4_SAVED_CUT_PLAN_TURN : cutPlan ? K4_CUT_PLAN_PREVIOUS_TURN : cutFit ? K4_CUT_FIT_PREVIOUS_TURN : recovery ? K4_RECOVERY_TURN : stage === 'K3' ? K3_PREVIOUS_TURN : K4_PREVIOUS_TURN
   let phase = 'configuration', client, acquired = false
   try {
     assert.equal(env.VITE_SUPABASE_URL?.replace(/\/$/, ''), URL)
@@ -93,13 +96,14 @@ async function runAuthenticatedConstruction(env, { makeClient, probe, progress =
       if (readback) assert(plans.data[0].id === K4_SAVED_CUT_PLAN_ID && plans.data[0].current_revision === 1 && plans.data[0].artifact_id === K4_SOURCE)
     }
     if (pack) {
-      const articles = await client.from('supplier_articles').select('id').eq('project_id', K3_PROJECT).limit(1)
-      assert(!articles.error && articles.data?.length === 0, 'Inspect the existing supplier product before any new model turn')
+      const articles = await client.from('supplier_articles').select('id').eq('project_id', K3_PROJECT).limit(2)
+      assert(!articles.error && articles.data?.length === (packReadback ? 1 : 0), 'Inspect the existing supplier product before any new model turn')
     }
-    progress(pack ? 'Existing member, saved plan and empty product state verified; invoking the K4 pack probe once.' : readback ? `Existing member, completed turn and saved plan verified; reading the same result without a model request.` : `Existing member, project and conversation verified; invoking the ${stage} probe once.`)
+    progress(packReadback ? 'Existing member and saved pack turn verified; rechecking the saved result without a model request.' : pack ? 'Existing member, saved plan and empty product state verified; invoking the K4 pack probe once.' : readback ? `Existing member, completed turn and saved plan verified; reading the same result without a model request.` : `Existing member, project and conversation verified; invoking the ${stage} probe once.`)
     phase = 'probe'
     await probe({
       ...(readback && !pack ? { BOB_K4_VERIFY_ONLY: 'saved-plan' } : {}),
+      ...(packReadback ? { BOB_K4_VERIFY_ONLY: 'pack-purchase' } : {}),
       VITE_SUPABASE_URL: URL, VITE_SUPABASE_ANON_KEY: key,
       BOB_TEST_MEMBER_ID: K3_MEMBER, BOB_TEST_MEMBER_ACCESS_TOKEN: session.access_token,
       [`BOB_${stage}_PROJECT_ID`]: K3_PROJECT, [`BOB_${stage}_LIVE_CONFIRM`]: 'disposable-fixtures-only',

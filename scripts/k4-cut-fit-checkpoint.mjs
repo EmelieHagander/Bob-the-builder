@@ -41,3 +41,7 @@ export function assertK4PackRetryCheckpoint(requirements, sources, history) {
  assertK4CutFitCheckpoint(requirements.filter(r => r.id !== K4_PACK_LEFTOVER_NEED), sources.filter(s => s.requirement_id !== K4_PACK_LEFTOVER_NEED),
   history.filter(h => h.requirement_id !== K4_PACK_LEFTOVER_NEED))
 }
+
+// The second paid pack run (2026-10-07) saved the product and published two packs.
+// It is rechecked read-only; a new paid turn needs a fresh checkpoint.
+export const K4_PACK_TURN = 'a403143b-63e4-4444-b2d5-dc29a55ba9fb'
