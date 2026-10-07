@@ -1,16 +1,20 @@
 import { useBobSurface } from '../lib/bobSurface'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
-import { AvatarStack, Icon, Loading, SkillPill, StatusPill, statusCheck, useAsync } from '../components/ui'
+import { useState } from 'react'
+import { formatEventDay } from '../lib/eventDay'
+import { AvatarStack, Icon, LoadFailed, Loading, SkillPill, StatusPill, statusCheck, useAsync } from '../components/ui'
 import { PhasePill } from '../components/PhaseUI'
 
 export function Today() {
   useBobSurface(db.getActiveProjectId() ?? '', { surface: 'today' }, 'Today’s work')
   const projectId = db.getActiveProjectId() ?? ''
-  const { data: tasks } = useAsync(() => db.getTodayTasks(), [])
-  const { data: readiness } = useAsync(() => projectId ? db.getTaskReadiness(projectId) : Promise.resolve([]), [projectId])
-  const { data: next } = useAsync(() => db.getNextEvent(), [])
-  const { data: people } = useAsync(() => db.getPeople(), [])
+  const [version, setVersion] = useState(0)
+  const retry = () => setVersion((v) => v + 1)
+  const { data: tasks, error: tasksError } = useAsync(() => db.getTodayTasks(), [version])
+  const { data: readiness } = useAsync(() => projectId ? db.getTaskReadiness(projectId) : Promise.resolve([]), [projectId, version])
+  const { data: next, error: nextError } = useAsync(() => db.getNextEvent(), [version])
+  const { data: people } = useAsync(() => db.getPeople(), [version])
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
   const readinessById = new Map((readiness ?? []).map(item => [item.taskId, item]))
@@ -20,7 +24,8 @@ export function Today() {
   return (
     <div className="page" style={{ maxWidth: 720 }}>
       <h1 className="page-title">What needs doing today</h1>
-      {next && <p className="page-sub">{next.title} · {next.day} · {next.time}</p>}
+      {next && <p className="page-sub">{next.title} · {formatEventDay(next.day)} · {next.time}</p>}
+      {nextError && <LoadFailed what="The next build day" onRetry={retry} />}
 
       {next && (
         <div style={{ marginTop: 'var(--section-gap)', background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 'var(--r)', padding: 'var(--row-padding)', display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)', fontSize: 13.5 }}>
@@ -29,7 +34,9 @@ export function Today() {
         </div>
       )}
 
-      {!orderedTasks ? (
+      {tasksError ? (
+        <LoadFailed what="Today’s tasks" onRetry={retry} />
+      ) : !orderedTasks ? (
         <Loading />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)' }}>

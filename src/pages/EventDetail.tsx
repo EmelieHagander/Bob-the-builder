@@ -1,3 +1,4 @@
+import { formatEventDay } from '../lib/eventDay'
 import { useBobSurface } from '../lib/bobSurface'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -67,7 +68,7 @@ export function EventDetail() {
             <div style={{ fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: '#ffffff90', fontWeight: 700 }}>Build day</div>
             <h1 className="font-display" style={{ fontSize: 'var(--text-title)', fontWeight: 700, marginTop: 5 }}>{event.title}</h1>
             <div style={{ display: 'flex', gap: 'var(--layout-gap)', marginTop: 'var(--section-gap)', fontSize: 14, color: '#ffffffd5', flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="calendar-dots" size={16} color="var(--accent)" />{event.day}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="calendar-dots" size={16} color="var(--accent)" />{formatEventDay(event.day)}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="clock" size={16} color="var(--accent)" />{event.time}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="map-pin" size={16} color="var(--accent)" />{event.place}</span>
             </div>

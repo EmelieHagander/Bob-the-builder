@@ -113,6 +113,21 @@ Display strings the UI consumes verbatim (`hours: '6h'`, `spots: '12 / 20'`,
 exactly like the mock data. Normalising them into numeric/date columns is
 future work and only touches this schema + `src/data/database.ts`.
 
+Two of them are read, not trusted, by the data layer:
+
+- `events.spots` — only the capacity half is authoritative. The taken half is
+  recomputed from `event_attendees` on every read, because volunteer RSVPs and
+  person removals change attendees without rewriting the string.
+- `events.day` — the event editor saves an ISO date (`2026-10-11`); older
+  authored labels (`Lör 5 juli`, `Sat 5 Jul`) are still parsed. "Next build
+  day" is the soonest day on or after today (`src/lib/eventDay.ts`), not the
+  first event by `sort_order`.
+
+Area names are unique per project (case-insensitive, archived Areas included)
+because `materials.area_label` links Shopping rows to an Area by name. Projects
+that already hold two Areas with one name keep their materials untouched when
+either Area is renamed or deleted.
+
 ## Image and task-step foundation
 
 [`Docs/media-and-steps.md`](../Docs/media-and-steps.md) owns the storage,

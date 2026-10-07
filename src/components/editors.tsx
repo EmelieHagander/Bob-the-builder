@@ -6,6 +6,7 @@
  * delete (with an inline "really?" confirm).
  */
 
+import { eventDayInputValue } from '../lib/eventDay'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import * as db from '../data/database'
 import type { Area, BuildEvent, Material, Meal, Person, Skill, SkillLevel, Task } from '../data/types'
@@ -340,7 +341,7 @@ export function MaterialModal({
 
 export function EventModal({ event, onClose, onDone }: { event?: BuildEvent; onClose: () => void; onDone: () => void }) {
   const [title, setTitle] = useState(event?.title ?? '')
-  const [day, setDay] = useState(event?.day ?? '')
+  const [day, setDay] = useState(event ? eventDayInputValue(event.day) : '')
   const [time, setTime] = useState(event?.time ?? '')
   const [place, setPlace] = useState(event?.place ?? '')
   const [capacity, setCapacity] = useState(event ? event.spots.split('/')[1]?.trim() || '10' : '10')
@@ -366,7 +367,7 @@ export function EventModal({ event, onClose, onDone }: { event?: BuildEvent; onC
         </Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--layout-gap)' }}>
           <Field label="Day *">
-            <input style={inputStyle} value={day} onChange={(e) => setDay(e.target.value)} placeholder="Sat 5 Jul" required />
+            <input style={inputStyle} type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
           </Field>
           <Field label="Time">
             <input style={inputStyle} value={time} onChange={(e) => setTime(e.target.value)} placeholder="09:00–16:00" />

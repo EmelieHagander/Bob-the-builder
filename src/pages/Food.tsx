@@ -2,17 +2,18 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Meal } from '../data/types'
-import { Avatar, EmptyState, Icon, List, ListItem, Loading, SectionTitle, SummaryRow, useAsync } from '../components/ui'
+import { Avatar, EmptyState, Icon, List, ListItem, LoadFailed, Loading, SectionTitle, SummaryRow, useAsync } from '../components/ui'
 import { MealModal } from '../components/editors'
 
 export function Food() {
   const [version, setVersion] = useState(0)
-  const { data: meals } = useAsync(() => db.getMeals(), [version])
-  const { data: columns } = useAsync(() => db.getDietColumns(), [version])
-  const { data: matrix } = useAsync(() => db.getDietMatrix(), [version])
-  const { data: people } = useAsync(() => db.getPeople(), [])
-  const { data: events } = useAsync(() => db.getEvents(), [version])
-  const { data: summary } = useAsync(() => db.getFoodSummary(), [version])
+  const { data: meals, error: mealsError } = useAsync(() => db.getMeals(), [version])
+  const { data: columns, error: columnsError } = useAsync(() => db.getDietColumns(), [version])
+  const { data: matrix, error: matrixError } = useAsync(() => db.getDietMatrix(), [version])
+  const { data: people, error: peopleError } = useAsync(() => db.getPeople(), [version])
+  const { data: events, error: eventsError } = useAsync(() => db.getEvents(), [version])
+  const { data: summary, error: summaryError } = useAsync(() => db.getFoodSummary(), [version])
+  const loadError = mealsError ?? columnsError ?? matrixError ?? peopleError ?? eventsError ?? summaryError
   const [mealModal, setMealModal] = useState<{ meal?: Meal } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [flagBusy, setFlagBusy] = useState<string | null>(null)
@@ -71,6 +72,8 @@ export function Food() {
         </div>
       )}
 
+      {loadError && <LoadFailed what="Part of the food plan" onRetry={() => setVersion((v) => v + 1)} />}
+
       {error && (
         <div style={{ marginTop: 'var(--section-gap)', background: 'var(--clay-bg)', border: '1px solid #e0b3a8', borderRadius: 'var(--r)', padding: 'var(--row-padding)', fontSize: 13, color: '#8a3b2b' }}>
           {error}
@@ -81,7 +84,7 @@ export function Food() {
       <div style={{ marginTop: 'var(--section-gap)' }}>
         <SectionTitle icon="fork-knife">Meal plan</SectionTitle>
         {!meals ? (
-          <Loading />
+          mealsError ? null : <Loading />
         ) : meals.length === 0 ? (
           <EmptyState icon="cooking-pot" title="No meals planned yet" hint="Add breakfast, lunch and fika so the crew knows what's cooking." />
         ) : (
@@ -107,7 +110,7 @@ export function Food() {
       <div style={{ marginTop: 'var(--section-gap)' }}>
         <SectionTitle icon="warning" color="var(--clay)">Allergy & dietary matrix</SectionTitle>
         {!matrix || !columns || !people ? (
-          <Loading />
+          matrixError || columnsError || peopleError ? null : <Loading />
         ) : columns.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--layout-gap)', alignItems: 'flex-start' }}>
             <EmptyState icon="warning" title="No dietary columns yet" hint="Set up the standard set (vegetarian, vegan, gluten-free…) and tick who's who." />

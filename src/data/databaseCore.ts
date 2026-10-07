@@ -25,6 +25,7 @@ import type { DrawingSourceStatus } from './drawingSources'
 import { createClient } from '@supabase/supabase-js'
 import { accountClient, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabaseClient'
 import { relativeTime } from '../lib/format'
+import { formatEventDay, pickNextEvent, spotsWithTaken } from '../lib/eventDay'
 import type { AnswerEvidence } from './provenance'
 import { createRequestScope } from '../lib/projectRequest'
 import { createProjectFiles } from './projectFiles'
@@ -937,11 +938,28 @@ export interface NewArea {
 }
 
 /** Create a work area on the active project. Progress starts at zero. */
+/** Materials are labelled by Area name, so two Areas must never share one. */
+const sameAreaName = (a: string, b: string): boolean => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase()
+
+function assertAreaNameFree(areas: Area[], name: string, exceptId?: string): void {
+  const taken = areas.find((a) => a.id !== exceptId && sameAreaName(a.name, name))
+  if (taken) throw new Error(taken.archivedAt
+    ? `An archived Area is already called “${taken.name}”. Restore it or pick a different name.`
+    : `An Area called “${taken.name}” already exists. Pick a different name.`)
+}
+
+/** First free `base`, `base-2`, `base-3`… — the router looks rows up by slug. */
+function freeSlug(base: string, taken: string[]): string {
+  if (!taken.includes(base)) return base
+  let n = 2
+  while (taken.includes(`${base}-${n}`)) n++
+  return `${base}-${n}`
+}
+
 export async function createArea(input: NewArea): Promise<Area> {
   const existing = await getAreas({ includeArchived: true })
-  const baseSlug = slugify(input.name, 'area')
-  // Keep slugs unique within the project — the router looks areas up by slug.
-  const slug = existing.some((a) => a.slug === baseSlug) ? `${baseSlug}-${existing.length + 1}` : baseSlug
+  assertAreaNameFree(existing, input.name)
+  const slug = freeSlug(slugify(input.name, 'area'), existing.map((a) => a.slug))
   const area: Area = {
     id: newId('a'),
     slug,
@@ -993,13 +1011,15 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
   if (!db) {
     const area = mock.areas.find((a) => a.id === id)
     if (!area) throw new Error('database: no such area')
+    assertAreaNameFree(mock.areas, input.name, id)
     const oldName = area.name
+    const shared = mock.areas.some((a) => a.id !== id && a.name === oldName)
     area.name = input.name
     area.description = input.description
     area.icon = input.icon
     area.leadId = input.leadId
     if (input.leadId && !area.crewIds.includes(input.leadId)) area.crewIds.push(input.leadId)
-    if (oldName !== input.name) {
+    if (oldName !== input.name && !shared) {
       mock.materials.forEach((m) => {
         if (m.area === oldName) m.area = input.name
       })
@@ -1007,8 +1027,13 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
     await read(null)
     return
   }
-  const before = (await fetchAreas()).find((a) => a.id === id)
+  const areas = await fetchAreas()
+  const before = areas.find((a) => a.id === id)
   if (!before) throw new Error('database: no such area')
+  assertAreaNameFree(areas, input.name, id)
+  // Older projects may already hold two Areas with one name; their materials
+  // cannot be told apart, so leave them rather than move both Areas' rows.
+  const shared = areas.some((a) => a.id !== id && a.name === before.name)
   const res = await db
     .from('areas')
     .update({ name: input.name, description: input.description, icon: input.icon, lead_id: input.leadId })
@@ -1018,7 +1043,7 @@ export async function updateArea(id: string, input: AreaUpdate): Promise<void> {
     const crew = await db.from('area_crew').insert({ area_id: id, person_id: input.leadId })
     if (crew.error) throw new Error(`database: ${crew.error.message}`)
   }
-  if (before.name !== input.name) {
+  if (before.name !== input.name && !shared) {
     const pid = await activeProjectId()
     const mats = await db.from('materials').update({ area_label: input.name }).eq('project_id', pid).eq('area_label', before.name)
     if (mats.error) throw new Error(`database: ${mats.error.message}`)
@@ -1031,17 +1056,21 @@ export async function deleteArea(id: string): Promise<void> {
     const i = mock.areas.findIndex((a) => a.id === id)
     if (i < 0) return
     const name = mock.areas[i].name
+    const shared = mock.areas.some((a) => a.id !== id && a.name === name)
     mock.areas.splice(i, 1)
     for (const task of mock.tasks) if (task.areaId === id) task.areaId = null
-    for (let m = mock.materials.length - 1; m >= 0; m--) if (mock.materials[m].area === name) mock.materials.splice(m, 1)
+    if (!shared) for (let m = mock.materials.length - 1; m >= 0; m--) if (mock.materials[m].area === name) mock.materials.splice(m, 1)
     await read(null)
     return
   }
-  const area = (await fetchAreas()).find((a) => a.id === id)
+  const areas = await fetchAreas()
+  const area = areas.find((a) => a.id === id)
+  // Another Area with the same name owns materials under that label too.
+  const shared = Boolean(area && areas.some((a) => a.id !== id && a.name === area.name))
   const res = await db.from('areas').delete().eq('id', id)
   if (res.error?.code === '23503') throw new Error('This Area is still referenced by saved project records or plan history and cannot be deleted. Moving current steps does not remove historical references.')
   if (res.error) throw new Error(`database: ${res.error.message}`)
-  if (area) {
+  if (area && !shared) {
     const pid = await activeProjectId()
     const mats = await db.from('materials').delete().eq('project_id', pid).eq('area_label', area.name)
     if (mats.error) throw new Error(`database: ${mats.error.message}`)
@@ -1345,7 +1374,9 @@ export async function setMaterialStatus(id: string, status: MaterialStatus): Pro
 /* ─────────────────────────── EVENTS ─────────────────────────── */
 
 export async function getEvents(): Promise<BuildEvent[]> {
-  if (!db) return readScoped(mock.events)
+  // The taken half of `spots` follows the attendee rows; volunteer RSVPs and
+  // person removals change attendees without rewriting the authored string.
+  if (!db) return (await readScoped(mock.events)).map((event) => ({ ...event, spots: spotsWithTaken(event.spots, event.attendeeIds.length) }))
   const pid = await activeProjectId()
   if (!pid) return []
   const rows = unwrap<EventRow[]>(
@@ -1362,7 +1393,7 @@ export async function getEvents(): Promise<BuildEvent[]> {
     day: row.day,
     time: row.time,
     place: row.place,
-    spots: row.spots,
+    spots: spotsWithTaken(row.spots, row.event_attendees.length),
     status: row.status as EventStatus,
     food: row.food,
     attendeeIds: row.event_attendees.map((a) => a.person_id),
@@ -1394,7 +1425,7 @@ export async function getEventTasks(eventId: string): Promise<TodayTask[]> {
 
 /** The soonest upcoming event — drives the dashboard "next build day" card. */
 export async function getNextEvent(): Promise<BuildEvent | undefined> {
-  return (await getEvents())[0]
+  return pickNextEvent(await getEvents())
 }
 
 export interface NewEvent {
@@ -1408,8 +1439,7 @@ export interface NewEvent {
 
 export async function createEvent(input: NewEvent): Promise<BuildEvent> {
   const existing = await getEvents()
-  const baseSlug = slugify(input.title, 'event')
-  const slug = existing.some((e) => e.slug === baseSlug) ? `${baseSlug}-${existing.length + 1}` : baseSlug
+  const slug = freeSlug(slugify(input.title, 'event'), existing.map((e) => e.slug))
   const event: BuildEvent = {
     id: newId('e'),
     slug,
@@ -1473,9 +1503,9 @@ export async function joinEvent(id: string): Promise<void> {
     const event = mock.events.find((e) => e.id === id)
     if (!event) throw new Error('database: no such event')
     if (!event.attendeeIds.includes(me.id)) {
-      if (isFull(event)) throw new Error('This build day is full — ask the organiser to add spots.')
+      if (isFull({ ...event, spots: spotsWithTaken(event.spots, event.attendeeIds.length) })) throw new Error('This build day is full — ask the organiser to add spots.')
       event.attendeeIds.push(me.id)
-      event.spots = bump(event.spots, +1)
+      event.spots = spotsWithTaken(event.spots, event.attendeeIds.length)
     }
     event.status = 'going'
     await read(null)
@@ -1510,7 +1540,7 @@ export async function leaveEvent(id: string): Promise<void> {
     const i = event.attendeeIds.indexOf(me.id)
     if (i >= 0) {
       event.attendeeIds.splice(i, 1)
-      event.spots = bump(event.spots)
+      event.spots = spotsWithTaken(event.spots, event.attendeeIds.length)
     }
     event.status = 'open'
     await read(null)
@@ -1939,7 +1969,7 @@ export async function getAskBobChat(): Promise<ChatMessage[]> {
   if (attention.length > 0) {
     messages.push({
       from: 'bob',
-      text: next ? `Things I'd nudge before ${next.day}:` : "Things I'd nudge:",
+      text: next ? `Things I'd nudge before ${formatEventDay(next.day)}:` : "Things I'd nudge:",
       list: attention.map((a) => ({ icon: a.icon, tone: a.tone, text: a.text })),
     })
   } else {
@@ -2017,7 +2047,7 @@ export async function getDashboardStats(): Promise<DashboardStat[]> {
   const next = events[0]
   const [taken, cap] = next ? next.spots.split('/').map((s) => s.trim()) : ['0', '0']
   return [
-    { icon: 'calendar-dots', value: next ? next.day : '—', label: 'Next build day', color: 'var(--accent)' },
+    { icon: 'calendar-dots', value: next ? formatEventDay(next.day) : '—', label: 'Next build day', color: 'var(--accent)' },
     { icon: 'users-three', value: `${taken} / ${cap}`, label: 'Volunteers confirmed', color: 'var(--leaf)' },
     { icon: 'chart-pie-slice', value: `${overall}%`, label: 'Overall complete', color: 'var(--honey)' },
     { icon: 'package', value: String(stillNeeded), label: 'Materials still needed', color: 'var(--clay)' },
@@ -2070,7 +2100,7 @@ export async function getFoodSummary(): Promise<string> {
   const [columns, matrix, next] = await Promise.all([getDietColumns(), getDietMatrix(), getNextEvent()])
   const counts = columns.map((_, i) => matrix.filter((r) => r.flags[i]).length)
   const confirmed = next ? next.spots.split('/')[0].trim() : String(matrix.length)
-  const when = next ? next.day : 'the next build day'
+  const when = next ? formatEventDay(next.day) : 'the next build day'
   const parts = columns
     .map((c, i) => (counts[i] > 0 ? `${counts[i]} ${c.name.toLowerCase()}` : null))
     .filter(Boolean)

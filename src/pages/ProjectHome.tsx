@@ -1,3 +1,4 @@
+import { formatEventDay } from '../lib/eventDay'
 import { useBobSurface } from '../lib/bobSurface'
 import {DrawingRequests} from '../components/DrawingRequests'
 import { ProjectStepWorkspace } from '../components/ProjectStepWorkspace'
@@ -216,7 +217,7 @@ export function ProjectHome() {
         <div className="card" style={{ padding: 'var(--panel-padding)' }}>
           {next ? <>
             <strong>{next.title}</strong>
-            <p className="foundation-hint">{next.day} · {next.time} · {next.place}</p>
+            <p className="foundation-hint">{formatEventDay(next.day)} · {next.time} · {next.place}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--layout-gap)' }}><AvatarStack people={resolve(next.attendeeIds)} max={5} /><span className="foundation-hint">{next.spots} spots</span></div>
             <Link to={`/events/${next.slug}`} className="btn" style={{ marginTop: 'var(--section-gap)' }}>Open build day</Link>
           </> : <><p className="foundation-hint">Nothing scheduled yet. Calendar timing is separate from lifecycle phase.</p><Link to="/events" className="btn">Events</Link></>}
