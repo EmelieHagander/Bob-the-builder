@@ -66,7 +66,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
 
   const fixture = {
     stocks, stockHistory, requirements, requirementHistory, allocations, shoppingLinks, materials, artifacts,
-    cutPlanSources: new Map(), failCutPlanSources: false,
+    cutPlanSources: new Map(), packSources: new Map(), failCutPlanSources: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = new Set([
@@ -84,7 +84,7 @@ export function createMaterialPlanningFixture(timestamp, facts, solutions, artif
         const { p_project, p_input } = request.postDataJSON()
         if (p_input.resource !== 'shopping') return false
         if (fixture.failCutPlanSources) return fail('Source read unavailable')
-        const records = [...materials.values()].filter(r => r.project_id === p_project).map(r => ({ ...r, cut_plan_source: fixture.cutPlanSources.get(r.id) ?? null }))
+        const records = [...materials.values()].filter(r => r.project_id === p_project).map(r => ({ ...r, cut_plan_source: fixture.cutPlanSources.get(r.id) ?? null, pack_source: fixture.packSources.get(r.id) ?? null }))
         return reply({ json: { projectId: p_project, records, truncated: false, next_cursor: null } })
       }
       if (table === 'materials') {
@@ -527,6 +527,26 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await page.getByText('From cut plans · 2 active contributions', { exact: true }).waitFor()
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Shopping sources must fit mobile')
   fixture.materials.delete(sourceId); fixture.cutPlanSources.clear()
+
+  const packId = randomUUID(), needA = randomUUID(), needB = randomUUID()
+  const packRow = { id: packId, project_id: 'A', name: 'Wood screw 5×50 · WS-550 (100 pcs/pack)', qty: '1 pack', area_label: '', supplier: 'Fixture supplier', status: 'needed', cost: '', category: 'Fasteners & glue', category_icon: 'nut', sort_order: 1 }
+  fixture.materials.set(packId, packRow)
+  fixture.packSources.set(packId, { article_id: randomUUID(), revision: 1, published: true, total_quantity: '90.0000', content_unit: 'pcs', content_per_purchase_unit: '100.0000', purchase_unit: 'pack',
+    purchase_count: 1, surplus_quantity: '10.0000', source_state: 'current', shopping_edited: false,
+    article: { title: 'Wood screw 5×50', supplier: 'Fixture supplier', manufacturer: 'Fixture maker', article_number: 'WS-550', variant: 'Zinc', source_url: 'https://supplier.test.example/ws-550', source_document: '', revision: 1, source_state: 'current' },
+    needs: [{ requirement_id: needA, requirement_revision: 1, quantity: '30.0000', name: 'Screws shelf A', requirement_changed: false }, { requirement_id: needB, requirement_revision: 1, quantity: '60.0000', name: 'Screws shelf B', requirement_changed: false }] })
+  await page.reload()
+  await page.getByText('From pack purchase', { exact: true }).waitFor()
+  await page.getByText('Pack size and needs', { exact: true }).click()
+  await page.getByText('1 pack × 100 pcs for 90 pcs needed after stock · 10 pcs surplus.', { exact: true }).waitFor()
+  await page.getByText('30 pcs · Screws shelf A · revision 1', { exact: true }).waitFor()
+  assert.equal(packRow.status, 'needed', 'Opening pack provenance must not tick a Shopping checkbox')
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Pack sources must fit mobile')
+  await page.screenshot({ path: `test-results/pack-purchase-shopping-${width}.png`, fullPage: true })
+  fixture.packSources.get(packId).source_state = 'changed'
+  await page.reload()
+  await page.getByText('From pack purchase · source changed', { exact: true }).waitFor()
+  fixture.materials.delete(packId); fixture.packSources.clear()
   assert.equal(fixture.materials.size, 2)
   console.log(`Material plan Project/Area target scope + manual/deterministic quantity, stock/reuse/arithmetic/Shopping handoff/reload/project isolation passed at ${width}px; HTTP fixtures, no AI.`)
 }

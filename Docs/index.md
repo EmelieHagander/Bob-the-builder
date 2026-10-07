@@ -40,7 +40,7 @@
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
-| material requirements, deterministic quantities, construction cut plans, stock/reuse and Shopping handoff | `Docs/material-planning.md` |
+| material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; opt-in manual experiment and its measured trade-offs; older discovery design kept as history |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |

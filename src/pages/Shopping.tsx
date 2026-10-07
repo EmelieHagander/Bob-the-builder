@@ -47,25 +47,34 @@ export function Shopping() {
   const estTotal = (materials ?? []).reduce((sum, m) => sum + parseCost(m.cost), 0)
   const sourceByMaterial = new Map((planSources ?? []).filter(item => item.materialId).map(item => [item.materialId!, item]))
 
-  const cutSourceByMaterial = new Map((cutPlanSources ?? []).map(item => [item.materialId, item.source]))
+  const cutSourceByMaterial = new Map((cutPlanSources ?? []).filter(item => item.source).map(item => [item.materialId, item.source!]))
+  const packByMaterial = new Map((cutPlanSources ?? []).filter(item => item.pack).map(item => [item.materialId, item.pack!]))
+  const amount = (v: string | number | null) => v === null ? '?' : String(Number(v))
 
   const row = (m: Material) => {
     const on = bought[m.id]
     const source = sourceByMaterial.get(m.id)
     const cutSource = cutSourceByMaterial.get(m.id)
+    const pack = packByMaterial.get(m.id)
     const displayStatus = on ? 'delivered' : m.status === 'delivered' ? 'needed' : m.status
     return (
       <div key={m.id}><ChecklistRow checked={!!on} onChange={() => toggle(m)} trailing={m.cost}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: on ? 'var(--ink-faint)' : 'var(--ink)', textDecoration: on ? 'line-through' : 'none' }}>{m.name}</div>
           <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{m.qty} · {m.area} · {m.supplier}</div>
-          <div style={{ marginTop: 4, fontSize: 11.5, color: source?.sourceOutdated || source?.sourceStale || source?.shoppingEdited ? 'var(--clay)' : 'var(--ink-faint)' }}>
-            {cutSource ? `From cut plans · ${cutSource.contribution_count} active contribution${cutSource.contribution_count === 1 ? '' : 's'}${cutSource.shopping_edited ? ' · shopping row edited' : ''}` : source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : planSourceError || cutPlanSourceError ? 'Source unavailable' : !planSources || !cutPlanSources ? 'Checking source…' : 'Manual shopping item'}
+          <div style={{ marginTop: 4, fontSize: 11.5, color: source?.sourceOutdated || source?.sourceStale || source?.shoppingEdited || pack?.source_state === 'changed' || pack?.shopping_edited ? 'var(--clay)' : 'var(--ink-faint)' }}>
+            {pack ? `From pack purchase${pack.published ? '' : ' · withdrawn'}${pack.source_state === 'changed' ? ' · source changed' : ''}${pack.shopping_edited ? ' · shopping row edited' : ''}` : cutSource ? `From cut plans · ${cutSource.contribution_count} active contribution${cutSource.contribution_count === 1 ? '' : 's'}${cutSource.shopping_edited ? ' · shopping row edited' : ''}` : source ? `From material plan${source.sourceOutdated ? ' · plan updated' : ''}${source.sourceStale ? ' · source changed' : ''}${source.shoppingEdited ? ' · shopping row edited' : ''}` : planSourceError || cutPlanSourceError ? 'Source unavailable' : !planSources || !cutPlanSources ? 'Checking source…' : 'Manual shopping item'}
           </div>
 
         </div>
         <div className="ui-row-meta no-print"><MaterialPill status={displayStatus} /></div>
       </ChecklistRow>
+          {pack && <details style={{ marginTop: 6, fontSize: 12 }}>
+            <summary>Pack size and needs</summary>
+            <p>{pack.purchase_count ?? '?'} {pack.purchase_unit} × {amount(pack.content_per_purchase_unit)} {pack.content_unit} for {amount(pack.total_quantity)} {pack.content_unit} needed after stock · {amount(pack.surplus_quantity)} {pack.content_unit} surplus.</p>
+            <p>{[pack.article.manufacturer || pack.article.supplier, pack.article.article_number, pack.article.variant].filter(Boolean).join(' · ')} · source {pack.article.source_url ? <a href={pack.article.source_url} target="_blank" rel="noreferrer">link</a> : pack.article.source_document}. Declared product data, not checked for suitability.</p>
+            <ul>{pack.needs.map(n => <li key={n.requirement_id}>{amount(n.quantity)} {pack.content_unit} · {n.name ?? 'Need unavailable'} · revision {n.requirement_revision}{n.requirement_changed ? ' · changed since publish' : ''}</li>)}</ul>
+          </details>}
           {cutSource && <details style={{ marginTop: 6, fontSize: 12 }}>
             <summary>Sheet quantities and sources</summary>
             <p>Whole sheets, not finished blanks. Check the saved plan sources, supplier product and pack size before ordering.</p>
