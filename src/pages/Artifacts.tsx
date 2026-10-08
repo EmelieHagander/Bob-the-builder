@@ -94,7 +94,7 @@ function GeneratedDetails({ value }: { value: ArtifactVersion }) {
   </div>
 }
 
-function VersionDetails({ value, target, onShellChanged }: { value: ArtifactVersion; target: SelectedTarget; onShellChanged?: (next: ArtifactVersion) => void }) {
+function VersionDetails({ value, target, onShellChanged, onShellReload }: { value: ArtifactVersion; target: SelectedTarget; onShellChanged?: (next: ArtifactVersion) => void; onShellReload?: () => Promise<void> }) {
   const [image, setImage] = useState(false)
   return <div className="fact-details">
     <p className="foundation-hint">Viewing saved revision {value.revision}.{value.latestRevision && value.latestRevision !== value.revision ? ` The newest saved revision is ${value.latestRevision}; this view keeps revision ${value.revision}.` : ''} A saved Concept remains a proposal; source freshness does not approve it for building.</p>
@@ -109,7 +109,7 @@ function VersionDetails({ value, target, onShellChanged }: { value: ArtifactVers
     <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
     {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} />}
-    {value.shell && <CadShellView value={value.shell} projectId={value.projectId} canEdit={!!onShellChanged} onChanged={onShellChanged} />}
+    {value.shell && <CadShellView value={value.shell} projectId={value.projectId} canEdit={!!onShellChanged} onChanged={onShellChanged} onReload={onShellReload} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
       artifactId: value.id, revision: value.revision, status: STATUS_LABELS[value.status],
       source: `${value.solutionTitle} · solution v${value.solutionRevision} · target decision ${value.targetRevision}. ${value.assumptions}` }} />}
@@ -270,13 +270,20 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, onClose, 
     [projectId, id, revision, attempt],
   )
   const { loading, error } = loaded, data = fresh ?? loaded.data
+  // After a shell conflict: open the newest saved revision in place.
+  async function reloadShell() {
+    if (!data) return
+    const now = await db.getProjectArtifactVersion(projectId, id, data.revision)
+    const newest = now.latestRevision ?? now.revision
+    setFresh(newest === now.revision ? now : await db.getProjectArtifactVersion(projectId, id, newest))
+  }
   if (data?.parametricRecipe && !loading && !error && edit) return <StorageBoxEditor projectId={projectId} areaId={data.areaId ?? ''}
     target={target} value={data} onClose={onClose} onSaved={onSaved} />
   if (data && !data.cad && !data.shell && !loading && !error && edit) return <Editor projectId={projectId} value={data} areas={areas} initialArea={data.areaId ?? ''} target={target} onClose={onClose} onSaved={onSaved} />
   return <Modal title={data ? `${data.title} · Version ${data.revision}` : 'Drawing version'} wide={Boolean(data?.cad || data?.shell || data?.parametricRecipe || data?.hasRoomLayout || data?.hasStairStudy || data?.hasMultifloorPlan)} onClose={fresh ? onSaved : onClose}>
     {data?.cad && edit && <p>Ask Bob to revise this drawing. Include its title and the changes you want so the CAD assistant can update the construction and its views together.</p>}
-    {data?.shell && edit && <p>Ask Bob to move, add or remove pieces in this combined drawing. To change a piece itself, open it from the list below.</p>}
-    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} target={target} onShellChanged={setFresh} /></>}
+    {data?.shell && edit && <p>Drag a piece in the plan, or choose Move in the list, to place it yourself. Ask Bob to add or remove pieces. To change a piece itself, open it from the list below.</p>}
+    {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button><VersionDetails value={data} target={target} onShellChanged={setFresh} onShellReload={reloadShell} /></>}
   </Modal>
 }
 

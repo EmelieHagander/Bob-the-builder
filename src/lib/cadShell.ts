@@ -15,3 +15,49 @@ export function shellFootprint(c:Pick<ShellComponent,'x_mm'|'y_mm'|'rz'|'boundin
  const xs=corners.map(p=>p[0]),ys=corners.map(p=>p[1])
  return {x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...ys)-Math.min(...ys)}
 }
+
+/** Owner moves in the plan view snap to this grid. */
+export const SHELL_GRID_MM = 50
+export type ShellFootprint = NonNullable<ReturnType<typeof shellFootprint>>
+export type ShellPlacement = Pick<ShellComponent, 'x_mm' | 'y_mm' | 'rz' | 'bounding_box_mm'>
+
+/** Nearest grid line, as whole mm (the shell stores integers). */
+export function snapMm(v: number, step = SHELL_GRID_MM) {
+  return Math.round(Math.round(v / step) * step) || 0
+}
+
+/** One grid step in a direction; a piece off the grid lands on the next grid line that way. */
+export function nudgeMm(v: number, dir: 1 | -1, step = SHELL_GRID_MM) {
+  const r = Math.round(v)
+  return (dir > 0 ? Math.floor(r / step) * step + step : Math.ceil(r / step) * step - step) || 0
+}
+
+/** A quarter turn that keeps the footprint centred where it was (snapped to the grid).
+ * Without a saved size there is no footprint, so the piece turns about its origin. */
+export function turnQuarter(c: ShellPlacement, step = SHELL_GRID_MM): Pick<ShellComponent, 'x_mm' | 'y_mm' | 'rz'> {
+  const rz = ((c.rz % 360) + 450) % 360
+  const before = shellFootprint(c), after = shellFootprint({ ...c, x_mm: 0, y_mm: 0, rz })
+  if (!before || !after) return { x_mm: c.x_mm, y_mm: c.y_mm, rz }
+  const cx = before.x + before.width / 2, cy = before.y + before.depth / 2
+  return { x_mm: snapMm(cx - (after.x + after.width / 2), step), y_mm: snapMm(cy - (after.y + after.depth / 2), step), rz }
+}
+
+const area = (f: ShellFootprint) => f.width * f.depth
+const inside = (a: ShellFootprint, b: ShellFootprint) => b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.depth <= a.y + a.depth
+
+/** Pairs of footprints that share area. A piece wholly inside a larger one (furniture in a room)
+ * is expected and not listed; edges that only touch are not overlaps. This compares bounding
+ * boxes only: it is a visual warning, not a measured clash check. */
+export function footprintOverlaps<K>(items: { key: K; footprint: ShellFootprint | null }[]): [K, K][] {
+  const out: [K, K][] = []
+  for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+    const a = items[i].footprint, b = items[j].footprint
+    if (!a || !b) continue
+    const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
+    const d = Math.min(a.y + a.depth, b.y + b.depth) - Math.max(a.y, b.y)
+    if (w <= 0 || d <= 0) continue
+    if ((inside(a, b) && area(a) > area(b)) || (inside(b, a) && area(b) > area(a))) continue
+    out.push([items[i].key, items[j].key])
+  }
+  return out
+}
