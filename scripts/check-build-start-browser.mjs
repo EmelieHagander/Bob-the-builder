@@ -60,7 +60,8 @@ try {
     const button = start.getByRole('button', { name: 'Start this build', exact: true })
     await button.waitFor()
     const box = await button.boundingBox()
-    assert(box && box.height >= 56, `Start this build is the large main action at ${width}px`)
+    // Subpixel layout can report 55.99998 for a 56px min-height.
+    assert(box && box.height >= 55.5, `Start this build is the large main action at ${width}px`)
     assert(box.y < (width === 320 ? 568 : 900), `Start this build is on the opening screen at ${width}px`)
     assert.equal(await page.locator('.page-head .btn-primary').count(), 0, 'Only one primary action competes with Start this build')
     await page.screenshot({ path: `test-results/build-start-${width}.png` })
