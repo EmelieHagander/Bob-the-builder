@@ -90,6 +90,15 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       }
 
       if (table === 'artifact_cad_revisions') {
+        const or=url.searchParams.get('or')??''
+        if(or.includes('artifact_revision.eq.')) {
+          // The shell 3D view reads the pinned pieces' recipes in one scoped query, without export files.
+          assert.equal(url.searchParams.get('select'),'project_id,artifact_id,artifact_revision,recipe','3D view reads recipes only')
+          const pairs=[...or.matchAll(/artifact_id\.eq\.([0-9a-f-]+),artifact_revision\.eq\.(\d+)/gi)]
+          fixture.recipeReads=(fixture.recipeReads??0)+1
+          return reply({json:pairs.map(m=>cad.get(generationKey(m[1],Number(m[2])))).filter(r=>r&&r.project_id===eq('project_id'))
+            .map(r=>({project_id:r.project_id,artifact_id:r.artifact_id,artifact_revision:r.artifact_revision,recipe:r.recipe}))})
+        }
         if(!eq('artifact_id')) return reply({json:[...cad.values()].filter(r=>r.project_id===eq('project_id')&&r.step_id).map(r=>({...r,artifacts:{current_revision:records.get(r.artifact_id)?.revision}}))})
         const row=cad.get(generationKey(eq('artifact_id'),Number(eq('artifact_revision'))));return reply({json:row?.project_id===eq('project_id')?row:null}) }
       if (table === 'project_buildings') return reply({ json: eq('project_id') === 'A' ? physical.buildings : [] })

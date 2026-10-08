@@ -16,10 +16,12 @@ import { verifyCadShellBrowser } from './cad-shell-browser.mjs'
 import { createMaterialPlanningFixture, verifyMaterialPlanningBrowser } from './material-planning-browser.mjs'
 import { installSheetLayerFixture, verifySheetLayersBrowser } from './sheet-layer-browser.mjs'
 
-const base = 'http://127.0.0.1:4173/Bob-the-builder/'
+// PREVIEW_PORT lets parallel checkouts run this check without reaching each other's preview server.
+const port = process.env.PREVIEW_PORT || '4173'
+const base = `http://127.0.0.1:${port}/Bob-the-builder/`
 const api = 'https://pwa-proof.invalid'
 const sourceGraph = JSON.parse(await readFile(new URL('./fixtures/cad-source-map.json', import.meta.url), 'utf8'))
-const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
+const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--base', '/Bob-the-builder/', '--host', '127.0.0.1', '--port', port, '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'] })
 let logs = '', browser, activePage
 server.stdout.on('data', data => { logs += data })
 server.stderr.on('data', data => { logs += data })

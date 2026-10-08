@@ -1,10 +1,19 @@
-import { useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { ArtifactVersion } from '../data/artifacts'
 import { SHELL_BASIS_LABELS, shellFootprint, type CadShell, type ShellComponent } from '../lib/cadShell'
 import { formatDrawingMm } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
+
+// three.js stays out of the main bundle until the owner opens the 3D view.
+const Shell3D = lazy(() => import('./CadShell3D').catch(() => ({ default: Shell3DUnavailable })))
+function Shell3DUnavailable({ onFallback }: { onFallback: (message: string) => void }) {
+  return <div role="alert" className="solution-attention">
+    <p style={{ margin: 0 }}>The 3D view could not be loaded. Check the connection and try again.</p>
+    <button type="button" className="btn" style={{ marginTop: 8 }} onClick={() => onFallback('')}>Show plan view</button>
+  </div>
+}
 
 const STATUS: Record<ShellComponent['status'], string> = {
   current: 'Up to date',
@@ -23,6 +32,9 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
 }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  const [view, setView] = useState<'plan' | '3d'>('plan')
+  const [notice, setNotice] = useState('')
+  const fallback = useCallback((message: string) => { setView('plan'); setNotice(message) }, [])
   const latest = value.revision === value.current_revision && !value.archived
   const placed = value.components.map(c => ({ c, f: shellFootprint(c) }))
   const boxes = placed.flatMap(p => p.f ? [p.f] : [])
@@ -43,7 +55,15 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
 
   return <section className="box-drawing" aria-label="Combined drawing">
     <p className="foundation-hint">Combines {value.components.length} saved {value.components.length === 1 ? 'drawing' : 'drawings'} by reference. Each piece keeps its own measurements and cut list. Positions are proposals unless marked "Placed by you". Ask Bob to move, add or remove a piece.</p>
-    {flagged > 0 && <p role="status" className="solution-attention">{flagged === 1 ? 'One piece has' : `${flagged} pieces have`} changed since this drawing pinned {flagged === 1 ? 'it' : 'them'}. The plan below still shows the pinned versions.</p>}
+    {flagged > 0 && <p role="status" className="solution-attention">{flagged === 1 ? 'One piece has' : `${flagged} pieces have`} changed since this drawing pinned {flagged === 1 ? 'it' : 'them'}. The views below still show the pinned versions.</p>}
+    {value.components.length > 0 && <div className="foundation-actions" style={{ margin: '8px 0' }}>
+      <button type="button" className={`btn${view === 'plan' ? ' btn-primary' : ''}`} aria-pressed={view === 'plan'} onClick={() => setView('plan')}>Plan view</button>
+      <button type="button" className={`btn${view === '3d' ? ' btn-primary' : ''}`} aria-pressed={view === '3d'} onClick={() => { setNotice(''); setView('3d') }}>3D view</button>
+    </div>}
+    {view === '3d' ? <Suspense fallback={<p role="status" className="foundation-hint">Loading the 3D view…</p>}>
+      <Shell3D value={value} projectId={projectId} onFallback={fallback} />
+    </Suspense> : <>
+    {notice && <p role="status" className="solution-attention">{notice}</p>}
     {boxes.length ? <div className="box-drawing-viewport" tabIndex={0} aria-label="Combined plan view">
       <svg className="box-drawing-sheet" role="img" aria-label={`Plan view of ${value.title}`} width="100%"
         viewBox={`${minX - pad} ${-(maxY + pad)} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`} style={{ background: 'var(--surface)', maxHeight: '55vh', display: 'block' }}>
@@ -54,6 +74,7 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
         </g>)}
       </svg>
     </div> : <p className="solution-attention">No piece has a saved size yet, so the plan view cannot be drawn.</p>}
+    </>}
     {error && <p role="alert" className="solution-attention">{error}</p>}
     <ul className="fact-list" aria-label="Pieces in this drawing" style={{ listStyle: 'none', padding: 0 }}>
       {placed.map(({ c, f }) => <li key={c.component_key} style={{ padding: '10px 0', borderTop: '1px solid var(--line)' }}>
