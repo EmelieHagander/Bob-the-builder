@@ -9,6 +9,7 @@ import { collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
+import { createCadPieces } from './cad-pieces.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
 import { rethrowContinuation, stableJsonValue } from './bob-job-journal.ts'
@@ -67,11 +68,13 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
  const metrics={research_calls:0,consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
- return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return Math.max(0,12-lifecycleUsed)},
+ const pieces=createCadPieces({requestStore:opts.requestStore,ownerRequest:opts.ownerRequest??null,hasAccess:opts.hasAccess})
+ return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return Math.max(0,12-lifecycleUsed)},
  async lifecycle(name:string,raw:unknown){
   if(!object(raw))return {status:'invalid'}
   if(!await opts.hasAccess())throw new Error('project_denied')
   if(lifecycleUsed>=12)return {status:'budget_exhausted'}
+  if(name==='plan_cad_pieces'){lifecycleUsed++;return pieces.execute(raw)}
   if(name==='ensure_drawing_gap_task'&&Object.keys(raw).sort().join(',')==='expected_revision,gap_id,plan_revision,request_id,requirement_id'&&uuid(raw.request_id)&&uuid(raw.gap_id)&&uuid(raw.requirement_id)&&Number.isSafeInteger(raw.expected_revision)&&raw.expected_revision>=0&&Number.isSafeInteger(raw.plan_revision)&&raw.plan_revision>0&&opts.requestStore?.ensureGapTask){lifecycleUsed++;return opts.requestStore.ensureGapTask(raw.request_id,raw.expected_revision,raw.gap_id,raw.requirement_id,raw.plan_revision)}
   if(name==='read_drawing_request_work'&&Object.keys(raw).join(',')==='request_id'&&uuid(raw.request_id)&&opts.requestStore?.work){lifecycleUsed++;return opts.requestStore.work(raw.request_id)}
   if(name==='link_drawing_gap'&&Object.keys(raw).sort().join(',')==='expected_revision,gap_id,request_id,step_id,task_id'&&uuid(raw.request_id)&&uuid(raw.gap_id)&&Number.isSafeInteger(raw.expected_revision)&&raw.expected_revision>=0&&(raw.task_id===null||text(raw.task_id,200))&&(raw.step_id===null||uuid(raw.step_id))&&opts.requestStore?.linkGap){lifecycleUsed++;return opts.requestStore.linkGap(raw.request_id,raw.expected_revision,raw.gap_id,raw.task_id,raw.step_id)}

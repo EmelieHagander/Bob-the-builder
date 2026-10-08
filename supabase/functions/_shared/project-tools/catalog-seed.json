@@ -654,5 +654,16 @@
       "build"
     ],
     "active": true
+  },
+  {
+    "name": "plan_cad_pieces",
+    "description": "Split a large build into separately designed and saved drawing pieces.",
+    "how_to": "Use instead of design_project_cad when one drawing would need more than about 24 parts or several structural systems (walls, floor, roof, stairs, built-in furniture). Give 2-12 pieces, each with a complete standalone brief and handoff in one shared coordinate system. Pieces are designed one at a time after your reply while the owner has Bob open; each saved piece appears in the conversation. Tell the owner the pieces and that they arrive one by one. A failed piece can be resumed alone by its request_id. Saved pieces are concepts, not measured truth or structural approval.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
   }
 ]
