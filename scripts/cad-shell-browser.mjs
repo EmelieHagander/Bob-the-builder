@@ -69,7 +69,7 @@ export async function verifyCadShellBrowser(page, base, fixture, width) {
   // Materials: summed from the pieces, with the uncounted piece named, never a zero.
   const totals = view.getByRole('region', { name: 'Materials for the whole drawing', exact: true })
   await totals.getByRole('heading', { name: 'Materials so far', exact: true }).waitFor()
-  await totals.getByText('Not counted yet: Bunk bed.', { exact: false }).waitFor()
+  await totals.getByText('Not counted yet: Bunk bed, Window seat.', { exact: false }).waitFor()
   const lines = totals.getByRole('list', { name: 'Material totals', exact: true }).getByRole('listitem')
   assert.equal(await lines.count(), 2)
   assert.match(await lines.nth(1).innerText(), /Studs 45x95: 10 pcs/)
