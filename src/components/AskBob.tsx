@@ -44,6 +44,8 @@ const toneColor = {
 
 const CHAT_HISTORY_PREFIX = 'bob:ask-bob-history:v1'
 const MAX_SAVED_MESSAGES = 80
+const BUSY_RESEND_INTERVAL_MS = 8_000
+const BUSY_RESEND_MS = 20 * 60_000
 
 function parseSavedChat(raw: string | null): ChatMessage[] {
   if (!raw) return []
@@ -299,6 +301,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<RetryTurn | null>(null)
   const [recovering, setRecovering] = useState<(RetryTurn & { expiresAt: number }) | null>(null)
+  // A new message rejected because Bob is finishing earlier work (often a
+  // background drawing) is resent in this tab with the same turn id until he is free.
+  const [waitingFree, setWaitingFree] = useState<(RetryTurn & { until: number; attempt: number }) | null>(null)
   const [workingLabel, setWorkingLabel] = useState(db.describeBobProgress(undefined))
   const outgoing = useRef<OutgoingTurn | null>(null)
   const outgoingKey = useRef<string | null>(null)
@@ -395,7 +400,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent()
     outgoing.current = null; outgoingKey.current = null; serverThread.current = null
-    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('')
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice(''); setWaitingFree(null)
     void (async () => {
       const me = await db.getCurrentUser()
       if (!current()) return
@@ -504,7 +509,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
-      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setConfirmReset(false); setRetry(null)
+      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
     }
@@ -529,7 +534,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
       window.dispatchEvent(new Event('bob:inbox-changed'))
-      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setRetry(null)
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
         ? 'New conversation started. Saved project data is unchanged.'
@@ -544,9 +549,22 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const push = (...msgs: ChatMessage[]) => setExtra(list => [...list, ...msgs])
 
+  function holdUntilFree(turn: RetryTurn) {
+    const until = waitingFree?.turnId === turn.turnId ? waitingFree.until : Date.now() + BUSY_RESEND_MS
+    setRetry(turn)
+    if (Date.now() >= until) {
+      setWaitingFree(null)
+      setHistoryNotice('Bob is still busy with earlier work. Your message is kept here. Use Retry request to send it.')
+      return
+    }
+    setWaitingFree(previous => ({ ...turn, until, attempt: (previous?.turnId === turn.turnId ? previous.attempt : 0) + 1 }))
+    setHistoryNotice('Bob is finishing earlier work, such as a drawing. Your message is kept and sends by itself when he is free.')
+  }
+
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
     const text = (retryRequest?.text ?? draft).trim()
     if (!text || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
+    if (waitingFree && retryRequest?.turnId !== waitingFree.turnId) setWaitingFree(null)
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
@@ -571,19 +589,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         if (history.mode === 'server') {
           applyServerHistory(history)
           if (history.messages.some(message => message.from === 'bob' && message.turnId === clientTurnId && message.evidence?.writes?.length)) setNeedsRefresh(true)
+          if (result.unavailable === 'turn_in_flight' && outgoing.current?.turnId === clientTurnId) holdUntilFree({ text, turnId: clientTurnId, screen })
+          else if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)
           return
         }
       } catch { /* Preserve the same turn id for a later recovery attempt. */ }
       if (!isCurrent()) return
       if (result.unavailable === 'turn_in_flight') {
         setWorking(false)
-        setRetry({ text, turnId: clientTurnId, screen })
-        setHistoryNotice('Bob is busy. Your message is kept here. Use Retry request when he is free.')
+        holdUntilFree({ text, turnId: clientTurnId, screen })
         return
       }
     }
     if (!isCurrent()) return
     setWorking(false)
+    if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)
     if ('answer' in result) {
       keepOutgoing(null)
       if (result.evidence.writes?.length) setNeedsRefresh(true)
@@ -612,6 +632,14 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       push({ from: 'bob', text: message })
     }
   }
+
+  const sendRef = useRef(send)
+  sendRef.current = send
+  useEffect(() => {
+    if (!waitingFree || working || recovering) return
+    const timer = setTimeout(() => { void sendRef.current(waitingFree, false) }, BUSY_RESEND_INTERVAL_MS)
+    return () => clearTimeout(timer)
+  }, [waitingFree, working, recovering])
 
   const handleAction = (action: string) => { void send({ text: action, turnId: crypto.randomUUID() }, true) }
 
