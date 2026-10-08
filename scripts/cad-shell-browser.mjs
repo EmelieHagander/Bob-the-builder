@@ -46,9 +46,84 @@ export async function verifyCadShellBrowser(page, base, fixture, width) {
   assert.equal(fixture.shells.get(`${shell}:2`).components.find(c => c.component_key === 'bed').child_revision, 2)
   assert.equal(fixture.shells.get(`${shell}:1`).components.find(c => c.component_key === 'bed').child_revision, 1, 'Old shell version keeps its pin')
   await page.screenshot({ path: `test-results/cad-shell-adopted-${width}.png`, fullPage: true })
+
+  // Owner placement: buttons, keyboard, a real pointer drag, then a stale-revision conflict.
+  const version = n => page.getByRole('dialog', { name: `Cabin bedroom · Version ${n}`, exact: true })
+  const plan = () => updated.getByRole('region', { name: 'Combined drawing', exact: true })
+  await plan().getByRole('button', { name: 'Move Bunk bed', exact: true }).click()
+  // The dialog title follows the saved version, so these locators are not scoped to one title.
+  const mover = page.getByRole('dialog').getByRole('group', { name: 'Move Bunk bed', exact: true })
+  const readout = mover.locator('.shell-move-readout')
+  await readout.getByText('x 3800 mm, y 200 mm, turned 90°', { exact: true }).waitFor()
+  for (const button of await mover.getByRole('button').all()) {
+    const b = await button.boundingBox()
+    assert(b && b.width >= 44 && b.height >= 44, 'Move controls need 44px targets')
+  }
+  for (let i = 0; i < 6; i++) await mover.getByRole('button', { name: 'Move right 50 mm', exact: true }).click()
+  await readout.getByText('x 4100 mm, y 200 mm, turned 90° · not saved yet', { exact: true }).waitFor()
+  const overlap = updated.getByRole('status').filter({ hasText: 'Footprints overlap: Bedroom walls and Bunk bed.' })
+  await overlap.getByText(/not a measured clash check/).waitFor()
+  assert.equal(await mover.getByRole('button', { name: 'Save position', exact: true }).isEnabled(), true, 'Overlap warns, never blocks')
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No horizontal page scroll while moving')
+  await page.screenshot({ path: `test-results/cad-shell-overlap-${width}.png`, fullPage: true })
+  await mover.getByRole('button', { name: 'Turn 90°', exact: true }).click()
+  await readout.getByText('x 4700 mm, y 1700 mm, turned 180° · not saved yet', { exact: true }).waitFor()
+  await updated.locator('.box-drawing-viewport').focus()
+  for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft')
+  await readout.getByText('x 4000 mm, y 1700 mm, turned 180° · not saved yet', { exact: true }).waitFor()
+  await overlap.waitFor({ state: 'detached' })
+  await mover.getByLabel('Why it goes here (optional)').fill('Head away from the window')
+  await mover.getByRole('button', { name: 'Save position', exact: true }).click()
+  await version(3).getByText('This drawing is now version 3.', { exact: false }).waitFor()
+  const v3 = fixture.shells.get(`${shell}:3`).components.find(c => c.component_key === 'bed')
+  assert.deepEqual([v3.x_mm, v3.y_mm, v3.z_mm, v3.rz, v3.placement_basis, v3.reason], [4000, 1700, 0, 180, 'owner_placed', 'Head away from the window'])
+  assert.equal(fixture.shellCommands.at(-1).expected, 2)
+  await version(3).getByRole('list', { name: 'Pieces in this drawing', exact: true }).getByText(/turned 180°.*Head away from the window/).waitFor()
+
+  // A real drag with the mouse; the live position shows on the sheet while the button is held.
+  const piece = version(3).locator('svg g[data-piece="bed"] rect')
+  await piece.scrollIntoViewIfNeeded()
+  const at = await piece.boundingBox()
+  const x0 = at.x + at.width / 2, y0 = at.y + at.height / 2
+  await page.mouse.move(x0, y0)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) await page.mouse.move(x0 - 5 * i, y0 - 4 * i)
+  const live = await version(3).locator('[data-active-outline] text').textContent()
+  const [, liveX, liveY] = live.match(/^x (-?\d+) · y (-?\d+)$/).map(Number)
+  assert(liveX < 4000 && liveY > 1700 && liveX % 50 === 0 && liveY % 50 === 0, `Drag snaps to the 50 mm grid: ${live}`)
+  await readout.getByText(`x ${liveX} mm, y ${liveY} mm, turned 180° · not saved yet`, { exact: true }).waitFor()
+  await page.mouse.up()
+  await mover.getByRole('button', { name: 'Save position', exact: true }).click()
+  await version(4).waitFor()
+  const v4 = fixture.shells.get(`${shell}:4`).components.find(c => c.component_key === 'bed')
+  assert.deepEqual([v4.x_mm, v4.y_mm, v4.rz, v4.placement_basis, v4.reason], [liveX, liveY, 180, 'owner_placed', 'Moved in the drawing'])
+
+  // Someone else saves first: the move is kept, the owner reloads and saves on the newest version.
+  await mover.getByRole('button', { name: 'Move up 50 mm', exact: true }).click()
+  const bob = structuredClone(fixture.shells.get(`${shell}:4`)); bob.revision = 5
+  bob.components.find(c => c.component_key === 'room').reason = 'Bob noted the door side'
+  fixture.shells.set(`${shell}:5`, bob)
+  const row5 = { ...fixture.records.get(shell), revision: 5, change_note: 'Shell: place room' }
+  fixture.records.set(shell, row5); fixture.histories.set(shell, [...fixture.histories.get(shell), structuredClone(row5)])
+  await mover.getByRole('button', { name: 'Save position', exact: true }).click()
+  await version(4).getByRole('alert').getByText(/changed since you opened it, so your move was not saved/).waitFor()
+  await readout.getByText(`x ${liveX} mm, y ${liveY + 50} mm, turned 180° · not saved yet`, { exact: true }).waitFor()
+  assert.equal(fixture.shells.has(`${shell}:6`), false)
+  await page.screenshot({ path: `test-results/cad-shell-conflict-${width}.png`, fullPage: true })
+  await version(4).getByRole('button', { name: 'Reload drawing', exact: true }).click()
+  await version(5).getByText('Your unsaved move is still shown', { exact: false }).waitFor()
+  await version(5).getByText(/Bob noted the door side/).waitFor()
+  await readout.getByText(`x ${liveX} mm, y ${liveY + 50} mm, turned 180° · not saved yet`, { exact: true }).waitFor()
+  await mover.getByRole('button', { name: 'Save position', exact: true }).click()
+  await version(6).waitFor()
+  assert.equal(fixture.shellCommands.at(-1).expected, 5)
+  assert.equal(fixture.shells.get(`${shell}:6`).components.find(c => c.component_key === 'bed').y_mm, liveY + 50)
+  assert.equal(fixture.shells.get(`${shell}:6`).components.find(c => c.component_key === 'room').reason, 'Bob noted the door side', 'The other change survives')
+  await page.screenshot({ path: `test-results/cad-shell-placed-${width}.png`, fullPage: true })
+
   await page.keyboard.press('Escape')
-  await card.getByText('Version 2', { exact: true }).waitFor()
+  await card.getByText('Version 6', { exact: true }).waitFor()
   // Later scenarios count drawings; leave the fixture as it was.
-  fixture.records.delete(shell); fixture.histories.delete(shell)
+  fixture.records.delete(shell); fixture.histories.delete(shell); fixture.shellCommands.length = 0
   for (const key of [...fixture.shells.keys()]) if (key.startsWith(shell)) fixture.shells.delete(key)
 }

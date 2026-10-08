@@ -30,7 +30,7 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
   const sources = new Map()
   const shellRead = shellReadFor(records, shellPieces)
   const sourceStatus = id => sources.get(id) ?? {source_state:'current',source_reasons:[]}
-  const fixture = { records, histories, generations, parametric, cad, workLinks, shells, shellPieces, sources, physical, rejectNext: false, rejectPreview: false,
+  const fixture = { records, histories, generations, parametric, cad, workLinks, shells, shellPieces, shellCommands: [], sources, physical, rejectNext: false, rejectPreview: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
@@ -52,13 +52,23 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       }
       if(table==='cad_shell_command') {
         const {p_project,p_action,p_shell,p_expected,p_data}=request.postDataJSON()
-        assert.equal(p_project,'A');assert.equal(p_action,'adopt','The app only re-pins pieces; Bob moves them')
+        assert.equal(p_project,'A');assert(['adopt','place'].includes(p_action),'The app re-pins and places pieces; Bob adds and removes them')
+        fixture.shellCommands.push({action:p_action,expected:p_expected,data:structuredClone(p_data)})
         const old=records.get(p_shell),shell=old&&shells.get(generationKey(p_shell,old.revision))
         if(!shell||old.revision!==p_expected)return reply({status:409,json:{code:'40001',message:'cad_shell_changed'}})
         const next=structuredClone(shell);next.revision=old.revision+1
         const piece=next.components.find(c=>c.component_key===p_data.component_key);assert(piece)
-        piece.child_revision=shellPieces.get(piece.child_artifact_id).revision
-        const row={...old,revision:next.revision,recorded_at:timestamp(),change_note:'Shell: adopt '+piece.component_key}
+        if(p_action==='adopt'){
+          assert.deepEqual(Object.keys(p_data),['component_key'])
+          piece.child_revision=shellPieces.get(piece.child_artifact_id).revision
+        }else{
+          // Mirrors bob_private.cad_shell_component: whole mm, quarter turns, a known basis, no other keys.
+          assert.deepEqual(Object.keys(p_data).sort(),['component_key','placement_basis','reason','rz','x_mm','y_mm','z_mm'])
+          for(const k of ['x_mm','y_mm','z_mm'])assert(Number.isInteger(p_data[k])&&String(p_data[k]).length<=9,k+' is whole mm')
+          assert([0,90,180,270].includes(p_data.rz));assert.equal(p_data.placement_basis,'owner_placed');assert(p_data.reason.trim())
+          Object.assign(piece,{x_mm:p_data.x_mm,y_mm:p_data.y_mm,z_mm:p_data.z_mm,rz:p_data.rz,placement_basis:p_data.placement_basis,reason:p_data.reason.trim()})
+        }
+        const row={...old,revision:next.revision,recorded_at:timestamp(),change_note:'Shell: '+p_action+' '+piece.component_key}
         records.set(p_shell,row);histories.set(p_shell,[...(histories.get(p_shell)??[]),structuredClone(row)]);shells.set(generationKey(p_shell,next.revision),next)
         return reply({json:shellRead(next)})
       }

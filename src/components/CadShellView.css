@@ -1,0 +1,15 @@
+/* Owner placement controls for shell drawings (CadShellView). Tokens come from theme.css. */
+.shell-piece { cursor: pointer; }
+.shell-piece.is-active { cursor: grab; touch-action: none; }
+.shell-piece.is-active:active { cursor: grabbing; }
+.shell-move { margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.shell-move-title, .shell-move-readout { margin: 0 0 8px; }
+.shell-move-readout { font-variant-numeric: tabular-nums; font-weight: 700; }
+.shell-move-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.shell-move-pad { display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 48px); gap: 4px; }
+.shell-move-pad .btn { min-height: 48px; min-width: 48px; padding: 0; font-size: 20px; }
+.shell-move-pad .shell-up { grid-area: 1 / 2; }
+.shell-move-pad .shell-left { grid-area: 2 / 1; }
+.shell-move-pad .shell-right { grid-area: 2 / 3; }
+.shell-move-pad .shell-down { grid-area: 3 / 2; }
+.shell-move :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
