@@ -198,3 +198,29 @@ test('P2: an unpriced transport failure cannot release its uncertain reservation
  assert.deepEqual(await budget('request',{functionName:'cad-designer'} as any,async()=>failure),failure)
  assert.deepEqual(operations,['reserve'])
 })
+test('P2 events: a chat turn\'s own project writes do not resume the request it just failed',async t=>{
+ const pg=await projectSchema();t.after(()=>pg.close())
+ await pg.exec(`create schema cron; create schema net; create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer) returns bigint language sql as 'select 1::bigint'`)
+ const owner=randomUUID(),turn=randomUUID(),id=randomUUID()
+ const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>
+  (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
+ const service=(name:string,args:any[])=>call(null,'bob.'+name,args,'service_role')
+ const bump=()=>pg.query('insert into bob_private.drawing_project_events(project_id) values($1) on conflict(project_id) do update set revision=bob_private.drawing_project_events.revision+1',[project])
+ const resumes=async()=>(await pg.query('select count(*)::int n from bob_private.bob_jobs where drawing_request_id=$1',[id])).rows[0].n
+ await pg.query('insert into auth.users values($1,$2,now())',[owner,'own-write@example.test'])
+ const project=(await call(owner,'bob.create_project',[JSON.stringify({name:'Own write fixture'})])).id
+ const queued=await service('bob_enqueue_job',[project,owner,turn,'80x165x12 cm',{version:1,ciphertext:'fixture'},new Date(Date.now()+600000).toISOString(),'https://fixture.supabase.co/functions/v1/bob-worker'])
+ const secret=(await pg.query('select * from bob_private.bob_jobs where id=$1',[queued.jobId])).rows[0]
+ const claim=await service('bob_claim_job',[queued.jobId,secret.capability])
+ assert.equal(claim.status,'claimed')
+ // The turn saves measurements after it was queued, then the designer fails.
+ await bump();await bump()
+ await call(owner,'bob.create_drawing_request',[project,secret.thread_id,turn,claim.generation,id,scope])
+ await service('bob_drawing_request',[project,owner,secret.thread_id,turn,claim.generation,'save',id,0,'retrieval_failed',{brief:{...scope},owner_request:'80x165x12 cm',reference_refs:[]},randomUUID()])
+ await service('bob_finish_job',[queued.jobId,claim.claimToken,null])
+ await service('bob_dispatch_jobs',[])
+ assert.equal(await resumes(),0,'the turn\'s own writes are not new data for its failed request')
+ await bump()
+ await service('bob_dispatch_jobs',[])
+ assert.equal(await resumes(),1,'data changed after the turn still resumes the request')
+})
