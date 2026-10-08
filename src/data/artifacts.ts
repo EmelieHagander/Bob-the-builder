@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import type { StudWallRole } from '../lib/artifactGeometry'
 import type { StorageBoxRecipe } from '../lib/storageBox'
+import type { CadShell } from '../lib/cadShell'
 import { parseDrawingSourceChanges, type DrawingSourceStatus } from './drawingSources'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
@@ -77,6 +78,8 @@ export interface ArtifactVersion extends ProjectArtifact {
   latestRevision?: number
   sourceStatus?: DrawingSourceStatus
   cad?: CadDrawing | null
+  /** Present when this drawing combines saved CAD pieces. */
+  shell?: CadShell | null
   measurements: ArtifactMeasurement[]
   generation: ArtifactGeneration | null
   stairStudy?: StairDetails | null
@@ -247,9 +250,13 @@ export function createArtifacts(
       const parent=checked(await db.from('artifacts').select('current_revision').eq('project_id',projectId).eq('id',cad.source_artifact_id).maybeSingle())
       cad.source_changed=!parent||parent.current_revision!==cad.source_revision
     }
+    // Until the shell migration is live the function is absent; ordinary drawings still open.
+    const shellRead = cad ? null : await db.rpc('read_cad_shell', { p_project: projectId, p_shell: id, p_revision: revision })
+    const shell = !shellRead || shellRead.error?.code === 'PGRST202' ? null : checked(shellRead) as CadShell | null
     guard()
     return {
       latestRevision: head?.current_revision,
+      shell,
       sourceStatus: sourceStatus ?? { source_state: 'unavailable', source_reasons: ['source_unavailable'] },
       cad,
       multifloorPlan,
@@ -291,6 +298,13 @@ export function createArtifacts(
       const parametric = await recipes(projectId, page.map(r => ({ id, revision: r.revision })))
       guard()
       return { items: page.map(r => artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_revision === r.revision)?.recipe })), hasMore: rows.length > 12 }
+    },
+    /** The one shell write path, shared with Bob: place/add/remove/adopt a piece. */
+    async shellCommand(projectId: string, action: 'place' | 'add' | 'remove' | 'adopt', id: string, expected: number, data: Record<string, unknown>) {
+      const { db, guard } = connection(projectId)
+      const saved = checked(await db.rpc('cad_shell_command', { p_project: projectId, p_action: action, p_shell: id, p_expected: expected, p_data: data })) as CadShell
+      guard()
+      return version(projectId, id, saved.revision)
     },
     async edit(projectId: string, action: ArtifactEditAction, id: string, expected: number, data: Record<string, unknown> = {}) {
       const { db, guard } = connection(projectId)

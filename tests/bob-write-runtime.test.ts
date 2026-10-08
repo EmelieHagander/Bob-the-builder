@@ -39,8 +39,8 @@ test('strict write shapes bind project server-side and accept a real current-tur
   const plan=parseProjectWrite('save_project_description',{description:'70 × 160',expected_updated_at:time,request_quote:'A'},'BOUND','A')!
   assert.equal(plan.record_id,'BOUND')
   assert.equal(parseProjectWrite('delete_project',{},'A','A'),null)
-  assert.equal(WRITE_TOOLS.length,32)
-  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,32)
+  assert.equal(WRITE_TOOLS.length,33)
+  assert.equal(new Set(WRITE_TOOLS.map(t=>t.function.name)).size,33)
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_drawing'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='save_project_area'))
   assert(WRITE_TOOLS.some(t=>t.function.name==='set_project_plan_focus'))

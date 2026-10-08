@@ -295,7 +295,13 @@ export async function answerWithOpenAi(opts: {
     },
     ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,journal,
       privateCall:drawingRequestCall,
-      newId:()=>memo('cad:project_request_id',{},async()=>crypto.randomUUID()),
+      // One stable id per piece key; the unkeyed id keeps its existing journal identity.
+      newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
+      release:async ids=>{
+        const {data,error}=await internal.rpc('release_drawing_pieces',{...binding,p_user:opts.userId,p_ids:ids}).abortSignal(AbortSignal.timeout(12000))
+        if(error)throw new Error(error.message?.includes('project_denied')?'project_denied':'drawing_pieces_unavailable')
+        return {released:Array.isArray(data?.released)?data.released:[]}
+      },
       caller:async(name,args)=>{
         const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
         if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','drawing_request_not_paused','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
@@ -324,6 +330,10 @@ export async function answerWithOpenAi(opts: {
       },
      },id,revision)
      return fresh?check():memo('cad:construction_check',{id,revision},check)
+    },
+    readShell:async(id,revision)=>{
+      const {data,error}=await rpc('read_cad_shell',{p_project:opts.projectId,p_shell:id,p_revision:revision},AbortSignal.timeout(10000))
+      if(error)throw new Error('cad_shell_read_unavailable');return data
     },
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));

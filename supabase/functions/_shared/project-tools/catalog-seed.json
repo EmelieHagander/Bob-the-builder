@@ -654,5 +654,38 @@
       "build"
     ],
     "active": true
+  },
+  {
+    "name": "plan_cad_pieces",
+    "description": "Split a large build into separately designed and saved drawing pieces.",
+    "how_to": "Use instead of design_project_cad when one drawing would need more than about 24 parts or several structural systems (walls, floor, roof, stairs, built-in furniture). Give 2-12 pieces, each with a complete standalone brief and handoff in one shared coordinate system. Pieces are designed one at a time after your reply while the owner has Bob open; each saved piece appears in the conversation. Tell the owner the pieces and that they arrive one by one. A failed piece can be resumed alone by its request_id. Saved pieces are concepts, not measured truth or structural approval.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
+  },
+  {
+    "name": "compose_cad_shell",
+    "description": "Combine separately saved CAD pieces into one shell drawing, and move, add, remove or update pieces in it.",
+    "how_to": "A shell places saved CAD pieces (rooms, walls, furniture) by reference: exact piece revision plus x/y/z in mm and a rotation of 0, 90, 180 or 270 degrees about z. action=create needs title, description, assumptions, area_id and components [{component_key,child_artifact_id,child_revision (null = current),x_mm,y_mm,z_mm,rz,placement_basis,reason}]. Pieces made by plan_cad_pieces share one origin: use 0,0,0,0 with placement_basis shared_origin. place moves one piece (component_key plus new placement); add/remove change the piece list; adopt re-pins a piece that has a newer saved revision. Use the returned revision as expected_revision next time. Positions the owner chose are owner_placed; never present a placement as measured. Cut lists and materials stay on the pieces.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
+  },
+  {
+    "name": "read_cad_shell",
+    "description": "Read a shell drawing: pinned pieces, placements, footprints and which pieces have newer saved revisions.",
+    "how_to": "Use before compose_cad_shell on an existing shell, with the shell id from its save receipt or the project drawings. Component keys and the revision come from here. A piece marked newer_revision has a newer saved drawing: tell the owner and adopt it only when they want the update. Footprints are bounding boxes, not measured rooms.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
   }
 ]

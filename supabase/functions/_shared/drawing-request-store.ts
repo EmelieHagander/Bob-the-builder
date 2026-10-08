@@ -9,7 +9,8 @@ export function createDrawingRequestStore(opts:{
  projectId:string; binding:Input;
  caller:(name:string,args:Input)=>Promise<any>;
  privateCall:(args:Input)=>Promise<any>;
- newId:()=>Promise<string>;
+ newId:(key?:string)=>Promise<string>;
+ release?:(ids:string[])=>Promise<any>;
  journal?:BobJournal;
 }):DrawingRequestStore {
  const restored=new Map<string,any>()
@@ -66,10 +67,11 @@ export function createDrawingRequestStore(opts:{
     else throw new Error('drawing_request_complete')
    }
   },
-  save:async(id,expected,status,payload)=>{
+  ...(opts.release?{releasePieces:opts.release}:{}),
+  save:async(id,expected,status,payload,idKey)=>{
    if(id===null){
     const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(k=>[k,payload.brief[k]??null]))
-    id=await opts.newId()
+    id=await opts.newId(idKey)
     const resolved=await caller('resolve_drawing_request',{...opts.binding,p_id:id,p_scope:scope,p_intent:await drawingInputFingerprint(payload.brief,null,null)})
     if(resolved.reused)throw new Error('drawing_request_reuse:'+resolved.id)
    }
