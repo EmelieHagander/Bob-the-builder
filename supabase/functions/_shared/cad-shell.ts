@@ -74,3 +74,24 @@ export function parseCadShellRead(v:unknown){
  if(!exact(v,['shell_id','revision'])||typeof v.shell_id!=='string'||!UUID.test(v.shell_id)||!(v.revision===null||Number.isSafeInteger(v.revision)&&Number(v.revision)>0))return null
  return {shell_id:v.shell_id.toLowerCase(),revision:v.revision as number|null}
 }
+
+export const LINK_CAD_SHELL_STEPS_TOOL={type:'function' as const,function:{name:'link_cad_shell_steps',
+ description:'Link the pieces of a shell drawing to current plan Steps in one go, or unlink them. Each link is held by the piece, exactly as link_project_drawing would save it; the shell itself is not changed.',
+ parameters:{type:'object',additionalProperties:false,required:['shell_id','expected_revision','links','request_quote'],properties:{
+  shell_id:{type:'string',description:'Shell drawing id from read_cad_shell or its save receipt.'},
+  expected_revision:{type:'integer',minimum:1,description:'The shell revision you last read.'},
+  links:{type:'array',minItems:1,maxItems:64,description:'One entry per piece and Step, in build order.',items:{type:'object',additionalProperties:false,required:['component_key','step_id','action'],properties:{
+   component_key:{type:'string',pattern:KEY.source,description:'Exactly as read_cad_shell returns it.'},
+   step_id:{type:'string',description:'Exact current plan Step id.'},
+   action:{type:'string',enum:['link','unlink']}}}},
+  request_quote:{type:'string',description:'Exact quote from the CURRENT user message authorising this change.'}}}}}
+/** Returns the claimed-turn writer payload for link_cad_shell_steps, or null when malformed. */
+export function parseCadShellStepsWrite(v:Record<string,unknown>){
+ if(!exact(v,LINK_CAD_SHELL_STEPS_TOOL.function.parameters.required)||typeof v.shell_id!=='string'||!UUID.test(v.shell_id)||!text(v.request_quote,500)
+  ||!Number.isSafeInteger(v.expected_revision)||Number(v.expected_revision)<1||!Array.isArray(v.links)||v.links.length<1||v.links.length>64)return null
+ const links=v.links.map(l=>exact(l,['component_key','step_id','action'])&&typeof l.component_key==='string'&&KEY.test(l.component_key)
+  &&typeof l.step_id==='string'&&UUID.test(l.step_id)&&(l.action==='link'||l.action==='unlink')?{component_key:l.component_key,step_id:l.step_id.toLowerCase(),action:l.action}:null)
+ if(!links.every(Boolean)||new Set(links.map(l=>`${l!.component_key}:${l!.step_id}`)).size!==links.length)return null
+ return {kind:'cad_shell_steps' as const,record_id:v.shell_id.toLowerCase(),expected_updated_at:null,expected_revision:Number(v.expected_revision),
+  request_quote:v.request_quote as string,data:{links}}
+}

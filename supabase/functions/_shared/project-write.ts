@@ -15,7 +15,7 @@ import { withDerivedRoomLayout } from '../../../src/lib/roomLayout.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
 import { DRAWING_PROPERTIES, DRAWING_DESCRIPTION, parseDrawingWrite } from './project-drawing-write.ts'
-import { COMPOSE_CAD_SHELL_TOOL, parseCadShellWrite } from './cad-shell.ts'
+import { COMPOSE_CAD_SHELL_TOOL, LINK_CAD_SHELL_STEPS_TOOL, parseCadShellWrite, parseCadShellStepsWrite } from './cad-shell.ts'
 import { LIFECYCLE_TOOLS, LIFECYCLE_TOOL_NAMES, parseLifecycleWrite } from './project-lifecycle.ts'
 
 const nullableText = { type: ['string', 'null'] }
@@ -37,6 +37,7 @@ export const WRITE_TOOLS = [
   ...ROOM_LAYOUT_TOOLS,
   ...LIFECYCLE_TOOLS,
   COMPOSE_CAD_SHELL_TOOL,
+  LINK_CAD_SHELL_STEPS_TOOL,
   tool('save_project_drawing', DRAWING_DESCRIPTION, DRAWING_PROPERTIES),
   tool('link_project_drawing', 'Link or unlink a saved drawing and a current work Step without redrawing. One drawing can support several Steps. Saved drawings appear on Project home automatically; Planning is a phase, not a mandatory Step.', {
     record_id: text, expected_revision: { type: 'integer' }, step_id: text,
@@ -65,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'cad_shell' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -119,6 +120,7 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if (PLAN_WRITE_TOOLS.some(t => t.function.name === name)) return parsePlanWrite(name, v)
   if (name === STAIR_WRITE_TOOL.function.name) return parseStairWrite(v)
   if (name === COMPOSE_CAD_SHELL_TOOL.function.name) return parseCadShellWrite(v)
+  if (name === LINK_CAD_SHELL_STEPS_TOOL.function.name) return parseCadShellStepsWrite(v)
   if (name === BUILDING_PLAN_TOOL.function.name) return parseBuildingPlanWrite(v)
   if (name === BUILDING_INTAKE_TOOL.function.name) return parseBuildingIntake(v, userMessage)
   if (ROOM_LAYOUT_TOOLS.some(t => t.function.name === name)) return parseRoomLayoutWrite(name, v)
@@ -251,6 +253,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (payload.kind === 'cut_plan_stock' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No reservation changed. Reserve requires at least one used stock sheet, all used sheets bound to current stock or catalog panels, and exact plan/reservation revisions. Only stock sheets are reserved; catalog sheets require separate publish. Used hypothetical sheets cannot reserve. Quantities come only from the saved layout. Reopen supply after either operation and retry only the missing commitment.' }
           if (payload.kind === 'cut_plan' && error.code === 'PT409') return { status: 'conflict', message: 'Cut plan, construction, saved piece needs, material/format revision or remaining whole-sheet capacity changed. Read current cut_plan, requirements and sources; preserve existing identities and update the same plan.' }
           if (payload.kind === 'cut_plan' && ['22023','22P02','23514'].includes(error.code ?? '')) return { status: 'invalid', message: 'No cut plan saved. Use the exact current piece needs, explicit valid sheet inputs, and matching versioned stock/catalog format. Unknown inputs or an unexecutable layout cannot be saved. Stock reservation and Shopping remain separate.' }
+          if (payload.kind === 'cad_shell_steps' && error.code === '40001') return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and link against its current revision.' }
+          if (payload.kind === 'cad_shell_steps' && error.code === '22023') return { status: 'invalid', message: 'No plan links changed. ' + (/cad_shell_step_unavailable/.test(error.message ?? '') ? 'Use exact Step ids from the current plan; add a missing Step with edit_project_plan first.' : /cad_shell_unknown_component/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them.' : /cad_shell_piece_archived/.test(error.message ?? '') ? 'An archived piece cannot be linked; restore it first.' : /cad_shell_archived/.test(error.message ?? '') ? 'The shell is archived; restore it first.' : 'Give 1-64 distinct links, each a component_key from the shell, a Step id and link or unlink.') }
           if (payload.kind === 'cad_shell' && error.code === '40001') return { status: 'conflict', message: 'The shell drawing changed since you read it. Read it with read_cad_shell and apply the change to its current revision.' }
           if (payload.kind === 'cad_shell' && error.code === '22023') return { status: 'invalid', message: 'No shell change made. ' + (/cad_shell_[a-z_]+|use_cad_shell_command/.exec(error.message ?? '')?.[0] === 'cad_shell_piece_archived' ? 'An archived piece cannot be placed; restore it first.' : /cad_shell_(unknown_component|duplicate_key)/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them; a new piece needs a new key.' : 'Pieces must be saved CAD drawings in this project (read_drawing_requests lists them), 1-64 per shell, placed in whole mm with rz 0, 90, 180 or 270.') }
           if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }

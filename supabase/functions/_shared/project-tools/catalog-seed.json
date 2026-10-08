@@ -680,11 +680,23 @@
   {
     "name": "read_cad_shell",
     "description": "Read a shell drawing: pinned pieces, placements, footprints and which pieces have newer saved revisions.",
-    "how_to": "Use before compose_cad_shell on an existing shell, with the shell id from its save receipt or the project drawings. Component keys and the revision come from here. A piece marked newer_revision has a newer saved drawing: tell the owner and adopt it only when they want the update. Footprints are bounding boxes, not measured rooms.",
+    "how_to": "Use before compose_cad_shell on an existing shell, with the shell id from its save receipt or the project drawings. Component keys and the revision come from here. A piece marked newer_revision has a newer saved drawing: tell the owner and adopt it only when they want the update. Footprints are bounding boxes, not measured rooms. Each piece also lists its linked plan Steps and its material requirements; plan_summary sums the pieces' requirements by name and unit, lists pieces not counted yet (no requirement) and pieces not in the plan yet. A piece placed twice is counted once and named in counted_once. Link pieces to Steps with link_cad_shell_steps.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [
       "design"
+    ],
+    "active": true
+  },
+  {
+    "name": "link_cad_shell_steps",
+    "description": "Link the pieces of a shell drawing to current plan Steps in one go, or unlink them.",
+    "how_to": "Read the shell with read_cad_shell and the current plan first. Each link names a component_key from the shell and an exact current Step id; the link is held by the piece, as link_project_drawing would. Use the shell revision as expected_revision. Link each piece to the Step that builds it, in build order (for example walls before the bed that stands against them). When a piece has no fitting Step, add the Step with edit_project_plan first, then link. One piece can serve several Steps.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design",
+      "planning"
     ],
     "active": true
   }
