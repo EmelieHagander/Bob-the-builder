@@ -1,0 +1,9 @@
+.shell3d { min-width: 0; max-width: 100%; }
+.shell3d-controls { align-items: center; margin: 8px 0; }
+.shell3d-viewport { position: relative; width: 100%; height: clamp(260px, 55vh, 520px); border: 1px solid var(--line); border-radius: var(--r); background: var(--canvas); overflow: hidden; }
+.shell3d-viewport:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.shell3d-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.shell3d-legend { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; }
+.shell3d-legend li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; overflow-wrap: anywhere; }
+.shell3d-swatch { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--ink-soft); }
+.shell3d-swatch[data-flagged] { outline: 2px dashed var(--clay); outline-offset: 2px; }

@@ -24,12 +24,14 @@
     "@supabase/supabase-js": "2.110.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "7.18.4"
+    "react-router-dom": "7.18.4",
+    "three": "0.170.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "0.170.0",
     "@vitejs/plugin-react": "^4.3.2",
     "deno": "2.9.6",
     "playwright-core": "1.62.1",

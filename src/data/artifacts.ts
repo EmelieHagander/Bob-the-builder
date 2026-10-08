@@ -299,6 +299,25 @@ export function createArtifacts(
       guard()
       return { items: page.map(r => artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_revision === r.revision)?.recipe })), hasMore: rows.length > 12 }
     },
+    /** Saved CAD recipes of the exact piece revisions a shell pins, for the browser-composed 3D view.
+     * Reads only the recipe (no export files) and keeps the project scope; a missing row stays missing. */
+    async shellPieceRecipes(projectId: string, pins: { id: string; revision: number }[]) {
+      const { db, guard } = connection(projectId)
+      const unique = [...new Map(pins.map(p => [`${p.id}:${p.revision}`, p])).values()]
+      if (unique.length > 64 || unique.some(p => !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(p.id)
+        || !Number.isSafeInteger(p.revision) || p.revision < 1)) throw new Error('Invalid drawing revision reference.')
+      const found = new Map<string, unknown>()
+      for (let i = 0; i < unique.length; i += 16) {
+        const chunk = unique.slice(i, i + 16)
+        const filter = chunk.map(p => `and(artifact_id.eq.${p.id},artifact_revision.eq.${p.revision})`).join(',')
+        const rows = checked(await db.from('artifact_cad_revisions').select('project_id,artifact_id,artifact_revision,recipe')
+          .eq('project_id', projectId).or(filter)) as Row[]
+        guard()
+        if (rows.some(row => !chunk.some(p => p.id === row.artifact_id && p.revision === row.artifact_revision))) throw new Error('Drawing recipe revision mismatch.')
+        for (const row of scoped(rows, projectId)) found.set(`${row.artifact_id}:${row.artifact_revision}`, row.recipe)
+      }
+      return found
+    },
     /** The one shell write path, shared with Bob: place/add/remove/adopt a piece. */
     async shellCommand(projectId: string, action: 'place' | 'add' | 'remove' | 'adopt', id: string, expected: number, data: Record<string, unknown>) {
       const { db, guard } = connection(projectId)
