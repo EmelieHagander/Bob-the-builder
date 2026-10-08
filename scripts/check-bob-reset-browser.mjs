@@ -383,7 +383,7 @@ try {
       const arriving = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === complement)
       await drawer.getByRole('button', { name: 'Send', exact: true }).click()
       const originalBody = (await arriving).postDataJSON()
-      await drawer.getByText('Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.', { exact: true }).waitFor()
+      await drawer.getByText('Bob is finishing earlier work, such as a drawing. Your message is kept and sends by itself when he is free.', { exact: true }).waitFor()
       assert.equal(await drawer.getByText(complement, { exact: true }).count(), 1)
       assert(!h.messages.some(m => m.text === complement), '409 did not save the new message')
       await drawer.getByText('OLD SHELF INSTRUCTION', { exact: true }).last().waitFor()
@@ -430,11 +430,27 @@ try {
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
       assert.equal(answerCalls, before + 2, 'Only the deliberate same-ID retry sends again')
     }
+    // A message rejected while Bob finishes background work resends itself in
+    // this tab, with the same turn id, once he is free.
+    sendMode = 'collision'
+    const autoBefore = answerCalls
+    await drawer.getByRole('textbox').fill('Sends when Bob is free')
+    const firstTry = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === 'Sends when Bob is free')
+    await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+    const firstBody = (await firstTry).postDataJSON()
+    await drawer.getByText('Bob is finishing earlier work, such as a drawing. Your message is kept and sends by itself when he is free.', { exact: true }).waitFor()
+    sendMode = 'normal'
+    const autoAnswers = await drawer.getByText('FRESH ANSWER', { exact: true }).count()
+    const resent = page.waitForRequest(r => new URL(r.url()).pathname === '/functions/v1/ask-bob' && r.postDataJSON()?.message === 'Sends when Bob is free', { timeout: 20_000 })
+    assert.equal((await resent).postDataJSON().clientTurnId, firstBody.clientTurnId)
+    await drawer.getByText('FRESH ANSWER', { exact: true }).nth(autoAnswers).waitFor()
+    assert.equal(answerCalls, autoBefore + 2)
+    assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     // Successful reset clears held text too; a failed reset preserves it.
     sendMode = 'collision'
     await drawer.getByRole('textbox').fill('Held before reset')
     await drawer.getByRole('button', { name: 'Send', exact: true }).click()
-    await drawer.getByText('Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.', { exact: true }).waitFor()
+    await drawer.getByText('Bob is finishing earlier work, such as a drawing. Your message is kept and sends by itself when he is free.', { exact: true }).waitFor()
     resetMode = 'unavailable'
     dialog = await confirm()
     await dialog.getByRole('button', { name: 'Clear chat and context', exact: true }).click()
