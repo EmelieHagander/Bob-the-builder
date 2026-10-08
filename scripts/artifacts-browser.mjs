@@ -3,8 +3,18 @@ import { randomUUID } from 'node:crypto'
 
 const generationKey = (id, revision) => `${id}:${revision}`
 
+/** Mirrors bob.read_cad_shell. Pieces live in `pieces` (id -> {title, revision, archived, boxes}) so they stay out of the drawing list. */
+function shellReadFor(records, pieces) {
+  return shell => ({ ...shell, current_revision: records.get(shell.id).revision, components: shell.components.map(c => {
+    const child = pieces.get(c.child_artifact_id)
+    return { ...c, child_title: child?.title ?? null, child_current_revision: child?.revision ?? null,
+      bounding_box_mm: child?.boxes[c.child_revision] ?? null,
+      status: !child ? 'unavailable' : child.archived ? 'archived' : child.revision > c.child_revision ? 'newer_revision' : 'current' }
+  }) })
+}
+
 export function createArtifactsFixture(timestamp, assets, facts, solutions) {
-  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map(), cad = new Map(), workLinks = new Map()
+  const records = new Map(), histories = new Map(), generations = new Map(), parametric = new Map(), cad = new Map(), workLinks = new Map(), shells = new Map(), shellPieces = new Map()
   const physical = {
     buildings: [{
       id: '90000000-0000-0000-0000-000000000001', site_id: null, project_id: 'A', revision: 1,
@@ -18,14 +28,16 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
     }],
   }
   const sources = new Map()
+  const shellRead = shellReadFor(records, shellPieces)
   const sourceStatus = id => sources.get(id) ?? {source_state:'current',source_reasons:[]}
-  const fixture = { records, histories, generations, parametric, cad, workLinks, sources, physical, rejectNext: false, rejectPreview: false,
+  const fixture = { records, histories, generations, parametric, cad, workLinks, shells, shellPieces, sources, physical, rejectNext: false, rejectPreview: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
         'artifacts','artifact_source_status','artifact_source_changes','current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
         'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions','current_drawing_overview','current_drawing_steps',
+        'read_cad_shell','cad_shell_command',
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
@@ -33,6 +45,23 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
       const fail = message => reply({ status: 409, json: { message } })
       if(table==='artifacts')return reply({json:records.get(eq('id'))?.project_id===eq('project_id')?{current_revision:records.get(eq('id')).revision}:null})
 
+      if(table==='read_cad_shell') {
+        const {p_project,p_shell,p_revision}=request.postDataJSON()
+        const shell=shells.get(generationKey(p_shell,p_revision??records.get(p_shell)?.revision))
+        return reply({json:shell&&p_project==='A'?shellRead(shell):null})
+      }
+      if(table==='cad_shell_command') {
+        const {p_project,p_action,p_shell,p_expected,p_data}=request.postDataJSON()
+        assert.equal(p_project,'A');assert.equal(p_action,'adopt','The app only re-pins pieces; Bob moves them')
+        const old=records.get(p_shell),shell=old&&shells.get(generationKey(p_shell,old.revision))
+        if(!shell||old.revision!==p_expected)return reply({status:409,json:{code:'40001',message:'cad_shell_changed'}})
+        const next=structuredClone(shell);next.revision=old.revision+1
+        const piece=next.components.find(c=>c.component_key===p_data.component_key);assert(piece)
+        piece.child_revision=shellPieces.get(piece.child_artifact_id).revision
+        const row={...old,revision:next.revision,recorded_at:timestamp(),change_note:'Shell: adopt '+piece.component_key}
+        records.set(p_shell,row);histories.set(p_shell,[...(histories.get(p_shell)??[]),structuredClone(row)]);shells.set(generationKey(p_shell,next.revision),next)
+        return reply({json:shellRead(next)})
+      }
       if(table==='artifact_source_changes') {
         const body=request.postDataJSON()
         const row=records.get(body.p_artifact)

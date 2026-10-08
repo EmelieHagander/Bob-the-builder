@@ -12,6 +12,7 @@ import { createSolutionsFixture, verifySolutionsBrowser } from './solutions-brow
 import { createArtifactsFixture, verifyArtifactsBrowser } from './artifacts-browser.mjs'
 import { createRoomLayoutFixture, verifyRoomLayoutBrowser } from './room-layout-browser.mjs'
 import { verifyStorageBoxBrowser } from './storage-box-browser.mjs'
+import { verifyCadShellBrowser } from './cad-shell-browser.mjs'
 import { createMaterialPlanningFixture, verifyMaterialPlanningBrowser } from './material-planning-browser.mjs'
 import { installSheetLayerFixture, verifySheetLayersBrowser } from './sheet-layer-browser.mjs'
 
@@ -303,6 +304,7 @@ try {
     await verifyFactsBrowser(page, base, facts, viewport.width)
     await verifySolutionsBrowser(page, base, solutions, facts, viewport.width)
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
+    await verifyCadShellBrowser(page, base, artifacts, viewport.width)
     await verifyMaterialPlanningBrowser(page, base, materialPlanning, facts, viewport.width)
     await verifySheetLayersBrowser(page, base, materialPlanning, viewport.width)
     await verifyStorageBoxBrowser(page, base, artifacts, viewport.width)

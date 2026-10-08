@@ -331,6 +331,10 @@ export async function answerWithOpenAi(opts: {
      },id,revision)
      return fresh?check():memo('cad:construction_check',{id,revision},check)
     },
+    readShell:async(id,revision)=>{
+      const {data,error}=await rpc('read_cad_shell',{p_project:opts.projectId,p_shell:id,p_revision:revision},AbortSignal.timeout(10000))
+      if(error)throw new Error('cad_shell_read_unavailable');return data
+    },
     readArtifact:async(id,revision)=>{
       const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
       if(error)throw new Error('cad_read_unavailable');

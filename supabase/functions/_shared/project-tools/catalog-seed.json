@@ -665,5 +665,27 @@
       "design"
     ],
     "active": true
+  },
+  {
+    "name": "compose_cad_shell",
+    "description": "Combine separately saved CAD pieces into one shell drawing, and move, add, remove or update pieces in it.",
+    "how_to": "A shell places saved CAD pieces (rooms, walls, furniture) by reference: exact piece revision plus x/y/z in mm and a rotation of 0, 90, 180 or 270 degrees about z. action=create needs title, description, assumptions, area_id and components [{component_key,child_artifact_id,child_revision (null = current),x_mm,y_mm,z_mm,rz,placement_basis,reason}]. Pieces made by plan_cad_pieces share one origin: use 0,0,0,0 with placement_basis shared_origin. place moves one piece (component_key plus new placement); add/remove change the piece list; adopt re-pins a piece that has a newer saved revision. Use the returned revision as expected_revision next time. Positions the owner chose are owner_placed; never present a placement as measured. Cut lists and materials stay on the pieces.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
+  },
+  {
+    "name": "read_cad_shell",
+    "description": "Read a shell drawing: pinned pieces, placements, footprints and which pieces have newer saved revisions.",
+    "how_to": "Use before compose_cad_shell on an existing shell, with the shell id from its save receipt or the project drawings. Component keys and the revision come from here. A piece marked newer_revision has a newer saved drawing: tell the owner and adopt it only when they want the update. Footprints are bounding boxes, not measured rooms.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "design"
+    ],
+    "active": true
   }
 ]
