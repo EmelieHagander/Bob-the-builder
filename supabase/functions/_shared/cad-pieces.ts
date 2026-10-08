@@ -63,6 +63,6 @@ export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerReq
   }
   for(const p of pieces)if(p.status==='queued'&&!released.includes(p.request_id!))p.status='stored_not_started'
   return {status:released.length?'queued':'not_started',saved:false,pieces,
-   next_action:'Tell the owner which pieces were queued. Each is designed and saved separately after this reply, one at a time, while the owner has Bob open; saved pieces appear in this conversation. Do not call design_project_cad for queued pieces in this turn. existing_request pieces are already in progress; stored_not_started pieces start with design_project_cad and their request_id; not_stored pieces were not created. When the pieces are saved, combine them with compose_cad_shell (placement_basis shared_origin at 0,0,0) so the owner sees the whole build.'}
+   next_action:'Tell the owner which pieces were queued. Each is designed and saved separately after this reply, one at a time, while the owner has Bob open; saved pieces appear in this conversation. Do not call design_project_cad for queued pieces in this turn. existing_request pieces are already in progress; stored_not_started pieces start with design_project_cad and their request_id; not_stored pieces were not created. When the pieces are saved, combine them with compose_cad_shell (placement_basis shared_origin at 0,0,0) so the owner sees the whole build, then link each piece to the plan Step that builds it with link_cad_shell_steps.'}
  }}
 }
