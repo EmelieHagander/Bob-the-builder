@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
 import type { ArtifactVersion } from '../data/artifacts'
-import { SHELL_BASIS_LABELS, shellFootprint, type CadShell, type ShellComponent } from '../lib/cadShell'
+import { SHELL_BASIS_LABELS, shellBuildOrder, shellFootprint, shellQuantity, type CadShell, type ShellComponent } from '../lib/cadShell'
 import { formatDrawingMm } from '../lib/storageBox'
 import './StorageBoxDrawing.css'
 
@@ -31,6 +31,9 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
   const pad = boxes.length ? Math.max(maxX - minX, maxY - minY) * 0.06 : 0
   const font = boxes.length ? Math.max(maxX - minX, maxY - minY) / 32 : 0
   const flagged = value.components.filter(c => c.status !== 'current').length
+  const ordered = shellBuildOrder(placed.map(p => ({ ...p, steps: p.c.steps })))
+  const summary = value.plan_summary
+  const titleOf = (key: string) => { const c = value.components.find(x => x.component_key === key); return c?.child_title ?? key }
 
   async function adopt(c: ShellComponent) {
     setBusy(c.component_key); setError('')
@@ -55,8 +58,11 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
       </svg>
     </div> : <p className="solution-attention">No piece has a saved size yet, so the plan view cannot be drawn.</p>}
     {error && <p role="alert" className="solution-attention">{error}</p>}
+    {summary && <p className="foundation-hint" role="status">{summary.not_in_plan.length === 0
+      ? 'Every piece is linked to a step in the build plan. Pieces are listed in build order.'
+      : `${value.components.length - summary.not_in_plan.length} of ${value.components.length} pieces are in the build plan. Ask Bob to link the rest to plan steps.`}</p>}
     <ul className="fact-list" aria-label="Pieces in this drawing" style={{ listStyle: 'none', padding: 0 }}>
-      {placed.map(({ c, f }) => <li key={c.component_key} style={{ padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+      {ordered.map(({ c, f }) => <li key={c.component_key} style={{ padding: '10px 0', borderTop: '1px solid var(--line)' }}>
         <Link to={`/artifacts?drawing=${encodeURIComponent(c.child_artifact_id)}&revision=${c.child_revision}`}><strong>{c.child_title ?? c.component_key}</strong></Link>
         {' '}· version {c.child_revision}
         <div className="foundation-actions" style={{ marginTop: 6 }}>
@@ -67,10 +73,36 @@ export function CadShellView({ value, projectId, canEdit, onChanged }: {
           At x {formatDrawingMm(c.x_mm)}, y {formatDrawingMm(c.y_mm)}, height {formatDrawingMm(c.z_mm)} mm{c.rz ? `, turned ${c.rz}°` : ''}
           {f ? ` · footprint ${formatDrawingMm(f.width)} × ${formatDrawingMm(f.depth)} mm` : ''}. {c.reason}
         </p>
+        {c.steps && <p className="foundation-hint" style={{ margin: '6px 0' }}>
+          <strong>Plan:</strong>{' '}
+          {c.steps.length ? c.steps.map((s, i) => <span key={s.id}>{i > 0 && ', '}<Link to={`/project?step=${encodeURIComponent(s.id)}`}>Step {s.position} · {s.title}</Link></span>)
+            : 'Not in the plan yet'}
+        </p>}
+        {c.materials && <p className="foundation-hint" style={{ margin: '6px 0' }}>
+          <strong>Materials:</strong>{' '}
+          {c.counted_with ? `Same drawing as ${titleOf(c.counted_with)}, counted once there`
+            : c.materials.length ? `${c.materials.length} ${c.materials.length === 1 ? 'line' : 'lines'} on this piece${c.materials.some(m => m.needs_review || !m.from_pinned_version) ? ', some need a check' : ''}`
+            : 'Not counted yet'}
+        </p>}
         {c.status === 'newer_revision' && canEdit && latest && <button type="button" className="btn" disabled={!!busy} onClick={() => adopt(c)}>
           {busy === c.component_key ? 'Updating…' : `Use newest version (${c.child_current_revision})`}
         </button>}
       </li>)}
     </ul>
+    {summary && <section aria-label="Materials for the whole drawing" style={{ marginTop: 16 }}>
+      <h3 style={{ margin: '0 0 6px' }}>{summary.not_counted.length ? 'Materials so far' : 'Materials for the whole drawing'}</h3>
+      <p className="foundation-hint">Adds up each piece's own material list. A piece is counted once even if it is placed twice. Nothing here is a purchase; see the <Link to="/material-plan">material plan</Link>.</p>
+      {summary.not_counted.length > 0 && <p role="status" className="solution-attention">
+        Not counted yet: {summary.not_counted.map(titleOf).join(', ')}. {summary.not_counted.length === 1 ? 'This piece has' : 'These pieces have'} no material list, so the total below is incomplete.
+      </p>}
+      {summary.totals.length ? <ul className="fact-list" aria-label="Material totals" style={{ listStyle: 'none', padding: 0 }}>
+        {summary.totals.map(t => <li key={`${t.name}:${t.unit}`} style={{ padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+          <strong>{t.name}</strong>: {shellQuantity(t.required_quantity)} {t.unit}
+          <span className="foundation-hint" style={{ display: 'block', margin: '2px 0 0' }}>
+            From {t.pieces.map(titleOf).join(', ')}{t.needs_review ? ` · ${t.needs_review === 1 ? 'one line needs' : `${t.needs_review} lines need`} a check (from another version of the piece or the design changed)` : ''}
+          </span>
+        </li>)}
+      </ul> : <p className="foundation-hint">No piece has a material list yet.</p>}
+    </section>}
   </section>
 }

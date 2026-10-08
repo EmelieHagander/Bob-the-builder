@@ -3,14 +3,34 @@ import { randomUUID } from 'node:crypto'
 
 const generationKey = (id, revision) => `${id}:${revision}`
 
-/** Mirrors bob.read_cad_shell. Pieces live in `pieces` (id -> {title, revision, archived, boxes}) so they stay out of the drawing list. */
+/** Mirrors bob.read_cad_shell. Pieces live in `pieces` (id -> {title, revision, archived, boxes, steps?, materials?}) so they stay out of the drawing list. */
 function shellReadFor(records, pieces) {
-  return shell => ({ ...shell, current_revision: records.get(shell.id).revision, components: shell.components.map(c => {
-    const child = pieces.get(c.child_artifact_id)
-    return { ...c, child_title: child?.title ?? null, child_current_revision: child?.revision ?? null,
-      bounding_box_mm: child?.boxes[c.child_revision] ?? null,
-      status: !child ? 'unavailable' : child.archived ? 'archived' : child.revision > c.child_revision ? 'newer_revision' : 'current' }
-  }) })
+  return shell => {
+    const seen = new Map()
+    const components = shell.components.map(c => {
+      const child = pieces.get(c.child_artifact_id)
+      const counted_with = seen.get(c.child_artifact_id) ?? null
+      if (!counted_with) seen.set(c.child_artifact_id, c.component_key)
+      return { ...c, child_title: child?.title ?? null, child_current_revision: child?.revision ?? null,
+        bounding_box_mm: child?.boxes[c.child_revision] ?? null,
+        status: !child ? 'unavailable' : child.archived ? 'archived' : child.revision > c.child_revision ? 'newer_revision' : 'current',
+        steps: child?.steps ?? [], materials: child?.materials ?? [], counted_with }
+    })
+    const totals = new Map()
+    for (const c of components) if (!c.counted_with) for (const m of c.materials) {
+      const key = `${m.name.toLowerCase()}:${m.unit}`, t = totals.get(key) ?? { name: m.name, unit: m.unit, required_quantity: 0, lines: 0, pieces: [], needs_review: 0 }
+      t.required_quantity += Number(m.required_quantity); t.lines++; if (!t.pieces.includes(c.component_key)) t.pieces.push(c.component_key)
+      if (m.needs_review || !m.from_pinned_version) t.needs_review++
+      totals.set(key, t)
+    }
+    const keys = f => components.filter(f).map(c => c.component_key).sort()
+    return { ...shell, current_revision: records.get(shell.id).revision, components, plan_summary: {
+      totals: [...totals.values()].sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit)).map(t => ({ ...t, required_quantity: t.required_quantity.toFixed(4) })),
+      counted_pieces: new Set([...totals.values()].flatMap(t => t.pieces)).size,
+      not_counted: keys(c => !c.materials.length), not_in_plan: keys(c => !c.steps.length),
+      counted_once: components.filter(c => c.counted_with).map(c => ({ component_key: c.component_key, counted_with: c.counted_with })),
+    } }
+  }
 }
 
 export function createArtifactsFixture(timestamp, assets, facts, solutions) {
