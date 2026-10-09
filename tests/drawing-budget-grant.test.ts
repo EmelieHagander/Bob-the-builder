@@ -125,12 +125,13 @@ test('a refused grant stops at the budget boundary with the owner-facing resume 
   assert.equal(f.loads.length, 1, 'no reload without a grant')
   assert.match(result.next_action, /call design_project_cad at once with this same request_id/)
   assert.match(result.next_action, /do not read requests, budgets or sources/)
-  assert.match(result.user_message, /Säg till om jag ska fortsätta/)
+  assert.match(result.user_message, /Skriv till mig igen om ritningen/)
 })
 
 test('budget stop guidance distinguishes the request limit from the turn limit', () => {
   const request = { scope: 'drawing_request' as const, reasons: ['usd_limit' as const] }
-  assert.match(budgetResumeAction(request), /owner asks to continue or try again/)
+  assert.match(budgetResumeAction(request), /next message about this drawing renews its budget/)
+  assert.doesNotMatch(budgetResumeAction(request), /try again/, 'no magic words for the owner')
   assert.doesNotMatch(budgetResumeAction(request), /Resume only after an authorised budget change/)
   assert.match(budgetResumeAction({ scope: 'turn', reasons: ['call_limit'] }), /next message continues this same request_id/)
   assert.match(budgetStopMessage(request), /mer budget/)
