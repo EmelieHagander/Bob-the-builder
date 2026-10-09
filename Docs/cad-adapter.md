@@ -196,15 +196,20 @@ reusing the existing versioned Solution record.
 
 The current technical handoff and original-image path already exist, and the
 first-layout instruction includes required functions; only optional joinery and
-decoration are deferred. The saved bed recipe has two mattress platforms but
-lacks the intended bookshelf, drawers and separate gable panel. Its legacy
-selected Solution described a compact bed with storage undecided and no linked
-source image; it had not been aligned to the mockup. Recipe/metadata readback
-establishes this design gap. A full mockup pixel comparison was unavailable, so
-visual fidelity and the proposed brief's acceptance remain open in
-[State](bob-delivery-flow.md#state). The
-[verification owner](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
-owns the actual artifact/reference evidence and its limits.
+decoration are deferred. The newly supplied screenshots confirm design intent:
+three pull-out drawers, a gable ladder and foot-end opening, with book display
+left and ladder right when facing the visible foot gable, plus horizontal timber
+panels at that end and the upper long guard. Saved CAD revision 1 instead has a
+left ladder, mirrored opening, no book module or drawers and two full 18 mm
+decks. Its legacy selected Solution left storage undecided and had no linked
+source image; it had not been aligned to the mockup.
+
+The [dated screenshot comparison](foundation-verification.md#mockup-screenshot-comparison--2026-10-09)
+now owns visual evidence; the initial connector pixel limitation remains incident
+history. Hidden head-gable construction, joints, drawer mechanisms/bearings and
+mattress support by slats versus board remain undetermined. Images convey design
+intent, not measured facts. Aligning the selected Solution, image binding and
+required-feature acceptance remains in [State](bob-delivery-flow.md#state).
 
 ### Hosting boundary
 
