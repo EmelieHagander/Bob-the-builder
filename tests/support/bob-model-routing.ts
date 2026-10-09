@@ -1,10 +1,9 @@
 /** Tool/domain unit tests script the executing model. The only non-executing call
  * left in a turn is on-demand localisation of a server notice; keep it explicit.
  * End-to-end autonomy and delivery tests import the production loop directly. */
-import { runProjectAnswer as answer, type ModelCall } from '../../supabase/functions/_shared/project-answer.ts'
-import { runClaimedProjectTurn as turn } from '../../supabase/functions/_shared/project-turn.ts'
-export { seedToolPolicy, buildBobSystemMessage, BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES } from '../../supabase/functions/_shared/project-answer.ts'
-export type { ModelCall, ProjectAnswer } from '../../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer as answer, runClaimedProjectTurn as turn, type ModelCall } from './main-catalog-fixture.ts'
+export { seedToolPolicy, buildBobSystemMessage } from './main-catalog-fixture.ts'
+export type { ModelCall, ProjectAnswer } from './main-catalog-fixture.ts'
 function routing(call:ModelCall):ModelCall{return async options=>{
  if(options.schemaName==='bob_delivery_language')return {success:false,data:null,model:'language-fixture',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
  return call(options)

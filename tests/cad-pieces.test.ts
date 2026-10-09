@@ -1,7 +1,9 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
-import {createCadPieces} from '../supabase/functions/_shared/cad-pieces.ts'
+import { createCadPieces as createCadPiecesImplementation } from '../supabase/functions/_shared/cad-pieces.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+const createCadPieces=(opts:Omit<Parameters<typeof createCadPiecesImplementation>[0],'aiCatalog'>)=>createCadPiecesImplementation({...opts,aiCatalog:catalogFixture()})
 import {handoff} from './support/cad-review-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 

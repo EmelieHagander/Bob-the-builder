@@ -88,7 +88,22 @@ Preparation is synchronous before answering, not Launchpad's separate fold worke
 
 The first answer call starts a **new** provider chain containing fresh rules/briefing, the older brief labelled untrusted conversational data, and T1's original roles/text. The previous user-turn cursor is not used. Within the current turn only, tool results continue through server-owned Responses ids. The final id is still stored by existing commit machinery, but no longer supplies next-turn memory. Clearing Bob context does not promise erasure of already-retained provider objects.
 
-The original approved persona remains byte-for-byte unchanged. Separate server rules ask for concise, concrete construction proposals, ordinary reversible working decisions and consistent dimension stacks. They do not grant safety certification, inspection/image capabilities, deletion, purchases, assignment or broader write authority. The listed available tools remain the capability authority.
+The 2026-10-09 [AI catalog implementation](../supabase/README.md#ai-definition-catalog-and-model-tiers) supersedes the earlier byte-for-byte persona guarantee. Bob and colleagues use short second-person personas with separate technical contracts. Their definitions, output schemas and execution profiles are database versions; this does not grant broader write authority or change the transcript/summary behavior. Listed registered tools and real backend checks remain the capability authority.
+
+### Pinned AI definitions during continuation
+
+Before model work, the turn journal pins one service-resolved AI catalog manifest.
+Its exact prompt, role, profile, tier binding and model capability/price versions
+survive worker continuation and retry. An operator's new activation applies to
+new manifests; it cannot change the input of an already-journalled model call.
+Membership, live tool policy, record freshness and the function/module enable
+switch remain fresh checks. A manifest records configuration, not execution
+permission or project truth. [The catalog owner](../supabase/README.md#one-turn-one-configuration-snapshot)
+owns resolution, version activation and release evidence.
+
+`context-summary` remains the existing bounded private conversation fold. An
+explicitly disabled memory-agent proposal in the catalog does not add a separate
+intelligent worker, project-memory store or autonomous archive/forget lifecycle.
 
 ## Research and execution budget
 

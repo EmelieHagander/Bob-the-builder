@@ -42,6 +42,7 @@
 | construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
 | material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
+| AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
 | Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; opt-in manual experiment and its measured trade-offs; older discovery design kept as history |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
@@ -139,7 +140,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract and active State**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and staged delivery. Domain owners distinguish implemented, deployed and remaining target scope. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in PR/CI or the archive below.
-- `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
+- `supabase/README.md` — provider path, versioned AI definition catalog, per-app model tiers, pinned manifests, activation/rollback, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-tools.md` — **tool-system owner**: since 2026-09-27 the whole permitted toolbox is offered every step on named shelves, with waiting/used-up tools listed and no forced tool choice; caller authority and execution fences are unchanged. The earlier core/on-demand tiers and list/load discovery are kept as history. Does not claim the generic drawing engine is built.
 - `Docs/bob-tool-autonomy-audit-2026-09-25.md` — **dated audit after PR #146**: actual models/loadout, general completion gaps, discovery and budget failures, CAD feedback and behavioural verification; follow the domain owners for implementation contracts.
 - `Docs/bob-ai-runtime-review-2026-09-27.md` — **dated review after PR #149, compared with Launchpad**: the path of one request, every model role in a turn, the tool surface per phase, the background-hop budget, and ranked findings (answer replaced by a notice, quote-as-authorisation, approval chains, forced continuation, missing archive tools) with an ordered fix list; a review, not a contract.
@@ -148,7 +149,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `Docs/ask-bob-context-implementation.md` — **remaining technical landing plan with current source map** for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **conversation state owner**: private transcript, working memory, explicit reset, durable background turns and server-driven continuation; provider erasure remains planned; per-user/project privacy and release gates.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
-- `supabase/functions/_shared/project-answer.ts` — scoped research/write loop, assembled tool surface and fixed cross-tool truth rules.
+- `supabase/functions/_shared/project-answer.ts` — scoped research/write loop and assembled catalog-backed tool/prompt surface.
+- `supabase/functions/_shared/ai-catalog.ts` — pinned definition manifest and role/profile/tier/tool/output resolution; owning contract in `supabase/README.md`.
 - `supabase/functions/_shared/project-tools/` — caller-scoped policy reader, exact handler registration and per-turn discovery/loading/dispatch.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
 - `supabase/functions/_shared/serve-bob.ts` and `supabase/functions/ask-bob/` — authenticated OpenAI endpoint for Bob. The old `ask-launchpad/` contains only a retirement response.

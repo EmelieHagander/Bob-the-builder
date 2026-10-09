@@ -6,7 +6,7 @@ import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
-import { runProjectAnswer, seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer, seedToolPolicy } from './support/main-catalog-fixture.ts'
 import { handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 // Actual SQL/RLS/claimed-write and production orchestration; only AI/CAD network

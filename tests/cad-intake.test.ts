@@ -1,9 +1,10 @@
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import {parseIntakeAssessment,bindMeasuredDimensions,type DrawingRequest,type DrawingRequestStore} from '../supabase/functions/_shared/cad-intake.ts'
-import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import {createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
@@ -22,7 +23,7 @@ test('a completed CAD save replays its original reviewed result after a worker p
  const f=fixture()
  const run=async()=>{
   const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
-  const store=createDrawingRequestStore({projectId:'A',binding:{},journal,newId:async()=>id,
+  const store=createDrawingRequestStore({aiCatalog:catalogFixture(),projectId:'A',binding:{},journal,newId:async()=>id,
    caller:async name=>name==='check_drawing_request'?{status:completed?'saved':'collecting'}:{id,reused:false},
    privateCall:args=>journal.run('cad:request',args,async()=>args.p_operation==='save'
     ?f.opts.requestStore.save(f.row?.id??null,args.p_expected as number,args.p_status as string,args.p_payload as any):null),

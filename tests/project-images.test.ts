@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import { createProjectContext } from './support/colleague-catalog-fixture.ts'
 import { createMediaAdapter, resolveMediaImage, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
 import { responseMessageContent, hasImageContent, prepareResponseImages } from '../supabase/functions/_shared/openai-content.ts'
 import type { ProjectSource } from '../src/data/provenance.ts'
-import {DRAWING_REVIEW_INSTRUCTION} from '../supabase/functions/_shared/drawing-review.ts'
+import {DRAWING_REVIEW_INSTRUCTION} from './support/colleague-catalog-fixture.ts'
 
 const id = (n = 1) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const ref = (n = 1) => `image:${id(n)}`

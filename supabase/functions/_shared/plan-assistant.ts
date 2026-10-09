@@ -1,7 +1,7 @@
-import { domainVocabulary } from '../../../src/domain/vocabulary.ts'
+import type { AiCatalogSession, AiVariables } from './ai-catalog.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import { PLAN_PROPOSAL_TOOL, parsePlanWrite, isPlanIdentity } from './project-plan.ts'
+import { parsePlanWrite, isPlanIdentity } from './project-plan.ts'
 import { EDIT_PLAN_TOOL, editPlanSnapshot } from './plan-edit.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
@@ -52,69 +52,9 @@ export const SAVE_COMPILED_PLAN_TOOL={
   },
 }
 
-const proposalSteps=(PLAN_PROPOSAL_TOOL.function.parameters.properties as Record<string,any>).steps
-const compilationSchema={
-  type:'object',additionalProperties:false,
-  properties:{
-    summary:{type:'string'},
-    reason:{type:'string'},
-    steps:proposalSteps,
-    task_candidates:{
-      type:'array',maxItems:40,items:{
-        type:'object',additionalProperties:false,
-        properties:{
-          step_position:{type:'integer',minimum:1,maximum:100},
-          task_id:{type:'string'},
-          task_name:{type:'string'},
-          reason:{type:'string'},
-        },
-        required:['step_position','task_id','task_name','reason'],
-      },
-    },
-    observations:{type:'array',maxItems:30,items:{type:'string'}},
-  },
-  required:['summary','reason','steps','task_candidates','observations'],
-}
 
 const REVIEW_CODES=['active_step_count','bundled_requirement','evidence_mismatch','unresolved_conflict',
   'identity_mismatch','task_not_completion_proof','strategy_changed','incomplete_snapshot','uncertainty','other'] as const
-const reviewSchema={
-  type:'object',additionalProperties:false,
-  properties:{
-    ready_to_save:{type:'boolean'},
-    summary:{type:'string'},
-    issues:{
-      type:'array',maxItems:40,items:{
-        type:'object',additionalProperties:false,
-        properties:{
-          severity:{type:'string',enum:['info','warning','error']},
-          code:{type:'string',enum:[...REVIEW_CODES]},
-          step_position:{type:['integer','null']},
-          requirement_position:{type:['integer','null']},
-          evidence_id:{type:['string','null']},
-          message:{type:'string'},
-          suggestion:{type:'string'},
-        },
-        required:['severity','code','step_position','requirement_position','evidence_id','message','suggestion'],
-      },
-    },
-  },
-  required:['ready_to_save','summary','issues'],
-}
-
-const COMPILER_SYSTEM=`You keep the plan desk in order. Bob is the project manager; turn his intent into the supplied schema using the authorised PROJECT SNAPSHOT. You cannot write data or replace his strategy.
-
-Preserve sequence, goals and known identities/parents; copy exact Step/Requirement UUIDs from the snapshot, and use null for new identities. Task IDs are not Requirement IDs. Omit completed Steps; their history is preserved. Independent Steps may be active together. Unknown people remain unassigned. In audit mode preserve strategy; repair feedback is advice. The server binds the current revision.
-
-Finish criteria are atomic and require matching evidence; briefs and Task existence prove nothing. Expose uncertainty and conflicts. Missing evidence stays open; Task selectors cannot prove completion.
-
-Return only the structured compilation. task_candidates contain only requested ownership changes, each Task once. Existing primary ownership is preserved automatically; related_tasks are references, not additional owners.`
-
-const REVIEWER_SYSTEM=`You check the plan at Bob's desk. Bob remains the project manager. Compare the compilation, his intent and authorised snapshot against the supplied schema and server validation.
-
-Check identity/parent preservation, altered strategy, conflicting evidence, bundled criteria and false completion. New identities may be null. Open work is valid; Step briefs and Task existence are not completion evidence. Parallel active Steps are valid.
-
-Return the structured review with concise corrections. Errors make ready_to_save=false; uncertainty merits warnings. Your advice does not grant permission or veto Bob's judgement.`
 
 const pick=(row:Record<string,unknown>,keys:string[])=>Object.fromEntries(keys.filter(k=>Object.hasOwn(row,k)).map(k=>[k,row[k]]))
 function compact(dataset:string,row:Record<string,unknown>){
@@ -224,9 +164,10 @@ function referencedSources(compiled:any,review:any,sources:ProjectSource[]){
 }
 
 export function createPlanAssistant(opts:{
-  projectId:string;userId:string;hasAccess:()=>Promise<boolean>;
+  aiCatalog:AiCatalogSession;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
+ const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
   let used=0,editUsed=0,partial=false
   let compilationAttempted=false
   let repairFeedback:null|{compiled_plan:unknown;review:unknown;server_validation:unknown}=null
@@ -262,7 +203,7 @@ export function createPlanAssistant(opts:{
         for(const s of snapshot.sources)if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId))sources.push(s)
         return {status:valid?'ok':'invalid',saved:false,mode:'edit_plan',current_revision:compiled.expected_revision,proposal_ready:valid,
           server_validation:{valid,issues},compiled_plan:proposal,
-          note:'Unchanged work was copied from the current plan. Save the exact proposal with save_compiled_project_plan; only a successful decide_project_plan receipt makes it current. An explicit instruction to apply this exact edit may authorise that decision; a request for options does not.'}
+          note:catalogText("feedback.plan-assistant.note.0cf2ef4a93f4")}
       }
       const mode=name===COMPILE_PLAN_TOOL.function.name?'compile_plan' as const
         :name===AUDIT_PLAN_TOOL.function.name?'audit_plan' as const
@@ -299,10 +240,10 @@ export function createPlanAssistant(opts:{
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
       const compiler=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
-        userId:opts.userId,systemMessage:COMPILER_SYSTEM+'\n\n'+domainVocabulary('planner'),useHardcodedPrompt:true,
+        userId:opts.userId,catalogRoleKey:'plan-compiler',catalogSchemaKey:'bob_plan_compilation',
         prompt:JSON.stringify({mode,expected_revision:expectedRevision,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
           ...(mode==='compile_plan'&&repairFeedback?{repair_feedback:repairFeedback}:{})}),
-        schemaName:'bob_plan_compilation',schema:compilationSchema,maxOutputTokens:24000,reasoningEffort:'low',
+        schemaName:'bob_plan_compilation',maxOutputTokens:24000,
         timeoutMs:Math.max(5000,Math.min(40000,deadline-Date.now())),
       })
       if(!compiler.success||!compiler.data) {partial=true;return {status:'unavailable',saved:false,stage:'compiler'}}
@@ -315,13 +256,15 @@ export function createPlanAssistant(opts:{
       if(!parsed) localIssues.push({severity:'error',code:'invalid_plan_shape',step_position:null,requirement_position:null,evidence_id:null,
         message:'Compiler output does not satisfy the living-plan write contract.',suggestion:'Repair the structured plan before saving.'})
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
+      if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable')
+      const proposalStepsSchema=(opts.aiCatalog.schema('bob_plan_compilation').schema.properties as Record<string,unknown>).steps
       const reviewer=await opts.callModel({
         app:'bob',coworkerId:'bob',functionName:'plan-reviewer',aiFunction:'plan-reviewer',module:'living-plan',
-        userId:opts.userId,systemMessage:REVIEWER_SYSTEM+'\n\n'+domainVocabulary('planner'),useHardcodedPrompt:true,
+        userId:opts.userId,catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review',
         prompt:JSON.stringify({mode,plan_intent:planIntent,project_snapshot:snapshot.data,snapshot_partial:snapshot.partial,
-          proposal_steps_schema:proposalSteps,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null,issues:localIssues},
+          proposal_steps_schema:proposalStepsSchema,server_validation:{proposal_shape_valid:parsed!==null,new_identity_value:null,issues:localIssues},
           compiled_plan:compiled,local_validation_issues:localIssues}),
-        schemaName:'bob_plan_review',schema:reviewSchema,maxOutputTokens:4000,reasoningEffort:'low',
+        schemaName:'bob_plan_review',maxOutputTokens:4000,
         timeoutMs:Math.max(5000,Math.min(30000,deadline-Date.now())),
       })
       let review:any
@@ -356,12 +299,12 @@ export function createPlanAssistant(opts:{
         },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,server_validation:serverValidation,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
         assistant_models:{compiler:compiler.model,reviewer:reviewer.model},
-        note: 'Read-only result. Bob owns the plan decision; nano advises. '+
+        note: catalogText("feedback.plan-assistant.note.7bb190c25de8")+
           (savableProposal
-            ? 'Server validation passed. Save a sound, requested proposal with save_compiled_project_plan. Open work is not a defect; false evidence is. '
-            : 'No savable proposal: resolve server errors, or leave an audit read-only. ')+
-          (used>=MAX_CALLS?'No compilation attempts remain. Report any unresolved defect. ':'For corrections, call compile_project_plan with updated plan_intent; prior feedback is supplied. ')+
-          'Task ownership choices are included when saving this proposal and applied atomically on approval. Until then they are not current ownership.',
+            ? catalogText("feedback.plan-assistant.note.5c04f4599184")
+            : catalogText("feedback.plan-assistant.note.38e56a34f20e"))+
+          (used>=MAX_CALLS?catalogText("feedback.plan-assistant.note.92132e480769"):catalogText("feedback.plan-assistant.note.e6f48179b693"))+
+          catalogText("feedback.plan-assistant.note.3f00f5401851"),
       }
     },
   }

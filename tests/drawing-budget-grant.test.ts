@@ -1,11 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createCadAssistant } from './support/cad-parameter-fixture.ts'
-import { createDrawingRequestStore } from '../supabase/functions/_shared/drawing-request-store.ts'
+import { createDrawingRequestStore as createDrawingRequestStoreImplementation } from '../supabase/functions/_shared/drawing-request-store.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+const createDrawingRequestStore=(opts:Omit<Parameters<typeof createDrawingRequestStoreImplementation>[0],'aiCatalog'>)=>createDrawingRequestStoreImplementation({...opts,aiCatalog:catalogFixture()})
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { budgetResumeAction, budgetStopMessage } from '../supabase/functions/_shared/bob-budget-stop.ts'
+import { budgetResumeAction as budgetResumeActionImplementation, budgetStopMessage } from '../supabase/functions/_shared/bob-budget-stop.ts'
 import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+
+const budgetResumeAction=(stop:Parameters<typeof budgetResumeActionImplementation>[0])=>budgetResumeActionImplementation(stop,catalogFixture())
 
 const id = '30000000-0000-4000-8000-000000000191'
 const turn = '30000000-0000-4000-8000-000000000192'

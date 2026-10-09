@@ -20,7 +20,7 @@ For current working context, five full recent messages, incremental summaries, h
 
 ## Code ownership
 
-The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), including the 2026-09-24 Area/Step/Task review. `src/domain/vocabulary.ts` provides the compact runtime bundle to main Bob, plan compiler/reviewer and CAD. Its marked documentation table is generated and checked in CI. Actual-call tests verify delivery; migration `20260924135637_unified_project_work.sql` aligns Task Project/primary-Step ownership, optional Areas, parallel Step state and separate focus. Legacy Tasks without a primary Step remain visible as unorganised work.
+The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), including the 2026-09-24 Area/Step/Task review. `src/domain/vocabulary.ts` owns the generated documentation table and the pre-catalog vocabulary source; CI checks that table. The AI catalog migration imports its compact Bob/planner/CAD bundles as versioned vocabulary definitions, which subsequent catalog-backed calls consume from the database. Migration `20260924135637_unified_project_work.sql` aligns Task Project/primary-Step ownership, optional Areas, parallel Step state and separate focus. Legacy Tasks without a primary Step remain visible as unorganised work.
 
 | File | Responsibility |
 | --- | --- |
@@ -29,6 +29,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |
+| `_shared/ai-catalog.ts` | Request-pinned definition manifest, role/profile/tier resolution, catalog prompt/tool/output contracts and compatibility checks. |
 | `_shared/construction-draft.ts` | K1 shared construction checkpoint tools, using the CAD parameter evaluator and caller-authorised v14 writes; [Artifact contract](../Docs/artifacts.md#k1-construction-checkpoints). |
 | `_shared/project-answer.ts` | Briefing and bounded tool loop, server-only continuation, truth rules. |
 | `_shared/current-view.ts`, `current-view-guard.ts` | Fixed caller-JWT screen hydration and freshness/verified-own-write checks; [context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target). P3 deployed; named-member acceptance remains open. |
@@ -37,19 +38,176 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | `_shared/bob-working-context.ts` | Five verbatim messages, incremental older summary and claimed-thread history retrieval. |
 | `_shared/openai-service.ts` | Shared Responses service with optional durable transport; see [background calls](../Docs/shared-ai-background.md). |
 
-No browser or model has the service-role key. The shared service uses it only
-for `shared.ai_models`, `shared.ai_settings`, `shared.ai_usage_events` and the service-only background-job commands, plus the guarded private Bob conversation/context commands. Domain reads and writes still use the caller JWT.
-`OPENAI_API_KEY` is read only by the shared service and its background worker. Model choice, reasoning effort,
-usage attribution and the kill switch retain their existing configuration.
+No browser or model has the service-role key. The shared service uses it for
+shared AI configuration, definition manifests, usage/call accounting and
+service-only background-job commands, plus the guarded private Bob
+conversation/context commands. Domain reads and writes still use the caller JWT.
+`OPENAI_API_KEY` is read only by the shared service and its background worker.
 
-Bob uses the service's existing `useHardcodedPrompt` option so a settings prompt
-cannot replace its authority/truth rules. The shared service currently sends
-non-strict function schemas; the dispatcher independently rejects extra/invalid
-arguments before a database call. No Bob-specific service logic is introduced.
-The new Deno gate exposed two pre-existing annotation errors: nullable cost and
-the async usage logger's Promise return. Both are corrected here. Carry these
-generic declaration fixes when synchronising the canonical service copies;
-other repositories/deployments were not rewritten as part of this Bob slice. The optional background transport also requires the companion `ai-background.ts`; its rollout prerequisites and current activation status are owned by [Shared AI background calls](../Docs/shared-ai-background.md).
+Catalog-backed Bob calls use the resolved `aiDefinition`; settings prompt text
+cannot replace their catalog prompts. The shared provider service exposes this
+as a generic opt-in, preserving other apps' existing configuration path.
+The dispatcher independently rejects extra/invalid tool arguments before a
+database call. The optional background transport also requires the companion
+`ai-background.ts`; its activation and rollout prerequisites are owned by
+[Shared AI background calls](../Docs/shared-ai-background.md).
+
+## AI definition catalog and model tiers
+
+**Implementation contract — 2026-10-09.** This replaces Bob's code-authored AI
+definitions and direct-model settings with versioned database definitions.
+Migration presence is not hosted installation: the release PR owns the applied
+migration ledger, tested source, deployed Edge versions and runtime readback.
+
+Local implementation verification (2026-10-09): 1,063/1,063 full-suite tests pass
+with bounded test concurrency; 41 final catalog/metrics/tool checks pass after
+review corrections. Vocabulary, reproducible seed, production build and six
+Edge entrypoint type checks pass. The local Edge check used a temporary import
+map to the installed Supabase package because esm.sh was unreachable; CI with
+the normal import remains pending. Independent agents reviewed catalog SQL and
+runtime boundaries. Publication, hosted migrations and deployment are pending
+explicit approval after automatic approval review rejected the GitHub push.
+No hosted installation or real-model persona acceptance is claimed.
+
+### Canonical sources
+
+All Bob definitions use `app = 'bob'` in the existing prompt catalog. A stable
+key identifies a definition; its immutable active version is the runtime truth.
+
+| Database object | Responsibility |
+| --- | --- |
+| `shared.ai_prompts` | Stable `(app, prompt_key)` identity, definition kind and active-version pointer; existing content fields are compatibility projections. |
+| `shared.ai_prompt_versions` | Immutable content, structured definition, metadata, declared variables and SHA-256 payload hash. |
+| `shared.ai_catalog_manifests` | Immutable app configuration snapshot, including exact definition versions and bound model capabilities/prices. No project facts, transcript, credentials or caller authority. |
+| `shared.ai_models` | Provider/model identity, prices, output capacity and capabilities, including provider adapter, supported reasoning efforts and function/schema support. |
+| `shared.ai_settings` | Existing function/module enable switch, checked live before provider dispatch. Its legacy direct-model and prompt values do not override catalog-backed Bob definitions. |
+
+The catalog stores `role`, `prompt`, `instruction_fragment`, `tool_contract`,
+`agent_contract`, `project_method`, `vocabulary`, `execution_profile`,
+`tier_binding`, `routing_policy` and `response_schema` definitions. Roles hold
+name, title, purpose and references; personas use short second-person text.
+Exact technical instructions and schemas have separate definitions. Current
+project records, requirement IDs and source references enter as task data;
+schema substitutions are limited to declared server bindings.
+
+Catalog data describes a capability. Registered handlers, validation,
+authorization, execution limits, revision guards and receipts remain executable
+server code. A database definition cannot introduce an executable tool or grant
+access to a project.
+
+### Roles and baseline profiles
+
+| Role key | Name / title | Purpose | Initial tier / effort |
+| --- | --- | --- | --- |
+| `role.ask-bob` | Bob — byggexpert och projektkollega | Drives the owner's delegated project work. | standard / high |
+| `role.cad-designer` | Daisy — designer | Creates, renders and repairs an exact candidate. | standard / medium |
+| `role.cad-research` | Kjell — researcher | Investigates source evidence and construction readiness. | mini / low |
+| `role.cad-reviewer` | Rita — ritningsgranskare | Independently reviews the exact candidate and current evidence. | mini / high |
+| `role.plan-compiler` | Plantus — planskrivare | Represents Bob's intent as a validated project plan. | mini / low |
+| `role.plan-reviewer` | Vera — plangranskare | Gives advisory plan feedback; no save veto. | nano / low |
+| `role.context-summary` | Samtalsminnet — konversationssammanfattare | Folds private older conversation into a brief and exact-history pointers. | mini / low |
+| `role.work-router` | Statusspråk — statuslokaliserare | Localises server-owned status meanings. | standard / low |
+| `role.drawing-resume-reply` | Ritningsbesked — återupptagningsbesked | Explains the actual resumed drawing outcome from its receipt. | standard / low |
+| `role.project-image` | Illustratören — bildgenerator | Produces an illustration from a bounded image brief. | image / none |
+
+The seed preserves the existing model family: nano → `gpt-5.4-nano`, mini →
+`gpt-5.4-mini`, standard → `gpt-5.4`, image → the existing image model setting.
+Profiles preserve effective output capacity, including the plan compiler's
+24,000-token request and Rita's approved 50,000-token frame. The provider applies
+the profile/model limit and any stricter server call limit. Usage pricing comes
+from the pinned model row; a warm legacy model cache cannot choose another price.
+
+Model selection is `role → routing/default profile → tier → model`.
+`tier.nano`, `tier.mini`, `tier.standard` and `tier.image` are versioned **Bob app
+bindings**. Upgrading `tier.mini` changes the model for all Bob mini profiles in
+new manifests without rewriting their prompts. Shared global
+`is_current_for_type`/default flags remain the legacy path for other apps; a
+Bob-only upgrade does not mutate them. Provider adapters and capability checks
+must match the replacement; an API-incompatible model needs an adapter change.
+
+The initial routing policy preserves today's tiers. Mini-first classification
+and automatic standard escalation remain a separate model-quality/cost
+experiment; this migration does not enable them.
+
+### One turn, one configuration snapshot
+
+`shared.resolve_ai_catalog(p_app, p_manifest_id default null)` is service-only.
+Without an ID it resolves all active app definitions and bound models from one
+SQL snapshot, stores/deduplicates the immutable manifest and returns it. With an
+ID it reads that stored payload after checking app scope.
+
+`createAiCatalogSession(sharedClient, { app, manifest?, manifestId? })` loads
+once. Its `role`, `text`, `tool` and `schema` methods resolve only from that
+manifest. Missing/invalid definitions, ambiguous tiers or incompatible models
+stop the call; normal Bob execution has no code-prompt, direct-model or global
+default fallback. Explicit test fixtures are not a production fallback.
+
+The turn journal pins the manifest before model work. Worker continuation and
+retry reuse its exact versions, model, effort and prices, even if an operator
+activates a new catalog revision meanwhile. Current membership, tool policy,
+record freshness and `ai_settings.is_enabled` remain live checks. A saved
+configuration snapshot never preserves permission or disables the kill switch.
+
+```mermaid
+flowchart TD
+  U["Beställarens meddelande"] --> T["Behörig projektturn"]
+  T --> C["Journal: låst katalogmanifest"]
+  T --> E["Aktuella poster och privat samtalskontext"]
+  C --> B["Bob: standardprofil"]
+  E --> B
+  B --> S["Kollegor: katalogstyrda profiler"]
+  B --> H["Registrerade projektverktyg"]
+  S --> B
+  H --> B
+  B --> R["Svar och verifierade sparningskvitton"]
+```
+
+### Authoring, activation and release
+
+1. Insert a new `shared.ai_prompt_versions` row for each changed definition;
+   never edit an old version. Bind a tier to a registered model with suitable
+   capabilities and pricing before activation.
+2. Activate the complete change with service-only
+   `shared.activate_ai_catalog(p_app, p_versions)`, where `p_versions` maps exact
+   prompt keys to version UUIDs. Validation checks references, app/kind scope,
+   profiles and model capabilities before atomically moving pointers. App
+   activation is serialised. Invalid changes leave the previous graph active.
+3. Revert by activating the previous version UUIDs through the same operation.
+   Existing pinned jobs remain on their original manifest; new turns use the
+   reverted active configuration.
+4. Apply reviewed `20261009144206_ai_definition_catalog.sql` and generated
+   `20261009150000_seed_bob_ai_catalog.sql` before
+   deploying both `ask-bob` and `bob-worker` from the same immutable source.
+   Preserve their existing JWT/custom authentication modes. Verify active
+   definitions, a resolved manifest, service-only access and actual consumed
+   runtime source before calling the release installed.
+
+`scripts/build-ai-catalog-seed.ts` is a one-time migration builder. It extracts
+exact baseline schemas/instructions from pinned Git revision
+`e0d5fcd4f212cb42743309ee0c0b5e8e37756d6d` and imports the approved personas.
+Generated migration payloads retain that provenance. Runtime never imports the
+builder or former source strings; later definition edits are new database
+versions. Source extraction is not a second active prompt catalog.
+
+To inspect a reconstructed baseline without changing a committed migration:
+
+```bash
+node --import tsx scripts/build-ai-catalog-seed.ts --output /tmp/bob-ai-catalog-baseline.sql
+```
+
+The builder accepts `--ref` for the pinned source and `--proposal` for the first
+persona import. Without the external proposal it reuses the approved personas
+and method from the committed seed payload. A regenerated historical baseline
+is for review; active catalog edits still require a new version and activation.
+
+This catalog changes definition ownership and names, preserving the existing
+domain workflow. `role.memory-agent` is an explicitly disabled proposal; the
+existing private `context-summary` fold does not implement an autonomous
+save/recall/archive memory manager. Project phase transitions keep their
+existing commands and rules. The whole permitted toolbox and inline manuals
+remain the production baseline; deferred schema loading/JIT tool discovery is
+not introduced. [Tools](../Docs/ask-bob-tools.md) and
+[conversation state](../Docs/ask-bob-conversations.md) own those behaviors.
 
 ## Project lookup contract — Slice 0
 

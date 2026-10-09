@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {runProjectAnswer} from './support/bob-model-routing.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
-import {createPlanAssistant} from '../supabase/functions/_shared/plan-assistant.ts'
+import {createPlanAssistant} from './support/colleague-catalog-fixture.ts'
 
 const message='Ta bort det steget och skriv instruktionerna för ritningen.'
 const lookup=()=>createProjectLookup('A',async(_p,i)=>({data:{records:i.dataset==='project'?[{id:'A',name:'Fixture'}]:[],related:[],truncated:false},error:null}),1000,128)

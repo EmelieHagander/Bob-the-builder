@@ -1,7 +1,8 @@
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import {domainVocabulary} from '../src/domain/vocabulary.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL, SAVE_COMPILED_PLAN_TOOL } from '../supabase/functions/_shared/plan-assistant.ts'
+import { createPlanAssistant, AUDIT_PLAN_TOOL, COMPILE_PLAN_TOOL, SAVE_COMPILED_PLAN_TOOL } from './support/colleague-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { PLAN_PROPOSAL_TOOL } from '../supabase/functions/_shared/project-plan.ts'
@@ -118,14 +119,14 @@ test('compile tool needs only Bob intent; server supplies revision and mini+nano
   assert.deepEqual(calls.map(c=>c.functionName),['plan-compiler','plan-reviewer'])
   for(const call of calls)assert(call.systemMessage!.includes(domainVocabulary('planner')))
   assert.equal(calls[0].module,'living-plan');assert.equal(calls[1].module,'living-plan')
-  assert.equal(calls[0].reasoningEffort,'low');assert.equal(calls[1].reasoningEffort,'low')
+  assert.equal(calls[0].reasoningEffort,undefined);assert.equal(calls[1].reasoningEffort,undefined,'reasoning comes from the catalog profile');assert.equal(calls[0].aiDefinition?.reasoningEffort,'low');assert.equal(calls[1].aiDefinition?.reasoningEffort,'low')
   const prompt=JSON.parse(String(calls[0].prompt))
   assert.equal(prompt.expected_revision,0);assert.equal(prompt.plan_intent,'First verify the opening, then frame it.')
-  assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,undefined,'model choice stays in shared.ai_settings')
+  assert.equal(calls[0].model,undefined);assert.equal(calls[1].model,undefined,'model choice stays in the catalog tier binding')
   assert.match(calls[0].systemMessage!,/Bob is the project manager/)
   assert.match(calls[1].systemMessage!,/Bob remains the project manager/)
-  assert(calls[0].systemMessage!.trim().split(/\s+/).length <= 300, 'compiler guidance stays focused on representation')
-  assert(calls[1].systemMessage!.trim().split(/\s+/).length <= 250, 'reviewer guidance stays focused on evidence')
+  assert(catalogFixture().text('plan-compiler.persona').trim().split(/\s+/).length<=80,'Plantus persona remains compact');assert(catalogFixture().text('plan-compiler.contract').trim().split(/\s+/).length<=200,'compiler contract stays focused on representation')
+  assert(catalogFixture().text('plan-reviewer.persona').trim().split(/\s+/).length<=80,'Vera persona remains compact');assert(catalogFixture().text('plan-reviewer.contract').trim().split(/\s+/).length<=150,'reviewer contract stays focused on evidence')
   assert.equal(result.compiled_plan.steps[0].state,'active')
   assert.equal(result.review.ready_to_save,true)
   assert.equal(result.task_candidates[0].task_id,taskId)

@@ -35,6 +35,10 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
           returned_tool_count:result.toolCalls?.length??0,returned_tools:(result.toolCalls??[]).slice(0,32).map(t=>code(t.function?.name,'invalid_name')),
           timeout_ms:number(options.timeoutMs),failure_kind:failureKind(result),
           model:label(result.model),reasoning_effort:label(result.reasoningEffort),
+          ai_manifest_id:label(options.aiDefinition?.manifestId),
+          ai_role_version_id:label(options.aiDefinition?.roleVersionId),
+          ai_profile_version_id:label(options.aiDefinition?.profileVersionId),
+          ai_tier:label(options.aiDefinition?.tier),
           cached_input_tokens:number(result.usage?.cached_input_tokens),reasoning_tokens:number(result.usage?.reasoning_tokens),
           step:label(call.step),attempt:number(call.attempt)}})
     },

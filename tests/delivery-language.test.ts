@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createDeliveryLanguage,DELIVERY_MEANINGS,parseDeliveryLanguage,type DeliveryLexicon} from '../supabase/functions/_shared/delivery-language.ts'
-import {runClaimedProjectTurn} from '../supabase/functions/_shared/project-turn.ts'
+import {createDeliveryLanguage,DELIVERY_MEANINGS,parseDeliveryLanguage,type DeliveryLexicon} from './support/colleague-catalog-fixture.ts'
+import {runClaimedProjectTurn} from './support/main-catalog-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createProjectWriter,type WriteReadback} from '../supabase/functions/_shared/project-write.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
