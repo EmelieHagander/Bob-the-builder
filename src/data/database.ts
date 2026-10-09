@@ -10,7 +10,7 @@ import type { Area, Project, ProjectPhase } from './types'
 export * from './databaseCore'
 // Explicit exports win over the legacy star export above. Ask Bob now resolves
 // server-owned conversation state while the rest of databaseCore stays stable.
-export { renewDrawingRequests, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, askBob, getAskBobConversation, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
+export { renewDrawingRequests, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, askBob, getAskBobConversation, getAskBobDrawingRecovery, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
 export type { BobProgress, BobInbox } from './bobConversation'
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {

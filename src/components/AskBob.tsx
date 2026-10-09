@@ -219,7 +219,8 @@ function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?:
       <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
-        {isUser && msg.deliveryState === 'failed' && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
+        {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
+        {isUser && msg.deliveryRecovery === 'completed' && <div className="foundation-hint" style={{ color: 'inherit' }}>The drawing was saved after the earlier interruption.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
         {msg.evidence && <details style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-soft)' }}>
           <summary>Project records consulted ({msg.evidence.sources.length})</summary>
@@ -458,6 +459,50 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     }).catch(() => { /* The existing transcript remains usable while offline. */ })
     return () => { cancelled = true }
   }, [open, project.id, historyReady, localHistory])
+
+  const latestOwnerMessage = [...extra].reverse().find(message => message.from === 'user')
+  const stoppedTurn = latestOwnerMessage?.deliveryState === 'failed' && !latestOwnerMessage.deliveryRecovery
+    ? latestOwnerMessage.turnId : undefined
+  // Delegated work can finish after the chat attempt stopped. The idle drawer
+  // observes delivery without resending the owner message or disturbing its draft.
+  useEffect(() => {
+    if (!open || !historyReady || localHistory || working || recovering || resetting || confirmReset) return
+    let cancelled = false, checking = false
+    const version = sendVersion.current
+    const isCurrent = scope.current.capture()
+    const current = () => !cancelled && isCurrent() && version === sendVersion.current && !resetPending.current
+    const check = async (refreshRecovery = false) => {
+      if (checking || !current() || document.visibilityState === 'hidden') return
+      checking = true
+      try {
+        const inbox = await db.getBobInbox(project.id)
+        if (!current()) return
+        const changed = !!inbox && (inbox.threadId !== readTarget?.threadId || inbox.latestSeq > (readTarget?.seq ?? 0))
+        if (!changed) {
+          if (!refreshRecovery || !stoppedTurn) return
+          const recovery = await db.getAskBobDrawingRecovery(project.id, stoppedTurn)
+          if (!current() || !recovery) return
+        }
+        const history = await db.getAskBobConversation(project.id)
+        if (!current() || history.mode !== 'server') return
+        applyServerHistory(history)
+        if (changed && history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
+      } catch { /* Keep the current transcript and draft until delivery reconnects. */ }
+      finally { checking = false }
+    }
+    const changed = () => { void check() }
+    const reconnect = () => { void check(true) }
+    const timer = setInterval(reconnect, 10000)
+    window.addEventListener(db.BOB_INBOX_EVENT, changed)
+    window.addEventListener('focus', reconnect)
+    document.addEventListener('visibilitychange', reconnect)
+    return () => {
+      cancelled = true; clearInterval(timer)
+      window.removeEventListener(db.BOB_INBOX_EVENT, changed)
+      window.removeEventListener('focus', reconnect)
+      document.removeEventListener('visibilitychange', reconnect)
+    }
+  }, [open, historyReady, localHistory, working, recovering?.turnId, resetting, confirmReset, project.id, readTarget?.threadId, readTarget?.seq, stoppedTurn])
 
   // Reopening/reloading never resends a pending question. Read until the server
   // commits the answer or reports failure. Durable jobs own their expiry; legacy

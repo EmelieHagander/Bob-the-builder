@@ -613,9 +613,12 @@ requests, budgets or sources first.
 The old ordinary-turn threshold could stop a valid CAD request before its
 independent review despite remaining durable request budget. This correction
 gives each governed CAD call one budget owner and sends a valid render directly
-to independent review. Deployment and allocation readback are verified; actual
-authenticated recovery through review, save and reread remains an acceptance
-gate.
+to independent review. Deployment and allocation readback are verified. The
+existing bed request has since completed independent review and canonical save
+under its request budget; ordinary browser reread and honest recovered status
+remain an acceptance gate. The
+[recovery/status evidence](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns that result and the subsequent UI defect.
 
 | Call scope | Governing limit |
 | --- | --- |
@@ -672,10 +675,10 @@ deployed first with `verify_jwt=false`, then `ask-bob` v93 with
 `verify_jwt=true`; both are active, and every included source file matched the
 uploaded bundle on readback.
 
-These checks establish deployment, budget, review, no-progress and replay
-mechanisms under controlled inputs. They do not establish an actual authenticated
-member's complete recovery, independent review, canonical save and reread; that
-model acceptance remains in [State](bob-delivery-flow.md#state).
+These checks establish deployment and the mechanisms under controlled inputs.
+The subsequent named-member request's review/save evidence does not yet prove
+ordinary browser reread or honest UI status after recovery; that remaining
+acceptance is in [State](bob-delivery-flow.md#state).
 
 ### Planned annotation contract for K3
 

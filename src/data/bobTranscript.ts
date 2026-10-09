@@ -6,6 +6,35 @@ export interface TranscriptRow {
   seq: number; updated_at?: string; evidence?: unknown
 }
 
+export type DrawingTurnRecovery = { status: 'completed'; requestIds: string[] }
+  | { status: 'queued' | 'running'; requestIds: string[]; expiresAt: number; progress?: unknown }
+
+/** The authenticated status RPC, rather than answer prose or unrelated receipts,
+ * establishes whether this exact originating turn's drawing work recovered. */
+export function readDrawingTurnRecovery(value: unknown, now = Date.now()): DrawingTurnRecovery | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const recovery = value as Record<string, unknown>
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  if (recovery.scope !== 'drawing' || !Array.isArray(recovery.requestIds) || !recovery.requestIds.length
+    || !recovery.requestIds.every(id => typeof id === 'string' && uuid.test(id))) return undefined
+  if (recovery.status === 'completed') return { status: 'completed', requestIds: recovery.requestIds }
+  if (recovery.status !== 'queued' && recovery.status !== 'running') return undefined
+  const expiresAt = typeof recovery.expiresAt === 'string' ? Date.parse(recovery.expiresAt) : NaN
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return undefined
+  return { status: recovery.status, requestIds: recovery.requestIds, expiresAt, progress: recovery.progress }
+}
+
+export function reconcileDrawingTurnRecovery(transcript: ReturnType<typeof readBobTranscript>, turnId: string, recovery: DrawingTurnRecovery | undefined, recoveredBudgetStop = false) {
+  if (!recovery || transcript.unfinished?.turnId !== turnId) return transcript
+  const completed = recovery.status === 'completed'
+  return { ...transcript,
+    messages: transcript.messages.map(message => message.from === 'user' && message.turnId === turnId
+      ? { ...message, deliveryRecovery: completed ? 'completed' as const : 'pending' as const } : message),
+    unfinished: completed ? recoveredBudgetStop ? undefined : transcript.unfinished
+      : { ...transcript.unfinished, pending: true, expiresAt: recovery.expiresAt },
+  }
+}
+
 /** Transcript visibility is independent of execution status. Event replies have
  * their own turn IDs and cannot settle an unrelated owner message. */
 export function readBobTranscript(rows: TranscriptRow[], projectId: string, notices: Map<string, string>, now = Date.now()) {

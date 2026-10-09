@@ -19,10 +19,13 @@ Released through [PR #181](https://github.com/EmelieHagander/Bob-the-builder/pul
 records the exact tested source and served bundle. The real shelf acceptance remains open.
 
 Every saved owner message remains visible in sequence, including failed and pending
-turns. Failed execution is labelled separately from message persistence. Only a
-matching turn reply can settle its retry state; independently delivered drawing
-events do not hide or acknowledge the owner's message. A newer owner message
-supersedes the older retry action while retaining the full visible history.
+turns. Failed execution is labelled separately from message persistence. A
+matching turn reply settles its ordinary retry state; independently delivered
+drawing events do not hide or acknowledge the owner's message. The
+[exact drawing-recovery correction](#exact-drawing-request-recovery-status--2026-10-09)
+below adds a narrowly scoped budget-stop projection, with separate release status.
+A newer owner message supersedes the older retry action while retaining the full
+visible history.
 
 Before an ordinary member sends, the drawer retains one attempted message, its
 idempotency UUID and frozen screen pointer in tab-scoped session storage keyed by
@@ -43,6 +46,56 @@ with both terminal and pending older work, retained original instructions, reloa
 explicit same-ID retry, duplicate prevention and failed/successful reset at
 320/390/1280 px. Pure transcript/retention cases live in
 `tests/bob-transcript.test.ts`. These fixtures do not close the real shelf/CAD gate.
+
+### Exact drawing-request recovery status — 2026-10-09
+
+**Correction in implementation; review, CI, migration and Pages release pending.**
+The existing bed request completed independent review and canonical save after
+its original ordinary turn had failed at the budget guard. The browser still
+appended that old turn's synthetic spending-stop notice after the saved reply.
+[The verification owner](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns the actual recovery evidence and remaining browser acceptance.
+
+The authenticated `bob_job_status` RPC retains its historical outer `status` and
+`error`. An additive `drawingRecovery` projection identifies exact linked
+`requestIds`, `scope: 'drawing'` and `status: 'queued' | 'running' | 'completed'`,
+with nullable `expiresAt` and `progress`. It requires current project access and
+the caller's active private thread. Every request matches the Project, owner,
+thread and original turn; each uses its latest matching event job. Completed
+recovery requires every linked request to be saved, its exact Artifact receipt
+and historical revision to exist, its latest event job to be completed, and a
+completed assistant event message with `partial: false` and that exact saved
+write receipt. A legitimately newer Artifact head does not invalidate the saved
+historical revision. Prose, a merely ready candidate or an unrelated reply is
+insufficient.
+
+An exact queued/running recovery with a valid future expiry projects pending
+drawing progress for the original unfinished turn, including after a non-budget
+failure. It does not claim completion. Terminal completion has the narrower
+budget-stop rule below.
+
+Only an outer `failed / turn_budget_exhausted` plus this exact completed drawing
+projection removes the synthetic budget-stop notice and its obsolete retry
+state. The original user message, failed `delivery_state`, ordinary job and
+assistant event remain intact. The client uses a separate `deliveryRecovery`
+marker for recovered drawing work; it does not declare the whole ordinary turn
+completed. A non-budget failure retains ordinary retry/notice behavior even when
+its drawing is saved. Missing, malformed, cancelled or unrelated recovery cannot
+settle the failed turn. The RPC is read-only: it cannot enqueue work, renew
+authority, grant budget or alter messages.
+
+An open, visible, idle member drawer checks content-free inbox/status every ten
+seconds and on focus, visibility or inbox events. An unchanged stopped turn gets
+its status checked before full history is fetched; history refresh is justified
+by a changed inbox or valid exact recovery. The drawer observes delivery without
+resending the owner message, preserves draft and scroll, and fences late reads
+by the existing project/account, send and reset scope.
+
+The retained outgoing-message rules above are unchanged. A recovered drawing
+does not acknowledge a different message rejected at 409 or an uncertain send;
+that copy still needs its exact user-turn receipt or explicit dismissal. Release
+and the existing owner's ordinary browser reload remain separate gates in
+[State](bob-delivery-flow.md#state).
 
 ## Explicit T1 / T2 / T3 context
 
@@ -401,7 +454,7 @@ Bob-owned domain changes advance a project event revision. The existing queue st
 
 Authority remains the initiating member's ordinary short-lived access JWT, sealed using the existing credential transport, with a maximum twenty-minute execution window. The signed-in app renews authority only for existing active delegated requests through authenticated `renew_requests`; this cannot create work, restore cleared context or increase budget. A closed/expired session leaves `authorization_needed` visible in request work. Membership, generation, cancellation and restored-plan revisions remain fresh backend gates. No refresh token, synthetic JWT, service-role domain writer or cross-member takeover is introduced.
 
-Each new request starts with the existing $1 / 24-call stopping policy, now reserved and accounted across turns, worker segments and retries. The cost threshold is checked before each call; the last in-flight call can exceed it. Identical model inputs recover their private result without another paid dispatch. Unknown outcomes remain reserved; known late provider charges reconcile exactly once from Bob's shared AI usage receipt. Private result payloads disappear with the thread; minimal accounting remains with the request. Unpriced or unresolved usage blocks further spending. A separate owner-only, idempotent budget command adds $1 / 24 calls without changing the work mandate; the UI presents that concrete allocation before applying it. Older project requests receive no inferred historical costs or free refill: their pre-migration accounting is marked untracked, with zero further allocation until explicitly extended.
+The initial P2 release used a $1 / 24-call request policy; [the current drawing allocation and budget ownership](cad-adapter.md#drawing-request-budget-and-review--2026-10-09) supersedes that starting amount and the ordinary-turn boundary. Request spending remains reserved and accounted across turns, worker segments and retries. The cost threshold is checked before each call; the last in-flight call can exceed it. Identical model inputs recover their private result without another paid dispatch. Unknown outcomes remain reserved; known late provider charges reconcile exactly once from Bob's shared AI usage receipt. Private result payloads disappear with the thread; minimal accounting remains with the request. Unpriced or unresolved usage blocks further spending. A separate owner-only, idempotent budget command adds $1 / 24 calls without changing the work mandate; the UI presents that concrete allocation before applying it. Older project requests receive no inferred historical costs or free refill: their pre-migration accounting is marked untracked, with zero further allocation until explicitly extended.
 
 Project Home and linked Task detail read the same request projection after reload, with current status, shared links, budget and owner controls. A saved historical Artifact is linked at its exact revision. Private context restoration remains the explicit P2c command; opening the app cannot silently recover erased requirements. P0's real user outcome and P4's broader product acceptance remain separate gates in [State](bob-delivery-flow.md#state).
 

@@ -65,7 +65,7 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
-        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, screen: row.screen??null, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } : null })
+        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, screen: row.screen??null, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -366,13 +366,57 @@ try {
     await drawer.waitFor({ state: 'hidden' })
     drawer = await open()
     // A spending stop survives reload and never offers the same expensive retry.
-    h.messages.push({role:'user',text:'Budget-limited drawing',turn_id:crypto.randomUUID(),delivery_state:'failed',background:true,error:'turn_budget_exhausted',updated_at:new Date().toISOString(),seq:h.next_seq++})
+    const budgetTurn = '6aa673cd-5d1f-4f6f-94b5-611d404969cb'
+    const recoveryRequest = '3bc79294-7c78-4ca0-a97a-0e5dea4f672b'
+    const stopped = {role:'user',text:'Budget-limited drawing',turn_id:budgetTurn,delivery_state:'failed',background:true,error:'turn_budget_exhausted',updated_at:new Date().toISOString(),seq:h.next_seq++}
+    h.messages.push(stopped)
     const beforeBudgetReload=answerCalls
     await page.reload();drawer=await open()
     await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).waitFor()
     assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
     assert.equal(answerCalls,beforeBudgetReload)
     await page.screenshot({path:`test-results/bob-budget-stop-${viewport.width}.png`})
+    // The real bed regression: a completed event has its own turn ID. Only the
+    // exact-origin server projection settles the stale CAD spending notice.
+    await drawer.getByRole('textbox').fill('Keep this unsent recovery draft')
+    stopped.drawingRecovery={scope:'drawing',status:'completed',requestIds:[recoveryRequest]}
+    h.messages.push({role:'assistant',text:'Ritningen är sparad.',turn_id:'75d8631f-44f1-4fda-b1d0-188b2cec2d1c',delivery_state:'completed',seq:h.next_seq++,evidence:{kind:'ai_assessment',sources:[],partial:false,writes:[{projectId:'A',dataset:'artifacts',recordId:'2ba8576b-c4c3-4136-9b7f-f31ecb6caa7d',revision:1,areaId:null,label:'Recovered drawing',operation:'created',savedAt:new Date().toISOString()}]}})
+    await page.evaluate(()=>window.dispatchEvent(new Event('bob:inbox-changed')))
+    await drawer.getByText('Ritningen är sparad.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).count(),0)
+    assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
+    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep this unsent recovery draft')
+    assert.equal(answerCalls,beforeBudgetReload,'Idle event delivery never sends another owner/model turn')
+    await drawer.getByText('The drawing was saved after the earlier interruption.',{exact:true}).waitFor()
+    await page.screenshot({path:`test-results/bob-drawing-recovery-${viewport.width}.png`})
+    await page.reload();drawer=await open()
+    await drawer.getByText('Ritningen är sparad.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).count(),0)
+    assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
+    assert.equal(answerCalls,beforeBudgetReload)
+    // A fresh delegated attempt can become active without advancing inbox seq.
+    // Its own expiry/progress takes precedence over the old failed job.
+    const activeRecovery={role:'user',text:'Another stopped drawing',turn_id:crypto.randomUUID(),delivery_state:'failed',background:true,error:'turn_budget_exhausted',updated_at:new Date().toISOString(),seq:h.next_seq++}
+    h.messages.push(activeRecovery)
+    await page.reload();drawer=await open()
+    await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).waitFor()
+    activeRecovery.drawingRecovery={scope:'drawing',status:'running',requestIds:[crypto.randomUUID()],expiresAt:new Date(Date.now()+10*60_000).toISOString(),progress:{stage:'tool',tool:'design_project_cad',step:6,saved:0}}
+    await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+    await drawer.getByText('Designing the drawing — this can take a few minutes…',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).count(),0)
+    assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
+    activeRecovery.drawingRecovery={...activeRecovery.drawingRecovery,status:'completed'}
+    h.messages.push({role:'assistant',text:'ACTIVE DRAWING RECOVERED',turn_id:crypto.randomUUID(),delivery_state:'completed',seq:h.next_seq++})
+    await drawer.getByText('ACTIVE DRAWING RECOVERED',{exact:true}).waitFor()
+    await drawer.locator('.bob-working').waitFor({state:'hidden'})
+    assert.equal(answerCalls,beforeBudgetReload)
+    // An unrelated saved event cannot settle a newer failed owner instruction.
+    h.messages.push({role:'user',text:'Unrelated failed instruction',turn_id:crypto.randomUUID(),delivery_state:'failed',background:true,error:'turn_budget_exhausted',updated_at:new Date().toISOString(),seq:h.next_seq++})
+    h.messages.push({role:'assistant',text:'UNRELATED DRAWING SAVED',turn_id:crypto.randomUUID(),delivery_state:'completed',seq:h.next_seq++})
+    await page.evaluate(()=>window.dispatchEvent(new Event('bob:inbox-changed')))
+    await drawer.getByText('UNRELATED DRAWING SAVED',{exact:true}).waitFor()
+    await drawer.getByText('Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.',{exact:true}).waitFor()
+    assert.equal(answerCalls,beforeBudgetReload)
     // Regression: a rejected complement must survive event replies and reload,
     // and the original failed user message must remain visible in its position.
     for (const mode of ['collision', 'collision-pending']) {
