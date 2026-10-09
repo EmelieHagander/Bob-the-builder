@@ -225,6 +225,8 @@ export interface TodayTask {
 export interface ChatMessage {
   turnId?: string
   deliveryState?: 'pending' | 'failed' | 'completed'
+  /** Exact originating drawing work recovered separately from its historical chat attempt. */
+  deliveryRecovery?: 'pending' | 'completed'
   evidence?: import('./provenance').AnswerEvidence
   from: 'bob' | 'user'
   text: string

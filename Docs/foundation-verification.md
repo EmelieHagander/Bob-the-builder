@@ -1710,3 +1710,22 @@ Both retain zero pending charges, `unpriced=false`, their request identities and
 The merge also triggered [Live Bob release check 37982456317](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456317), which passed actual guest Auth/RLS, OpenAI tools, image pixels and knowledge checks, plus [Pages 37982456363](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456363) and [CAD adapter 37982456375](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456375), both successful. The live check finished at 19:47Z, before the new Edge deployment at 19:48Z, and did not exercise CAD; it is continuity smoke evidence, not acceptance of the new CAD budget runtime. Its fourth disposable guest project is `p_b09d5b5514ce4bec92a2199fcd4cb102`; the script removed its image bytes/metadata through ordinary caller commands but does not delete the project. Guarded project cleanup remains in State alongside the three previously recorded fixtures. This task did not rerun the paid workflow.
 
 At release readback no new bed job had started. The historical failed job stays failed; a fresh authorized continuation can reuse the same request and draft. No user message was impersonated and no new paid acceptance turn was submitted. Actual authenticated model recovery through independent review, canonical save and member readback remains the acceptance gate. The $3 dispatch threshold is finite and a final in-flight call can exceed it; completion is not guaranteed. A later owner message after a request USD/call stop can grant the existing idempotent +$1/+24 calls on that request; automatic recovery does not refill the ledger. [State](bob-delivery-flow.md#state) owns the next action.
+
+### Drawing recovery status investigation — 2026-10-09
+
+The owner's new interruption report after #234 exposed a separate status-projection problem. Read-only hosted inspection found the drawing recovery actually completed at **20:17:57Z / 22:17 Swedish time**. Event job `75d8631f-44f1-4fda-b1d0-188b2cec2d1c` uses original owner turn `6aa673cd-5d1f-4f6f-94b5-611d404969cb`; the original ordinary job `d1ccfb0e-9ed2-42ed-b716-e16d2c5dfeed` remains historically failed at 17:58Z.
+
+| Evidence | Hosted readback |
+|---|---|
+| Same request | `3bc79294-7c78-4ca0-a97a-0e5dea4f672b`, saved revision 28 |
+| Canonical artifact | `2ba8576b-c4c3-4136-9b7f-f31ecb6caa7d`, revision 1, concept, saved at 20:17:43Z; header/working receipts and input hash match |
+| New assistant delivery | Sequence 13, event-job turn ID, completed, “Ritningen är sparad.”; partial=false and exact artifact write receipt |
+| Older owner delivery | Sequence 12, original turn ID, still failed; its instruction remains visible |
+| Added model work | One successful mini CAD reviewer call, $0.166613, then delivery-language call $0.009033; no repeat designer call |
+| Persistent drawing budget | $2.369983 / $3, 10 calls / 48, budget revision 3, unpriced=false |
+
+This establishes the new request-ledger review/save path on the named owner's existing work. It does not establish physical safety, full mixed-goal owner-turn completion or ordinary browser reread. The saved artifact remains explicitly a concept.
+
+The frontend reproduced an additional current-sounding budget-stop notice after the completed saved reply: transcript recovery retained the old unfinished user turn, `bob_job_status` read only its failed ordinary job, and the event reply deliberately used a different turn ID. An already-open idle drawer also did not reload when a new delegated reply arrived. The correction adds owner/thread/origin-scoped drawing recovery status without rewriting historical failed messages, and refreshes the existing drawer from inbox changes. Unrelated replies, incomplete requests and mixed non-CAD goals do not become ordinary-turn completion receipts.
+
+Technical release and browser readback of that correction are pending. [Conversation owner](ask-bob-conversations.md) owns recovery semantics; [State](bob-delivery-flow.md#state) owns the remaining gate. No new paid user turn was submitted during this investigation.

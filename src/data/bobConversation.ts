@@ -3,7 +3,7 @@ import type { ChatMessage } from './types'
 import type { AnswerEvidence } from './provenance'
 import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
 import { isBobAnswerEvidence } from './bobEvidence'
-import { readBobTranscript } from './bobTranscript'
+import { readBobTranscript, readDrawingTurnRecovery, reconcileDrawingTurnRecovery } from './bobTranscript'
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 
 const GUEST_EMAIL = 'guest@bob.local'
@@ -87,8 +87,8 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
 
   const notices = await bobDb.from('bob_delegation_notices').select('turn_id,text').eq('thread_id', threadResult.data.id)
   const byTurn = new Map<string, string>((notices.data ?? []).map(row => [row.turn_id, row.text]))
-  const transcript = readBobTranscript(rows.data ?? [], projectId, byTurn)
-  const { messages, latestSeq, lastCompletedTurnId } = transcript
+  let transcript = readBobTranscript(rows.data ?? [], projectId, byTurn)
+  const { latestSeq, lastCompletedTurnId } = transcript
   const turn = transcript.unfinished
   let pending: BobConversationHistory['pending'] = turn?.pending ? { text: turn.text, turnId: turn.turnId, expiresAt: turn.expiresAt } : undefined
   let retry: BobConversationHistory['retry'] = turn && !turn.pending ? { text: turn.text, turnId: turn.turnId } : undefined
@@ -96,9 +96,16 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
     if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
+    const drawingRecovery = readDrawingTurnRecovery(job.data?.drawingRecovery)
+    const recoveredBudgetStop = drawingRecovery?.status === 'completed' && job.data?.status === 'failed' && job.data?.error === 'turn_budget_exhausted'
+    transcript = reconcileDrawingTurnRecovery(transcript, unfinished.turnId, drawingRecovery, recoveredBudgetStop)
     // Older jobs have no pointer. Never replace a recovered turn with this page.
     try { unfinished.screen = parseBobScreen(job.data?.screen) } catch { unfinished.screen = null }
-    if (job.data && ['queued', 'running'].includes(job.data.status)) {
+    if (recoveredBudgetStop) {
+      pending = undefined; retry = undefined
+    } else if (drawingRecovery && drawingRecovery.status !== 'completed') {
+      pending = { ...unfinished, expiresAt: drawingRecovery.expiresAt, progress: parseProgress(drawingRecovery.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
+    } else if (job.data && ['queued', 'running'].includes(job.data.status)) {
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
       pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
@@ -106,11 +113,20 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
       pending = undefined
       if (job.data.error === 'turn_budget_exhausted') {
         retry = undefined
-        messages.push({ from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
+        transcript.messages.push({ from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
       } else retry = unfinished
     }
   }
-  return { mode: 'server', messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, ownerId: auth.user.id, latestSeq }
+  return { mode: 'server', messages: transcript.messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, ownerId: auth.user.id, latestSeq }
+}
+
+/** Content-free exact-turn recovery check for a stopped, already-open drawer. */
+export async function getAskBobDrawingRecovery(projectId: string, turnId: string) {
+  if (!bobDb || projectId !== getActiveProjectId()) return undefined
+  const result = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: turnId })
+  if (result.error) throw new Error('Could not check drawing recovery')
+  if (projectId !== getActiveProjectId()) return undefined
+  return readDrawingTurnRecovery(result.data?.drawingRecovery)
 }
 
 export interface BobInbox { threadId: string; latestSeq: number; readSeq: number; unread: boolean }

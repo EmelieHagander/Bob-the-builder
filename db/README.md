@@ -767,6 +767,23 @@ drafts and other working data while clearing their cost-stop retry fingerprints.
 records source hashes and acceptance limits; [CAD budget and review](../Docs/cad-adapter.md#drawing-request-budget-and-review--2026-10-09)
 owns the runtime contract. Do not reapply this migration.
 
+### Drawing recovery status — 2026-10-09
+
+`20261009203935_bob_drawing_recovery_status.sql` adds read-only `drawingRecovery`
+metadata to the existing caller-only `bob_job_status` API. It scopes proof to
+the current member's active private thread and exact originating owner turn.
+Completion requires saved Artifact receipts for all linked requests, existing
+Artifact revisions and matching completed event replies; fresh event executions
+can report queued/running progress. The original ordinary job status, failed
+messages, budget and saved project records remain unchanged. No read enqueues
+work. Existing invoker wrapper, private helper grants and empty search path are
+retained; reset/revoked/foreign access cannot inherit recovery proof.
+
+This source correction is awaiting final CI and hosted application. The
+[conversation owner](../Docs/ask-bob-conversations.md) owns display and retry
+semantics; [incident evidence](../Docs/foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+distinguishes the successful drawing save from the stale chat warning.
+
 ### P3 screen context and source changes — applied
 
 Migration `20260930112431_bob_p3_context_and_source_changes.sql` adds private `bob_turn_screens` keyed by logical thread/turn, strict pointer validation, claimed-turn capture, v2 enqueue and claim/status recovery. Original focus, including omission, is immutable across retries; JSON object key order does not create a different pointer. Service-only capture/enqueue/claim commands retain actor/generation assertions; private rows have no browser-readable policy. The authenticated status endpoint returns only the initiating user's permitted turn. Screen pointers contain no fact labels, credentials or private assessment prose.
