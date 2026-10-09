@@ -1,5 +1,5 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import { parseIntakeAssessment, evidenceRefs, type IntakeAssessment } from './cad-intake.ts'
+import { prepareIntakeAssessment, evidenceRefs, type IntakeAssessment } from './cad-intake.ts'
 import type { DesignHandoff } from './cad-review.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
@@ -16,7 +16,7 @@ export async function collectCadResearch(opts: {
  execute: (name: string, args: unknown) => Promise<unknown>;
  callModel: (o: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>;
  hasAccess: () => Promise<boolean>; deadline: number;
- handoff:DesignHandoff; initialEvidence?:Evidence[]; carrier?:()=>NonNullable<OpenAIServiceOptions['messages']>; confirmDelivery?:()=>void;
+ handoff:DesignHandoff; previousAssessment?:IntakeAssessment|null; choiceIds?:ReadonlySet<string>; initialEvidence?:Evidence[]; carrier?:()=>NonNullable<OpenAIServiceOptions['messages']>; confirmDelivery?:()=>void;
 }) {
  const evidence: Evidence[] = [...opts.initialEvidence??[]]; let bytes = new TextEncoder().encode(JSON.stringify(evidence)).length, truncated = false, calls = 0
  let assessment:IntakeAssessment|null=null
@@ -25,7 +25,7 @@ export async function collectCadResearch(opts: {
   if (!await opts.hasAccess()) throw new Error('project_denied')
   const refs=evidenceRefs(evidence,opts.handoff)
   if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable')
-  const catalogSchemaParameters={evidence_refs:[...refs].sort()}
+  const catalogSchemaParameters={evidence_refs:[...refs].sort(),...(opts.handoff.requirements.length?{check_ids:opts.handoff.requirements.map(r=>r.id)}:{})}
   const tools = [...opts.tools(),opts.aiCatalog.tool(FINISH_NAME,catalogSchemaParameters)]
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'cad-research',
    aiFunction: 'cad-research', module: 'cad', userId: opts.userId, catalogRoleKey:'cad-research',catalogSchemaParameters,
@@ -47,7 +47,7 @@ export async function collectCadResearch(opts: {
     if (!tools.some(t => t.function.name === call.function.name)) throw new Error('tool_not_offered')
     const args = JSON.parse(call.function.arguments)
     if (call.function.name === FINISH_NAME) {
-     assessment=parseIntakeAssessment(args,opts.handoff,evidenceRefs(evidence,opts.handoff))
+     assessment=await prepareIntakeAssessment(args,opts.handoff,evidenceRefs(evidence,opts.handoff),opts.previousAssessment,opts.choiceIds)
      if(assessment&&result.toolCalls.length===1){finished=true;continue}
      assessment=null
      const checks=[...(Array.isArray(args?.checks)?args.checks:[]),...(Array.isArray(args?.additional_needs)?args.additional_needs:[])]

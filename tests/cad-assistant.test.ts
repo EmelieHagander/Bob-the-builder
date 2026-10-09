@@ -93,12 +93,13 @@ test('CAD research has a bounded stage and exact measurement verification remain
  assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
 })
 
-test('CAD cannot render against an invented target revision',async()=>{
+test('CAD pins the database target instead of an invented model revision',async()=>{
  const f=fixture();let calls=0,renders=0
  f.opts.callModel=async()=>calls++===0?response('render_cad_candidate',{...candidate,target_revision:9}):response()
  f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
  const a=createCadAssistant(f.opts)
- assert.equal((await a.consult(request)).status,'incomplete');assert.equal(renders,0)
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1)
+ assert.equal(a.candidate?.target_revision,1)
 })
 
 function imageFixture(){

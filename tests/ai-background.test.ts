@@ -31,11 +31,11 @@ test('long model survives restarts: one POST, retrieve same response, then journ
   try {
     await assert.rejects(run, e => e instanceof BobContinuation && e.aiWait?.accepted === true)
     await assert.rejects(run, e => e instanceof BobContinuation)
-    assert.equal(entries.length, 0, 'waiting is neither an error checkpoint nor a provider retry')
+    assert.deepEqual(entries.map(entry=>entry.key),['model:0:waiting'],'waiting pins input without recording an error or a provider retry')
     await reconcileAiWork(rpc, 'key', 'job', id, id)
     assert.deepEqual(await run(), result)
     assert.deepEqual(await run(), result)
-    assert.equal(posts, 1); assert.equal(gets, 1); assert.equal(entries.length, 1)
+    assert.equal(posts, 1); assert.equal(gets, 1); assert.equal(entries.length, 2)
   } finally { globalThis.fetch = oldFetch }
 })
 

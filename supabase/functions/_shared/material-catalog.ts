@@ -148,7 +148,7 @@ export function catalogRejection(message = ''): { fields: string[]; message: str
   if (/\bcatalog_unknown_category\b/.test(message)) return { fields: ['categories'], message: 'No change made: an unknown category was supplied. Browse search_material_catalog with entity=categories and copy returned codes; do not guess category names.' }
   return null
 }
-export type CatalogTransport = (input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
+export type CatalogTransport = ((input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>) & { checkpointed?: boolean }
 export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000) {
   let used = 0, partial = false
   return {
@@ -164,7 +164,7 @@ export function createMaterialCatalogReader(projectId: string, transport: Catalo
       try {
         const { data, error } = await Promise.race([
           Promise.resolve(transport(input, controller.signal)),
-          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('unavailable')) }, timeoutMs) }),
+          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!transport.checkpointed)reject(new Error('unavailable')) }, timeoutMs) }),
         ])
         if (!await hasAccess()) return { status: 'denied' }
         if (error?.code === '42501') return { status: 'denied' }

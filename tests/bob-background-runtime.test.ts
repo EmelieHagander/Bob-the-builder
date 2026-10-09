@@ -116,9 +116,9 @@ test('waiting for an accepted AI job and yielding before dispatch do not spend r
     }), BobContinuation)
   }
   assert.equal(dispatches, 0)
-  assert.equal(entries.length, 0)
+  assert.deepEqual(entries.map(entry=>entry.key),['model:cad:0:waiting'])
   let attempts = 0
-  const run = () => createBobJournal(store, Infinity).run('model:cad', {}, async () => {
+  const run = () => createBobJournal(store, Infinity).run('model:next', {}, async () => {
     if (++attempts === 1) throw new BobContinuation('yield', 'provider_retry')
     return 'recovered'
   })
