@@ -1,6 +1,10 @@
 import {drawingInputFingerprint} from './drawing-request-recovery.ts'
-import type { DrawingRequestStore } from './cad-intake.ts'
-import type { BobJournal } from './bob-job-journal.ts'
+import type { DrawingBudgetGrant, DrawingRequestStore } from './cad-intake.ts'
+import { fingerprint, type BobJournal } from './bob-job-journal.ts'
+
+// One grant identity per turn, request and budget revision: a replayed or
+// repeated resume in the same turn never adds a second allocation.
+const grantUuid=(h:string)=>`${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-${(8+(parseInt(h[16],16)&3)).toString(16)}${h.slice(17,20)}-${h.slice(20,32)}`
 
 type Input=Record<string,unknown>
 /** Project identity creation/cancellation use the caller JWT. Only the private
@@ -43,6 +47,22 @@ export function createDrawingRequestStore(opts:{
    restored.set(id,result);return result
   },
   read,
+  // The owner's request to continue is the authorization; the same owner-only
+  // SQL as the "Add request budget" button adds +$1 / +24 calls once.
+  grant:async(id):Promise<DrawingBudgetGrant>=>{
+   const budget=(await caller('drawing_request_work',{p_project:opts.projectId,p_id:id}))?.budget
+   if(!budget||budget.legacy_untracked||!Number.isSafeInteger(budget.revision))return {status:'unavailable',reason:'budget_unavailable'}
+   if(budget.calls<budget.call_limit&&budget.spent_usd<budget.usd_limit)return {status:'budget_remaining',budget_revision:budget.revision}
+   const grant=grantUuid(await fingerprint({turn:opts.binding.p_turn??null,request:id,revision:budget.revision}))
+   try{
+    const result=await caller('grant_drawing_budget',{p_project:opts.projectId,p_id:id,p_expected:budget.revision,p_grant:grant})
+    return {status:'granted',budget_revision:result?.revision,added:{usd:1,calls:24}}
+   }catch(error){
+    if(error instanceof Error&&['budget_remaining','budget_outcome_unknown','budget_changed','budget_unavailable','drawing_request_inactive','drawing_request_denied'].includes(error.message))
+     return {status:error.message==='budget_remaining'?'budget_remaining':'not_granted',reason:error.message,budget_revision:budget.revision}
+    throw error
+   }
+  },
   cancel:async(id,expected)=>{
    try{return await caller('cancel_drawing_request',{p_project:opts.projectId,p_id:id,p_expected:expected})}
    catch(error){

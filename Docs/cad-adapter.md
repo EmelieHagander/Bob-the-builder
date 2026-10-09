@@ -587,6 +587,18 @@ change any allocation or grant automatic retry. In particular, a new turn does
 not reset the durable drawing-request budget, superseding the earlier historical
 turn-only description above.
 
+The owner's next message about the drawing renews the budget after a
+request-scope cost or call stop; no wording is required. When Bob resumes a request whose recorded stop is
+`drawing_request` × `usd_limit`/`call_limit` while answering the owner's message,
+the server first calls the same owner-only `bob.grant_drawing_budget` that the
+"Add request budget" button uses (+$1, +24 calls, idempotent per turn, request
+and budget revision), reloads the packet and continues; the result carries
+`budget_grant`. Turn-scope stops, pending or unpriced outcomes and automatic
+continuations never grant. Bob's instructions on such a stop are to tell the
+owner and finish the reply, then on the owner's next message about the drawing
+call `design_project_cad` with the same request ID at once instead of re-reading
+requests, budgets or sources first.
+
 ### Planned annotation contract for K3
 
 The current contour exporter does not render dimensions or part labels. Extend
