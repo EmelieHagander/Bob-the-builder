@@ -5,7 +5,7 @@ import type { WriteReadback } from '../supabase/functions/_shared/project-write.
 import { createCurrentViewGuard } from '../supabase/functions/_shared/current-view-guard.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer } from './support/main-catalog-fixture.ts'
 
 const t1 = '2026-09-30T12:00:00Z', t2 = '2026-09-30T12:00:01Z', t3 = '2026-09-30T12:00:02Z'
 const step = '10000000-0000-4000-8000-000000000001'

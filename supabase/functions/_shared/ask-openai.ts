@@ -38,6 +38,7 @@ import type { ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
+import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
@@ -58,6 +59,10 @@ export async function answerWithOpenAi(opts: {
   const internal = createClient(url, serviceKey, {
     db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
   })
+  const shared = createClient(url, serviceKey, {
+    db: { schema: 'shared' }, auth: { persistSession: false, autoRefreshToken: false },
+  })
+  let aiCatalog: AiCatalogSession
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
@@ -88,7 +93,9 @@ export async function answerWithOpenAi(opts: {
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   const modelBudget = createBobModelBudget()
-  const callModel = async (options: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => modelBudget.run(async () => {
+  const callModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
+   const options = applyCatalogModelOptions(aiCatalog, requested)
+   return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
    try{return await memo('model:' + options.functionName, options, async identity => {
@@ -129,6 +136,7 @@ export async function answerWithOpenAi(opts: {
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result
   })
+  }
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
     return { ...adapter,
@@ -176,6 +184,19 @@ export async function answerWithOpenAi(opts: {
     return { ok: false, error: 'turn_in_flight' }
   }
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
+  try {
+    // The private job journal pins configuration, not project authority. Fresh
+    // caller reads and live enabled checks still guard each execution boundary.
+    const manifest = await memo('ai-catalog', { app: 'bob' }, () => createAiCatalogSession(shared, { app: 'bob' }).load())
+    aiCatalog = createAiCatalogSession(shared, { app: 'bob', manifest })
+    await aiCatalog.load()
+  } catch (error) {
+    rethrowContinuation(error)
+    if (claimedServer) {
+      try { await conversations.fail(opts.projectId, opts.userId, claimedServer.thread_id, opts.clientTurnId, claimedServer.generation) } catch { /* lease recovery */ }
+    }
+    return { ok: false, error: 'ai_catalog_unavailable' }
+  }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
   const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now()}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
@@ -222,6 +243,8 @@ export async function answerWithOpenAi(opts: {
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
   const projectContext = createProjectContext({
+    reviewInstruction: aiCatalog.text('drawing-review.instruction'),
+    imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
     adapters: [mediaAdapter()],
     hasAccess, sources: lookup.sources,
     ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
@@ -264,6 +287,7 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionTools = createConstructionTools(constructionOptions)
   const planAssistant = createPlanAssistant({
+    aiCatalog,
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
@@ -288,12 +312,13 @@ export async function answerWithOpenAi(opts: {
   }})
 
   const cadAssistant = createCadAssistant({
+    aiCatalog,
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')})),
     requestModel:async(id,_options,work)=>{
       const previous=drawingRequestId;drawingRequestId=id
       try{return await work()}finally{drawingRequestId=previous}
     },
-    ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,journal,
+    ...(claimedServer?{requestStore:createDrawingRequestStore({aiCatalog,projectId:opts.projectId,binding,journal,
       privateCall:drawingRequestCall,
       // One stable id per piece key; the unkeyed id keeps its existing journal identity.
       newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
@@ -350,7 +375,7 @@ export async function answerWithOpenAi(opts: {
       return {...data,current_step_ids:links}
     },
     catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
-    context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
+    context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -377,8 +402,9 @@ export async function answerWithOpenAi(opts: {
   const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
     generate: async prompt => {
-      const result = await memo('image:generate', prompt, async () => {
-        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,timeoutMs:100000})
+      const role = aiCatalog.role('project-image')
+      const result = await memo('image:generate', { prompt, manifestId: role.manifestId, roleVersionId: role.roleVersionId }, async () => {
+        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,timeoutMs:100000,aiDefinition:role})
         if (!generated.ok) return generated
         let encoded = ''; for (let i=0;i<generated.image.length;i+=8192) encoded+=String.fromCharCode(...generated.image.subarray(i,i+8192))
         return {ok:true as const,image:btoa(encoded)}
@@ -407,6 +433,7 @@ export async function answerWithOpenAi(opts: {
   },hasAccess)
   try {
   const result=await runClaimedProjectTurn({
+    aiCatalog,
     observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
@@ -437,6 +464,7 @@ export async function answerWithOpenAi(opts: {
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
+      groundingInstruction: aiCatalog.text('bob.grounding'),
       projectId: opts.projectId, message: opts.message, lookup: imageGrounding, hasAccess, deadline,
       validateImages: () => projectContext.validate(),
       callModel,

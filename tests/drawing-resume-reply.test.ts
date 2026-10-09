@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {drawingResumeReply} from '../supabase/functions/_shared/drawing-resume-reply.ts'
+import {drawingResumeReply} from './support/colleague-catalog-fixture.ts'
 import {BobContinuation} from '../supabase/functions/_shared/bob-job-journal.ts'
 const usage={input_tokens:0,output_tokens:0,total_tokens:0}
 const outcome={status:'needs_data',gaps:[{id:'depth',action:'owner_decision',detail:'Owner must choose depth.'},{id:'depth_again',action:'owner_decision',detail:'Same missing depth.'}]}

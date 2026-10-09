@@ -1,4 +1,5 @@
 import type { OpenAIServiceResponse } from './openai-service.ts'
+import type { AiCatalogSession } from './ai-catalog.ts'
 
 const reasons = ['usd_limit','call_limit','unpriced_usage','pending_outcome','context_cleared','review_reserve','unknown'] as const
 export type BobBudgetStop = {
@@ -34,12 +35,12 @@ export function budgetStopMessage(stop:BobBudgetStop|undefined) {
  if(stop?.reasons.includes('call_limit'))return 'Ritförsöket stoppades av gränsen för antal modellanrop.'+resume
  return 'Ritförsöket stoppades av en resursgräns; den exakta orsaken är inte tillgänglig.'
 }
-export function budgetResumeAction(stop:BobBudgetStop|undefined) {
- if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Reconcile the prior provider outcome and cost before another dispatch. Do not release or replace its reservation.'
- if(stop?.reasons.includes('context_cleared'))return 'Restore the same request through its existing context-recovery path. A new request must not bypass previous accounting.'
- if(stop?.reasons.includes('review_reserve'))return 'Design/research reached the turn limit minus the review/delivery reserve. Review or deliver what exists; do not dispatch more design work in this turn.'
+export function budgetResumeAction(stop:BobBudgetStop|undefined,aiCatalog:AiCatalogSession) {
+ if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return aiCatalog.text('feedback.bob-budget-stop.resume.9c3a74e182d5')
+ if(stop?.reasons.includes('context_cleared'))return aiCatalog.text('feedback.bob-budget-stop.resume.f0e268bdddc1')
+ if(stop?.reasons.includes('review_reserve'))return aiCatalog.text('feedback.bob-budget-stop.resume.f43f67fe832d')
  if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return stop.scope==='drawing_request'
-  ?'This drawing request reached its own cost or call limit. Tell the owner plainly and finish this reply; do not read requests, budgets or sources to look for a way around it. The owner\'s next message about this drawing renews its budget: call design_project_cad at once with this same request_id, brief and handoff, and the server adds one more allocation before resuming.'
-  :'This turn\'s model budget is used. Tell the owner what exists and that the next message continues this same request_id; do not retry in this turn.'
- return 'Inspect the current budget boundary before retrying. The unavailable diagnostic is not evidence that more money or more input is needed.'
+  ?aiCatalog.text('feedback.bob-budget-stop.resume.eefd1193bc73')
+  :aiCatalog.text('feedback.bob-budget-stop.resume.51aac0199a6c')
+ return aiCatalog.text('feedback.bob-budget-stop.resume.bca602f7146a')
 }

@@ -17,9 +17,15 @@ Current View and the remaining broader catalog/router/Librarian design are disti
 
 ## Current toolbox contract — 2026-09-27
 
+**Definition ownership changes in the 2026-10-09 catalog implementation.**
+[The AI catalog owner](../supabase/README.md#ai-definition-catalog-and-model-tiers)
+describes database versions, request manifests and tiers. This changes the source
+of offered contracts; it preserves the bench, execution gates and inline-manual
+baseline below. Hosted installation is recorded separately in the release PR.
+
 **Supersedes the two-tier core/on-demand loading, `list_tools`/`load_tool` discovery and phase preloads described in [Product rule](#product-rule) and [Prepare, discover, load, execute](#prepare-discover-load-execute).** Those sections remain as history of the September 21–26 design. The dated [runtime review](bob-ai-runtime-review-2026-09-27.md) records why.
 
-- **One bench.** Every catalog row that is active, has a registered handler with a matching schema version and passes its server gate is offered on every tool-enabled model step. Its description joins the catalog description, the code description and the full `how_to` guide. There is no discovery round and no model-interpreted capability search.
+- **One bench.** Every policy row that is active, has a registered handler with a matching schema version and passes its server gate is offered on every tool-enabled model step. The exact parameter schema and description come from the pinned `tool_contract` database version; migrated descriptions retain the previous technical guidance and inline manual. There is no discovery round and no model-interpreted capability search.
 - **Shelves.** The system prompt lists the bench on fixed shelves (`TOOLBOX_SHELVES` in `project-tools/bob-tools.ts`): records, project/phases/Areas, living plan, Tasks and build days, measurements and design decisions, drawings and CAD, materials, images, building, knowledge. A test requires every active catalog row to sit on a shelf.
 - **Waiting and used up.** A tool whose prerequisite does not exist yet (for example `save_cad_design` before a reviewed candidate) or whose budget is used is not offered, but its shelf entry says so. A caller who may not use a tool (for example a guest and any write) sees neither the tool nor its shelf entry.
 - **Bob chooses.** The server never sets `tool_choice` for Bob or the CAD designer. Phase is no longer a loading hint; `always_load` and `preload_phases` stay in the catalog as data but do not change the bench.
@@ -82,18 +88,20 @@ call remains tool-free; directory availability does not promise an unbounded loo
 
 ## One catalog and one handler-registration seam
 
-`bob.tool_catalog` is operator-owned **surface metadata**: stable name, short
-trigger description, long `how_to`, schema version, core flag, preload phases and
-active flag. Authenticated identities can read it; ordinary users cannot modify
-it. It contains no private project data, tool credentials, executable code or
-per-user grants. Catalog visibility by itself is not execution authority.
+`bob.tool_catalog` retains operator-owned **live policy metadata**: stable name,
+schema version, active flag and legacy descriptions/loading fields. Authenticated
+identities can read it; ordinary users cannot modify it. The AI catalog's
+`tools.<name>` definition owns the model-facing description, manual and exact
+JSON parameter schema. Its immutable version is pinned for the turn. Neither
+catalog contains project facts, credentials, executable code or per-user grants.
 
 `project-tools/bob-tools.ts` is the sole registration seam connecting a catalog
-name to its real validated schema, handler and server-derived eligibility gate.
-The runtime intersects BOTH sources. A catalog row with no registered handler,
-a disabled row or a mismatched schema version never becomes callable. Exact
-schemas are sourced from the executable contract, not a separately editable JSON
-copy in a database. Adding a new handler does not require editing the model loop.
+name to a validated handler and server-derived eligibility gate. The runtime
+intersects the live policy, pinned tool contract and registration. A missing
+contract, unregistered handler, disabled policy row or mismatched schema version
+cannot become callable. Database schema changes must remain compatible with the
+registered validator/handler; activation cannot add executable behavior. Adding
+a new handler does not require editing the model loop.
 
 `catalog-seed.json` is the complete migrated offline policy, including inactive
 rows and phase preloads. `tool-catalog-parity.test.ts` installs all migrations and
@@ -102,6 +110,12 @@ failed live reads never fall back to the seed. Operator edits must be recorded i
 a new migration and regenerated seed to retain parity. The dated
 [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md) preserves the earlier drift.
 Already committed migrations are never edited to change a live loadout.
+
+After catalog rollout, legacy policy/manual parity does not determine the active
+provider schema. Activate a new AI definition version for model-facing contract
+edits, and preserve the separate live policy/handler compatibility checks. The
+[catalog owner](../supabase/README.md#authoring-activation-and-release) owns
+activation and rollback.
 
 There is no new grant editor in this slice. Eligibility reuses the actual
 capabilities of the authorised turn: for example, a shared guest has no claimed

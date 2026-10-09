@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { BOB_SYSTEM_SECTIONS, BOB_TRUTH_RULES, buildBobSystemMessage, runProjectAnswer } from './support/bob-model-routing.ts'
+import { runProjectAnswer } from './support/bob-model-routing.ts'
+import { bobCatalog, bobPersona, bobContract } from './support/main-catalog-fixture.ts'
 import { createBobHandler } from '../supabase/functions/_shared/bob-request.ts'
 
 const pg = new PGlite()
@@ -141,11 +142,11 @@ test('prompt assembly keeps durable persona separate from fresh turn context and
   assert.equal(calls[0].previousResponseId, 'resp_previous')
   assert.equal(calls[1].previousResponseId, 'resp_tool')
   for (const call of calls) {
-    assert(call.systemMessage!.startsWith(buildBobSystemMessage().split('\n\nYour toolbox')[0]), 'persona is sent fresh on every provider call')
-    assert(call.systemMessage!.endsWith(BOB_TRUTH_RULES), 'safety rules are sent fresh on every provider call')
+    assert(call.systemMessage!.startsWith(bobPersona), 'catalog persona is sent fresh on every provider call')
+    assert(call.systemMessage!.includes(bobContract), 'catalog contracts are sent fresh on every provider call')
+    assert.equal(call.aiDefinition.manifestId, bobCatalog.manifest().manifest_id)
     for (const tool of call.tools ?? []) assert(call.systemMessage!.includes(tool.function.name), 'the toolbox shelf lists every offered tool')
   }
-  for (const value of Object.values(BOB_SYSTEM_SECTIONS)) assert(BOB_TRUTH_RULES.includes(value))
   assert.match(calls[0].messages[0].content, /Current turn/)
   assert.match(calls[0].messages[0].content, /fetched for THIS turn/)
   assert.equal(calls[0].messages[1].content, 'What did we decide?')

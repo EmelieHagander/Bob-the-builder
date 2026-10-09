@@ -124,3 +124,15 @@ test('model rows carry model, applied effort, cached/reasoning tokens, journal s
  assert.equal(events[2].counts.step,null);assert.equal(events[2].counts.attempt,0);assert.equal(events[2].counts.cached_input_tokens,0)
  assert(!JSON.stringify(events).includes('PRIVATE'))
 })
+
+
+test('model diagnostics identify pinned catalog configuration without recording instruction content',async()=>{
+ const events:ExecutionEvent[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ await metrics.model({aiFunction:'ask-bob',aiDefinition:{manifestId:'11111111-1111-4111-8111-111111111111',roleVersionId:'22222222-2222-4222-8222-222222222222',profileVersionId:'33333333-3333-4333-8333-333333333333',tier:'standard',systemMessage:'PRIVATE instructions'}} as any,reply,2)
+ assert.equal(events[0].counts.ai_manifest_id,'11111111-1111-4111-8111-111111111111')
+ assert.equal(events[0].counts.ai_role_version_id,'22222222-2222-4222-8222-222222222222')
+ assert.equal(events[0].counts.ai_profile_version_id,'33333333-3333-4333-8333-333333333333')
+ assert.equal(events[0].counts.ai_tier,'standard')
+ assert(!JSON.stringify(events).includes('PRIVATE'))
+})

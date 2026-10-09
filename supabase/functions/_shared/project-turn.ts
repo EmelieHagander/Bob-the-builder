@@ -1,3 +1,4 @@
+import type { AiCatalogSession } from './ai-catalog.ts'
 import type { ConstructionTools } from './construction-draft.ts'
 import { createDeliveryLanguage } from './delivery-language.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
@@ -19,6 +20,7 @@ import { compactReceipts, type ProjectWriter } from './project-write.ts'
 
 /** Production orchestration, injected for failure/retry tests without an AI key. */
 export async function runClaimedProjectTurn(opts: {
+  aiCatalog: AiCatalogSession;
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;

@@ -5,8 +5,8 @@ import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import {parseDesignHandoff,parseCadReview,candidateFingerprint,cadReviewSchema} from '../supabase/functions/_shared/cad-review.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {handoff,reviewReply} from './support/cad-review-fixture.ts'
-import {createProjectContext} from '../supabase/functions/_shared/project-context/dispatcher.ts'
-import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from '../supabase/functions/_shared/drawing-review.ts'
+import {createProjectContext} from './support/colleague-catalog-fixture.ts'
+import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from './support/colleague-catalog-fixture.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {budgetFailure} from '../supabase/functions/_shared/bob-budget-stop.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
@@ -77,7 +77,7 @@ test('review rejection returns concrete feedback to the designer and requires a 
   }
   designers++
   if(designers===1)return call('render_cad_candidate',design)
-  if(designers===3){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,undefined,'repair is requested, never forced');assert.equal(o.messages[0].role,'user');assert.match(String(o.messages[0].content),/^\[Server note — not from the owner\]/);return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
+  if(designers===3){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,undefined,'repair is requested, never forced');assert.equal(o.messages[0].role,'user');assert.equal(JSON.parse(String(o.messages[0].content)).independent_review_required,true);return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
   return reply('Ready')
  }
  const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,2);assert.equal(a.metrics.review_rejections,1)

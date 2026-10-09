@@ -1,6 +1,6 @@
 /** Explicit synthetic decisions for existing transport/render fixtures. Never
  * used by production to manufacture missing provenance. */
-import {createCadAssistant as production} from '../../supabase/functions/_shared/cad-assistant.ts'
+import {createCadAssistant as production} from './colleague-catalog-fixture.ts'
 import {createHash} from 'node:crypto'
 import {cadParameterTargets,compileCadParameters,type ParameterPlan} from '../../supabase/functions/_shared/cad-parameters.ts'
 import type {CadAssemblyRequest} from '../../supabase/functions/_shared/cad-adapter.ts'

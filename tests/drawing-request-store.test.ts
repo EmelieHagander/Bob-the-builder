@@ -2,7 +2,9 @@ import {handoff} from './support/cad-review-fixture.ts'
 import {drawingInputFingerprint} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
+import { createDrawingRequestStore as createDrawingRequestStoreImplementation } from '../supabase/functions/_shared/drawing-request-store.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+const createDrawingRequestStore=(opts:Omit<Parameters<typeof createDrawingRequestStoreImplementation>[0],'aiCatalog'>)=>createDrawingRequestStoreImplementation({...opts,aiCatalog:catalogFixture()})
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 
 test('completed reconstruction permits exact checkpoints, rejects new or changed operations, and keeps cancellation/reset fresh',async()=>{

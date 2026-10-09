@@ -1,6 +1,7 @@
 import {drawingInputFingerprint} from './drawing-request-recovery.ts'
 import type { DrawingBudgetGrant, DrawingRequestStore } from './cad-intake.ts'
 import { fingerprint, type BobJournal } from './bob-job-journal.ts'
+import type { AiCatalogSession } from './ai-catalog.ts'
 
 // One grant identity per turn, request and budget revision: a replayed or
 // repeated resume in the same turn never adds a second allocation.
@@ -16,6 +17,7 @@ export function createDrawingRequestStore(opts:{
  newId:(key?:string)=>Promise<string>;
  release?:(ids:string[])=>Promise<any>;
  journal?:BobJournal;
+ aiCatalog:AiCatalogSession;
 }):DrawingRequestStore {
  const restored=new Map<string,any>()
  let requireRecorded:(()=>void)|undefined
@@ -68,7 +70,7 @@ export function createDrawingRequestStore(opts:{
    catch(error){
     if(error instanceof Error&&['drawing_request_complete','drawing_request_changed','drawing_request_denied'].includes(error.message))return {
      status:error.message==='drawing_request_denied'?'not_allowed':'conflict',reason:error.message,request_id:id,
-     next_action:'Read the current request status. A completed Artifact remains saved; only the initiating authorized member may cancel unfinished work.',
+     next_action:opts.aiCatalog.text('feedback.drawing-request-store.next-action.e9a22f8d7db1'),
     }
     throw error
    }

@@ -7,9 +7,8 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { BOB_PERSONA } from '../supabase/functions/_shared/bob-prompt.ts'
-import { BOB_TRUTH_RULES } from '../supabase/functions/_shared/project-answer.ts'
-import { domainVocabulary } from '../src/domain/vocabulary.ts'
+import { bobCatalog, bobPersona, bobContract, buildBobSystemMessage, runProjectAnswer } from '../tests/support/main-catalog-fixture.ts'
+import { createCadAssistant, createPlanAssistant, createProjectContext } from '../tests/support/colleague-catalog-fixture.ts'
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
@@ -17,16 +16,12 @@ import { checkedToolSnapshot, type ToolInstructions } from '../supabase/function
 import seed from '../supabase/functions/_shared/project-tools/catalog-seed.json' with { type: 'json' }
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import { createMaterialCatalogReader } from '../supabase/functions/_shared/material-catalog.ts'
 import { createKnowledgeReader } from '../supabase/functions/_shared/building-knowledge.ts'
 import { createOperationalReader } from '../supabase/functions/_shared/project-operations.ts'
 import { createRecordDetailReader } from '../supabase/functions/_shared/project-record-detail.ts'
 import { createProjectImageTools } from '../supabase/functions/_shared/project-image-tools.ts'
-import { createPlanAssistant } from '../supabase/functions/_shared/plan-assistant.ts'
-import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
-import { buildBobSystemMessage, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { parameterPlan } from '../tests/support/cad-parameter-fixture.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
 import { createExecutionMetrics, type ExecutionEvent } from '../supabase/functions/_shared/execution-metrics.ts'
@@ -50,6 +45,8 @@ const stamp = '2026-10-03T00:00:00Z'
 let responseSequence = 0
 const calls: any[] = []
 const executionEvents: ExecutionEvent[] = []
+const systemParts={persona:bobPersona,rules:bobContract,vocabulary:bobCatalog.text('domain.vocabulary.bob'),method:bobCatalog.text('bob.method')}
+const systemPartBytes=Object.fromEntries(Object.entries(systemParts).map(([key,text])=>[key,Buffer.byteLength(text)]))
 const metrics = createExecutionMetrics({ runId: 'synthetic-audit', turnId: 'synthetic-turn', startedAt: 0, write: async e => { executionEvents.push(e) } })
 function measured(scenario: string, model: (o: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>, history: string[] = []) {
   return async (options: OpenAIServiceOptions) => {
@@ -58,7 +55,7 @@ function measured(scenario: string, model: (o: OpenAIServiceOptions) => Promise<
     const elapsed = performance.now() - start
     await metrics.model(options, result, elapsed)
     calls.push({ scenario, role: options.functionName, call: calls.filter(c => c.scenario === scenario && c.role === options.functionName).length + 1,
-      ...input, ...(options.functionName === 'ask-bob' ? { system_sections_utf8_bytes: { persona: Buffer.byteLength(BOB_PERSONA), rules: Buffer.byteLength(BOB_TRUTH_RULES), vocabulary: Buffer.byteLength(domainVocabulary('bob')), toolbox_and_separators: input.content_utf8_bytes.system - Buffer.byteLength(BOB_PERSONA + BOB_TRUTH_RULES + domainVocabulary('bob')) } } : {}), execution_metric_role: executionEvents.at(-1)?.role, output: measureRuntimeOutput(result), fixture_elapsed_ms: elapsed,
+      ...input, ...(options.functionName === 'ask-bob' ? { system_sections_utf8_bytes: { ...systemPartBytes, toolbox_and_separators: input.content_utf8_bytes.system - Object.values(systemPartBytes).reduce((sum,bytes)=>sum+bytes,0) } } : {}), execution_metric_role: executionEvents.at(-1)?.role, output: measureRuntimeOutput(result), fixture_elapsed_ms: elapsed,
       provider_usage: null, provider_cost_usd: null, provider_latency_ms: null })
     return result
   }
@@ -89,7 +86,7 @@ function fixture(phase: string | null, message = 'Skapa en uppgift för att mät
     receipts.push(receipt); return { data: receipt, error: null }
   }, async () => ({ data: receipts, error: null }), async () => ({ data: { generation: 1, receipts }, error: null }))
   const hasAccess = async () => true, deadline = Date.now() + 300000
-  const base = { projectId: 'synthetic', userId: 'synthetic-user', hasAccess, deadline }
+  const base = { aiCatalog: bobCatalog, projectId: 'synthetic', userId: 'synthetic-user', hasAccess, deadline }
   const constructionTools = createConstructionTools({ projectId: 'synthetic', message, writer, hasAccess, now: () => new Date(stamp),
     read: async (artifact, revision) => artifact === null ? { projectId: 'synthetic', status: 'ok', items: structuredClone(drafts.slice(-1)) }
       : artifact !== id || !drafts.length ? { projectId: 'synthetic', status: 'not_found' }
@@ -248,7 +245,7 @@ const readProbe = lookup()
 const readInput = { dataset: 'project', query: null, status: null, area_id: null, record_id: null }
 for (let i = 0; i < 32; i++) await readProbe.search(readInput)
 let grounding: any
-await createGroundedModelCall({ projectId: 'synthetic', message: 'Compare the reference.', lookup: lookup(48), hasAccess: async () => true,
+await createGroundedModelCall({ groundingInstruction:bobCatalog.text('bob.grounding'), projectId: 'synthetic', message: 'Compare the reference.', lookup: lookup(48), hasAccess: async () => true,
   validateImages: async () => true, deadline: Date.now() + 30000, callModel: async o => { grounding = o.messages?.at(-1)?.content; return response('Synthetic answer') } })({
   messages: [{ role: 'user', content: [{ type: 'image_url', image_url: 'data:image/png;base64,c3ludGhldGlj' }] }],
 } as any)
@@ -299,9 +296,11 @@ for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_
 })).status)
 assert.equal(writeStatuses.filter(s => s === 'saved').length, 9)
 
-const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/bob-prompt.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
+const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/ai-catalog.ts', 'supabase/functions/_shared/bob-prompt.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
 const sourceHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async path => [path, createHash('sha256').update(await readFile(new URL('../' + path, import.meta.url))).digest('hex')])))
 return { report_version: 1, tool_instruction_mode: toolInstructions, manual_strategy: toolInstructions === 'inline' ? null : manualStrategy, manual_reads: manualReads, source_sha256: sourceHashes, fixture_date: stamp, catalog_sha256: createHash('sha256').update(JSON.stringify(catalog)).digest('hex'),
+  ai_catalog_definition_sha256:createHash('sha256').update(JSON.stringify(bobCatalog.manifest().definitions)).digest('hex'),
+  ai_catalog_source:'explicit synthetic migration-seed fixture (not hosted configuration)',
   evidence_class: 'controlled runtime mechanics; model and I/O are synthetic',
   catalog_source: useSeed ? 'current repository seed (not live policy)' : 'explicit caller-supplied snapshot (not live policy)', active_catalog_tools: catalog.filter(r => r.active).length,
   measurement_contract: { units: 'UTF-8 bytes; not tokens', boundary: 'Local callModel options before shared provider formatting/configuration', retained_history: 'previousResponseId may carry unmeasured provider context', content_accounting: 'UTF-8 content values; local_input_json_bytes separately includes local serialization overhead', coverage: 'Bob/task/construction and CAD intake/designer/reviewer; plan specialist and memory-fold calls are not exercised', usage: 'Synthetic replies; provider usage, caching, cost and latency unavailable' },

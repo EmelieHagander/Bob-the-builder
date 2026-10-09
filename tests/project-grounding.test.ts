@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
 import type { LookupInput, LookupResult } from '../supabase/functions/_shared/project-lookup.ts'
 import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
@@ -28,7 +29,7 @@ function fixture() {
       { id: 'width', subject: 'Cushion width', value: null, unit: 'mm', truth: 'unknown', notes: 'Old estimate was 900 mm.' },
     ]),
   }
-  const deps = { projectId: 'A', message: 'Look at the mockup. Do we have the dimensions?', deadline: Date.now() + 200000,
+  const deps = { groundingInstruction: catalogFixture().text('bob.grounding'), projectId: 'A', message: 'Look at the mockup. Do we have the dimensions?', deadline: Date.now() + 200000,
     lookup: { search: async (i: LookupInput) => { calls.push(i); return data[i.dataset as keyof typeof data] } },
     hasAccess: async () => allowed, validateImages: async () => imagesValid,
     callModel: async (o: OpenAIServiceOptions) => { providerCalls++; payloads.push(o); return response },
