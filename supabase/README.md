@@ -54,20 +54,12 @@ database call. The optional background transport also requires the companion
 
 ## AI definition catalog and model tiers
 
-**Implementation contract — 2026-10-09.** This replaces Bob's code-authored AI
-definitions and direct-model settings with versioned database definitions.
-Migration presence is not hosted installation: the release PR owns the applied
-migration ledger, tested source, deployed Edge versions and runtime readback.
-
-Local implementation verification (2026-10-09): 1,063/1,063 full-suite tests pass
-with bounded test concurrency; 41 final catalog/metrics/tool checks pass after
-review corrections. Vocabulary, reproducible seed, production build and six
-Edge entrypoint type checks pass. The local Edge check used a temporary import
-map to the installed Supabase package because esm.sh was unreachable; CI with
-the normal import remains pending. Independent agents reviewed catalog SQL and
-runtime boundaries. Publication, hosted migrations and deployment are pending
-explicit approval after automatic approval review rejected the GitHub push.
-No hosted installation or real-model persona acceptance is claimed.
+**Technical release — 2026-10-09, [PR #233](https://github.com/EmelieHagander/Bob-the-builder/pull/233).**
+Bob's code-authored AI definitions and direct-model settings are replaced by
+versioned database definitions. The schema, seed and both Bob Edge endpoints
+are installed; [release evidence](#catalog-release-evidence--2026-10-09) below
+distinguishes actual runtime consumption from remaining persona/colleague
+acceptance.
 
 ### Canonical sources
 
@@ -76,7 +68,7 @@ key identifies a definition; its immutable active version is the runtime truth.
 
 | Database object | Responsibility |
 | --- | --- |
-| `shared.ai_prompts` | Stable `(app, prompt_key)` identity, definition kind and active-version pointer; existing content fields are compatibility projections. |
+| `shared.ai_prompts` | Stable `(app, prompt_key)` identity, definition kind and active-version pointer; first version permanently marks the head `catalog_managed`. Existing content fields are compatibility projections. |
 | `shared.ai_prompt_versions` | Immutable content, structured definition, metadata, declared variables and SHA-256 payload hash. |
 | `shared.ai_catalog_manifests` | Immutable app configuration snapshot, including exact definition versions and bound model capabilities/prices. No project facts, transcript, credentials or caller authority. |
 | `shared.ai_models` | Provider/model identity, prices, output capacity and capabilities, including provider adapter, supported reasoning efforts and function/schema support. |
@@ -145,8 +137,11 @@ default fallback. Explicit test fixtures are not a production fallback.
 The turn journal pins the manifest before model work. Worker continuation and
 retry reuse its exact versions, model, effort and prices, even if an operator
 activates a new catalog revision meanwhile. Current membership, tool policy,
-record freshness and `ai_settings.is_enabled` remain live checks. A saved
-configuration snapshot never preserves permission or disables the kill switch.
+record freshness, `ai_settings.is_enabled` and the bound model's current
+`ai_models.is_active` remain live checks. Retiring that exact model stops new
+dispatches even for an older manifest; activating a different tier binding does
+not rewrite it. A saved configuration snapshot never preserves permission or
+disables the kill switch.
 
 ```mermaid
 flowchart TD
@@ -192,13 +187,15 @@ versions. Source extraction is not a second active prompt catalog.
 To inspect a reconstructed baseline without changing a committed migration:
 
 ```bash
+node --import tsx scripts/build-ai-catalog-seed.ts --check
 node --import tsx scripts/build-ai-catalog-seed.ts --output /tmp/bob-ai-catalog-baseline.sql
 ```
 
-The builder accepts `--ref` for the pinned source and `--proposal` for the first
-persona import. Without the external proposal it reuses the approved personas
-and method from the committed seed payload. A regenerated historical baseline
-is for review; active catalog edits still require a new version and activation.
+The builder accepts `--ref` for the pinned source. Approved personas and method
+are bundled in `scripts/fixtures/bob-ai-personas-v1.json`, so a clean checkout
+reproduces the seed without an external proposal. `--proposal` is an explicit
+alternative import input. A regenerated historical baseline is for review;
+active catalog edits still require a new version and activation.
 
 This catalog changes definition ownership and names, preserving the existing
 domain workflow. `role.memory-agent` is an explicitly disabled proposal; the
@@ -208,6 +205,71 @@ existing commands and rules. The whole permitted toolbox and inline manuals
 remain the production baseline; deferred schema loading/JIT tool discovery is
 not introduced. [Tools](../Docs/ask-bob-tools.md) and
 [conversation state](../Docs/ask-bob-conversations.md) own those behaviors.
+
+### Catalog release evidence — 2026-10-09
+
+[PR #233](https://github.com/EmelieHagander/Bob-the-builder/pull/233) merged as
+`21aeeada860cc1d50692f7c27255dd28b200e816`, with reviewed tree
+`8525d7ff544254ab662c7e7abc0048896924585f`. All three PR workflows passed,
+including 1,063 tests, production build, normal-import Edge type checks and
+browser gates. Local vocabulary, reproducible-seed and focused
+catalog/metrics/tool checks also passed; independent agents reviewed SQL and
+runtime boundaries.
+
+| Installed item | Readback |
+| --- | --- |
+| Schema migration | Hosted ledger `20261009153433`, `ai_definition_catalog`; source `20261009144206_ai_definition_catalog.sql`. |
+| Seed migration | Hosted ledger `20261009153435`, `seed_bob_ai_catalog`; source `20261009150000_seed_bob_ai_catalog.sql`. |
+| Active catalog | 264 definitions, 77 tool contracts, 11 roles (10 enabled), 11 profiles and four tiers. |
+| `ask-bob` | Version 92, JWT verification enabled; bundle SHA-256 `47b5d9b80d708f1bd754f00fe38b55760773ff3e4b98963166d875318eeef218`. |
+| `bob-worker` | Version 60, JWT verification disabled with existing custom job authentication; bundle SHA-256 `72687b4cbe8a2163f67427662c41169df1d2d774ca297c3432327ffadb069322`. |
+
+Every returned deployed source file matched its uploaded content: 83 for
+`ask-bob`, 81 for `bob-worker`. Supabase omits type-only `provenance.ts` from both
+readbacks and `bob-request.ts` from the worker. Hosted ACL/RLS and service-only
+invoker RPC checks passed. The hosted transactional activation,
+manifest replay and restoration check passed with 264 definitions, 11 roles,
+11 profiles and four tiers; rollback preserved the original configuration.
+Four independent attempts to update/delete immutable versions and manifests
+were rejected. Advisors remained at seven security and four performance
+findings, with no new finding from this release.
+
+The [actual-model smoke run](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37952736442)
+passed project-scoped material retrieval (37), red-image pixel inspection,
+`timber.moisture` bundle `2026-09-30.1`, foreign-project denial (403) and retired
+endpoint rejection (410). Metrics recorded five successful API calls using
+`gpt-5.4`, standard tier, pinned manifest
+`a01b3555-4ac5-4640-8cae-89bbf44c0970` and exact catalog role/profile versions.
+These calls consumed the database catalog rather than the legacy runtime path.
+
+The separate [idea-advice run](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37955046605)
+passed on test-only main commit `6c5cd177f1296a3e17bdf97be0d28b0d38c667c7`,
+job `113903315051`. Turn `3a3ec6e9-c873-49c5-81b4-046225cb8a63` made exactly
+one successful `role.ask-bob` / `profile.ask-bob` call: `gpt-5.4`, high reasoning,
+standard tier and the same pinned manifest above. It returned no tools and
+called no colleague. The project and 16 scoped table fingerprints were
+unchanged, with zero write receipts.
+
+Bob's 209-word Swedish answer began with place and intended use, asked the
+owner to measure/inspect on site, explored backrest, maintenance and budget,
+labelled dimensions provisional and gave four concrete site inputs for the
+next step. This one observation supports role awareness and a useful next
+action; the answer was longer than the requested short advice. It is not a
+systematic persona evaluation. Both live probes use the shared guest, which has
+no writer; unchanged records do not prove restraint under named-member write
+authority. Named-member private history, writes and colleague acceptance remain
+separate from this completed technical release and initial Bob probe.
+
+Image storage objects and metadata were cleaned from both disposable fixtures.
+Project deletion remains blocked: three SQL cleanup requests returned connector
+`Invalid/expired requestState`, and neither project was deleted. The remaining
+projects are `p_6fc92672ce9942c4817a5871fa1bc08a` and
+`p_e9529c812a874d7e9a75900dfef12bbb`; each retains one guest membership, one task
+and one material, with no images, storage objects, private conversation history
+or active jobs. Their scoped
+cleanup, systematic persona/colleague acceptance and the separate mini-first,
+managed-memory and JIT-tool work remain in
+[State](../Docs/bob-delivery-flow.md#state).
 
 ## Project lookup contract — Slice 0
 
