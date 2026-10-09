@@ -1,3 +1,4 @@
+import { designIntent } from './design-intent-fixture.ts'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './project-schema.ts'
@@ -11,7 +12,7 @@ export async function cutPlanFixture(t: any) {
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[user,'cut-plan@test.example',other,'outsider@test.example'])
  const rpc=async(name:string,args:any[],uid:string|null=user,role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
  const project=(await rpc('bob.create_project',[JSON.stringify({name:'Cut plan isolated fixture'})])).id, solution=randomUUID()
- await rpc('bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Concept bracket',description:'Fixture',assumptions:'Product unknown',tradeoffs:'Synthetic',measurements:[]})])
+ await rpc('bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Concept bracket',description:'Fixture',assumptions:'Product unknown',tradeoffs:'Synthetic',measurements:[],design_intent:designIntent()})])
  await rpc('bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Fixture'})])
  const turn=randomUUID(),claim=await rpc('bob.bob_claim_turn',[project,user,turn,message],null,'service_role')
  const write=(p:any,uid=user)=>rpc('bob.bob_project_write_v15',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)],uid)

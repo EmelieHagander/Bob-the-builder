@@ -23,6 +23,7 @@ import { createRecordDetailReader } from '../supabase/functions/_shared/project-
 import { createProjectImageTools } from '../supabase/functions/_shared/project-image-tools.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
 import { parameterPlan } from '../tests/support/cad-parameter-fixture.ts'
+import { designIntent, designIntentPin } from '../tests/support/design-intent-fixture.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
 import { createExecutionMetrics, type ExecutionEvent } from '../supabase/functions/_shared/execution-metrics.ts'
 import { measureRuntimeInput, measureRuntimeOutput } from './support/runtime-audit-metrics.ts'
@@ -88,6 +89,7 @@ function fixture(phase: string | null, message = 'Skapa en uppgift för att mät
   const hasAccess = async () => true, deadline = Date.now() + 300000
   const base = { aiCatalog: bobCatalog, projectId: 'synthetic', userId: 'synthetic-user', hasAccess, deadline }
   const constructionTools = createConstructionTools({ projectId: 'synthetic', message, writer, hasAccess, now: () => new Date(stamp),
+    readDesignReadiness: async (targetRevision, purpose, areaId = null) => ({ status: 'ready', project_id: 'synthetic', area_id: areaId, target_revision: targetRevision, solution_id: id, solution_revision: 1, purpose, design_intent: designIntent(), issues: [], deferred_choice_ids: [], pin: designIntentPin('synthetic', id, 1, targetRevision, areaId) }),
     read: async (artifact, revision) => artifact === null ? { projectId: 'synthetic', status: 'ok', items: structuredClone(drafts.slice(-1)) }
       : artifact !== id || !drafts.length ? { projectId: 'synthetic', status: 'not_found' }
       : { ...structuredClone(drafts[(revision ?? drafts.length) - 1]), current_revision: drafts.length },

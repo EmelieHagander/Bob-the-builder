@@ -4,7 +4,7 @@ import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadP
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
 import {splitDimensionBindings,readPhysicalCadSources,bindPhysicalDimensions,physicalLineageSources,PhysicalCadSourceError} from './cad-physical-lineage.ts'
 import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
-import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, type DrawingBudgetGrant, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
+import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, intakeGaps, type DrawingBudgetGrant, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
@@ -23,6 +23,7 @@ import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
+import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -30,7 +31,7 @@ const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9
 const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
-  'Delegate a requested CAD drawing to the CAD assistant. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Images opened in this turn are reopened for the designer beside current project facts. Delegate drawing intake early; the collector can read facts and open relevant images. Return all missing inputs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. It has its own project, material, image and geometry tools and can inspect, render and repair repeatedly. Returns a checked candidate, not a saved drawing. Specify intent, coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
+  'Delegate a requested CAD drawing from the current selected Solution and its purpose-specific design intent. Resolve consequential choices through expert advice and supported selections before fixing construction geometry; reuse prior decisions and delegation. An exploratory form sketch may retain explicitly deferred choices within its stated scope. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Selected original images accompany the same pinned intent for designer and reviewer. Intake returns remaining needs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. Returns a checked candidate, not a saved drawing. Specify coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
   {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
@@ -55,7 +56,7 @@ const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused r
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null)=>Promise<any>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
@@ -147,8 +148,9 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     }
    }
   }
-  const handoff=parseDesignHandoff(raw.handoff)
-  if(!handoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
+  const incomingHandoff=parseDesignHandoff(raw.handoff)
+  if(!incomingHandoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
+  let handoff=incomingHandoff
   const dependencies=createDrawingDependencies(request?.payload.dependencies)
   const makeLookup=()=>{
    const source=opts.makeLookup()
@@ -168,9 +170,18 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   }
   let runtimeVersion:string|undefined
   let constructionDispatchGuard:(()=>Promise<void>)|undefined
+  let designReadiness:DesignReadiness|null=null
+  const requiredFeatureIds=new Set<string>()
+  const readReadiness=async(targetRevision:number,purpose:'construction'|null,areaId:string|null,fresh=false)=>{
+   try{return opts.readDesignReadiness?parseDesignReadiness(await opts.readDesignReadiness(targetRevision,purpose,areaId,fresh)):null}catch(error){
+    rethrowContinuation(error)
+    if(error instanceof Error&&error.message==='project_denied')throw error
+    throw new Error('design_readiness_unavailable')
+   }
+  }
   const model=async(original:OpenAIServiceOptions)=>{
    const o=runtimeVersion?{...original,messages:[...(original.messages??[]),{role:'user' as const,content:JSON.stringify({runtime_configuration_revision:runtimeVersion})}]}:original
-   const work=()=>opts.callModel(o,original.functionName==='cad-reviewer'?constructionDispatchGuard:undefined)
+   const work=()=>opts.callModel(o,constructionDispatchGuard)
    const response=await(request&&opts.requestModel?opts.requestModel(request.id,o,work):work())
    if(!response.success&&response.error==='turn_budget_exhausted')throw new BobBudgetError(response,
     original.functionName==='cad-reviewer'?'review':original.functionName==='cad-research'?'intake':'design')
@@ -220,9 +231,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    title:input.title,description:input.description,assumptions:input.assumptions,target_revision:input.target_revision,
    measurements:input.measurements,source_artifact_id:input.source_artifact_id??null,source_revision:input.source_revision??null,part_ids:input.part_ids??[],
    project_id:opts.projectId,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected,
-   handoff,reference_images:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),
+   handoff,design_intent:designReadiness?.pin,reference_images:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),
   })
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
+  let designImages:{image_id:string;source_version:string}[]=[]
   const researchEvidence:{tool:string;result:unknown}[]=[]
   let researchBytes=0,researchTruncated=false
   const constructionFailure=async(checked:any)=>{
@@ -239,13 +251,41 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    if(target.status==='empty'&&raw.area_id!==null)target=await lookup.search({dataset:'target',query:null,status:null,area_id:null,record_id:'project',after_id:null})
    if(target.status==='denied')throw new Error('project_denied')
    const targetReadable=['ok','empty'].includes(target.status)
-   if(!targetReadable&&opts.research===false)return {status:'unavailable',stage:'target',saved:false}
+   if(!targetReadable)return {status:'unavailable',stage:'target',saved:false}
    const selected=target.records[0]
    const hasTarget=!!selected?.solution_id&&Number.isSafeInteger(selected.revision)
    if(targetReadable&&!hasTarget)requiredTools=['save_project_solution','select_project_target']
-   if(opts.research===false&&!hasTarget)return {status:'prerequisite_required',stage:'target',saved:false,required_tools:requiredTools}
+   if(!hasTarget)return {status:'prerequisite_required',stage:'target',saved:false,required_tools:requiredTools}
+   const readiness=await readReadiness(Number(selected.revision),construction?'construction':null,raw.area_id)
+   if(!readiness||readiness.status!=='ready'||!readiness.pin||!readiness.design_intent){
+    partial=true
+    requiredTools=['save_project_solution','select_project_target']
+    if(request)await persist(readiness&&readiness.status!=='unavailable'?'needs_data':'retrieval_failed',{reviewed_candidate:undefined})
+    return {status:readiness?.status==='unavailable'||!readiness?'unavailable':'needs_data',stage:'design_readiness',saved:false,request_id:request?.id??null,reason:'design_intent_not_ready',readiness,
+     required_tools:requiredTools}
+   }
+   if(readiness.pin.project_id!==opts.projectId||readiness.area_id!==raw.area_id||readiness.pin.target_revision!==selected.revision||readiness.pin.solution_id!==selected.solution_id
+     ||construction&&readiness.pin.purpose!=='construction'
+     ||selected.solution_revision!=null&&readiness.pin.solution_revision!==selected.solution_revision)
+    return {status:'needs_data',stage:'design_readiness',saved:false,reason:'design_intent_changed'}
+   if(new Set([...handoff.requirements.map(r=>r.id),...readiness.design_intent.features.map(f=>'intent_'+f.id)]).size>24)
+    return {status:'needs_data',stage:'design_readiness',saved:false,reason:'design_requirement_limit',maximum:24}
+   designReadiness=readiness
+   try{handoff=designIntentHandoff(handoff,readiness.design_intent,readiness.pin)}catch(error){
+    if(error instanceof Error&&['design_intent_requirement_limit','design_intent_unresolved_limit'].includes(error.message))return {status:'needs_data',stage:'design_readiness',saved:false,reason:error.message}
+    throw error
+   }
+   readiness.design_intent.features.forEach(f=>requiredFeatureIds.add('intent_'+f.id))
+   const refreshDesignReadiness=async(fresh=false)=>{
+    if(!await checkAuthority()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
+    const current=await readReadiness(Number(selected.revision),construction?'construction':null,raw.area_id,fresh)
+    if(!current||current.status==='unavailable')throw new Error('design_readiness_unavailable')
+    if(current.status!=='ready'||!current.pin||current.area_id!==raw.area_id||JSON.stringify(stableJsonValue(current.pin))!==JSON.stringify(stableJsonValue(readiness.pin)))throw new Error('design_readiness_changed')
+   }
+   constructionDispatchGuard=()=>refreshDesignReadiness(true)
+   payload.reference_refs=[...new Set([...payload.reference_refs,...readiness.design_intent.references.map(r=>'image:'+r.image_id)])]
    used++;metrics.consultations++
-   messages.push({role:'user',content:JSON.stringify({current_target:selected??null,quick_check:{target:hasTarget,requirements:handoff.requirements.length>0},quick_check_is_only_structural:true,current_target_is_design_intent:true,current_target_is_physical_verification:false})})
+   messages.push({role:'user',content:JSON.stringify({current_target:selected??null,design_readiness:readiness,handoff,quick_check:{target:hasTarget,requirements:handoff.requirements.length>0},quick_check_is_only_structural:true,current_target_is_design_intent:true,current_target_is_physical_verification:false})})
    if(!request?.payload.retry)await persist('collecting')
    if(!opts.available){await persist('retrieval_failed');return {status:'unavailable',stage:'cad_engine',saved:false,request_id:request?.id??null,reason:'CAD service is not configured. This is an infrastructure issue, not a missing user approval.'}}
    const referenceRefs=payload.reference_refs
@@ -256,13 +296,24 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     const opened=await opts.context.execute('open_project_item',{refs})
     for(const ref of refs)if(!('items' in opened)||!opened.items?.some(item=>item.ref===ref&&item.status==='prepared'))imageFailures.push(ref)
    }
+   designImages=readiness.design_intent.references.flatMap(r=>{
+    const version=opts.context?.imageEvidence?.().get('image:'+r.image_id)
+    if(!version){imageFailures.push('image:'+r.image_id);return []}
+    return [{image_id:r.image_id,source_version:version}]
+   })
+   if(imageFailures.length){
+    partial=true
+    await persist('retrieval_failed',{reviewed_candidate:undefined,incomplete:[...new Set(imageFailures)].map(ref=>'image:'+ref.replace(/^image:/,''))})
+    return {status:'unavailable',stage:'reference_images',saved:false,request_id:request?.id??null,reason:'design_reference_unavailable',reference_refs:[...new Set(imageFailures)]}
+   }
+   if(construction||opts.research===false)referencePixels.push(...opts.context?.carrier()??[])
    if(opts.research!==false&&!construction){
     runtimeVersion=await opts.runtimeVersion?.()
     const facts=await collectIntakeFacts(lookup)
-    const initialEvidence=[{tool:'current_target',result:target},...facts.evidence]
+    const initialEvidence=[{tool:'current_target',result:target},{tool:'design_readiness',result:{ref:readiness.pin.solution_id,...readiness}},...facts.evidence]
     const imageCatalog=await opts.context?.catalog()??null
     await dependencies.refresh(executeRead)
-    retryInputs={evidence:{initialEvidence,artifact_revision:expected},images:{refs:[...referenceRefs].sort(),versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),failures:imageFailures,catalog:imageCatalog}}
+    retryInputs={evidence:{initialEvidence,design_intent:readiness.pin,artifact_revision:expected},images:{refs:[...referenceRefs].sort(),versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),failures:imageFailures,catalog:imageCatalog}}
     const inputFingerprint=await retryFingerprint()
     if(request?.payload.retry?.fingerprint===inputFingerprint){
      partial=true
@@ -286,12 +337,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
      execute:executeRead})
     metrics.research_calls+=collected.calls;researchEvidence.push(...collected.evidence)
     researchBytes=collected.bytes;researchTruncated=collected.truncated
-    const incomplete=[...facts.incomplete,...(!targetReadable?['target']:[]),...imageFailures.map(ref=>'image:'+ref),...(collected.truncated?['assessment']:[])]
-    const checks=collected.assessment?[...collected.assessment.checks,...collected.assessment.additional_needs]:[]
-    const gaps=checks.filter(c=>c.blocking)
-    if(targetReadable&&!hasTarget)gaps.push({id:'selected_target',status:'missing',blocking:true,source_refs:[],action:'bob_decision',detail:'Read/reuse or save a justified solution and select it. Respect an explicitly cleared target; resolve the design choice within the owner request.'})
+    const incomplete=[...facts.incomplete,...(collected.truncated?['assessment']:[])]
+    const gaps=intakeGaps(collected.assessment,new Set(readiness.deferred_choice_ids))
+    const gapById=new Map(gaps.map(c=>[c.id,c]))
+    const assessment=collected.assessment?{checks:collected.assessment.checks.map(c=>gapById.get(c.id)??c),additional_needs:collected.assessment.additional_needs.map(c=>gapById.get(c.id)??c)}:null
+    const checks=assessment?[...assessment.checks,...assessment.additional_needs]:[]
     payload.reference_refs=[...new Set([...referenceRefs,...opts.context?.openedImageRefs()??[]])]
-    await persist(incomplete.length?'retrieval_failed':gaps.length?'needs_data':'ready_to_design',{assessment:collected.assessment,incomplete,evidence:collected.evidence})
+    await persist(incomplete.length?'retrieval_failed':gaps.length?'needs_data':'ready_to_design',{assessment,incomplete,evidence:collected.evidence})
     if(incomplete.length||gaps.length){
      partial=true
      const outcome={status:incomplete.length?'unavailable':'needs_data',stage:'intake',saved:false,checks,gaps,incomplete,required_tools:requiredTools,
@@ -300,10 +352,9 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       await persist(incomplete.length?'retrieval_failed':'needs_data',{dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})
      return {...outcome,request_id:request?.id??null}
     }
-    messages=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:ownerRequest,brief:raw,current_target:selected,source_evidence:collected.evidence,intake:collected.assessment,previous_draft:request?.payload.draft??null,source_records_are_exact:true,previous_draft_verified:false})},...referencePixels]
+    messages=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:ownerRequest,brief:raw,handoff,design_readiness:readiness,current_target:selected,source_evidence:collected.evidence,intake:assessment,previous_draft:request?.payload.draft??null,source_records_are_exact:true,previous_draft_verified:false})},...referencePixels]
     }
-   }else if(!hasTarget)return {status:'prerequisite_required',stage:'target',saved:false,required_tools:requiredTools}
-   else if(imageFailures.length)return {status:'unavailable',stage:'reference_images',saved:false}
+   }
    // Specialists need the same current-fact grounding as Bob when viewing pixels.
    // A visual reference supplies design intent, never updated measured dimensions.
    if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable')
@@ -320,10 +371,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    }
    // Recorded gates rebuild earlier replies. A missing render/model checkpoint
    // must still verify current sources inside its actual dispatch operation.
-   constructionDispatchGuard=construction?async()=>{
-    const current=await refreshConstruction(true)
-    if(current?.status!=='ready')throw new Error(current?.status==='unavailable'?'checked_construction_unavailable':'checked_construction_changed')
-   }:undefined
+   constructionDispatchGuard=async()=>{
+    await refreshDesignReadiness(true)
+    if(construction){
+     const current=await refreshConstruction(true)
+     if(current?.status!=='ready')throw new Error(current?.status==='unavailable'?'checked_construction_unavailable':'checked_construction_changed')
+    }
+   }
    const reviewCurrentCandidate=async():Promise<Record<string,any>>=>{
      if(!candidate)throw new Error('missing_candidate')
      if(construction){const fresh=await refreshConstruction();if(fresh?.status!=='ready'){candidate=null;acceptedReview=null;return constructionFailure(fresh)}}
@@ -391,7 +445,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:'bob_cad_review',
       messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
-       source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
+       design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.candidate-view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
       // Omit tools: even an empty array suppresses text.format in the shared adapter.
       // The governed setting includes reasoning tokens as well as the verdict.
@@ -405,7 +459,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
        user_message:'Granskaren förbrukade sin svarsbudget utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
      }
-     const review=checked.success?parseCadReview(checked.data,handoff):null
+     const review=checked.success?parseCadReview(checked.data,handoff,requiredFeatureIds):null
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
      reviewPending=false
      if(missingViews.length){review.verdict='revise';review.issues.push({severity:'error',code:'views',correction:'Render missing requested views: '+missingViews.join(', ')})}
@@ -427,7 +481,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     if(ready?.status!=='ready')return constructionFailure(ready)
     runtimeVersion=await opts.runtimeVersion?.()
     await dependencies.refresh(executeRead)
-    retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
+    retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,design_intent:readiness.pin,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
     const currentFingerprint=await retryFingerprint()
     if(request?.payload.retry?.fingerprint===currentFingerprint)return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
      next_action:catalogText("feedback.cad-assistant.next-action.d7dc5f3db6a2")}
@@ -449,7 +503,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     let packet:CadPacket
     try{packet=await opts.render(recipe,{artifact_id:construction.artifact_id,revision:construction.revision},constructionDispatchGuard)}catch(error){
      rethrowContinuation(error)
-     if(error instanceof Error&&['project_denied','checked_construction_unavailable','checked_construction_changed'].includes(error.message))throw error
+     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','checked_construction_unavailable','checked_construction_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
      return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
     }
     if(packet.manifest.annotations?.coverage!=='complete'||packet.manifest.annotations?.version!==1)
@@ -458,7 +512,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     if(!bounds||!expectedBounds||['min','max','size'].some(key=>!Array.isArray(bounds[key])||bounds[key].length!==3||bounds[key].some((v:number,i:number)=>!Number.isFinite(v)||Math.abs(v-expectedBounds[key][i])>0.001))
      ||collisions?.status!=='complete'||!Array.isArray(collisions.overlaps)||collisions.overlaps.length)
      return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'construction_geometry_disagrees',next_action:catalogText("feedback.cad-assistant.next-action.482e8923bc81")}
-    packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin}}
+    packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
     candidate={...metadata,packet};reviewPending=true
     const checked=await reviewCurrentCandidate()
     if(checked.status==='revise'){
@@ -475,12 +529,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     candidateInputFingerprint=await renderInputFingerprint({...d,recipe:parsed})
     renders++;metrics.renders++
     let packet:CadPacket
-    try{packet=await opts.render(parsed)}catch(error){
+    try{packet=await opts.render(parsed,undefined,constructionDispatchGuard)}catch(error){
      rethrowContinuation(error);partial=true
+     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
      return {status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
     }
     const {bob_parameters:_untrusted,...manifest}=packet.manifest
-    packet={...packet,manifest:{...manifest,bob_lineage:d.lineage,...(d.parameters?{bob_parameters:d.parameters}:{})}}
+    packet={...packet,manifest:{...manifest,bob_lineage:d.lineage,...(d.parameters?{bob_parameters:d.parameters}:{}),bob_design_intent:readiness.pin,bob_design_images:designImages}}
     candidate={packet,title:d.title,description:d.description,assumptions:d.assumptions,target_revision:d.target_revision,measurements:d.measurements,source_artifact_id:d.source_artifact_id,source_revision:d.source_revision,part_ids:d.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
     reviewPending=true
     const checked=await reviewCurrentCandidate()
@@ -629,19 +684,20 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
        renders++;metrics.renders++
        await persist('draft',{draft:{source_fingerprint:await sourceFingerprint(),recipe:parsed,lineage,parameters,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements,target_revision:args.target_revision,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids}})
        let packet:CadPacket
-       try{packet=await opts.render(parsed)}catch(error){
+       try{packet=await opts.render(parsed,undefined,constructionDispatchGuard)}catch(error){
         rethrowContinuation(error);partial=true
+        if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
         return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed',summary:'The CAD service failed. Stop this design attempt; changing the construction is not a renderer repair.'}
        }
        const {bob_parameters:_untrustedParameters,...renderManifest}=packet.manifest
-       packet={...packet,manifest:{...renderManifest,bob_lineage:lineage,...(parameters?{bob_parameters:parameters}:{})}}
+       packet={...packet,manifest:{...renderManifest,bob_lineage:lineage,...(parameters?{bob_parameters:parameters}:{}),bob_design_intent:readiness.pin,bob_design_images:designImages}}
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}
 
        reviewPending=true
        out={status:'rendered',saved:false,...(dropped?.length?{dropped_nodes:dropped}:{}),applied_dimension_bindings:args.dimension_bindings??[],exact_recipe:parsed,bounds:packet.manifest.bounding_box_mm,parts:packet.manifest.instances,checks:packet.manifest.checks??{status:'not_available'},views:parsed.views,previews_available:!!packet.previews,recipe_id:parsed.assembly_id,note:catalogText('cad.render-review-note')}
       }
      }catch(error){
-      rethrowContinuation(error);if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message))throw error
+      rethrowContinuation(error);if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
       if(error instanceof CadParameterSourceError){
        candidate=null;acceptedReview=null;partial=true
        terminalFailure={status:error.technical?'unavailable':'needs_data',stage:'parameters',reason:error.message,saved:false,request_id:request?.id??null,next_action:catalogText("feedback.cad-assistant.next-action.86f74a49e075")}
@@ -684,6 +740,11 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   }catch(error){
    rethrowContinuation(error);candidate=null;acceptedReview=null;partial=true
    if(error instanceof Error&&error.message==='project_denied')throw error
+   if(error instanceof Error&&['design_readiness_unavailable','design_readiness_changed'].includes(error.message)){
+    const outcome={status:error.message==='design_readiness_unavailable'?'unavailable':'needs_data',stage:'design_readiness',saved:false,reason:error.message,request_id:request?.id??null}
+    if(request)await persist(outcome.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
+    return outcome
+   }
    if(error instanceof Error&&['checked_construction_unavailable','checked_construction_changed'].includes(error.message))return constructionFailure({status:error.message==='checked_construction_unavailable'?'unavailable':'conflict'})
    if(error instanceof Error&&['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed'].includes(error.message)){
     candidate=null;acceptedReview=null;partial=true

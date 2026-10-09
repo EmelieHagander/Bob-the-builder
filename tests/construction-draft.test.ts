@@ -11,6 +11,7 @@ import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
+import {designIntent} from './support/design-intent-fixture.ts'
 
 export function shelf(){
  const placement=(x:number,z:number)=>({x,y:0,z,rx:0,ry:0,rz:0})
@@ -45,7 +46,7 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
  const project=(await call(owner,'bob.create_project',[JSON.stringify({name:'K1 fixture'})])).id
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values($1,$2,'Member','M',$3)",[randomUUID(),project,member])
  const solution=randomUUID()
- await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Construction',description:'Synthetic concept',assumptions:'Checks open',tradeoffs:'Simple',measurements:[]})])
+ await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Construction',description:'Synthetic concept',assumptions:'Checks open',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await call(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Synthetic target'})])
  let turn=randomUUID(),claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
  const save=(p:any)=>call(owner,'bob.bob_project_write_v14',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
@@ -79,7 +80,9 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   assert.equal(writer.hasUnresolvedWrites,false)
   assert.equal((await pg.query('select count(*) n from bob.catalog_items where project_id=$1',[project])).rows[0].n,1)
  })
- const tools=createConstructionTools({projectId:project,message,writer,hasAccess:async()=>true,read:(id,revision)=>read(id,revision),readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]),readSources:async()=>({project:new Map(),physical:new Map()})})
+ const tools=createConstructionTools({projectId:project,message,writer,hasAccess:async()=>true,read:(id,revision)=>read(id,revision),
+  readDesignReadiness:(targetRevision,purpose,areaId)=>call(owner,'bob.read_design_readiness',[project,areaId??null,targetRevision,purpose]),
+  readCatalog:(id,revision)=>call(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]),readSources:async()=>({project:new Map(),physical:new Map()})})
  const session=createBobToolSession({message,writer,constructionTools:tools,lookup:createProjectLookup(project,async()=>({data:[],error:null}),async()=>({data:[],error:null})),readPolicy:seedToolPolicy})
  // Real handler registration and seed policy; no renderer/model call required.
  assert(tools.tools.some(x=>x.function.name==='save_construction_draft'))

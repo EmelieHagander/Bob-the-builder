@@ -12,6 +12,7 @@ declare
  image_id uuid:=gen_random_uuid(); media jsonb; image_version text;
  physical_measure uuid:=gen_random_uuid(); project_measure uuid:=gen_random_uuid(); solution uuid:=gen_random_uuid();
  turn_id uuid:=gen_random_uuid(); donor text; project text; claim jsonb; snapshot jsonb;
+ intent jsonb; solution_data jsonb;
  recipe jsonb; parameters jsonb; lineage jsonb; payload jsonb; detail jsonb; saved jsonb; child jsonb; readback jsonb;
  request_text text:='P1 release smoke: save synthetic source-bound CAD'; source_state text;
 begin
@@ -30,7 +31,13 @@ begin
  perform bob.physical_scope_command(project,'project','link',scope,jsonb_build_object('target_kind','space','building_id',building,'space_id',space));
  snapshot:=bob.search_bob_project_data_v8(project,'physical_space_measurements',null,null,null,null,null)->'records'->0;
  if snapshot is null then raise exception 'smoke_snapshot_missing'; end if;
- perform bob.solution_command(project,'create',solution,0,'{"area_id":null,"title":"Synthetic panel","description":"Fixture","assumptions":"No physical claim","tradeoffs":"Fixture","measurements":[]}'::jsonb);
+ solution_data:='{"area_id":null,"title":"Synthetic panel","description":"Fixture","assumptions":"No physical claim","tradeoffs":"Fixture","measurements":[]}'::jsonb;
+ -- This fixture also seeds genuine pre-readiness history during migration tests.
+ -- Current schemas explicitly align the construction; historical schemas keep it unknown.
+ if to_regprocedure('bob.read_design_readiness(text,text,integer,text)') is not null then
+  intent:='{"version":1,"purpose":"construction","summary":"Synthetic panel with an agreed simple support arrangement. Geometry verification only.","references":[],"features":[],"choices":[{"id":"support","question":"How are the fixture parts supported?","alternatives":["Simple fixture joint","Separate support"],"recommendation":"Use the simple fixture joint for this isolated geometry test.","basis":"Explicit synthetic test scope, with no structural certification.","consequences":"Fixes the geometry while physical connection performance remains unverified.","geometry_dependency":true,"status":"resolved","selected_direction":"Simple fixture joint","decision_authority":"bob","decision_basis":"Ordinary geometry choice delegated by this synthetic test.","deferral":null}],"alignment":{"status":"aligned","basis":"The fixture explicitly selects this construction direction; this is not fabrication approval."}}'::jsonb;solution_data:=solution_data||jsonb_build_object('design_intent',intent);
+ end if;
+ perform bob.solution_command(project,'create',solution,0,solution_data);
  perform bob.solution_command(project,'select',solution,0,'{"solution_revision":1,"reason":"Release fixture"}'::jsonb);
  recipe:='{"contract_version":1,"units":"mm","assembly_id":"p1-release","definitions":[{"id":"panel","primitive":"box","material_ref":null,"x_mm":960,"y_mm":300,"z_mm":18}],"instances":[{"id":"panel","definition_id":"panel","placement":{"x":0,"y":0,"z":0,"rx":0,"ry":0,"rz":0}}],"views":["front"]}'::jsonb;
  lineage:=jsonb_build_object('version',2,'coverage','partial','project_id',project,'coordinates',null,'inherited_from',null,'bindings',jsonb_build_array(
@@ -60,9 +67,12 @@ begin
   'title','Synthetic source-bound panel','description','Release fixture','assumptions','No physical claim','target_revision',1,'measurements',jsonb_build_array(jsonb_build_object('id',project_measure,'revision',1)),
   'source_artifact_id',null,'source_revision',null,'part_ids','[]'::jsonb,'area_id',null,'component_id',null,'step_id',null,'artifact_id',null,'expected_revision',0,
   'packet',jsonb_build_object('recipe',recipe,'manifest',jsonb_build_object('engine',jsonb_build_object('name','build123d'),'assembly_id','p1-release','bob_lineage',lineage,'bob_parameters',parameters),'files',jsonb_build_object('front','PHN2Zz48L3N2Zz4=','step','SYNTHETIC_RELEASE_EXPORT'))));
+ if intent is not null then
+  payload:=jsonb_set(payload,'{data,packet,manifest}',payload#>'{data,packet,manifest}'||jsonb_build_object('bob_design_intent',jsonb_build_object('version',1,'project_id',project,'area_id',null,'target_revision',1,'solution_id',solution,'solution_revision',1,'purpose','construction'),'bob_design_images','[]'::jsonb));
+ end if;
  reset role;
  insert into public.cad_race_fixture values(jsonb_build_object(
-  'image',image_id,'actor',actor,'project',project,'donor',donor,'building',building,'space',space,'scope',scope,
+  'solution',solution,'image',image_id,'actor',actor,'project',project,'donor',donor,'building',building,'space',space,'scope',scope,
   'physical_measure',physical_measure,'project_measure',project_measure,'turn_id',turn_id,'claim',claim,'payload',payload));
 end $$;
 commit;

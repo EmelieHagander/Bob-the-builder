@@ -5,7 +5,7 @@ import type { AiCatalogSession } from './ai-catalog.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 
 type Evidence = { tool: string; result: unknown }
-export const CAD_RESEARCH_CONTRACT = '2026-10-02-input-readiness-before-delivery'
+export const CAD_RESEARCH_CONTRACT = '2026-10-09-solution-advice-and-purpose-readiness'
 const FINISH_NAME='finish_cad_research'
 
 /** Read-only selection, in a separate provider conversation. The constructor gets

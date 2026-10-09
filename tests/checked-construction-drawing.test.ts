@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -143,7 +144,7 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  const rpc=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'k3-owner@example.test',outsider,'k3-other@example.test'])
  const project=(await rpc(owner,'bob.create_project',[JSON.stringify({name:'K3 fixture'})])).id,solution=randomUUID()
- await rpc(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Bracket',description:'Synthetic',assumptions:'Unknown strength',tradeoffs:'Simple',measurements:[]})])
+ await rpc(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Bracket',description:'Synthetic',assumptions:'Unknown strength',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await rpc(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Synthetic target'})])
  const claim=await rpc(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
  const write=(p:any)=>rpc(owner,'bob.bob_project_write_v14',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
@@ -152,7 +153,7 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  const source={kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'checkpoint',title:draft.title,description:draft.description,area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameters:draft.parameters,materials:draft.materials,joints:draft.joints,open_questions:draft.open_questions}}
  const checkpoint=await write(source);draft.artifact_id=checkpoint.recordId
  const checked=checkConstruction(draft,new Map([[mat.recordId+'@1',{...catalog.get(material+'@1'),id:mat.recordId}]]),'2026-10-04');assert.equal(checked.concept_ready,true)
- const manifest:any={assembly_id:draft.recipe.assembly_id,engine:{name:'build123d'},bob_parameters:draft.parameters,bob_lineage:buildCadLineage(project,draft.recipe,[],new Map(),handoff.coordinates),annotations:{version:1,coverage:'complete'},drawing_source:{artifact_id:checkpoint.recordId,revision:1},bob_construction:{version:1,project_id:project,artifact_id:checkpoint.recordId,revision:1,check:checked}}
+ const manifest:any={...designManifest(project,solution),assembly_id:draft.recipe.assembly_id,engine:{name:'build123d'},bob_parameters:draft.parameters,bob_lineage:buildCadLineage(project,draft.recipe,[],new Map(),handoff.coordinates),annotations:{version:1,coverage:'complete'},drawing_source:{artifact_id:checkpoint.recordId,revision:1},bob_construction:{version:1,project_id:project,artifact_id:checkpoint.recordId,revision:1,check:checked}}
  const drawing:any={kind:'cad',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{title:'Bracket drawing',description:'Synthetic concept',assumptions:'Not fabrication ready',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe:draft.recipe,manifest,files:{front:'PHN2Zy8+'}}}}
  for(const change of [(p:any)=>p.data.packet.recipe.instances[1].placement.x=19,(p:any)=>p.data.packet.manifest.bob_construction.check.concept_ready=false,(p:any)=>p.data.packet.manifest.bob_construction.revision=2,(p:any)=>delete p.data.packet.manifest.annotations]){
   const bad=structuredClone(drawing);change(bad);await assert.rejects(write(bad),/drawing_must_reuse_construction|invalid_construction_check|construction_source_changed|construction_annotations_required/)

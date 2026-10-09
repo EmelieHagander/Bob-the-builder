@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
@@ -233,11 +234,11 @@ test('expert tools archive with history, assign only project people, and preserv
 })
 test('CAD stores an exact Artifact revision; duplicate retries reuse it and cross-project sources fail',async()=>{
  const c=await claim()
- const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'CAD design',description:'Generic assembly',assumptions:'Concept',tradeoffs:'Simple',measurements:[],area_id:null}})
+ const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'CAD design',description:'Generic assembly',assumptions:'Concept',tradeoffs:'Simple',measurements:[],area_id:null,design_intent:designIntent()}})
  const targetBefore:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
  const target=await expertWrite(c,{kind:'target',record_id:sol.recordId,expected_updated_at:null,expected_revision:targetBefore?.current_revision??0,request_quote:'Spara',data:{solution_revision:sol.revision,reason:'Delegated design'}})
  const recipe={contract_version:1,units:'mm',assembly_id:'shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:400,z_mm:18}],instances:[{id:'top',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
- const data={title:'Shelf',description:'Generic CAD',assumptions:'Concept only',target_revision:target.revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{bob_parameters:parameterPacket('A',recipe as any),engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'Zml4dHVyZQ=='}}}
+ const data={title:'Shelf',description:'Generic CAD',assumptions:'Concept only',target_revision:target.revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{...designManifest('A',sol.recordId,sol.revision,target.revision),bob_parameters:parameterPacket('A',recipe as any),engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'Zml4dHVyZQ=='}}}
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data}
  const drawing=await expertWrite(c,payload);assert.equal(drawing.dataset,'artifacts');assert.equal(drawing.revision,1);assert.deepEqual(await expertWrite(c,payload),drawing)
  const read:any=(await as(one,'select bob.read_cad_artifact($1,$2,null) value',['A',drawing.recordId])).rows[0].value
@@ -314,7 +315,7 @@ test('Bob build days retain exact task schedules across revisions and never inve
 
 test('Bob stock → requirement → Shopping uses canonical arithmetic and blocks stale allocations',async()=>{
  const c=await claim()
- const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'Material flow',description:'Fixture',assumptions:'Concept',tradeoffs:'Fixture',measurements:[],area_id:null}})
+ const sol=await expertWrite(c,{kind:'solution',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data:{title:'Material flow',description:'Fixture',assumptions:'Concept',tradeoffs:'Fixture',measurements:[],area_id:null,design_intent:designIntent()}})
  const before:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
  const target=await expertWrite(c,{kind:'target',record_id:sol.recordId,expected_updated_at:null,expected_revision:before.current_revision,request_quote:'Spara',data:{solution_revision:sol.revision,reason:'Fixture'}})
  const fields={name:'Boards',specification:'Fixture stock',quantity:'4',unit:'pcs',status:'available',area_id:null,notes:'User reported',change_note:'Fixture'}
@@ -335,8 +336,9 @@ test('Bob stock → requirement → Shopping uses canonical arithmetic and block
 test('CAD recipe → counted blanks → versioned requirement → stock → Shopping rejects stale or invented quantities',async()=>{
  const c=await claim()
  const target:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
+ const chosen:any=(await pg.query("select solution_id,solution_revision from bob.current_target where project_id='A' and area_id is null")).rows[0]
  const recipe={contract_version:1,units:'mm',assembly_id:'cut.test',definitions:[{id:'panel',primitive:'box',material_ref:'plywood',x_mm:800,y_mm:400,z_mm:18}],instances:['left','right'].map((id,i)=>({id,definition_id:'panel',placement:{x:i*900,y:0,z:0,rx:0,ry:0,rz:0}})),views:['front']}
- const data={title:'Cut list fixture',description:'Two identical panels',assumptions:'Concept',target_revision:target.current_revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{bob_parameters:parameterPacket('A',recipe as any),engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='}}}
+ const data={title:'Cut list fixture',description:'Two identical panels',assumptions:'Concept',target_revision:target.current_revision,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:{...designManifest('A',chosen.solution_id,chosen.solution_revision,target.current_revision),bob_parameters:parameterPacket('A',recipe as any),engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='}}}
  const drawing=await expertWrite(c,{kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data})
  const stock=await operationalWrite(c,operational('stock','create',{name:'Confirmed panel',specification:'800 × 400 × 18 plywood; fits blank',quantity:'1',unit:'pcs',status:'available',area_id:null,notes:'Fixture confirmation',change_note:'Fixture'}))
  const fields={name:'Cut panels',category:'Sheet',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Stock blank dimensions and specification confirmed',artifact_id:drawing.recordId,artifact_revision:1,target_revision:target.current_revision,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[{id:stock.recordId,revision:1,quantity:'1'}],component_allocations:[]}

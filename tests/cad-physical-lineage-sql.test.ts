@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
@@ -28,14 +29,14 @@ test('P1b: physical source persists across projects with exact scope, revision a
  assert.equal(lookup.records.length,1,'a project scoped to one room must not read its neighbour')
  assert.equal((await asProjectUser(pg,reader,'select * from bob.current_measurements where project_id=$1',[donor])).rows.length,0,'donor project is private')
  const solution=randomUUID()
- await call(reader,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Panel concept',description:'Design',assumptions:'Not structural approval',tradeoffs:'Simple',measurements:[]})])
+ await call(reader,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Panel concept',description:'Design',assumptions:'Not structural approval',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await call(reader,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Use concept'})])
  const recipe={contract_version:1,units:'mm',assembly_id:'physical-panel',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:300,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
  const lineage=buildCadLineage(project,recipe,[],new Map(),handoff.coordinates)
  bindPhysicalDimensions(recipe,[{definition_id:'panel',dimension:'x_mm',space_measurement_id:snapshot.id,space_revision:1}],new Map([[snapshot.id,snapshot]]),lineage)
  const message='Save the room-bound drawing.',turn=randomUUID(),claim=await call(null,'bob.bob_claim_turn',[project,reader,turn,message],'service_role')
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{title:'Room-bound panel',description:'Design',assumptions:'No structural certification',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'physical-panel',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'}}}}
+  packet:{recipe,manifest:{...designManifest(project,solution),bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'physical-panel',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_EXPORT'}}}}
  const save=(p:any)=>call(reader,'bob.bob_project_write_v11',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const read=(id:string,rev:number|null=null)=>call(reader,'bob.read_cad_artifact',[project,id,rev])
  const status=async(id:string)=>(await asProjectUser(pg,reader,'select source_state,source_reasons from bob.artifact_source_status where artifact_id=$1 and revision=1',[id])).rows[0]

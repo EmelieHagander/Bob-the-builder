@@ -1,6 +1,7 @@
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
 import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
+import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
@@ -263,7 +264,20 @@ export async function answerWithOpenAi(opts: {
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
     hasAccess, lookup.sources)
+  const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
+    const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
+    // Replaying a recorded gate reconstructs an earlier completed operation.
+    // Fresh dispatch guards use the caller directly, before new provider work.
+    const {data,error}=await(fresh
+      ?client.rpc('read_design_readiness',args).abortSignal(AbortSignal.timeout(12000))
+      :rpc('read_design_readiness',args,AbortSignal.timeout(12000)))
+    if(error)throw new Error('design_readiness_unavailable')
+    const result=parseDesignReadiness(data)
+    if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
+    return result
+  }
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    readDesignReadiness,
     // Earlier RPC results reconstruct a resumed turn. A current-source gate
     // must bypass that journal before it calls a list/check result current.
     readCurrent:async(id:string)=>{
@@ -337,6 +351,7 @@ export async function answerWithOpenAi(opts: {
       },
     })}:{}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
+    readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,

@@ -2,6 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {designIntent,designIntentPin} from './support/design-intent-fixture.ts'
 
 const project='p_fixture', artifact='11111111-1111-4111-8111-111111111111', material='22222222-2222-4222-8222-222222222222'
 const placement=(x=0,y=0,z=0,rx=0,ry=0,rz=0)=>({x,y,z,rx,ry,rz})
@@ -22,6 +23,7 @@ test('construction save identifies missing binding paths so the same request can
  const dotted=structuredClone(plan);dotted.bindings.forEach(b=>b.path=b.path.replaceAll('/','.'))
  let writes=0,sourceFailed=false,persisted:any
  const tools=createConstructionTools({projectId:project,message,hasAccess:async()=>true,read:async()=>null,
+  readDesignReadiness:async()=>({status:'ready',project_id:project,area_id:null,target_revision:1,solution_id:artifact,solution_revision:1,purpose:'construction',design_intent:designIntent(),issues:[],deferred_choice_ids:[],pin:designIntentPin(project,artifact)}),
   readSources:async()=>{if(sourceFailed)throw Error('private network diagnostic');return {project:new Map(),physical:new Map()}},
   writer:{commit:async payload=>{writes++;persisted=payload;return {status:'saved'}}} as any})
  const input={key:'initial',record_id:null,expected_revision:0,title:'Shelf',description:'Synthetic concept',area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameter_plan:dotted,materials:draft.materials,joints:draft.joints,open_questions:[],request_quote:message}
@@ -109,13 +111,14 @@ test('caller SQL checkpoint and exact normalized catalog feed a successful real 
  const rpc=async(name:string,args:unknown[],service=false):Promise<any>=>(await asProjectUser(pg,service?null:owner,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,service?'service_role':'authenticated')).rows[0].result
  await pg.query('insert into auth.users values($1,$2,now())',[owner,'k2-owner@example.test'])
  const projectId=(await rpc('bob.create_project',[JSON.stringify({name:'K2 fixture'})])).id
- await rpc('bob.solution_command',[projectId,'create',solution,0,JSON.stringify({area_id:null,title:'Synthetic concept',description:'No physical safety approval',assumptions:'Product checks open',tradeoffs:'Simple',measurements:[]})])
+ await rpc('bob.solution_command',[projectId,'create',solution,0,JSON.stringify({area_id:null,title:'Synthetic concept',description:'No physical safety approval',assumptions:'Product checks open',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await rpc('bob.solution_command',[projectId,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Synthetic test target'})])
  const claim=await rpc('bob.bob_claim_turn',[projectId,owner,turn,message],true)
  const write=(payload:any)=>rpc('bob.bob_project_write_v14',[projectId,claim.thread_id,turn,claim.generation,JSON.stringify(payload)])
  const mat=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'material',kind:'material',name:'Plywood concept',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'1.8',unit:'cm',truth:'provided_spec',parameter:null,note:'Declared synthetic choice'}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
  const writer=createProjectWriter(projectId,message,async p=>({data:await write(p),error:null}),async()=>({data:[],error:null}),async()=>({data:[],error:null}))
  const tools=createConstructionTools({projectId,message,writer,hasAccess:async()=>true,now:()=>new Date('2026-10-03'),
+ readDesignReadiness:(targetRevision,purpose,areaId)=>rpc('bob.read_design_readiness',[projectId,areaId??null,targetRevision,purpose]),
  read:(id,revision,after)=>rpc('bob.read_construction_draft',[projectId,id,revision,after]),
  readSources:async()=>({project:new Map(),physical:new Map()}),
  readCatalog:(id,revision)=>rpc('bob.catalog_read',[projectId,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})])})

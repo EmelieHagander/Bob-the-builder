@@ -1,3 +1,4 @@
+import { designIntent } from './support/design-intent-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -23,7 +24,7 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
     steps: [{ step_id: null, title: 'Design', goal: 'A usable concept drawing', state: 'active', phase: 'planning', area_id: null, responsible_kind: 'bob', responsible_person_id: null, notes: '', requirements: [] }], task_links: [] })], 'postgres')
   const step = (await call(owner, 'bob_private.project_plan_decide', [project, 0, proposal.record.revision, 'approve', 'Proceed'], 'postgres')).record.steps[0].id
   const solution = randomUUID()
-  await call(owner, 'bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Shelf concept', description: 'Synthetic geometry', assumptions: 'Site fit unverified', tradeoffs: 'Simple', measurements: [] })])
+  await call(owner, 'bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Shelf concept', description: 'Synthetic geometry', assumptions: 'Site fit unverified', tradeoffs: 'Simple', measurements: [], design_intent: { ...designIntent(), features: [] } })])
   await call(owner, 'bob.solution_command', [project, 'select', solution, 0, JSON.stringify({ solution_revision: 1, reason: 'Use this design' })])
   const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id: 'p0-shelf',
     definitions: [{ id: 'panel', primitive: 'box' as const, material_ref: null, x_mm: 600, y_mm: 300, z_mm: 18 }],
@@ -52,6 +53,7 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
     }, 5000, 40)
     const cadAssistant = createCadAssistant({ projectId: project, userId: owner, ownerRequest: message, available: true, deadline: Date.now() + 300000,
       hasAccess: async () => true, makeLookup, readArtifact: async () => null,
+      readDesignReadiness: (targetRevision, purpose, areaId) => call(owner, 'bob.read_design_readiness', [project, areaId ?? null, targetRevision, purpose]),
       // Match the production packet contract; rendering itself is still mocked.
       render: async r => { renders++; return { recipe: r, manifest: { engine: { name: 'build123d' }, assembly_id: r.assembly_id, instances: r.instances },
         files: { front: 'PHN2Zz48L3N2Zz4=', top: 'PHN2Zz48L3N2Zz4=', step: privateStep }, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } } },

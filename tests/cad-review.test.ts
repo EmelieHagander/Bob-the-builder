@@ -183,6 +183,13 @@ test('strict review keys cover the whole handoff; a plan-only pass cannot replac
  assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{...value.requirements.width,id:'invented'}}},full),null)
  assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{status:'failed',evidence:'Wrong binding'}}},full)?.verdict,'revise')
 })
+test('required solution features cannot pass as unresolved while future delivery receipts may remain pending',()=>{
+ const full={...handoff,requirements:[...handoff.requirements,{id:'intent_storage',requirement:'Include the selected integrated storage',basis:'project_record' as const,source_ref:'solution:fixture@2'},{id:'save_link',requirement:'Save and link the reviewed drawing',basis:'user_request' as const,source_ref:null}]}
+ const value={verdict:'pass',summary:'Reviewed the concept',requirements:{shape:{status:'met',evidence:'Concept geometry'},intent_storage:{status:'unresolved',evidence:'The simplified geometry omits storage'},save_link:{status:'unresolved',evidence:'pending_delivery: save after candidate review'}},issues:[]}
+ assert.equal(parseCadReview(value,full,new Set(['intent_storage']))?.verdict,'revise')
+ value.requirements.intent_storage={status:'met',evidence:'Storage modules are present in recipe and preview'}
+ assert.equal(parseCadReview(value,full,new Set(['intent_storage']))?.verdict,'pass')
+})
 test('review gets original reference pixels and revocation during review prevents saving',async()=>{
  const f=fixture();let valid=true,sawReference=false
  const source={projectId:'A',dataset:'image_pixels',recordId:'ref',label:'Reference',retrievedAt:'now',truth:'unknown' as const}

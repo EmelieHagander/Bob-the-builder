@@ -3,7 +3,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
-import {parseIntakeAssessment,bindMeasuredDimensions,type DrawingRequest,type DrawingRequestStore} from '../supabase/functions/_shared/cad-intake.ts'
+import {parseIntakeAssessment,bindMeasuredDimensions,intakeGaps,type DrawingRequest,type DrawingRequestStore} from '../supabase/functions/_shared/cad-intake.ts'
 import {createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
@@ -57,10 +57,14 @@ function fixture(){
   render:async(r:any)=>{renders++;return {recipe:r,manifest:{instances:r.instances},files:{front:'not persisted'},previews:{front:'pixels',top:'pixels'}}},readArtifact:async()=>null}
  return {opts,reads,get row(){return row},get renders(){return renders},get design(){return design},noTarget:()=>{target=false},failRead:()=>{readError=true},repairRead:()=>{readError=false},complement:()=>{revision++}}
 }
-test('intake returns all blocking needs and target prerequisite without invoking designer',async()=>{
- const f=fixture();f.noTarget();const a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[check('door','missing',true),check('window','conflict',true)]})}})
+test('a missing selected target stops before paid intake; ready intent still returns all collected needs together',async()=>{
+ const missing=fixture();missing.noTarget()
+ const prerequisite=await createCadAssistant({...missing.opts,callModel:async()=>{throw Error('target prerequisite must precede paid work')}}).consult(request)
+ assert.equal(prerequisite.status,'prerequisite_required');assert.deepEqual(prerequisite.required_tools,['save_project_solution','select_project_target'])
+ assert.equal(missing.renders,0)
+ const f=fixture();const a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[check('door','missing',true),check('window','conflict',true)]})}})
  const result=await a.consult(request)
- assert.equal(result.status,'needs_data');assert.equal(result.request_id,id);assert.deepEqual(result.gaps?.map(c=>c.id),['shape','door','window','selected_target']);assert.equal(f.renders,0)
+ assert.equal(result.status,'needs_data');assert.equal(result.request_id,id);assert.deepEqual(result.gaps?.map(c=>c.id),['shape','door','window']);assert.equal(f.renders,0)
  for(const dataset of ['measurements','physical_elements','physical_spaces','plan','tasks'])assert(f.reads.includes(dataset))
  assert.equal(f.row?.status,'needs_data')
 })
@@ -103,6 +107,19 @@ test('a partial or fabricated checklist cannot pass readiness',()=>{
  assert.equal(parseIntakeAssessment({...assessment,checks:[]},handoff,refs),null)
  assert.equal(parseIntakeAssessment({...assessment,checks:[{...check('shape'),source_refs:['imaginary']}]},handoff,refs),null)
  assert.equal(parseIntakeAssessment({...assessment,additional_needs:[check('shape')]},handoff,refs),null)
+})
+test('unresolved owner choices cannot be waived by a false blocking flag or a different canonical deferral',async()=>{
+ const ownerChoice={...check('important_choice','missing',false),action:'owner_decision' as const,detail:'Explain options and recommend a solution before selecting the geometry'}
+ const evaluated={checks:[check('shape')],additional_needs:[ownerChoice]}
+ assert.equal(intakeGaps(evaluated).length,1)
+ assert.equal(intakeGaps(evaluated,new Set(['different_choice'])).length,1)
+ assert.equal(intakeGaps(evaluated,new Set(['important_choice'])).length,0)
+ assert.equal(intakeGaps({checks:[],additional_needs:[{...ownerChoice,blocking:true}]},new Set(['important_choice'])).length,1)
+ assert.equal(intakeGaps({checks:[],additional_needs:[{...ownerChoice,action:'bob_decision'}]}).length,0,'ordinary reversible decisions remain autonomous')
+ const f=fixture(),a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',evaluated)}})
+ const result=await a.consult(request)
+ assert.equal(result.status,'needs_data');assert.deepEqual(result.gaps?.map(g=>g.id),['important_choice']);assert.equal(f.renders,0)
+ assert.equal(f.row?.payload.assessment?.additional_needs[0].blocking,true,'persisted stable gap work retains the corrected need')
 })
 
 test('P2: unchanged next-turn intake returns the same gaps without paid calls; changed source resumes',async()=>{

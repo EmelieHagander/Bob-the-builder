@@ -52,7 +52,7 @@ export function createBobToolSession(opts: {
     { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
-    ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
+    ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
       ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 export function createSolutionsFixture(timestamp, assets, facts) {
   const records = new Map(), histories = new Map(), decisions = []
-  const fixture = { records, histories, decisions, rejectNext: false,
+  const fixture = { records, histories, decisions, rejectNext: false, wrongVersionProjectOnce: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       if (!['current_solutions','solution_revisions','solution_measurement_details','current_target','target_revisions','solution_command'].includes(table)) return false
@@ -31,6 +31,11 @@ export function createSolutionsFixture(timestamp, assets, facts) {
           : { ...old, id, solution_id: id, project_id: p_project, area_id: data.area_id ?? old?.area_id ?? null,
             assumptions: '', tradeoffs: '', ...data, source_media_id: source?.id ?? null,
             source_media_title: source?.title ?? '', archived: false, change_note: data.change_note ?? 'Initial alternative' }
+        if (action === 'revise' && old.design_intent && !Object.hasOwn(data, 'design_intent')
+          && ['title', 'description', 'assumptions', 'tradeoffs', 'source_media_id', 'measurements'].some(key => JSON.stringify(row[key]) !== JSON.stringify(old[key]))) {
+          row.design_intent = structuredClone(old.design_intent)
+          row.design_intent.alignment = { status: 'draft', basis: 'The solution text or references changed; reconcile the shared direction.' }
+        }
         row.revision = (old?.revision ?? 0) + 1; row.actor_label = 'Fixture member'; row.recorded_at = timestamp()
         records.set(id, row); histories.set(id, [...(histories.get(id) ?? []), structuredClone(row)])
         await respond({ json: { id, revision: row.revision } }); return true
@@ -63,6 +68,10 @@ export function createSolutionsFixture(timestamp, assets, facts) {
       if (table === 'current_solutions') rows.sort((a,b) => b.recorded_at.localeCompare(a.recorded_at) || a.id.localeCompare(b.id))
       const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 1000)
       const single = (request.headers()['accept'] ?? '').includes('application/vnd.pgrst.object+json')
+      if (table === 'solution_revisions' && eq('revision') && fixture.wrongVersionProjectOnce && rows.length) {
+        fixture.wrongVersionProjectOnce = false
+        rows = [{ ...rows[0], project_id: 'B' }]
+      }
       await respond({ json: single || (table === 'solution_revisions' && eq('revision')) ? rows[0] ?? null : rows.slice(offset, offset + limit) })
       return true
     },
@@ -101,6 +110,23 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
     await page.getByRole('article', { name: title, exact: true }).waitFor()
   }
   await add('Keep the porch', true); await add('Extend the porch')
+  // A canonical synthetic Bob revision, stored outside the private transcript.
+  // The UI reads the selected historical version rather than a newer candidate.
+  const advised = [...fixture.records.values()].find(row => row.title === 'Keep the porch')
+  advised.design_intent = { version: 1, purpose: 'concept', summary: 'Reuse the porch footprint and windows; investigate the foundation before construction.',
+    references: [{ image_id: advised.source_media_id, role: 'layout', note: 'Preserve the existing footprint; the image does not supply measured dimensions.' }],
+    features: [{ id: 'reuse_windows', description: 'Preserve the existing windows and entrance footprint.', basis: 'project_record', source_ref: null }],
+    choices: [
+      { id: 'footprint', question: 'Which footprint should we develop?', alternatives: ['Retain the footprint', 'Extend the porch'],
+        recommendation: 'Retain the footprint', basis: 'The owner chose reuse and a smaller material need.', consequences: 'Less space, fewer new materials.', geometry_dependency: true,
+        status: 'resolved', selected_direction: 'Keep the existing footprint', decision_authority: 'owner', decision_basis: 'Prior saved owner direction.', deferral: null },
+      { id: 'surface', question: 'Which finish should the concept show?', alternatives: ['Opaque coating', 'Clear coating'],
+        recommendation: 'Opaque coating', basis: 'A reversible appearance study within the delegated concept.', consequences: 'A uniform proposed appearance; product selection is separate.', geometry_dependency: false,
+        status: 'resolved', selected_direction: 'Opaque coating', decision_authority: 'bob', decision_basis: 'The owner delegated ordinary concept details.', deferral: null },
+      { id: 'support', question: 'How should the foundation support the porch?', alternatives: [], recommendation: '', basis: '', consequences: 'Construction depends on a site inspection.', geometry_dependency: true,
+        status: 'deferred', selected_direction: null, decision_authority: 'bob', decision_basis: '', deferral: { scope: 'concept', reason: 'Inspect the foundation and resolve support before construction.' } },
+    ], alignment: { status: 'aligned', basis: 'The prior reuse choice is preserved for this limited concept.' } }
+  fixture.histories.get(advised.id)[0].design_intent = structuredClone(advised.design_intent)
   const a = page.getByRole('article', { name: 'Keep the porch', exact: true }), b = page.getByRole('article', { name: 'Extend the porch', exact: true })
   const target = page.getByRole('region', { name: 'Selected Project target', exact: true })
   async function choose(card, reason) {
@@ -112,6 +138,22 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   }
   await (await choose(a, 'Reuse what we have')).waitFor({ state: 'hidden' })
   await target.getByRole('heading', { name: 'Keep the porch · Version 1', exact: true }).waitFor()
+  const design = target.getByRole('region', { name: 'Design & choices', exact: true })
+  await design.getByText(advised.design_intent.summary, { exact: true }).waitFor()
+  await design.getByText('Shared direction recorded', { exact: false }).waitFor()
+  const ownerChoice = design.locator('.fact-source').filter({ has: page.getByText('Which footprint should we develop?', { exact: true }) })
+  await ownerChoice.getByText(/Chosen by the owner/).waitFor()
+  await design.getByText(/Chosen by Bob within mandate/).waitFor()
+  await design.getByText('Deferred for concept design', { exact: true }).waitFor()
+  await ownerChoice.locator('summary').click()
+  await ownerChoice.getByText('Decision basis: Prior saved owner direction.', { exact: true }).waitFor()
+  await design.getByText('Preserved features & references', { exact: true }).click()
+  await design.getByText('Preserve the existing windows and entrance footprint.', { exact: true }).waitFor()
+  await design.getByRole('button', { name: 'View layout reference 1', exact: true }).click()
+  const designImage = page.getByRole('dialog', { name: 'Entry before work', exact: true })
+  await designImage.locator('img.project-image-original').waitFor()
+  await designImage.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.screenshot({ path: 'test-results/solutions-design-choices-' + width + '.png', fullPage: true })
   await a.getByRole('button', { name: 'Revise', exact: true }).click()
   const editor = page.getByRole('dialog', { name: 'Revise alternative', exact: true })
   await editor.getByLabel('Description and rationale', { exact: true }).fill('A newer candidate with a sheltered door.')
@@ -121,6 +163,13 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   const measurement = [...facts.records.measurement.values()].find(m => m.subject === 'Opening width')
   facts.remember('measurement', { ...measurement, revision: measurement.revision + 1, value: '1290', truth: 'measured', source: 'Later measurement' })
   await page.reload()
+  await design.getByText(advised.design_intent.summary, { exact: true }).waitFor()
+  await design.getByText('Shared direction recorded', { exact: false }).waitFor()
+  await a.getByRole('button', { name: 'View evidence', exact: true }).click()
+  const revised = page.getByRole('dialog', { name: 'Keep the porch · Version 2', exact: true })
+  await revised.getByText('Direction needs reconciliation', { exact: false }).waitFor()
+  await revised.getByText(/Chosen by the owner/).waitFor()
+  await revised.getByRole('button', { name: 'Close', exact: true }).click()
   await target.getByText(/Measurement changed since this version/).waitFor()
   await target.getByRole('button', { name: 'View reference image', exact: true }).click()
   const original = page.getByRole('dialog', { name: 'Entry before work', exact: true })
@@ -134,6 +183,8 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await history.getByRole('button', { name: 'View version', exact: true }).last().click()
   const old = page.getByRole('dialog', { name: 'Keep the porch · Version 1', exact: true })
   await old.getByText('Keep the existing footprint and reuse the windows.', { exact: true }).waitFor()
+  await old.getByText('Shared direction recorded', { exact: false }).waitFor()
+  await old.getByText(/Chosen by Bob within mandate/).waitFor()
   await old.getByRole('button', { name: 'Close', exact: true }).click()
   fixture.rejectNext = true
   const conflict = await choose(b, 'Keep this decision input')
@@ -142,6 +193,7 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await conflict.getByRole('button', { name: 'Cancel', exact: true }).click()
   await (await choose(b, 'More room required')).waitFor({ state: 'hidden' })
   await target.getByRole('heading', { name: 'Extend the porch · Version 1', exact: true }).waitFor()
+  await target.getByText('Design advice and choices are not recorded for this version yet.', { exact: true }).waitFor()
   await a.getByRole('button', { name: 'Archive', exact: true }).click()
   await page.getByRole('dialog', { name: 'Archive alternative', exact: true }).getByRole('button', { name: 'Archive alternative', exact: true }).click()
   await a.waitFor({ state: 'hidden' })
@@ -150,6 +202,12 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await page.getByRole('dialog', { name: 'Restore alternative', exact: true }).getByRole('button', { name: 'Restore alternative', exact: true }).click()
   await a.waitFor({ state: 'hidden' })
   await page.getByLabel('Show alternatives', { exact: true }).selectOption('active'); await a.waitFor()
+  fixture.wrongVersionProjectOnce = true
+  await page.reload()
+  await page.getByRole('alert').getByText('Solution project mismatch.', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('region', { name: 'Design & choices', exact: true }).count(), 0, 'Wrong-project advice must not be rendered')
+  await page.getByRole('button', { name: 'Reload solutions', exact: true }).click()
+  await target.getByRole('heading', { name: 'Extend the porch · Version 1', exact: true }).waitFor()
   await target.getByRole('button', { name: 'Clear target', exact: true }).click()
   const clear = page.getByRole('dialog', { name: 'Clear target', exact: true })
   await clear.getByLabel('Reason for decision', { exact: true }).fill('Wait for the site check')
@@ -172,5 +230,5 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await page.waitForFunction(() => document.querySelectorAll('.solution-list > article').length === 3)
   await page.getByRole('button', { name: 'Previous page', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('.solution-list > article').length === 24)
-  console.log('Solutions alternatives/evidence/pinned target/revisions/conflict/archive/restore/decisions/reload/paging passed at ' + width + 'px; HTTP fixtures, no AI.')
+  console.log('Solutions alternatives/advice/choices/reference roles/exact selected version/evidence/revisions/conflict/archive/restore/decisions/reload/paging passed at ' + width + 'px; HTTP fixtures, no AI.')
 }

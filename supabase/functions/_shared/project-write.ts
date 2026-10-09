@@ -105,7 +105,10 @@ export function parseProjectWrite(name: string, value: unknown, projectId: strin
   if(name==='propose_project_plan'&&!Object.hasOwn(v,'task_links'))v.task_links=[]
   if(name==='save_project_task'&&!Object.hasOwn(v,'step_id'))v.step_id=null
   const keys = definition.function.parameters.required
-  if (Object.keys(v).length !== keys.length || keys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', keys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
+  // Calls recorded before the additive solution contract can omit these fields.
+  // Omission preserves canonical values; it must not become an explicit clear.
+  const requiredKeys = name === 'save_project_solution' ? keys.filter(k => !['source_media_id', 'design_intent'].includes(k)) : keys
+  if (Object.keys(v).some(k => !keys.includes(k)) || requiredKeys.some(k => !Object.hasOwn(v, k))) return invalid('tool_shape', requiredKeys.filter(k => !Object.hasOwn(v, k)), 'Supply every required field and remove fields absent from the tool schema. Use null only where allowed.')
   if (!isText(v.request_quote, 500) || !userMessage.includes(v.request_quote)) return invalid('request_quote', ['request_quote'], 'The change could not be tied to the current owner message. Retry the call once; if it fails again, report it.')
   if (OPERATION_WRITE_TOOLS.some(t=>t.function.name===name)) return parseOperationalWrite(name,v,report)
   if (LIFECYCLE_TOOL_NAMES.has(name)) return parseLifecycleWrite(name, v, projectId)
@@ -240,6 +243,9 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           invalidAttempts++
           if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
           if (error.code === '42501') return { status: 'denied', reason: 'access' }
+          if ((payload.kind === 'solution' || payload.kind === 'target') && error.message?.includes('compact_design_intent_required')) return { status: 'invalid', message: 'No change made. Keep shared design advice compact enough to read; shorten explanations while preserving actual choices, references and required features, then retry.' }
+          if (payload.kind === 'construction' && /design_readiness_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No construction saved. Read the selected solution and its design_intent. Investigate unresolved choices, explain alternatives and recommend a supported direction; reuse prior decisions or decide within the existing mandate. Save and select the exact solution revision for purpose=construction before retrying.' }
+          if (payload.kind === 'solution' && /(?:invalid_design_(?:intent|choice|feature|reference)|design_(?:choice|feature|reference)_[a-z_]+)/.test(error.message ?? '')) return { status: 'invalid', message: 'No solution saved. Read the current solution and this tool schema. Preserve significant features, original references and prior choices; each resolved choice needs a selected direction and a supported decision basis. Open choices retain advice and consequences. A deferral names only this illustration or concept purpose.' }
           if (payload.kind === 'operational' && error.message?.includes('construction_requirement_exists')) return { status: 'conflict', message: 'A current blank requirement already exists for this construction definition and quantity mode. Read requirements and revise that same identity; do not create a duplicate.' }
           if (payload.kind === 'operational' && error.message?.includes('construction_derive_required')) return { status: 'invalid', message: 'Recalculate this existing construction blank requirement with derive_cad_material_requirement and the same record_id/current revision. Manual revision cannot replace its deterministic source proof.' }
           if (payload.kind === 'operational' && error.message?.includes('construction_cut_fit_required')) return { status: 'invalid', message: 'Construction blank quantities are saved concept needs. Reserve only an exact saved cut_plan through manage_project_material(resource=cut_plan), with its current plan/reservation revisions and real bound stock. Do not allocate raw sheets to individual blank needs or send these blanks to Shopping. Keep that gap explicit.' }

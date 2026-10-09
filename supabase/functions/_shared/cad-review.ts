@@ -56,11 +56,12 @@ export function cadReviewSchema(handoff:DesignHandoff){
  }}
 }
 
-export function parseCadReview(value: unknown, handoff: DesignHandoff): CadReview | null {
+export function parseCadReview(value: unknown, handoff: DesignHandoff, requiredFeatureIds: ReadonlySet<string> = new Set()): CadReview | null {
   let v: any = value
   if (typeof v === 'string') { try { v = JSON.parse(v) } catch { return null } }
   if (!exact(v, ['verdict', 'summary', 'requirements', 'issues']) || !['pass', 'revise'].includes(v.verdict) || !text(v.summary)) return null
   const ids = new Set(handoff.requirements.map(r => r.id))
+  if ([...requiredFeatureIds].some(id => !ids.has(id))) return null
   if(v.requirements&&!Array.isArray(v.requirements)){
     if(!exact(v.requirements,[...ids])||Object.values(v.requirements).some(r=>!exact(r,['status','evidence'])))return null
     v={...v,requirements:handoff.requirements.map(r=>({id:r.id,...v.requirements[r.id]}))}
@@ -69,7 +70,7 @@ export function parseCadReview(value: unknown, handoff: DesignHandoff): CadRevie
     || v.requirements.some((r: any) => !exact(r, ['id', 'status', 'evidence']) || !ids.has(r.id) || !['met', 'unresolved', 'failed'].includes(r.status) || !text(r.evidence))
     || new Set(v.requirements.map((r: any) => r.id)).size !== ids.size) return null
   if (!Array.isArray(v.issues) || v.issues.length > 20 || v.issues.some((r: any) => !exact(r, ['severity', 'code', 'correction']) || !['warning', 'error'].includes(r.severity) || !['orientation', 'geometry', 'views', 'reference', 'requirements', 'readability', 'uncertainty'].includes(r.code) || !text(r.correction))) return null
-  if (v.requirements.some((r: any) => r.status === 'failed') || v.issues.some((r: any) => r.severity === 'error')) v.verdict = 'revise'
+  if (v.requirements.some((r: any) => r.status === 'failed' || requiredFeatureIds.has(r.id) && r.status !== 'met') || v.issues.some((r: any) => r.severity === 'error')) v.verdict = 'revise'
   return v
 }
 /** Binds the review to the exact candidate AND scoped source pins, never its title alone. */
