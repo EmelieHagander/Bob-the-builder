@@ -82,6 +82,12 @@ Exact technical instructions and schemas have separate definitions. Current
 project records, requirement IDs and source references enter as task data;
 schema substitutions are limited to declared server bindings.
 
+All roles reference the shared `communication.concise` fragment immediately
+after their persona. It describes a busy reader who may only read the last two
+sentences and values brief messages with the important point and next step near
+the end. This is soft narrative guidance for prose; delivery schemas, required
+fields and execution profiles retain their existing contracts.
+
 Catalog data describes a capability. Registered handlers, validation,
 authorization, execution limits, revision guards and receipts remain executable
 server code. A database definition cannot introduce an executable tool or grant
@@ -220,7 +226,7 @@ runtime boundaries.
 | --- | --- |
 | Schema migration | Hosted ledger `20261009153433`, `ai_definition_catalog`; source `20261009144206_ai_definition_catalog.sql`. |
 | Seed migration | Hosted ledger `20261009153435`, `seed_bob_ai_catalog`; source `20261009150000_seed_bob_ai_catalog.sql`. |
-| Active catalog | 264 definitions, 77 tool contracts, 11 roles (10 enabled), 11 profiles and four tiers. |
+| Initial catalog | 264 definitions, 77 tool contracts, 11 roles (10 enabled), 11 profiles and four tiers. |
 | `ask-bob` | Version 92, JWT verification enabled; bundle SHA-256 `47b5d9b80d708f1bd754f00fe38b55760773ff3e4b98963166d875318eeef218`. |
 | `bob-worker` | Version 60, JWT verification disabled with existing custom job authentication; bundle SHA-256 `72687b4cbe8a2163f67427662c41169df1d2d774ca297c3432327ffadb069322`. |
 
@@ -270,6 +276,31 @@ or active jobs. Their scoped
 cleanup, systematic persona/colleague acceptance and the separate mini-first,
 managed-memory and JIT-tool work remain in
 [State](../Docs/bob-delivery-flow.md#state).
+
+### Concise communication follow-up — 2026-10-09
+
+Source `20261009171521_ai_concise_communication.sql`, commit
+`005d57252f3d90fc70cd67a7829ead42d54d2bb6`, is installed as hosted ledger
+`20261009171859 / ai_concise_communication`. One shared narrative fragment and
+11 role revisions bring the active catalog to 265 definitions. All role
+references select it exactly once after the persona. The proposed memory role
+stays disabled. Existing models, profiles, schemas, tool contracts and saved
+manifests are unchanged. Independent local activation/replay and actual runtime
+prompt composition checks passed, as did 22 catalog/DB tests and historical
+seed reproducibility. Hosted role/reference and previous-manifest checks passed.
+
+The existing [live release probe, attempt 2](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37955046605/attempts/2)
+passed, including material/image/knowledge checks. Idea turn
+`af6a5117-975c-49c0-968a-010055facf8c` made one successful standard-tier
+`gpt-5.4` call with role version 2 and manifest
+`08d9acbb-17b5-4178-bd95-de7c78fcbb89`, containing the shared guidance. Bob's
+184-word answer placed concrete next actions in its last two sentences.
+The earlier probe had 209 words; this is one observation, not a length target
+or evidence of a consistent improvement. The guest fixture remained unchanged
+and its image objects/metadata were removed. Guarded project deletion again
+returned `Invalid or expired requestState`; the additional disposable project
+`p_661d492be7d345f4b56d8a1c288824de` remains with one guest membership, one task
+and one material, with no images, stored objects, private history or active jobs.
 
 ## Project lookup contract — Slice 0
 
