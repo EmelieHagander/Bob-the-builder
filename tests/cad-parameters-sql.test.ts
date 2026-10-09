@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {compileCadParameters,inheritCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {test} from 'node:test'
 import {parameterPlan,parameterPacket} from './support/cad-parameter-fixture.ts'
@@ -18,7 +19,7 @@ test('P1 graph: authoritative SQL rejects omitted and tampered controlling param
  const measurement=randomUUID(),solution=randomUUID()
  const fact={subject:'Panel width',value:'1.001',unit:'m',truth:'measured',source:'Tape at marked endpoints',required:true}
  await call(owner,'bob.evidence_command',[project,'measurement','create',measurement,0,JSON.stringify(fact)])
- await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'Concept',assumptions:'Fit unverified',tradeoffs:'Simple',measurements:[]})])
+ await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'Concept',assumptions:'Fit unverified',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await call(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Use design'})])
  const m:any=(await asProjectUser(pg,owner,'select * from bob.current_measurements where id=$1',[measurement])).rows[0]
  const recipe={contract_version:1,units:'mm',assembly_id:'shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:1001,y_mm:300,z_mm:18}],instances:[{id:'panel-1',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
@@ -28,7 +29,7 @@ test('P1 graph: authoritative SQL rejects omitted and tampered controlling param
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
   title:'Source-bound shelf',description:'Concept',assumptions:'No structural certification',target_revision:1,measurements:[{id:measurement,revision:1}],
   source_artifact_id:null as string|null,source_revision:null as number|null,part_ids:[] as string[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
+  packet:{recipe,manifest:{...designManifest(project,solution),bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
  const save=(p:any)=>call(owner,'bob.bob_project_write_v11',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const read=(id:string,rev:number|null=null)=>call(owner,'bob.read_cad_artifact',[project,id,rev])
  const saved=await save(payload),id=saved.recordId
@@ -125,10 +126,11 @@ test('P1 upgrade keeps genuine historical geometry partial without a backfill or
  assert.equal((await read(f.saved.recordId)).parameter_state,'legacy_partial')
  assert.equal((await read(f.saved.recordId)).parameters,null)
  const detail=structuredClone(f.payload);detail.data.title='Legacy detail';detail.data.source_artifact_id=f.saved.recordId;detail.data.source_revision=1;detail.data.part_ids=['panel'];detail.data.packet.manifest.bob_lineage.inherited_from={artifact_id:f.saved.recordId,revision:1}
- const child:any=(await asProjectUser(pg,f.actor,'select bob.bob_project_write_v11($1,$2,$3,$4,$5) result',[f.project,f.claim.thread_id,f.turn_id,f.claim.generation,JSON.stringify(detail)])).rows[0].result
- assert.equal((await read(child.recordId)).parameter_state,'legacy_partial')
+ // Reading and lifecycle copying old geometry remains supported; making a new
+ // detail from it first requires a shared, supported design direction.
+ await assert.rejects(asProjectUser(pg,f.actor,'select bob.bob_project_write_v11($1,$2,$3,$4,$5)',[f.project,f.claim.thread_id,f.turn_id,f.claim.generation,JSON.stringify(detail)]),/design_readiness_required/)
  const fresh=structuredClone(f.payload);fresh.data.title='New untracked design'
- await assert.rejects(asProjectUser(pg,f.actor,'select bob.bob_project_write_v11($1,$2,$3,$4,$5)',[f.project,f.claim.thread_id,f.turn_id,f.claim.generation,JSON.stringify(fresh)]),/cad_parameters_required/)
+ await assert.rejects(asProjectUser(pg,f.actor,'select bob.bob_project_write_v11($1,$2,$3,$4,$5)',[f.project,f.claim.thread_id,f.turn_id,f.claim.generation,JSON.stringify(fresh)]),/design_readiness_required/)
  await asProjectUser(pg,f.actor,"select bob.artifact_command($1,'archive',$2,1,'{}')",[f.project,f.saved.recordId])
  assert.equal((await read(f.saved.recordId)).parameter_state,'legacy_partial')
 })

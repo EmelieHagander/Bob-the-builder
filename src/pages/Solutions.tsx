@@ -26,11 +26,52 @@ function Evidence({ items }: { items: SolutionMeasurement[] }) {
     </div>)}
   </div>
 }
+function DesignChoices({ value }: { value: Solution }) {
+  const [image, setImage] = useState<{ id: string; title: string } | null>(null)
+  const intent = value.designIntent
+  if (!intent) return <p className="foundation-hint">{value.designIntentState === 'invalid'
+    ? 'The saved design advice could not be read. The original solution text is retained; ask Bob to reconcile this version.'
+    : 'Design advice and choices are not recorded for this version yet.'}</p>
+  const purposes = { illustration: 'Exploratory illustration', concept: 'Concept design', construction: 'Construction concept' }
+  const roles = { appearance: 'Appearance', layout: 'Layout', context: 'Context' }
+  return <section className="fact-details" aria-label="Design & choices">
+    <h4>Design & choices</h4>
+    <p><strong>{purposes[intent.purpose]}</strong> · {intent.alignment.status === 'aligned' ? 'Shared direction recorded' : 'Direction needs reconciliation'}</p>
+    <p>{intent.summary}</p>
+    <details className="ui-row-details"><summary tabIndex={0}>Preserved features & references</summary><div className="fact-details">
+      {intent.features.length ? intent.features.map(feature => <p key={feature.id}>{feature.description}{feature.basis === 'working_assumption' && <span className="foundation-hint"> · Working assumption</span>}</p>)
+        : <p>No specific features recorded.</p>}
+      {intent.references.map((reference, index) => <div className="fact-source" key={reference.image_id}>
+        <strong>{roles[reference.role]} reference {index + 1}</strong><p>{reference.note || 'No reference note recorded.'}</p>
+        <button className="btn" onClick={() => setImage({ id: reference.image_id, title: reference.image_id === value.imageId && value.imageTitle ? value.imageTitle : `${roles[reference.role]} reference ${index + 1}` })}>View {roles[reference.role].toLowerCase()} reference {index + 1}</button>
+      </div>)}
+    </div></details>
+    {intent.choices.map(choice => <div className="fact-source" key={choice.id}>
+      <strong>{choice.question}</strong>
+      <p>{choice.status === 'resolved' ? <><strong>{choice.selected_direction}</strong> · Chosen by {choice.decision_authority === 'bob' ? 'Bob within mandate' : 'the owner'}</>
+        : choice.status === 'deferred' ? `Deferred for ${purposes[choice.deferral!.scope].toLowerCase()}` : 'Open choice'}</p>
+      <details className="ui-row-details"><summary tabIndex={0} aria-label={`Advice and alternatives: ${choice.question}`}>Advice & alternatives</summary><div className="fact-details">
+        <p><strong>Alternatives:</strong> {choice.alternatives.join(' · ') || 'Not investigated yet'}</p>
+        <p><strong>Recommendation:</strong> {choice.recommendation || 'Not recorded yet'}</p>
+        <p><strong>Basis:</strong> {choice.basis || 'Evidence still needed'}</p>
+        <p><strong>Consequences:</strong> {choice.consequences || 'Not recorded yet'}</p>
+        {choice.status === 'resolved' && <p><strong>Decision basis:</strong> {choice.decision_basis}</p>}
+        {choice.deferral && <p><strong>Deferred question:</strong> {choice.deferral.reason}</p>}
+        {choice.status === 'open' && <p>{choice.decision_authority === 'bob' ? 'Bob investigates and recommends within the project mandate.' : 'The owner chooses the significant direction with Bob’s advice.'}</p>}
+      </div></details>
+    </div>)}
+    <p className="foundation-hint">{intent.alignment.basis || 'Shared direction has not been settled.'}</p>
+    {image && <Modal title={image.title} wide onClose={() => setImage(null)}>
+      <StoredImage projectId={value.projectId} image={image} original />
+    </Modal>}
+  </section>
+}
 function VersionDetails({ value }: { value: SolutionVersion }) {
   const [image, setImage] = useState(false)
   return <div className="fact-details">
     <p>{value.description}</p><p><strong>Assumptions:</strong> {value.assumptions || 'Not recorded'}</p>
     <p><strong>Trade-offs:</strong> {value.tradeoffs || 'Not recorded'}</p>
+    <DesignChoices key={value.id + ':' + value.revision} value={value} />
     <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <Evidence items={value.measurements} />
     {value.imageId ? <button className="btn" onClick={() => setImage(true)}>View reference image</button>

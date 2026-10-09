@@ -1,3 +1,4 @@
+import { designIntent } from './support/design-intent-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +15,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   (await asProjectUser(pg, uid, `select ${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args, role)).rows[0].result
  const project = (await call('bob.create_project', [JSON.stringify({ name: 'K4 isolated fixture' })])).id
  const solution = randomUUID()
- await call('bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Concept bracket', description: 'Fixture', assumptions: 'Product unknown', tradeoffs: 'Synthetic', measurements: [] })])
+ await call('bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Concept bracket', description: 'Fixture', assumptions: 'Product unknown', tradeoffs: 'Synthetic', measurements: [], design_intent: designIntent() })])
  await call('bob.solution_command', [project, 'select', solution, 0, JSON.stringify({ solution_revision: 1, reason: 'Fixture' })])
  let turn = randomUUID(), claim = await call('bob.bob_claim_turn', [project, user, turn, message], null, 'service_role')
  const write = (payload: any) => call('bob.bob_project_write_v14', [project, claim.thread_id, turn, claim.generation, JSON.stringify(payload)])

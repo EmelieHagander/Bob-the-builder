@@ -1,5 +1,23 @@
 # bob — current capability & gap inventory
 
+## Shared design advice and purpose readiness — source 2026-10-09
+
+**Implemented in current source; final review/CI and hosted release pending.**
+The existing Solution revision now carries shared expert advice, actual choices,
+original-image roles, required features and a bounded next-output purpose. Bob's
+write/read/target paths expose it, and Solutions has read-only choice/history
+disclosure. Canonical readiness gates new construction saves and paid CAD work;
+designer/reviewer and CAD save consume the same exact selected revision and image
+versions. Legacy reads and historical replay remain available. No new model,
+budget allocation or universal owner-approval step is added.
+
+[Solutions](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) owns
+packet semantics; [CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09)
+owns consumption. The source migrations and matching catalog/runtime/UI are not
+yet recorded as hosted. [State](bob-delivery-flow.md#state) retains release and
+ordinary named-member advice/mockup acceptance; controlled checks do not close
+those outcome gates.
+
 ## K1 construction checkpoints — deployed, model acceptance pending
 
 Bob now has registered tools to create, list, read and revise persistent

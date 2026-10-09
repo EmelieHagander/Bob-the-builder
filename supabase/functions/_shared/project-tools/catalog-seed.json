@@ -168,8 +168,8 @@
   },
   {
     "name": "design_project_cad",
-    "description": "Collect and assess all drawing requirements, then construct and independently review CAD.",
-    "how_to": "Read current construction drafts and check the exact revision. Pass that construction Artifact ID as artifact_id to design_project_cad. The server rechecks its current sources and renders the same geometry with dimensions and part IDs; no second designer construction is created. Original requirements, joints, materials, checks and pixels go to the independent reviewer. Only save_cad_design saves an approved candidate; verify its receipt, exact revision, work link and readback. Correct construction issues in the checkpoint; renderer annotation defects need a renderer repair. Unknown product or strength checks remain concept limitations.",
+    "description": "Design and independently review CAD from the current purpose-appropriate selected Solution.",
+    "how_to": "Read the selected Solution and its visible design_intent, linked original images and prior choices. The server assesses readiness for this output before design: construction geometry needs supported, settled controlling choices; a form-only exploratory sketch may defer explicit issues outside its purpose. An unavailable source or missing required feature is not waived by a simplified concept. Reuse prior choices and delegation. Read current construction drafts and check their exact revision. Pass that construction Artifact ID as artifact_id to draw its exact geometry. The same pinned intent, required features, materials, checks and original pixels reach the independent reviewer. Only save_cad_design persists the approved candidate; verify the saved receipt, exact revision, work link and readback. Correct construction issues in the checkpoint. Concept review never certifies strength or site fit.",
     "schema_version": 3,
     "always_load": false,
     "preload_phases": [
@@ -460,7 +460,7 @@
   {
     "name": "save_construction_draft",
     "description": "Save or revise a versioned construction with parts, exact materials and typed joints, without rendering.",
-    "how_to": "Read existing drafts and catalog revisions first. Reuse Artifact, assembly, part and joint IDs. Supply the complete CAD parameter plan; the server calculates values and rejects unknown controlling dimensions. Joint methods are design choices, not checked strength or hardware. Open questions stay explicit. A draft receipt is not a drawing or purchase receipt. For a delegated assembly choose the parts and joints from the request, exact catalog and applicable building knowledge; ordinary reversible choices are design_choice, not new owner approvals. Derive dependent spans and positions from shared dimension nodes. After saving, call check_construction_draft on that revision and correct reported IDs with another revision. Compare bounds/count against the original requirements. A checked concept is not fabrication approval. For a requested drawing pass this checked construction Artifact ID to design_project_cad. A construction receipt alone is not a drawing delivery; verify the drawing save/link receipts and exact readback.",
+    "how_to": "Read the selected Solution, its visible design_intent and current drafts and catalog revisions first. Resolve consequential geometry-dependent choices through expert advice and actual selections; reuse prior decisions and delegation. The server blocks construction save when canonical intent or supported controlling choices are missing. Preserve stable Artifact, assembly, part and joint IDs. Supply the complete CAD parameter plan; the server computes values and rejects unknown controlling dimensions. Joint methods are design choices, not checked strength or hardware. Open questions stay explicit. A draft receipt is not a drawing or purchase receipt. Derive spans and positions from shared dimension nodes. Check the saved exact revision and correct reported IDs with another revision. Compare bounds and required features with the pinned Solution. A checked concept is not fabrication approval. For a drawing pass this checked construction Artifact ID to design_project_cad and verify the drawing save/link receipts and exact readback.",
     "schema_version": 1,
     "always_load": false,
     "preload_phases": [],
@@ -527,9 +527,9 @@
   },
   {
     "name": "save_project_solution",
-    "description": "Create or revise a solution alternative for the project or Area.",
-    "how_to": "Read existing solutions and measurement revisions first. Record actual intent, assumptions and tradeoffs. A solution is distinct from selected target. Ordinary delegated design choices do not need another permission round.",
-    "schema_version": 1,
+    "description": "Create or revise a visible solution with design intent, references and advised decisions.",
+    "how_to": "Read the current solution, selected target, linked images and prior decisions first. Preserve their exact scope and revisions. Record purpose, use, form/orientation and required features in design_intent. For each consequential choice record relevant alternatives, your supported recommendation, basis, consequences, chooser and actual selected direction; delegation is a mandate, not a chosen direction. Reuse prior owner decisions and explicit delegation. Resolve geometry-dependent technical questions through research and advice before construction, while an exploratory sketch may explicitly defer issues outside its purpose. Images supply intent, not measured dimensions. source_media_id names an accessible project reference. Explicit null source_media_id or design_intent clears that field; omitted fields on a legacy call preserve their previous values. Null design_intent remains unassessed and cannot establish readiness. A solution receipt records a proposal or design choice, not measured truth, target selection or structural approval.",
+    "schema_version": 2,
     "always_load": false,
     "preload_phases": [],
     "active": true

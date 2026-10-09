@@ -5,6 +5,12 @@ import type { LookupInput, createProjectLookup } from './project-lookup.ts'
 
 export type IntakeCheck = { id:string; status:'known'|'assumption'|'missing'|'conflict'; blocking:boolean; source_refs:string[]; action:'none'|'bob_decision'|'measurement'|'owner_decision'; detail:string }
 export type IntakeAssessment = { checks:IntakeCheck[]; additional_needs:IntakeCheck[] }
+/** An unresolved consequential owner choice is still a need when a permissive
+ * collector forgets its blocking flag. Only the same explicitly scoped canonical
+ * deferral can permit it; reversible Bob decisions retain their autonomy. */
+export function intakeGaps(assessment:IntakeAssessment|null,deferredChoiceIds:ReadonlySet<string>=new Set()):IntakeCheck[]{
+ return [...assessment?.checks??[],...assessment?.additional_needs??[]].filter(c=>c.blocking||c.status!=='known'&&c.action==='owner_decision'&&!deferredChoiceIds.has(c.id)).map(c=>({...c,blocking:true}))
+}
 const checkSchema={type:'object',additionalProperties:false,properties:{id:{type:'string'},status:{type:'string',enum:['known','assumption','missing','conflict']},blocking:{type:'boolean'},source_refs:{type:'array',items:{type:'string'},maxItems:12},action:{type:'string',enum:['none','bob_decision','measurement','owner_decision']},detail:{type:'string',maxLength:1000}},required:['id','status','blocking','source_refs','action','detail']}
 export const INTAKE_SCHEMA={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:checkSchema,maxItems:24},additional_needs:{type:'array',items:checkSchema,maxItems:20}},required:['checks','additional_needs']}
 export function parseIntakeAssessment(value:unknown,handoff:DesignHandoff,refs:Set<string>):IntakeAssessment|null{

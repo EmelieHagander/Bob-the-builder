@@ -7,6 +7,7 @@ import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, compileCadParameters, pa
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriter } from './project-write.ts'
+import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 
 const obj=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
 const id={type:'string',pattern:'^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'}
@@ -17,7 +18,7 @@ const nullableRev={anyOf:[rev,{type:'null'}]}
 const endpoint=obj({instance_id:id,face:{type:'string',enum:['x_min','x_max','y_min','y_max','z_min','z_max']}})
 const tool=(name:string,description:string,properties:Record<string,unknown>)=>({type:'function' as const,function:{name,description,parameters:obj(properties)}})
 export const CONSTRUCTION_SAVE_TOOL=tool('save_construction_draft',
- 'Create or revise the requested construction concept: you choose its parts and typed joints, save this shared checkpoint, then check its exact revision. Use this path when no drawing is requested; a CAD drawing is not a substitute for the material/joint construction. Read current drafts and exact catalog materials first. Complete snapshot replaces only this draft revision; preserve stable IDs and unrelated parts. CAD parameter bindings compute all dimensions and placements server-side in mm/deg. material_ref must be null; materials pins each definition. Joints name box faces in LOCAL part coordinates; methods/reasons are unverified design choices. Keep missing hardware/knowledge in open_questions. Then call check_construction_draft and correct reported geometry/material/joint issues. No strength, drawing or purchase approval is implied.',{
+ 'Create or revise the requested construction concept after expert advice and significant choices are recorded in the selected solution for purpose=construction. Read its design_intent, investigate dependencies and recommend supported options before fixing geometry; reuse prior decisions and delegated technical choices. Canonical readiness is checked before compilation and again at save. You choose parts and typed joints, save this shared checkpoint, then check its exact revision. A CAD drawing is not a substitute for this material/joint construction. Read current drafts and exact catalog materials first. Preserve stable IDs and unrelated parts. CAD parameter bindings compute dimensions and placements server-side in mm/deg. material_ref must be null; materials pins each definition. Joints name box faces in LOCAL part coordinates; methods/reasons are unverified design choices. Keep missing hardware/knowledge in open_questions. Then check_construction_draft and correct reported issues. No strength, drawing or purchase approval is implied.',{
  key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$',description:'Unique key for this intended write in the turn. Reuse only for exact retry; a new revision needs a new key.'},
  record_id:nullableUuid,expected_revision:{type:'integer',minimum:0,maximum:999999999},
  title:{type:'string',minLength:1,maxLength:200},description:{type:'string',minLength:1,maxLength:5500},area_id:{type:['string','null']},target_revision:rev,
@@ -56,6 +57,7 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
+ readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null)=>Promise<DesignReadiness|unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
@@ -112,6 +114,14 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    }
    if(!opts.writer)return {status:'denied'}
    if(!opts.message.includes(v.request_quote)||!v.request_quote.trim()||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1))return {status:'invalid',message:'Use the current request and exact expected revision.'}
+   if(!opts.readDesignReadiness)return {status:'unavailable',message:'Could not read the selected solution and expert advice. Recover that read before fixing construction geometry.'}
+   const readiness=parseDesignReadiness(await opts.readDesignReadiness(v.target_revision,'construction',v.area_id))
+   if(!await opts.hasAccess())return {status:'denied'}
+   if(!readiness||readiness.project_id!==opts.projectId||readiness.area_id!==v.area_id
+     ||readiness.purpose!=='construction')return {status:'unavailable',message:'Could not verify advice for this exact selected solution and construction purpose. Read the current target and solution again.'}
+   if(readiness.status!=='ready')return {status:readiness.status,readiness,issues:readiness.issues,
+     message:'No construction saved. Resolve the listed evidence and design choices before fixing their geometry: investigate relevant sources, explain alternatives and recommend a supported direction. Reuse prior choices or decide within the existing mandate, then save and select that solution revision.'}
+   if(readiness.target_revision!==v.target_revision)return {status:'conflict',message:'The selected target changed. Read its exact current revision and shared advice before fixing construction geometry.'}
    const recipe=parseCadAssemblyRequest(structuredClone(v.recipe))
    if(!recipe)return {status:'invalid',message:'Invalid CAD recipe or referenced part IDs.'}
    const plan=parseParameterPlan(v.parameter_plan)
