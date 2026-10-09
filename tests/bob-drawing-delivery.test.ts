@@ -238,7 +238,7 @@ for(const priorWrite of [false,true])test(`a CAD token failure is committed with
   lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{failures++},commit:async value=>{committed=value},
   cadAssistant:createCadAssistant({...f.cadOptions,callModel:async()=>({success:false,data:null,model:'fixture',usage,error:'model_output_limit'})}),
   callModel:async()=>{calls++;assert.equal(calls,1,'no paid explanation/localisation');return response(null,call('design_project_cad',cadRequest))}})
- assert(result.ok);assert.match(result.answer,/Designern förbrukade sin svarsbudget/)
+ assert(result.ok);assert.match(result.answer,/Designern nådde sin svarsgräns/)
  assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
  assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
 })

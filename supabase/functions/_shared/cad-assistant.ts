@@ -1,4 +1,4 @@
-import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop } from './bob-budget-stop.ts'
+import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop, withoutBudgetDetails } from './bob-budget-stop.ts'
 import {createDrawingDependencies} from './drawing-dependencies.ts'
 import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadParameters,inheritCadParameters,cadParameterSources,CadParameterGap,CadParameterSourceError,type CadParameters} from './cad-parameters.ts'
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
@@ -31,7 +31,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a requested CAD drawing to the CAD assistant. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Images opened in this turn are reopened for the designer beside current project facts. Delegate drawing intake early; the collector can read facts and open relevant images. Return all missing inputs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. It has its own project, material, image and geometry tools and can inspect, render and repair repeatedly. Returns a checked candidate, not a saved drawing. Specify intent, coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
-  {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
+  {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them. When the owner writes again about a request that paused at a limit, call this immediately with that ID and it continues. Do not re-read requests or sources first.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const CAD_BLOCKER_TOOL=tool('report_cad_blocker','Report an indispensable constraint, unsupported geometry, render failure or unreadable preview that prevents completion. Renderer failures must stop even when a candidate exists. Ordinary reversible design choices and later physical verification are not blockers. Do not replace a feasible render with an offer to do it later.',
@@ -48,7 +48,7 @@ export const RENDER_SAVED_CAD_TOOL=tool('render_saved_cad_candidate','Render an 
 const READ_REQUESTS_TOOL=tool('read_drawing_requests','Read minimal project drawing status and exact saved Artifact references. No private chat or drafts. Use after_id for the next page.',{request_id:{type:['string','null']},after_id:{type:['string','null']}})
 const CANCEL_REQUEST_TOOL=tool('cancel_drawing_request','Cancel your drawing request only when the owner asks to stop it. Read its current revision first. This fences late saves; it does not delete an already saved Artifact.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0}})
 const ENSURE_GAP_TOOL=tool('ensure_drawing_gap_task','Atomically reuse/create the Task for a gap bound to an already shared current Plan requirement. Read stable gap and requirement IDs first. Private-only needs stay in chat or link existing work; never copy private assessment prose.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},gap_id:{type:'string'},requirement_id:{type:'string'},plan_revision:{type:'integer',minimum:1}})
-const REQUEST_WORK_TOOL=tool('read_drawing_request_work','Read stable gaps, existing Task/Step links and the remaining request budget. A completed Task does not prove a missing measurement has been supplied.',{request_id:{type:'string'}})
+const REQUEST_WORK_TOOL=tool('read_drawing_request_work','Read stable gaps and existing Task/Step links. A completed Task does not prove a missing measurement has been supplied.',{request_id:{type:'string'}})
 const LINK_GAP_TOOL=tool('link_drawing_gap','Link a stable drawing gap to an existing project Task and/or Step. Read request work first and reuse existing links; never duplicate a Task by its title. Do not copy private assessment prose into project Tasks. Null references leave the gap as a chat complement.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},gap_id:{type:'string'},task_id:{type:['string','null']},step_id:{type:['string','null']}})
 export type CadPacket={recipe:CadAssemblyRequest;manifest:Record<string,any>;files:Record<string,string>;previews?:Record<string,string>}
 const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused request from ALL canonical requirements of a current approved plan Step and the current owner instruction. Read request and plan first. Keeps the same ID; starts fresh intake without recovering deleted chat. Then call design_project_cad with that ID and preserve the restored requirements. Does not grant readiness or a new budget.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},plan_revision:{type:'integer',minimum:1},step_id:{type:'string'},request_quote:{type:'string',maxLength:500}})
@@ -105,7 +105,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
   return {status:'invalid'}
  },sources,markSaved:async()=>{await savedRequest?.()},pending:()=>opts.requestStore?.list()??Promise.resolve([]),get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
  async consult(raw:unknown){
-  if(terminalFailure)return terminalFailure
+  if(terminalFailure)return withoutBudgetDetails(terminalFailure)
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
   if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
@@ -399,7 +399,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
      if(!checked.success&&['model_output_limit','model_reasoning_only'].includes(checked.error??'')){
       candidate=null;partial=true;metrics.review_unavailable++
       return terminalFailure={status:'unavailable',stage:'review',reason:checked.error,saved:false,
-       user_message:'Granskaren förbrukade sin svarsbudget utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
+       user_message:'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat. Ritningen kunde därför inte godkännas eller sparas från det försöket. Jag stoppade försöket utan att starta om samma arbete.'}
      }
      const review=checked.success?parseCadReview(checked.data,handoff):null
      if(!review){candidate=null;partial=true;metrics.review_unavailable++;return {status:'unavailable',stage:'review',reason:'review_unavailable',saved:false}}
@@ -678,7 +678,7 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
     const message=reason==='turn_budget_exhausted'
      ?budgetStopMessage(readBudgetStop(error))
      :['model_output_limit','model_reasoning_only'].includes(reason)
-      ?'Designern förbrukade sin svarsbudget utan att lämna ett användbart resultat.'
+      ?'Designern nådde sin svarsgräns utan att lämna ett användbart resultat.'
       :'Designerns modellanrop misslyckades.'
     return terminalFailure={...failure,user_message:message+' Ingen ny ritning sparades från det försöket. '+(metrics.renders===0?'CAD-motorn anropades aldrig. ':'')+'Jag stoppade försöket utan att starta om samma arbete.'}
    }
@@ -698,7 +698,9 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    }
    return outcome
   }
-  return opts.requestStore?.withReplayScope?opts.requestStore.withReplayScope(finish):finish()
+  // The persisted outcome keeps the stop diagnostics for recovery and logs;
+  // Bob gets the pause and what to do next.
+  return withoutBudgetDetails(await(opts.requestStore?.withReplayScope?opts.requestStore.withReplayScope(finish):finish()))
  }}
 }
 export type CadAssistant=ReturnType<typeof createCadAssistant>

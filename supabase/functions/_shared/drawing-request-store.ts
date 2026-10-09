@@ -37,7 +37,12 @@ export function createDrawingRequestStore(opts:{
   },
   atomicSave:true,
   ensureGapTask:(id,expected,gap,requirement,plan)=>caller('ensure_drawing_gap_task',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_requirement:requirement,p_plan_revision:plan}),
-  work:id=>caller('drawing_request_work',{p_project:opts.projectId,p_id:id}),
+  // Limits are enforced and renewed server-side; Bob never reads the ledger.
+  work:async id=>{
+   const work=await caller('drawing_request_work',{p_project:opts.projectId,p_id:id})
+   if(!work||typeof work!=='object')return work
+   const {budget:_budget,...rest}=work;return rest
+  },
   linkGap:(id,expected,gap,task,step)=>caller('link_drawing_gap',{p_project:opts.projectId,p_id:id,p_expected:expected,p_gap:gap,p_task:task,p_step:step}),
   list:()=>opts.privateCall({p_operation:'list'}),
   load:id=>restored.has(id)?Promise.resolve(structuredClone(restored.get(id))):opts.privateCall({p_operation:'load',p_id:id}),

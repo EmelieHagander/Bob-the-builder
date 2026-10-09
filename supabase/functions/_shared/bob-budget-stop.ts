@@ -25,21 +25,25 @@ export class BobBudgetError extends Error {
  readonly budget_stop:BobBudgetStop|undefined
  constructor(response:unknown,readonly stage:'intake'|'design'|'review'='design'){super('turn_budget_exhausted');this.budget_stop=readBudgetStop(response)}
 }
+/** Owner-facing. Limits are the server's business: the owner hears that the
+ * drawing paused and how it continues, never figures or allocation rules. */
 export function budgetStopMessage(stop:BobBudgetStop|undefined) {
- if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Ritförsöket pausades eftersom kostnaden eller utfallet för ett tidigare modellanrop ännu inte är klarlagt.'
+ if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Ritförsöket pausades tills ett tidigare steg är avslutat. Skriv till mig igen om ritningen om en stund, så fortsätter jag.'
  if(stop?.reasons.includes('context_cleared'))return 'Ritförsöket pausades eftersom ett tidigare arbetsresultat inte längre finns kvar i samtalet.'
- if(stop?.reasons.includes('review_reserve'))return 'Ritförsöket stoppades innan granskning och svar, eftersom resten av turens budget är reserverad för dem.'
- const resume=stop?.scope==='drawing_request'?' Skriv till mig igen om ritningen, så får den mer budget och jag tar vid där den stannade.':''
- if(stop?.reasons.includes('usd_limit'))return 'Ritförsöket stoppades av kostnadsgränsen.'+resume
- if(stop?.reasons.includes('call_limit'))return 'Ritförsöket stoppades av gränsen för antal modellanrop.'+resume
- return 'Ritförsöket stoppades av en resursgräns; den exakta orsaken är inte tillgänglig.'
+ if(stop?.reasons.includes('review_reserve'))return 'Ritförsöket stoppades före granskning och svar i den här omgången. Skriv till mig igen om ritningen, så fortsätter jag.'
+ if(!stop)return 'Ritförsöket pausades vid en gräns; den exakta orsaken är inte tillgänglig. Skriv till mig igen om ritningen, så fortsätter jag.'
+ return 'Ritförsöket pausades vid en gräns. Skriv till mig igen om ritningen, så fortsätter jag där den stannade.'
 }
+/** Model-facing. Bob is told what to do, not how limits are sized or renewed. */
 export function budgetResumeAction(stop:BobBudgetStop|undefined) {
- if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Reconcile the prior provider outcome and cost before another dispatch. Do not release or replace its reservation.'
- if(stop?.reasons.includes('context_cleared'))return 'Restore the same request through its existing context-recovery path. A new request must not bypass previous accounting.'
- if(stop?.reasons.includes('review_reserve'))return 'Design/research reached the turn limit minus the review/delivery reserve. Review or deliver what exists; do not dispatch more design work in this turn.'
- if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return stop.scope==='drawing_request'
-  ?'This drawing request reached its own cost or call limit. Tell the owner plainly and finish this reply; do not read requests, budgets or sources to look for a way around it. The owner\'s next message about this drawing renews its budget: call design_project_cad at once with this same request_id, brief and handoff, and the server adds one more allocation before resuming.'
-  :'This turn\'s model budget is used. Tell the owner what exists and that the next message continues this same request_id; do not retry in this turn.'
- return 'Inspect the current budget boundary before retrying. The unavailable diagnostic is not evidence that more money or more input is needed.'
+ if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'A previous step of this drawing is still being settled. Tell the owner the drawing is paused and finish this reply; do not retry in this turn. It continues on a later message about it.'
+ if(stop?.reasons.includes('context_cleared'))return 'Restore the same request through its existing context-recovery path. Do not create a new request.'
+ if(stop?.reasons.includes('review_reserve'))return 'Design work reached this turn\'s limit before review. Review or deliver what exists; do not dispatch more design work in this turn.'
+ if(stop?.scope==='turn')return 'This turn\'s work limit is reached. Tell the owner what exists and that the next message continues this same request_id; do not retry in this turn.'
+ return 'This drawing paused at a limit. Tell the owner plainly and finish this reply; do not read requests or sources to look for a way around it. The owner\'s next message about this drawing continues it: call design_project_cad at once with this same request_id, brief and handoff.'
+}
+/** What Bob sees of a stop: the pause and its next action, never the ledger. */
+export function withoutBudgetDetails<T extends Record<string,unknown>>(outcome:T):Omit<T,'budget_stop'|'budget_grant'> {
+ const {budget_stop:_stop,budget_grant:_grant,...rest}=outcome
+ return rest.reason==='turn_budget_exhausted'?{...rest,reason:'paused_at_limit'}:rest
 }

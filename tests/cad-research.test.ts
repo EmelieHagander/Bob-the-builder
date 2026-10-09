@@ -87,7 +87,8 @@ for(const error of ['model_output_limit','model_reasoning_only','model_unavailab
  const f=fixture();let calls=0
  const a=createCadAssistant({...f.opts,callModel:async o=>{calls++;return o.functionName==='cad-research'?reply('finish_cad_research',assessment):{...reply(),success:false,error}}})
  const result=await a.consult(request)
- assert.equal(result.stage,'design');assert.equal(result.reason,error);assert.equal(a.remaining,0);assert.equal(a.candidate,null)
+ // Bob reads the pause, not the ledger; the server-side record keeps the real cause.
+ assert.equal(result.stage,'design');assert.equal(result.reason,error==='turn_budget_exhausted'?'paused_at_limit':error);assert.equal(a.failure?.reason,error);assert.equal(a.remaining,0);assert.equal(a.candidate,null)
  assert.equal(f.renders,0);assert.equal(calls,2);assert.match(String(result.user_message),/CAD-motorn anropades aldrig/)
  assert.deepEqual(await a.consult(request),result);assert.equal(calls,2)
 })
@@ -110,7 +111,7 @@ test('Bob delivers the true design failure without paying for an explanation or 
  const a=createCadAssistant({...f.opts,research:false,callModel:async()=>{designCalls++;return {...reply(),success:false,error:'model_output_limit'}}})
  const result=await runProjectAnswer({projectId:'A',userId:'u',message:'Draw the bed',lookup:f.opts.makeLookup(),hasAccess:async()=>true,cadAssistant:a,
   callModel:async()=>{bobCalls++;assert.equal(bobCalls,1,'no paid explanation or restart');return reply('design_project_cad',request)}})
- assert(result.ok);assert.match(result.answer,/Designern förbrukade sin svarsbudget/);assert.match(result.answer,/CAD-motorn anropades aldrig/)
+ assert(result.ok);assert.match(result.answer,/Designern nådde sin svarsgräns/);assert.match(result.answer,/CAD-motorn anropades aldrig/)
  assert.equal(result.providerResponseId,undefined,'do not reuse a cursor with unresolved tool outputs')
  assert.equal(result.evidence.partial,true);assert.equal(designCalls,1);assert.equal(f.renders,0)
 })
