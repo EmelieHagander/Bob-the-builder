@@ -42,7 +42,9 @@ No current task, shopping item or drawing is recalculated by this milestone.
 
 ## Shared expert advice and design intent — 2026-10-09
 
-**Implemented in current source; final review/CI and hosted release pending.**
+**Deployed 2026-10-09 through [PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236).**
+[Release evidence](foundation-verification.md#expert-advice-and-design-readiness-release--2026-10-09)
+owns migration, catalog, runtime and Pages pins.
 `20261009214214_solution_design_readiness.sql` adds nullable `design_intent` to
 the existing immutable Solution revision. Bob's solution tools expose this packet
 and existing `source_media_id`; paged reads and exact selected-target reads retain
@@ -97,12 +99,12 @@ Shorten explanations while preserving actual choices, required features and
 reference identities; open original sources separately. No generic prompt/read
 budget increase or new tool is introduced.
 
-The source adds a read-only **Design & choices** section to selected and historical
+The UI adds a read-only **Design & choices** section to selected and historical
 Solution details, including original reference viewing, alternatives, advice,
 actual direction and bounded deferrals. Missing or unreadable legacy packets keep
 the original Solution text visible without claiming readiness. This UI is not a
 manual readiness editor or a new confirmation step. [State](bob-delivery-flow.md#state)
-retains release and ordinary-member advice/reference acceptance.
+retains ordinary-member advice/reference acceptance.
 
 ## Authority, files and recovery
 

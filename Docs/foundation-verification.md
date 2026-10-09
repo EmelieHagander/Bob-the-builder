@@ -1768,7 +1768,7 @@ The owner confirms Bob could read these project images and already identify seve
 
 The owner clarified that the bed was not ready for designer handoff: the mattress-support construction should first have been discussed with Bob acting as an expert adviser. Matching the mockup alone would not resolve that missing construction decision. This is the owner's reported missing advisory step; the deleted original private handoff cannot establish every earlier discussion.
 
-Read-only code review and an independent audit found these current seams:
+Before #236, read-only code review and an independent audit found these seams:
 
 - `cad-intake.ts` distinguishes `owner_decision`, `bob_decision` and measurements, but accepts missing/assumed owner decisions marked nonblocking. There is no recorded significance, advisory recommendation or decision-authority check.
 - `cad-assistant.ts` admits the ordinary design path when retrieval is complete, a target exists and no assessment checks are marked blocking. Target existence is not evidence of an informed chosen construction.
@@ -1777,6 +1777,64 @@ Read-only code review and an independent audit found these current seams:
 
 The specified responsibility is broader than a visual brief: Bob identifies material choices, researches applicable evidence, explains relevant alternatives and practical consequences, recommends a supported direction, and records the resulting decision or genuine open issue in the evolving selected Solution. Existing owner decisions and delegated authority count; a technical detail does not automatically require permission. Engineering correctness belongs to investigation/verification, not an uninformed owner vote.
 
-The [CAD owner](cad-adapter.md#proposed-visible-design-intent-before-3d--2026-10-09) owns the pending advisory/readiness contract and its implementation boundaries; [State](bob-delivery-flow.md#state) owns the next action. Readiness depends on the next deliverable's purpose. An exploratory appearance sketch can explicitly leave a support question open; developing construction cannot silently settle it by embedding an unexplained default into geometry. Unrelated reversible work can continue.
+The [Solution owner](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) owns shared intent and advice; [CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09) owns readiness consumption. The subsequent release below implements this boundary. Readiness depends on the next deliverable's purpose. An exploratory appearance sketch can explicitly leave a support question open; developing construction cannot silently settle it by embedding an unexplained default into geometry. Unrelated reversible work can continue.
 
-Required future acceptance covers: advice and supported resolution before a significant geometry-dependent choice; supported autonomous choices within mandate; reuse of earlier decisions after chat reset; explicit purpose-appropriate concept deferrals; and retrieval failures remaining unavailable rather than guessed. These are specified cases, not new passing runtime tests. This clarification changed documentation only; no catalog prompt, schema, paid model call or active project job was changed.
+Named-member acceptance still covers advice and supported resolution before a significant geometry-dependent choice; supported autonomous choices within mandate; reuse of earlier decisions after chat reset; purpose-appropriate concept deferrals; and retrieval failures remaining unavailable rather than guessed. At this clarification checkpoint only documentation changed; the subsequent implementation and technical release are recorded below.
+
+### Expert advice and design readiness release — 2026-10-09
+
+[PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236) merged as
+`9300aa90ab0bfd3c923802e88405975cb52a0809`, exact reviewed tree
+`fe3d1c76e90638c2cebc40824523f40e4535ea70`. The domain owners are
+[Solutions](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) and
+[CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09).
+
+[CI 37996963538](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963538)
+passed **1139/1139** tests, real Edge checks and every browser gate, including
+advice/choices, historical reload and original references at **320/390/1280 px**.
+[CAD 37996963521](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963521)
+passed 12 real Python worker tests;
+[PostgreSQL 37996963520](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963520)
+passed 62 concurrency cases. Screenshot artifact **11648121696** was created,
+but pixel materialization returned HTTP 403; this record claims automated browser
+proof, without additional manual visual inspection.
+
+| Reviewed migration source | SHA-256 | Hosted ledger |
+| --- | --- | --- |
+| `20261009214214_solution_design_readiness.sql` | `8a4c24ad48d1e4a8d37015a667be9f8640a13e55f62d29ff430b899af1fa9c60` | `20261009221621 / solution_design_readiness` |
+| `20261009214611_ai_design_readiness_catalog.sql` | `5a2d25d0e92c8177501afa6e1dfe31317066b5eb811364487432d603bec71554` | `20261009221638 / ai_design_readiness_catalog` |
+
+Ten hosted SQL function-body hashes match the isolated expected definitions.
+All ten immutable catalog definitions are active; resolved catalog hash is
+`08dc61413375b08461cc0a5cd5fe502db8f15b7c28be83b73c626ed8998ad1cc`.
+
+| Endpoint | Hosted status | Authentication retained | Exact packaged-source readback |
+| --- | --- | --- | --- |
+| `bob-worker` | 62 / ACTIVE | `verify_jwt=false`, existing job capability | All 82 included files match |
+| `ask-bob` | 94 / ACTIVE | `verify_jwt=true` | All 84 included files match |
+
+The read-only SQL-role probe of the actual bed Area `a_br_sang`, target decision
+1 and selected Solution revision 1 returns legacy `needs_data /
+design_intent_required`, without a fabricated ready pin. The original CAD remains
+readable. Outsider, anonymous and service-role access are denied. Deployment
+before/after hashes match for Solutions, targets, the original CAD, private
+requests and budgets. Jobs/messages were compared within the post-deployment
+read-only role probe under repeatable read. Security and performance advisor
+category/count groups are unchanged. This is SQL-role simulation, not signed-in
+HTTP or semantic owner acceptance.
+
+[Pages 37998296214](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37998296214)
+published the exact merge at **22:17:16Z** to
+https://emeliehagander.github.io/Bob-the-builder/.
+[Live Bob 37998296738](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37998296738)
+passed after runtime/catalog deployment: ordinary guest Auth/RLS, actual OpenAI
+lookup, neutral red image pixels and versioned knowledge, with no private server
+history. Idea turn `a3207805-ebcb-430e-8765-884c966af0e4` advises on place and
+measurements first. Its 190 words and seven input items remain a brevity-quality
+observation, not a style-acceptance pass. Fixture
+`p_908f30c8ba26451182ba48d416722a6c` completed normal-API image cleanup and guarded
+project deletion; exact fixture Project/people/Task/material/media readback is
+zero. Actual bed project data stayed unchanged through the guest probe. Technical
+installation is complete. Ordinary named-member
+expert-choice/design acceptance, reference fidelity and broader P0/P4 outcomes
+remain open in [State](bob-delivery-flow.md#state).

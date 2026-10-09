@@ -1,8 +1,8 @@
 # bob — current capability & gap inventory
 
-## Shared design advice and purpose readiness — source 2026-10-09
+## Shared design advice and purpose readiness — deployed 2026-10-09
 
-**Implemented in current source; final review/CI and hosted release pending.**
+**Deployed through [PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236); named-member acceptance remains open.**
 The existing Solution revision now carries shared expert advice, actual choices,
 original-image roles, required features and a bounded next-output purpose. Bob's
 write/read/target paths expose it, and Solutions has read-only choice/history
@@ -13,8 +13,9 @@ budget allocation or universal owner-approval step is added.
 
 [Solutions](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) owns
 packet semantics; [CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09)
-owns consumption. The source migrations and matching catalog/runtime/UI are not
-yet recorded as hosted. [State](bob-delivery-flow.md#state) retains release and
+owns consumption. [Release evidence](foundation-verification.md#expert-advice-and-design-readiness-release--2026-10-09)
+records the applied migrations, active catalog, exact runtime and Pages release.
+[State](bob-delivery-flow.md#state) retains
 ordinary named-member advice/mockup acceptance; controlled checks do not close
 those outcome gates.
 

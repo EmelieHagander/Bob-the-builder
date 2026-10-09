@@ -181,7 +181,9 @@ the follow-up PR, separately from the initial merged implementation.
 <a id="proposed-visible-design-intent-before-3d--2026-10-09"></a>
 ### Expert advice and design readiness — 2026-10-09
 
-**Implemented in current source; final review/CI and hosted release pending.**
+**Deployed 2026-10-09 through [PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236).**
+[Release evidence](foundation-verification.md#expert-advice-and-design-readiness-release--2026-10-09)
+owns exact installation and preservation checks.
 [The Solution owner](solutions.md#shared-expert-advice-and-design-intent--2026-10-09)
 defines shared advice, actual chosen direction, mandate, references and bounded
 output-purpose deferrals. Bob develops that supported direction within the
@@ -219,8 +221,8 @@ grant new geometry, broader access or new spending allocation.
 | Source read failure | Report unavailable evidence and recover retrieval; do not replace it with a guess. |
 
 The [dated readiness finding](foundation-verification.md#expert-advice-and-design-readiness--2026-10-09)
-owns the original gap; [State](bob-delivery-flow.md#state) owns remaining release
-and named-member advice/mockup acceptance. Controlled code/SQL/browser fixtures
+owns the original gap; [State](bob-delivery-flow.md#state) owns remaining
+named-member advice/mockup acceptance. Controlled code/SQL/browser fixtures
 do not establish the quality of actual expert advice or reference fidelity.
 
 The current technical handoff and original-image path already exist, and the
