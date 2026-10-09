@@ -124,7 +124,7 @@ export async function runProjectAnswer(opts: {
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
   const drawingRequests=await opts.cadAssistant?.pending()
-  if(Array.isArray(drawingRequests)&&drawingRequests.length)messages.push({role:'user',content:'Outstanding drawing requests (private working state, not verified project truth). Resume the matching request_id after complements; do not restart or duplicate follow-up tasks. The owner\'s new message about a request that stopped at its cost limit renews its budget: call design_project_cad with that request_id at once. Do not read requests, budgets or sources first.\n'+JSON.stringify(drawingRequests)})
+  if(Array.isArray(drawingRequests)&&drawingRequests.length)messages.push({role:'user',content:'Outstanding drawing requests (private working state, not verified project truth). Resume the matching request_id after complements; do not restart or duplicate follow-up tasks. A request that paused at a limit continues on the owner\'s next message about it: call design_project_cad with that request_id at once. Do not read requests or sources first.\n'+JSON.stringify(drawingRequests)})
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   const observation: TurnObservation = { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' }
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }

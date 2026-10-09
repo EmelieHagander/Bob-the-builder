@@ -62,9 +62,11 @@ test('review budget failure retains boundary, counters and review stage and cann
  const f=fixture(),model=f.opts.callModel
  f.opts.callModel=async o=>o.functionName==='cad-reviewer'?budgetFailure<string>({scope:'drawing_request',reasons:['call_limit'],calls:24,call_limit:24}):model(o)
  const assistant=createCadAssistant(f.opts),result=await assistant.consult(request)
- assert.equal(result.reason,'turn_budget_exhausted');assert.equal(result.stage,'review')
- assert.deepEqual(result.budget_stop,{scope:'drawing_request',reasons:['call_limit'],calls:24,call_limit:24})
- assert.match(result.user_message,/antal modellanrop/);assert.equal(assistant.candidate,null)
+ assert.equal(result.reason,'paused_at_limit');assert.equal(result.stage,'review')
+ assert.equal(result.budget_stop,undefined,'Bob is not shown the ledger')
+ assert.equal(assistant.failure?.reason,'turn_budget_exhausted','the server-side record keeps the real cause')
+ assert.deepEqual(assistant.failure?.budget_stop,{scope:'drawing_request',reasons:['call_limit'],calls:24,call_limit:24})
+ assert.match(result.user_message,/pausades vid en gräns/);assert.equal(assistant.candidate,null)
  assert.deepEqual(await assistant.consult(request),result,'same assistant does not restart after a budget stop')
 })
 test('review rejection returns concrete feedback to the designer and requires a new reviewed candidate',async()=>{

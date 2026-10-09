@@ -51,7 +51,7 @@ test('P4: own budget/status changes cannot rewrite a replayed tool reply; cancel
   }
   await assert.rejects(run(),BobContinuation);revision=2
   if(!checkpoint){await assert.rejects(run(),/continuation_changed/);assert.equal(calls,1);continue}
-  assert.deepEqual(await run(),{revision:1,budget:{calls:1}});assert.equal(calls,1)
+  assert.deepEqual(await run(),{revision:1},'the replayed reply is kept and the ledger never reaches Bob');assert.equal(calls,1)
   status='cancelled';await assert.rejects(run(),/drawing_request_cancelled/)
  }
 })
