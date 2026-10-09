@@ -4,7 +4,7 @@ import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadP
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
 import {splitDimensionBindings,readPhysicalCadSources,bindPhysicalDimensions,physicalLineageSources,PhysicalCadSourceError} from './cad-physical-lineage.ts'
 import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
-import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
+import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, type DrawingBudgetGrant, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
@@ -31,7 +31,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a requested CAD drawing to the CAD assistant. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Images opened in this turn are reopened for the designer beside current project facts. Delegate drawing intake early; the collector can read facts and open relevant images. Return all missing inputs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. It has its own project, material, image and geometry tools and can inspect, render and repair repeatedly. Returns a checked candidate, not a saved drawing. Specify intent, coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
-  {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
+  {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them. When the owner asks to continue or retry a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s request authorizes one more budget allocation, added by the server. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const CAD_BLOCKER_TOOL=tool('report_cad_blocker','Report an indispensable constraint, unsupported geometry, render failure or unreadable preview that prevents completion. Renderer failures must stop even when a candidate exists. Ordinary reversible design choices and later physical verification are not blockers. Do not replace a feasible render with an offer to do it later.',
@@ -138,6 +138,21 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
    }
   }
   if(used>=2)return {status:'budget_exhausted',saved:false}
+  // The owner's message resuming a cost-stopped request is the budget
+  // authorization. The grant is owner-only SQL and idempotent per turn; the
+  // packet is reloaded because the grant releases its retry gate and revision.
+  let budgetGrant:DrawingBudgetGrant|null=null
+  if(request&&opts.ownerRequest&&opts.requestStore?.grant&&request.payload.retry?.outcome?.reason==='turn_budget_exhausted'){
+   const stop=readBudgetStop(request.payload.retry.outcome)
+   if(stop?.scope==='drawing_request'&&stop.reasons.some(r=>r==='usd_limit'||r==='call_limit')){
+    budgetGrant=await opts.requestStore.grant(request.id)
+    if(budgetGrant.status==='granted'){
+     const fresh=await opts.requestStore.load(request.id)
+     if(!fresh)return {status:'unavailable',stage:'intake_store',saved:false,budget_grant:budgetGrant}
+     request=fresh
+    }
+   }
+  }
   const handoff=parseDesignHandoff(raw.handoff)
   if(!handoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
   const dependencies=createDrawingDependencies(request?.payload.dependencies)
@@ -672,7 +687,8 @@ export function createCadAssistant(opts:{runtimeVersion?:()=>Promise<string>;req
   finally{sources.push(...lookup.sources,...groundingLookup.sources)}
   }
   const finish=async()=>{
-   const outcome=await attempt()
+   const result=await attempt()
+   const outcome=budgetGrant?{...result,budget_grant:budgetGrant}:result
    if(request&&!candidate&&retryInputs&&dependencies.complete&&!['stopped','cancelled','paused','saved','existing_request'].includes(String(outcome.status))&&!('retry_suppressed' in outcome)){
     try{await persist(outcome.status==='needs_data'?'needs_data':'retrieval_failed',{reviewed_candidate:undefined,...(object(payload.draft)?{draft:{...payload.draft,source_fingerprint:await sourceFingerprint()}}:{}),dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})}catch(error){
      rethrowContinuation(error)
