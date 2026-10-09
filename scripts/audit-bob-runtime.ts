@@ -257,7 +257,7 @@ const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id
 const candidate = { purpose: 'project', parameter_plan: parameterPlan(recipe), dimension_bindings: [], recipe, source_artifact_id: null, source_revision: null, part_ids: [], title: 'Synthetic shelf', description: 'Synthetic audit geometry',
   assumptions: 'No physical verification', target_revision: 1, measurements: [] }
 const broken = structuredClone(candidate) as any; delete broken.recipe.definitions[0].y_mm
-const cadCalls: any[] = []; let renders = 0
+const cadCalls: any[] = [], cadReviewerCalls: any[] = []; let renders = 0
 const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true, makeLookup: () => lookup(40),
   deadline: Date.now() + 300000, available: true, readArtifact: noIO,
   render: async r => { renders++; const bounds = { min: [0, 0, 0], max: [600, 250, 18], size: [600, 250, 18] }
@@ -266,7 +266,11 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
     files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES',top:'SYNTHETIC_TOP_PNG_BYTES'} } },
   callModel: measured('cad-repair', async o => {
     if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
-    if(o.schemaName==='bob_cad_review')return response({verdict:'pass',summary:'Synthetic review',requirements:{shape:{status:'met',evidence:'Synthetic geometry'}},issues:[]});cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
+    if(o.schemaName==='bob_cad_review'){
+      cadReviewerCalls.push(structuredClone(o))
+      return response({verdict:'pass',summary:'Synthetic review',requirements:{shape:{status:'met',evidence:'Synthetic geometry'}},issues:[]})
+    }
+    cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') }),
 })
 const cadResult = await cad.consult({ handoff, brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: null })
@@ -274,6 +278,9 @@ const cadReturns = cadCalls.flatMap(o => o.messages ?? []).filter(m => m.role ==
 assert.equal(cadResult.status, 'ready', JSON.stringify(cadResult))
 assert(cad.candidate, 'Only an independently reviewed candidate may be offered for saving')
 assert.equal(renders, 1, 'Valid geometry must reach the synthetic transport once; invalid geometry must not.')
+const deliveredGeneratedPixels = (options: any[]) => ['SYNTHETIC_PNG_BYTES', 'SYNTHETIC_TOP_PNG_BYTES'].every(png =>
+  options.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) =>
+    p.type === 'image_url' && p.image_url?.url === 'data:image/png;base64,' + png))))
 
 let fourthTools: string[] = [], researchCalls = 0
 const researchLookup = lookup(40)
@@ -308,9 +315,10 @@ return { report_version: 1, tool_instruction_mode: toolInstructions, manual_stra
   calls, execution_roles: [...new Set(executionEvents.filter(e => e.kind === 'model').map(e => e.role))],
   surfaces, toolbox_shelves: discovery, premature,
   reserved_image_grounding: { remaining: readProbe.remaining, project: groundingData.project.status, measurements: groundingData.measurements.status, provider_still_called: true },
-  cad: { status: cadResult.status, calls: cadCalls.length, renders, returned_to_designer: cadReturns.map(r => ({ status: r.status, reason: r.reason ?? null })),
-    generated_pixels_delivered: cadCalls.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.type === 'image_url'))),
-    svg_bytes_delivered: JSON.stringify(cadCalls).includes('SYNTHETIC_SVG_BYTES'),
+  cad: { status: cadResult.status, calls: cadCalls.length, reviewer_calls: cadReviewerCalls.length, renders, returned_to_designer: cadReturns.map(r => ({ status: r.status, reason: r.reason ?? null })),
+    generated_pixels_delivered: deliveredGeneratedPixels([...cadCalls, ...cadReviewerCalls]),
+    generated_pixels_delivered_to_reviewer: deliveredGeneratedPixels(cadReviewerCalls),
+    svg_bytes_delivered: JSON.stringify([...cadCalls, ...cadReviewerCalls]).includes('SYNTHETIC_SVG_BYTES'),
     research_boundary_status: researchResult.status, research_tools_on_fourth_call: fourthTools, unused_lookup_calls: researchLookup.remaining },
   write_statuses_for_nine_tasks: writeStatuses,
   drawing_receipt_check_accepts_any_saved_drawing: drawingSaved([{ dataset: 'artifacts', revision: 1, record: { cad: true } }] as any,

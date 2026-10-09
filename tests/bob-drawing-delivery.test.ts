@@ -179,11 +179,16 @@ test('revocation stops the turn, and a closing deadline gives a text-only step',
 
 test('a worker yield replays the design and saves the drawing exactly once', async () => {
   const entries: JournalEntry[] = []; let now = 0, providerCalls = 0, renders = 0, writes = 0
+  const providerRoles: string[] = []
   const resume = () => {
     const f = fixture(), journal = createBobJournal({ entries, save: async e => { entries.push(structuredClone(e)) } }, 20000, () => now)
     const callModel: ModelCall = o => journal.run('model', o, async () => {
       providerCalls++
-      if (o.functionName === 'cad-designer') return o.messages?.some(m => m.role === 'tool') ? response('Inspected.') : response(null, call('render_cad_candidate', candidate))
+      providerRoles.push(o.functionName)
+      if (o.functionName === 'cad-designer') {
+        assert(!o.messages?.some(m => m.role === 'tool'), 'a successful render goes to independent review without a paid designer self-inspection')
+        return response(null, call('render_cad_candidate', candidate))
+      }
       const last = o.messages!.at(-1)!
       if (last.role !== 'tool') { now = 15000; return response(null, call('design_project_cad', cadRequest)) }
       if (JSON.parse(String(last.content)).status === 'ready') return response(null, call('save_cad_design', { request_quote: message }))
@@ -195,7 +200,9 @@ test('a worker yield replays the design and saves the drawing exactly once', asy
   await assert.rejects(resume(), e => e instanceof BobContinuation); now = 0
   const result = await resume()
   assert(result.ok); assert.equal(result.answer, 'Sparad.'); assert.equal(result.evidence.partial, false)
-  assert.equal(providerCalls, 5, 'each provider call runs once across the yield'); assert.equal(renders, 1); assert.equal(writes, 1)
+  assert.equal(providerCalls, 4, 'each necessary provider call runs once across the yield')
+  assert.deepEqual(providerRoles, ['ask-bob', 'cad-designer', 'ask-bob', 'ask-bob'])
+  assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
 test('a rendering result or unrelated Artifact link alone is not a saved drawing', () => {

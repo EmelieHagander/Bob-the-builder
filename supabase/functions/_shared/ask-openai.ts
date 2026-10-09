@@ -9,7 +9,7 @@ import { createCurrentViewGuard } from './current-view-guard.ts'
 import { parseBobScreen, type BobScreenPointer, type CurrentView } from '../../../src/domain/bobScreen.ts'
 import {createDrawingBudget} from './drawing-budget.ts'
 import {createDrawingRequestStore} from './drawing-request-store.ts'
-import { createBobModelBudget } from './bob-model-budget.ts'
+import { createBobModelBudget, isDrawingModelCall, type DrawingBudgetAuthority } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { hasImageContent } from './openai-content.ts'
@@ -95,6 +95,9 @@ export async function answerWithOpenAi(opts: {
   const modelBudget = createBobModelBudget()
   const callModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
+   const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
+    ?{requestId:drawingRequestId,options}:undefined
+   const boundDrawing=isDrawingModelCall(drawingAuthority,options.aiFunction)
    return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
@@ -113,7 +116,7 @@ export async function answerWithOpenAi(opts: {
           ...recovery,
         } } : {}),
       })
-      result=drawingRequestId&&drawingBudget?await drawingBudget(drawingRequestId,options,invoke):await invoke()
+      result=boundDrawing&&drawingAuthority&&drawingBudget?await drawingBudget(drawingAuthority.requestId,options,invoke):await invoke()
     } catch (error) {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
@@ -131,7 +134,7 @@ export async function answerWithOpenAi(opts: {
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  },options.aiFunction).then(result=>{
+  },options.aiFunction,boundDrawing?drawingAuthority:undefined).then(result=>{
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result
@@ -313,7 +316,7 @@ export async function answerWithOpenAi(opts: {
 
   const cadAssistant = createCadAssistant({
     aiCatalog,
-    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')})),
+    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
       const previous=drawingRequestId;drawingRequestId=id
       try{return await work()}finally{drawingRequestId=previous}

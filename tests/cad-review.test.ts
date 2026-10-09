@@ -29,6 +29,7 @@ function fixture(){let renderCount=0,designerCalls=0,reviewCalls=0
 test('original request and structured directions reach a separate, tool-free reviewer with exact generated pixels',async()=>{
  const f=fixture(),a=createCadAssistant(f.opts)
  assert.equal((await a.consult(request)).status,'ready')
+ assert.deepEqual(f.seen.map(o=>o.functionName),['cad-designer','cad-reviewer'],'rendered geometry needs no paid designer self-inspection')
  const review=f.seen.find(o=>o.functionName==='cad-reviewer')
  assert.equal(review.previousResponseId,undefined);assert.equal(review.tools,undefined)
  assert.deepEqual(review.schema.properties.requirements.required,['shape'])
@@ -77,11 +78,78 @@ test('review rejection returns concrete feedback to the designer and requires a 
   }
   designers++
   if(designers===1)return call('render_cad_candidate',design)
-  if(designers===3){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,undefined,'repair is requested, never forced');assert.equal(o.messages[0].role,'user');assert.equal(JSON.parse(String(o.messages[0].content)).independent_review_required,true);return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
+  if(designers===2){assert(JSON.stringify(o.messages).includes('negative X'));assert.equal(o.tool_choice,undefined,'repair is requested, never forced');const feedback=o.messages.find((m:any)=>m.role==='user'&&typeof m.content==='string'&&JSON.parse(m.content).independent_review_required);assert(feedback);assert(JSON.stringify(o.messages).includes('render-1-front'));return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-600}}]}})}
   return reply('Ready')
  }
  const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,2);assert.equal(a.metrics.review_rejections,1)
+ assert.equal(designers,2);assert.equal(reviews,2)
  assert.equal(a.candidate!.packet.recipe.instances[0].placement.x,-600)
+})
+test('an unchanged rejected candidate stops before another render or paid review',async()=>{
+ const f=fixture();let designers=0,reviews=0
+ f.opts.callModel=async o=>{
+  if(o.functionName==='cad-reviewer'){
+   reviews++
+   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+  }
+  designers++
+  return call('render_cad_candidate',designers===1?design:Object.fromEntries(Object.entries(design).reverse()))
+ }
+ const a=createCadAssistant(f.opts),result=await a.consult(request)
+ assert.equal(result.status,'incomplete');assert.equal(result.reason,'no_progress');assert.equal(result.stage,'review')
+ assert.equal(designers,2);assert.equal(f.renders,1);assert.equal(reviews,1)
+ assert.equal(a.candidate,null);assert.equal(a.quality,null)
+ assert.deepEqual(await a.consult(request),result);assert.equal(designers,2)
+})
+test('a pause reconstructs rejected inputs and cannot render or review the same candidate twice',async()=>{
+ const f=fixture(),entries:JournalEntry[]=[];let now=0,designers=0,reviews=0
+ const run=()=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},20000,()=>now)
+  return createCadAssistant({...f.opts,
+   callModel:o=>journal.run('model:'+o.functionName,o,async()=>{
+    if(o.functionName==='cad-reviewer'){
+     reviews++;now=15000
+     return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+    }
+    designers++;return call('render_cad_candidate',design)
+   },10000),
+   render:r=>journal.run('render',r,()=>f.opts.render(r as typeof recipe)),
+  })
+ }
+ await assert.rejects(run().consult(request),e=>e instanceof BobContinuation&&e.kind==='yield')
+ now=0
+ const a=run(),result=await a.consult(request)
+ assert.equal(result.reason,'no_progress');assert.equal(designers,2);assert.equal(f.renders,1);assert.equal(reviews,1)
+ assert.equal(a.candidate,null)
+})
+test('a correction to the candidate assumptions can be reviewed without changing valid geometry',async()=>{
+ const f=fixture();let designers=0,reviews=0
+ const assumptions='Physical clearance remains unverified and must be measured on site.'
+ f.opts.callModel=async o=>{
+  if(o.functionName==='cad-reviewer'){
+   if(++reviews===1)return reply(JSON.stringify({verdict:'revise',summary:'Make the physical clearance uncertainty explicit',requirements:[{id:'shape',status:'failed',evidence:'The candidate assumptions omit the open clearance check'}],issues:[{severity:'error',code:'uncertainty',correction:assumptions}]}))
+   assert.equal(JSON.parse(o.messages[0].content).candidate.assumptions,assumptions)
+   return reviewReply()
+  }
+  return call('render_cad_candidate',++designers===1?design:{...design,assumptions})
+ }
+ const a=createCadAssistant(f.opts),result=await a.consult(request)
+ assert.equal(result.status,'ready');assert.equal(designers,2);assert.equal(f.renders,2);assert.equal(reviews,2)
+ assert.deepEqual(a.candidate?.packet.recipe,recipe)
+})
+test('distinct repairs keep the three-review bound and cannot save a rejected candidate',async()=>{
+ const f=fixture();let designers=0,reviews=0
+ f.opts.callModel=async o=>{
+  if(o.functionName==='cad-reviewer'){
+   reviews++
+   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+  }
+  designers++
+  return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-100*designers}}]}})
+ }
+ const a=createCadAssistant(f.opts),result=await a.consult(request)
+ assert.equal(result.status,'incomplete');assert.equal(designers,3);assert.equal(f.renders,3);assert.equal(reviews,3)
+ assert.equal(a.candidate,null);assert.equal(a.quality,null)
 })
 test('missing previews, unavailable/malformed review and omitted requirements cannot expose a savable candidate',async()=>{
  for(const failure of ['pixels','provider','coverage']){
