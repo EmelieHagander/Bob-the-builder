@@ -779,10 +779,18 @@ messages, budget and saved project records remain unchanged. No read enqueues
 work. Existing invoker wrapper, private helper grants and empty search path are
 retained; reset/revoked/foreign access cannot inherit recovery proof.
 
-This source correction is awaiting final CI and hosted application. The
-[conversation owner](../Docs/ask-bob-conversations.md) owns display and retry
-semantics; [incident evidence](../Docs/foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
-distinguishes the successful drawing save from the stale chat warning.
+The reviewed migration was applied as **20261009210458 /
+bob_drawing_recovery_status** after
+[PR #235](https://github.com/EmelieHagander/Bob-the-builder/pull/235). Private-body
+and public-wrapper/OID/grant readback match the reviewed source. A rollback-only
+SQL role probe confirmed current queued/completed status, reset isolation,
+outsider/anonymous denial and unchanged request, budget, job and message counts.
+The old private turn returns no status after the owner's reset; its saved project
+Artifact remains. No Edge deployment was required. The
+[conversation owner](../Docs/ask-bob-conversations.md#exact-drawing-request-recovery-status--2026-10-09)
+owns the released display/retry semantics; [incident and release evidence](../Docs/foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns exact source pins, Pages proof and the remaining ordinary browser acceptance.
+Do not reapply this migration.
 
 ### P3 screen context and source changes — applied
 

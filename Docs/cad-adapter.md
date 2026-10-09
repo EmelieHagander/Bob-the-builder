@@ -178,6 +178,34 @@ through the actual adapter and asserts strict `text.format` at the HTTP boundary
 The shared cross-app adapter itself is unchanged. Live acceptance is recorded in
 the follow-up PR, separately from the initial merged implementation.
 
+### Proposed visible design intent before 3D — 2026-10-09
+
+**Proposal only; no schema, workflow or prompt change is implemented.** The
+owner proposes agreeing the object's design before 3D. Reuse the visible
+[selected Solution](solutions.md) with a version-bound design intent: reference
+roles, orientation and form, required functions, features to preserve,
+dimensions and open choices. Daisy and Rita would receive the same exact brief
+and original images. Earlier explicit choices remain useful; Bob would resolve
+significant new differences rather than ask again for settled decisions. This
+proposal adds no mandatory approval step or execution gate.
+
+The existing Solution `source_media_id` is available in the database/UI but
+missing from Bob's tool surface. A proposed implementation would expose it
+through Bob's write/read/target paths and open the chosen image before handoff,
+reusing the existing versioned Solution record.
+
+The current technical handoff and original-image path already exist, and the
+first-layout instruction includes required functions; only optional joinery and
+decoration are deferred. The saved bed recipe has two mattress platforms but
+lacks the intended bookshelf, drawers and separate gable panel. Its legacy
+selected Solution described a compact bed with storage undecided and no linked
+source image; it had not been aligned to the mockup. Recipe/metadata readback
+establishes this design gap. A full mockup pixel comparison was unavailable, so
+visual fidelity and the proposed brief's acceptance remain open in
+[State](bob-delivery-flow.md#state). The
+[verification owner](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns the actual artifact/reference evidence and its limits.
+
 ### Hosting boundary
 
 Build `cad-worker/Dockerfile` and run behind HTTPS with a secret `BOB_CAD_TOKEN` of at least 32 characters. Set matching Edge secrets `BOB_CAD_URL=https://<host>/render` and `BOB_CAD_TOKEN`. The service accepts only authenticated POST `/render`, limits input to 256 KiB, runs geometry in a killable child process for at most 40 seconds and returns at most 6 MiB. It writes only a temporary directory, accepts no paths/code/URLs and logs no recipes or credentials. The transport checks engine/assembly identity, definitions, instance identity, bounds and every export hash. Configure provider resource/rate limits at deployment.

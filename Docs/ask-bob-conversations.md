@@ -49,7 +49,7 @@ explicit same-ID retry, duplicate prevention and failed/successful reset at
 
 ### Exact drawing-request recovery status — 2026-10-09
 
-**Correction in implementation; review, CI, migration and Pages release pending.**
+**Deployed 2026-10-09 through [PR #235](https://github.com/EmelieHagander/Bob-the-builder/pull/235).**
 The existing bed request completed independent review and canonical save after
 its original ordinary turn had failed at the budget guard. The browser still
 appended that old turn's synthetic spending-stop notice after the saved reply.
@@ -93,9 +93,19 @@ by the existing project/account, send and reset scope.
 
 The retained outgoing-message rules above are unchanged. A recovered drawing
 does not acknowledge a different message rejected at 409 or an uncertain send;
-that copy still needs its exact user-turn receipt or explicit dismissal. Release
-and the existing owner's ordinary browser reload remain separate gates in
-[State](bob-delivery-flow.md#state).
+that copy still needs its exact user-turn receipt or explicit dismissal.
+
+[CI 37989030600](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37989030600)
+passed 1,093 tests and reset/recovery browser fixtures at 320/390/1280 px.
+[Pages 37991195981](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37991195981)
+deployed merge `a77de7431f3c4ef0a7b866c142e6c050550ac216` successfully. The status
+migration is applied; `ask-bob` v93 and `bob-worker` v61 are unchanged. During the
+investigation the owner cleared the private thread at 20:40:02Z, before the status
+migration: old jobs, messages and working packet were deleted, while the saved
+request and Artifact revision remain. That old
+turn can no longer supply a live completed-status probe. Isolated SQL and CI
+browser fixtures prove the correction; ordinary named-owner browser acceptance
+remains in [State](bob-delivery-flow.md#state).
 
 ## Explicit T1 / T2 / T3 context
 
