@@ -748,6 +748,22 @@ The migration adds request-owned gap identities, deterministic request reuse, ca
 Release order: review the exact tree and pass SQL, Edge, browser and real PostgreSQL concurrency gates; apply the migration; deploy matching `ask-bob` and `bob-worker`; verify authenticated event/receipt recovery and the frontend build. Existing worker signatures remain compatible. Older request charges are not guessed: pre-migration requests require a prospective explicit allocation. The current lifecycle/retention/authority owner is [Ask bob conversations — P2 completion](../Docs/ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Exact deployment and model proof belongs in [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 
+### Drawing request allocation — 2026-10-09
+
+Source migration `20261008160000_drawing_budget_3usd.sql` implements the owner's
+$3 allocation for a drawing request. It raises the default and tracked open
+requests below $3, retaining all calls and charges. A prior cost-stop retry
+fingerprint is released and a project event is bumped; saved, cancelled and
+legacy-untracked requests are excluded. Grants, uncertain outcomes, caller
+authority and canonical save receipts keep their existing boundaries.
+
+The October 9 investigation verified that this migration was absent from the
+hosted ledger, whose default remained $1. Apply this reviewed existing migration
+after deploying the matching request-scoped runtime, so its recovery event
+cannot awaken an old worker with the conflicting turn limit. Hosted release
+and readback are pending. [CAD budget and review](../Docs/cad-adapter.md#drawing-request-budget-and-review--2026-10-09)
+owns the runtime contract and acceptance limits.
+
 ### P3 screen context and source changes — applied
 
 Migration `20260930112431_bob_p3_context_and_source_changes.sql` adds private `bob_turn_screens` keyed by logical thread/turn, strict pointer validation, claimed-turn capture, v2 enqueue and claim/status recovery. Original focus, including omission, is immutable across retries; JSON object key order does not create a different pointer. Service-only capture/enqueue/claim commands retain actor/generation assertions; private rows have no browser-readable policy. The authenticated status endpoint returns only the initiating user's permitted turn. Screen pointers contain no fact labels, credentials or private assessment prose.

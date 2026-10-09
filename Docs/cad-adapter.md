@@ -79,8 +79,11 @@ Its own bounded loop can search current project/physical records, inspect materi
 Each render returns bounds, part metadata and geometry checks plus PNG views
 rasterized from the **same exported SVGs** using pinned CairoSVG 2.9.1. The
 transport verifies PNG dimensions/signature/hash and their source-SVG hashes.
-The designer receives these pixels on the next model call to compare orientation,
-construction and reference intent, then can research and repair. Max dimension
+The independent reviewer receives a valid candidate's pixels directly, without
+another paid designer inspection first; on rejection the designer receives the
+pixels and concrete feedback to research and repair. See the
+[budget/review correction](#drawing-request-budget-and-review--2026-10-09) for
+implementation and release status. Max dimension
 is 1024 px, 512 KiB decoded per view, within the existing 6 MiB response bound.
 This is visual feedback, not proof of physical fit or semantic correctness.
 
@@ -119,7 +122,7 @@ that handoff. This is semantic intent, never a measured fact or new permission.
 Source detail renders keep exact geometry/part identities and use the requested
 views. No object names or language keyword tables select the workflow.
 
-After the designer inspects its candidate, a separate `cad-reviewer/cad` model
+After a valid render, a separate `cad-reviewer/cad` model
 conversation gets the same original request/handoff, exact recipe, engine checks,
 generated previews, retained reference pixels and bounded research evidence.
 Fresh project/measurement grounding and retained-image revocation checks apply
@@ -150,8 +153,10 @@ certification attached to every historical Artifact revision.
 The reviewer is configured independently using the governed vision-capable mini
 model at high reasoning. Its current governed output ceiling is **50,000 tokens**
 (reasoning and verdict together), explicitly authorised by the owner and read back
-on October 2; model and reasoning effort are unchanged. Settings are read for each
-new model call, so in-flight provider calls retain their original ceiling. Request
+on October 2; model and reasoning effort are unchanged. Since the
+[AI catalog release](../supabase/README.md#ai-definition-catalog-and-model-tiers),
+the execution profile is pinned for the job; enablement and model retirement
+remain live checks. Request
 cost/attempt/deadline guards remain separate. See the [configuration evidence and
 remaining acceptance](foundation-verification.md#reviewer-output-ceiling--2026-10-02).
 
@@ -249,7 +254,9 @@ Diagnostics cannot replace a deliverable or be reviewed as project work. A
 rejected candidate that was not changed cannot trigger another paid review.
 Ordinary design corrections and input validation retain bounded repair attempts.
 
-All Responses model roles in one Bob turn share a $1 stop threshold and a
+**Historical budget boundary, superseded by the
+[drawing-request correction](#drawing-request-budget-and-review--2026-10-09).**
+At this release, all Responses model roles in one Bob turn shared a $1 stop threshold and a
 24-call ceiling, rebuilt from replayed results on each worker segment. Unknown
 prices stop further calls. The last in-flight call can cross the dollar threshold;
 this is not an exact billing cap or daily account limit. Image generation is a
@@ -388,9 +395,10 @@ Failed, overlarge, truncated or unreadable evidence remains a retrieval problem.
 An invalid/incomplete checklist cannot start the designer. Missing target returns
 its existing solution/selection tools alongside other gaps. Bounds remain explicit:
 4 pages per baseline dataset, 120 kB packet, 3 collector calls, 8 reads per call,
-2 consultations per turn, existing render/review limits and the shared $1 stop
-threshold. This is a stop threshold, not a guaranteed provider billing cap.
-No larger budget or model upgrade is part of this change.
+2 consultations per turn and existing render/review limits. The historical
+shared $1 stop threshold is superseded for server-bound governed CAD by the
+[drawing-request correction](#drawing-request-budget-and-review--2026-10-09).
+No model upgrade was part of this intake change.
 
 Known records are handed forward unchanged, with original values, units, IDs and
 revisions. The AI selects meaning and placement. New geometry can bind a part
@@ -598,6 +606,63 @@ continuations never grant. Bob's instructions on such a stop are to tell the
 owner and finish the reply, then on the owner's next message about the drawing
 call `design_project_cad` with the same request ID at once instead of re-reading
 requests, budgets or sources first.
+
+### Drawing-request budget and review — 2026-10-09
+
+**Locally verified correction; CI and deployment pending.**
+The old ordinary-turn threshold could stop a valid CAD request before its
+independent review despite remaining durable request budget. This correction
+gives each governed CAD call one budget owner and sends a valid render directly
+to independent review. Hosted behavior is not claimed until the release evidence
+is recorded.
+
+| Call scope | Governing limit |
+| --- | --- |
+| Server-bound `cad-research`, `cad-designer`, `cad-reviewer` | The existing persistent drawing-request USD/call ledger; these calls do not also consume or stop at the ordinary-turn $1/24-call guard. |
+| Bob, plan, context and other Responses roles | The existing ordinary-turn guard, including when a CAD request is active. |
+
+Exemption requires a server-bound request UUID, matching Bob/CAD role identity
+and pinned catalog role. Model-written options cannot grant it. Ungoverned CAD
+calls retain the ordinary guard. The request ledger preserves calls, known
+charges, pending outcomes and unpriced usage across turns, worker segments and
+replay; successful recovery does not allocate a new budget.
+
+The existing `20261008160000_drawing_budget_3usd.sql` sets the default allocation
+to $3 and raises open tracked requests below $3, preserving spent amounts, call
+counts and receipts. It releases only the recorded budget-stop retry fingerprint
+and bumps the project event so the same request can continue. The
+[database owner](../db/README.md#drawing-request-allocation--2026-10-09) owns its
+application/readback. This is a finite dispatch threshold, not a strict provider
+billing cap, guaranteed reviewer reserve or promise to finish any drawing. The
+last dispatched call can cross it; there is no emergency bypass.
+
+The owner's next message about a request stopped by its USD/call limit still
+authorizes the existing owner-only +$1/+24-call grant, with no special wording.
+The server uses the same revision-checked, idempotent grant as the UI, reloads the
+same request and continues. Pending/unpriced outcomes and automatic continuation
+do not grant budget. Other owner questions do not renew an unrelated request.
+
+A valid rendered candidate goes through fresh source checks and independent
+review before another designer call. A pass exposes the exact candidate for
+Bob's separate canonical save; rejection returns concrete feedback for repair.
+Four render attempts, three reviews and ten designer rounds remain the bounds,
+alongside the existing authority, preview, provenance and deadline checks.
+An unchanged rejected candidate cannot justify another render or paid review.
+The guard compares validated geometry, provenance, metadata and sources before
+dispatch, excluding engine timestamps. Changed geometry or assumptions can
+start a bounded repair; journal replay restores the rejected-input set.
+
+The retry fingerprint includes the CAD catalog dependency closure, live kill
+switches and drawing budget/review policy revision. A relevant catalog change
+or repaired runtime policy can release a previous failure on a new legitimate
+attempt; an unrelated catalog edit or new worker/turn ID cannot. Already pinned
+jobs keep their catalog snapshot, and unchanged failed work does not become an
+automatic paid retry.
+
+Local verification includes 82 focused CAD checks and 27 allocation/grant/
+recovery SQL checks. Controlled inputs establish the budget, review, no-progress
+and replay mechanisms; CI, hosted migration/runtime readback and actual-member
+model acceptance are separate gates in [State](bob-delivery-flow.md#state).
 
 ### Planned annotation contract for K3
 

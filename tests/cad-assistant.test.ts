@@ -2,7 +2,8 @@ import {domainVocabulary} from '../src/domain/vocabulary.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant, handoff} from './support/cad-review-fixture.ts'
+import {createCadAssistant, handoff, reviewReply} from './support/cad-review-fixture.ts'
+import {createCadAssistant as createReviewedCadAssistant} from './support/cad-parameter-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 import {createProjectContext} from './support/colleague-catalog-fixture.ts'
@@ -21,9 +22,16 @@ function fixture(){let calls=0;const seen:any[]=[];let allowed=true
   readArtifact:async()=>({revision:2,recipe:structuredClone(recipe)})}
  return {opts,seen,deny:()=>{allowed=false}}
 }
-test('CAD assistant has an independent model config, own tools and multi-call loop',async()=>{const f=fixture();const a=createCadAssistant(f.opts);const result=await a.consult(request);assert.equal(result.status,'ready');assert(a.candidate);assert.equal(f.seen.length,2);for(const call of f.seen)assert(call.systemMessage.includes(domainVocabulary('cad')));assert.equal(f.seen[0].functionName,'cad-designer');assert(f.seen[0].tools.some((t:any)=>t.function.name==='render_cad_candidate'));assert.equal(f.seen[1].messages[0].role,'tool');assert.equal(f.seen[1].previousResponseId,'resp');assert.equal(result.saved,false)})
+test('CAD designer has an independent model config and renders without a paid self-inspection',async()=>{const f=fixture();const a=createCadAssistant(f.opts);const result=await a.consult(request);assert.equal(result.status,'ready');assert(a.candidate);assert.equal(f.seen.length,1);assert(f.seen[0].systemMessage.includes(domainVocabulary('cad')));assert.equal(f.seen[0].functionName,'cad-designer');assert(f.seen[0].tools.some((t:any)=>t.function.name==='render_cad_candidate'));assert.equal(a.metrics.reviews,1);assert.equal(result.saved,false)})
 test('detail selection reuses exact source dimensions and placements instead of rebuilding them',async()=>{const f=fixture();let n=0;f.opts.callModel=async()=>n++===0?response('render_saved_cad_candidate',(({recipe,...rest})=>rest)({...candidate,source_artifact_id:id,source_revision:2,part_ids:['drawer.base']})):response();const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'ready');assert.deepEqual(a.candidate!.packet.recipe.instances,[recipe.instances[1]]);assert.deepEqual(a.candidate!.packet.recipe.definitions,[recipe.definitions[1]]);assert.equal(a.candidate!.source_revision,2)})
-test('a failed repair invalidates the old candidate; failure cannot save stale success',async()=>{const f=fixture();let n=0;f.opts.callModel=async()=>++n===1?response('render_cad_candidate',candidate):n===2?response('render_cad_candidate',{...candidate,recipe:{...recipe,python:'not allowed'}}):response();const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'incomplete');assert.equal(a.candidate,null)})
+test('a failed repair invalidates the old candidate; failure cannot save stale success',async()=>{
+ const f=fixture();let n=0
+ const a=createReviewedCadAssistant({...f.opts,research:false,
+  render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
+  callModel:async o=>o.functionName==='cad-reviewer'?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Repair the dimensions',requirements:[{id:'shape',status:'failed',evidence:'Dimensions need repair'}],issues:[]})}:++n===1?response('render_cad_candidate',candidate):n===2?response('render_cad_candidate',{...candidate,recipe:{...recipe,python:'not allowed'}}):response(),
+ })
+ assert.equal((await a.consult(request)).status,'incomplete');assert.equal(a.candidate,null)
+})
 test('missing infrastructure is explicit and makes no provider call',async()=>{const f=fixture();f.opts.available=false;const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).stage,'cad_engine');assert.equal(f.seen.length,0);assert.equal(a.candidate,null)})
 test('access revocation prevents generation and has no candidate',async()=>{const f=fixture();f.deny();const a=createCadAssistant(f.opts);await assert.rejects(a.consult(request),/project_denied/);assert.equal(f.seen.length,0);assert.equal(a.candidate,null)})
 test('stale measurement references stop the same design without guessing replacements',async()=>{const f=fixture();let n=0,renders=0;f.opts.callModel=async()=>n++===0?response('render_cad_candidate',{...candidate,measurements:[{id,revision:1}]}):response();f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}};const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'needs_data');assert.equal(renders,0)})
@@ -39,12 +47,12 @@ test('CAD revisions inherit current work links instead of a removed historical S
 })
 
 test('CAD restart restores the rendered candidate without rendering or asking the model twice',async()=>{
- const f=fixture(),entries:JournalEntry[]=[];let now=0,renders=0
+ const f=fixture(),entries:JournalEntry[]=[];let now=0,renders=0,reviews=0
  const run=()=>{
   const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},20000,()=>now)
-  return createCadAssistant({...f.opts,
-   callModel:o=>journal.run('model:cad',o,()=>f.opts.callModel(o),10000),
-   render:r=>journal.run('cad:render',r,async()=>{renders++;const packet=await f.opts.render(r);now=15000;return packet}),
+  return createReviewedCadAssistant({...f.opts,research:false,
+   callModel:o=>journal.run('model:'+o.functionName,o,async()=>o.functionName==='cad-reviewer'?(reviews++,reviewReply()):f.opts.callModel(o),10000),
+   render:r=>journal.run('cad:render',r,async()=>{renders++;const packet=await f.opts.render(r);now=15000;return {...packet,previews:{front:'fixture',top:'fixture'}}}),
   })
  }
  await assert.rejects(run().consult(structuredClone(request)),e=>e instanceof BobContinuation&&e.kind==='yield')
@@ -53,7 +61,7 @@ test('CAD restart restores the rendered candidate without rendering or asking th
  const resumed=run()
  assert.equal((await resumed.consult(structuredClone(request))).status,'ready')
  assert.deepEqual(resumed.candidate!.packet.recipe,recipe)
- assert.equal(renders,1);assert.equal(f.seen.length,2)
+ assert.equal(renders,1);assert.equal(f.seen.length,1);assert.equal(reviews,1)
 })
 
 test('missing or explicitly cleared targets return actionable prerequisites before spending CAD attempts',async()=>{
@@ -81,7 +89,7 @@ test('CAD research has a bounded stage and exact measurement verification remain
  }
  f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
  const a=createCadAssistant(f.opts)
- assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1);assert.equal(calls,5)
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1);assert.equal(calls,4)
  assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
 })
 
@@ -121,7 +129,7 @@ test('CAD receives Bob-selected original pixels beside fresh project facts after
  const reminder=String(f.seen[0].messages.at(-1).content)
  assert.match(reminder,/1320/);assert.match(reminder,/room-facing edge/);assert.match(reminder,/provided_spec/)
  assert.equal(f.reads[0],'target');assert(f.reads.filter(x=>x==='project').length>=2);assert.equal(f.reads.filter(x=>x==='project').length,f.reads.filter(x=>x==='measurements').length)
- assert(hasImageContent(f.seen[1].messages));assert.equal(f.seen[1].previousResponseId,'resp')
+ assert.equal(f.seen.length,1);assert.equal(a.metrics.reviews,1)
  assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
 })
 
@@ -157,26 +165,28 @@ test('revoked reference evidence blocks the next CAD model call and invalidates 
  assert.equal(a.candidate,null)
 })
 
-test('invalid geometry reports the exact missing field without spending a render; designer sees the corrected render pixels',async()=>{
+test('invalid geometry reports the exact missing field without spending a render before the corrected candidate is reviewed',async()=>{
  const f=fixture();let calls=0,renders=0
  const broken=structuredClone(candidate);delete (broken.recipe.definitions[0] as any).y_mm
  f.opts.render=async r=>{renders++;return {recipe:r,manifest:{bounding_box_mm:{size:[800,600,1800]},instances:r.instances},files:{front:'fixture'},previews:{front:'cGl4ZWxz'}}}
  f.opts.callModel=async(o:any)=>{
   if(++calls===1)return response('render_cad_candidate',broken)
   if(calls===2){const result=JSON.parse(o.messages[0].content);assert.equal(result.status,'invalid');assert(result.issues.some((i:any)=>i.path==='recipe.definitions[0].y_mm'));assert.equal(result.renders_remaining,4);return response('render_cad_candidate',candidate)}
-  assert(hasImageContent(o.messages));assert(o.messages.some((m:any)=>Array.isArray(m.content)&&m.content.some((p:any)=>p.type==='image_url'&&p.image_url.url==='data:image/png;base64,cGl4ZWxz')))
-  return response()
+  throw new Error('no paid designer inspection after a successful render')
  }
  const result=await createCadAssistant(f.opts).consult(request)
- assert.equal(result.status,'ready');assert.equal(renders,1);assert.equal(calls,3)
+ assert.equal(result.status,'ready');assert.equal(renders,1);assert.equal(calls,2)
 })
 test('designer retains research tools beyond three calls and can investigate a problem after rendering',async()=>{
- const f=fixture();let calls=0
- f.opts.callModel=async(o:any)=>{
+ const f=fixture();let calls=0,reviews=0
+ const a=createReviewedCadAssistant({...f.opts,research:false,
+ render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
+ callModel:async(o:any)=>{
+  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Investigate the placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
   calls++
   if(calls<=4||calls===6){assert(o.tools.some((t:any)=>t.function.name==='search_project_data'));return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})}
   if(calls===5)return response('render_cad_candidate',candidate)
-  return response()
- }
- assert.equal((await createCadAssistant(f.opts).consult(request)).status,'ready');assert.equal(calls,7)
+  return response('render_cad_candidate',{...candidate,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:30}},recipe.instances[1]]}})
+ }})
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(calls,7);assert.equal(reviews,2)
 })

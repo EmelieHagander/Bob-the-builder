@@ -64,18 +64,18 @@ test('constructor starts a fresh conversation with original source values after 
   if(++design===1){assert.equal(o.previousResponseId,undefined);assert(JSON.stringify(o.messages).includes('2720'));assert(JSON.stringify(o.messages).includes('2700'));return reply('render_cad_candidate',candidate)}
   return reply()
  }})
- assert.equal((await a.consult(request)).status,'ready');assert.equal(research,2);assert.equal(design,2);assert.equal(f.renders,1)
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(research,2);assert.equal(design,1);assert.equal(f.renders,1)
 })
 for(const reason of ['preview_unreadable','render_failed','diagnostic'])test(`renderer blocker ${reason} cannot replace the project, invoke review or restart the consultation`,async()=>{
  const f=fixture();let calls=0,reviews=0
  const a=createCadAssistant({...f.opts,research:false,callModel:async o=>{
   if(o.functionName==='cad-reviewer'){reviews++;return reviewReply()}
-  if(++calls===1)return reply('render_cad_candidate',candidate)
+  calls++
   assert(o.tools?.some(t=>t.function.name==='report_cad_blocker'))
   return reason==='diagnostic'?reply('render_cad_candidate',{...candidate,purpose:'diagnostic'}):reply('report_cad_blocker',{reason,explanation:'Preview cannot be inspected.'})
  }})
- const result=await a.consult(request);assert.equal(result.stage,'cad_engine');assert.equal(a.candidate,null);assert.equal(reviews,0);assert.equal(f.renders,1)
- assert.deepEqual(await a.consult(request),result);assert.equal(calls,2)
+ const result=await a.consult(request);assert.equal(result.stage,'cad_engine');assert.equal(a.candidate,null);assert.equal(reviews,0);assert.equal(f.renders,0)
+ assert.deepEqual(await a.consult(request),result);assert.equal(calls,1)
 })
 test('actual renderer failure stops before another model call',async()=>{
  const f=fixture();let calls=0
@@ -92,17 +92,17 @@ for(const error of ['model_output_limit','model_reasoning_only','model_unavailab
  assert.deepEqual(await a.consult(request),result);assert.equal(calls,2)
 })
 test('first layout allows one targeted read batch then requires geometry or a blocker; repair restores research',async()=>{
- const f=fixture();let design=0
+ const f=fixture();let design=0,reviews=0
  const a=createCadAssistant({...f.opts,callModel:async o=>{
   if(o.functionName==='cad-research')return reply('finish_cad_research',assessment)
-  if(o.functionName==='cad-reviewer')return reviewReply()
+  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Check the requested placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
   design++
   const names=o.tools!.map(t=>t.function.name)
   if(design===1){assert(names.includes('search_project_data'));return reply('search_project_data',read)}
   if(design===2){assert(!names.includes('search_project_data'));assert(names.includes('report_cad_blocker'));return reply('render_cad_candidate',candidate)}
-  assert(names.includes('search_project_data'));return reply()
+  assert(names.includes('search_project_data'));return reply('render_cad_candidate',{...candidate,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:30}}]}})
  }})
- assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,1);assert.equal(design,3)
+ assert.equal((await a.consult(request)).status,'ready');assert.equal(f.renders,2);assert.equal(design,3);assert.equal(reviews,2)
 })
 
 test('Bob delivers the true design failure without paying for an explanation or another consultation',async()=>{
@@ -122,5 +122,5 @@ test('review token exhaustion preserves its own stage and cannot restart design'
  }})
  const result=await a.consult(request)
  assert.equal(result.stage,'review');assert.match(String(result.user_message),/Granskaren/);assert.equal(a.candidate,null)
- assert.deepEqual(await a.consult(request),result);assert.equal(calls,3);assert.equal(f.renders,1)
+ assert.deepEqual(await a.consult(request),result);assert.equal(calls,2);assert.equal(f.renders,1)
 })

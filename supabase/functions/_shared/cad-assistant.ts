@@ -13,7 +13,7 @@ import { createCadPieces } from './cad-pieces.ts'
 import { READ_CAD_SHELL_TOOL, parseCadShellRead } from './cad-shell.ts'
 import { REVISE_CAD_TOOL, applyCadRevision } from './cad-revise.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
-import { rethrowContinuation, stableJsonValue } from './bob-job-journal.ts'
+import { fingerprint, rethrowContinuation, stableJsonValue } from './bob-job-journal.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { AiCatalogSession, AiVariables } from './ai-catalog.ts'
 import { SEARCH_TOOL, type createProjectLookup } from './project-lookup.ts'
@@ -213,6 +213,15 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0,reviewPending=false
   // Exact input of the last new-geometry render; revise_cad_candidate patches it.
   let lastRenderArgs:Record<string,any>|null=null
+  let candidateInputFingerprint:string|null=null
+  const rejectedInputs=new Set<string>()
+  const renderInputFingerprint=(input:Record<string,any>)=>fingerprint({
+   recipe:input.recipe,lineage:input.lineage,parameters:input.parameters??null,
+   title:input.title,description:input.description,assumptions:input.assumptions,target_revision:input.target_revision,
+   measurements:input.measurements,source_artifact_id:input.source_artifact_id??null,source_revision:input.source_revision??null,part_ids:input.part_ids??[],
+   project_id:opts.projectId,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected,
+   handoff,reference_images:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b)),
+  })
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   const researchEvidence:{tool:string;result:unknown}[]=[]
   let researchBytes=0,researchTruncated=false
@@ -409,6 +418,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
      }
      metrics.review_rejections++
+     if(candidateInputFingerprint)rejectedInputs.add(candidateInputFingerprint)
      if(reviews>=3||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
      return {status:'revise',saved:false,review}
    }
@@ -462,6 +472,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     // A repaired runtime gets the exact pinned recipe. Current source reads and
     // the independent review remain mandatory; no designer call precedes them.
     const d=resumeDraft,parsed=parseCadAssemblyRequest(d.recipe)!
+    candidateInputFingerprint=await renderInputFingerprint({...d,recipe:parsed})
     renders++;metrics.renders++
     let packet:CadPacket
     try{packet=await opts.render(parsed)}catch(error){
@@ -609,6 +620,12 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
        }
        const parsed=parseCadAssemblyRequest(recipe);if(!parsed){invalidRenders++;metrics.input_corrections++;out={status:'invalid',reason:'invalid_geometry',issues:cadIssues(recipe),renders_remaining:4-renders,corrections_remaining:8-invalidRenders};messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(out)});continue}
        lineage??=buildCadLineage(opts.projectId,parsed,[],measurementRecords,handoff.coordinates)
+       const renderFingerprint=await renderInputFingerprint({...args,recipe:parsed,lineage,parameters})
+       if(rejectedInputs.has(renderFingerprint)){
+        candidate=null;acceptedReview=null;partial=true
+        return terminalFailure={status:'incomplete',stage:'review',reason:'no_progress',saved:false,request_id:request?.id??null}
+       }
+       candidateInputFingerprint=renderFingerprint
        renders++;metrics.renders++
        await persist('draft',{draft:{source_fingerprint:await sourceFingerprint(),recipe:parsed,lineage,parameters,title:args.title,description:args.description,assumptions:args.assumptions,measurements:args.measurements,target_revision:args.target_revision,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids}})
        let packet:CadPacket
@@ -653,13 +670,15 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     if(candidate?.packet.previews){
      messages.push({role:'user',content:[{type:'text',text:catalogText('cad.preview.current',{assembly_id:candidate.packet.recipe.assembly_id})},...Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])]})
     }
-   }
-   // The last designer call may render too. Review its exact output without
-   // spending another designer call or removing construction tools prematurely.
-   if(candidate&&reviewPending){
-    const checked=await reviewCurrentCandidate()
-    if(checked.status!=='revise')return checked
-    candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review:checked.review}
+    // A rendered candidate goes straight to independent review. A second paid
+    // designer inspection adds no approval; concrete review feedback drives
+    // the next bounded repair of this same construction instead.
+    if(candidate&&reviewPending){
+     const checked=await reviewCurrentCandidate()
+     if(checked.status!=='revise')return checked
+     if(round===9){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review:checked.review}}
+     messages.push({role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,review:checked.review,repair_same_construction:true,independent_review_required:true})})
+    }
    }
    candidate=null;partial=true;return {status:'budget_exhausted',saved:false}
   }catch(error){

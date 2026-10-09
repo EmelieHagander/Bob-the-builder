@@ -36,14 +36,14 @@ test('unknown ids, a missing base and malformed change sets are corrections, not
  assert.throws(()=>applyCadRevision(base(),{upsert:{},remove:{}}),/invalid_revision/)
 })
 test('designer loop: second round sends only the change and renders the merged construction through the same checks',async()=>{
- let calls=0,renders=0,offered:string[]=[]
+ let calls=0,renders=0,reviews=0,offered:string[]=[]
  const sent:number[]=[]
  const a=createCadAssistant({research:false,projectId:'A',userId:'u',available:true,deadline:Date.now()+200000,hasAccess:async()=>true,
   makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:'90000000-0000-4000-8000-000000000001'}]:[],related:[],truncated:false},error:null}),1000,40),
   readArtifact:async()=>null,
   render:async r=>{renders++;return {recipe:r,manifest:{},files:{front:'fixture'},previews:Object.fromEntries(r.views.map(v=>[v,'Zml4dHVyZQ==']))}},
   callModel:async o=>{
-   if(o.functionName==='cad-reviewer')return reviewReply()
+   if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Raise shelf to 450 mm',requirements:[{id:'shape',status:'failed',evidence:'Shelf is at 400 mm'}],issues:[{severity:'error',code:'geometry',correction:'Raise shelf to 450 mm'}]})}:reviewReply()
    calls++
    const call=(name:string,args:unknown)=>{const text=JSON.stringify(args);sent.push(text.length);return {toolCalls:[{id:'c'+calls,type:'function' as const,function:{name,arguments:text}}]}}
    if(calls===2)offered=(o.tools??[]).map((t:any)=>t.function.name)
@@ -51,7 +51,7 @@ test('designer loop: second round sends only the change and renders the merged c
     ...(calls===1?call('render_cad_candidate',base()):calls===2?call('revise_cad_candidate',change({upsert:{nodes:[{id:'lift',role:'decision',value:450,unit:'mm',reason:'Raised shelf'}],bindings:[{path:'instances/shelf1/placement/z',node:'lift'}]}})):{})}
   }} as any)
  const result:any=await a.consult({handoff,brief:'Draw a shelf',area_id:null,component_id:null,step_id:null,artifact_id:null})
- assert.equal(result.status,'ready');assert.equal(renders,2);assert(offered.includes('revise_cad_candidate'))
+ assert.equal(result.status,'ready');assert.equal(renders,2);assert.equal(calls,2);assert.equal(reviews,2);assert(offered.includes('revise_cad_candidate'))
  assert.equal(a.candidate!.packet.recipe.instances.find(i=>i.id==='shelf1')!.placement.z,450)
  assert.equal(a.candidate!.packet.manifest.bob_parameters.coverage,'complete')
  assert(sent[1]<sent[0]/3,`repair payload ${sent[1]} should be far smaller than the full render ${sent[0]}`)
