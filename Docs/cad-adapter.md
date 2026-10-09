@@ -609,12 +609,13 @@ requests, budgets or sources first.
 
 ### Drawing-request budget and review — 2026-10-09
 
-**Locally verified correction; CI and deployment pending.**
+**Released and read back on 2026-10-09.**
 The old ordinary-turn threshold could stop a valid CAD request before its
 independent review despite remaining durable request budget. This correction
 gives each governed CAD call one budget owner and sends a valid render directly
-to independent review. Hosted behavior is not claimed until the release evidence
-is recorded.
+to independent review. Deployment and allocation readback are verified; actual
+authenticated recovery through review, save and reread remains an acceptance
+gate.
 
 | Call scope | Governing limit |
 | --- | --- |
@@ -627,13 +628,14 @@ calls retain the ordinary guard. The request ledger preserves calls, known
 charges, pending outcomes and unpriced usage across turns, worker segments and
 replay; successful recovery does not allocate a new budget.
 
-The existing `20261008160000_drawing_budget_3usd.sql` sets the default allocation
-to $3 and raises open tracked requests below $3, preserving spent amounts, call
-counts and receipts. It releases only the recorded budget-stop retry fingerprint
+The existing `20261008160000_drawing_budget_3usd.sql` was applied successfully.
+It sets the default allocation to $3 and raises open tracked requests below $3,
+preserving spent amounts, call counts and receipts. It releases only the recorded
+budget-stop retry fingerprint
 and bumps the project event so the same request can continue. The
 [database owner](../db/README.md#drawing-request-allocation--2026-10-09) owns its
-application/readback. This is a finite dispatch threshold, not a strict provider
-billing cap, guaranteed reviewer reserve or promise to finish any drawing. The
+verified ledger readback. This is a finite dispatch threshold, not a strict
+provider billing cap, guaranteed reviewer reserve or promise to finish any drawing. The
 last dispatched call can cross it; there is no emergency bypass.
 
 The owner's next message about a request stopped by its USD/call limit still
@@ -659,10 +661,21 @@ attempt; an unrelated catalog edit or new worker/turn ID cannot. Already pinned
 jobs keep their catalog snapshot, and unchanged failed work does not become an
 automatic paid retry.
 
-Local verification includes 82 focused CAD checks and 27 allocation/grant/
-recovery SQL checks. Controlled inputs establish the budget, review, no-progress
-and replay mechanisms; CI, hosted migration/runtime readback and actual-member
-model acceptance are separate gates in [State](bob-delivery-flow.md#state).
+[PR #234](https://github.com/EmelieHagander/Bob-the-builder/pull/234) merged as
+`9705a8b671695ac7a86b142989b0a8771ac051d5`, with exact reviewed tree
+`98d7097d52cdfd43b939fda625de3d88545f417c`.
+[Required CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37980764170)
+and [CAD checks](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37980764021)
+passed; the local suite passed 1,080 tests. Focused checks also verified CAD,
+runtime fingerprint and allocation/grant/recovery behavior. `bob-worker` v61 was
+deployed first with `verify_jwt=false`, then `ask-bob` v93 with
+`verify_jwt=true`; both are active, and every included source file matched the
+uploaded bundle on readback.
+
+These checks establish deployment, budget, review, no-progress and replay
+mechanisms under controlled inputs. They do not establish an actual authenticated
+member's complete recovery, independent review, canonical save and reread; that
+model acceptance remains in [State](bob-delivery-flow.md#state).
 
 ### Planned annotation contract for K3
 

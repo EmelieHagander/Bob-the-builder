@@ -757,12 +757,15 @@ fingerprint is released and a project event is bumped; saved, cancelled and
 legacy-untracked requests are excluded. Grants, uncertain outcomes, caller
 authority and canonical save receipts keep their existing boundaries.
 
-The October 9 investigation verified that this migration was absent from the
-hosted ledger, whose default remained $1. Apply this reviewed existing migration
-after deploying the matching request-scoped runtime, so its recovery event
-cannot awaken an old worker with the conflicting turn limit. Hosted release
-and readback are pending. [CAD budget and review](../Docs/cad-adapter.md#drawing-request-budget-and-review--2026-10-09)
-owns the runtime contract and acceptance limits.
+The October 9 investigation found the migration absent and the hosted default
+still $1. After [PR #234](https://github.com/EmelieHagander/Bob-the-builder/pull/234),
+worker 61 was deployed before ask-bob 93, then the exact existing migration was
+applied as **20261009194934 / drawing_budget_3usd**. Readback confirms default $3
+and two tracked open-request upgrades, preserving spent USD, call counts,
+drafts and other working data while clearing their cost-stop retry fingerprints.
+[Release evidence](../Docs/foundation-verification.md#drawing-request-loop-budget-release--2026-10-09)
+records source hashes and acceptance limits; [CAD budget and review](../Docs/cad-adapter.md#drawing-request-budget-and-review--2026-10-09)
+owns the runtime contract. Do not reapply this migration.
 
 ### P3 screen context and source changes — applied
 
