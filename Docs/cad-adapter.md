@@ -4,6 +4,14 @@
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
+## Server-owned target and intake identities
+
+CAD render tools obtain the target revision from the caller-scoped selected-target read. The designer cannot supply that version. The candidate retains the exact pin, and readiness, source freshness, independent review and save-time revision guards still apply. A changed target cannot silently accept an older candidate.
+
+Research checks use the exact IDs of the persisted handoff, bound into the tool schema. Newly discovered needs omit IDs; the server creates bounded deterministic IDs and reuses matching identities from the saved assessment. An owner-decision need citing exactly one canonical choice uses that database choice ID, so only its own saved deferral can resolve it. Historical pinned contracts remain readable, but their model-supplied target versions and new-need IDs are not authoritative. Invalid citations, missing physical inputs and consequential owner choices retain their existing guards.
+
+Install the matching handlers in both Bob endpoints before applying `20261009222402_cad_server_owned_values.sql`. It clones and activates only the three affected immutable tool contracts, preserving other active edits and all saved manifests. [Background execution](ask-bob-conversations.md) owns durable continuation; read timeouts must be sealed in its journal before a later model dispatch.
+
 ## First contract
 
 Contract v1 uses canonical millimetres. The September 25 extension adds cylinder blanks, local subtractive cuts and explicit geometry checks while retaining old box/tube recipes:

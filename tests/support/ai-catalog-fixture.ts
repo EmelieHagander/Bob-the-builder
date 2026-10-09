@@ -23,6 +23,22 @@ for(const migration of migrations){
  }
  const patch=source.match(/\$ai_catalog_patch\$([\s\S]+?)\$ai_catalog_patch\$/)
  if(patch)for(const row of JSON.parse(patch[1])){const index=seed.findIndex(value=>value.key===row.key);versions.set(row.key,(versions.get(row.key)??0)+1);if(index<0)seed.push(row);else seed[index]=row}
+ const serverPatches=source.match(/\$cad_server_contracts\$([\s\S]+?)\$cad_server_contracts\$/)
+ if(serverPatches)for(const patch of JSON.parse(serverPatches[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  row.metadata.server_owned_values=true
+  for(const field of patch.remove_fields??[]){
+   delete row.definition.parameters.properties[field]
+   for(const key of ['required_parameters','optional_parameters'])row.definition[key]=row.definition[key].filter((key:string)=>key!==field)
+   row.definition.parameters.required=row.definition.parameters.required.filter((key:string)=>key!==field)
+  }
+  if(patch.server_need_ids){
+   const need=row.definition.parameters.properties.additional_needs.items
+   delete need.properties.id;need.required=need.required.filter((key:string)=>key!=='id')
+   row.metadata.schema_bindings={...row.metadata.schema_bindings,...patch.schema_bindings}
+  }
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

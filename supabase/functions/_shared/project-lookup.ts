@@ -32,8 +32,8 @@ export interface LookupResult {
   partial: boolean
   truth: 'unknown'
 }
-export type LookupTransport = (projectId: string, input: LookupInput, signal: AbortSignal) =>
-  PromiseLike<{ data: unknown; error: { code?: string } | null }>
+export type LookupTransport = ((projectId: string, input: LookupInput, signal: AbortSignal) =>
+  PromiseLike<{ data: unknown; error: { code?: string } | null }>) & { checkpointed?: boolean }
 
 export function parseLookup(value: unknown): LookupInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
@@ -134,7 +134,9 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
       try {
         const { data, error } = await Promise.race([
           Promise.resolve(transport(projectId, input, controller.signal)),
-          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')) }, timeoutMs) }),
+          // A journaled transport seals abort and saves that outcome before
+          // returning. Do not race its checkpoint with a different result.
+          new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); if(!transport.checkpointed)reject(new Error('timeout')) }, timeoutMs) }),
         ])
         if (error) {
           incomplete = true

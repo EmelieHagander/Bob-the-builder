@@ -69,14 +69,15 @@ export async function answerWithOpenAi(opts: {
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
   const withResendNotice = (answer: string) => journal && journal.uncertainResends() > 0 && !answer.includes(RESEND_NOTICE)
     ? answer + '\n\n' + RESEND_NOTICE : answer
-  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0): Promise<T> =>
-    journal ? journal.run(stream, input, work, reserve) : work()
+  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0, signal?:AbortSignal): Promise<T> =>
+    journal ? journal.run(stream, input, work, reserve, signal) : work()
+  const checkpointed = <T extends (...args:any[])=>any>(read:T) => Object.assign(read,{checkpointed:!!journal})
   const rpc = async (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
     const { p_generation: _generation, ...stable } = args
     return memo('rpc:' + name, stable, async () => {
       const { data, error } = await client.rpc(name, args).abortSignal(signal)
       return { data, error }
-    })
+    },0,signal)
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -143,11 +144,11 @@ export async function answerWithOpenAi(opts: {
   }
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
-    return { ...adapter,
-      count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal)),
-      list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args)),
+    return { ...adapter,checkpointed:!!journal,
+      count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal),0,signal),
+      list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args),0,args[1]),
       open: async (...args: Parameters<typeof adapter.open>) => {
-        const opened = await memo('media:open', args[0], () => adapter.open(...args))
+        const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
         // Rebuild the resolver registry from compact checkpoints on every resume.
         if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
         return opened
@@ -155,11 +156,11 @@ export async function answerWithOpenAi(opts: {
       // current() remains LIVE, including for already-replayed image evidence.
     }
   }
-  const lookupTransport = (projectId: string, input: LookupInput, signal: AbortSignal) =>
+  const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
     rpc('search_bob_project_data_v8', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
-    }, signal)
+    }, signal))
   const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32)
   const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48)
   const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
@@ -262,7 +263,7 @@ export async function answerWithOpenAi(opts: {
   const knowledgeReader = createKnowledgeReader(hasAccess)
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
-    (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
+    checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
     hasAccess, lookup.sources)
   const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
     const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
@@ -306,11 +307,11 @@ export async function answerWithOpenAi(opts: {
   const planAssistant = createPlanAssistant({
     aiCatalog,
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
-    makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
+    makeLookup: () => createProjectLookup(opts.projectId, checkpointed(async(projectId:string,input:LookupInput,signal:AbortSignal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
       const {data,error}=await rpc('project_plan_read',{p_project:projectId,p_revision:null},signal)
       return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
-    }, 10_000, 128, 512*1024),
+    }), 10_000, 128, 512*1024),
     callModel,
   })
   const drawingRequestCall=async(raw:Record<string,unknown>)=>{
@@ -392,7 +393,7 @@ export async function answerWithOpenAi(opts: {
       })
       return {...data,current_step_ids:links}
     },
-    catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
+    catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources),
     context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })

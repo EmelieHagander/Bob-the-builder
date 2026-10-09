@@ -12,7 +12,33 @@ export function intakeGaps(assessment:IntakeAssessment|null,deferredChoiceIds:Re
  return [...assessment?.checks??[],...assessment?.additional_needs??[]].filter(c=>c.blocking||c.status!=='known'&&c.action==='owner_decision'&&!deferredChoiceIds.has(c.id)).map(c=>({...c,blocking:true}))
 }
 const checkSchema={type:'object',additionalProperties:false,properties:{id:{type:'string'},status:{type:'string',enum:['known','assumption','missing','conflict']},blocking:{type:'boolean'},source_refs:{type:'array',items:{type:'string'},maxItems:12},action:{type:'string',enum:['none','bob_decision','measurement','owner_decision']},detail:{type:'string',maxLength:1000}},required:['id','status','blocking','source_refs','action','detail']}
-export const INTAKE_SCHEMA={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:checkSchema,maxItems:24},additional_needs:{type:'array',items:checkSchema,maxItems:20}},required:['checks','additional_needs']}
+const {id:_needId,...needProperties}=checkSchema.properties
+export const INTAKE_SCHEMA={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:checkSchema,maxItems:24},additional_needs:{type:'array',items:{...checkSchema,properties:needProperties,required:checkSchema.required.filter(key=>key!=='id')},maxItems:20}},required:['checks','additional_needs']}
+/** Existing check IDs come from the persisted handoff. New needs have no ID
+ * yet: allocate a bounded content identity here, then persist it with intake.
+ * Ignore IDs from older pinned tool contracts; never trust a model allocation.
+ * Status/action may change without changing a need's identity. */
+export async function prepareIntakeAssessment(value:unknown,handoff:DesignHandoff,refs:Set<string>,previous?:IntakeAssessment|null,choiceIds:ReadonlySet<string>=new Set()):Promise<IntakeAssessment|null>{
+ if(!value||typeof value!=='object'||Array.isArray(value))return null
+ const v=structuredClone(value) as Record<string,any>
+ if(!Array.isArray(v.additional_needs)||v.additional_needs.length>20)return null
+ for(const need of v.additional_needs){
+  if(!need||typeof need!=='object'||Array.isArray(need))return null
+  const keys=Object.keys(need).filter(key=>key!=='id').sort().join(',')
+  if(keys!=='action,blocking,detail,source_refs,status'||('id' in need&&typeof need.id!=='string')||typeof need.detail!=='string'||!Array.isArray(need.source_refs)||need.source_refs.some((ref:unknown)=>typeof ref!=='string'))return null
+  // A cited existing choice gets its database identity, never the model's ID.
+  // Only owner-choice needs may use canonical scoped deferrals downstream.
+  const choices=[...new Set<string>(need.source_refs)].filter(ref=>choiceIds.has(ref))
+  if(need.action==='owner_decision'&&choices.length===1){need.id=choices[0];continue}
+  const identityOf=(value:Pick<IntakeCheck,'detail'|'source_refs'>)=>JSON.stringify([value.detail.trim().replace(/\s+/g,' '),[...new Set(value.source_refs)].sort()])
+  const identity=identityOf(need)
+  const existing=previous?.additional_needs.find(check=>identityOf(check)===identity)
+  if(existing){need.id=existing.id;continue}
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(identity))
+  need.id='need_'+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('').slice(0,32)
+ }
+ return parseIntakeAssessment(v,handoff,refs)
+}
 export function parseIntakeAssessment(value:unknown,handoff:DesignHandoff,refs:Set<string>):IntakeAssessment|null{
  const v=value as IntakeAssessment
  if(!v||Object.keys(v).sort().join(',')!=='additional_needs,checks'||!Array.isArray(v.checks)||!Array.isArray(v.additional_needs)||v.checks.length!==handoff.requirements.length||v.additional_needs.length>20)return null

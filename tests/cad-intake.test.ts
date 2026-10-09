@@ -13,7 +13,7 @@ import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/fu
 const id='30000000-0000-4000-8000-000000000001'
 const measurement='30000000-0000-4000-8000-000000000002'
 const request={request_id:null,handoff,brief:'Draw the construction using current measures',area_id:null,component_id:null,step_id:null,artifact_id:null}
-const check=(id:string,status='known',blocking=false)=>({id,status,blocking,source_refs:status==='known'?['requirement:'+id]:[],action:blocking?'measurement':'none',detail:'Whole construction input check'})
+const check=(id:string,status='known',blocking=false)=>({id,status,blocking,source_refs:status==='known'?['requirement:'+id]:[],action:blocking?'measurement':'none',detail:'Whole construction input check: '+id})
 const assessment={checks:[check('shape')],additional_needs:[]}
 const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixture',responseId:'r',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
 const recipe={contract_version:1 as const,units:'mm' as const,assembly_id:'bed',definitions:[{id:'panel',primitive:'box' as const,material_ref:null,x_mm:999,y_mm:600,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front' as const,'top' as const]}
@@ -64,7 +64,9 @@ test('a missing selected target stops before paid intake; ready intent still ret
  assert.equal(missing.renders,0)
  const f=fixture();const a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[check('door','missing',true),check('window','conflict',true)]})}})
  const result=await a.consult(request)
- assert.equal(result.status,'needs_data');assert.equal(result.request_id,id);assert.deepEqual(result.gaps?.map(c=>c.id),['shape','door','window']);assert.equal(f.renders,0)
+ assert.equal(result.status,'needs_data');assert.equal(result.request_id,id)
+ assert.deepEqual(result.gaps?.map(c=>c.detail),['Whole construction input check: shape','Whole construction input check: door','Whole construction input check: window'])
+ assert(result.gaps?.slice(1,3).every(c=>/^need_[a-f0-9]{32}$/.test(c.id)));assert.equal(f.renders,0)
  for(const dataset of ['measurements','physical_elements','physical_spaces','plan','tasks'])assert(f.reads.includes(dataset))
  assert.equal(f.row?.status,'needs_data')
 })
@@ -118,7 +120,7 @@ test('unresolved owner choices cannot be waived by a false blocking flag or a di
  assert.equal(intakeGaps({checks:[],additional_needs:[{...ownerChoice,action:'bob_decision'}]}).length,0,'ordinary reversible decisions remain autonomous')
  const f=fixture(),a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',evaluated)}})
  const result=await a.consult(request)
- assert.equal(result.status,'needs_data');assert.deepEqual(result.gaps?.map(g=>g.id),['important_choice']);assert.equal(f.renders,0)
+ assert.equal(result.status,'needs_data');assert.equal(result.gaps?.length,1);assert.match(result.gaps![0].id,/^need_[a-f0-9]{32}$/);assert.equal(result.gaps![0].action,'owner_decision');assert.equal(f.renders,0)
  assert.equal(f.row?.payload.assessment?.additional_needs[0].blocking,true,'persisted stable gap work retains the corrected need')
 })
 

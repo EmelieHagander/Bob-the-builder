@@ -24,7 +24,7 @@ export interface BobJournal {
   /** Reconstruct a completed operation from recorded steps only. The scope
    * must opt in after a fresh lifecycle check; it grants no new dispatch. */
   replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T>
-  run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs?: number): Promise<T>
+  run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs?: number, signal?: AbortSignal): Promise<T>
   check(): void
   /** Milliseconds left in this worker's segment. */
   remaining(): number
@@ -58,6 +58,18 @@ export async function fingerprint(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical(value))))
   return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('')
 }
+/** A caller timeout seals the recorded outcome even if an SDK ignores abort
+ * and resolves later. The checkpoint itself must finish before delivery. */
+async function abortable<T>(work:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
+ if(!signal)return work()
+ if(signal.aborted)throw new Error('operation_aborted')
+ let abort:()=>void=()=>{}
+ try{return await Promise.race([work(),new Promise<never>((_,reject)=>{
+  abort=()=>reject(new Error('operation_aborted'))
+  signal.addEventListener('abort',abort,{once:true})
+  if(signal.aborted)abort()
+ })])}finally{signal.removeEventListener('abort',abort)}
+}
 /** reusable: successful model results from an earlier failed attempt of the
  * same turn, keyed by exact input fingerprint. A match is recorded as this
  * job's own step without dispatching; anything else runs normally. */
@@ -82,11 +94,15 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       return [...entries.values()].filter(e => /:retry:\d+$/.test(e.key)
         && UNCERTAIN_RETRY_REASONS.has(String((e.value as { reason?: unknown } | null)?.reason))).length
     },
-    async run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs = 0): Promise<T> {
+    async run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs = 0, signal?:AbortSignal): Promise<T> {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
       const key = `${stream}:${position}`, hash = await fingerprint(input)
+      const waiting=entries.get(key+':waiting')
+      if(waiting&&waiting.fingerprint!==hash){
+        stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
+      }
       const retries=[...entries.values()].filter(e=>e.key.startsWith(key+':retry:'))
       if(retries.some(e=>e.fingerprint!==hash)){
         stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
@@ -122,8 +138,16 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         return stableJsonValue(earlier.result) as T
       }
       let value: T | undefined, failure: string | undefined
-      try { value = await operation({ key, fingerprint: hash, attempt: retries.length }) }
+      try { value = await abortable(()=>operation({ key, fingerprint: hash, attempt: retries.length }),signal) }
       catch (error) {
+        if(error instanceof BobContinuation&&error.aiWait){
+          if(waiting&&(waiting.value as {id?:string})?.id!==error.aiWait.id){stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped}
+          if(!waiting){
+            const marker={key:key+':waiting',fingerprint:hash,value:{id:error.aiWait.id}}
+            try{await store.save(marker)}catch{stopped=new BobContinuation('yield','checkpoint_unavailable');throw stopped}
+            entries.set(marker.key,marker)
+          }
+        }
         if(error instanceof BobContinuation&&error.kind==='yield'&&['provider_retry','provider_uncertain','segment_wall'].includes(error.message)){
           // A durable queue must not retry the same failing model call until
           // the twenty-minute turn expires. Keep the retry count with its
