@@ -1763,3 +1763,20 @@ At **23:18 Swedish time**, the owner supplied screenshots `14287.png` and `14286
 Three drawers are now a source-backed design feature, rather than an unverified count. The shown foot gable is partly panelled, not fully sealed. The hidden head gable, exact dimensions, joins, drawer hardware and rib-versus-sheet mattress support cannot be inferred reliably from these images. Keep measured/specification sources separate from visual design intent. Both images agree on the central arrangement; any material detail difference still needs a designated controlling reference or a recorded design choice.
 
 The owner confirms Bob could read these project images and already identify several errors. The gap is therefore preserving and checking design intent before accepting the CAD candidate, rather than lack of image access in Bob. Proposed acceptance should cover the agreed feature list, orientation and reference fidelity alongside numeric and functional checks. No prompt, schema or runtime change was made for this new proposal.
+
+### Expert advice and design readiness — 2026-10-09
+
+The owner clarified that the bed was not ready for designer handoff: the mattress-support construction should first have been discussed with Bob acting as an expert adviser. Matching the mockup alone would not resolve that missing construction decision. This is the owner's reported missing advisory step; the deleted original private handoff cannot establish every earlier discussion.
+
+Read-only code review and an independent audit found these current seams:
+
+- `cad-intake.ts` distinguishes `owner_decision`, `bob_decision` and measurements, but accepts missing/assumed owner decisions marked nonblocking. There is no recorded significance, advisory recommendation or decision-authority check.
+- `cad-assistant.ts` admits the ordinary design path when retrieval is complete, a target exists and no assessment checks are marked blocking. Target existence is not evidence of an informed chosen construction.
+- Its checked-construction path renders the saved checkpoint without researcher/designer intake. Readiness only at `design_project_cad` would therefore miss important choices already fixed by `save_construction_draft`.
+- `DesignHandoff` has free-text deliverable and unresolved checks; review can pass with unresolved requirements. This accommodates honest concepts but does not encode whether a pending decision blocks the particular output.
+
+The specified responsibility is broader than a visual brief: Bob identifies material choices, researches applicable evidence, explains relevant alternatives and practical consequences, recommends a supported direction, and records the resulting decision or genuine open issue in the evolving selected Solution. Existing owner decisions and delegated authority count; a technical detail does not automatically require permission. Engineering correctness belongs to investigation/verification, not an uninformed owner vote.
+
+The [CAD owner](cad-adapter.md#proposed-visible-design-intent-before-3d--2026-10-09) owns the pending advisory/readiness contract and its implementation boundaries; [State](bob-delivery-flow.md#state) owns the next action. Readiness depends on the next deliverable's purpose. An exploratory appearance sketch can explicitly leave a support question open; developing construction cannot silently settle it by embedding an unexplained default into geometry. Unrelated reversible work can continue.
+
+Required future acceptance covers: advice and supported resolution before a significant geometry-dependent choice; supported autonomous choices within mandate; reuse of earlier decisions after chat reset; explicit purpose-appropriate concept deferrals; and retrieval failures remaining unavailable rather than guessed. These are specified cases, not new passing runtime tests. This clarification changed documentation only; no catalog prompt, schema, paid model call or active project job was changed.

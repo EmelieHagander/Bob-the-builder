@@ -178,21 +178,61 @@ through the actual adapter and asserts strict `text.format` at the HTTP boundary
 The shared cross-app adapter itself is unchanged. Live acceptance is recorded in
 the follow-up PR, separately from the initial merged implementation.
 
-### Proposed visible design intent before 3D — 2026-10-09
+<a id="proposed-visible-design-intent-before-3d--2026-10-09"></a>
+### Expert advice and design readiness — 2026-10-09
 
-**Proposal only; no schema, workflow or prompt change is implemented.** The
-owner proposes agreeing the object's design before 3D. Reuse the visible
-[selected Solution](solutions.md) with a version-bound design intent: reference
-roles, orientation and form, required functions, features to preserve,
-dimensions and open choices. Daisy and Rita would receive the same exact brief
-and original images. Earlier explicit choices remain useful; Bob would resolve
-significant new differences rather than ask again for settled decisions. This
-proposal adds no mandatory approval step or execution gate.
+**Responsibility specified; implementation pending.** Before fixing construction,
+Bob notices consequential unresolved choices, finds applicable evidence, explains
+options and practical consequences, and recommends a supported solution. He owns
+technical investigation and choices within the existing mandate. The owner decides
+consequential use, cost, appearance, preferences or undelegated trade-offs; they
+are not asked to guess engineering correctness. Missing evidence requires
+research, specialist help or follow-up. Prior saved choices and explicit
+delegation are reused, including after private-chat reset; ordinary reversible
+details remain autonomous. Significant does not automatically mean owner approval.
 
-The existing Solution `source_media_id` is available in the database/UI but
-missing from Bob's tool surface. A proposed implementation would expose it
-through Bob's write/read/target paths and open the chosen image before handoff,
-reusing the existing versioned Solution record.
+Reuse the visible, versioned [selected Solution](solutions.md) for use/goals,
+references, orientation/form, required functions, preserved features, dimensions
+and important choices. Each choice needs relevant alternatives, a recommendation,
+its basis and consequences, responsible chooser, mandate and actual selected
+direction. Its outcome is open, chosen by the owner, chosen by Bob within mandate,
+or explicitly deferred for this output; delegation alone is not a settled design.
+Record the next
+deliverable's purpose and significant open issues, distinguishing blockers for
+that purpose from explicit bounded deferrals. Existing text and version fields
+can prototype this contract; no new table or final field schema is specified.
+
+An exploratory illustration may honestly leave structural questions open.
+Developing construction resolves choices on which its geometry depends. A checked
+numeric draft proves neither advisory readiness nor those choices. Current intake
+accepts nonblocking missing/assumed `owner_decision` items, and its readiness uses
+complete inputs, a selected target and no blocking flags. The checked-construction
+path can bypass research/designer work. The future contract therefore covers
+`save_construction_draft` as well as designer handoff and review.
+
+Implementation plan:
+
+1. Reconcile the selected Solution with prior choices and references; persist the
+   expert recommendation and purpose-specific unresolved issues visibly.
+2. Expose existing `source_media_id` through Bob's write/read/target paths and open
+   the chosen image. Keep reference roles and exact required-feature identities.
+3. Evaluate readiness before construction save and design handoff; pin the same
+   Solution revision for construction, Daisy and Rita, with original images.
+4. Verify advice, delegation, decision reuse and purpose-specific deferral across
+   construction, design and independent review. No code, database or prompt
+   change implementing this plan has been made.
+
+| Acceptance case | Expected behavior |
+| --- | --- |
+| Unresolved support affecting geometry | Investigate and advise before fixing geometry; resolve technical correctness through evidence. |
+| Explicit delegation | Make supported choices and proceed within the mandate. |
+| Prior saved owner choice after chat reset | Reuse the same project decision without asking again. |
+| Shape-only exploratory sketch | Preserve its limited purpose and label unresolved structural questions. |
+| Source read failure | Report unavailable evidence and recover retrieval; do not replace it with a guess. |
+
+The [dated readiness finding](foundation-verification.md#expert-advice-and-design-readiness--2026-10-09)
+owns evidence of the current gap; [State](bob-delivery-flow.md#state) owns the next
+implementation action. This is broader than mockup binding alone.
 
 The current technical handoff and original-image path already exist, and the
 first-layout instruction includes required functions; only optional joinery and
@@ -209,7 +249,7 @@ now owns visual evidence; the initial connector pixel limitation remains inciden
 history. Hidden head-gable construction, joints, drawer mechanisms/bearings and
 mattress support by slats versus board remain undetermined. Images convey design
 intent, not measured facts. Aligning the selected Solution, image binding and
-required-feature acceptance remains in [State](bob-delivery-flow.md#state).
+required-feature acceptance is part of the advisory/readiness plan above.
 
 ### Hosting boundary
 
