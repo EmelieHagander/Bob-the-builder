@@ -96,14 +96,18 @@ export default function CadWireframeCanvas({ title, geometry, components, select
       }
     }
     window.addEventListener('keydown', key, true)
-    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', key, true); if (previous?.isConnected) previous.focus() }
+    return () => {
+      document.body.style.overflow = overflow; window.removeEventListener('keydown', key, true)
+      if (previous?.isConnected && previous !== document.body) previous.focus()
+      else root.current?.querySelector<HTMLButtonElement>('[data-fullscreen-toggle]')?.focus()
+    }
   }, [expanded])
 
   const content = <div ref={root} className={expanded ? 'cad-wireframe-fullscreen' : 'shell3d'}
     role={expanded ? 'dialog' : undefined} aria-modal={expanded ? true : undefined} aria-label={expanded ? `${title} · 3D fullscreen` : undefined}>
     <div className="foundation-actions shell3d-controls">
       <button type="button" className="btn" onClick={() => fitRef.current()}>Fit view</button>
-      <button type="button" className="btn" onClick={() => setExpanded(v => !v)}>{expanded ? 'Close fullscreen' : 'Fullscreen'}</button>
+      <button type="button" className="btn" data-fullscreen-toggle onClick={() => setExpanded(v => !v)}>{expanded ? 'Close fullscreen' : 'Fullscreen'}</button>
       <span className="foundation-hint">Drag to turn · pinch to zoom · two fingers to move</span>
     </div>
     <div ref={host} className="shell3d-viewport" tabIndex={0} role="img" aria-label={`3D line view of ${title}`}

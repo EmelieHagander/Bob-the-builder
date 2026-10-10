@@ -261,6 +261,7 @@ async function verifyShell3D(page, view, fixture, width) {
     await page.screenshot({path:`test-results/cad-wireframe-fullscreen-${width}.png`})
     await page.keyboard.press('Escape');await full.waitFor({state:'detached'})
     await bed.waitFor();assert.equal(await view.count(),1,'Escape keeps the drawing open')
+    await page.waitForFunction(() => document.activeElement?.textContent==='Fullscreen')
     await selector.selectOption('');await image.waitFor()
     assert.equal(await view.locator('canvas.shell3d-canvas').count(),1,'only the current scene owns a canvas')
     await selector.selectOption('bed');await bed.waitFor()

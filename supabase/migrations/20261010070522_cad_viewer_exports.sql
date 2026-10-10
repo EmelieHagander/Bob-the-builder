@@ -1,4 +1,6 @@
 begin;
+set local lock_timeout='5s';
+set local statement_timeout='30s';
 -- A rebuildable display cache, never an Artifact revision or design approval.
 -- migration new crashed in the installed native CLI; filename uses observed UTC.
 create table bob.cad_viewer_exports (
