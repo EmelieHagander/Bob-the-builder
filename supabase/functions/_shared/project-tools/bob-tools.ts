@@ -63,7 +63,9 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => opts.projectContext!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.projectContext!.execute(spec.function.name, v),
     })),
-    ...(opts.constructionTools?.tools ?? []).map(spec => ({ spec, version: 1,
+    // New handlers can be installed before catalog activation; an older
+    // durable manifest keeps its own bench instead of failing on the new row.
+    ...(opts.constructionTools?.tools ?? []).filter(spec=>spec.function.name!=='change_construction_parameters'||!opts.aiCatalog||opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.change_construction_parameters')).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.constructionTools!.remaining > 0 && (!['save_construction_draft','change_construction_parameters','save_construction_cut_plan'].includes(spec.function.name) || (opts.writer?.remaining ?? 0) > 0) ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.constructionTools!.execute(spec.function.name, v),
     })),
