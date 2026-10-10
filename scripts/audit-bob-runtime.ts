@@ -40,7 +40,9 @@ globalThis.fetch = async () => { throw new Error('Runtime audit attempted networ
 const useSeed = !catalogArg || catalogArg === '--seed'
 const catalog = checkedToolSnapshot({ phase: null, tools: useSeed ? seed
   : JSON.parse(await readFile(catalogArg, 'utf8')) }).tools
-const handoff={deliverable:'Synthetic shelf concept',requirements:[{id:'shape',requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null}],coordinates:{origin:null,positive_x:null,positive_y:null,positive_z:'up'},views:['front','top'],unresolved:['Site fit']}
+const {requirementId}=await import('../supabase/functions/_shared/cad-handoff.ts')
+const shapeId=await requirementId({requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null})
+const handoff={deliverable:'Synthetic shelf concept',requirements:[{id:shapeId,requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null}],coordinates:{origin:null,positive_x:null,positive_y:null,positive_z:'up'},views:['front','top'],unresolved:['Site fit']}
 const id = '50000000-0000-4000-8000-000000000001'
 const stamp = '2026-10-03T00:00:00Z'
 let responseSequence = 0
@@ -267,10 +269,10 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
       instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
     files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES',top:'SYNTHETIC_TOP_PNG_BYTES'} } },
   callModel: measured('cad-repair', async o => {
-    if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
+    if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
     if(o.schemaName==='bob_cad_review'){
       cadReviewerCalls.push(structuredClone(o))
-      return response({verdict:'pass',summary:'Synthetic review',requirements:{shape:{status:'met',evidence:'Synthetic geometry'}},issues:[]})
+      return response({verdict:'pass',summary:'Synthetic review',requirements:{[shapeId]:{status:'met',evidence:'Synthetic geometry'}},issues:[]})
     }
     cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') }),
@@ -289,7 +291,7 @@ const researchLookup = lookup(40)
 const research = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true,
   makeLookup: () => researchLookup, deadline: Date.now() + 300000, available: true, readArtifact: noIO, render: noIO,
   callModel: measured('cad-read-boundary', async o => {
-    if(o.functionName==='cad-research')return response(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Explicit request' }], additional_needs: [] })
+    if(o.functionName==='cad-research')return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit request' }], additional_needs: [] })
     researchCalls++; if (researchCalls <= 3) return response(null, 'search_project_data', readInput)
     fourthTools = (o.tools ?? []).map(t => t.function.name)
     return response(null, 'report_cad_blocker', { reason: 'missing_constraint', explanation: 'Synthetic stopping condition for the audit.' }) }),

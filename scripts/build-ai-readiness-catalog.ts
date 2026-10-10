@@ -31,7 +31,16 @@ text('cad-designer.first-layout',
 text('cad-reviewer.contract', row('cad-reviewer.contract').content + '\n\n' +
   'Review the same pinned selected Solution revision, purpose, canonical design_intent and original references that the designer received. Cover every required feature ID as well as the handoff requirements; a simplified first layout does not waive required functions. Check that documented controlling selections actually support the geometry and that explicit deferrals remain outside the output’s purpose. Flag missing expert advice, an unresolved geometry-dependent choice, a reference-role mismatch or an omitted required feature concretely. Canonical intent records choices, not measured truth or structural certification.')
 
-const executable = [EXPERT_TOOLS.find(tool => tool.function.name === 'save_project_solution')!, DESIGN_CAD_TOOL, CONSTRUCTION_SAVE_TOOL]
+// Checking an applied publication must retain its historical CAD schema after
+// a later append-only handoff publication supersedes it. That newer executable
+// contract is independently checked by build-ai-handoff-catalog.ts.
+let cadTool=DESIGN_CAD_TOOL
+if(process.argv.includes('--check')&&readdirSync(migrationRoot).some(name=>name.endsWith('_cad_handoff_server_ids.sql'))){
+  const historical=readFileSync(path.join(migrationRoot,'20261009214611_ai_design_readiness_catalog.sql'),'utf8')
+  const definition=JSON.parse(historical.match(/\$ai_catalog_patch\$([\s\S]+?)\$ai_catalog_patch\$/)![1]).find((row:any)=>row.key==='tools.design_project_cad').definition
+  cadTool={...DESIGN_CAD_TOOL,function:{...DESIGN_CAD_TOOL.function,description:definition.description,parameters:definition.parameters}}
+}
+const executable = [EXPERT_TOOLS.find(tool => tool.function.name === 'save_project_solution')!, cadTool, CONSTRUCTION_SAVE_TOOL]
 for (const tool of executable) {
   const item = row('tools.' + tool.function.name)
   const entry = policy.find(value => value.name === tool.function.name)

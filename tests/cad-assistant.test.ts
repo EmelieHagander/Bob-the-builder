@@ -2,7 +2,7 @@ import {domainVocabulary} from '../src/domain/vocabulary.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant, handoff, reviewReply} from './support/cad-review-fixture.ts'
+import {createCadAssistant, shapeId, handoff, reviewReply} from './support/cad-review-fixture.ts'
 import {createCadAssistant as createReviewedCadAssistant} from './support/cad-parameter-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
@@ -28,7 +28,7 @@ test('a failed repair invalidates the old candidate; failure cannot save stale s
  const f=fixture();let n=0
  const a=createReviewedCadAssistant({...f.opts,research:false,
   render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
-  callModel:async o=>o.functionName==='cad-reviewer'?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Repair the dimensions',requirements:[{id:'shape',status:'failed',evidence:'Dimensions need repair'}],issues:[]})}:++n===1?response('render_cad_candidate',candidate):n===2?response('render_cad_candidate',{...candidate,recipe:{...recipe,python:'not allowed'}}):response(),
+  callModel:async o=>o.functionName==='cad-reviewer'?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Repair the dimensions',requirements:[{id:shapeId,status:'failed',evidence:'Dimensions need repair'}],issues:[]})}:++n===1?response('render_cad_candidate',candidate):n===2?response('render_cad_candidate',{...candidate,recipe:{...recipe,python:'not allowed'}}):response(),
  })
  assert.equal((await a.consult(request)).status,'incomplete');assert.equal(a.candidate,null)
 })
@@ -183,7 +183,7 @@ test('designer retains research tools beyond three calls and can investigate a p
  const a=createReviewedCadAssistant({...f.opts,research:false,
  render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
  callModel:async(o:any)=>{
-  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Investigate the placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
+  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Investigate the placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
   calls++
   if(calls<=4||calls===6){assert(o.tools.some((t:any)=>t.function.name==='search_project_data'));return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})}
   if(calls===5)return response('render_cad_candidate',candidate)

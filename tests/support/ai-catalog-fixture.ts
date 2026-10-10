@@ -39,6 +39,13 @@ for(const migration of migrations){
    row.metadata.schema_bindings={...row.metadata.schema_bindings,...patch.schema_bindings}
   }
  }
+ const handoffPatches=source.match(/\$cad_handoff_contracts\$([\s\S]+?)\$cad_handoff_contracts\$/)
+ if(handoffPatches)for(const patch of JSON.parse(handoffPatches[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
+  row.metadata={...row.metadata,server_owned_values:true,saved_handoff_resume:true}
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

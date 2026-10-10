@@ -1838,3 +1838,24 @@ zero. Actual bed project data stayed unchanged through the guest probe. Technica
 installation is complete. Ordinary named-member
 expert-choice/design acceptance, reference fidelity and broader P0/P4 outcomes
 remain open in [State](bob-delivery-flow.md#state).
+
+## CAD handoff ID regression — 2026-10-10
+
+The real resumed bunk-bed request had 15 persisted requirements. Bob returned
+10 paraphrased requirements with unrelated IDs; merging by those IDs produced
+25 and failed the strict 24-item validator before CAD dispatch. Repeated paid Bob
+steps could not repair that schema failure.
+
+The regression now tests the complete intake/design/review path: the 10 invented
+IDs retain the original 15 canonical requirements, reach one designer/render,
+and cannot repeat completed work. New IDs are server-generated for direct and
+split-piece requests. Separate tests cover exact replay, genuine additions,
+existing-ID updates, unknown references, preserved restoration, unchanged limits,
+and atomic catalog publication with fault-injected rollback. Provider-wire, K3,
+budget-grant and runtime-audit fixtures now reference server-owned identities.
+
+The new migration preserves all unrelated active definitions, model bindings,
+policy envelopes and immutable pinned history. Release validation, exact hosted
+source/schema readback and deployment status are recorded in the release PR.
+This change does not itself regenerate the owner's drawing or establish visual
+acceptance of the bed.

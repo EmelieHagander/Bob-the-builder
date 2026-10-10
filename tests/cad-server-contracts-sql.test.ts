@@ -10,14 +10,17 @@ const changed = new Set(['tools.render_cad_candidate', 'tools.render_saved_cad_c
 
 test('server contracts publish atomically, preserve pinned history and agree with runtime fixtures', async t => {
   let previous!: AiCatalogManifest
+  let published: AiCatalogManifest|undefined
   const pg = await projectSchema(async (db, name) => {
     if (name === migrationName) previous = (await db.query<{ result: AiCatalogManifest }>(
       "select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+    if(name>migrationName&&!published)published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   })
   t.after(() => pg.close())
   const resolve = async (manifestId: string | null = null) => (await pg.query<{ result: AiCatalogManifest }>(
     "select shared.resolve_ai_catalog('bob',$1) result", [manifestId])).rows[0].result
-  const current = await resolve()
+  const latest = await resolve()
+  const current = published??latest
   assert.notEqual(current.manifest_id, previous.manifest_id)
   assert.deepEqual(current.models, previous.models)
   assert.deepEqual(await resolve(previous.manifest_id), previous, 'running jobs retain their immutable contracts')
@@ -60,5 +63,5 @@ test('server contracts publish atomically, preserve pinned history and agree wit
       .replace(/^begin;$/m, '').replace(/^commit;$/m, ''))
   }), /cad_server_contract_missing/)
   assert.deepEqual(await snapshot(), beforeFailure, 'a missing third contract rolls back both earlier versions and all pointers')
-  assert.deepEqual(await resolve(), current)
+  assert.deepEqual(await resolve(), latest)
 })

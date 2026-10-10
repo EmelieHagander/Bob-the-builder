@@ -22,7 +22,8 @@ import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
-import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
+import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
+import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
@@ -32,7 +33,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a requested CAD drawing from the current selected Solution and its purpose-specific design intent. Resolve consequential choices through expert advice and supported selections before fixing construction geometry; reuse prior decisions and delegation. An exploratory form sketch may retain explicitly deferred choices within its stated scope. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Selected original images accompany the same pinned intent for designer and reviewer. Intake returns remaining needs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. Returns a checked candidate, not a saved drawing. Specify coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
-  {request_id:{...nullable,description:'Resume this saved drawing request ID after complements. Null only for a new request. Preserve existing requirements unless the owner explicitly changes them. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{...DESIGN_HANDOFF_SCHEMA,description:'Transfer all relevant owner requirements, including earlier corrections. Map coordinates and requested views explicitly; keep unknown directions null. Cite exact source refs for record facts; distinguish working assumptions. The original current request and selected reference pixels are also supplied by the server.'},area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
+  {request_id:{...nullable,description:'Copy the saved drawing request ID to resume after complements. Null only for a new request. With an ID, pass handoff:null and requirement_changes:[] to reuse ALL saved requirements. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const CAD_BLOCKER_TOOL=tool('report_cad_blocker','Report an indispensable constraint, unsupported geometry, render failure or unreadable preview that prevents completion. Renderer failures must stop even when a candidate exists. Ordinary reversible design choices and later physical verification are not blockers. Do not replace a feasible render with an offer to do it later.',
@@ -102,7 +103,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
  async consult(raw:unknown){
   if(terminalFailure)return terminalFailure
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
-  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
+  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   if(raw.request_id!=null&&!uuid(raw.request_id))return {status:'invalid',saved:false}
   raw=structuredClone(raw)
@@ -122,15 +123,6 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    if(Object.keys(scope).some(key=>raw[key]!==scope[key]))return {
     status:'recovery_required',reason:'drawing_scope_changed',saved:false,request_id:request.id,scope,
     next_action:catalogText("feedback.cad-assistant.next-action.70c5149c2791")}
-   // Source revisions refresh below; the original requirement contract survives.
-   const earlier=parseDesignHandoff(request.payload.brief.handoff)
-   const incoming=parseDesignHandoff(raw.handoff)
-   if(earlier&&incoming){
-    incoming.requirements=request.payload.restoration
-     ?[...earlier.requirements,...incoming.requirements.filter(r=>!earlier.requirements.some(n=>n.id===r.id))]
-     :[...earlier.requirements.filter(r=>!incoming.requirements.some(n=>n.id===r.id)),...incoming.requirements]
-    raw.handoff=incoming
-   }
   }
   if(used>=2)return {status:'budget_exhausted',saved:false}
   // The owner's message resuming a cost-stopped request is the budget
@@ -148,9 +140,15 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     }
    }
   }
-  const incomingHandoff=parseDesignHandoff(raw.handoff)
-  if(!incomingHandoff)return {status:'invalid',saved:false,reason:'invalid_handoff',required:'Provide the structured deliverable, requirements with provenance, coordinate mapping, views and unresolved checks.'}
-  let handoff=incomingHandoff
+  const earlier=request?parseDesignHandoff(request.payload.brief.handoff):null
+  if(request&&!earlier)return {status:'recovery_required',saved:false,request_id:request.id,reason:'saved_handoff_unavailable'}
+  const prepared=await prepareDesignHandoff(raw.handoff,earlier,raw.requirement_changes??[],!!request?.payload.restoration)
+  if('reason' in prepared)return {status:'invalid',saved:false,reason:prepared.reason,request_id:request?.id??null,
+   required:request?'Resume with handoff:null and requirement_changes:[]; changes must copy saved requirement IDs, while new requirements use requirement_id:null.':'Provide a structured handoff without requirement IDs; the server allocates them.',
+   ...(earlier?{handoff:earlier}:{}),maximum:24}
+  let handoff=prepared.handoff
+  raw.handoff=structuredClone(handoff)
+  delete raw.requirement_changes
   const dependencies=createDrawingDependencies(request?.payload.dependencies)
   const makeLookup=()=>{
    const source=opts.makeLookup()
@@ -219,7 +217,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     :old.step_id??null
   }
   payload.brief=structuredClone(raw)
-  let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:ownerRequest,brief:raw,brief_is_design_intent:true,brief_is_measurement_evidence:false})}]
+  let messages:NonNullable<OpenAIServiceOptions['messages']>=[{role:'user',content:JSON.stringify({project_id:opts.projectId,owner_request:ownerRequest,brief:raw,brief_is_design_intent:true,brief_is_measurement_evidence:false,
+   ...(prepared.ignored_legacy_ids.length?{ignored_legacy_requirement_ids:prepared.ignored_legacy_ids,requirements_from_saved_request:true}: {})})}]
   let preRenderReadRounds=0
   let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0,reviewPending=false
   // Exact input of the last new-geometry render; revise_cad_candidate patches it.

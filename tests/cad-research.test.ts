@@ -4,7 +4,7 @@ import { runProjectAnswer } from './support/main-catalog-fixture.ts'
 import { collectCadResearch } from './support/colleague-catalog-fixture.ts'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import { createProjectLookup, SEARCH_TOOL } from '../supabase/functions/_shared/project-lookup.ts'
-import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
 const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixture',responseId:'cursor',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'call',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
 const assessment={checks:handoff.requirements.map(r=>({id:r.id,status:'known',blocking:false,source_refs:['requirement:'+r.id],action:'none',detail:'Explicit requested concept'})),additional_needs:[]}
 const read={dataset:'measurements',query:null,status:null,area_id:null,record_id:null,after_id:null}
@@ -16,11 +16,11 @@ test('live intake rejects invented citations and repairs with exact refs without
    calls++
    const schema=o.tools!.find(t=>t.function.name==='finish_cad_research')!.function.parameters as any
    assert.equal(o.tools!.find(t=>t.function.name==='finish_cad_research')!.function.strict,true)
-   assert.deepEqual(schema.properties.checks.items.properties.source_refs.items.enum,['requirement:shape','west.parts','west.total'])
+   assert.deepEqual(schema.properties.checks.items.properties.source_refs.items.enum,['requirement:'+shapeId,'west.parts','west.total'])
    assert(JSON.stringify(o.messages).includes('not an input prerequisite'))
    if(calls===1)return reply('finish_cad_research',{...assessment,checks:assessment.checks.map(c=>({...c,source_refs:['user:current_request','measurements']}))})
    const feedback=JSON.parse(String(o.messages!.find(m=>m.role==='tool')!.content))
-   assert.equal(feedback.status,'invalid');assert(feedback.allowed_source_refs.includes('requirement:shape'))
+   assert.equal(feedback.status,'invalid');assert(feedback.allowed_source_refs.includes('requirement:'+shapeId))
    assert.deepEqual(feedback.invalid_source_refs,['user:current_request','measurements'])
    return reply('finish_cad_research',{...assessment,additional_needs:[{id:'width',status:'missing',blocking:true,source_refs:['west.total'],action:'measurement',detail:'Exact width remains unknown'}]})
   }})
@@ -95,7 +95,7 @@ test('first layout allows one targeted read batch then requires geometry or a bl
  const f=fixture();let design=0,reviews=0
  const a=createCadAssistant({...f.opts,callModel:async o=>{
   if(o.functionName==='cad-research')return reply('finish_cad_research',assessment)
-  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Check the requested placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
+  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Check the requested placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
   design++
   const names=o.tools!.map(t=>t.function.name)
   if(design===1){assert(names.includes('search_project_data'));return reply('search_project_data',read)}

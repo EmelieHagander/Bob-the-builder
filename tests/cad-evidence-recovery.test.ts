@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 const id = '30000000-0000-4000-8000-000000000091'
 const sourceId = '30000000-0000-4000-8000-000000000092'
@@ -14,7 +14,7 @@ const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id
 const metadata = { purpose: 'project', title: 'Concept', description: 'Synthetic recovery test', assumptions: 'Site fit unverified', target_revision: 1, measurements: [] }
 const reply = (name?: string, args: unknown = {}) => ({ success: true, data: null, responseId: 'response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
   ...(name ? { toolCalls: [{ id: 'call', type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
-const assessment = { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
+const assessment = { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
 
 function fixture() {
   let row: DrawingRequest | null = null, renders = 0, reviews = 0, checkpointsFail = false, renderedThisConsultation = false

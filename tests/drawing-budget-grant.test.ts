@@ -7,7 +7,7 @@ const createDrawingRequestStore=(opts:Omit<Parameters<typeof createDrawingReques
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { budgetResumeAction as budgetResumeActionImplementation, budgetStopMessage } from '../supabase/functions/_shared/bob-budget-stop.ts'
-import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 const budgetResumeAction=(stop:Parameters<typeof budgetResumeActionImplementation>[0])=>budgetResumeActionImplementation(stop,catalogFixture())
 
@@ -57,7 +57,7 @@ const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id
 const metadata = { purpose: 'project', title: 'Concept', description: 'Synthetic grant test', assumptions: 'Site fit unverified', target_revision: 1, measurements: [] }
 const reply = (name?: string, args: unknown = {}) => ({ success: true, data: null, responseId: 'response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
   ...(name ? { toolCalls: [{ id: 'call', type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
-const assessment = { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
+const assessment = { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
 const stoppedOutcome = { status: 'unavailable', stage: 'intake', saved: false, reason: 'turn_budget_exhausted',
   budget_stop: { scope: 'drawing_request', reasons: ['usd_limit'], calls: 9, call_limit: 24, spent_usd: 1.15, usd_limit: 1 } }
 
