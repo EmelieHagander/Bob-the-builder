@@ -3,10 +3,11 @@ import { constructionLists } from './construction-lists.ts'
 import { constructionCutFit } from './construction-cut-fit.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
-import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import { CAD_PARAMETERS_SCHEMA, CadParameterBindingGap, CadParameterGap, compileCadParameters, parseParameterPlan, parameterSourcePins } from './cad-parameters.ts'
+import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange} from './construction-parameters.ts'
 import { schemaIssues } from './schema-issues.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
-import type { ProjectWriter } from './project-write.ts'
+import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
 
 const obj=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
@@ -30,6 +31,10 @@ export const CONSTRUCTION_SAVE_TOOL=tool('save_construction_draft',
 })
 export const CONSTRUCTION_READ_TOOL=tool('read_construction_draft','List current construction drafts, or read exact saved geometry, parameters, material revisions and joints. A draft is not a reviewed/rendered drawing. Historical revisions retain their original values; inspect source_state.',{
  artifact_id:nullableUuid,revision:nullableRev,after:nullableUuid,
+})
+export const CONSTRUCTION_PARAMETER_TOOL=tool('change_construction_parameters','Change only existing input nodes in an exact saved construction. Read its stable parameter IDs first. Supply changed decision/estimate values in the SAME role/unit with an honest reason, or the newer revision of the SAME source measurement; never supply measured source values. Derived nodes, formulas, bindings, parts, materials and joints remain unchanged. The server reads the checkpoint and recomputes all dependent dimensions and placements. Unknown controlling values block saving. Use save_construction_draft for topology/material/formula changes. key identifies this intended write; exact retry reuses its receipt even after another head change. After saved, check_construction_draft at the receipt revision and pass that exact construction_revision to design_project_cad. A construction receipt alone is not a drawing delivery.',{
+ key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:uuid,expected_revision:rev,
+ changes:CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
 })
 export const CONSTRUCTION_CHECK_TOOL=tool('check_construction_draft','Check an exact current saved construction before drawing. Reads canonical geometry and catalog revisions server-side. Supports uncut wooden boxes, right-angle rotations and planar screwed/glued butt-joint concepts. Reports collisions, wrong local faces, missing joints, disconnected parts and material dimension mismatches with stable IDs. Compare returned bounds/count against the original request. concept_ready permits concept development only; fabrication_ready is always false until product, hardware, load and manufacturing checks exist. Unsupported operations and stale sources stop this check.',{
  artifact_id:uuid,revision:rev,
@@ -57,20 +62,37 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
+ prepareParameterChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
  readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null)=>Promise<DesignReadiness|unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12)return {status:'budget_exhausted'}
-  const spec=name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:name===CONSTRUCTION_CUT_SAVE_TOOL.function.name?CONSTRUCTION_CUT_SAVE_TOOL:null
+  const spec=name===CONSTRUCTION_PARAMETER_TOOL.function.name?CONSTRUCTION_PARAMETER_TOOL:name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:name===CONSTRUCTION_CUT_SAVE_TOOL.function.name?CONSTRUCTION_CUT_SAVE_TOOL:null
   if(!spec)return {status:'invalid'}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
   const v=raw as any
   if(!await opts.hasAccess())return {status:'denied'}
   try{
+   if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){
+    if(!opts.writer||!opts.prepareParameterChange)return {status:'unavailable'}
+    if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}
+    const payload:WritePayload={kind:'construction_parameters',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null}}
+    const prepared=await opts.prepareParameterChange(payload)
+    if(!await opts.hasAccess())return {status:'denied'}
+    if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
+    if(prepared.status==='ready'){
+     const draft=prepared.draft
+     if(draft?.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
+     payload.data.computed=await compileConstructionParameterChange(opts.projectId,draft,v.changes,opts.readSources)
+    }
+    if(!await opts.hasAccess())return {status:'denied'}
+    return await opts.writer.commit(payload)
+   }
    if(name===CONSTRUCTION_READ_TOOL.function.name){
     const result=await opts.read(v.artifact_id,v.revision,v.after) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}
@@ -136,6 +158,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    return await opts.writer.commit({kind:'construction',record_id,expected_revision,expected_updated_at:null,request_quote,data:{...data,recipe,parameters}})
   }catch(error){
    rethrowContinuation(error)
+   if(error instanceof CadParameterGap)return {status:'needs_data',reason:'unknown_required_parameters',gaps:error.gaps,message:'No construction changed. Resolve these controlling values in the same request; no zero or invented value was saved.'}
    if(error instanceof CadParameterBindingGap)return {status:'invalid',message:'Bind every path in unbound to a parameter node using these exact slash-separated paths. Keep the same construction IDs and correct the parameter plan; no source lookup retry is needed.',unbound:error.unbound}
    const message=error instanceof Error?error.message:''
    const known=/^(invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/

@@ -33,7 +33,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Delegate a requested CAD drawing from the current selected Solution and its purpose-specific design intent. Resolve consequential choices through expert advice and supported selections before fixing construction geometry; reuse prior decisions and delegation. An exploratory form sketch may retain explicitly deferred choices within its stated scope. For a construction concept with parts, material revisions and typed joints, use save_construction_draft and check_construction_draft first; this drawing tool cannot replace that deliverable or repair catalog definitions. Selected original images accompany the same pinned intent for designer and reviewer. Intake returns remaining needs together; reuse existing Tasks/Steps or gather measurements in chat, then resume the same request_id. Returns a checked candidate, not a saved drawing. Specify coordinate/view directions and relevant object IDs; the assistant can fetch wider dependencies.',
-  {request_id:{...nullable,description:'Copy the saved drawing request ID to resume after complements. Null only for a new request. With an ID, pass handoff:null and requirement_changes:[] to reuse ALL saved requirements. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'}})
+  {request_id:{...nullable,description:'Copy the saved drawing request ID to resume after complements. Null only for a new request. With an ID, pass handoff:null and requirement_changes:[] to reuse ALL saved requirements. When the owner writes again about a request that stopped at its cost or call limit, call this immediately with that ID; the owner\'s new message renews the budget, which the server adds. Do not re-read requests, budgets or sources first.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{...nullable,description:'Exact existing construction checkpoint to draw, or CAD Artifact to revise. A construction is freshly checked and rendered verbatim into a separate linked concept drawing; it is never redesigned here. Null only when no existing construction applies.'},construction_revision:{type:['integer','null'],minimum:1,maximum:999999999,description:'For construction rendering, copy the exact revision from its saved/read receipt. The server reads and checks that version; it cannot substitute the newest design. Resume preserves the saved version. Null only for a CAD drawing without a construction source.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact successfully rendered CAD candidate from this turn as a concept Artifact revision, including its plan Step link. This is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const CAD_BLOCKER_TOOL=tool('report_cad_blocker','Report an indispensable constraint, unsupported geometry, render failure or unreadable preview that prevents completion. Renderer failures must stop even when a candidate exists. Ordinary reversible design choices and later physical verification are not blockers. Do not replace a feasible render with an offer to do it later.',
@@ -103,7 +103,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
  async consult(raw:unknown){
   if(terminalFailure)return terminalFailure
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
-  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
+  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   if(raw.request_id!=null&&!uuid(raw.request_id))return {status:'invalid',saved:false}
   raw=structuredClone(raw)
@@ -123,7 +123,16 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    if(Object.keys(scope).some(key=>raw[key]!==scope[key]))return {
     status:'recovery_required',reason:'drawing_scope_changed',saved:false,request_id:request.id,scope,
     next_action:catalogText("feedback.cad-assistant.next-action.70c5149c2791")}
+   const savedDraft=request.payload.draft
+   if(request.payload.brief.construction_revision!=null){
+    raw.construction_revision??=request.payload.brief.construction_revision
+    if(raw.construction_revision!==request.payload.brief.construction_revision)return {status:'recovery_required',stage:'construction',reason:'construction_revision_changed',saved:false,request_id:request.id}
+   }else if(raw.construction_revision===undefined&&object(savedDraft)&&object(savedDraft.construction)&&savedDraft.construction.revision!=null){
+    raw.construction_revision=savedDraft.construction.revision
+   }
   }
+  if(raw.construction_revision!=null&&(!Number.isSafeInteger(raw.construction_revision)||raw.construction_revision<1||raw.construction_revision>999999999))return {status:'invalid',stage:'construction',saved:false,reason:'invalid_construction_revision'}
+  if(raw.construction_revision!=null&&!uuid(raw.artifact_id))return {status:'invalid',stage:'construction',saved:false,reason:'construction_source_required'}
   if(used>=2)return {status:'budget_exhausted',saved:false}
   // The owner's message resuming a cost-stopped request is the budget
   // authorization. The grant is owner-only SQL and idempotent per turn; the
@@ -204,12 +213,24 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   let drawingArtifactId=raw.artifact_id
   if(raw.artifact_id){
    const old=await readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
-   if(old.source_kind==='construction'){construction=old;drawingArtifactId=null}
+   if(old.source_kind==='construction'){
+    construction=raw.construction_revision!=null&&raw.construction_revision!==old.revision?await readArtifact(raw.artifact_id,raw.construction_revision):old
+    drawingArtifactId=null
+   }
    else if(old.manifest?.bob_construction){
-    const source=await readArtifact(old.manifest.bob_construction.artifact_id,null)
+    const sourceId=old.construction_source?.artifact_id??old.manifest.bob_construction.artifact_id
+    let source=await readArtifact(sourceId,null)
+    if(raw.construction_revision!=null&&source?.revision!==raw.construction_revision)source=await readArtifact(sourceId,raw.construction_revision)
     if(source?.source_kind!=='construction')return {status:'unavailable',stage:'construction',saved:false}
     construction=source
    }
+   if(construction){
+    if(raw.construction_revision===null)return {status:'needs_data',stage:'construction',saved:false,reason:'construction_revision_required',artifact_id:construction.artifact_id}
+    if(construction.source_kind!=='construction'||raw.construction_revision!=null&&construction.revision!==raw.construction_revision)return {status:'conflict',stage:'construction',saved:false,reason:'construction_revision_changed'}
+    // Old pinned manifests lacked the new input. Capture their server-read
+    // version once and persist it; subsequent resumes cannot follow a new head.
+    raw.construction_revision??=construction.revision
+   }else if(raw.construction_revision!=null)return {status:'invalid',stage:'construction',saved:false,reason:'construction_source_required'}
    expected=drawingArtifactId?old.revision:0;raw.area_id??=old.area_id??null;raw.component_id??=old.component_id??null
    // Work links may have changed independently of the geometry revision.
    raw.step_id??=Array.isArray(old.current_step_ids)

@@ -34,7 +34,13 @@ test('handoff contracts publish together, preserve active edits and pinned histo
  const fixture=catalogFixture()
  for(const tool of [DESIGN_CAD_TOOL,PLAN_CAD_PIECES_TOOL]){
   const key='tools.'+tool.function.name
-  assert.deepEqual(session.tool(key).function.parameters,tool.function.parameters)
+  const historical=structuredClone(tool.function.parameters)
+  if(tool.function.name==='design_project_cad'){
+   delete (historical.properties as any).construction_revision
+   historical.required=historical.required.filter(k=>k!=='construction_revision')
+   assert(!Object.hasOwn(session.tool(key).function.parameters.properties,'construction_revision'))
+  }
+  assert.deepEqual(session.tool(key).function.parameters,historical)
   assert.deepEqual(fixture.tool(key).function.parameters,tool.function.parameters)
   assert.equal(session.tool(key).function.description.split('\n')[0],tool.function.description)
  }

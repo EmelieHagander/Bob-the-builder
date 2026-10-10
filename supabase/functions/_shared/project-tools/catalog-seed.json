@@ -467,6 +467,15 @@
     "active": true
   },
   {
+    "name": "change_construction_parameters",
+    "description": "Change saved construction input nodes; server recomputes dependencies and retains exact version history.",
+    "how_to": "Read the existing construction and parameter IDs. Supply only same-role/unit input changes, or an updated revision of the same source measurement. Reuse key only for exact retry. The server preserves formulas, geometry topology, materials and joints. Check the receipt revision and pass it as construction_revision to design_project_cad; no drawing is saved by this command.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
     "name": "save_project_area",
     "description": "Create or revise an optional Area grouping for project Steps.",
     "how_to": "Read existing Areas first. Reuse exact IDs. Create a grouping when scope needs it; no placeholder Area is needed for a Step directly in the Project. This does not create a physical room or move existing work.",
