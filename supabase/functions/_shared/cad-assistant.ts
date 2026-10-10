@@ -221,7 +221,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    ...(prepared.ignored_legacy_ids.length?{ignored_legacy_requirement_ids:prepared.ignored_legacy_ids,requirements_from_saved_request:true}: {})})}]
   let preRenderReadRounds=0
   let previousResponseId:string|undefined, renders=0,invalidRenders=0,renderReviewed=false,reviews=0,reviewPending=false
-  // Exact input of the last new-geometry render; revise_cad_candidate patches it.
+  // Only successfully rendered input becomes a patch base. Invalid patches
+  // cannot poison the next repair or drop still-required source bindings.
   let lastRenderArgs:Record<string,any>|null=null
   let candidateInputFingerprint:string|null=null
   const rejectedInputs=new Set<string>()
@@ -620,7 +621,6 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
          ||!Array.isArray(args.part_ids)||new Set(args.part_ids).size!==args.part_ids.length)throw new Error('invalid_candidate')
        // The caller-scoped target read owns this pin. Legacy model fields are ignored.
        args.target_revision=Number(selected.revision)
-       lastRenderArgs=name==='render_cad_candidate'?structuredClone(args):null
        let recipe=args.recipe,lineage:CadLineage|null=null,parameters:CadParameters|undefined
        let parameterPlan=name==='render_cad_candidate'?parseParameterPlan(args.parameter_plan):null
        if(parameterPlan)({recipe,plan:parameterPlan}=expandCadArrays(recipe,parameterPlan))
@@ -698,6 +698,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
         if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
         return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed',summary:'The CAD service failed. Stop this design attempt; changing the construction is not a renderer repair.'}
        }
+       lastRenderArgs=name==='render_cad_candidate'?structuredClone(args):null
        const {bob_parameters:_untrustedParameters,...renderManifest}=packet.manifest
        packet={...packet,manifest:{...renderManifest,bob_lineage:lineage,...(parameters?{bob_parameters:parameters}:{}),bob_design_intent:readiness.pin,bob_design_images:designImages}}
        candidate={packet,title:args.title,description:args.description,assumptions:args.assumptions,target_revision:args.target_revision,measurements:args.measurements,source_artifact_id:args.source_artifact_id,source_revision:args.source_revision,part_ids:args.part_ids,area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:raw.artifact_id,expected_revision:expected}

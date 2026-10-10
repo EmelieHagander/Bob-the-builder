@@ -55,6 +55,12 @@ for(const migration of migrations){
   if(patch.minimum_output_tokens)row.definition={...row.definition,max_output_tokens:Math.max(row.definition.max_output_tokens??0,patch.minimum_output_tokens)}
   if(patch.append)row.content+='\n\n'+patch.append
  }
+ const revisionPatches=source.match(/\$cad_revision_contracts\$([\s\S]+?)\$cad_revision_contracts\$/)
+ if(revisionPatches)for(const patch of JSON.parse(revisionPatches[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

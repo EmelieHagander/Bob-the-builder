@@ -5,7 +5,7 @@ import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import type { AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 
 test('chat images are private, same-project, ready, immutable and durable across worker retries', async t => {
-  let previous!:AiCatalogManifest
+  let previous!:AiCatalogManifest,published:AiCatalogManifest|undefined
   const pg = await projectSchema(async (db, name) => {
     if (name === '20260924120448_bob_background_jobs.sql') await db.exec(`create schema cron; create schema net;
       create function cron.schedule(text,text,text) returns bigint language sql as 'select 1::bigint';
@@ -14,9 +14,13 @@ test('chat images are private, same-project, ready, immutable and durable across
       await db.exec("update shared.ai_models set supports_images=false where model_type='image';")
       previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
     }
+    if(previous&&name>'20261010122005_ai_chat_image_catalog.sql'&&!published)
+      published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   })
   t.after(() => pg.close())
-  const current=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  // Compare the image publication at its migration boundary. Later, unrelated
+  // catalog publications deliberately create another immutable manifest.
+  const current=published??(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   const pinned=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[previous.manifest_id])).rows[0].result
   assert.deepEqual(pinned,previous,'historical manifests keep their previous flags and schema')
   const binding=current.definitions.find(d=>d.prompt_key==='tier.image')!.definition.model_name
