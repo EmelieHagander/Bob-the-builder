@@ -207,7 +207,7 @@ physical-phone and named-participant acceptance.
 - AI drawer: `src/components/AskBob.tsx`
 - Page focus to Bob: `src/lib/bobSurface.ts` + `src/domain/bobScreen.ts`; [context contract](ask-bob-context.md#implemented-scope-and-remaining-target)
 - Drawing source map, exact-version status and shared request complements: `src/components/CadSourceMap.tsx`, `DrawingRequests.tsx` + [artifact contract](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed)
-- Shell drawing plan and house-size 3D view: `src/components/CadShellView.tsx`, lazily loaded `CadShell3D.tsx` (three.js, only fetched when the owner opens 3D) + `src/lib/shell3d.ts`; piece colours are a generated categorical palette used only in that 3D view and its legend, flagged pieces use `--clay` dashed outlines; [CAD contract](cad-adapter.md)
+- CAD line view and shell overview: `CadDrawingView.tsx`, `CadShellView.tsx`, lazy `CadWireframeView.tsx` / `CadWireframeCanvas.tsx` (three.js loads when 3D opens), `src/lib/wireframeObjects.ts`; `--ink` edges and `--clay` dashed bounds for changed pieces. [Mobile CAD contract](cad-adapter.md#mobile-cad-viewer--2026-10-10) owns detail loading, performance and honest overview states.
 - Installation behavior, assets and verification: `README.md` → Install Bob on a phone; public guide in `src/pages/Install.tsx`, account entry in `src/components/InstallSettingsCard.tsx`
 
 A page should compose these pieces and own domain-specific layout/meaning; it should not silently fork their generic behavior.

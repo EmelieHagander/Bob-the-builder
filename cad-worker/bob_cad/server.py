@@ -40,6 +40,18 @@ def render_to_pipe(recipe, connection):
     finally:
         connection.close()
 
+def wireframe_to_pipe(request, connection):
+    try:
+        from .wireframe import render_wireframe
+        body = json.dumps(render_wireframe(request), separators=(',', ':')).encode()
+        if len(body) > 4 * 1024 * 1024:
+            raise ValueError('wireframe_output_too_large')
+        connection.send_bytes(body)
+    except Exception:
+        connection.send_bytes(b'')
+    finally:
+        connection.close()
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # No auth headers, project recipes or private file data in access logs.
@@ -49,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
         if not token or not hmac.compare_digest(self.headers.get('Authorization', ''), 'Bearer ' + token):
             self.send_error(401)
             return
-        if self.path != '/render':
+        if self.path not in ('/render', '/wireframe'):
             self.send_error(404)
             return
         try:
@@ -63,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         context = multiprocessing.get_context('spawn')
         receive, send = context.Pipe(duplex=False)
-        worker = context.Process(target=render_to_pipe, args=(recipe, send))
+        worker = context.Process(target=wireframe_to_pipe if self.path == '/wireframe' else render_to_pipe, args=(recipe, send))
         worker.start()
         send.close()
         try:

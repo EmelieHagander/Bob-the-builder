@@ -7,6 +7,7 @@ import type { StudWallRole } from '../lib/artifactGeometry'
 import type { StorageBoxRecipe } from '../lib/storageBox'
 import type { CadShell } from '../lib/cadShell'
 import { parseDrawingSourceChanges, type DrawingSourceStatus } from './drawingSources'
+import { parseCadViewerPin, parseCadWireframe, type CadViewerResult } from '../../supabase/functions/_shared/cad-wireframe.ts'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
@@ -271,6 +272,21 @@ export function createArtifacts(
   return {
     version,
     generation,
+    async wireframe(projectId: string, id: string, revision: number, signal: AbortSignal, retry = false): Promise<CadViewerResult> {
+      const { db, guard } = connection(projectId)
+      const pin = parseCadViewerPin({ project_id: projectId, artifact_id: id, revision })
+      if (!pin) throw new Error('Invalid drawing revision reference.')
+      const { data, error } = await db.functions.invoke('cad-viewer', { body: { ...pin, retry }, signal })
+      guard()
+      if (signal.aborted) throw new Error('The 3D view was closed or timed out.')
+      if (error) throw new Error('Could not load this saved 3D view. Check your connection and project access.')
+      if (data?.status === 'pending') return { status: 'pending' }
+      if (data?.status === 'failed' && typeof data.retry_allowed === 'boolean') return data
+      const source = parseCadViewerPin(data?.source), geometry = parseCadWireframe(data?.geometry)
+      if (data?.status !== 'ready' || !source || !geometry || source.project_id !== pin.project_id || source.artifact_id !== pin.artifact_id || source.revision !== pin.revision)
+        throw new Error('The 3D view did not match this saved drawing version.')
+      return { status: 'ready', source, geometry }
+    },
     async list(projectId: string, areaId = '', archived = false, offset = 0) {
       const { db, guard } = connection(projectId)
       let query = db.from('current_artifacts').select('*').eq('project_id', projectId).eq('archived', archived)

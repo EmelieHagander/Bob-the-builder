@@ -592,11 +592,11 @@ Each parameter is an exact project/accepted-Space source, a documented design de
 
 **Repeat templates (arrays).** `render_cad_candidate` also accepts `recipe.arrays:[{id,definition_id,axis,count}]` for evenly spaced identical parts. `cad-arrays.ts` expands each array into ordinary instances `<id>.1..<id>.<count>` before validation, with each copy placed at `start + (N-1) × spacing` through shared `repeat.n<i>` scalar nodes and derived multiply/add nodes. The model binds only `arrays/<id>/start/*` and `arrays/<id>/spacing_mm`. Saved recipes, renderer input and `bob_parameters` keep the existing contract, so the 512-instance and 1024-node limits still apply after expansion. Arrays reduce designer output; they do not split a large construction into separately saved parts.
 
-**Split builds (pieces).** Bob's `plan_cad_pieces` tool (`cad-pieces.ts`) splits a large build into 2–12 pieces. Each piece is stored as an ordinary drawing request in `collecting` with its own budget, a stable per-piece id (`piece:<key>`) and a complete standalone brief and handoff. `bob.release_drawing_pieces` (migration `20261008100000_cad_pieces.sql`) marks one unseen drawing event for exactly those fresh pieces of the claimed turn. The existing `queue_drawing_events` then designs and auto-saves them one at a time per thread after the turn, while drawing authority lasts (renewed while the owner has Bob open). A failed piece keeps its `request_id` and does not block the others; failed and older requests still wait for real new data. Pieces share one coordinate system by brief only: there is no parent assembly that places saved pieces by reference yet, and no combined house render.
+**Split builds (pieces).** Bob's `plan_cad_pieces` tool (`cad-pieces.ts`) splits a large build into 2–12 pieces. Each piece is stored as an ordinary drawing request in `collecting` with its own budget, a stable per-piece id (`piece:<key>`) and a complete standalone brief and handoff. `bob.release_drawing_pieces` (migration `20261008100000_cad_pieces.sql`) marks one unseen drawing event for exactly those fresh pieces of the claimed turn. The existing `queue_drawing_events` then designs and auto-saves them one at a time per thread after the turn, while drawing authority lasts (renewed while the owner has Bob open). A failed piece keeps its `request_id` and does not block the others; failed and older requests still wait for real new data. Pieces retain separate drawing requests. A shell can place their saved revisions by reference; there is no combined house CAD render.
 
 **Change-only repairs.** After a new-geometry render, the designer is offered `revise_cad_candidate` (`cad-revise.ts`): `upsert`/`remove` by id for definitions, instances, arrays, clearances, motions, parameter nodes and bindings (by path), plus optional views/title/description/assumptions. The server applies it to the exact input of that consult's last `render_cad_candidate` call and re-runs the same render, provenance, lineage and review path. Removing an item removes the bindings under its path. Parameter nodes no longer reachable from a binding or frame are dropped and listed as `dropped_nodes`. Unknown ids are an input correction, not a silent no-op.
 
-**Shell drawings.** A shell (`20261008120000_cad_shells.sql`, `cad-shell.ts`, `src/lib/cadShell.ts`) is a plan-kind Artifact that places saved CAD pieces by reference: each revision pins exact piece revisions plus whole-mm x/y/z, a quarter-turn `rz` and a `placement_basis` (`shared_origin`, `owner_placed`, `bob_decision`). Bob (`compose_cad_shell` through writer kind `cad_shell`) and the app (`bob.cad_shell_command`) use the same command: create, place, add, remove, adopt. Pieces are never copied, so cut lists and materials stay on the pieces. `bob.read_cad_shell` marks a piece `newer_revision` when it has a newer saved CAD revision; adopting it is an explicit command. Generic Artifact revise is refused for shells; archive and restore carry the pieces. Shells do not nest, and the shell is not rendered as one CAD assembly: the app shows plan-view footprints from each piece's saved bounding box. On the newest, non-archived shell revision the owner can drag a piece (mouse or touch), nudge it with arrow buttons or arrow keys, or turn it a quarter about its footprint centre; positions snap to a 50 mm grid and each save is one `place` command with `placement_basis: owner_placed`, the opened revision as expected and the owner's reason (default "Moved in the drawing"). A stale revision (`cad_shell_changed`) keeps the unsaved move and offers a reload of the newest revision. Footprints that cross (not a piece wholly inside a larger one) are shown as a "footprints overlap" warning: bounding boxes only, never a measured clash check and never a block. Beside the plan, the app offers a **3D view** composed in the browser: it reads each pinned piece's saved `artifact_cad_revisions.recipe` (project-scoped, recipe column only, `getCadShellPieceRecipes`), validates it with `parseCadAssemblyRequest`, and draws boxes and cylinders as instanced meshes (one per primitive kind and piece colour) with the piece placement `T(x,y,z)·Rz(rz)` applied to the recipe's own `T·Rx·Ry·Rz` instance placement (`src/lib/shell3d.ts`). Tubes are drawn solid and cuts are not subtracted; the legend says so. Pieces that are unavailable or have no readable recipe are listed as not drawn; `newer_revision`/`changed`/`archived` pieces get a dashed outline. Without WebGL the view falls back to the plan with a message.
+**Shell drawings.** A shell (`20261008120000_cad_shells.sql`, `cad-shell.ts`, `src/lib/cadShell.ts`) is a plan-kind Artifact that places saved CAD pieces by reference: each revision pins exact piece revisions plus whole-mm x/y/z, a quarter-turn `rz` and a `placement_basis` (`shared_origin`, `owner_placed`, `bob_decision`). Bob (`compose_cad_shell` through writer kind `cad_shell`) and the app (`bob.cad_shell_command`) use the same command: create, place, add, remove, adopt. Pieces are never copied, so cut lists and materials stay on the pieces. `bob.read_cad_shell` marks a piece `newer_revision` when it has a newer saved CAD revision; adopting it is an explicit command. Generic Artifact revise is refused for shells; archive and restore carry the pieces. Shells do not nest, and the shell is not rendered as one CAD assembly: the app shows plan-view footprints from each piece's saved bounding box. On the newest, non-archived shell revision the owner can drag a piece (mouse or touch), nudge it with arrow buttons or arrow keys, or turn it a quarter about its footprint centre; positions snap to a 50 mm grid and each save is one `place` command with `placement_basis: owner_placed`, the opened revision as expected and the owner's reason (default "Moved in the drawing"). A stale revision (`cad_shell_changed`) keeps the unsaved move and offers a reload of the newest revision. Footprints that cross (not a piece wholly inside a larger one) are shown as a "footprints overlap" warning: bounding boxes only, never a measured clash check and never a block. Beside the plan, the app offers the [mobile CAD viewer](#mobile-cad-viewer--2026-10-10); the former solid-primitive preview is superseded by that line-view contract.
 
 **Shell → plan and materials** (`20261008150000_cad_shell_plan_link.sql`). `bob.read_cad_shell` also returns, per piece, its current plan Steps (the same `artifact_step_links` that `link_project_drawing` writes, so links are held by the pieces) and its current material requirements, plus a `plan_summary`: totals of the pieces' requirements grouped by name and unit, `not_counted` (pieces with no requirement — never shown as zero), `counted_once` (a piece placed twice is counted once and named) and `not_in_plan`. Lines from another piece version or a changed target are counted but flagged `needs_review`. The shell owns no links or materials. Bob links many pieces in one claimed-turn write with `link_cad_shell_steps` (writer kind `cad_shell_steps`; does not change the shell revision); a missing Step is added with the plan tools first. The app lists pieces in build order (earliest linked Step position) with "Not in the plan yet" / "Not counted yet", and a shell-level "Materials so far" total. This is a planning read-out, not a purchase or Shopping handoff.
 
@@ -821,3 +821,59 @@ review, budget and the 24-requirement bound still apply.
 versions. It preserves other edits and pinned manifests. Deploy the compatible
 handlers first. The publication builder checks the new executable schemas without
 rebuilding applied seeds. Verification and rollout evidence are in the release PR.
+
+
+## Mobile CAD viewer — 2026-10-10
+
+**Implemented; release pending migration, Edge, Modal and Pages readback.**
+
+`CadDrawingView` offers **View in 3D** on the opened CAD revision. Shells keep
+**3D view**, initially showing saved bounding boxes for the whole drawing.
+That overview is explicitly labelled; it does not claim to show walls, holes or
+collisions. **Detail to load** opens one pinned piece at a time. **Parts to show**
+can isolate one instance when a piece is too complex. Drag, pinch, two-finger
+pan, Fit view and Fullscreen work in the shared `CadWireframeView` /
+`CadWireframeCanvas`. Unsupported WebGL2 keeps the saved drawing visible with
+an explanation. Volunteers retain their existing saved drawing/download flow.
+
+The server creates a display derivative from native topological CAD edges,
+including holes, notches and tube bores, using the same pinned build123d engine.
+Straight edges have no triangulation diagonals. Curves are sampled at a viewing
+tolerance of 0.25 mm; exact dimensions remain on the drawing and in STEP.
+This is a line view of all edges, including edges behind other parts, with no
+lighting, textures, shadows or structural approval.
+
+The authenticated `cad-viewer` Edge endpoint accepts only Project, Artifact,
+revision and an explicit retry flag. It reads the caller-authorized saved recipe
+and source status, hashes canonical recipe + `kernel-edges-v1`, and claims a
+service-only lease in `bob.cad_viewer_exports`. Native `/wireframe` output is
+checked against the same hash, placements and engine identity. Access and source
+are rechecked after export and before cached bytes return. Output has no public
+URL and HTTP caching is disabled. This derivative never changes an Artifact
+revision, design workflow, CAD source, STEP or saved drawing.
+
+The first opening may pay for one on-demand CAD preparation. Concurrent openings
+share one lease; later openings reuse the database export. Rotation, zoom and an
+idle view run on the device. Metadata/auth/cache requests and storage still have
+ordinary hosting costs; there is no continuously running server-rendering
+session. Failure or lease expiry does not automatically repeat a paid export;
+explicit retry is limited to three attempts per version/hash/profile. Changing
+the source or display profile produces a different cache key.
+
+Bounds: 128 definitions / 512 instances per saved piece, 60,000 unique exported
+line segments, 4 MiB export and 200,000 displayed segments. The shell retains
+its existing 64-piece limit. Its overview needs at most two line batches;
+detail geometry uses one instanced line batch per used definition. The renderer
+rebases world coordinates, caps pixel ratio at 1.5, renders on interaction/resize
+only, pauses when hidden and disposes GPU buffers/controls/context on closure.
+Actual speed and graphics memory depend on the phone and geometry.
+
+`cad-worker/test_wireframe.py` checks real box edges, bores/cuts, curve tolerance,
+placements, shared definitions and budgets. `wireframe_fixtures.py` regenerates
+cross-runtime browser/TypeScript fixtures from the pinned kernel. The viewer
+handler and full-schema tests cover cache reuse, access, source changes, leases
+and retries. Browser verification covers 320/390 px and desktop, local
+rotation/zoom/pinch, fullscreen/Escape, idle rendering, pinned versions,
+retry/fallback and closing. Software WebGL fixtures do not establish physical
+phone FPS or acceptance of a particular real house. Release evidence belongs in
+the PR; physical-phone acceptance remains in [State](bob-delivery-flow.md#state).

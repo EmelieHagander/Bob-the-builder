@@ -108,7 +108,7 @@ function VersionDetails({ value, target, onShellChanged, onShellReload }: { valu
     <p><strong>Assumptions / limits:</strong> {value.assumptions || 'Not recorded'}</p>
     <p className="foundation-hint">{value.actor} · {formatDateTime(value.recordedAt)} · {value.reason}</p>
     <TargetLineage value={value} current={target} />
-    {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} />}
+    {value.cad && <CadDrawingView value={value.cad} title={value.title} sourceStatus={value.sourceStatus} projectId={value.projectId} artifactId={value.id} revision={value.revision} />}
     {value.shell && <CadShellView value={value.shell} projectId={value.projectId} canEdit={!!onShellChanged} onChanged={onShellChanged} onReload={onShellReload} />}
     {value.parametricRecipe && <StorageBoxDrawing recipe={value.parametricRecipe} stamp={{ title: value.title,
       artifactId: value.id, revision: value.revision, status: STATUS_LABELS[value.status],

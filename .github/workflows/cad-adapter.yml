@@ -9,6 +9,8 @@ on:
       - 'supabase/functions/_shared/cad-assistant.ts'
       - 'tests/checked-construction-drawing.test.ts'
       - 'tests/cad-adapter.test.ts'
+      - 'tests/cad-wireframe.test.ts'
+      - 'tests/fixtures/cad-wireframes.json'
       - 'Docs/cad-adapter.md'
       - '.github/workflows/cad-adapter.yml'
   push:
@@ -20,6 +22,8 @@ on:
       - 'supabase/functions/_shared/cad-assistant.ts'
       - 'tests/checked-construction-drawing.test.ts'
       - 'tests/cad-adapter.test.ts'
+      - 'tests/cad-wireframe.test.ts'
+      - 'tests/fixtures/cad-wireframes.json'
       - 'Docs/cad-adapter.md'
       - '.github/workflows/cad-adapter.yml'
 
@@ -41,10 +45,10 @@ jobs:
       - name: Run real build123d worker tests
         env:
           PYTHONPATH: cad-worker
-        run: python -m unittest cad-worker/test_worker.py
+        run: python -m unittest cad-worker/test_worker.py cad-worker/test_wireframe.py
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --import tsx --test tests/cad-adapter.test.ts tests/cad-transport.test.ts tests/checked-construction-drawing.test.ts
+      - run: node --import tsx --test tests/cad-adapter.test.ts tests/cad-transport.test.ts tests/checked-construction-drawing.test.ts tests/cad-wireframe.test.ts tests/cad-viewer-request.test.ts tests/cad-viewer-sql.test.ts
