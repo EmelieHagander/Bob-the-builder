@@ -151,7 +151,7 @@ test('a saved illustration after unsupported CAD geometry prompts one factual co
  const result=await f.run(async o=>{
   calls++;assert.equal(o.tool_choice,undefined)
   if(calls===1)return response(null,call('design_project_cad',cadRequest))
-  if(calls===2)return response(null,call('generate_project_image',{prompt:'Illustrative concept only',title:'Illustration',purpose:'proposal',target_kind:'project',target_id:'A'}))
+  if(calls===2)return response(null,call('generate_project_image',{prompt:'Illustrative concept only',title:'Illustration',purpose:'proposal',target_kind:'project',target_id:'A',reference_image_ids:[]}))
   if(calls===3){assert.equal(JSON.parse(String(o.messages![0].content)).geometry_verified,false);return response('The drawing is done.')}
   notes++;assert.match(String(note(o)?.content),/CAD attempt did not deliver a reviewed drawing/)
   return response('CAD failed. The saved image is an illustration; the drawing is unfinished.')

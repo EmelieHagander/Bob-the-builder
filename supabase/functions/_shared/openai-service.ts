@@ -1129,6 +1129,7 @@ async function logAIUsage(
  * ══════════════════════════════════════════════════════════════════════════ */
 
 const IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
+const IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
 export interface ImageCallOptions {
   /** Owning app, by schema name: 'hearth' | 'akr' | 'bob' | 'maidin'. */
@@ -1140,6 +1141,8 @@ export interface ImageCallOptions {
   /** What to draw. A non-empty prompt_template setting is prepended as art
    *  direction, so the house style can be retuned without a deploy. */
   prompt: string;
+  /** Caller-authorised originals for a reference-based edit. Never persisted here. */
+  referenceImages?: { bytes: Uint8Array; contentType: 'image/png' | 'image/jpeg' | 'image/webp' }[];
   /** Portrait by default — cards and plates are portrait artefacts. */
   size?: "1024x1024" | "1024x1536" | "1536x1024";
   quality?: "low" | "medium" | "high";
@@ -1185,7 +1188,7 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   try {
     if (catalogRole) {
       if (options.model) throw new Error('ai_profile_incompatible: direct model override');
-      validateAiCall(catalogRole, { app: options.app, imageOutput: true });
+      validateAiCall(catalogRole, { app: options.app, imageOutput: true, images: !!options.referenceImages?.length });
     }
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'ai_profile_incompatible' }; }
   const [models, settingsResult] = await Promise.all([
@@ -1217,6 +1220,10 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
     console.error("[OpenAI Service] No image-capable model in shared.ai_models");
     return { ok: false, error: catalogRole ? 'ai_tier_unavailable: model retired or allow-list unavailable' : "no_model" };
   }
+  const references = options.referenceImages ?? [];
+  if (references.length && (!model.supports_images || references.length > 4
+    || references.some(r => !['image/png','image/jpeg','image/webp'].includes(r.contentType) || !r.bytes.length || r.bytes.length > 6 * 1024 * 1024)
+    || references.reduce((total,r) => total + r.bytes.length,0) > 16 * 1024 * 1024)) return { ok: false, error: 'unsupported_image_references' };
 
   // A prompt override in the database wins as art direction; the caller's
   // prompt is the subject appended to it.
@@ -1237,16 +1244,25 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   };
 
   try {
-    const res = await fetch(IMAGES_ENDPOINT, {
+    const parameters = {
+      model: model.model_name,
+      prompt,
+      size: catalogRole?.providerParameters.size ?? options.size ?? "1024x1536",
+      quality: catalogRole?.providerParameters.quality ?? options.quality ?? "high",
+      n: 1,
+    };
+    let body: string | FormData = JSON.stringify(parameters);
+    if (references.length) {
+      const form = new FormData();
+      for (const [name,value] of Object.entries(parameters)) form.append(name,String(value));
+      references.forEach((reference,i) => form.append('image[]',new Blob([new Uint8Array(reference.bytes)],{type:reference.contentType}),
+        `reference-${i + 1}.${reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType === 'image/webp' ? 'webp' : 'png'}`));
+      body = form;
+    }
+    const res = await fetch(references.length ? IMAGE_EDITS_ENDPOINT : IMAGES_ENDPOINT, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: model.model_name,
-        prompt,
-        size: catalogRole?.providerParameters.size ?? options.size ?? "1024x1536",
-        quality: catalogRole?.providerParameters.quality ?? options.quality ?? "high",
-        n: 1,
-      }),
+      headers: { "Authorization": `Bearer ${apiKey}`, ...(references.length ? {} : {"Content-Type": "application/json"}) },
+      body,
       signal: controller.signal,
     });
 
@@ -1265,13 +1281,13 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
       return { ok: false, error };
     }
 
-    const body = await res.json();
-    const b64: string | undefined = body?.data?.[0]?.b64_json;
+    const responseBody = await res.json();
+    const b64: string | undefined = responseBody?.data?.[0]?.b64_json;
 
     const usage = {
-      input_tokens: body?.usage?.input_tokens || 0,
-      output_tokens: body?.usage?.output_tokens || 0,
-      total_tokens: body?.usage?.total_tokens || 0,
+      input_tokens: responseBody?.usage?.input_tokens || 0,
+      output_tokens: responseBody?.usage?.output_tokens || 0,
+      total_tokens: responseBody?.usage?.total_tokens || 0,
     };
     const costUsd = computeCostUsd(model, usage);
     console.log(
@@ -1281,7 +1297,7 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
     await logAIUsage(aiClient, {
       ...base,
       inputTokens: usage.input_tokens,
-      cachedInputTokens: body?.usage?.input_tokens_details?.cached_tokens || 0,
+      cachedInputTokens: responseBody?.usage?.input_tokens_details?.cached_tokens || 0,
       outputTokens: usage.output_tokens,
       reasoningTokens: 0,
       totalTokens: usage.total_tokens,

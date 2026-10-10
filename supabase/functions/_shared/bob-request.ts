@@ -1,7 +1,8 @@
 import type { ProjectAnswer } from './project-answer.ts'
 import { parseBobScreen, type BobScreenPointer } from '../../../src/domain/bobScreen.ts'
+import { parseBobImageIds } from '../../../src/domain/bobImages.ts'
 
-export type BobTurnInput = { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string; screen?: BobScreenPointer | null }
+export type BobTurnInput = { authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -44,7 +45,9 @@ export function createBobHandler(deps: {
       if (body.action !== 'send') return fail('unsupported_action', 409)
       // clientTurnId is an idempotency key only. Provider ids, transcripts and
       // model history remain server-owned and are still rejected here.
-      if (Object.keys(body).some(k => !['action', 'projectId', 'message', 'clientTurnId', 'background', 'screen'].includes(k))) return fail('bad_request', 400)
+      if (Object.keys(body).some(k => !['action', 'projectId', 'message', 'clientTurnId', 'background', 'screen', 'imageIds'].includes(k))) return fail('bad_request', 400)
+      let imageIds: string[] | undefined
+      try { imageIds = parseBobImageIds(body.imageIds) } catch { return fail('invalid_images', 400) }
       let screen: BobScreenPointer | null
       try { screen = parseBobScreen(body.screen) } catch { return fail('invalid_screen', 400) }
       if (typeof body.projectId !== 'string' || !body.projectId.trim() || body.projectId.length > 200) return fail('project_required', 400)
@@ -54,7 +57,7 @@ export function createBobHandler(deps: {
       // the UUID so a network retry can resolve to the same logical turn.
       if (body.background !== undefined && typeof body.background !== 'boolean') return fail('bad_request', 400)
       const clientTurnId = typeof body.clientTurnId === 'string' ? body.clientTurnId : crypto.randomUUID()
-      const result = await (body.background === true && deps.enqueue ? deps.enqueue : deps.answer)({ authHeader, userId, projectId: body.projectId, message: body.message.trim(), clientTurnId, screen })
+      const result = await (body.background === true && deps.enqueue ? deps.enqueue : deps.answer)({ authHeader, userId, projectId: body.projectId, message: body.message.trim(), clientTurnId, screen, ...(imageIds !== undefined ? { imageIds } : {}) })
       if (!result.ok) {
         const status = result.error === 'unauthorized' ? 401 : result.error === 'project_denied' ? 403 : result.error === 'turn_in_flight' ? 409 : 503
         return fail(result.error, status)

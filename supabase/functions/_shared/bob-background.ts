@@ -29,11 +29,12 @@ export async function enqueueBobTurn(input: Input) {
   const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
   const expires = Math.min(Number(payload.exp) * 1000, Date.now() + 20 * 60_000)
   if (!Number.isFinite(expires) || expires < Date.now() + 30000) return { ok: false as const, error: 'unauthorized' }
-  const result = await s.rpc('bob_enqueue_job_v2', {
+  const result = await s.rpc('bob_enqueue_job_v3', {
     p_project: input.projectId, p_user: input.userId, p_turn: input.clientTurnId, p_message: input.message,
     p_credential: await sealCredential(token, binding(input), s.secret), p_expires: new Date(expires).toISOString(),
     p_worker_url: s.url.replace(/\/$/, '') + '/functions/v1/bob-worker',
     p_screen: input.screen ?? null,
+    p_images: input.imageIds ?? null,
   })
   if (result.status === 'accepted') {
     console.log('[Bob job]', JSON.stringify({ jobId: result.jobId, turnId: input.clientTurnId, status: 'queued' }))
