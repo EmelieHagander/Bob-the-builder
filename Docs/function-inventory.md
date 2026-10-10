@@ -1,5 +1,9 @@
 # bob — current capability & gap inventory
 
+## Bounded construction changes and exact drawings — deployed 2026-10-10
+
+Release B saves a numeric delta against existing construction input IDs, recomputes dependent dimensions through the existing compiler/writer and gives the drawing job that exact saved construction revision. Checked rendering bypasses geometry design/research; retries keep their checkpoint and immutable history. A typed same-project relation supplies exact construction-to-drawing readback. Existing claim, source, readiness, review and receipt guards remain in force. [Artifacts](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) owns the contract and [verification](foundation-verification.md#bounded-construction-changes--release-b) records [PR #244](https://github.com/EmelieHagander/Bob-the-builder/pull/244), CI and hosted installation. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains legacy conversion C, part roles/consequence continuation D and real member/mockup/cost acceptance E. Older drawings without a construction pin do not yet use this bounded path.
+
 ## Shared design advice and purpose readiness — deployed 2026-10-09
 
 **Deployed through [PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236); named-member acceptance remains open.**

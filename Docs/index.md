@@ -31,7 +31,7 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` and `Docs/index.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
-| existing construction/version relationships versus remaining schema and workflow gaps | [Database authority assessment](../db/README.md#construction-data-authority-and-remaining-extensions) — checked hosted foundation, guarded JSON lineage and planned targeted extensions |
+| existing construction/version relationships versus remaining schema and workflow gaps | [Database authority assessment](../db/README.md#construction-data-authority-and-remaining-extensions) — deployed bounded changes and typed drawing lineage; remaining targeted extensions |
 | share a Building or selected projects with a household / invite an existing friend | `Docs/user-stories.md` → BOB-US-038 / BOB-US-059 + `db/README.md` → Household and friend sharing |
 | volunteers joining with only a name / optional allergies when food is planned | `Docs/user-stories.md` → BOB-US-038 + `db/README.md` → Name-only volunteer access |
 | preserve old Areas through archive/restore | `db/README.md` → Area archive and volunteer drawing reader; `Docs/ui-index.md` |
@@ -41,7 +41,7 @@
 | project image storage, chat photos/reference mockups, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md`; [parameter changes and version ownership](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) are specified next work, not a deployed command |
+| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md`; [parameter changes and version ownership](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) are deployed in release B; legacy conversion and real acceptance remain |
 | material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
