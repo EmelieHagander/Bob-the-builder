@@ -85,6 +85,10 @@ test('bounded parameter command recomputes canonical dependencies with SQL recei
   const fresh={...input,key:'invalid',expected_revision:2}
   const unknown=await tools().execute('change_construction_parameters',{...fresh,changes:[{id:'width',role:'unknown',unit:'mm',reason:'No controlling value available'}]})
   assert.equal(unknown.status,'needs_data');assert.equal(unknown.gaps[0].id,'width')
+  const calls=sourceReads,twoGaps=await tools().execute('change_construction_parameters',{...fresh,changes:
+   ['width','sideThickness'].map(id=>({id,role:'unknown',unit:'mm',reason:'Both controlling values are missing'}))})
+  assert.equal(twoGaps.status,'needs_data');assert.deepEqual(twoGaps.gaps.map((g:any)=>g.id),['width','sideThickness'])
+  assert.equal(sourceReads,calls,'all known gaps return together before another source read')
   const derived=before.parameters.nodes.find((n:any)=>n.role==='derived')
   for(const changes of [[{...input.changes[0],unit:'deg'}],[{...input.changes[0],role:'estimate'}],[{...input.changes[0],id:'missing'}],
    [input.changes[0],input.changes[0]],[{...input.changes[0],normalized:{value:1,unit:'mm'}}],[{id:derived.id,role:'decision',value:700,unit:'mm',reason:'Replace formula'}]]){
