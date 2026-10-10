@@ -39,7 +39,7 @@
 | project image storage, chat photos/reference mockups, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
+| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md`; [parameter changes and version ownership](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) are specified next work, not a deployed command |
 | material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
