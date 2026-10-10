@@ -3,7 +3,7 @@ import { fingerprint } from './bob-job-journal.ts'
 
 const string = { type: 'string', minLength: 1, maxLength: 2000 }
 const nullable = { type: ['string', 'null'], maxLength: 500 }
-const record = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
+const record = <T extends Record<string, unknown>>(properties: T) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
 export const CAD_VIEWS = ['front', 'right', 'top', 'isometric'] as const
 export interface DesignHandoff {
   deliverable: string
