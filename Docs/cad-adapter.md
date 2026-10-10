@@ -825,7 +825,7 @@ rebuilding applied seeds. Verification and rollout evidence are in the release P
 
 ## Mobile CAD viewer — 2026-10-10
 
-**Implemented; release pending migration, Edge, Modal and Pages readback.**
+**Deployed through [PR #239](https://github.com/EmelieHagander/Bob-the-builder/pull/239).** The PR owns exact CI, hosted migration/Edge source readback and live Modal/Pages evidence.
 
 `CadDrawingView` offers **View in 3D** on the opened CAD revision. Shells keep
 **3D view**, initially showing saved bounding boxes for the whole drawing.

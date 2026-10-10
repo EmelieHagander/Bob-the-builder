@@ -940,5 +940,4 @@ reads, member writes and member RPC execution are denied. Claiming serializes
 preparation with a finite lease and three explicit attempts; completion fences
 old/expired workers. Source rows and Artifact revisions remain unchanged.
 [Mobile CAD](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10) owns the viewer
-and cache contract. Migration committed is not migration applied; exact hosted
-ledger and Edge/Modal/Pages readback belong in the release PR.
+and cache contract. [PR #239](https://github.com/EmelieHagander/Bob-the-builder/pull/239) applied this migration as hosted ledger `20261010081013_cad_viewer_exports` and records exact function bodies, RLS/grants and Edge/Modal/Pages readback.

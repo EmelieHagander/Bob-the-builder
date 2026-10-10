@@ -20,7 +20,7 @@ export function createWireframeObjects(value: CadWireframe, colour: string, oute
   if (!instances.length) throw new Error('This part is not in the saved drawing.')
   const defs = new Map(value.definitions.map(d => [d.id, d.positions]))
   const segments = instances.reduce((n, i) => n + defs.get(i.definition_id)!.length / 6, 0)
-  if (segments > CAD_WIREFRAME_DRAW_SEGMENTS) throw new Error('This piece has too many edges for the mobile view. Choose one part below.')
+  if (segments > CAD_WIREFRAME_DRAW_SEGMENTS) throw new Error('This piece has too many edges for the mobile view. Choose one part in Parts to show.')
   let bounds: WireBounds
   if (!instanceId) bounds = pointBounds(corners(value.bounds).map(p => transformPoint(outer, p)))
   else {

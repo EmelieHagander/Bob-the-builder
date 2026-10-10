@@ -26,6 +26,7 @@ The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), incl
 | --- | --- |
 | `bob-worker/index.ts`, `_shared/bob-background.ts` | Private-capability background worker; see [durable turns](../Docs/ask-bob-conversations.md#durable-background-turns). |
 | `ask-bob/index.ts`, `_shared/serve-bob.ts` | Bob's OpenAI endpoint; validate Supabase Auth user. |
+| `cad-viewer/index.ts`, `_shared/cad-viewer-request.ts` | Authenticated saved-version CAD edge derivative, service-only lease cache and fresh caller/source checks; [mobile CAD contract](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10). |
 | `ask-launchpad/index.ts` | Retired URL: HTTP 410, no calls or automatic forwarding. |
 | `_shared/bob-request.ts` | HTTP validation; reject unscoped/async actions and browser-supplied history or response ids. |
 | `_shared/ask-openai.ts` | Caller-JWT client, membership checks, shared AI service adapter. |

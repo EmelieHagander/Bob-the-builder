@@ -278,7 +278,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Mobil CAD:** granska och publicera linjevyn med versionsbunden cache, därefter prova en verklig sparad ritning och husdelar på beställarens telefon. [CAD-ägaren](cad-adapter.md#mobile-cad-viewer--2026-10-10) anger laddning, kostnad och gränser; emulerad mobil och software WebGL ersätter inte faktisk telefonprestanda.
+**Mobil CAD:** prova den driftsatta linjevyn med en verklig sparad ritning och husdelar på beställarens telefon. [CAD-ägaren](cad-adapter.md#mobile-cad-viewer--2026-10-10) anger laddning, kostnad och gränser; emulerad mobil och software WebGL ersätter inte faktisk telefonprestanda.
 
 **Nästa acceptans:** prova driftsatt Bob med den namngivna beställaren: expertens råd före geometriberoende val, faktisk riktning inom delegation, återbruk av sparade val efter reset, avgränsad formskiss, källfel och mockupens obligatoriska funktioner. [Solution-avsikten](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) och [CAD:s beredskapsgräns](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09) äger beteendet; [releasebeviset](foundation-verification.md#expert-advice-and-design-readiness-release--2026-10-09) stänger den tekniska installationsgrinden. [Bildjämförelsen](foundation-verification.md#mockup-screenshot-comparison--2026-10-09) anger designavsikten. Vanliga detaljer kräver ingen generell godkännandegrind; SQL-rollprov och kontrollerade browserfall ersätter inte medlemsprovet.
 
