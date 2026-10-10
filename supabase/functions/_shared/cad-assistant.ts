@@ -123,11 +123,12 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    if(Object.keys(scope).some(key=>raw[key]!==scope[key]))return {
     status:'recovery_required',reason:'drawing_scope_changed',saved:false,request_id:request.id,scope,
     next_action:catalogText("feedback.cad-assistant.next-action.70c5149c2791")}
+   const savedDraft=request.payload.draft
    if(request.payload.brief.construction_revision!=null){
     raw.construction_revision??=request.payload.brief.construction_revision
     if(raw.construction_revision!==request.payload.brief.construction_revision)return {status:'recovery_required',stage:'construction',reason:'construction_revision_changed',saved:false,request_id:request.id}
-   }else if(raw.construction_revision===undefined&&request.payload.draft?.construction?.revision!=null){
-    raw.construction_revision=request.payload.draft.construction.revision
+   }else if(raw.construction_revision===undefined&&object(savedDraft)&&object(savedDraft.construction)&&savedDraft.construction.revision!=null){
+    raw.construction_revision=savedDraft.construction.revision
    }
   }
   if(raw.construction_revision!=null&&(!Number.isSafeInteger(raw.construction_revision)||raw.construction_revision<1||raw.construction_revision>999999999))return {status:'invalid',stage:'construction',saved:false,reason:'invalid_construction_revision'}
