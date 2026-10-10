@@ -160,7 +160,7 @@ function boundSchema(row: AiCatalogDefinition, source: JsonObject, parameters: J
   if (evidence) {
     if (row.definition.dynamic_evidence_refs !== true && row.metadata.dynamic_evidence_refs !== true) fail('ai_contract_missing','undeclared evidence binding')
     const properties = object(result.properties) ? result.properties : {}
-    for (const name of ['checks','additional_needs']) {
+    for (const name of ['checks','additional_needs',...(properties.execution_issues?['execution_issues']:[])]) {
       const field = properties[name]
       const items = object(field) && object(field.items) ? field.items : undefined
       const itemProperties = items && object(items.properties) ? items.properties : undefined

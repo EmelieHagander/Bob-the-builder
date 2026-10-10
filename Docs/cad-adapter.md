@@ -877,3 +877,27 @@ rotation/zoom/pinch, fullscreen/Escape, idle rendering, pinned versions,
 retry/fallback and closing. Software WebGL fixtures do not establish physical
 phone FPS or acceptance of a particular real house. Release evidence belongs in
 the PR; physical-phone acceptance remains in [State](bob-delivery-flow.md#state).
+
+## Input readiness and CAD execution — 2026-10-10
+
+The intake researcher reports historical candidate, renderer and model failures
+in cited `execution_issues`. These pass to the constructor as work to investigate
+while producing and reviewing a new candidate. They are not missing measurements
+or unresolved owner choices. Physical input gaps, conflicting facts and significant
+controlling choices retain their existing readiness gates. Execution history does
+not prove a candidate is valid; successful rendering and independent review are
+still required before saving.
+
+The researcher uses a bounded answer allowance sized for the complete checklist,
+from 6,000 to 13,600 tokens for the supported 24 requirements, inside a 16,000-token
+catalog profile ceiling. The three-call collection limit and drawing cost controls
+remain. Incomplete model answers preserve the intake stage and specific failure
+reason, stop repeated work and report an honest message. A model token stop after
+successful source reads must not be described as failed source retrieval or create
+measurement tasks. The intake contract revision releases retries cached by older
+logic; unchanged retries under the current contract remain suppressed.
+
+Publication clones six active definitions and retains unrelated catalog edits,
+metadata, flows and pinned versions. Old two-field assessments remain readable.
+Deployment evidence belongs in the release PR. A real corrected drawing and its
+mockup match remain part of [the member acceptance](bob-delivery-flow.md#state).

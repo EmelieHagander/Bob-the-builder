@@ -46,6 +46,15 @@ for(const migration of migrations){
   row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
   row.metadata={...row.metadata,server_owned_values:true,saved_handoff_resume:true}
  }
+ const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
+ if(intakePatches)for(const patch of JSON.parse(intakePatches[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  if(patch.parameters)row.definition={...row.definition,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
+  if(patch.schema)row.definition=patch.schema
+  if(patch.minimum_output_tokens)row.definition={...row.definition,max_output_tokens:Math.max(row.definition.max_output_tokens??0,patch.minimum_output_tokens)}
+  if(patch.append)row.content+='\n\n'+patch.append
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
