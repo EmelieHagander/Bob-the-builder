@@ -2,14 +2,31 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
+import type { AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 
 test('chat images are private, same-project, ready, immutable and durable across worker retries', async t => {
+  let previous!:AiCatalogManifest
   const pg = await projectSchema(async (db, name) => {
     if (name === '20260924120448_bob_background_jobs.sql') await db.exec(`create schema cron; create schema net;
       create function cron.schedule(text,text,text) returns bigint language sql as 'select 1::bigint';
       create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer) returns bigint language sql as 'select 1::bigint';`)
+    if(name==='20261010122005_ai_chat_image_catalog.sql'){
+      await db.exec("update shared.ai_models set supports_images=false where model_type='image';")
+      previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+    }
   })
   t.after(() => pg.close())
+  const current=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  const pinned=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[previous.manifest_id])).rows[0].result
+  assert.deepEqual(pinned,previous,'historical manifests keep their previous flags and schema')
+  const binding=current.definitions.find(d=>d.prompt_key==='tier.image')!.definition.model_name
+  assert.equal(current.models.find(m=>m.model_name===binding)?.supports_images,true,'deployed image binding accepts references')
+  for(const old of previous.definitions){
+    const next=current.definitions.find(d=>d.prompt_key===old.prompt_key)!
+    if(old.prompt_key==='tools.generate_project_image'){assert.equal(next.version,old.version+1);assert.equal(next.content,old.content);assert.deepEqual(next.definition.envelope,old.definition.envelope)}
+    else assert.deepEqual(next,old,'other active definitions are preserved')
+  }
+  assert.deepEqual(current.models.filter(m=>m.model_name!==binding),previous.models.filter(m=>m.model_name!==binding),'no unrelated model flag changes')
   const owner = randomUUID(), member = randomUUID(), other = randomUUID()
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now()),($5,$6,now())', [owner,'photos@example.test',member,'member@example.test',other,'other@example.test'])
   const call = async (user: string | null, name: string, args: unknown[], role='authenticated'): Promise<any> =>

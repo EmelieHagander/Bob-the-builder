@@ -111,7 +111,9 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
         // A lost success response or an immutable-path conflict can still mean
         // the original bytes arrived. Finalisation verifies stored MIME/size.
         try { await command(projectId, 'finalize', id); return id }
-        catch { throw new Error('Upload interrupted. Retry this attachment to continue the same upload. It is also saved in project Images.') }
+        catch { throw new Error(uploadId
+          ? 'Upload interrupted. Retry this attachment to continue the same upload. It is also saved in project Images.'
+          : 'Upload interrupted. The pending image is saved below; check it or remove it and choose the file again.') }
       }
       await command(projectId, 'finalize', id)
       return id

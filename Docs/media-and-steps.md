@@ -114,6 +114,9 @@ open in the shared image modal and survive transcript reload. Generation continu
 to use the existing private-media reserve/upload/finalise path and project write
 receipts. The AI catalog publishes a new immutable image-tool version; earlier
 pinned manifests retain their historical schema.
+The publication also declares image input for Bob's existing GPT Image binding,
+whose legacy catalog flag was false, using the documented edits capability. It
+preserves model selection, prices and enablement.
 
 Verification owners are `bob-chat-images-db.test.ts`, `bob-chat-images.test.ts`,
 `project-images-runtime.test.ts`, `project-image-tools.test.ts`,

@@ -618,7 +618,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }
 
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
-    const imageIds = retryRequest?.imageIds ?? (appendUser && !retryRequest ? images.map(image => image.id) : undefined)
+    const imageIds = retryRequest?.imageIds ?? (appendUser && !retryRequest && images.length ? images.map(image => image.id) : undefined)
     const text = (retryRequest?.text ?? draft).trim() || (imageIds?.length ? 'Please look at the attached images.' : '')
     if (!text || (appendUser && !retryRequest && images.some(image => image.status !== 'ready')) || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
     if (waitingFree && retryRequest?.turnId !== waitingFree.turnId) setWaitingFree(null)
