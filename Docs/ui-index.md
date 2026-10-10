@@ -87,9 +87,14 @@ viewport-dependent limit and leaves room to read. Opening Bob on a touch device
 focuses Close without opening the keyboard. The page behind the drawer cannot
 scroll. Auto-follow handles message and composer resizing only while the reader
 is at the end; reading older answers keeps their position and offers Latest.
+The paperclip attaches project photos with upload status, a preview and retry/remove
+actions. User photos and saved illustrations open their originals from the chat.
+The [media contract](media-and-steps.md#chat-photos-and-reference-mockups) owns limits,
+private persistence and reference-based mockup delivery.
 
 The owning browser flows are `check-project-work-browser.mjs`,
-`check-project-browser.mjs` and `check-bob-reset-browser.mjs`; fixture screenshots
+`check-project-browser.mjs`, `check-bob-reset-browser.mjs` and
+`check-bob-images-browser.mjs`; fixture screenshots
 and release evidence belong to the PR/CI, separately from real phone acceptance.
 
 ### Page frame

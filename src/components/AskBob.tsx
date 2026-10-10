@@ -16,8 +16,12 @@ import { BOB_DRAFT_EVENT, getBobSurface, takePendingBobDraft, useBobSurfaceSnaps
 import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
 import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
 import { formatDateTime } from '../lib/format'
+import { BOB_IMAGE_LIMIT, BOB_IMAGE_BYTES_LIMIT, parseBobImageIds } from '../domain/bobImages'
+import { BobChatImages } from './BobChatImages'
+import { StoredImage } from './ProjectImages'
 
-type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null }
+type RetryTurn = { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
+type DraftImage = { id: string; file: File; status: 'uploading' | 'ready' | 'failed'; error?: string }
 
 function ViewEvidence({ view }: { view: CurrentView }) {
   if (view.status !== 'ok') return <p className="foundation-hint" role="status">
@@ -56,6 +60,7 @@ function parseSavedChat(raw: string | null): ChatMessage[] {
       .filter((item): item is ChatMessage => {
         if (!item || typeof item !== 'object') return false
         const message = item as Partial<ChatMessage>
+        try { parseBobImageIds(message.imageIds) } catch { return false }
         return (message.from === 'bob' || message.from === 'user') && typeof message.text === 'string'
       })
       .slice(-MAX_SAVED_MESSAGES)
@@ -212,13 +217,16 @@ function MarkdownText({ text }: { text: string }) {
   return <div className="bob-markdown">{blocks}</div>
 }
 
-function Bubble({ msg, onAction, onOpenDrawing }: { msg: ChatMessage; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
+function Bubble({ msg, projectId, onAction, onOpenDrawing }: { msg: ChatMessage; projectId: string; onAction?: (action: string) => void; onOpenDrawing?: () => void }) {
   const isUser = msg.from === 'user'
+  const generatedImages = [...new Set(msg.evidence?.writes?.filter(r => r.dataset === 'media' && r.operation === 'updated').map(r => r.recordId) ?? [])]
   return (
     <div className={`bob-message ${isUser ? 'bob-message-user' : 'bob-message-assistant'}`}>
       <div className="bob-bubble">
         {msg.evidence && <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 6 }}>Bob’s assessment</div>}
         {isUser ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div> : <MarkdownText text={msg.text} />}
+        <BobChatImages projectId={projectId} ids={parseBobImageIds(msg.imageIds)} />
+        <BobChatImages projectId={projectId} ids={generatedImages} label="Project illustration" />
         {isUser && msg.deliveryState === 'failed' && !msg.deliveryRecovery && <div className="foundation-hint" style={{ color: 'inherit' }}>Bob’s earlier attempt was interrupted. Your message is saved.</div>}
         {isUser && msg.deliveryRecovery === 'completed' && <div className="foundation-hint" style={{ color: 'inherit' }}>The drawing was saved after the earlier interruption.</div>}
         {msg.evidence?.currentView && <ViewEvidence view={msg.evidence.currentView} />}
@@ -253,6 +261,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const surface = useBobSurfaceSnapshot(project.id)
   const { data: chips } = useAsync(() => db.getAskBobChips(), [project.id])
   const [draft, setDraft] = useState('')
+  const [images, setImages] = useState<DraftImage[]>([])
+  const [imageError, setImageError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
   useEffect(() => {
     const take = () => {
       const text = takePendingBobDraft()
@@ -435,7 +446,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages))
     const held = outgoing.current
     setLocalHistory(false)
-    setExtra(held ? [...history.messages, { from: 'user', text: held.text, turnId: held.turnId }] : history.messages)
+    setExtra(held ? [...history.messages, { from: 'user', text: held.text, turnId: held.turnId, imageIds: held.imageIds }] : history.messages)
     setReadTarget(history.threadId && history.latestSeq ? { threadId: history.threadId, seq: history.latestSeq } : null)
     window.dispatchEvent(new Event(db.BOB_INBOX_EVENT))
     setRetry(held ?? history.retry ?? null)
@@ -554,7 +565,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
-      setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setConfirmReset(false); setRetry(null)
+      setExtra([]); setDraft(''); setImages([]); setImageError(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setConfirmReset(false); setRetry(null)
       setHistoryReady(true)
       setHistoryNotice('This conversation was cleared in another tab. Saved project data is unchanged.')
     }
@@ -563,7 +574,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }, [historyKey])
 
   const resetConversation = async () => {
-    if (resetPending.current || working || !historyReady || !historyKey) return
+    if (resetPending.current || working || images.some(image => image.status === 'uploading') || !historyReady || !historyKey) return
     resetPending.current = true
     const isCurrent = scope.current.capture()
     setResetting(true); setResetError('')
@@ -579,7 +590,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
       window.dispatchEvent(new Event('bob:inbox-changed'))
-      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setRetry(null)
+      setLocalHistory(mode === 'local'); setExtra([]); setDraft(''); setImages([]); setImageError(''); setExpanded(false); setShowJump(false); stickToEnd.current = true; setWorking(false); setRecovering(null); setWaitingFree(null); setRetry(null)
       setConfirmReset(false)
       setHistoryNotice(cacheCleared
         ? 'New conversation started. Saved project data is unchanged.'
@@ -607,23 +618,24 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   }
 
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
-    const text = (retryRequest?.text ?? draft).trim()
-    if (!text || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
+    const imageIds = retryRequest?.imageIds ?? (appendUser && !retryRequest && images.length ? images.map(image => image.id) : undefined)
+    const text = (retryRequest?.text ?? draft).trim() || (imageIds?.length ? 'Please look at the attached images.' : '')
+    if (!text || (appendUser && !retryRequest && images.some(image => image.status !== 'ready')) || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
     if (waitingFree && retryRequest?.turnId !== waitingFree.turnId) setWaitingFree(null)
     sendVersion.current++
     const isCurrent = scope.current.capture()
     const clientTurnId = retryRequest?.turnId ?? crypto.randomUUID()
     // A retry belongs to the original send. A new request reads navigation now.
     const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
-    if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, threadId: serverThread.current })
-    if (appendUser) setDraft('')
+    if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, imageIds, threadId: serverThread.current })
+    if (appendUser) { setDraft(''); if (!retryRequest) setImages([]); setImageError('') }
     setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
-    if (appendUser) push({ from: 'user', text, turnId: clientTurnId })
+    if (appendUser) push({ from: 'user', text, turnId: clientTurnId, imageIds })
     setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
-    const result = await db.askBob(project.id, text, clientTurnId, screen)
+    const result = await db.askBob(project.id, text, clientTurnId, screen, imageIds)
     if (!isCurrent()) return
     if ('pending' in result) {
-      setRecovering({ text, turnId: clientTurnId, screen, expiresAt: result.expiresAt })
+      setRecovering({ text, turnId: clientTurnId, screen, imageIds, expiresAt: result.expiresAt })
       return
     }
     // A disconnected HTTP response does not mean the server stopped working.
@@ -634,7 +646,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         if (history.mode === 'server') {
           applyServerHistory(history)
           if (history.messages.some(message => message.from === 'bob' && message.turnId === clientTurnId && message.evidence?.writes?.length)) setNeedsRefresh(true)
-          if (result.unavailable === 'turn_in_flight' && outgoing.current?.turnId === clientTurnId) holdUntilFree({ text, turnId: clientTurnId, screen })
+          if (result.unavailable === 'turn_in_flight' && outgoing.current?.turnId === clientTurnId) holdUntilFree({ text, turnId: clientTurnId, screen, imageIds })
           else if (waitingFree?.turnId === clientTurnId) setWaitingFree(null)
           return
         }
@@ -642,7 +654,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!isCurrent()) return
       if (result.unavailable === 'turn_in_flight') {
         setWorking(false)
-        holdUntilFree({ text, turnId: clientTurnId, screen })
+        holdUntilFree({ text, turnId: clientTurnId, screen, imageIds })
         return
       }
     }
@@ -658,7 +670,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         keepOutgoing(null)
         if (result.unavailable !== 'turn_budget_exhausted') setDraft(previous => previous || text)
       }
-      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId, screen })
+      if (!['project_denied', 'unauthorized', 'not_configured', 'project_mismatch', 'turn_budget_exhausted'].includes(result.unavailable)) setRetry({ text, turnId: clientTurnId, screen, imageIds })
       const message = result.unavailable === 'not_configured'
         ? 'This is demo mode. I can show the sample project, but a real AI conversation is not connected.'
         : result.unavailable === 'unauthorized'
@@ -688,6 +700,27 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
 
   const handleAction = (action: string) => { void send({ text: action, turnId: crypto.randomUUID() }, true) }
 
+  async function uploadImage(image: DraftImage) {
+    const isCurrent = scope.current.capture()
+    setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'uploading', error: undefined } : item))
+    try {
+      await db.uploadProjectImage(project.id, { kind: 'project', id: project.id }, image.file, 'reference', image.file.name.replace(/\.[^.]+$/, '').slice(0, 200) || 'Chat image', image.id)
+      if (isCurrent()) setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'ready' } : item))
+    } catch (error) {
+      if (isCurrent()) setImages(current => current.map(item => item.id === image.id ? { ...item, status: 'failed', error: error instanceof Error ? error.message : 'Image could not be uploaded.' } : item))
+    }
+  }
+
+  function chooseImages(files: FileList | null) {
+    if (!files?.length) return
+    if (images.length + files.length > BOB_IMAGE_LIMIT) { setImageError(`Attach up to ${BOB_IMAGE_LIMIT} images per message.`); return }
+    if (images.reduce((total,image)=>total+image.file.size,0)+Array.from(files).reduce((total,file)=>total+file.size,0)>BOB_IMAGE_BYTES_LIMIT) { setImageError('Choose images totalling up to 16 MiB per message.'); return }
+    setImageError('')
+    const chosen: DraftImage[] = Array.from(files, file => ({ id: crypto.randomUUID(), file, status: 'uploading' }))
+    setImages(current => [...current, ...chosen])
+    for (const image of chosen) void uploadImage(image)
+  }
+
   if (!open) return null
 
   return createPortal(
@@ -701,7 +734,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         </header>
 
         <div className="bob-toolbar">
-          <button type="button" className="btn" disabled={!historyReady || working || resetting} style={{ minHeight: 44 }} onClick={() => { setResetError(''); setConfirmReset(true) }}>
+          <button type="button" className="btn" disabled={!historyReady || working || resetting || images.some(image => image.status === 'uploading')} style={{ minHeight: 44 }} onClick={() => { setResetError(''); setConfirmReset(true) }}>
             <Icon name="arrow-counter-clockwise" size={16} /> New conversation
           </button>
           <button type="button" className="btn bob-density" aria-label="Comfortable text spacing" aria-pressed={!compact} title={compact ? 'Use larger text and spacing' : 'Use compact text and spacing'} onClick={() => setCompact(value => !value)}>Aa</button>
@@ -717,8 +750,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
             <summary>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</summary>
             <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
           </details>
-          {!extra.length && !working && <Bubble msg={{ from: 'bob', text: `Ask me about ${project.name}, work out a build detail or request a saved update.` }} />}
-          {extra.map((m, i) => <Bubble key={`x${i}`} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
+          {!extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
+          {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
           {historyNotice && <div role="status" className="bob-history-notice">{historyNotice}</div>}
           {working && <WorkingBubble label={workingLabel} />}
         {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
@@ -743,7 +776,19 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <span>{outgoing.current ? 'Receipt not confirmed' : 'Answer interrupted'}</span>
           <button className="btn btn-primary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)}>Retry request</button>
         </div>}
+        {!!images.length && <div className="bob-attachments" aria-label="Images for your next message">
+          {images.map(image => <div className="bob-attachment" key={image.id}>
+            {image.status === 'ready' ? <StoredImage projectId={project.id} image={{ id: image.id, title: image.file.name }} original allowRetry={false} /> : <Icon name="image" size={24} />}
+            <div><span>{image.file.name}</span><small role="status">{image.status === 'uploading' ? 'Uploading…' : image.status === 'ready' ? 'Ready to send' : image.error}</small></div>
+            {image.status === 'failed' && <button className="btn" type="button" onClick={() => void uploadImage(image)}>Retry upload</button>}
+            <button className="btn" type="button" aria-label={`Remove attachment ${image.file.name}`} disabled={image.status === 'uploading'} onClick={() => setImages(current => current.filter(item => item.id !== image.id))}><Icon name="x" size={18} /></button>
+          </div>)}
+          <p className="foundation-hint">Images are kept in project Images. Removing an attachment only removes it from this message.</p>
+        </div>}
+        {imageError && <p className="bob-image-error" role="alert">{imageError}</p>}
         <form onSubmit={e => { e.preventDefault(); void send() }} className={`bob-composer ${expanded ? 'bob-composer-expanded' : ''}`}>
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden aria-label="Images for bob" onChange={e => { chooseImages(e.target.files); e.target.value = '' }} />
+          <button type="button" className="btn bob-attach-button" aria-label="Attach images" title="JPEG, PNG or WebP, up to 6 MiB each" disabled={!db.authEnabled() || !historyReady || resetting || !!outgoing.current || images.length >= BOB_IMAGE_LIMIT} onClick={() => fileInput.current?.click()}><Icon name="paperclip" size={20} /></button>
           <textarea ref={composer} rows={1} disabled={resetting} value={draft} onChange={e => setDraft(e.target.value)} aria-label="Question for bob" maxLength={4096} placeholder="Ask bob about this project…" onKeyDown={e => {
             if (e.nativeEvent.isComposing) return
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() }
@@ -751,7 +796,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           }} />
           <div className="bob-composer-actions">
             <button type="button" className="btn" aria-label={expanded ? 'Collapse message editor' : 'Expand message editor'} aria-expanded={expanded} onClick={() => { setExpanded(value => !value); composer.current?.focus() }}><Icon name={expanded ? 'arrows-in-simple' : 'arrows-out-simple'} size={18} /></button>
-            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || !draft.trim() || !!outgoing.current}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
+            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || (!draft.trim() && !images.length) || images.some(image => image.status !== 'ready') || !!outgoing.current}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
           </div>
         </form>
       </aside>

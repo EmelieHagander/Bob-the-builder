@@ -5,6 +5,7 @@ import { createProjectWriter } from '../supabase/functions/_shared/project-write
 import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
 import { createMediaAdapter, type MediaRow } from '../supabase/functions/_shared/project-context/media.ts'
+import { prepareChatImages } from '../supabase/functions/_shared/project-context/chat-images.ts'
 import { hasImageContent, responseMessageContent } from '../supabase/functions/_shared/openai-content.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
 const time = '2026-09-20T12:00:00Z', id = '10000000-0000-4000-8000-000000000001'
@@ -27,6 +28,22 @@ function fixture() {
     lookup, projectContext, writer, hasAccess: async () => allowed, fail: async () => {} },
     row, get downloads() { return downloads }, revoke() { allowed = false } }
 }
+
+test('chat attachments supply real pixels on the first model call and refuse missing photos',async()=>{
+  const f=fixture()
+  await prepareChatImages(f.opts.projectContext,[id])
+  let calls=0
+  const answer=await runClaimedProjectTurn({...f.opts,callModel:async options=>{
+    calls++
+    assert(hasImageContent(options.messages),'the first call receives the attached original')
+    assert.match(JSON.stringify(options.messages),/data:image\/png;base64/)
+    return success('I can see the place.')
+  }})
+  assert(answer.ok);assert.equal(calls,1)
+  if(answer.ok)assert(answer.evidence.sources.some(s=>s.dataset==='image_pixels'&&s.recordId===id))
+  const missing=fixture()
+  await assert.rejects(prepareChatImages(missing.opts.projectContext,['10000000-0000-4000-8000-000000000099']),/image_unavailable/)
+})
 
 test('actual claimed tool loop lists metadata, delivers selected pixels, preserves source disclosure through settlement', async () => {
   const f = fixture(); let calls = 0, committed: any

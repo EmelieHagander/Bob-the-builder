@@ -29,6 +29,7 @@ import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
 import { createMediaAdapter, resolveMediaImage } from './project-context/media.ts'
+import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, generateImage } from './openai-service.ts'
@@ -46,6 +47,7 @@ import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
+  imageIds?: string[];
   background?: { drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
@@ -260,6 +262,19 @@ export async function answerWithOpenAi(opts: {
       return true
     }) } : {}),
   })
+  let attachedImageIds:string[]=[]
+  if (!opts.background?.drawingRequestId) {
+    try {
+      attachedImageIds=claimedServer&&threadId
+        ?await conversations.captureImages({projectId:opts.projectId,userId:opts.userId,threadId,turnId:opts.clientTurnId,generation:claimedServer.generation},opts.imageIds)
+        :opts.imageIds??[]
+      await prepareChatImages(projectContext,attachedImageIds)
+    } catch(error){
+      rethrowContinuation(error)
+      if(claimedServer&&threadId)try{await conversations.fail(opts.projectId,opts.userId,threadId,opts.clientTurnId,claimedServer.generation)}catch{/* lease recovery */}
+      return {ok:false,error:'context_unavailable'}
+    }
+  }
   const knowledgeReader = createKnowledgeReader(hasAccess)
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
@@ -418,13 +433,32 @@ export async function answerWithOpenAi(opts: {
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
     return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }
-  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
+  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
-    generate: async prompt => {
+    generate: async (prompt,referenceIds) => {
       const role = aiCatalog.role('project-image')
-      const result = await memo('image:generate', { prompt, manifestId: role.manifestId, roleVersionId: role.roleVersionId }, async () => {
-        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,timeoutMs:100000,aiDefinition:role})
+      const unopened=referenceIds.filter(id=>!projectContext.openedImageRefs().includes('image:'+id))
+      await prepareChatImages(projectContext,unopened)
+      // Compact, exact-version checkpoints; re-authorise/download original
+      // bytes only inside a fresh provider dispatch. Missing photos never turn
+      // a requested photo edit into an unrelated text-only generation.
+      const references=await Promise.all(referenceIds.map(id=>mediaAdapter().open('image:'+id,AbortSignal.timeout(12000))))
+      const inputReferences=references.map(r=>({id:r.source.recordId,version:r.version}))
+      if(references.reduce((total,r)=>total+r.bytes,0)>16*1024*1024)return {ok:false as const,error:'unsupported_image_references'}
+      if(!await projectContext.validate())throw new Error('context_changed')
+      const result = await memo('image:generate', { prompt, references:inputReferences, manifestId: role.manifestId, roleVersionId: role.roleVersionId }, async () => {
+        if(!await hasAccess())throw new Error('project_denied')
+        const referenceImages=await Promise.all(references.map(async r=>{
+          const data=await resolveMediaImage(opts.projectId,mediaTransport,r,AbortSignal.timeout(12000))
+          const match=data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/)
+          if(!match)throw new Error('unsupported_image')
+          const binary=atob(match[2]),bytes=new Uint8Array(binary.length)
+          for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i)
+          return {contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp',bytes}
+        }))
+        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,referenceImages,timeoutMs:100000,aiDefinition:role})
         if (!generated.ok) return generated
+        if(!await hasAccess()||!await projectContext.validate())throw new Error('context_changed')
         let encoded = ''; for (let i=0;i<generated.image.length;i+=8192) encoded+=String.fromCharCode(...generated.image.subarray(i,i+8192))
         return {ok:true as const,image:btoa(encoded)}
       },100000)

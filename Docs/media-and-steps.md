@@ -79,7 +79,52 @@ Changed provenance or attachments invalidate retained image context. A saved
 illustration after failed CAD produces one factual completion note; tools remain
 unforced and the owner-facing reply remains Bob's responsibility.
 AI consumption/generation is outside milestones 1A/1B. The image-on-demand slice
-below adds explicit vision reads; generation remains separate scope.
+below adds explicit vision reads; chat photos and reference mockups are owned by
+the following contract.
+
+## Chat photos and reference mockups
+
+Ask bob's paperclip uploads up to four JPEG/PNG/WebP originals through the existing
+project-media commands (6 MiB per image, 16 MiB per message). A ready preview can
+be sent with a message or on its own. Failed uploads have a retry action that keeps
+the same immutable asset identity. Removing a draft attachment leaves its project
+image in Images. Unsent drafts are local to the mounted drawer; uploaded originals
+remain in the project even after a page reload.
+
+The user message stores only private same-project `image_ids`. Enqueue v3 binds
+the ready image set in the same transaction as the logical turn; retrying an
+accepted turn cannot replace, reorder or remove those references. Omission on an
+older client preserves the saved set. The private transcript and outgoing-turn
+recovery read the IDs back; byte data and download URLs are never stored in chat
+or browser persistence. The ready project originals remain governed by membership
+and authenticated downloads. Each person still owns their private conversation.
+
+Before the first model call, the attached photos use the existing versioned image
+context path. Bob sees the actual pixels and exact IDs. For a placement mockup,
+`generate_project_image.reference_image_ids` selects those photos (or other opened,
+ready same-project photos). The image provider receives their freshly authorised
+original bytes through `/v1/images/edits`. An empty list uses the existing text-only
+generation path. Missing, changed, inaccessible or unsupported references fail
+explicitly; they cannot silently become a new setting invented from text.
+The prompt asks the image model to preserve the photographed setting, perspective
+and existing features. The result remains an illustrative proposal.
+
+The assistant bubble shows saved media write receipts as image previews. Originals
+open in the shared image modal and survive transcript reload. Generation continues
+to use the existing private-media reserve/upload/finalise path and project write
+receipts. The AI catalog publishes a new immutable image-tool version; earlier
+pinned manifests retain their historical schema.
+The publication also declares image input for Bob's existing GPT Image binding,
+whose legacy catalog flag was false, using the documented edits capability. It
+preserves model selection, prices and enablement.
+
+Verification owners are `bob-chat-images-db.test.ts`, `bob-chat-images.test.ts`,
+`project-images-runtime.test.ts`, `project-image-tools.test.ts`,
+`openai-image-wire.test.ts` and `check-bob-images-browser.mjs`. The browser fixtures
+cover interrupted upload/send, unchanged retry identities, original previews,
+reload, unsupported formats and project switching at 320/390/1280 px. These do not
+establish real-model visual quality; rollout and real photo acceptance belong to
+the feature PR.
 
 ## Manual task detail and steps
 

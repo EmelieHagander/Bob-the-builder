@@ -36,7 +36,7 @@
 | volunteer task drawing reader and its release boundary | `Docs/artifacts.md` → Volunteer task drawings; `db/README.md` → capability endpoints |
 | deliberate organisation of older Tasks / preserved history | `Docs/living-project-plan.md` → Older work organisation and Area lifecycle |
 | household physical-edit authority versus project collaboration | `Docs/building-model.md` → §11.1A + `db/README.md` → Effective authority and revocation |
-| project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
+| project image storage, chat photos/reference mockups, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
 | construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |

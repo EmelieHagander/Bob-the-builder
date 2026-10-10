@@ -83,7 +83,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
       assertCurrent()
       changed()
     },
-    async uploadImage(projectId: string, target: MediaTarget, file: File, purpose: MediaPurpose, title: string): Promise<void> {
+    async uploadImage(projectId: string, target: MediaTarget, file: File, purpose: MediaPurpose, title: string, uploadId?: string): Promise<string> {
       const { db, assertCurrent } = connection(projectId)
       if (!IMAGE_TYPES.includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP image. Export HEIC images as JPEG first.')
       if (!file.size || file.size > IMAGE_LIMIT) throw new Error('Choose an image smaller than 6 MiB.')
@@ -94,16 +94,29 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
       bitmap.close()
       if (!width || !height || width > 20000 || height > 20000 || width * height > 48000000) throw new Error('Choose an image up to 48 megapixels.')
       assertCurrent()
-      const id = crypto.randomUUID()
-      const row = await command(projectId, 'reserve', id, {
+      const id = uploadId ?? crypto.randomUUID()
+      // Chat keeps one identity per chosen file, including an interrupted upload.
+      const existing = uploadId ? value(await db.from('media_assets').select('*').eq('project_id', projectId).eq('id', id).limit(1)) as Row[] : []
+      assertCurrent()
+      if (existing[0] && (existing[0].state === 'deleting' || existing[0].content_type !== file.type || existing[0].byte_size !== file.size || existing[0].width !== width || existing[0].height !== height)) throw new Error('This upload changed. Remove the attachment and choose the file again.')
+      if (existing[0]?.state === 'ready') return id
+      const row = existing[0] ?? await command(projectId, 'reserve', id, {
         original_name: file.name.slice(0, 255), title: title.trim(), purpose, content_type: file.type,
         byte_size: file.size, width, height, target_kind: target.kind, target_id: target.id,
       })
       assertCurrent()
       const upload = await db.storage.from(row.bucket_id).upload(row.object_path, file, { contentType: file.type, upsert: false, cacheControl: '0' })
       assertCurrent()
-      if (upload.error) throw new Error('Upload interrupted. The pending image is saved below; check it or remove it and choose the file again.')
+      if (upload.error) {
+        // A lost success response or an immutable-path conflict can still mean
+        // the original bytes arrived. Finalisation verifies stored MIME/size.
+        try { await command(projectId, 'finalize', id); return id }
+        catch { throw new Error(uploadId
+          ? 'Upload interrupted. Retry this attachment to continue the same upload. It is also saved in project Images.'
+          : 'Upload interrupted. The pending image is saved below; check it or remove it and choose the file again.') }
+      }
       await command(projectId, 'finalize', id)
+      return id
     },
     async downloadImage(projectId: string, mediaId: string): Promise<Blob> {
       const { db, assertCurrent } = connection(projectId)

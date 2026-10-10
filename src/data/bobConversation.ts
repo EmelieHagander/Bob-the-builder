@@ -55,8 +55,8 @@ export function describeBobProgress(progress: BobProgress | undefined): string {
 export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
-  retry?: { text: string; turnId: string; screen?: BobScreenPointer | null }
-  pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; expiresAt: number; progress?: BobProgress; notice?: string }
+  retry?: { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
+  pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[]; expiresAt: number; progress?: BobProgress; notice?: string }
   lastCompletedTurnId?: string
   threadId?: string
   ownerId?: string
@@ -80,7 +80,7 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (!threadResult.data) return { mode: 'server', messages: [], ownerId: auth.user.id }
 
   const rows = await bobDb.from('bob_messages')
-    .select('role,text,evidence,delivery_state,seq,turn_id,updated_at')
+    .select('role,text,evidence,delivery_state,seq,turn_id,updated_at,image_ids')
     .eq('thread_id', threadResult.data.id)
     .order('seq')
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
@@ -90,8 +90,8 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   let transcript = readBobTranscript(rows.data ?? [], projectId, byTurn)
   const { latestSeq, lastCompletedTurnId } = transcript
   const turn = transcript.unfinished
-  let pending: BobConversationHistory['pending'] = turn?.pending ? { text: turn.text, turnId: turn.turnId, expiresAt: turn.expiresAt } : undefined
-  let retry: BobConversationHistory['retry'] = turn && !turn.pending ? { text: turn.text, turnId: turn.turnId } : undefined
+  let pending: BobConversationHistory['pending'] = turn?.pending ? { text: turn.text, turnId: turn.turnId, imageIds: turn.imageIds, expiresAt: turn.expiresAt } : undefined
+  let retry: BobConversationHistory['retry'] = turn && !turn.pending ? { text: turn.text, turnId: turn.turnId, imageIds: turn.imageIds } : undefined
   const unfinished = pending ?? retry
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
@@ -184,9 +184,10 @@ export async function askBob(
   message: string,
   clientTurnId: string = crypto.randomUUID(),
   screen?: BobScreenPointer | null,
+  imageIds?: string[],
 ): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string } | { pending: true; expiresAt: number }> {
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
-  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true, ...(screen !== undefined ? { screen } : {}) })
+  const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true, ...(screen !== undefined ? { screen } : {}), ...(imageIds !== undefined ? { imageIds } : {}) })
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
   if (res.ok && res.status === 'accepted' && res.jobId && Number.isFinite(Date.parse(res.expiresAt ?? ''))) return { pending: true, expiresAt: Date.parse(res.expiresAt!) }

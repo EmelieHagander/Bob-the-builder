@@ -2,6 +2,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.110.2'
 import type { ContextStore } from './bob-working-context.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { parseBobScreen, type BobScreenPointer } from '../../../src/domain/bobScreen.ts'
+import { parseBobImageIds } from '../../../src/domain/bobImages.ts'
 
 export type BobTurnClaim =
   | { mode: 'local_only'; status: 'claimed' }
@@ -24,6 +25,12 @@ function checked<T>(result: RpcResult<T>, operation: string): T {
  */
 export function createBobConversationStore(client: SupabaseClient<any, 'bob', any>) {
   return {
+    async captureImages(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }, imageIds?: string[]) {
+      const result = checked(await client.rpc('bob_capture_turn_images', { p_project: binding.projectId, p_user: binding.userId,
+        p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation, p_images: imageIds ?? null,
+      }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<{ imageIds: unknown }>, 'conversation images')
+      return parseBobImageIds(result.imageIds) ?? []
+    },
     async captureScreen(binding: { projectId: string; userId: string; threadId: string; turnId: string; generation: number }, screen?: BobScreenPointer | null) {
       const result = checked(await client.rpc('bob_capture_turn_screen', { p_project: binding.projectId, p_user: binding.userId,
         p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation, p_screen: screen ?? null,

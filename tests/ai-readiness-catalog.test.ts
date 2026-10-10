@@ -15,11 +15,16 @@ let previous: any
 let current: any
 before(async () => {
   pg = await projectSchema(async (db, filename) => {
+    // Compare this publication at its own boundary. Later publications may
+    // legitimately change other model capabilities without changing its history.
+    if (previous && !current) {
+      current = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
+    }
     if (filename.endsWith('_ai_design_readiness_catalog.sql')) {
       previous = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
     }
   })
-  current = (await pg.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
+  current ??= (await pg.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
 })
 after(async () => pg?.close())
 const row = (manifest: any, key: string) => manifest.definitions.find((item: any) => item.prompt_key === key)
@@ -29,6 +34,8 @@ test('the publication changes the advisory contract without changing tiers, mode
   assert.notEqual(current.manifest_id, previous.manifest_id)
   const replay = (await pg.query<any>('select shared.resolve_ai_catalog($1,$2) manifest', ['bob', previous.manifest_id])).rows[0].manifest
   assert.deepEqual(replay, previous)
+  const publishedReplay = (await pg.query<any>('select shared.resolve_ai_catalog($1,$2) manifest', ['bob', current.manifest_id])).rows[0].manifest
+  assert.deepEqual(publishedReplay, current)
   assert.notEqual(row(current, 'bob.persona').id, row(previous, 'bob.persona').id)
   assert.equal(row(current, 'bob.persona').version, row(previous, 'bob.persona').version + 1)
   assert.deepEqual(current.models, previous.models)

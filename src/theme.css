@@ -879,6 +879,17 @@ select {
 .bob-composer textarea { flex: 1; min-width: 0; min-height: 44px; resize: none; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; padding: var(--row-padding); font: inherit; font-size: 16px; line-height: 1.4; background: var(--surface); color: var(--ink); }
 .bob-composer-actions { display: flex; flex-direction: row; gap: 4px; }
 .bob-composer-actions .btn { min-width: 44px; min-height: 44px; padding: 8px; }
+.bob-attach-button { min-width: 44px; min-height: 44px; padding: 8px; }
+.bob-attachments { flex-shrink: 0; max-height: 160px; overflow-y: auto; padding: 8px 10px; border-top: 1px solid var(--line); background: var(--surface); }
+.bob-attachment { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.bob-attachment > img { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; flex-shrink: 0; }
+.bob-attachment > div { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.bob-attachment small { display: block; color: var(--ink-soft); }
+.bob-attachment .btn { flex-shrink: 0; min-height: 44px; min-width: 44px; }
+.bob-image-error { flex-shrink: 0; padding: 4px 10px; margin: 0; color: var(--clay); font-size: 13px; }
+.bob-chat-images { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.bob-chat-image { display: block; width: min(100%, 220px); min-height: 44px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.bob-chat-image img { display: block; width: 100%; max-height: 220px; object-fit: contain; }
 .bob-composer textarea:focus-visible, .bob-drawer button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 @media (min-width: 480px) { .bob-composer-actions { flex-direction: row; } }
 
