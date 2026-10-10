@@ -84,6 +84,8 @@ the following contract.
 
 ## Chat photos and reference mockups
 
+Status: deployed on 2026-10-10 in [PR #241](https://github.com/EmelieHagander/Bob-the-builder/pull/241), which records backend/frontend release evidence. Real owner photo-to-mockup acceptance remains open.
+
 Ask bob's paperclip uploads up to four JPEG/PNG/WebP originals through the existing
 project-media commands (6 MiB per image, 16 MiB per message). A ready preview can
 be sent with a message or on its own. Failed uploads have a retry action that keeps
