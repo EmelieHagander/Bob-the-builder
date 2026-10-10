@@ -459,4 +459,28 @@ for(const kind of ['pack-competing','pack-replay','pack-same-article','pack-lega
  }
  console.log(`PASS ${kind}: observed lock wait; one purchase route per need, CAS, replay and committed-row guard checked`);cases++
 }
+for(const kind of ['viewer-claim','viewer-retry']) {
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture')
+ const auth=`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`
+ const saved=JSON.parse((await query(`begin;${auth}select bob.bob_project_write_v11(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(f.payload))});commit;`)).split('\n').at(-1)!)
+ const hash='a'.repeat(64),args=`${literal(f.project)},${literal(saved.recordId)},1,${literal(hash)}`
+ const claim=`select bob.claim_cad_viewer_export(${args},${kind==='viewer-retry'})`
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';set local role service_role;${sql};${tail}commit;`
+ if(kind==='viewer-retry') {
+  const first=JSON.parse((await query(tx(`select bob.claim_cad_viewer_export(${args},false)`))).split('\n').at(-1)!)
+  assert.equal(first.status,'claimed')
+  assert.equal(await query(tx(`select bob.finish_cad_viewer_export(${args},${literal(first.lease_token)},null)`)),'t')
+ }
+ const key=770000+cases,barrier=await gate(key)
+ const leader=start(tx(claim,`select pg_advisory_xact_lock(${key});`));let follower:ReturnType<typeof start>|undefined
+ try {const pid=await waiting(leader.app,barrier.pid);follower=start(tx(claim));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done
+ assert.equal(lead.code,0,lead.stderr);assert.equal(follow.code,0,follow.stderr)
+ const result=(out:string)=>JSON.parse(out.split('\n').find(line=>line.startsWith('{')&&line.includes('"status"'))!)
+ assert.equal(result(lead.stdout).status,'claimed');assert.deepEqual(result(follow.stdout),{status:'pending'})
+ assert.equal(result(lead.stdout).attempt,kind==='viewer-retry'?2:1)
+ assert.equal(Number(await query(`select attempts from bob.cad_viewer_exports where artifact_id=${literal(saved.recordId)}`)),kind==='viewer-retry'?2:1)
+ console.log(`PASS ${kind}: observed lock wait; exactly one export lease and attempt`);cases++
+}
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+const machined = JSON.parse(readFileSync(new URL('../tests/fixtures/cad-wireframes.json',import.meta.url),'utf8')).machined
 
 const place = (x = 0, y = 0, z = 0, rz = 0) => ({ x, y, z, rx: 0, ry: 0, rz })
 const recipe = (id, definitions, instances) => ({ contract_version: 1, units: 'mm', assembly_id: id, definitions, instances, views: ['isometric'] })
@@ -166,54 +168,128 @@ export async function verifyCadShellBrowser(page, base, fixture, width) {
 
   await page.keyboard.press('Escape')
   await card.getByText('Version 6', { exact: true }).waitFor()
+  await verifySingleWireframe(page,base,fixture,width,row)
   // Later scenarios count drawings; leave the fixture as it was.
   fixture.records.delete(shell); fixture.histories.delete(shell); fixture.shellCommands.length = 0
   for (const [key] of pieceRows) fixture.cad.delete(key)
   for (const key of [...fixture.shells.keys()]) if (key.startsWith(shell)) fixture.shells.delete(key)
 }
 
-/** Opens the browser-composed 3D view. Asserts the drawn view when this Chromium has WebGL, and always asserts the honest fallback. */
+async function verifySingleWireframe(page,base,fixture,width,template) {
+  const id=randomUUID(),title='Machined CAD block'
+  const row={...template,id,artifact_id:id,title,revision:1,description:'Kernel edges of a hole and notch',change_note:'Viewer fixture'}
+  fixture.records.set(id,row);fixture.histories.set(id,[row])
+  fixture.cad.set(`${id}:1`,{project_id:'A',artifact_id:id,artifact_revision:1,recipe:machined.recipe,manifest:{},files:{
+    isometric:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path d="M10 10H110V110H10Z M60 55a5 5 0 1 0 0 10a5 5 0 1 0 0-10" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21').toString('base64')}})
+  await page.goto(base+'#/artifacts?area=areaA');await page.reload()
+  await page.getByRole('article',{name:title,exact:true}).getByRole('button',{name:/View evidence|Open drawing/}).click()
+  const dialog=page.getByRole('dialog',{name:title+' · Version 1',exact:true})
+  await dialog.getByRole('button',{name:'View in 3D',exact:true}).click()
+  const image=dialog.getByRole('img',{name:'3D line view of '+title,exact:true})
+  await image.waitFor()
+  await page.waitForFunction(() => Number(document.querySelector('.shell3d-viewport')?.dataset.renders)>0)
+  assert.equal(fixture.viewerCalls.at(-1).artifact_id,id);assert.equal(fixture.viewerCalls.at(-1).revision,1)
+  const exports=fixture.viewerExports
+  await image.scrollIntoViewIfNeeded();await page.screenshot({path:`test-results/cad-single-wireframe-${width}.png`,fullPage:true})
+  await dialog.getByRole('button',{name:'Close 3D view',exact:true}).click();assert.equal(await dialog.locator('canvas').count(),0)
+  await dialog.getByRole('button',{name:'View in 3D',exact:true}).click();await image.waitFor()
+  assert.equal(fixture.viewerExports,exports,'single drawing cache survives closing')
+  await dialog.getByRole('link',{name:'Download 3D model',exact:true}).waitFor()
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'})
+  fixture.records.delete(id);fixture.histories.delete(id);fixture.cad.delete(`${id}:1`)
+}
+
+/** Real kernel fixture edges, phone interaction and bounded on-demand loading. */
 async function verifyShell3D(page, view, fixture, width) {
-  const webgl = await page.evaluate(() => { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')) })
-  const reads = fixture.recipeReads ?? 0
+  const webgl = await page.evaluate(() => !!document.createElement('canvas').getContext('webgl2'))
+  const reads = fixture.recipeReads ?? 0, calls = fixture.viewerCalls.length
   const scripts = () => page.evaluate(() => performance.getEntriesByType('resource').filter(e => /CadShell3D/.test(e.name)).length)
-  assert.equal(await scripts(), 0, 'three.js chunk is not fetched before the 3D view opens')
+  assert.equal(await scripts(), 0, 'three.js chunk stays lazy')
   if (webgl) {
     await view.getByRole('button', { name: '3D view', exact: true }).click()
-    const legend = view.getByRole('list', { name: '3D legend', exact: true })
-    await view.getByRole('img', { name: /^3D view of Cabin bedroom: 2 pieces, 15 parts$/ }).waitFor()
-    assert(await scripts() > 0, 'three.js chunk loads lazily')
-    assert.equal(fixture.recipeReads, reads + 1, 'one scoped recipe read for all pinned pieces')
-    await view.getByText('2 of 3 pieces are drawn.', { exact: false }).waitFor()
-    await legend.getByText('Not drawn: no saved 3D recipe for this version', { exact: true }).waitFor()
-    await legend.getByText(/Newer version saved · dashed outline/).waitFor()
-    await legend.getByText('Bedroom walls', { exact: true }).waitFor()
-    const canvas = view.locator('canvas.shell3d-canvas')
-    const size = await canvas.boundingBox()
-    assert(size && size.width > 200 && size.height >= 250, 'canvas fills the viewport')
-    const fit = view.getByRole('button', { name: 'Fit all', exact: true })
-    const box = await fit.boundingBox(); assert(box && box.height >= 44, 'Fit all is a 44px target')
-    await canvas.hover(); await page.mouse.wheel(0, -400)
+    const image = view.getByRole('img', { name: '3D line view of Cabin bedroom', exact: true })
+    await image.waitFor()
+    await view.getByText('Overview · saved bounding boxes only.', { exact: false }).waitFor()
+    assert(await scripts() > 0)
+    assert.equal(fixture.recipeReads ?? 0, reads, 'overview never fetches CAD recipes')
+    assert.equal(fixture.viewerCalls.length, calls, 'overview never asks the paid worker for detail')
+    await page.waitForFunction(() => Number(document.querySelector('.shell3d-viewport')?.dataset.renders)>0)
+    assert.equal(await image.getAttribute('data-budget-segments'), '36')
+    assert.equal(await image.getAttribute('data-draw-calls'), '2')
+    const selector=view.getByLabel('Detail to load')
+    await selector.selectOption('bed')
+    const bed=view.getByRole('img',{name:'3D line view of Bunk bed',exact:true})
+    await bed.waitFor()
+    await view.getByText('saved version 1.',{exact:false}).waitFor()
+    const first=fixture.viewerCalls.at(-1)
+    assert.equal(first.revision,1,'keeps pinned bed version, even with a newer version available')
+    const exports=fixture.viewerExports
+    await page.waitForFunction(() => Number(document.querySelector('.shell3d-viewport')?.dataset.drawCalls)===3)
+    assert.equal(await bed.getAttribute('data-budget-calls'),'3','one draw per definition')
+    const canvas=view.locator('canvas.shell3d-canvas');await canvas.scrollIntoViewIfNeeded()
+    const size=await canvas.boundingBox();assert(size&&size.width>200&&size.height>=250)
+    const before=Number(await bed.getAttribute('data-renders')), network=fixture.viewerCalls.length
+    await page.waitForTimeout(250)
+    assert.equal(Number(await bed.getAttribute('data-renders')),before,'idle view does not animate')
+    assert.equal(fixture.viewerCalls.length,network,'idle view makes no server calls')
+    await page.mouse.move(size.x+size.width/2,size.y+size.height/2)
+    await page.mouse.down();await page.mouse.move(size.x+size.width/2+45,size.y+size.height/2+25,{steps:5});await page.mouse.up()
+    await page.mouse.wheel(0,-200)
+    await page.waitForTimeout(100)
+    assert(Number(await bed.getAttribute('data-renders'))>before,'rotate and zoom render locally')
+    if(width<768) {
+      const cdp=await page.context().newCDPSession(page)
+      const x=size.x+size.width/2,y=size.y+size.height/2
+      const touchBefore=Number(await bed.getAttribute('data-renders'))
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-20,y},{x:x+20,y}]})
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-45,y:y+10},{x:x+45,y:y+10}]})
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+      await page.waitForTimeout(100);assert(Number(await bed.getAttribute('data-renders'))>touchBefore,'pinch and two-finger pan')
+      await cdp.detach()
+    }
+    const fit=view.getByRole('button',{name:'Fit view',exact:true})
+    const target=await fit.boundingBox();assert(target&&target.height>=44)
     await fit.click()
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No horizontal page scroll in 3D')
-    await page.waitForTimeout(150)
-    await page.screenshot({ path: `test-results/cad-shell-3d-${width}.png`, fullPage: true })
-    await legend.scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `test-results/cad-shell-3d-legend-${width}.png` })
-    await view.getByRole('button', { name: 'Plan view', exact: true }).click()
-    await view.getByRole('img', { name: 'Plan view of Cabin bedroom', exact: true }).waitFor()
+    await view.getByLabel('Parts to show').selectOption('post0')
+    await page.waitForFunction(() => Number(document.querySelector('.shell3d-viewport')?.dataset.drawCalls)===1)
+    assert.equal(fixture.viewerCalls.length,network,'part selection uses the downloaded buffers')
+    await view.getByLabel('Parts to show').selectOption('')
+    await view.getByRole('button',{name:'Fullscreen',exact:true}).click()
+    const full=page.getByRole('dialog',{name:'Bunk bed · 3D fullscreen',exact:true})
+    await full.waitFor();assert.equal(fixture.viewerCalls.length,network,'fullscreen reuses downloaded geometry')
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=window.innerWidth),true)
+    await page.screenshot({path:`test-results/cad-wireframe-fullscreen-${width}.png`})
+    await page.keyboard.press('Escape');await full.waitFor({state:'detached'})
+    await bed.waitFor();assert.equal(await view.count(),1,'Escape keeps the drawing open')
+    await page.waitForFunction(() => document.activeElement?.textContent==='Fullscreen')
+    await selector.selectOption('');await image.waitFor()
+    assert.equal(await view.locator('canvas.shell3d-canvas').count(),1,'only the current scene owns a canvas')
+    await selector.selectOption('bed');await bed.waitFor()
+    assert.equal(fixture.viewerExports,exports,'reopening the same pin uses its saved export')
+    fixture.rejectViewer=true
+    await selector.selectOption('room')
+    await view.getByRole('button',{name:'Try again',exact:true}).waitFor()
+    const failedCalls=fixture.viewerCalls.length
+    await page.waitForTimeout(250);assert.equal(fixture.viewerCalls.length,failedCalls,'failure does not retry itself')
+    fixture.rejectViewer=false;await view.getByRole('button',{name:'Try again',exact:true}).click()
+    await view.getByRole('img',{name:'3D line view of Bedroom walls',exact:true}).waitFor()
+    assert.equal(fixture.viewerCalls.at(-1).retry,true)
+    await page.screenshot({path:`test-results/cad-shell-wireframe-${width}.png`,fullPage:true})
+    await view.getByRole('button',{name:'Plan view',exact:true}).click()
+    await view.getByRole('img',{name:'Plan view of Cabin bedroom',exact:true}).waitFor()
+    assert.equal(await view.locator('canvas').count(),0,'closing releases the canvas')
   }
-  // Without WebGL the owner keeps the plan view and is told why.
   await page.evaluate(() => {
-    const original = HTMLCanvasElement.prototype.getContext
-    window.__restoreGetContext = () => { HTMLCanvasElement.prototype.getContext = original }
-    HTMLCanvasElement.prototype.getContext = function (type, ...rest) { return /webgl/.test(type) ? null : original.call(this, type, ...rest) }
+    const original=HTMLCanvasElement.prototype.getContext
+    window.__restoreGetContext=()=>{HTMLCanvasElement.prototype.getContext=original}
+    HTMLCanvasElement.prototype.getContext=function(type,...rest){return /webgl/.test(type)?null:original.call(this,type,...rest)}
   })
-  await view.getByRole('button', { name: '3D view', exact: true }).click()
-  await view.getByText('This browser or device cannot draw 3D here (WebGL is off or unavailable). Showing the plan view instead.', { exact: true }).waitFor()
-  await view.getByRole('img', { name: 'Plan view of Cabin bedroom', exact: true }).waitFor()
-  assert.equal(await view.getByRole('button', { name: 'Plan view', exact: true }).getAttribute('aria-pressed'), 'true')
-  await page.screenshot({ path: `test-results/cad-shell-3d-fallback-${width}.png`, fullPage: true })
+  const lastCalls=fixture.viewerCalls.length
+  await view.getByRole('button',{name:'3D view',exact:true}).click()
+  await view.getByText('This browser or device cannot draw 3D here (WebGL is off or unavailable). Showing the saved drawing instead.',{exact:true}).waitFor()
+  await view.getByRole('img',{name:'Plan view of Cabin bedroom',exact:true}).waitFor()
+  assert.equal(fixture.viewerCalls.length,lastCalls,'unsupported devices do not prepare a paid export')
+  await page.screenshot({path:`test-results/cad-shell-3d-fallback-${width}.png`,fullPage:true})
   await page.evaluate(() => window.__restoreGetContext())
   return webgl
 }

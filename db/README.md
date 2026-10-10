@@ -928,3 +928,17 @@ The reviewed migration is installed in the existing project as `20261006163926 /
 ## K4 mixed sheet supply — deployed
 
 `20261006211841_cut_plan_mixed_supply.sql` replaces only the two existing guarded commitment functions and the combined plan reader, then updates the two tool manuals. Stock allocation and Shopping contribution derivation filter actual used sheets by their existing source kind; no new tables, policies, writer ABI or timeout changes. Existing privileges are retained by CREATE OR REPLACE. The CLI again aborted in its native Bun runtime even for `migration new --help`; the filename uses observed UTC. [Material planning](../Docs/material-planning.md#k4-mixed-stockcatalog-supply--deployed) owns independent partial-success semantics and exact coverage fields. Applied as `20261007090620 / cut_plan_mixed_supply`; exact bodies, authority/RLS/manual parity, unchanged 8-second budget, rollback-only mixed behavior and retained-plan member readback are [verified](../Docs/foundation-verification.md#k4-mixed-sheet-supply-hosted-release--2026-10-07).
+
+
+### Mobile CAD display cache
+
+`20261010070522_cad_viewer_exports.sql` adds a rebuildable `bob.cad_viewer_exports`
+sidecar and the service-only invoker RPCs `claim_cad_viewer_export` /
+`finish_cad_viewer_export`. The key is immutable CAD revision, recipe hash and
+display profile. Project members may read matching rows under RLS; anonymous
+reads, member writes and member RPC execution are denied. Claiming serializes
+preparation with a finite lease and three explicit attempts; completion fences
+old/expired workers. Source rows and Artifact revisions remain unchanged.
+[Mobile CAD](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10) owns the viewer
+and cache contract. Migration committed is not migration applied; exact hosted
+ledger and Edge/Modal/Pages readback belong in the release PR.
