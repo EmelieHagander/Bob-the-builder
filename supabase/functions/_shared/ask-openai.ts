@@ -452,7 +452,9 @@ export async function answerWithOpenAi(opts: {
           const data=await resolveMediaImage(opts.projectId,mediaTransport,r,AbortSignal.timeout(12000))
           const match=data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/)
           if(!match)throw new Error('unsupported_image')
-          return {contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp',bytes:Uint8Array.from(atob(match[2]),c=>c.charCodeAt(0))}
+          const binary=atob(match[2]),bytes=new Uint8Array(binary.length)
+          for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i)
+          return {contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp',bytes}
         }))
         const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,referenceImages,timeoutMs:100000,aiDefinition:role})
         if (!generated.ok) return generated
