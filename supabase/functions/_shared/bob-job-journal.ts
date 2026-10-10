@@ -129,7 +129,11 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
         try { await store.save(marker) } catch { stopped = new BobContinuation('yield'); throw stopped }
         entries.set(marker.key, marker)
       }
-      const earlier = stream.startsWith('model:') && !retries.length ? reusable.get(hash) as { ok?: unknown; result?: unknown } | undefined : undefined
+      // A release moved phrasebook calls out of work-router's model sequence.
+      // Reuse only an exact input match from this same turn; old free answers
+      // have a different schema/input fingerprint and are never accepted.
+      const priorLanguage=stream==='model:delivery-language-v1'?[...entries.values()].find(e=>e.key.startsWith('model:work-router:')&&e.fingerprint===hash&&(e.value as {ok?:unknown})?.ok===true)?.value:undefined
+      const earlier = stream.startsWith('model:') && !retries.length ? (reusable.get(hash)??priorLanguage) as { ok?: unknown; result?: unknown } | undefined : undefined
       if (earlier?.ok === true) {
         const entry = { key, fingerprint: hash, value: { ok: true, result: earlier.result, reused: true } }
         try { await store.save(entry) }

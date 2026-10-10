@@ -265,6 +265,14 @@ localisation call before settlement. Complete provider failure or no remaining
 budget uses language-neutral warning/open/saved marks and original labels.
 That path preserves partial evidence and never re-executes writes.
 
+### Receipt-owned drawing event replies — 2026-10-10
+
+**Implemented in source; release and member acceptance remain until recorded in [verification](foundation-verification.md#receipt-owned-drawing-event-replies--2026-10-10).** Drawing-event replies use this same phrasebook/notice composer instead of the separate free `drawing_resume_reply` answer. Only an explicit CAD-writer/request-store receipt for the current project establishes a delivered drawing; provisional `saved` flags and free `outcome.user_message` do not. Other verified writes remain partial results. The message includes exact receipt titles and revisions, original gaps and the actual technical/recovery cause; it cannot manufacture a new owner permission question.
+
+Known CAD-engine failures, exhausted drawing budgets and already-saved request acknowledgements need no fresh language call. Seeded phrases remain usable; otherwise the existing language-neutral marks and original labels preserve the result. Missing-data notices may prepare the existing outcome-independent phrasebook once. Localisation receives the owner's language request, not the domain outcome or receipt it might rewrite. Access is rechecked before and after delivery.
+
+Phrasebook calls have a separate `model:delivery-language-v1` journal stream. An exact matching phrasebook already recorded under work-router can be reused from the same turn without provider dispatch; a former free drawing answer has a different input/schema and is not reused as language data. Old work-router slots stay intact. No catalog schema/profile, storage table, write authority or budget reset is added by this release. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains the staged implementation and required gates.
+
 `bob.execution_events` is service-only with RLS and no anon/authenticated grants.
 It stores random run/turn correlation IDs, role/status, time, tokens, known cost
 and bounded numeric/enum counters. No user IDs, project IDs, prompts, record

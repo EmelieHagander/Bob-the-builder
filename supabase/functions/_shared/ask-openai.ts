@@ -3,7 +3,7 @@ import { parameterSourcePins } from './cad-parameters.ts'
 import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
-import {drawingResumeReply} from './drawing-resume-reply.ts'
+import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
@@ -105,7 +105,11 @@ export async function answerWithOpenAi(opts: {
    return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
-   try{return await memo('model:' + options.functionName, options, async identity => {
+   // Localisation has its own journal stream. Existing jobs may contain the old
+   // free-form drawing answer at work-router's next position; do not replay it
+   // as a phrasebook or collide with its fingerprint during a release.
+   const modelStream=options.catalogSchemaKey==='bob_delivery_language'?'model:delivery-language-v1':'model:'+options.functionName
+   try{return await memo(modelStream, options, async identity => {
     await beforeDispatch?.()
     const started = performance.now()
     const wall = journal ? journal.remaining() + 8000 : Infinity
@@ -417,19 +421,24 @@ export async function answerWithOpenAi(opts: {
     // No invented user turn, model-written mandate or generic project tool loop.
     const request=await drawingRequestCall({p_operation:'load',p_id:opts.background.drawingRequestId})
     if(!request)return {ok:false,error:'drawing_request_unavailable'}
-    if(request.status==='saved')return {ok:true,projectId:opts.projectId,answer:'Ritningen är redan sparad.',evidence:{kind:'ai_assessment',references:[],sources:[],partial:false,writes:request.receipt?[request.receipt]:[]}}
+    if(request.status==='saved'){
+      if(!confirmedDrawingReceipt(request.receipt,opts.projectId))return {ok:false,error:'drawing_save_unconfirmed'}
+      const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome:{status:'already_saved'},drawingReceipt:request.receipt,hasAccess,callModel})
+      return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:[],partial:false,writes:[request.receipt]}}
+    }
     if(['paused','cancelled'].includes(request.status))return {ok:false,error:'drawing_request_inactive'}
     const outcome:Record<string,any>=await cadAssistant.consult({...request.payload.brief,request_id:request.id})
     const candidate=cadAssistant.candidate
-    let saved=false
+    let drawingReceipt
     if(candidate&&writer){
       const receipt=await writer.commit({kind:'cad',record_id:candidate.artifact_id,expected_updated_at:null,expected_revision:candidate.expected_revision,request_quote:opts.message.slice(0,500),data:candidate})
-      if(receipt.status!=='saved')return {ok:false,error:'drawing_save_unconfirmed'}
+      if(receipt.status!=='saved'||!confirmedDrawingReceipt(receipt.receipt,opts.projectId))return {ok:false,error:'drawing_save_unconfirmed'}
       await cadAssistant.markSaved()
-      saved=true
+      drawingReceipt=receipt.receipt
     }
     journal?.check()
-    const answer=await drawingResumeReply({message:opts.message,userId:opts.userId,outcome,saved,hasAccess,callModel})
+    const saved=!!drawingReceipt
+    const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
     return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }

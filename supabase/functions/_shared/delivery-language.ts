@@ -1,5 +1,5 @@
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import type { WriteReadback } from './project-write.ts'
+import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 
 export type DeliveryNotice = 'incomplete' | 'drawing_unavailable' | 'drawing_prerequisite' | 'drawing_incomplete' | 'uncertain' | 'recovered' | 'chat_unsynced'
@@ -23,17 +23,20 @@ export function parseDeliveryLanguage(value:unknown):DeliveryLexicon|null{
   return v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...keys].sort().join(',')&&keys.every(k=>typeof v[k]==='string'&&!!v[k].trim()&&v[k].length<=600)?v:null
 }
 
-export interface NoticeInput { notice: DeliveryNotice; missing?: string[]; receipts?: WriteReadback[]; detail?: string }
+/** An omitted notice lists verified receipts without claiming the whole request
+ * complete. The caller, never the language model, selects the outcome. */
+export interface NoticeInput { notice?: DeliveryNotice; missing?: string[]; receipts?: ProjectWriteReceipt[]; detail?: string }
+const receiptLabel=(r:ProjectWriteReceipt)=>r.label+(r.revision!==undefined?' · v'+r.revision:'')
 export function neutralDeliveryNotice(input: NoticeInput): string {
-  return ['⚠', ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+r.label),...(input.detail?[input.detail]:[])].join('\n')
+  return [...(input.notice?['⚠']:[]), ...(input.missing??[]).map(x=>'○ '+x), ...(input.receipts??[]).map(r=>'✓ '+receiptLabel(r)),...(input.detail?[input.detail]:[])].join('\n')
 }
 export function createDeliveryLanguage(opts: {
   userId: string; message: string; context?: string; deadline?: number; hasAccess: () => Promise<boolean>;
   callModel: (o: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>;
 }) {
   let lexicon:DeliveryLexicon|null=null
-  const fallback=(input:NoticeInput)=>lexicon?[lexicon[input.notice],...(input.missing?.length?[lexicon.missing_label+'\n'+input.missing.map(x=>'• '+x).join('\n')]:[]),
-    ...(input.receipts?.length?[lexicon.saved_label+'\n'+input.receipts.map(r=>'• '+r.label).join('\n')]:[]),...(input.detail?[input.detail]:[])].join('\n\n'):neutralDeliveryNotice(input)
+  const fallback=(input:NoticeInput)=>lexicon?[...(input.notice?[lexicon[input.notice]]:[]),...(input.missing?.length?[lexicon.missing_label+'\n'+input.missing.map(x=>'• '+x).join('\n')]:[]),
+    ...(input.receipts?.length?[lexicon.saved_label+'\n'+input.receipts.map(r=>'• '+receiptLabel(r)).join('\n')]:[]),...(input.detail?[input.detail]:[])].join('\n\n'):neutralDeliveryNotice(input)
   const format=async (input: NoticeInput): Promise<string> => {
     // No provider is needed to retain receipts. During total provider failure,
     // use language-neutral status marks plus original record/request labels.
