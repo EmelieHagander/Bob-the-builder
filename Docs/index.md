@@ -16,6 +16,7 @@
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
 | next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; the active stage lives there, not in this index |
 | end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — cross-domain target, remaining P3 named-member acceptance and P4 cases; actual implemented/released scope lives with domain owners |
+| data-driven handoff gaps and server-owned changes/status | [Data boundary review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) — reviewed gaps, existing guards and domain routing; remaining implementation is in State |
 | five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
 | baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
 | general audit of Bob's tool use and unfinished work after PR #146 | `Docs/bob-tool-autonomy-audit-2026-09-25.md` — live configuration, reproducible runtime findings, test-policy drift and outcome acceptance |

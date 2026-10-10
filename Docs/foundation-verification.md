@@ -1859,3 +1859,19 @@ policy envelopes and immutable pinned history. Release validation, exact hosted
 source/schema readback and deployment status are recorded in the release PR.
 This change does not itself regenerate the owner's drawing or establish visual
 acceptance of the bed.
+
+## Data authority gap review — 2026-10-10
+
+Read-only review of main `9c3d363e8ebf78fb1258b3a68b4f395ed40d0267` traced source selection, parameter compilation, construction/CAD handoff, quantities, product evidence and resumed delivery. [Delivery flow](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) owns the remaining cross-domain boundaries; existing specialist contracts remain authoritative.
+
+Three controlled counterexamples used the actual TypeScript functions and synthetic values, with **zero paid model calls and zero production writes**:
+
+- `drawingResumeReply`: a stub language response saying the drawing was saved was accepted with `saved=false` and a `cad_engine` failure. This establishes a missing output-authority boundary, not a finding that an actual member received that exact text in this pass.
+- `constructionLists`: a valid single box named as reference context was counted as one blank. `cad-schema.ts` has no typed build/reference role. A suggestive name does not supply the missing classification; no owner's material need was changed or alleged incorrect here.
+- `supplierArticleFields`: a synthetic article with a never-fetched example URL and declared pack fields passed shape validation. Source citation is declared evidence, not a captured-source receipt. SQL requires source fields and supported-field declarations but does not ingest the supplier page.
+
+Focused existing checks passed **45/45**, no failures: `cad-parameters`, `construction-lists`, `project-design-intent`, `drawing-runtime`, `plan-edits` and `drawing-resume-reply`. These verify current mechanical guards, canonical feature handoff and retry selection; passing them does not close the counterexamples. The construction-requirement source/command inspection also confirms that changed checkpoints flag old needs and require an explicit revision of the same need rather than automatically updating the whole downstream chain. Hosted measurement columns confirm free-text `subject` with optional component ownership, without a typed property/reference-point contract.
+
+Hosted readback found migration `20261007140000_supplier_article_packs` in the migration ledger, and its supplier-article revisions, pack-purchase tables and command functions present. This supersedes the older “not applied” wording only for database installation. This pass did not establish matching current endpoint/UI product execution or physical member/model acceptance; those remaining evidence checks stay in State. Do not reapply the installed migration based on the old code-only checkpoint.
+
+Direct operator review followed the repository's source/owner and verification guidance. No independent subagent review, new runtime change, migration, deployment or visual acceptance is claimed by this audit.
