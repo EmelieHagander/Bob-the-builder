@@ -149,7 +149,7 @@ Sparandet måste kontrollera samma förväntade revisioner vid den auktoritativa
 
 ### Kvarstående datagränser — kodgranskning 2026-10-10
 
-**Kodgranskade luckor och specificerade nästa gränser, inte nya driftsatta funktioner.** [Verifieringen](foundation-verification.md#data-authority-gap-review--2026-10-10) skiljer kontrollerade motprov från verkliga medlems-/modellfel. Den redan specificerade [parameterändringen före ritning](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) återanvänder K1/K2/K3; nedan är ytterligare luckor, inte en parallell databasplan.
+**Kodgranskade luckor och specificerade nästa gränser, inte nya driftsatta funktioner.** [Verifieringen](foundation-verification.md#data-authority-gap-review--2026-10-10) skiljer kontrollerade motprov från verkliga medlems-/modellfel. [Databasägaren](../db/README.md#construction-data-authority-and-remaining-extensions) skiljer befintliga, kontrollerade versionskopplingar från planerade schema- och flödeskompletteringar. Den redan specificerade [parameterändringen före ritning](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) återanvänder K1/K2/K3; nedan är ytterligare luckor, inte en parallell databasplan.
 
 | Prioritet / gräns | Verifierat nuläge och risk | Nästa avgränsade ändring och ägare |
 |---|---|---|

@@ -31,6 +31,7 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` and `Docs/index.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
+| existing construction/version relationships versus remaining schema and workflow gaps | [Database authority assessment](../db/README.md#construction-data-authority-and-remaining-extensions) — checked hosted foundation, guarded JSON lineage and planned targeted extensions |
 | share a Building or selected projects with a household / invite an existing friend | `Docs/user-stories.md` → BOB-US-038 / BOB-US-059 + `db/README.md` → Household and friend sharing |
 | volunteers joining with only a name / optional allergies when food is planned | `Docs/user-stories.md` → BOB-US-038 + `db/README.md` → Name-only volunteer access |
 | preserve old Areas through archive/restore | `db/README.md` → Area archive and volunteer drawing reader; `Docs/ui-index.md` |
