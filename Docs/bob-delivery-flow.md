@@ -278,6 +278,8 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Chattbilder:** slutför frontend-releasen av [PR #241](https://github.com/EmelieHagander/Bob-the-builder/pull/241) efter grön CI. Backend och bildkatalog är installerade; [bildägaren](media-and-steps.md#chat-photos-and-reference-mockups) äger uppladdning, privata referenser och mockupflödet. Därefter återstår ett verkligt foto → mockup-prov med beställaren; kontrollerade browserfall bevisar inte bildmodellens visuella kvalitet.
+
 **Mobil CAD:** prova den driftsatta linjevyn med en verklig sparad ritning och husdelar på beställarens telefon. [CAD-ägaren](cad-adapter.md#mobile-cad-viewer--2026-10-10) anger laddning, kostnad och gränser; emulerad mobil och software WebGL ersätter inte faktisk telefonprestanda.
 
 **CAD-fortsättning:** kontrollera att samma uppdrag når en ny granskad och sparad ritning efter kapat underlagsgranskarsvar och historiskt renderfel. [Intake-ägaren](cad-adapter.md#input-readiness-and-cad-execution--2026-10-10) anger klassificering, svarsutrymme och bibehållna fysiska beredskapsgrindar. Ett kontrollerat prov stänger inte den verkliga våningssängens mockupacceptans.
