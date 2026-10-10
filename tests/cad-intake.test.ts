@@ -134,6 +134,29 @@ test('a partial or fabricated checklist cannot pass readiness',()=>{
  assert.equal(parseIntakeAssessment({...assessment,checks:[{...check(shapeId),source_refs:['imaginary']}]},handoff,refs),null)
  assert.equal(parseIntakeAssessment({...assessment,additional_needs:[check(shapeId)]},handoff,refs),null)
 })
+test('execution history cannot erase missing measurements or consequential owner choices',()=>{
+ const refs=new Set(['requirement:'+shapeId])
+ const execution_issues=[{kind:'candidate_validation',detail:'A prior candidate failed rendering.',source_refs:['requirement:'+shapeId]}]
+ const inputs={checks:[check(shapeId,'missing',true)],additional_needs:[{...check('owner_choice','missing',false),action:'owner_decision'}],execution_issues}
+ const parsed=parseIntakeAssessment(inputs,handoff,refs)
+ assert(parsed);assert.deepEqual(parsed.execution_issues,execution_issues)
+ assert.deepEqual(intakeGaps(parsed).map(c=>c.id),[shapeId,'owner_choice'])
+ const ready=parseIntakeAssessment({...assessment,execution_issues},handoff,refs)
+ assert(ready);assert.deepEqual(intakeGaps(ready),[])
+ for(const issue of [{...execution_issues[0],source_refs:['invented']},{...execution_issues[0],source_refs:[]},{...execution_issues[0],kind:'missing_measurement'},{...execution_issues[0],blocking:false}]){
+  assert.equal(parseIntakeAssessment({...assessment,execution_issues:[issue]},handoff,refs),null)
+ }
+ assert(parseIntakeAssessment(assessment,handoff,refs),'old pinned two-field assessments remain readable')
+})
+test('a model output stop is persisted and suppresses unchanged next-turn work with the accurate reason',async()=>{
+ const f=fixture();let calls=0
+ const opts={...f.opts,callModel:async()=>{calls++;return {...reply(),success:false,error:'model_output_limit'}}}
+ const first=await createCadAssistant(opts).consult(request)
+ assert.equal(first.stage,'intake');assert.equal(first.reason,'model_output_limit');assert.equal(calls,1)
+ const next=await createCadAssistant(opts).consult({...request,request_id:id,brief:'Please continue the same work'})
+ assert.equal(next.retry_suppressed,true);assert.equal(next.stage,'intake');assert.equal(next.reason,'model_output_limit')
+ assert.equal(next.user_message,first.user_message);assert.equal(calls,1);assert.equal(f.renders,0)
+})
 test('unresolved owner choices cannot be waived by a false blocking flag or a different canonical deferral',async()=>{
  const ownerChoice={...check('important_choice','missing',false),action:'owner_decision' as const,detail:'Explain options and recommend a solution before selecting the geometry'}
  const evaluated={checks:[check(shapeId)],additional_needs:[ownerChoice]}

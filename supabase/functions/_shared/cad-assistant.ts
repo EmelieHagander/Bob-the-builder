@@ -5,7 +5,7 @@ import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-r
 import {splitDimensionBindings,readPhysicalCadSources,bindPhysicalDimensions,physicalLineageSources,PhysicalCadSourceError} from './cad-physical-lineage.ts'
 import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
 import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, intakeGaps, type DrawingBudgetGrant, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
-import { collectCadResearch } from './cad-research.ts'
+import { CAD_RESEARCH_CONTRACT, collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA, expandCadArrays } from './cad-arrays.ts'
@@ -198,7 +198,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   let resumeDraft:Record<string,any>|null=null
   let retryInputs:{evidence:Record<string,unknown>;images:unknown}|undefined
   const sourceFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,dependencies:await dependencies.digest()},retryInputs.images):''
-  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,dependencies:await dependencies.digest()},retryInputs.images):''
+  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,intake_contract:CAD_RESEARCH_CONTRACT,dependencies:await dependencies.digest()},retryInputs.images):''
   let expected=0
   let construction:Record<string,any>|null=null
   let drawingArtifactId=raw.artifact_id
@@ -339,10 +339,18 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     const incomplete=[...facts.incomplete,...(collected.truncated?['assessment']:[])]
     const gaps=intakeGaps(collected.assessment,new Set(readiness.deferred_choice_ids))
     const gapById=new Map(gaps.map(c=>[c.id,c]))
-    const assessment=collected.assessment?{checks:collected.assessment.checks.map(c=>gapById.get(c.id)??c),additional_needs:collected.assessment.additional_needs.map(c=>gapById.get(c.id)??c)}:null
+    const assessment=collected.assessment?{...collected.assessment,checks:collected.assessment.checks.map(c=>gapById.get(c.id)??c),additional_needs:collected.assessment.additional_needs.map(c=>gapById.get(c.id)??c)}:null
     const checks=assessment?[...assessment.checks,...assessment.additional_needs]:[]
     payload.reference_refs=[...new Set([...referenceRefs,...opts.context?.openedImageRefs()??[]])]
     await persist(incomplete.length?'retrieval_failed':gaps.length?'needs_data':'ready_to_design',{assessment,incomplete,evidence:collected.evidence})
+    if(collected.truncated&&!facts.incomplete.length&&!collected.sourceFailure){
+     partial=true
+     return terminalFailure={status:'unavailable',stage:'intake',saved:false,reason:collected.failureReason??'assessment_incomplete',request_id:request?.id??null,checks,gaps,incomplete,
+      user_message:collected.failureReason==='model_output_limit'
+       ?'Underlagsgranskarens svar nådde sin tokengräns och blev ofullständigt. Ingen ny ritning sparades. CAD-motorn anropades aldrig i det här försöket.'
+       :'Underlagsgranskaren lämnade ingen fullständig bedömning. Ingen ny ritning sparades. CAD-motorn anropades aldrig i det här försöket.',
+      next_action:'Complete the intake assessment. Source reads succeeded; do not request new measurements or report a source retrieval failure.'}
+    }
     if(incomplete.length||gaps.length){
      partial=true
      const outcome={status:incomplete.length?'unavailable':'needs_data',stage:'intake',saved:false,checks,gaps,incomplete,required_tools:requiredTools,

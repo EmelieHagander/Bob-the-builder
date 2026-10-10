@@ -35,9 +35,10 @@ test('server contracts publish atomically, preserve pinned history and agree wit
   const catalog = createAiCatalogSession({ rpc: async () => { throw new Error('pinned only') } }, { app: 'bob', manifest: current })
   const oldCatalog = createAiCatalogSession({ rpc: async () => { throw new Error('pinned only') } }, { app: 'bob', manifest: previous })
   const fixture = catalogFixture()
+  const latestCatalog=createAiCatalogSession({rpc:async()=>{throw Error('pinned only')}},{app:'bob',manifest:latest})
   for (const key of changed) {
     const parameters = { evidence_refs: ['measurement:a', 'choice:b'], check_ids: ['width', 'height'] }
-    assert.deepEqual(catalog.tool(key, parameters).function.parameters, fixture.tool(key, parameters).function.parameters)
+    assert.deepEqual(latestCatalog.tool(key, parameters).function.parameters, fixture.tool(key, parameters).function.parameters)
   }
   for (const key of ['tools.render_cad_candidate', 'tools.render_saved_cad_candidate']) {
     const schema = catalog.tool(key).function.parameters as any

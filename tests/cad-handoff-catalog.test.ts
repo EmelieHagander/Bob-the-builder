@@ -11,12 +11,14 @@ import { catalogFixture } from './support/ai-catalog-fixture.ts'
 const migrationName='20261010063726_cad_handoff_server_ids.sql'
 test('handoff contracts publish together, preserve active edits and pinned history, and match the executable tools',async t=>{
  let previous!:AiCatalogManifest
+ let published:AiCatalogManifest|undefined
  const pg=await projectSchema(async(db,name)=>{
   if(name===migrationName)previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  if(previous&&name>migrationName&&!published)published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
  })
  t.after(()=>pg.close())
  const resolve=async(id:string|null=null)=>(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[id])).rows[0].result
- const current=await resolve()
+ const latest=await resolve(),current=published??latest
  assert.deepEqual(current.models,previous.models)
  assert.deepEqual(await resolve(previous.manifest_id),previous)
  const changed=new Set(['tools.design_project_cad','tools.plan_cad_pieces'])
@@ -45,7 +47,7 @@ test('handoff contracts publish together, preserve active edits and pinned histo
  const before=await snapshot()
  const sql=await readFile(new URL('../supabase/migrations/'+migrationName,import.meta.url),'utf8')
  await assert.rejects(pg.transaction(tx=>tx.exec(sql.replace('"tools.plan_cad_pieces"','"tools.missing_handoff_contract"').replace(/^begin;$/m,'').replace(/^commit;$/m,''))),/cad_handoff_contract_missing/)
- assert.deepEqual(await snapshot(),before);assert.deepEqual(await resolve(),current)
+ assert.deepEqual(await snapshot(),before);assert.deepEqual(await resolve(),latest)
 })
 test('the handoff publication is reproducible from executable declarations',()=>{
  const output=execFileSync(process.execPath,['--import','tsx','scripts/build-ai-handoff-catalog.ts','--check'],{encoding:'utf8'})
