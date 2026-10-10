@@ -4,11 +4,13 @@ import {type CadPacket} from '../supabase/functions/_shared/cad-assistant.ts'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import {parseDesignHandoff,parseCadReview,candidateFingerprint,cadReviewSchema} from '../supabase/functions/_shared/cad-review.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import {shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {DRAWING_REVIEW_INSTRUCTION,collectDrawingReviewEvidence} from './support/colleague-catalog-fixture.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {budgetFailure} from '../supabase/functions/_shared/bob-budget-stop.ts'
+import {requirementId} from '../supabase/functions/_shared/cad-handoff.ts'
+const saveLinkId=await requirementId({requirement:'Save and link the drawing to the work Step',basis:'user_request',source_ref:null})
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
 const reply=(data:any)=>({success:true,data,model:'fixture',responseId:'designer-cursor',usage})
 const call=(name:string,args:any)=>({...reply(null),toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
@@ -32,7 +34,7 @@ test('original request and structured directions reach a separate, tool-free rev
  assert.deepEqual(f.seen.map(o=>o.functionName),['cad-designer','cad-reviewer'],'rendered geometry needs no paid designer self-inspection')
  const review=f.seen.find(o=>o.functionName==='cad-reviewer')
  assert.equal(review.previousResponseId,undefined);assert.equal(review.tools,undefined)
- assert.deepEqual(review.schema.properties.requirements.required,['shape'])
+ assert.deepEqual(review.schema.properties.requirements.required,[shapeId])
  assert.equal(review.schema.properties.requirements.additionalProperties,false)
  const data=JSON.parse(review.messages[0].content)
  assert.equal(data.owner_request,f.opts.ownerRequest);assert.equal(data.handoff.coordinates.positive_x,'east')
@@ -43,7 +45,7 @@ test('original request and structured directions reach a separate, tool-free rev
 })
 test('candidate review defers delivery receipts without certifying saved work or weakening geometry checks',async()=>{
  const f=fixture(),model=f.opts.callModel
- const handoffWithDelivery={...request.handoff,requirements:[...request.handoff.requirements,{id:'save_link',requirement:'Save and link the drawing to the work Step',basis:'user_request' as const,source_ref:null}]}
+ const handoffWithDelivery={...request.handoff,requirements:[...request.handoff.requirements,{id:saveLinkId,requirement:'Save and link the drawing to the work Step',basis:'user_request' as const,source_ref:null}]}
  f.opts.callModel=async o=>{
   if(o.functionName!=='cad-reviewer')return model(o)
   const context=JSON.parse(o.messages[0].content)
@@ -51,12 +53,12 @@ test('candidate review defers delivery receipts without certifying saved work or
   assert.deepEqual(context.review_scope.deferred_checks,['save_receipt','step_link_receipt','reopen_saved_revision'])
   assert.match(o.systemMessage,/Do not mark a future delivery action met/)
   assert.match(o.systemMessage,/Wrong intended project\/target\/scope/)
-  return reply(JSON.stringify({verdict:'pass',summary:'Candidate ready; delivery remains',requirements:{shape:{status:'met',evidence:'Geometry checked'},save_link:{status:'unresolved',evidence:'pending_delivery: save and link after review'}},issues:[]}))
+  return reply(JSON.stringify({verdict:'pass',summary:'Candidate ready; delivery remains',requirements:{[shapeId]:{status:'met',evidence:'Geometry checked'},[saveLinkId]:{status:'unresolved',evidence:'pending_delivery: save and link after review'}},issues:[]}))
  }
  const assistant=createCadAssistant(f.opts),result=await assistant.consult({...request,handoff:handoffWithDelivery})
  assert.equal(result.status,'ready');assert.equal(result.saved,false)
- assert.equal(assistant.quality?.review.requirements.find(r=>r.id==='save_link')?.status,'unresolved')
- const broken=parseCadReview({verdict:'pass',summary:'Incorrect width',requirements:{shape:{status:'failed',evidence:'Wrong width'},save_link:{status:'unresolved',evidence:'pending_delivery'}},issues:[]},handoffWithDelivery)
+ assert.equal(assistant.quality?.review.requirements.find(r=>r.id===saveLinkId)?.status,'unresolved')
+ const broken=parseCadReview({verdict:'pass',summary:'Incorrect width',requirements:{[shapeId]:{status:'failed',evidence:'Wrong width'},[saveLinkId]:{status:'unresolved',evidence:'pending_delivery'}},issues:[]},handoffWithDelivery)
  assert.equal(broken?.verdict,'revise','deferred delivery cannot override a construction failure')
 })
 test('review budget failure retains boundary, counters and review stage and cannot expose a savable candidate',async()=>{
@@ -72,7 +74,7 @@ test('review rejection returns concrete feedback to the designer and requires a 
  const f=fixture();let designers=0,reviews=0
  f.opts.callModel=async o=>{
   if(o.functionName==='cad-reviewer'){
-   if(++reviews===1)return reply(JSON.stringify({verdict:'pass',summary:'Wrong side',requirements:[{id:'shape',status:'failed',evidence:'Wrong reference side'}],issues:[{severity:'error',code:'orientation',correction:'Move access to the negative X side'}]}))
+   if(++reviews===1)return reply(JSON.stringify({verdict:'pass',summary:'Wrong side',requirements:[{id:shapeId,status:'failed',evidence:'Wrong reference side'}],issues:[{severity:'error',code:'orientation',correction:'Move access to the negative X side'}]}))
    assert.equal(JSON.parse(o.messages[0].content).candidate.recipe.instances[0].placement.x,-600)
    return reviewReply()
   }
@@ -90,7 +92,7 @@ test('an unchanged rejected candidate stops before another render or paid review
  f.opts.callModel=async o=>{
   if(o.functionName==='cad-reviewer'){
    reviews++
-   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs repair'}],issues:[]}))
   }
   designers++
   return call('render_cad_candidate',designers===1?design:Object.fromEntries(Object.entries(design).reverse()))
@@ -109,7 +111,7 @@ test('a pause reconstructs rejected inputs and cannot render or review the same 
    callModel:o=>journal.run('model:'+o.functionName,o,async()=>{
     if(o.functionName==='cad-reviewer'){
      reviews++;now=15000
-     return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+     return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs repair'}],issues:[]}))
     }
     designers++;return call('render_cad_candidate',design)
    },10000),
@@ -127,7 +129,7 @@ test('a correction to the candidate assumptions can be reviewed without changing
  const assumptions='Physical clearance remains unverified and must be measured on site.'
  f.opts.callModel=async o=>{
   if(o.functionName==='cad-reviewer'){
-   if(++reviews===1)return reply(JSON.stringify({verdict:'revise',summary:'Make the physical clearance uncertainty explicit',requirements:[{id:'shape',status:'failed',evidence:'The candidate assumptions omit the open clearance check'}],issues:[{severity:'error',code:'uncertainty',correction:assumptions}]}))
+   if(++reviews===1)return reply(JSON.stringify({verdict:'revise',summary:'Make the physical clearance uncertainty explicit',requirements:[{id:shapeId,status:'failed',evidence:'The candidate assumptions omit the open clearance check'}],issues:[{severity:'error',code:'uncertainty',correction:assumptions}]}))
    assert.equal(JSON.parse(o.messages[0].content).candidate.assumptions,assumptions)
    return reviewReply()
   }
@@ -142,7 +144,7 @@ test('distinct repairs keep the three-review bound and cannot save a rejected ca
  f.opts.callModel=async o=>{
   if(o.functionName==='cad-reviewer'){
    reviews++
-   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:'shape',status:'failed',evidence:'Placement needs repair'}],issues:[]}))
+   return reply(JSON.stringify({verdict:'revise',summary:'Wrong placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs repair'}],issues:[]}))
   }
   designers++
   return call('render_cad_candidate',{...design,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:-100*designers}}]}})
@@ -175,17 +177,17 @@ test('strict review keys cover the whole handoff; a plan-only pass cannot replac
  const full={...handoff,requirements:[...handoff.requirements,{id:'width',requirement:'Bind exact width',basis:'project_record' as const,source_ref:'measurement-id'}]}
  const schema=cadReviewSchema(full)
  const map=schema.properties.requirements as any
- assert.deepEqual(map.required,['shape','width']);assert.equal(map.additionalProperties,false)
- const value={verdict:'pass',summary:'Reviewed exact candidate',requirements:{shape:{status:'met',evidence:'One panel'},width:{status:'met',evidence:'Measurement revision 2'}},issues:[]}
- assert.deepEqual(parseCadReview(value,full)?.requirements.map(r=>r.id),['shape','width'])
+ assert.deepEqual(map.required,[shapeId,'width']);assert.equal(map.additionalProperties,false)
+ const value={verdict:'pass',summary:'Reviewed exact candidate',requirements:{[shapeId]:{status:'met',evidence:'One panel'},width:{status:'met',evidence:'Measurement revision 2'}},issues:[]}
+ assert.deepEqual(parseCadReview(value,full)?.requirements.map(r=>r.id),[shapeId,'width'])
  assert.equal(parseCadReview({...value,requirements:{'plan-uuid':value.requirements.shape}},full),null)
  assert.equal(parseCadReview({...value,requirements:{shape:value.requirements.shape}},full),null)
  assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{...value.requirements.width,id:'invented'}}},full),null)
  assert.equal(parseCadReview({...value,requirements:{...value.requirements,width:{status:'failed',evidence:'Wrong binding'}}},full)?.verdict,'revise')
 })
 test('required solution features cannot pass as unresolved while future delivery receipts may remain pending',()=>{
- const full={...handoff,requirements:[...handoff.requirements,{id:'intent_storage',requirement:'Include the selected integrated storage',basis:'project_record' as const,source_ref:'solution:fixture@2'},{id:'save_link',requirement:'Save and link the reviewed drawing',basis:'user_request' as const,source_ref:null}]}
- const value={verdict:'pass',summary:'Reviewed the concept',requirements:{shape:{status:'met',evidence:'Concept geometry'},intent_storage:{status:'unresolved',evidence:'The simplified geometry omits storage'},save_link:{status:'unresolved',evidence:'pending_delivery: save after candidate review'}},issues:[]}
+ const full={...handoff,requirements:[...handoff.requirements,{id:'intent_storage',requirement:'Include the selected integrated storage',basis:'project_record' as const,source_ref:'solution:fixture@2'},{id:saveLinkId,requirement:'Save and link the reviewed drawing',basis:'user_request' as const,source_ref:null}]}
+ const value={verdict:'pass',summary:'Reviewed the concept',requirements:{[shapeId]:{status:'met',evidence:'Concept geometry'},intent_storage:{status:'unresolved',evidence:'The simplified geometry omits storage'},[saveLinkId]:{status:'unresolved',evidence:'pending_delivery: save after candidate review'}},issues:[]}
  assert.equal(parseCadReview(value,full,new Set(['intent_storage']))?.verdict,'revise')
  value.requirements.intent_storage={status:'met',evidence:'Storage modules are present in recipe and preview'}
  assert.equal(parseCadReview(value,full,new Set(['intent_storage']))?.verdict,'pass')
@@ -242,7 +244,7 @@ test('retrying a late research call preserves prior work and keeps the final ren
 test('a last-call render rejected by review remains unsavable without another designer attempt',async()=>{
  const f=fixture();let calls=0,reviews=0
  f.opts.callModel=async o=>{
-  if(o.functionName==='cad-reviewer'){reviews++;return reply(JSON.stringify({verdict:'revise',summary:'Door is on the wrong wall',requirements:[{id:'shape',status:'failed',evidence:'Wrong wall'}],issues:[]}))}
+  if(o.functionName==='cad-reviewer'){reviews++;return reply(JSON.stringify({verdict:'revise',summary:'Door is on the wrong wall',requirements:[{id:shapeId,status:'failed',evidence:'Wrong wall'}],issues:[]}))}
   return ++calls<10?call('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null}):call('render_cad_candidate',design)
  }
  const a=createCadAssistant(f.opts)

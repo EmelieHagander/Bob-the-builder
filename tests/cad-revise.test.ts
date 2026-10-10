@@ -4,7 +4,7 @@ import {applyCadRevision} from '../supabase/functions/_shared/cad-revise.ts'
 import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
-import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import {shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 
 const place={x:0,y:0,z:0,rx:0,ry:0,rz:0}
 function base(){
@@ -43,7 +43,7 @@ test('designer loop: second round sends only the change and renders the merged c
   readArtifact:async()=>null,
   render:async r=>{renders++;return {recipe:r,manifest:{},files:{front:'fixture'},previews:Object.fromEntries(r.views.map(v=>[v,'Zml4dHVyZQ==']))}},
   callModel:async o=>{
-   if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Raise shelf to 450 mm',requirements:[{id:'shape',status:'failed',evidence:'Shelf is at 400 mm'}],issues:[{severity:'error',code:'geometry',correction:'Raise shelf to 450 mm'}]})}:reviewReply()
+   if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Raise shelf to 450 mm',requirements:[{id:shapeId,status:'failed',evidence:'Shelf is at 400 mm'}],issues:[{severity:'error',code:'geometry',correction:'Raise shelf to 450 mm'}]})}:reviewReply()
    calls++
    const call=(name:string,args:unknown)=>{const text=JSON.stringify(args);sent.push(text.length);return {toolCalls:[{id:'c'+calls,type:'function' as const,function:{name,arguments:text}}]}}
    if(calls===2)offered=(o.tools??[]).map((t:any)=>t.function.name)

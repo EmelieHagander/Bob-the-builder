@@ -799,3 +799,25 @@ The authenticated worker accepts the old recipe request and a bounded `{recipe,d
 Visible view headings use a neutral assembly label. The stable `assembly_id` remains the manifest/recipe identity; it may contain dimensions from an earlier revision and must not become a current dimension claim in the heading. Current sizes come from the kernel bounds and exact part dimensions. Correcting presentation does not revise the checked construction.
 
 The reviewer gets the original request/handoff, complete checkpoint with joints/materials/open questions, K2 evidence, exact rendered geometry, kernel checks and generated pixels. A rejection cannot trigger a second construction: checkpoint defects return to K2; annotation/export defects require renderer correction. Existing legacy free-design CAD remains available when no checked construction is selected. [Verification](foundation-verification.md#k3-checked-construction-drawings--2026-10-04) owns CI, deployment and live acceptance; source code alone does not prove those outcomes.
+
+## Server-owned handoff identities — 2026-10-10
+
+New `design_project_cad` handoffs and `plan_cad_pieces` omit requirement IDs.
+The handler allocates bounded deterministic content identities and persists them
+before paid CAD work. Resume the saved request with `handoff:null` and
+`requirement_changes:[]`; the server reads all saved requirements and their IDs.
+Explicit changes copy a saved `requirement_id`; null allocates a genuinely new
+requirement. Unknown references fail before CAD work, repeated exact additions
+reuse their saved identity, and restored canonical requirements cannot be replaced.
+
+Older pinned contracts remain executable. A resent handoff can update a known
+saved ID; unknown model-created IDs do not append requirements. This prevents
+15 saved requirements plus 10 renamed copies from becoming 25. The original
+requirements remain intact. Scope, source freshness, design-intent readiness,
+review, budget and the 24-requirement bound still apply.
+
+`20261010063726_cad_handoff_server_ids.sql` clones and atomically activates only
+`tools.design_project_cad` and `tools.plan_cad_pieces` from their current database
+versions. It preserves other edits and pinned manifests. Deploy the compatible
+handlers first. The publication builder checks the new executable schemas without
+rebuilding applied seeds. Verification and rollout evidence are in the release PR.

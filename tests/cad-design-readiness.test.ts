@@ -5,7 +5,7 @@ import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.
 import {catalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
 import {fixtureDesignReadiness,createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
-import {handoff} from './support/cad-review-fixture.ts'
+import {shapeId,handoff} from './support/cad-review-fixture.ts'
 import type {DesignReadiness} from '../supabase/functions/_shared/project-design-intent.ts'
 
 const solution='44444444-4444-4444-8444-444444444444'
@@ -89,7 +89,7 @@ test('an unresolved canonical feature overrides a permissive reviewer and cannot
  const a=createCadAssistant({...f.opts,callModel:async(o:any,guard)=>{
   if(o.functionName!=='cad-reviewer')return model(o,guard)
   await guard?.()
-  return reply(JSON.stringify({verdict:'pass',summary:'Simplified concept',requirements:{shape:{status:'met',evidence:'Base form'},intent_storage:{status:'unresolved',evidence:'Storage was omitted from simplification'}},issues:[]}))
+  return reply(JSON.stringify({verdict:'pass',summary:'Simplified concept',requirements:{[shapeId]:{status:'met',evidence:'Base form'},intent_storage:{status:'unresolved',evidence:'Storage was omitted from simplification'}},issues:[]}))
  }})
  const result=await a.consult(request)
  assert.equal(result.status,'incomplete');assert.equal(result.reason,'no_progress');assert.equal(f.renders,1)

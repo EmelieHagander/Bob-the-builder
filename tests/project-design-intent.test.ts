@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {parseDesignIntent,parseDesignReadiness,designIntentHandoff,type DesignIntent,type DesignReadiness} from '../supabase/functions/_shared/project-design-intent.ts'
-import {handoff} from './support/cad-review-fixture.ts'
+import { shapeId,handoff} from './support/cad-review-fixture.ts'
 
 const image='11111111-1111-4111-8111-111111111111',solution='22222222-2222-4222-8222-222222222222'
 function intent():DesignIntent{return {
@@ -74,7 +74,7 @@ test('handoff obtains canonical required features and bounded deferrals from the
  const p=packet(),i=p.design_intent!
  const result=designIntentHandoff(handoff,i,p.pin!)
  assert.deepEqual(result.requirements.find(r=>r.id==='intent_display'),{id:'intent_display',requirement:i.features[0].description,basis:'project_record',source_ref:solution})
- assert.deepEqual(handoff.requirements.map(r=>r.id),['shape'],'caller handoff is not mutated')
+ assert.deepEqual(handoff.requirements.map(r=>r.id),[shapeId],'caller handoff is not mutated')
  const full={...handoff,requirements:Array.from({length:24},(_,n)=>({...handoff.requirements[0],id:'r'+n}))}
  assert.throws(()=>designIntentHandoff(full,i,p.pin!),/design_intent_requirement_limit/)
 })

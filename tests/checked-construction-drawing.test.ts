@@ -8,7 +8,7 @@ import {checkedConstructionForDrawing} from '../supabase/functions/_shared/const
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import { shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
@@ -36,7 +36,7 @@ function runtime(){
   makeLookup:()=>createProjectLookup(draft.projectId,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:material}]:[],related:[],truncated:false},error:null}),1000,40),
   readArtifact:async()=>structuredClone(draft),checkConstruction:check,
   render:async recipe=>{renders++;afterRender();return {recipe,manifest:{bounding_box_mm:checkConstruction(draft,catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map(v=>[v,'Zml4dHVyZQ==']))}},
-  callModel:async o=>{assert.equal(o.aiFunction,'cad-reviewer','construction rendering must not call a geometry designer');reviews++;const r=reviewReply(handoff);if(verdict!=='pass')r.data=JSON.stringify({verdict:'revise',summary:'Fix annotation',requirements:[{id:'shape',status:'met',evidence:'geometry correct'}],issues:[{severity:'error',code:'readability',correction:'Make label readable'}]});afterReview();return r},...extra,
+  callModel:async o=>{assert.equal(o.aiFunction,'cad-reviewer','construction rendering must not call a geometry designer');reviews++;const r=reviewReply(handoff);if(verdict!=='pass')r.data=JSON.stringify({verdict:'revise',summary:'Fix annotation',requirements:[{id:shapeId,status:'met',evidence:'geometry correct'}],issues:[{severity:'error',code:'readability',correction:'Make label readable'}]});afterReview();return r},...extra,
  })
  return {draft,catalog,assistant,check,setAllowed:(v:boolean)=>{allowed=v},afterRender:(f:()=>void)=>{afterRender=f},afterReview:(f:()=>void)=>{afterReview=f},reject:()=>{verdict='revise'},counts:()=>({reads,renders,reviews})}
 }

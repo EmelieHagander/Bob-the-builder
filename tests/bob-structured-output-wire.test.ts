@@ -5,7 +5,7 @@ import ts from 'typescript'
 import {createCadAssistant} from './support/cad-parameter-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createDeliveryLanguage, DELIVERY_MEANINGS } from './support/colleague-catalog-fixture.ts'
-import { handoff } from './support/cad-review-fixture.ts'
+import { shapeId, handoff } from './support/cad-review-fixture.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 
 // Real Bob call sites through the unchanged shared adapter. Only database and
@@ -26,7 +26,7 @@ test('CAD review and recovery language send strict response schemas and no tools
   } })
   g.Deno = { env: { get: (name: string) => ({ SUPABASE_URL: 'https://fixture.invalid',
     SUPABASE_SERVICE_ROLE_KEY: 'fixture-service', OPENAI_API_KEY: 'fixture-provider' } as any)[name] } }
-  const review = { verdict: 'pass', summary: 'Concept reviewed', requirements: [{ id: 'shape', status: 'met', evidence: 'Exact panel dimensions' }], issues: [] }
+  const review = { verdict: 'pass', summary: 'Concept reviewed', requirements: [{ id: shapeId, status: 'met', evidence: 'Exact panel dimensions' }], issues: [] }
   const language = { ...DELIVERY_MEANINGS, missing_label: 'Missing results', saved_label: 'Saved changes' }
   g.fetch = async (url: string, init: RequestInit) => {
     assert.equal(url, 'https://api.openai.com/v1/responses')

@@ -8,7 +8,7 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { runProjectAnswer, seedToolPolicy } from './support/main-catalog-fixture.ts'
-import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 // Actual SQL/RLS/claimed-write and production orchestration; only AI/CAD network
 // calls and the deliberately injected read failure are fixtures. No live data.
@@ -58,7 +58,7 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
       render: async r => { renders++; return { recipe: r, manifest: { engine: { name: 'build123d' }, assembly_id: r.assembly_id, instances: r.instances },
         files: { front: 'PHN2Zz48L3N2Zz4=', top: 'PHN2Zz48L3N2Zz4=', step: privateStep }, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } } },
       callModel: async o => {
-        if (o.functionName === 'cad-research') return reply(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Synthetic concept requirement' }], additional_needs: [] })
+        if (o.functionName === 'cad-research') return reply(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Synthetic concept requirement' }], additional_needs: [] })
         if (o.functionName === 'cad-reviewer') { reviews++; return reviewReply() }
         return ++designerCalls === 1 ? reply(null, 'render_cad_candidate', { purpose: 'project', recipe, dimension_bindings: [], title: 'Shelf concept', description: 'Synthetic construction', assumptions: 'Not certified or measured site fit', target_revision: 1, measurements: [] }) : reply('Ready for review.')
       },

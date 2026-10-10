@@ -7,14 +7,14 @@ import {parseIntakeAssessment,bindMeasuredDimensions,intakeGaps,type DrawingRequ
 import {createProjectContext} from './support/colleague-catalog-fixture.ts'
 import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {handoff,reviewReply} from './support/cad-review-fixture.ts'
+import {shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 const id='30000000-0000-4000-8000-000000000001'
 const measurement='30000000-0000-4000-8000-000000000002'
 const request={request_id:null,handoff,brief:'Draw the construction using current measures',area_id:null,component_id:null,step_id:null,artifact_id:null}
 const check=(id:string,status='known',blocking=false)=>({id,status,blocking,source_refs:status==='known'?['requirement:'+id]:[],action:blocking?'measurement':'none',detail:'Whole construction input check: '+id})
-const assessment={checks:[check('shape')],additional_needs:[]}
+const assessment={checks:[check(shapeId)],additional_needs:[]}
 const reply=(name?:string,args:unknown={})=>({success:true,data:null,model:'fixture',responseId:'r',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'c',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
 const recipe={contract_version:1 as const,units:'mm' as const,assembly_id:'bed',definitions:[{id:'panel',primitive:'box' as const,material_ref:null,x_mm:999,y_mm:600,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front' as const,'top' as const]}
 const candidate={purpose:'project',recipe,dimension_bindings:[],title:'Bed',description:'Concept',assumptions:'Unverified site fit',target_revision:1,measurements:[]}
@@ -57,15 +57,39 @@ function fixture(){
   render:async(r:any)=>{renders++;return {recipe:r,manifest:{instances:r.instances},files:{front:'not persisted'},previews:{front:'pixels',top:'pixels'}}},readArtifact:async()=>null}
  return {opts,reads,get row(){return row},get renders(){return renders},get design(){return design},noTarget:()=>{target=false},failRead:()=>{readError=true},repairRead:()=>{readError=false},complement:()=>{revision++}}
 }
+test('the 15 saved plus 10 renamed requirement regression reaches CAD and keeps the saved contract',async()=>{
+ const f=fixture()
+ const original={...handoff,requirements:Array.from({length:15},(_,n)=>({id:'saved_'+n,requirement:'Retain original requirement '+n,basis:'user_request' as const,source_ref:null}))}
+ await f.opts.requestStore.save(null,0,'needs_data',{brief:{...request,handoff:original},owner_request:'Continue the same design',reference_refs:[]})
+ let designers=0,research=0
+ f.opts.callModel=async(o:any)=>{
+  if(o.functionName==='cad-research'){
+   research++
+   const ids=o.tools.find((t:any)=>t.function.name==='finish_cad_research').function.parameters.properties.checks.items.properties.id.enum
+   assert.deepEqual(ids,original.requirements.map(r=>r.id))
+   return reply('finish_cad_research',{checks:ids.map((id:string)=>check(id)),additional_needs:[]})
+  }
+  if(o.functionName==='cad-reviewer')return reviewReply(original)
+  designers++;return reply('render_cad_candidate',candidate)
+ }
+ const rewritten={...original,requirements:original.requirements.slice(0,10).map((r,n)=>({...r,id:'invented_'+n,requirement:'Reworded original '+n}))}
+ const a=createCadAssistant(f.opts)
+ assert.equal((await a.consult({...request,request_id:id,handoff:rewritten})).status,'ready')
+ assert.equal(research,1);assert.equal(designers,1);assert.equal(f.renders,1)
+ assert.deepEqual((f.row!.payload.brief.handoff as any).requirements,original.requirements)
+ await a.markSaved();assert.equal(f.row!.status,'saved')
+ assert.equal((await createCadAssistant(f.opts).consult({...request,request_id:id,handoff:null})).status,'completed_unlinked','the synthetic store has no Artifact save receipt')
+ assert.equal(designers,1);assert.equal(f.renders,1)
+})
 test('a missing selected target stops before paid intake; ready intent still returns all collected needs together',async()=>{
  const missing=fixture();missing.noTarget()
  const prerequisite=await createCadAssistant({...missing.opts,callModel:async()=>{throw Error('target prerequisite must precede paid work')}}).consult(request)
  assert.equal(prerequisite.status,'prerequisite_required');assert.deepEqual(prerequisite.required_tools,['save_project_solution','select_project_target'])
  assert.equal(missing.renders,0)
- const f=fixture();const a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[check('door','missing',true),check('window','conflict',true)]})}})
+ const f=fixture();const a=createCadAssistant({...f.opts,callModel:async o=>{assert.equal(o.functionName,'cad-research');return reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[check('door','missing',true),check('window','conflict',true)]})}})
  const result=await a.consult(request)
  assert.equal(result.status,'needs_data');assert.equal(result.request_id,id)
- assert.deepEqual(result.gaps?.map(c=>c.detail),['Whole construction input check: shape','Whole construction input check: door','Whole construction input check: window'])
+ assert.deepEqual(result.gaps?.map(c=>c.detail),['Whole construction input check: '+shapeId,'Whole construction input check: door','Whole construction input check: window'])
  assert(result.gaps?.slice(1,3).every(c=>/^need_[a-f0-9]{32}$/.test(c.id)));assert.equal(f.renders,0)
  for(const dataset of ['measurements','physical_elements','physical_spaces','plan','tasks'])assert(f.reads.includes(dataset))
  assert.equal(f.row?.status,'needs_data')
@@ -76,7 +100,7 @@ test('missing sources remain retrieval failures, never invented measurement task
 })
 test('complements resume the same request, refresh facts, retain earlier requirements, and save no pixels',async()=>{
  const f=fixture();let blocked=true;const model=f.opts.callModel
- f.opts.callModel=async o=>o.functionName==='cad-research'?reply('finish_cad_research',blocked?{checks:[check('shape','missing',true)],additional_needs:[]}:assessment):model(o)
+ f.opts.callModel=async o=>o.functionName==='cad-research'?reply('finish_cad_research',blocked?{checks:[check(shapeId,'missing',true)],additional_needs:[]}:assessment):model(o)
  const first=await createCadAssistant(f.opts).consult(request);assert.equal(first.status,'needs_data');const reads=f.reads.length;blocked=false;f.complement()
  const a=createCadAssistant(f.opts),second=await a.consult({...request,request_id:id})
  assert.equal(second.status,'ready');assert(f.reads.length>reads);assert.equal(f.row?.id,id);assert.equal(f.row?.status,'reviewed');assert.equal(f.renders,1)
@@ -86,7 +110,7 @@ test('complements resume the same request, refresh facts, retain earlier require
 test('same-request complement returns immutable scope before research or writes, then resumes with the corrected scope',async()=>{
  const f=fixture();let blocked=true,calls=0;const model=f.opts.callModel
  f.opts.callModel=async o=>{calls++;return o.functionName==='cad-research'&&blocked
-  ?reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]}):model(o)}
+  ?reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[]}):model(o)}
  assert.equal((await createCadAssistant(f.opts).consult(request)).status,'needs_data')
  const original=structuredClone(f.row),reads=f.reads.length,paid=calls
  const assistant=createCadAssistant(f.opts)
@@ -104,15 +128,15 @@ test('same-request complement returns immutable scope before research or writes,
 })
 
 test('a partial or fabricated checklist cannot pass readiness',()=>{
- const refs=new Set(['requirement:shape'])
+ const refs=new Set(['requirement:'+shapeId])
  assert(parseIntakeAssessment(assessment,handoff,refs))
  assert.equal(parseIntakeAssessment({...assessment,checks:[]},handoff,refs),null)
- assert.equal(parseIntakeAssessment({...assessment,checks:[{...check('shape'),source_refs:['imaginary']}]},handoff,refs),null)
- assert.equal(parseIntakeAssessment({...assessment,additional_needs:[check('shape')]},handoff,refs),null)
+ assert.equal(parseIntakeAssessment({...assessment,checks:[{...check(shapeId),source_refs:['imaginary']}]},handoff,refs),null)
+ assert.equal(parseIntakeAssessment({...assessment,additional_needs:[check(shapeId)]},handoff,refs),null)
 })
 test('unresolved owner choices cannot be waived by a false blocking flag or a different canonical deferral',async()=>{
  const ownerChoice={...check('important_choice','missing',false),action:'owner_decision' as const,detail:'Explain options and recommend a solution before selecting the geometry'}
- const evaluated={checks:[check('shape')],additional_needs:[ownerChoice]}
+ const evaluated={checks:[check(shapeId)],additional_needs:[ownerChoice]}
  assert.equal(intakeGaps(evaluated).length,1)
  assert.equal(intakeGaps(evaluated,new Set(['different_choice'])).length,1)
  assert.equal(intakeGaps(evaluated,new Set(['important_choice'])).length,0)
@@ -129,7 +153,7 @@ test('P2: unchanged next-turn intake returns the same gaps without paid calls; c
  const original=f.opts.callModel
  f.opts.callModel=async o=>{
   calls++
-  return o.functionName==='cad-research'&&blocked?reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]}):original(o)
+  return o.functionName==='cad-research'&&blocked?reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[]}):original(o)
  }
  const first=await createCadAssistant(f.opts).consult(request)
  assert.equal(first.status,'needs_data');assert(f.row?.payload.retry)
@@ -154,7 +178,7 @@ test('P2: repaired read failure resumes, and changed structured requirements rel
  f.repairRead()
  assert.equal((await createCadAssistant(f.opts).consult({...request,request_id:id})).status,'ready')
  const g=fixture();let calls=0
- g.opts.callModel=async()=>{calls++;return reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})}
+ g.opts.callModel=async()=>{calls++;return reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[]})}
  await createCadAssistant(g.opts).consult(request)
  const changed=structuredClone(request);changed.handoff.requirements[0].requirement='Use a smaller selected concept'
  await createCadAssistant(g.opts).consult({...changed,request_id:id})
@@ -165,7 +189,7 @@ test('P2: discovered collector dependencies refresh before suppressing unchanged
  const f=fixture();let calls=0
  f.opts.callModel=async()=>++calls%2===1
   ?reply('search_project_data',{dataset:'artifacts',query:null,status:null,area_id:null,record_id:null,after_id:null})
-  :reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})
+  :reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[]})
  await createCadAssistant(f.opts).consult(request)
  assert(f.row!.payload.dependencies?.some(d=>d.tool==='search_project_data'&&(d.args as any).dataset==='artifacts'))
  assert(f.row!.payload.retry)
@@ -257,7 +281,7 @@ test('P2c: actual toolbox offers lifecycle tools after design consultations are 
  const {createBobToolSession}=await import('../supabase/functions/_shared/project-tools/bob-tools.ts')
  const {domainToolLoadout}=await import('./support/tool-loadout.ts')
  const f=fixture();let cancellations=0
- f.opts.callModel=async()=>reply('finish_cad_research',{checks:[check('shape','missing',true)],additional_needs:[]})
+ f.opts.callModel=async()=>reply('finish_cad_research',{checks:[check(shapeId,'missing',true)],additional_needs:[]})
  const a=createCadAssistant({...f.opts,requestStore:{...f.opts.requestStore,
   restore:async()=>({id,revision:9,status:'collecting',payload:f.row!.payload}),
   read:async()=>({requests:[{id,revision:f.row!.revision,status:'needs_data'}],next_cursor:null}),
@@ -291,7 +315,7 @@ test('P2c restore tool runs fresh intake on the same identity and cannot overwri
  }
  const a=createCadAssistant({...f.opts,requestStore:store,ownerRequest:'Restore the drawing',callModel:async o=>{
   paid++;if(o.functionName==='cad-research')assert(JSON.stringify(o.messages).includes('canonical east-side'))
-  if(o.functionName==='cad-research')return reply('finish_cad_research',{checks:[blocked?check('shape','missing',true):{...check('shape'),source_refs:[measurement]}],additional_needs:[]})
+  if(o.functionName==='cad-research')return reply('finish_cad_research',{checks:[blocked?check(shapeId,'missing',true):{...check(shapeId),source_refs:[measurement]}],additional_needs:[]})
   return f.opts.callModel(o)
  }})
  assert.equal((await a.consult({...request,request_id:id})).status,'recovery_required');assert.equal(paid,0)

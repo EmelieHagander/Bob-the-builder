@@ -1,4 +1,5 @@
-import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff } from './cad-review.ts'
+import { HANDOFF_INPUT_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
+import type { DesignHandoff } from './cad-review.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { DrawingRequestStore } from './cad-intake.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
@@ -19,7 +20,7 @@ export const PLAN_CAD_PIECES_TOOL={type:'function' as const,function:{name:'plan
   area_id:nullable,
   pieces:{type:'array',minItems:2,maxItems:12,items:{type:'object',additionalProperties:false,required:['piece_key','brief','component_id','handoff'],properties:{
    piece_key:{type:'string',pattern:KEY.source,description:'Stable short key, e.g. wall_north, floor, roof, bunk_bed.'},
-   brief:{type:'string',maxLength:5000},component_id:nullable,handoff:DESIGN_HANDOFF_SCHEMA}}}}}}}
+   brief:{type:'string',maxLength:5000},component_id:nullable,handoff:HANDOFF_INPUT_SCHEMA}}}}}}}
 
 export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession}){
  let used=0
@@ -31,12 +32,16 @@ export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerReq
   const v=raw as any
   if(!exact(v,['assembly_title','assembly_brief','area_id','pieces'])||!text(v.assembly_title,200)||!text(v.assembly_brief,3000)||(v.area_id!==null&&!text(v.area_id,200))
    ||!Array.isArray(v.pieces)||v.pieces.length<2||v.pieces.length>12)return {status:'invalid',saved:false}
-  const keys=new Set<string>(),issues:{piece_key:unknown;reason:string}[]=[]
+  const keys=new Set<string>(),issues:{piece_key:unknown;reason:string}[]=[],handoffs=new Map<string,DesignHandoff>()
   for(const p of v.pieces){
    if(!exact(p,['piece_key','brief','component_id','handoff'])||!KEY.test(p.piece_key)||keys.has(p.piece_key)){issues.push({piece_key:p?.piece_key,reason:'invalid_piece'});continue}
    keys.add(p.piece_key)
    if(!text(p.brief,5000)||(p.component_id!==null&&!uuid(p.component_id)))issues.push({piece_key:p.piece_key,reason:'invalid_piece'})
-   else if(!parseDesignHandoff(p.handoff))issues.push({piece_key:p.piece_key,reason:'invalid_handoff'})
+   else {
+    const prepared=await prepareDesignHandoff(p.handoff)
+    if('reason' in prepared)issues.push({piece_key:p.piece_key,reason:prepared.reason})
+    else handoffs.set(p.piece_key,prepared.handoff)
+   }
   }
   // Validate everything before storing anything: a half-stored split is harder to explain than none.
   if(issues.length)return {status:'invalid',saved:false,issues}
@@ -44,7 +49,7 @@ export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerReq
   used++
   const pieces:{piece_key:string;request_id:string|null;status:string}[]=[]
   for(const [index,p] of v.pieces.entries()){
-   const brief={area_id:v.area_id,component_id:p.component_id,step_id:null,artifact_id:null,handoff:p.handoff,
+   const brief={area_id:v.area_id,component_id:p.component_id,step_id:null,artifact_id:null,handoff:handoffs.get(p.piece_key)!,
     brief:opts.aiCatalog.text('cad.piece-brief',{position:index+1,count:v.pieces.length,piece_key:p.piece_key,assembly_title:v.assembly_title,assembly_brief:v.assembly_brief,piece_brief:p.brief}).slice(0,6000)}
    try{
     const saved=await store.save(null,0,'collecting',{brief,owner_request:opts.ownerRequest,reference_refs:[]},'piece:'+p.piece_key)
