@@ -6,6 +6,7 @@ import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
+import {compileConstructionParameterChange} from '../supabase/functions/_shared/construction-parameters.ts'
 import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import { shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
@@ -41,6 +42,33 @@ function runtime(){
  return {draft,catalog,assistant,check,setAllowed:(v:boolean)=>{allowed=v},afterRender:(f:()=>void)=>{afterRender=f},afterReview:(f:()=>void)=>{afterReview=f},reject:()=>{verdict='revise'},counts:()=>({reads,renders,reviews})}
 }
 const request={request_id:null,brief:'Draw this exact bracket',handoff,artifact_id:artifact,area_id:null,component_id:null,step_id:null}
+test('K3 explicit construction revision rejects missing, malformed or substituted versions before render or paid review',async()=>{
+ for(const [revision,status] of [[null,'needs_data'],[0,'invalid'],['1','invalid'],[2,'conflict']] as const){
+  const f=runtime(),result=await f.assistant().consult({...request,construction_revision:revision})
+  assert.equal(result.status,status,JSON.stringify(result));assert.equal(f.counts().renders,0);assert.equal(f.counts().reviews,0)
+ }
+ const f=runtime(),a=f.assistant();assert.equal((await a.consult({...request,construction_revision:1})).status,'ready')
+ assert.equal(a.candidate!.packet.manifest.bob_construction.revision,1)
+ const missing=runtime();assert.equal((await missing.assistant().consult({...request,artifact_id:null,construction_revision:1})).reason,'construction_source_required')
+ assert.equal(missing.counts().renders,0);assert.equal(missing.counts().reviews,0)
+})
+test('K3 render failure retains exact checkpoint; repaired renderer retries without a geometry designer or replacement version',async()=>{
+ const f=runtime();let saved:any=null,broken=true,attempts=0
+ const store={load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{
+  saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)};return structuredClone(saved)
+ }}
+ const assistant=()=>f.assistant({requestStore:store,runtimeVersion:async()=>broken?'broken-renderer':'repaired-renderer',render:async(recipe:any)=>{
+  attempts++;if(broken)throw new Error('renderer temporarily unavailable')
+  return {recipe,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'}},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map((v:string)=>[v,'Zml4dHVyZQ==']))}
+ }})
+ const first=await assistant().consult({...request,construction_revision:1})
+ assert.equal(first.stage,'cad_engine');assert.equal(saved.payload.brief.construction_revision,1);assert.equal(saved.payload.draft.construction.revision,1);assert.equal(f.counts().reviews,0)
+ broken=false
+ const resumed=assistant();assert.equal((await resumed.consult({...request,request_id:saved.id,construction_revision:1})).status,'ready')
+ assert.equal(resumed.candidate!.packet.manifest.bob_construction.revision,1);assert.equal(attempts,2);assert.equal(f.counts().reviews,1)
+ const result=await assistant().consult({...request,request_id:saved.id,construction_revision:2})
+ assert.equal(result.reason,'construction_revision_changed');assert.equal(attempts,2);assert.equal(f.counts().reviews,1)
+})
 test('K3 uses exact checked checkpoint geometry and full parameter history; reviewer sees joints, material sources and exact pixels',async()=>{
  const f=runtime(),a=f.assistant(),original=structuredClone(f.draft)
  assert.equal((await a.consult(request)).status,'ready');assert.equal(f.counts().renders,1);assert.equal(f.counts().reviews,1)
@@ -168,12 +196,37 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  assert.equal(delivered.requests[0].status,'saved');assert.equal(delivered.requests[0].artifact_id,saved.recordId)
  const read=(uid=owner,revision:number|null=null)=>rpc(uid,'bob.read_cad_artifact',[project,saved.recordId,revision])
  const back=await read();assert.deepEqual(back.recipe,draft.recipe);assert.deepEqual(back.manifest.bob_construction,manifest.bob_construction)
+ assert.deepEqual(back.construction_source,{project_id:project,artifact_id:checkpoint.recordId,revision:1})
+ const relation=(await asProjectUser(pg,owner,'select * from bob.artifact_construction_drawings where drawing_artifact_id=$1',[saved.recordId])).rows[0]
+ assert.equal(relation.construction_artifact_id,checkpoint.recordId);assert.equal(relation.construction_revision,1);assert.equal(relation.drawing_revision,1)
+ assert.equal((await asProjectUser(pg,outsider,'select * from bob.artifact_construction_drawings')).rows.length,0)
+ await assert.rejects(asProjectUser(pg,owner,'update bob.artifact_construction_drawings set construction_revision=2 where drawing_artifact_id=$1',[saved.recordId]),/permission denied/)
  await assert.rejects(read(outsider),/project_denied/);await assert.rejects(read(null as any),/project_denied/)
- const revise=structuredClone(source);revise.record_id=checkpoint.recordId;revise.expected_revision=1;revise.data.key='revision';revise.data.change_note='New description';revise.data.description='Revised concept'
- await write(revise)
+ const change=async(value:number,revision:number)=>{
+  const exact=await rpc(owner,'bob.read_construction_draft',[project,checkpoint.recordId,revision,null])
+  const node=exact.parameters.nodes.find((n:any)=>exact.parameters.bindings.some((b:any)=>b.path==='definitions/arm/x_mm'&&b.node===n.id))
+  const {normalized,sources,...input}=node,changes=[{...input,value}]
+  const computed=await compileConstructionParameterChange(project,exact,changes,async()=>({project:new Map(),physical:new Map()}))
+  return write({kind:'construction_parameters',record_id:checkpoint.recordId,expected_revision:revision,expected_updated_at:null,request_quote:message,data:{key:'width'+value,change_note:'Synthetic width correction',changes,computed}})
+ }
+ assert.equal((await change(120,1)).revision,2)
  const stale=structuredClone(drawing);delete stale.data.drawing_request;stale.data.title='Stale drawing'
  await assert.rejects(write(stale),/construction_source_changed/)
  const state=(await asProjectUser(pg,owner,'select source_state,source_reasons from bob.artifact_source_status where artifact_id=$1 and revision=1',[saved.recordId])).rows[0]
  assert.equal(state.source_state,'changed');assert((state.source_reasons as string[]).includes('construction_source_changed'))
  assert.deepEqual((await read(owner,1)).recipe,draft.recipe)
+ const exact=await rpc(owner,'bob.read_construction_draft',[project,checkpoint.recordId,2,null]),next=structuredClone(stale)
+ next.record_id=saved.recordId;next.expected_revision=1;next.data.artifact_id=saved.recordId;next.data.expected_revision=1
+ next.data.source_artifact_id=null;next.data.source_revision=null;next.data.title='Corrected bracket drawing'
+ next.data.packet.recipe=exact.recipe;next.data.packet.manifest.bob_parameters=exact.parameters
+ next.data.packet.manifest.bob_construction={...manifest.bob_construction,revision:2,check:checkConstruction(exact,new Map([[mat.recordId+'@1',{...catalog.get(material+'@1'),id:mat.recordId}]]),'2026-10-04')}
+ next.data.packet.manifest.drawing_source={artifact_id:checkpoint.recordId,revision:2}
+ const corrected=await write(next);assert.equal(corrected.recordId,saved.recordId);assert.equal(corrected.revision,2)
+ const correctedBack=await read(owner,2);assert.equal(correctedBack.recipe.definitions[1].x_mm,120)
+ assert.deepEqual(correctedBack.construction_source,{project_id:project,artifact_id:checkpoint.recordId,revision:2})
+ assert.deepEqual((await read(owner,1)).recipe,draft.recipe)
+ await change(130,2)
+ await rpc(owner,'bob.artifact_command',[project,'archive',saved.recordId,2,'{}'])
+ assert.deepEqual((await read(owner,3)).construction_source,correctedBack.construction_source,'historical archive copies retain the exact typed source despite source drift')
+ assert.equal((await pg.query('select count(*) n from bob.artifact_construction_drawings where drawing_artifact_id=$1',[saved.recordId])).rows[0].n,3)
 })

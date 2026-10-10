@@ -61,6 +61,19 @@ for(const migration of migrations){
   versions.set(row.key,versions.get(row.key)!+1)
   row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
  }
+ const parameterContracts=source.match(/\$parameter_contracts\$([\s\S]+?)\$parameter_contracts\$/)
+ if(parameterContracts){
+  const policy=JSON.parse(source.match(/\$parameter_policy\$([\s\S]+?)\$parameter_policy\$/)![1])
+  for(const patch of JSON.parse(parameterContracts[1])){
+   let row=seed.find(row=>row.key==='tools.'+patch.name)
+   if(!row){row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key='tools.'+patch.name;seed.push(row)}
+   versions.set(row.key,(versions.get(row.key)??0)+1)
+   row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[]}
+  }
+  const toolbox=seed.find(row=>row.key==='bob.tools');versions.set(toolbox.key,versions.get(toolbox.key)!+1)
+  toolbox.definition.catalog.push(policy);toolbox.definition.contract_keys.push('tools.'+policy.name)
+  toolbox.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(policy.name)
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

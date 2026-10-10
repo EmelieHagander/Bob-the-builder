@@ -16,7 +16,7 @@ test('CAD revision publication changes only the repair contract and preserves pi
  })
  t.after(()=>pg.close())
  const resolve=async(id:string|null=null)=>(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[id])).rows[0].result
- const current=published??await resolve()
+ const latest=await resolve(),current=published??latest
  assert.deepEqual(current.models,previous.models)
  assert.deepEqual(await resolve(previous.manifest_id),previous)
  for(const old of previous.definitions){
@@ -38,7 +38,8 @@ test('CAD revision publication changes only the repair contract and preserves pi
  assert(!Object.hasOwn(legacy.tool('revise_cad_candidate').function.parameters.properties,'dimension_bindings'))
  const sql=await readFile(new URL('../supabase/migrations/'+migrationName,import.meta.url),'utf8')
  await assert.rejects(pg.transaction(tx=>tx.exec(sql.replace('"tools.revise_cad_candidate"','"tools.missing_revision_contract"').replace(/^begin;$/m,'').replace(/^commit;$/m,''))),/cad_revision_contract_missing/)
- assert.deepEqual(await resolve(),current)
+ assert.deepEqual(await resolve(),latest)
+ assert.deepEqual(await resolve(current.manifest_id),current)
 })
 test('CAD repair publication is reproducible from the executable declaration',()=>{
  assert.match(execFileSync(process.execPath,['--import','tsx','scripts/build-ai-cad-revision-catalog.ts','--check'],{encoding:'utf8'}),/Verified CAD revision publication: 1 contract/)

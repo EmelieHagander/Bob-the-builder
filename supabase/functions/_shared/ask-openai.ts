@@ -298,6 +298,11 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
     readDesignReadiness,
+    prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
+      return data
+    },
     // Earlier RPC results reconstruct a resumed turn. A current-source gate
     // must bypass that journal before it calls a list/check result current.
     readCurrent:async(id:string)=>{
