@@ -57,7 +57,7 @@ const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused r
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
@@ -210,6 +210,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
   const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,intake_contract:CAD_RESEARCH_CONTRACT,dependencies:await dependencies.digest()},retryInputs.images):''
   let expected=0
   let construction:Record<string,any>|null=null
+  let legacyTransition:Record<string,any>|null=null
   let drawingArtifactId=raw.artifact_id
   if(raw.artifact_id){
    const old=await readArtifact(raw.artifact_id,null);if(!old)return {status:'unavailable',stage:'source'}
@@ -217,8 +218,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     construction=raw.construction_revision!=null&&raw.construction_revision!==old.revision?await readArtifact(raw.artifact_id,raw.construction_revision):old
     drawingArtifactId=null
    }
-   else if(old.manifest?.bob_construction){
-    const sourceId=old.construction_source?.artifact_id??old.manifest.bob_construction.artifact_id
+   else if(old.manifest?.bob_construction||old.construction_transition){
+    if(!old.manifest?.bob_construction){
+     const pin=old.construction_transition
+     if(!object(pin)||pin.project_id!==opts.projectId||pin.drawing_artifact_id!==raw.artifact_id||pin.drawing_revision!==old.revision||!uuid(pin.artifact_id)||!Number.isSafeInteger(pin.revision)||pin.revision<1)return {status:'unavailable',stage:'construction',saved:false,reason:'legacy_transition_unavailable'}
+     legacyTransition=pin
+    }
+    const sourceId=old.construction_source?.artifact_id??old.manifest?.bob_construction?.artifact_id??legacyTransition?.artifact_id
     let source=await readArtifact(sourceId,null)
     if(raw.construction_revision!=null&&source?.revision!==raw.construction_revision)source=await readArtifact(sourceId,raw.construction_revision)
     if(source?.source_kind!=='construction')return {status:'unavailable',stage:'construction',saved:false}
@@ -391,6 +397,12 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     hasAccess:opts.hasAccess,validateImages:()=>opts.context?.validate()??Promise.resolve(true),deadline:until,callModel:model})
    const refreshConstruction=async(fresh=false)=>{
     if(!construction||!opts.checkConstruction)return construction?{status:'unavailable'}:null
+    if(legacyTransition){
+     const drawing=await opts.readArtifact(legacyTransition.drawing_artifact_id,null,fresh)
+     if(!drawing)return {status:'unavailable'}
+     if(drawing.revision!==expected||drawing.manifest?.bob_construction||drawing.construction_transition?.archived!==false
+      ||drawing.construction_transition?.artifact_id!==construction.artifact_id||drawing.construction_transition?.drawing_revision!==legacyTransition.drawing_revision)return {status:'conflict'}
+    }
     const current=await opts.checkConstruction(construction.artifact_id,construction.revision,fresh)
     if(current.status==='denied')throw new Error('project_denied')
     if(current.status!=='ready')return current

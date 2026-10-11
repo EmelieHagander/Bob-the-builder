@@ -292,7 +292,7 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling för datadrivna ändringar:** implementera C:s bevakade övergång för äldre ritningar utan konstruktionspin. [Artifact-kontraktet](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) och [databasägaren](../db/README.md#construction-data-authority-and-remaining-extensions) äger gränsen. A/B har ingen identifierad kvarstående kodinstallation; B:s avslutade CI, merge och migration/runtime/katalog-readback ligger i [verifieringen](foundation-verification.md#bounded-construction-changes--release-b). Beställarens implementations-/driftsättningsmandat gäller. A/B:s kvarstående verkliga medlemsacceptans och kostnadsmätning samlas i E.
+**Nästa handling för datadrivna ändringar:** slutför C:s pågående verifiering och granskade migration/runtime/katalog-installation. Den bevakade övergången för äldre ritningar är implementerad; releasebevis och readback återstår. [Artifact-kontraktet](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) och [databasägaren](../db/README.md#construction-data-authority-and-remaining-extensions) äger gränsen. A/B har ingen identifierad kvarstående kodinstallation; B:s avslutade CI, merge och migration/runtime/katalog-readback ligger i [verifieringen](foundation-verification.md#bounded-construction-changes--release-b). Beställarens implementations-/driftsättningsmandat gäller. A/B:s kvarstående verkliga medlemsacceptans och kostnadsmätning samlas i E.
 
 <a id="six-outcomes-in-five-releases"></a>
 ### Sex utfall i fem leveranser

@@ -708,5 +708,14 @@
       "planning"
     ],
     "active": true
+  },
+  {
+    "name": "transition_legacy_drawing",
+    "description": "Prepare an exact older drawing for construction-driven correction without rewriting its history.",
+    "how_to": "Read the legacy drawing and current design intent. Server copies its saved geometry and graph. Supply exact catalog material pins and typed joint choices, or reuse a matching existing construction. Null evidence returns all gaps; do not invent pins, joints or parameter roles. Check the saved construction receipt/readback, correct its input IDs and render the original drawing Artifact ID with exact construction_revision. This preparation does not deliver a drawing.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

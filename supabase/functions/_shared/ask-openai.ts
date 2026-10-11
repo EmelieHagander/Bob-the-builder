@@ -298,6 +298,11 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
     readDesignReadiness,
+    prepareLegacyTransition:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_legacy_construction_transition',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}
+      return data
+    },
     prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
@@ -403,8 +408,9 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await rpc('read_cad_shell',{p_project:opts.projectId,p_shell:id,p_revision:revision},AbortSignal.timeout(10000))
       if(error)throw new Error('cad_shell_read_unavailable');return data
     },
-    readArtifact:async(id,revision)=>{
-      const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
+    readArtifact:async(id,revision,fresh)=>{
+      const args={p_project:opts.projectId,p_artifact:id,p_revision:revision}
+      const {data,error}=await(fresh?client.rpc('read_cad_artifact',args).abortSignal(AbortSignal.timeout(10000)):rpc('read_cad_artifact',args,AbortSignal.timeout(10000)));
       if(error)throw new Error('cad_read_unavailable');
       if(!data){
         const draft=await constructionOptions.read(id,revision,null) as Record<string,any>

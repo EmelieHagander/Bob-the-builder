@@ -32,6 +32,14 @@ export const CONSTRUCTION_SAVE_TOOL=tool('save_construction_draft',
 export const CONSTRUCTION_READ_TOOL=tool('read_construction_draft','List current construction drafts, or read exact saved geometry, parameters, material revisions and joints. A draft is not a reviewed/rendered drawing. Historical revisions retain their original values; inspect source_state.',{
  artifact_id:nullableUuid,revision:nullableRev,after:nullableUuid,
 })
+export const CONSTRUCTION_LEGACY_TOOL=tool('transition_legacy_drawing','Prepare a saved older drawing for construction-driven correction. Read its exact Artifact ID/revision and current selected solution first. The SERVER copies its geometry and parameter graph; never recreate dimensions or IDs. With construction_id:null supply explicit current catalog materials, typed joint choices and open questions. null means evidence is missing and returns all gaps without saving; never infer catalog pins or joints from appearance. A saved graph is required to create; if absent establish a matching construction through the ordinary construction tools and reuse its exact ID/revision with materials/joints/open_questions:null. Reuse requires identical geometry, stable IDs and existing parameter/source pins. Already prepared returns that existing checkpoint without a duplicate. Check the receipt/readback; then change its parameter IDs, check_construction_draft and pass the ORIGINAL drawing Artifact ID and exact construction_revision to design_project_cad. This operation prepares a construction only, preserves drawing history and does not render or deliver a drawing.',{
+ key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:uuid,expected_revision:rev,target_revision:rev,
+ construction_id:nullableUuid,construction_revision:nullableRev,
+ materials:{anyOf:[CONSTRUCTION_SAVE_TOOL.function.parameters.properties.materials,{type:'null'}]},
+ joints:{anyOf:[CONSTRUCTION_SAVE_TOOL.function.parameters.properties.joints,{type:'null'}]},
+ open_questions:{anyOf:[{...(CONSTRUCTION_SAVE_TOOL.function.parameters.properties.open_questions as Record<string,unknown>),maxItems:39},{type:'null'}]},
+ change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
+})
 export const CONSTRUCTION_PARAMETER_TOOL=tool('change_construction_parameters','Change only existing input nodes in an exact saved construction. Read its stable parameter IDs first. Supply changed decision/estimate values in the SAME role/unit with an honest reason, or the newer revision of the SAME source measurement; never supply measured source values. Derived nodes, formulas, bindings, parts, materials and joints remain unchanged. The server reads the checkpoint and recomputes all dependent dimensions and placements. Unknown controlling values block saving. Use save_construction_draft for topology/material/formula changes. key identifies this intended write; exact retry reuses its receipt even after another head change. After saved, check_construction_draft at the receipt revision and pass that exact construction_revision to design_project_cad. A construction receipt alone is not a drawing delivery.',{
  key:{type:'string',pattern:'^[A-Za-z0-9_-]{1,80}$'},record_id:uuid,expected_revision:rev,
  changes:CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
@@ -63,20 +71,33 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
  prepareParameterChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
+ prepareLegacyTransition?:(payload:WritePayload)=>Promise<Record<string,any>>;
  readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null)=>Promise<DesignReadiness|unknown>;
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12)return {status:'budget_exhausted'}
-  const spec=name===CONSTRUCTION_PARAMETER_TOOL.function.name?CONSTRUCTION_PARAMETER_TOOL:name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:name===CONSTRUCTION_CUT_SAVE_TOOL.function.name?CONSTRUCTION_CUT_SAVE_TOOL:null
+  const spec=name===CONSTRUCTION_LEGACY_TOOL.function.name?CONSTRUCTION_LEGACY_TOOL:name===CONSTRUCTION_PARAMETER_TOOL.function.name?CONSTRUCTION_PARAMETER_TOOL:name===CONSTRUCTION_READ_TOOL.function.name?CONSTRUCTION_READ_TOOL:name===CONSTRUCTION_SAVE_TOOL.function.name?CONSTRUCTION_SAVE_TOOL:name===CONSTRUCTION_CHECK_TOOL.function.name?CONSTRUCTION_CHECK_TOOL:name===CONSTRUCTION_LIST_TOOL.function.name?CONSTRUCTION_LIST_TOOL:name===CONSTRUCTION_CUT_FIT_TOOL.function.name?CONSTRUCTION_CUT_FIT_TOOL:name===CONSTRUCTION_CUT_SAVE_TOOL.function.name?CONSTRUCTION_CUT_SAVE_TOOL:null
   if(!spec)return {status:'invalid'}
   const issues=schemaIssues(spec.function.parameters,raw)
   if(issues.length)return {status:'invalid',issues}
   const v=raw as any
   if(!await opts.hasAccess())return {status:'denied'}
   try{
+   if(name===CONSTRUCTION_LEGACY_TOOL.function.name){
+    if(!opts.writer||!opts.prepareLegacyTransition)return {status:'unavailable'}
+    if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}
+    const {record_id,expected_revision,request_quote,...data}=v
+    const payload:WritePayload={kind:'legacy_construction',record_id,expected_revision,expected_updated_at:null,request_quote,data}
+    const prepared=await opts.prepareLegacyTransition(payload)
+    if(!await opts.hasAccess())return {status:'denied'}
+    if(!['ready','saved'].includes(prepared.status))return {...prepared,message:prepared.status==='already_prepared'
+     ?'Use this existing construction ID and its current revision; no duplicate was created. Check or correct it, then render the original drawing identity.'
+     :prepared.status==='needs_data'?'No transition saved. Establish the listed evidence without inventing parameter roles, material pins or joints.':prepared.message}
+    return await opts.writer.commit(payload)
+   }
    if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){
     if(!opts.writer||!opts.prepareParameterChange)return {status:'unavailable'}
     if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',message:'Use an exact quote from the current request.'}

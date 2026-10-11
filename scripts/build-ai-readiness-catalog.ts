@@ -12,6 +12,7 @@ const baseline = JSON.parse(readFileSync(path.join(migrationRoot, '2026100915000
 // checked by its own builder; it was not part of this historical toolbox.
 const policy = (JSON.parse(readFileSync('supabase/functions/_shared/project-tools/catalog-seed.json', 'utf8')) as any[])
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_parameter_catalog.sql'))||row.name!=='change_construction_parameters')
+  .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_legacy_transition_catalog.sql'))||row.name!=='transition_legacy_drawing')
 const changed = new Map<string, any>()
 const row = (key: string) => structuredClone(baseline.find(item => item.key === key) ?? (() => { throw new Error('Missing catalog key ' + key) })())
 function publish(item: any) {
