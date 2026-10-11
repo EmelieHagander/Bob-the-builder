@@ -59,6 +59,20 @@ Arithmetic stays numeric in project truth. The legacy `bob.materials.qty` author
 
 Units are not silently converted in 4B. Allocated material stock must use the same unit as the requirement. Existing reusable components may only satisfy `pcs` requirements.
 
+### Authored prices and display total
+
+`bob.materials.cost` is authored text, separate from numeric requirement quantities
+and supplier pack counts. The current Shopping `parseCost` strips all nondigits
+before summing: `1 920 kr` contributes 1920, but `199,50 kr` contributes 19950 and
+`100–200 kr` contributes 100200; empty text contributes zero. The ordinary editor
+accepts these strings. This is a known display calculation defect, reproduced in
+the [calculation review](foundation-verification.md#calculation-and-formula-review--2026-10-11),
+not verified money arithmetic. A correction must preserve decimal amounts and
+currency and expose unknown/range inputs honestly before the common calculator
+can offer a price total. The existing deterministic quantity/pack methods do not
+consume this text and are unaffected. No price-parser correction is included in
+that documentation review.
+
 ## Material requirements and lineage
 
 `bob.material_requirements` owns requirement identity and current revision. `bob.material_requirement_revisions` is append-only and keeps:
