@@ -74,6 +74,18 @@ for(const migration of migrations){
   toolbox.definition.catalog.push(policy);toolbox.definition.contract_keys.push('tools.'+policy.name)
   toolbox.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(policy.name)
  }
+ const legacyContract=source.match(/\$legacy_transition_contract\$([\s\S]+?)\$legacy_transition_contract\$/)
+ if(legacyContract){
+  const patch=JSON.parse(legacyContract[1]),policy=JSON.parse(source.match(/\$legacy_transition_policy\$([\s\S]+?)\$legacy_transition_policy\$/)![1])
+  const row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key='tools.'+patch.name
+  row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policy.how_to}
+  seed.push(row);versions.set(row.key,1)
+  for(const manual of JSON.parse(source.match(/\$legacy_reader_manuals\$([\s\S]+?)\$legacy_reader_manuals\$/)![1])){
+   const old=seed.find(row=>row.key===manual.key);old.definition.additional_description=(old.definition.additional_description??'')+manual.text;versions.set(old.key,versions.get(old.key)!+1)
+  }
+  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(policy);box.definition.contract_keys.push(row.key)
+  box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(patch.name);versions.set(box.key,versions.get(box.key)!+1)
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

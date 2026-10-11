@@ -12,12 +12,13 @@ import {createBobToolSession} from '../supabase/functions/_shared/project-tools/
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
 
 test('parameter publication exposes bounded nodes and exact drawing version, preserves other definitions/models and old manifests',async t=>{
- let previous!:AiCatalogManifest
+ let previous!:AiCatalogManifest,published!:AiCatalogManifest
  const pg=await projectSchema(async(db,name)=>{
   if(name==='20261010222920_ai_construction_parameter_catalog.sql')previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  if(name==='20261011070724_legacy_construction_transition.sql')published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
  });t.after(()=>pg.close())
  const resolve=async(id:string|null=null)=>(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[id])).rows[0].result
- const current=await resolve();assert.deepEqual(await resolve(previous.manifest_id),previous);assert.deepEqual(current.models,previous.models)
+ const current=published;assert.deepEqual(await resolve(previous.manifest_id),previous);assert.deepEqual(current.models,previous.models)
  for(const old of previous.definitions){
   const next=current.definitions.find(r=>r.prompt_key===old.prompt_key)!
   if(['tools.design_project_cad','bob.tools'].includes(old.prompt_key)){assert.equal(next.version,old.version+1);assert.equal(next.content,old.content)}

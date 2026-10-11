@@ -36,6 +36,8 @@ The current synthetic payload and its limits are recorded in the [runtime baseli
 
 Deployed release B adds `change_construction_parameters` to the Drawings and CAD shelf and existing write-budget gate. The model sends changed saved input IDs, values/units/reasons or exact source revisions; the handler owns geometry compilation and unchanged metadata. The [Artifact owner](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) owns its boundaries and explicit downstream construction version. The generated catalog publication updates only this tool, `design_project_cad` and the toolbox, preserving immutable older manifests and role/model settings. Earlier pinned manifests omit the new handler while keeping their own existing tool bench. [Verification](foundation-verification.md#bounded-construction-changes--release-b) records hosted activation and remaining real member acceptance.
 
+Release C adds `transition_legacy_drawing` on the same shelf/write gate. The database owns the copied geometry/graph and atomic origin/receipt; the model cannot send a replacement recipe or dimensions. Null evidence returns grouped gaps; exact existing-checkpoint reuse returns a `reused` Artifact receipt without creating a construction revision. The catalog adds this contract and updates only the CAD reader/render manuals and toolbox. Older immutable manifests omit the handler even when live tool policy includes it. [Artifact](artifacts.md#legacy-drawing-transition--release-c) owns first-pin/history semantics and [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback.
+
 
 ## Opt-in manual experiment — 2026-10-03
 
