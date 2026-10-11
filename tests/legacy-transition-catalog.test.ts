@@ -11,9 +11,11 @@ import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 
 test('legacy publication preserves pinned catalogs/models; old benches survive new live policy',async t=>{
- let previous!:AiCatalogManifest
- const pg=await projectSchema(async(db,name)=>{if(name==='20261011071316_ai_legacy_transition_catalog.sql')previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result});t.after(()=>pg.close())
- const current=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ let previous!:AiCatalogManifest,current!:AiCatalogManifest
+ const pg=await projectSchema(async(db,name)=>{
+  if(name==='20261011071316_ai_legacy_transition_catalog.sql')previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  if(name==='20261011090115_construction_instance_roles.sql')current=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ });t.after(()=>pg.close())
  assert.deepEqual((await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[previous.manifest_id])).rows[0].result,previous)
  assert.deepEqual(current.models,previous.models);assert.deepEqual(current.settings,previous.settings);assert.equal(current.definitions.length,previous.definitions.length+1)
  for(const old of previous.definitions){const next=current.definitions.find(d=>d.prompt_key===old.prompt_key)!

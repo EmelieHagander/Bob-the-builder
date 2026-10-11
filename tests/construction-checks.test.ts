@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {designIntent,designIntentPin} from './support/design-intent-fixture.ts'
+import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 
 const project='p_fixture', artifact='11111111-1111-4111-8111-111111111111', material='22222222-2222-4222-8222-222222222222'
 const placement=(x=0,y=0,z=0,rx=0,ry=0,rz=0)=>({x,y,z,rx,ry,rz})
@@ -123,7 +124,7 @@ test('caller SQL checkpoint and exact normalized catalog feed a successful real 
  readSources:async()=>({project:new Map(),physical:new Map()}),
  readCatalog:(id,revision)=>rpc('bob.catalog_read',[projectId,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})])})
  const {draft}=fixture();draft.materials.forEach((m:any)=>m.material_id=mat.recordId)
- const saved=await tools.execute('save_construction_draft',{key:'initial',record_id:null,expected_revision:0,title:'Five-part concept',description:'Synthetic only',area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameter_plan:parameterPlan(draft.recipe),materials:draft.materials,joints:draft.joints,open_questions:[],request_quote:message})
+ const saved=await tools.execute('save_construction_draft',{key:'initial',record_id:null,expected_revision:0,title:'Five-part concept',description:'Synthetic only',area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameter_plan:parameterPlan(draft.recipe),instance_policy:manufacturePolicy(draft.recipe),materials:draft.materials,joints:draft.joints,open_questions:[],request_quote:message})
  assert.equal(saved.status,'saved',JSON.stringify(saved))
  const checked=await tools.execute('check_construction_draft',{artifact_id:saved.receipt.recordId,revision:1})
  assert.equal(checked.status,'checked',JSON.stringify(checked));assert.equal(checked.concept_ready,true,JSON.stringify(checked.issues));assert.equal(checked.fabrication_ready,false)

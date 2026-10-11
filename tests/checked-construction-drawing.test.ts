@@ -11,6 +11,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import { shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
+import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
@@ -77,6 +78,23 @@ test('K3 uses exact checked checkpoint geometry and full parameter history; revi
  const pin=a.candidate!.packet.manifest.bob_construction
  assert.equal(pin.artifact_id,artifact);assert.equal(pin.revision,1);assert.equal(pin.check.concept_ready,true);assert.equal(pin.check.fabrication_ready,false)
  assert.deepEqual(f.draft,original)
+})
+test('K3 renders the full reference geometry and bounds; its contextual overlaps remain visible without approving physical collisions',async()=>{
+ const run=async(overlaps:any[])=>{
+  const f=runtime(),recipe=f.draft.recipe
+  recipe.instances.push({...structuredClone(recipe.instances[0]),id:'reference',placement:{...recipe.instances[0].placement,x:180}})
+  f.draft.parameters=compileCadParameters(f.draft.projectId,recipe,parameterPlan(recipe),new Map(),new Map())
+  f.draft.instance_policy=manufacturePolicy(recipe)
+  Object.assign(f.draft.instance_policy.instances.find((i:any)=>i.instance_id==='reference'),{role:'reference',quantity_policy:'exclude',reason:'Explicit contextual fixture geometry'})
+  const a=f.assistant({render:async(r:any)=>({recipe:r,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps}},annotations:{version:1,coverage:'complete'}},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(r.views.map((v:string)=>[v,'Zml4dHVyZQ==']))})})
+  return {f,a,result:await a.consult(request)}
+ }
+ const contextual=[{first_id:'reference',second_id:'upright',volume_mm3:1}]
+ const good=await run(contextual);assert.equal(good.result.status,'ready',JSON.stringify(good.result));assert.equal(good.a.candidate!.packet.recipe.instances.length,3)
+ assert.deepEqual(good.a.candidate!.packet.manifest.checks.collisions.overlaps,contextual)
+ assert.equal(good.a.candidate!.packet.manifest.bounding_box_mm.max[0],198)
+ assert.equal(good.a.candidate!.packet.manifest.bob_construction.check.physical_part_count,2)
+ for(const overlaps of [[{first_id:'arm',second_id:'upright',volume_mm3:1}],[{first_id:'reference',second_id:'foreign',volume_mm3:1}]])assert.equal((await run(overlaps)).result.reason,'construction_geometry_disagrees')
 })
 test('K3 cannot render a stale, unchecked, colliding or jointless checkpoint',async()=>{
  for(const mutate of [(d:any)=>d.source_state='changed',(d:any)=>d.current_revision=2,(d:any)=>d.recipe.instances[1].placement.x=10,(d:any)=>d.joints=[]]){
@@ -178,7 +196,8 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  const write=(p:any)=>rpc(owner,'bob.bob_project_write_v14',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const mat=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'mat',kind:'material',name:'Plywood concept',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
  const {draft,catalog}=fixture(project);draft.materials.forEach((m:any)=>m.material_id=mat.recordId)
- const source={kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'checkpoint',title:draft.title,description:draft.description,area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameters:draft.parameters,materials:draft.materials,joints:draft.joints,open_questions:draft.open_questions}}
+ draft.instance_policy=manufacturePolicy(draft.recipe)
+ const source={kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'checkpoint',title:draft.title,description:draft.description,area_id:null,target_revision:1,change_note:'Initial',recipe:draft.recipe,parameters:draft.parameters,materials:draft.materials,joints:draft.joints,open_questions:draft.open_questions,instance_policy:draft.instance_policy}}
  const checkpoint=await write(source);draft.artifact_id=checkpoint.recordId
  const checked=checkConstruction(draft,new Map([[mat.recordId+'@1',{...catalog.get(material+'@1'),id:mat.recordId}]]),'2026-10-04');assert.equal(checked.concept_ready,true)
  const manifest:any={...designManifest(project,solution),assembly_id:draft.recipe.assembly_id,engine:{name:'build123d'},bob_parameters:draft.parameters,bob_lineage:buildCadLineage(project,draft.recipe,[],new Map(),handoff.coordinates),annotations:{version:1,coverage:'complete'},drawing_source:{artifact_id:checkpoint.recordId,revision:1},bob_construction:{version:1,project_id:project,artifact_id:checkpoint.recordId,revision:1,check:checked}}
@@ -197,6 +216,7 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  const read=(uid=owner,revision:number|null=null)=>rpc(uid,'bob.read_cad_artifact',[project,saved.recordId,revision])
  const back=await read();assert.deepEqual(back.recipe,draft.recipe);assert.deepEqual(back.manifest.bob_construction,manifest.bob_construction)
  assert.deepEqual(back.construction_source,{project_id:project,artifact_id:checkpoint.recordId,revision:1})
+ assert.deepEqual(back.instance_policy,draft.instance_policy)
  const relation=(await asProjectUser(pg,owner,'select * from bob.artifact_construction_drawings where drawing_artifact_id=$1',[saved.recordId])).rows[0]
  assert.equal(relation.construction_artifact_id,checkpoint.recordId);assert.equal(relation.construction_revision,1);assert.equal(relation.drawing_revision,1)
  assert.equal((await asProjectUser(pg,outsider,'select * from bob.artifact_construction_drawings')).rows.length,0)
@@ -210,6 +230,10 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
   return write({kind:'construction_parameters',record_id:checkpoint.recordId,expected_revision:revision,expected_updated_at:null,request_quote:message,data:{key:'width'+value,change_note:'Synthetic width correction',changes,computed}})
  }
  assert.equal((await change(120,1)).revision,2)
+ const work=await rpc(owner,'bob.read_construction_changes',[project,checkpoint.recordId,2,null])
+ assert.equal(work.pending,1);assert.equal(work.items[0].kind,'drawing');assert.equal(work.items[0].output_id,saved.recordId)
+ const renderPins=await rpc(owner,'bob.prepare_construction_consequence',[project,claim.thread_id,turn,claim.generation,JSON.stringify({kind:'construction_consequence',record_id:checkpoint.recordId,expected_revision:2,expected_updated_at:null,request_quote:message,data:{key:'render-work',item_id:work.items[0].id,change_note:'Render this affected drawing',computed:null,action:'recalculate',review_note:null,output_revision:null}})])
+ assert.equal(renderPins.status,'needs_render');assert.equal(renderPins.drawing_artifact_id,saved.recordId);assert.equal(renderPins.construction_revision,2)
  const stale=structuredClone(drawing);delete stale.data.drawing_request;stale.data.title='Stale drawing'
  await assert.rejects(write(stale),/construction_source_changed/)
  const state=(await asProjectUser(pg,owner,'select source_state,source_reasons from bob.artifact_source_status where artifact_id=$1 and revision=1',[saved.recordId])).rows[0]
@@ -223,6 +247,9 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  next.data.packet.manifest.drawing_source={artifact_id:checkpoint.recordId,revision:2}
  const corrected=await write(next);assert.equal(corrected.recordId,saved.recordId);assert.equal(corrected.revision,2)
  const correctedBack=await read(owner,2);assert.equal(correctedBack.recipe.definitions[1].x_mm,120)
+ const complete=await rpc(owner,'bob.read_construction_changes',[project,checkpoint.recordId,2,null])
+ assert.equal(complete.status,'complete');assert.equal(complete.items[0].completed_revision,2);assert.equal(complete.items[0].completion_receipt.recordId,saved.recordId)
+ assert.deepEqual((await read(owner,1)).instance_policy,draft.instance_policy)
  assert.deepEqual(correctedBack.construction_source,{project_id:project,artifact_id:checkpoint.recordId,revision:2})
  assert.deepEqual((await read(owner,1)).recipe,draft.recipe)
  await change(130,2)

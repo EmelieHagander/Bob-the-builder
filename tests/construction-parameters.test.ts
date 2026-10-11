@@ -46,6 +46,7 @@ test('bounded parameter command recomputes canonical dependencies with SQL recei
   parameters:compileCadParameters(project,recipe,plan,new Map(),new Map()),materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),
   joints:[{id:'leftJoint',method:'screwed_butt',first:{instance_id:'left',face:'x_max'},second:{instance_id:'bottom',face:'x_min'},reason:'Synthetic concept'},
    {id:'rightJoint',method:'screwed_butt',first:{instance_id:'bottom',face:'x_max'},second:{instance_id:'right',face:'x_min'},reason:'Synthetic concept'}],open_questions:['Hardware and strength unchecked']}
+ data.instance_policy={version:1,instances:recipe.instances.map((i:any)=>({instance_id:i.id,role:'build_part',quantity_policy:'manufacture',reason:'Explicit synthetic manufactured frame part'}))}
  const initial=await write({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data})
  const id=initial.recordId,read=(revision:number|null=null)=>rpc(owner,'bob.read_construction_draft',[project,id,revision,null])
  const before=await read();let sourceReads=0,allowed=true
