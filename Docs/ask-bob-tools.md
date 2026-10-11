@@ -47,7 +47,7 @@ Read saved change work after numeric, role or full construction revisions. Follo
 
 Preparation and queue reads use fresh caller RPCs rather than replaying an old journal progress snapshot. The writer repeats guards under the database lock and stores the original operation receipt. Already completed items are reused; stale heads and changed operations stop instead of duplicating outputs. The existing per-turn write/call/cost budgets remain unchanged. A saved queue supports later continuation; it does not promise every linked output fits inside one turn. Install both D core migrations and matching ask-bob/worker sources before activating the D catalog. Earlier manifests and all model/role settings/prices remain immutable.
 
-Legacy/manual linked needs are included in the work list even without a recorded model. `needs_requirement_model` requires an explicit supported definition/mode through `derive_cad_material_requirement`, under the same need ID and exact changed construction revision. Model inputs must not be guessed from a name, free-text basis or old quantity. Normal typed source publication then completes that item.
+Legacy/manual linked needs are included in the work list even without a recorded model. `needs_requirement_model` requires an explicit supported definition/mode through `derive_cad_material_requirement`, under the same need ID and exact changed construction revision. Model inputs must not be guessed from a name, free-text basis or old quantity. Normal typed source publication then completes that item. An explicit ordinary archive instead retires a no-longer-required need, preserving its original model/quantity/history.
 
 ## Calculator and saved calculation models — specified 2026-10-11
 

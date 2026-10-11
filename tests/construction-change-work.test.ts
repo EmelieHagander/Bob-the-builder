@@ -14,6 +14,25 @@ import {asProjectUser} from './support/project-schema.ts'
 import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 
+test('explicit canonical archive settles a linked model gap without inventing quantities or changing other work',async t=>{
+ const f=await cutPlanFixture(t),r=runtime(f),id=randomUUID()
+ await f.rpc('bob.material_requirement_command',[f.project,'create',id,0,JSON.stringify({name:'Legacy allowance',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'99',waste_percent:'0',purchase_increment:'1',basis:'Explicit manual allowance, model absent',assumptions:'Fixture',artifact_id:f.construction.recordId,artifact_revision:1,target_revision:1,stock_allocations:[],component_allocations:[],change_note:'Initial'})])
+ const before=(await f.pg.query('select * from bob.material_requirement_revisions where requirement_id=$1',[id])).rows
+ assert.equal((await r.tools().construction.execute('change_construction_roles',{key:'archive-gap-roles',record_id:f.construction.recordId,expected_revision:1,changes:[{instance_id:'back',role:'existing_part',quantity_policy:'retain',reason:'Explicit retained fixture member'}],change_note:'Retain member',request_quote:f.message})).status,'saved')
+ const work=await r.changes(2),item=work.items.find((i:any)=>i.output_id===id)
+ assert.equal((await r.advance(item,2)).status,'needs_requirement_model')
+ const payload={...f.base,kind:'operational',record_id:id,expected_revision:1,request_quote:f.message,data:{resource:'requirement',action:'archive',fields:{}}}
+ const saved=await r.write(payload);assert.equal(saved.recordId,id);assert.equal(saved.revision,2)
+ assert.deepEqual(await r.write(payload),saved)
+ const after=await r.changes(2),resolved=after.items.find((i:any)=>i.id===item.id)
+ assert.equal(resolved.state,'retired');assert.equal(resolved.completed_revision,2);assert.equal(resolved.completion_receipt.recordId,id)
+ assert.equal(after.pending,work.pending-1)
+ assert.deepEqual(after.items.filter((i:any)=>i.id!==item.id),work.items.filter((i:any)=>i.id!==item.id))
+ assert.deepEqual((await f.pg.query('select * from bob.material_requirement_revisions where requirement_id=$1 and revision=1',[id])).rows,before)
+ const current=(await f.pg.query('select * from bob.material_requirement_revisions where requirement_id=$1 and revision=2',[id])).rows[0]
+ assert.equal(Number(current.required_quantity),99);assert.equal(current.archived,true);assert.equal(current.method_key,'manual')
+})
+
 function runtime(f:any){
  const binding=[f.project,f.claim.thread_id,f.turn,f.claim.generation]
  const write=(p:any)=>f.rpc('bob.bob_project_write_v16',[...binding,JSON.stringify(p)])

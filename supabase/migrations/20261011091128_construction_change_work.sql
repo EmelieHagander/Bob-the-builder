@@ -142,6 +142,27 @@ create constraint trigger complete_construction_cut_plan after insert on bob.mat
 create constraint trigger complete_construction_drawing after insert on bob.artifact_construction_drawings deferrable initially deferred
  for each row execute function bob_private.complete_construction_change_output();
 
+-- An explicitly archived need no longer requires a reconstructed model. Only
+-- the current canonical archive can settle work for the current constructor
+-- head; superseded changes and later restores/revisions are not fabricated away.
+create function bob_private.retire_construction_change_requirement() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare receipt jsonb;
+begin
+ if not new.archived then return new; end if;
+ select w.receipt into receipt from bob_private.bob_write_receipts w where w.project_id=new.project_id
+  and w.receipt->>'recordId'=new.requirement_id::text and w.receipt->>'revision'=new.revision::text order by w.created_at desc limit 1;
+ update bob.construction_change_items i set state='retired',completed_revision=new.revision,completion_receipt=receipt,completed_at=clock_timestamp()
+  from bob.construction_change_sets c,bob.artifacts a,bob.material_requirements h
+  where i.change_id=c.id and i.project_id=new.project_id and i.kind='requirement' and i.requirement_id=new.requirement_id and i.state='pending'
+   and c.project_id=i.project_id and a.project_id=c.project_id and a.id=c.artifact_id and a.current_revision=c.to_revision
+   and h.project_id=new.project_id and h.id=new.requirement_id and h.current_revision=new.revision;
+ return new;
+end $$;
+revoke all on function bob_private.retire_construction_change_requirement() from public,anon,authenticated,service_role;
+create constraint trigger retire_construction_requirement after insert on bob.material_requirement_revisions deferrable initially deferred
+ for each row execute function bob_private.retire_construction_change_requirement();
+
 create function bob.read_construction_changes(p_project text,p_artifact uuid,p_revision integer,p_after uuid default null) returns jsonb
 language plpgsql stable security invoker set search_path='' as $$
 declare c bob.construction_change_sets; head bob.current_artifacts; page jsonb; more boolean; pending integer; total integer;
