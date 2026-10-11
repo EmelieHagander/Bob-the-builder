@@ -108,6 +108,8 @@ Acceptance must cover a dimension-only change and all dependent placements/list 
 
 ### Legacy drawing transition — release C
 
+**Status: merged, migrated and deployed through [PR #245](https://github.com/EmelieHagander/Bob-the-builder/pull/245), 2026-10-11.** [Verification](foundation-verification.md#legacy-drawing-transition--release-c) owns exact installation/readback; real owner/member/mockup/cost acceptance remains E.
+
 `transition_legacy_drawing` prepares a current nonarchived CAD drawing for construction-driven correction. Its input carries the exact drawing ID/revision, selected target revision, one receipt key and change reason. It accepts no recipe, dimension list or parameter plan. The database copies the immutable drawing's geometry, stable assembly/definition/instance IDs and saved parameter graph. Old material labels remain in drawing history; the construction uses explicit catalog revisions and `material_ref:null`.
 
 Creating a checkpoint requires explicit material pins, typed joint choices and open questions. These are current design choices, not recovered historical facts or fabrication approval. A missing graph, material/joint evidence, image-frame carrier or measurement binding returns all known gaps before saving. The ordinary construction tools may establish a matching checkpoint when the graph is absent. Reuse requires exact current construction ID/revision, same project/Area/target, equal geometry apart from views, and equal saved graph when one exists. Metadata inputs must be null in reuse mode; they are never silently ignored.
