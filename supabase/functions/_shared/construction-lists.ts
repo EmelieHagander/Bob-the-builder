@@ -10,7 +10,7 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
  const instances: Row[] = draft.recipe.instances
  const policy=constructionInstancePolicy(draft.recipe,draft.instance_policy)
  const unknown=policy.instances.filter(i=>i.role==='unknown')
- if(unknown.length)return {status:'needs_data',reason:'instance_roles_unknown',source:{artifact_id:draft.artifact_id,revision:draft.revision},
+ if(unknown.length)return {status:'needs_data' as const,reason:'instance_roles_unknown',source:{artifact_id:draft.artifact_id,revision:draft.revision},
   gaps:unknown.map(i=>({code:'instance_role_unknown',ids:[i.instance_id],message:i.reason})),
   message:'Classify these exact saved instances with change_construction_roles. Names do not establish manufacturing or ownership.'}
  const manufactured=new Set(policy.instances.filter(i=>i.quantity_policy==='manufacture').map(i=>i.instance_id))
@@ -19,12 +19,12 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
  if (dependencies.length && (dependencies.length !== ids.size || new Set(dependencies.map(d => d.joint_id)).size !== ids.size
   || dependencies.some(d => !ids.has(d.joint_id) || new Set(d.depends_on).size !== d.depends_on.length
    || d.depends_on.some(id => !ids.has(id) || id === d.joint_id))))
-  return { status: 'invalid', message: 'Supply each saved joint exactly once, with distinct existing prerequisite joint IDs. Physical joint contacts and assembly dependencies are different graphs.' }
+  return { status: 'invalid' as const, message: 'Supply each saved joint exactly once, with distinct existing prerequisite joint IDs. Physical joint contacts and assembly dependencies are different graphs.' }
  const remaining = new Map(dependencies.map(d => [d.joint_id, new Set(d.depends_on)]))
  const layers: string[][] = []
  while (remaining.size) {
   const ready = [...remaining].filter(([, deps]) => !deps.size).map(([id]) => id).sort()
-  if (!ready.length) return { status: 'invalid', message: 'Assembly dependencies contain a cycle. Correct only the order; physical joint cycles are permitted.', joint_ids: [...remaining.keys()].sort() }
+  if (!ready.length) return { status: 'invalid' as const, message: 'Assembly dependencies contain a cycle. Correct only the order; physical joint cycles are permitted.', joint_ids: [...remaining.keys()].sort() }
   layers.push(ready)
   for (const id of ready) remaining.delete(id)
   for (const deps of remaining.values()) for (const id of ready) deps.delete(id)
@@ -50,7 +50,7 @@ export function constructionLists(draft: Row, catalog: Map<string, Row>, depende
   return { joint_id: id, method: joint.method, first: joint.first, second: joint.second,
    depends_on: dependencies.find(d => d.joint_id === id)!.depends_on, reason: joint.reason }
  }) }))
- return { status: 'derived', calculation_version: CONSTRUCTION_LIST_VERSION,
+ return { status: 'derived' as const, calculation_version: CONSTRUCTION_LIST_VERSION,
   source: { artifact_id: draft.artifact_id, revision: draft.revision }, concept_only: true, fabrication_ready: false,
   instance_policy:policy, retained_instances:policy.instances.filter(i=>i.role==='existing_part'),
   complete_items:policy.instances.filter(i=>i.role==='prefabricated_part'), reference_instances:policy.instances.filter(i=>i.role==='reference'),
