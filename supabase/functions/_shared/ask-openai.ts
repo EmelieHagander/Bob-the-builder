@@ -298,6 +298,21 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
     readDesignReadiness,
+    prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await client.rpc('prepare_construction_role_change',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_role_preparation_failed'}
+      return data
+    },
+    prepareConsequence:async(payload:import('./project-write.ts').WritePayload)=>{
+      // Progress/source gates are live reads, not replayed segment snapshots.
+      const {data,error}=await client.rpc('prepare_construction_consequence',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_consequence_preparation_failed'}
+      return data
+    },
+    readChanges:async(id:string,revision:number,after:string|null)=>{
+      const {data,error}=await client.rpc('read_construction_changes',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_changes_unavailable');return data
+    },
     prepareLegacyTransition:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_legacy_construction_transition',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}

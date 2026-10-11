@@ -31,6 +31,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   parameters: compileCadParameters(project, recipe, parameterPlan(recipe), new Map(), new Map()),
   materials: recipe.definitions.map((d: any) => ({ definition_id: d.id, material_id: material.recordId, material_revision: 1, part_id: null, part_revision: null })),
   joints: [{ id: 'join', method: 'glued_butt', first: { instance_id: 'foot', face: 'z_max' }, second: { instance_id: 'back', face: 'z_min' }, reason: 'Concept only' }], open_questions: ['Adhesive and raw stock unverified'] }
+ data.instance_policy={version:1,instances:recipe.instances.map((i:any)=>({instance_id:i.id,role:'build_part',quantity_policy:'manufacture',reason:'Explicit synthetic newly manufactured bracket part'}))}
  const construction = await write({ ...base, kind: 'construction', data })
  const fields: any = { name: 'Base blank', category: 'Timber', area_id: null, task_id: null, waste_percent: '0', purchase_increment: '1', assumptions: 'Concept only',
   artifact_id: construction.recordId, artifact_revision: 1, target_revision: 1, definition_id: 'base', quantity_mode: 'pieces', stock_allocations: [], component_allocations: [], change_note: 'Counted blank' }
@@ -40,7 +41,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   requirement = await write(payload); assert(requirement.recordId); assert.equal(requirement.revision, 1)
   assert.deepEqual(await write(payload), requirement)
   const record = (await call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])).records[0]
-  assert.equal(record.required_quantity, 1); assert.equal(record.method_key, 'construction_blank_pieces'); assert.equal(record.method_version, '1')
+  assert.equal(record.required_quantity, 1); assert.equal(record.method_key, 'construction_blank_pieces'); assert.equal(record.method_version, '2')
   assert.equal(record.artifact_id, construction.recordId); assert.equal(record.artifact_revision, 1); assert.match(record.basis, /200 x 100 x 18/)
   const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [requirement.recordId])).rows[0]
   assert.deepEqual(source.instance_ids, ['foot']); assert.deepEqual(source.blank_mm, { x: 200, y: 100, z: 18 }); assert.equal(source.material_binding.material_id, material.recordId)

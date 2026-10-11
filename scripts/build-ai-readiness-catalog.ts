@@ -13,6 +13,7 @@ const baseline = JSON.parse(readFileSync(path.join(migrationRoot, '2026100915000
 const policy = (JSON.parse(readFileSync('supabase/functions/_shared/project-tools/catalog-seed.json', 'utf8')) as any[])
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_parameter_catalog.sql'))||row.name!=='change_construction_parameters')
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_legacy_transition_catalog.sql'))||row.name!=='transition_legacy_drawing')
+  .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_consequences_catalog.sql'))||!['change_construction_roles','read_construction_changes','continue_construction_change'].includes(row.name))
 const changed = new Map<string, any>()
 const row = (key: string) => structuredClone(baseline.find(item => item.key === key) ?? (() => { throw new Error('Missing catalog key ' + key) })())
 function publish(item: any) {
@@ -44,7 +45,13 @@ if(process.argv.includes('--check')&&readdirSync(migrationRoot).some(name=>name.
   const definition=JSON.parse(historical.match(/\$ai_catalog_patch\$([\s\S]+?)\$ai_catalog_patch\$/)![1]).find((row:any)=>row.key==='tools.design_project_cad').definition
   cadTool={...DESIGN_CAD_TOOL,function:{...DESIGN_CAD_TOOL.function,description:definition.description,parameters:definition.parameters}}
 }
-const executable = [EXPERT_TOOLS.find(tool => tool.function.name === 'save_project_solution')!, cadTool, CONSTRUCTION_SAVE_TOOL]
+const constructionTool=structuredClone(CONSTRUCTION_SAVE_TOOL)
+// D's added policy is checked by its own publication; applied A has no field.
+if(process.argv.includes('--check')&&readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_consequences_catalog.sql'))){
+ delete (constructionTool.function.parameters.properties as any).instance_policy
+ constructionTool.function.parameters.required=constructionTool.function.parameters.required.filter(k=>k!=='instance_policy')
+}
+const executable = [EXPERT_TOOLS.find(tool => tool.function.name === 'save_project_solution')!, cadTool, constructionTool]
 for (const tool of executable) {
   const item = row('tools.' + tool.function.name)
   const entry = policy.find(value => value.name === tool.function.name)

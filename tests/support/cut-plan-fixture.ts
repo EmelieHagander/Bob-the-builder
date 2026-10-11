@@ -6,6 +6,7 @@ import { parameterPlan } from './cad-parameter-fixture.ts'
 import { compileCadParameters } from '../../supabase/functions/_shared/cad-parameters.ts'
 import { constructionLists } from '../../supabase/functions/_shared/construction-lists.ts'
 import { constructionCutFit } from '../../supabase/functions/_shared/construction-cut-fit.ts'
+import { manufacturePolicy } from './construction-instance-policy-fixture.ts'
 
 export async function cutPlanFixture(t: any) {
  const pg=await projectSchema();t.after(()=>pg.close()); const user=randomUUID(),other=randomUUID(),message='Save a cut plan for the existing blanks. Keep stock, needs and Shopping unchanged.'
@@ -21,6 +22,7 @@ export async function cutPlanFixture(t: any) {
  const placement=(x:number,z:number)=>({x,y:0,z,rx:0,ry:0,rz:0})
  const recipe:any={contract_version:1,units:'mm',assembly_id:'bracket',definitions:[{id:'base',primitive:'box',material_ref:null,x_mm:200,y_mm:100,z_mm:18},{id:'upright',primitive:'box',material_ref:null,x_mm:18,y_mm:100,z_mm:100}],instances:[{id:'foot',definition_id:'base',placement:placement(0,0)},{id:'back',definition_id:'upright',placement:placement(0,18)}],views:['front']}
  const constructionData:any={key:'construction',title:'Two-part bracket',description:'Concept',area_id:null,target_revision:1,change_note:'Fixture',recipe,parameters:compileCadParameters(project,recipe,parameterPlan(recipe),new Map(),new Map()),materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[{id:'join',method:'glued_butt',first:{instance_id:'foot',face:'z_max'},second:{instance_id:'back',face:'z_min'},reason:'Concept'}],open_questions:['Hardware/access unknown']}
+ constructionData.instance_policy=manufacturePolicy(recipe)
  const construction=await write({...base,kind:'construction',data:constructionData})
  const needs=[]
  for(const definition_id of ['base','upright']){

@@ -333,7 +333,7 @@ test('Bob stock → requirement → Shopping uses canonical arithmetic and block
  await fail(next)
 })
 
-test('CAD recipe → counted blanks → versioned requirement → stock → Shopping rejects stale or invented quantities',async()=>{
+test('unclassified drawing geometry cannot create quantities, stock allocation or Shopping without a classified construction',async()=>{
  const c=await claim()
  const target:any=(await pg.query("select current_revision from bob.project_targets where project_id='A'")).rows[0]
  const chosen:any=(await pg.query("select solution_id,solution_revision from bob.current_target where project_id='A' and area_id is null")).rows[0]
@@ -342,24 +342,13 @@ test('CAD recipe → counted blanks → versioned requirement → stock → Shop
  const drawing=await expertWrite(c,{kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:'Spara',data})
  const stock=await operationalWrite(c,operational('stock','create',{name:'Confirmed panel',specification:'800 × 400 × 18 plywood; fits blank',quantity:'1',unit:'pcs',status:'available',area_id:null,notes:'Fixture confirmation',change_note:'Fixture'}))
  const fields={name:'Cut panels',category:'Sheet',area_id:null,task_id:null,waste_percent:'0',purchase_increment:'1',assumptions:'Stock blank dimensions and specification confirmed',artifact_id:drawing.recordId,artifact_revision:1,target_revision:target.current_revision,definition_id:'panel',quantity_mode:'pieces',stock_allocations:[{id:stock.recordId,revision:1,quantity:'1'}],component_allocations:[]}
- const payload=operational('cad_requirement','create',fields)
- const requirement=await operationalWrite(c,payload)
- assert.equal(requirement.record.required_quantity,2);assert.equal(requirement.record.purchase_quantity,1)
- assert.equal(requirement.record.source_kind,'deterministic');assert.equal(requirement.record.method_key,'cad_blank_pieces')
- assert.equal(requirement.record.artifact_revision,1);assert.deepEqual(await operationalWrite(c,payload),requirement)
- const purchase=await operationalWrite(c,operational('requirement','publish',{},requirement.recordId,1))
- assert.equal(purchase.record.shopping.revision,1)
- const shopping:any=(await pg.query('select * from bob.materials where id=$1',[purchase.record.shopping.material_id])).rows[0]
- assert.equal(shopping.qty,'1 pcs');assert.equal(shopping.status,'needed')
- const area=await operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Panel surface',quantity_mode:'area_xy',stock_allocations:[],purchase_increment:'0.1'}))
- assert.equal(area.record.required_quantity,0.64);assert.equal(area.record.purchase_quantity,0.7)
- await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Forged arithmetic',required_quantity:'999'})),/invalid_cad_requirement/)
- await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,name:'Unknown part',definition_id:'missing'})),/used CAD part/)
+ for(const quantity_mode of ['pieces','area_xy'])await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,quantity_mode})),/construction_instance_roles_required/)
+ await assert.rejects(operationalWrite(c,operational('cad_requirement','create',{...fields,required_quantity:'999'})),/invalid_cad_requirement/)
+ assert.equal((await pg.query('select count(*)::int n from bob.material_requirement_revisions where artifact_id=$1',[drawing.recordId])).rows[0].n,0)
  await fail(c)
  await as(one,'select bob.artifact_command($1,$2,$3,$4,$5)',['A','archive',drawing.recordId,1,'{}'])
  const next=await claim()
- await assert.rejects(operationalWrite(next,operational('requirement','publish',{},requirement.recordId,1)),/drawing|artifact|Artifact|Drawing|changed/)
- await assert.rejects(operationalWrite(next,operational('cad_requirement','revise',{...fields,change_note:'Recalculate'},requirement.recordId,1)),/current saved CAD/)
+ await assert.rejects(operationalWrite(next,operational('cad_requirement','create',fields)),/construction_instance_roles_required/)
  await fail(next)
  await assert.rejects(as(two,'select bob.material_requirement_cad_command($1,$2,$3,$4,$5)',['A','create',newId(),0,JSON.stringify(fields)]),/project_denied/)
 })

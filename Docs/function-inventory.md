@@ -1,8 +1,12 @@
 # bob — current capability & gap inventory
 
+## Versioned instance roles and affected-output work — release D
+
+Explicit instance roles now control deterministic manufacturing lists/needs/cuts. Construction revisions record linked pending output work; normal writers recalculate the same identities, preserve commitments/performed work, and reuse receipts after interruption. Reference geometry and the exact drawn role version remain visible. Historical unknown roles require explicit classification. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns the contract; [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d) records release/installation status. Calculator implementation and actual bed/mockup/member/cost acceptance remain in [State](bob-delivery-flow.md#state).
+
 ## Guarded legacy drawing transition — deployed 2026-10-11
 
-`transition_legacy_drawing` copies exact older geometry/parameter provenance server-side or reuses a matching checkpoint. Missing metadata returns explicit grouped gaps, receipts make retries stable, and an exact typed origin permits the first checked CAD save under the original drawing identity. Numeric correction then uses B's saved parameter IDs and exact revision. [Artifact](artifacts.md#legacy-drawing-transition--release-c) and [database](../db/README.md#construction-data-authority-and-remaining-extensions) own the contract; [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback. D's part roles/consequence continuation and E's actual bed/mockup/member/cost acceptance remain in [State](bob-delivery-flow.md#six-outcomes-in-five-releases).
+`transition_legacy_drawing` copies exact older geometry/parameter provenance server-side or reuses a matching checkpoint. Missing metadata returns explicit grouped gaps, receipts make retries stable, and an exact typed origin permits the first checked CAD save under the original drawing identity. Numeric correction then uses B's saved parameter IDs and exact revision. [Artifact](artifacts.md#legacy-drawing-transition--release-c) and [database](../db/README.md#construction-data-authority-and-remaining-extensions) own the contract; [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback. [D's role/continuation release](#versioned-instance-roles-and-affected-output-work--release-d) and E's actual bed/mockup/member/cost acceptance are tracked in [State](bob-delivery-flow.md#six-outcomes-in-five-releases).
 
 ## Bounded construction changes and exact drawings — deployed 2026-10-10
 

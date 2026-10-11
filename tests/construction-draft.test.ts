@@ -54,7 +54,7 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
  const catalog:any={kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'mat',kind:'material',name:'Synthetic plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:'my design choices',source_seq:null}}
  const material=await save(catalog)
  const {recipe,plan}=shelf()
- const input:any={key:'initial',record_id:null,expected_revision:0,title:'Construction checkpoint',description:'Synthetic only',area_id:null,target_revision:1,change_note:'Initial design',recipe,parameter_plan:plan,
+ const input:any={key:'initial',record_id:null,expected_revision:0,title:'Construction checkpoint',description:'Synthetic only',area_id:null,target_revision:1,change_note:'Initial design',recipe,parameter_plan:plan,instance_policy:null,
   materials:recipe.definitions.map(d=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),
   joints:[{id:'jointLeft',method:'screwed_butt',first:{instance_id:'left',face:'x_max'},second:{instance_id:'board0',face:'x_min'},reason:'Synthetic design choice; fasteners unresolved'}],
   open_questions:['Fastener size/count and joint fit unchecked'],request_quote:message}

@@ -7,6 +7,7 @@ import { schemaIssues } from '../supabase/functions/_shared/schema-issues.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
+import { manufacturePolicy } from './support/construction-instance-policy-fixture.ts'
 
 const artifact = '11111111-1111-4111-8111-111111111111', material = '22222222-2222-4222-8222-222222222222'
 export function listFixture() {
@@ -22,6 +23,7 @@ export function listFixture() {
   open_questions: ['No specified screw product or stock sheet'] }
  const catalog = new Map([[material + '@2', { id: material, revision: 2, current_revision: 2, kind: 'material', profile_code: 'sheet_stock', categories: ['wood.plywood', 'sheet'],
   properties: { thickness: { value: '21', unit: 'mm', truth: 'provided_spec', parameter: null } } }]])
+ draft.instance_policy=manufacturePolicy(draft.recipe)
  return { draft, catalog }
 }
 function harness(change?: (draft: any) => void, denied = false) {

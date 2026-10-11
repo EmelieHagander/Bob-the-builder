@@ -550,8 +550,11 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     if(packet.manifest.annotations?.coverage!=='complete'||packet.manifest.annotations?.version!==1)
      return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'annotations_unavailable',next_action:catalogText("feedback.cad-assistant.next-action.2015f7a2f7e9")}
     const bounds=packet.manifest.bounding_box_mm,expectedBounds=ready.checked.bounds_mm,collisions=packet.manifest.checks?.collisions
+    const visibleIds=new Set(recipe.instances.map(i=>i.id)),referenceIds=new Set(ready.checked.reference_instance_ids??[])
     if(!bounds||!expectedBounds||['min','max','size'].some(key=>!Array.isArray(bounds[key])||bounds[key].length!==3||bounds[key].some((v:number,i:number)=>!Number.isFinite(v)||Math.abs(v-expectedBounds[key][i])>0.001))
-     ||collisions?.status!=='complete'||!Array.isArray(collisions.overlaps)||collisions.overlaps.length)
+     ||collisions?.status!=='complete'||!Array.isArray(collisions.overlaps)||collisions.overlaps.some((overlap:any)=>
+      !visibleIds.has(overlap.first_id)||!visibleIds.has(overlap.second_id)||overlap.first_id===overlap.second_id
+      ||(!referenceIds.has(overlap.first_id)&&!referenceIds.has(overlap.second_id))))
      return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'construction_geometry_disagrees',next_action:catalogText("feedback.cad-assistant.next-action.482e8923bc81")}
     packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
     candidate={...metadata,packet};reviewPending=true

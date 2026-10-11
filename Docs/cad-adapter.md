@@ -792,6 +792,14 @@ or reviewed packets. Existing CAD publication remains guarded. K3 must compile
 and publish an exact checkpoint revision with its construction lineage; it must
 not bypass K1's Artifact revision guard or silently regenerate a parallel model.
 
+### Reference geometry and exact role versions — release D
+
+K3 now carries the [exact construction role policy](artifacts.md#instance-roles-and-affected-outputs--release-d) in its revision-bound check. SQL requires `orthogonal-butt-role-v1` and an exact matching policy for classified sources; historical sources retain their prior checker tag and uncertainty. `read_cad_artifact.instance_policy` reads the drawn construction revision, never a newer head. The CAD recipe/kernel contract remains version 1 and every visible instance is rendered.
+
+The bounded concept checker supports uncut orthogonal boxes for reference geometry as well as physical members. Bounds and part labels include all visible instances. Reference instances are excluded from manufacturing and physical-contact/connectivity checks, and cannot be physical joint endpoints. K3 retains the full kernel collision diagnostics: reference overlaps are contextual, while physical-member overlaps, malformed IDs or incomplete checks still stop rendering/publication. This does not verify reference clearance/motion, structural safety, existing-part condition or product suitability.
+
+Saved drawing consequences reopen the original drawing/Step identity and exact new construction pin. The existing checked rendering, reviewer, request/receipt and typed drawing-source write complete that item; an engine/review failure remains pending. No geometry designer is added to parameter/role corrections. [Verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d) owns installation evidence; actual mockup/design and member acceptance remain in E.
+
 ## K3 checked construction drawings — 2026-10-04
 
 Release C also accepts the original legacy drawing identity after `transition_legacy_drawing` has persisted an exact `construction_transition`. The reader exposes initial checkpoint provenance; the caller supplies the exact **current** `construction_revision` after any numeric correction. The runtime preserves the old drawing ID/expected revision, reads the canonical checkpoint and uses this checked path. It bypasses geometry design/research and freshly verifies the pending legacy head/origin before actual render/reviewer dispatch. A changed/archived drawing, changed construction or missing evidence stops publication. The first checked save needs the matching origin, advances the same drawing history and adds the existing typed rendered relation. See [Artifact owner](artifacts.md#legacy-drawing-transition--release-c) and [release C verification](foundation-verification.md#legacy-drawing-transition--release-c). Existing free-design request scopes/budgets are not silently rewritten.

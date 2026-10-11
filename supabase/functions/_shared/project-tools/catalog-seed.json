@@ -717,5 +717,32 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "change_construction_roles",
+    "description": "Classify saved part-instance roles without reconstructing geometry.",
+    "how_to": "Use exact IDs and role/quantity pairs from the saved construction; unknown stays unknown. Then read the saved affected-output work.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "continue_construction_change",
+    "description": "Recalculate one saved affected output from canonical inputs.",
+    "how_to": "Send an item ID and exact construction version. Needs precede cutting. Preserve purchases/reservations and performed work; record a work review separately from recomputation.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "read_construction_changes",
+    "description": "Read saved affected-output work for an exact construction revision.",
+    "how_to": "Follow every page; use stable output identities and recorded completion receipts. Superseded work cannot continue against a new construction head.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

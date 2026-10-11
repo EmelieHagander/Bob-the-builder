@@ -106,6 +106,26 @@ Before moving a legacy drawing onto this path, inspect its existing geometry, gr
 
 Acceptance must cover a dimension-only change and all dependent placements/list values, the exact construction-to-drawing pin after reload, stale/concurrent changes, an invalid or unknown input, a failed render followed by receipt-safe retry, and a legacy transition preserving history. Measure the whole model chain before/after on equivalent work. The expected saving is fewer repeated geometry-design calls and smaller deltas; no percentage or successful mockup match is established by this specification.
 
+### Instance roles and affected outputs — release D
+
+**Implemented; release installation/readback is tracked in [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d).** A version-1 `instance_policy` belongs to one exact construction revision. It contains one entry per stable recipe instance ID, an explicit role, its matching quantity policy and a reason. Geometry, definitions and numeric provenance remain in the existing construction; the policy does not alter the CAD recipe contract.
+
+| Role | Quantity policy | Meaning |
+|---|---|---|
+| `build_part` | `manufacture` | A new manufactured member; counted in blank needs and cuts. |
+| `existing_part` | `retain` | A retained member, listed separately; availability/condition remain unverified. |
+| `prefabricated_part` | `complete_item` | A complete item, listed separately; procurement and suitability need their own evidence. |
+| `reference` | `exclude` | Visible context, excluded from manufacturing and physical-contact checks; clearance remains unverified. |
+| `unknown` | `unknown` | Unclassified; quantity lists/needs/cuts stop instead of guessing. |
+
+Missing historical policies remain unknown. No existing owner data is backfilled. Numeric corrections and older full writes inherit previously classified stable IDs into the new revision; new IDs remain unknown. `change_construction_roles` applies only bounded existing-ID deltas while the server preserves geometry, parameters, material pins, joints, metadata and prior versions. Explicit full construction saves may supply a complete policy; null preserves uncertainty/inheritance rather than clearing a known policy. Neither names nor labels establish manufacturing, ownership or stock evidence.
+
+Every subsequent construction revision records the currently linked drawings, blank needs, cutting plans and current linked Steps in saved affected-output work. Exact source pins make all outputs linked to that construction require a fresh pin, even when their dimensions did not change. Other constructions and unrelated work are not selected. `read_construction_changes` reads paged pending/completed work; a superseded construction head fences old pending actions. Original and completed output versions retain typed foreign keys.
+
+`continue_construction_change` processes one item. Code reads the saved need/cutting model and uses the normal domain writer to revise the same identity; it never receives model-computed quantities or placements. Needs precede cutting. Removing a manufacturing need archives that same requirement. With no manufactured members, the cutting consequence becomes inapplicable while the historical plan/layout remains stale and unchanged; its reused receipt does not claim a new layout. Existing reservations, Shopping/purchases and allocations require explicit resolution through their usual commands. Interrupted work and exact retries preserve receipts without duplicate capacity or purchases.
+
+Drawing items return the existing drawing/Step and exact construction pins for K3 rendering. Typed publication completes the item; failed rendering stays pending. Linked work returns a review need. A recorded review pins the exact current plan revision, preserves performed/completed work and states `physical_verification:false`; it is not certification or an automatic work-state change. The [material owner](material-planning.md#role-aware-manufacturing-and-continuation--release-d) and [CAD owner](cad-adapter.md#reference-geometry-and-exact-role-versions--release-d) define their output semantics. Actual bed/mockup/member and cost acceptance remain in E.
+
 ### Legacy drawing transition — release C
 
 **Status: merged, migrated and deployed through [PR #245](https://github.com/EmelieHagander/Bob-the-builder/pull/245), 2026-10-11.** [Verification](foundation-verification.md#legacy-drawing-transition--release-c) owns exact installation/readback; real owner/member/mockup/cost acceptance remains E.
@@ -759,6 +779,6 @@ SQL publication guards reject stale/archived construction, changed catalog/measu
 
 ### K4 concept lists from construction checkpoints
 
-`derive_construction_lists` consumes the exact current checked K2 revision and creates no geometry or Artifact mutation. Its BOM counts each actual instance once; local blank dimensions come from the already compiled parameter graph. Delbeteckningar retain the same instance-order P-numbering as K3 annotations. Joints keep their saved IDs/methods/endpoints. A separate explicit assembly dependency graph is validated and ordered as a concept proposal, never inferred from the cyclic physical joint graph or promoted to verified access/strength.
+`derive_construction_lists` consumes the exact current checked K2 revision and creates no geometry or Artifact mutation. Its BOM counts each explicitly classified manufacturing instance once; local blank dimensions come from the already compiled parameter graph. Delbeteckningar retain the same instance-order P-numbering as K3 annotations. Joints keep their saved IDs/methods/endpoints. A separate explicit assembly dependency graph is validated and ordered as a concept proposal, never inferred from the cyclic physical joint graph or promoted to verified access/strength.
 
 Saved blank needs pin this same Artifact/revision through the existing material requirement contract; see [K4 material owner](material-planning.md#k4-construction-blank-needs--2026-10-05). Reading derived lists alone is not a saved delivery. Raw-stock cutting and product/assembly checks remain gaps.

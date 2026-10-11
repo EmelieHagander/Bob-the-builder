@@ -1,11 +1,13 @@
 import { intrinsicAxes } from './cad-frames.ts'
 import { parseCadAssemblyRequest } from './cad-adapter.ts'
 import seed from './building-knowledge-seed.json' with { type: 'json' }
+import { constructionInstancePolicy } from './construction-instance-policy.ts'
 
 /** Conservative analytic checks, not the CAD kernel or a structural/product approval.
  * Only uncut boxes at right-angle rotations are admitted. Unsupported geometry
  * never receives a bounding-box approximation masquerading as an exact result. */
 export const CONSTRUCTION_CHECK_VERSION = 'orthogonal-butt-v1'
+export const CONSTRUCTION_ROLE_CHECK_VERSION = 'orthogonal-butt-role-v1'
 type RecordData = Record<string, any>
 type Issue = { code: string; ids: string[]; message: string }
 type Box = { id: string; min: number[]; max: number[]; faces: Map<string, { axis: number; sign: number; plane: number }> }
@@ -22,21 +24,32 @@ export function constructionKnowledge(today: string) {
   && c.rights === 'original_summary_links_only' && c.reviewed_at <= today && c.review_due >= today)
 }
 export function checkConstruction(draft: RecordData, catalog: Map<string, RecordData>, today: string) {
- const issues: Issue[] = [], gaps: Issue[] = [], boxes: Box[] = []
+ const issues: Issue[] = [], gaps: Issue[] = [], boxes: Box[] = [],visibleBoxes:Box[]=[]
  const add = (code: string, ids: string[], message: string) => { issues.push({ code, ids, message }) }
  const gap = (code: string, ids: string[], message: string) => { gaps.push({ code, ids, message }) }
  const knowledge = constructionKnowledge(today)
  const recipe = parseCadAssemblyRequest(draft.recipe)
+ let checkerVersion=CONSTRUCTION_CHECK_VERSION
+ let referenceIds=new Set<string>()
  if (draft.source_state !== 'current' || draft.archived || draft.revision !== draft.current_revision)
   add('checkpoint_not_current', [], 'Read the current unarchived draft and refresh changed source revisions before checking.')
  if (!recipe || !Array.isArray(draft.materials) || !Array.isArray(draft.joints)) {
   add('invalid_checkpoint', [], 'A canonical construction checkpoint is required.')
   return result()
  }
+ try{
+  const policy=constructionInstancePolicy(recipe,draft.instance_policy)
+  if(draft.instance_policy!=null)checkerVersion=CONSTRUCTION_ROLE_CHECK_VERSION
+  referenceIds=new Set(policy.instances.filter(i=>i.role==='reference').map(i=>i.instance_id))
+  if(referenceIds.size)gap('reference_clearance_unverified',[...referenceIds],'Reference geometry stays visible. Excluding it from physical contact and manufacturing checks does not verify clearance, motion or suitability.')
+  if(policy.instances.some(i=>i.role==='unknown'))gap('instance_roles_unknown',policy.instances.filter(i=>i.role==='unknown').map(i=>i.instance_id),
+   'Historical roles are unknown. No manufacturing quantities or cutting plan can be derived until the exact instance roles are classified.')
+ }catch{add('invalid_instance_policy',[],'Use the canonical policy for every saved instance.');return result()}
  if (recipe.clearances?.length || recipe.motions?.length) add('unsupported_checks', [], 'Motion and clearance checks need the CAD kernel; this checker cannot approve them.')
  const definitions = new Map(recipe.definitions.map(d => [d.id, d]))
  for (const d of recipe.definitions) {
   if (d.primitive !== 'box' || d.cuts?.length) { add('unsupported_geometry', [d.id], 'Only uncut boxes are supported by this check version.'); continue }
+  if(!recipe.instances.some(i=>i.definition_id===d.id&&!referenceIds.has(i.id)))continue
   const binding = draft.materials.find((m: RecordData) => m.definition_id === d.id)
   const material = binding && catalog.get(`${binding.material_id}@${binding.material_revision}`)
   if (!material || material.kind !== 'material' || material.current_revision !== binding.material_revision) {
@@ -84,7 +97,9 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
    faces.set(`${axes[local]}_min`, { axis: world, sign: -sign, plane: origin[world] })
    faces.set(`${axes[local]}_max`, { axis: world, sign, plane: origin[world] + sign * dims[local] })
   }
-  boxes.push({ id: instance.id, min, max, faces })
+  const box={ id: instance.id, min, max, faces }
+  visibleBoxes.push(box)
+  if(!referenceIds.has(instance.id))boxes.push(box)
  }
  const byId = new Map(boxes.map(b => [b.id, b])), contacts = new Set<string>(), connected = new Map(boxes.map(b => [b.id, new Set<string>()]))
  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
@@ -94,6 +109,9 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
  }
  const joined = new Set<string>(), jointChecks: RecordData[] = []
  for (const joint of draft.joints) {
+  if(referenceIds.has(joint.first.instance_id)||referenceIds.has(joint.second.instance_id)){
+   add('reference_joint_invalid',[joint.id],'Reference geometry is context, not a physical joint endpoint. Correct this declared joint.');continue
+  }
   const a = byId.get(joint.first.instance_id), b = byId.get(joint.second.instance_id)
   const fa = a?.faces.get(joint.first.face), fb = b?.faces.get(joint.second.face)
   const ids = [joint.id, joint.first.instance_id, joint.second.instance_id]
@@ -126,10 +144,11 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
   if (seen.size !== boxes.length) add('disconnected_parts', boxes.filter(b=>!seen.has(b.id)).map(b=>b.id), 'All parts of this supported fixed assembly need a path of valid joints. Physical joint cycles are allowed.')
  }
  for (const question of draft.open_questions ?? []) gap('open_design_question', [], question)
- return result({ part_count:recipe.instances.length, joint_count:draft.joints.length, joint_checks:jointChecks,
-  bounds_mm:boxes.length?{min:axes.map((_,k)=>Math.min(...boxes.map(b=>b.min[k]))),max:axes.map((_,k)=>Math.max(...boxes.map(b=>b.max[k]))),size:axes.map((_,k)=>Math.max(...boxes.map(b=>b.max[k]))-Math.min(...boxes.map(b=>b.min[k])))}:null })
+ return result({ part_count:recipe.instances.length, physical_part_count:recipe.instances.length-referenceIds.size,reference_instance_ids:[...referenceIds],
+  ...(draft.instance_policy!=null?{instance_policy:draft.instance_policy}:{}),joint_count:draft.joints.length, joint_checks:jointChecks,
+  bounds_mm:visibleBoxes.length?{min:axes.map((_,k)=>Math.min(...visibleBoxes.map(b=>b.min[k]))),max:axes.map((_,k)=>Math.max(...visibleBoxes.map(b=>b.max[k]))),size:axes.map((_,k)=>Math.max(...visibleBoxes.map(b=>b.max[k]))-Math.min(...visibleBoxes.map(b=>b.min[k])))}:null })
  function result(extra:RecordData={}) {
-  return { status:'checked', checker_version:CONSTRUCTION_CHECK_VERSION, artifact_id:draft.artifact_id, revision:draft.revision,
+  return { status:'checked', checker_version:checkerVersion, artifact_id:draft.artifact_id, revision:draft.revision,
    concept_ready:issues.length===0, fabrication_ready:false, rendered:false, reviewed:false,
    issues:issues.slice(0,200), issue_count:issues.length, fabrication_gaps:gaps.slice(0,200), fabrication_gap_count:gaps.length,
    references:knowledge.map(c=>({id:c.id,title:c.title,url:c.url,version:c.version,reviewed_at:c.reviewed_at,limitations:c.limitations})),

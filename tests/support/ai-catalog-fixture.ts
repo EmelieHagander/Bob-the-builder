@@ -86,6 +86,21 @@ for(const migration of migrations){
   const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(policy);box.definition.contract_keys.push(row.key)
   box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(patch.name);versions.set(box.key,versions.get(box.key)!+1)
  }
+ const consequenceContracts=source.match(/\$consequence_contracts\$([\s\S]+?)\$consequence_contracts\$/)
+ if(consequenceContracts){
+  const policies=JSON.parse(source.match(/\$consequence_policies\$([\s\S]+?)\$consequence_policies\$/)![1])
+  for(const patch of JSON.parse(consequenceContracts[1])){
+   const name=patch.contract?.name??patch.name,key='tools.'+name
+   let row=seed.find(row=>row.key===key),newRow=false
+   if(!row){row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key=key;seed.push(row);newRow=true}
+   if(patch.contract)row.definition={...row.definition,...patch.contract,handler:name,required_parameters:patch.contract.parameters.required,optional_parameters:[]}
+   row.definition.additional_description=(newRow?'':row.definition.additional_description??'')+patch.text
+   versions.set(key,(versions.get(key)??0)+1)
+  }
+  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(...policies)
+  box.definition.contract_keys.push(...policies.map((p:any)=>'tools.'+p.name));box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(...policies.map((p:any)=>p.name))
+  versions.set(box.key,versions.get(box.key)!+1)
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
