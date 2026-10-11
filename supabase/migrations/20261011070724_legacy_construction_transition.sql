@@ -11,8 +11,8 @@ create table bob.artifact_construction_origins(
  construction_artifact_id uuid not null,
  construction_revision integer not null,
  primary key(drawing_artifact_id,drawing_revision),
- foreign key(drawing_artifact_id,drawing_revision) references bob.artifact_cad_revisions(artifact_id,artifact_revision),
- foreign key(drawing_artifact_id,project_id) references bob.artifacts(id,project_id),
+ foreign key(drawing_artifact_id,drawing_revision) references bob.artifact_cad_revisions(artifact_id,artifact_revision) on delete cascade,
+ foreign key(drawing_artifact_id,project_id) references bob.artifacts(id,project_id) on delete cascade,
  foreign key(project_id,construction_artifact_id,construction_revision) references bob.artifact_construction_revisions(project_id,artifact_id,artifact_revision)
 );
 create index construction_origin_source_idx on bob.artifact_construction_origins(project_id,construction_artifact_id,construction_revision);

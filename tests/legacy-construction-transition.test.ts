@@ -110,6 +110,8 @@ test('legacy transition uses canonical geometry, exact receipts and guarded same
   await assert.rejects(rpc(outsider,'bob.prepare_legacy_construction_transition',[...f.binding,JSON.stringify(f.payload(f.input))]),/project_denied|turn_claim|denied/)
   await assert.rejects(rpc(null,'bob.prepare_legacy_construction_transition',[...f.binding,JSON.stringify(f.payload(f.input))],'anon'),/permission denied/)
   await assert.rejects(rpc(owner,'bob.prepare_legacy_construction_transition',[...f.binding.slice(0,3),f.binding[3]+1,JSON.stringify(f.payload(f.input))]),/turn_claim|generation|claim/)
+  await pg.query('delete from bob.projects where id=$1',[f.project])
+  assert.equal((await pg.query('select count(*) n from bob.artifact_construction_origins where project_id=$1',[f.project])).rows[0].n,0,'normal project removal cascades origin metadata')
  })
 
  await t.test('two prepared operations produce one checkpoint and stable retries; altered keys or source heads conflict',async()=>{
