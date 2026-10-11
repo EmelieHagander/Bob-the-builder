@@ -25,7 +25,7 @@ test('explicit canonical archive settles a linked model gap without inventing qu
  const saved=await r.write(payload);assert.equal(saved.recordId,id);assert.equal(saved.revision,2)
  assert.deepEqual(await r.write(payload),saved)
  const after=await r.changes(2),resolved=after.items.find((i:any)=>i.id===item.id)
- assert.equal(resolved.state,'retired');assert.equal(resolved.completed_revision,2);assert.equal(resolved.completion_receipt.recordId,id)
+ assert.equal(resolved.state,'retired');assert.equal(resolved.completed_revision,2);assert.equal(resolved.completion_receipt.recordId,id);assert.equal(resolved.completion_receipt.dataset,'requirements')
  assert.equal(after.pending,work.pending-1)
  assert.deepEqual(after.items.filter((i:any)=>i.id!==item.id),work.items.filter((i:any)=>i.id!==item.id))
  assert.deepEqual((await f.pg.query('select * from bob.material_requirement_revisions where requirement_id=$1 and revision=1',[id])).rows,before)
@@ -102,7 +102,7 @@ test('saved consequences survive interruption and retry; code reuses need/cut id
  const plan=await f.read(saved.recordId);assert.equal(plan.artifact_revision,2);assert.equal(plan.source_state,'current');assert.equal(plan.layout.placements.find((p:any)=>p.instance_id==='foot').length_mm,240)
  assert.deepEqual(await f.read(saved.recordId,1),{...oldPlan,current_revision:2,source_state:'changed'})
  const readback=await r.changes(2);assert.equal(readback.status,'complete');assert.equal(readback.pending,0)
- for(const item of readback.items){assert.equal(item.state,'updated');assert.equal(item.completion_receipt.recordId,item.output_id);assert.equal(item.completed_revision,2)}
+ for(const item of readback.items){assert.equal(item.state,'updated');assert.equal(item.completion_receipt.recordId,item.output_id);assert.equal(item.completed_revision,2);assert.equal(item.completion_receipt.dataset,item.kind==='requirement'?'requirements':'cut_plans')}
  assert.deepEqual((await f.pg.query('select * from bob.material_requirement_revisions where project_id=$1 and revision=1 order by requirement_id',[f.project])).rows,oldNeeds)
  assert.equal((await f.pg.query('select count(*)::int n from bob.materials where project_id=$1',[f.project])).rows[0].n,0)
  assert.equal((await f.pg.query('select count(*)::int n from bob.material_cut_plan_reservations where project_id=$1',[f.project])).rows[0].n,0)

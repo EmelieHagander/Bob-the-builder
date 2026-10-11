@@ -128,7 +128,9 @@ begin
  else
   output_kind:='drawing';output:=(r->>'drawing_artifact_id')::uuid;version:=(r->>'drawing_revision')::integer;source:=(r->>'construction_artifact_id')::uuid;source_version:=(r->>'construction_revision')::integer;
  end if;
- select w.receipt into receipt from bob_private.bob_write_receipts w where w.project_id=r->>'project_id' and w.receipt->>'recordId'=output::text and w.receipt->>'revision'=version::text order by w.created_at desc limit 1;
+ select w.receipt into receipt from bob_private.bob_write_receipts w where w.project_id=r->>'project_id'
+  and w.receipt->>'dataset'=case output_kind when 'requirement' then 'requirements' when 'cut_plan' then 'cut_plans' else 'artifacts' end
+  and w.receipt->>'recordId'=output::text and w.receipt->>'revision'=version::text order by w.created_at desc limit 1;
  update bob.construction_change_items i set state='updated',completed_revision=version,completion_receipt=receipt,completed_at=clock_timestamp()
   from bob.construction_change_sets c where i.change_id=c.id and i.project_id=c.project_id and c.project_id=r->>'project_id'
    and c.artifact_id=source and c.to_revision=source_version and i.kind=output_kind and i.output_id=output and i.state='pending';
@@ -151,7 +153,7 @@ declare receipt jsonb;
 begin
  if not new.archived then return new; end if;
  select w.receipt into receipt from bob_private.bob_write_receipts w where w.project_id=new.project_id
-  and w.receipt->>'recordId'=new.requirement_id::text and w.receipt->>'revision'=new.revision::text order by w.created_at desc limit 1;
+  and w.receipt->>'dataset'='requirements' and w.receipt->>'recordId'=new.requirement_id::text and w.receipt->>'revision'=new.revision::text order by w.created_at desc limit 1;
  update bob.construction_change_items i set state='retired',completed_revision=new.revision,completion_receipt=receipt,completed_at=clock_timestamp()
   from bob.construction_change_sets c,bob.artifacts a,bob.material_requirements h
   where i.change_id=c.id and i.project_id=new.project_id and i.kind='requirement' and i.requirement_id=new.requirement_id and i.state='pending'
