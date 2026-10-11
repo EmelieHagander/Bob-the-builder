@@ -39,6 +39,57 @@ Deployed release B adds `change_construction_parameters` to the Drawings and CAD
 Release C adds `transition_legacy_drawing` on the same shelf/write gate. The database owns the copied geometry/graph and atomic origin/receipt; the model cannot send a replacement recipe or dimensions. Null evidence returns grouped gaps; exact existing-checkpoint reuse returns a `reused` Artifact receipt without creating a construction revision. The catalog adds this contract and updates only the CAD reader/render manuals and toolbox. Older immutable manifests omit the handler even when live tool policy includes it. [Artifact](artifacts.md#legacy-drawing-transition--release-c) owns first-pin/history semantics and [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback.
 
 
+## Calculator and saved calculation models — specified 2026-10-11
+
+**Product decision; a common calculator tool is not implemented or installed.**
+AI describes the calculation model and proposes explicit design assumptions;
+code executes the mathematics. Bob and delegated specialists must use the same
+calculation capability. A computed project value needs an executable model and
+traceable inputs, not arithmetic copied from an AI answer. Keep measured inputs,
+design decisions, estimates and derived results distinct.
+
+Expose a common calculator tool through the existing registered-handler,
+versioned AI-contract and policy seams. It must execute supported, versioned
+methods or a validated declarative dependency graph, with named inputs, units and
+an explicit rounding policy. Do not execute arbitrary model-authored code or
+expressions through `eval`. An unsupported formula or missing input is a concrete
+gap; it must not trigger a model-arithmetic fallback or an invented zero. Extending
+the supported operations/methods is a reviewed code change.
+
+One tool surface does not require one new formula table or a second calculation
+engine. Preserve the existing owners and distinguish three layers:
+
+| Layer | Version and storage owner |
+|---|---|
+| Reusable method and supported operations | Versioned executable code. Fixed domain methods reuse their current evaluator; the AI catalog owns the offered tool contract, not the mathematical definition. A changed formula gets a new method version; existing saved versions keep their original semantics and remain replayable. |
+| Project model, inputs and dependencies | The existing domain revision: construction parameter graph, stair recipe with exact source plan, or material requirement basis. Project-specific declarative formulas belong with that revision. Source values are read from authorised exact database revisions; AI supplies references, not copied source values. Explicit proposed inputs retain decision/estimate provenance. |
+| Calculation result | Returned by code with method/operation versions, input provenance, units and rounding. A saved result/basis belongs to the same owning domain revision through its canonical writer and receipt. Where results are derived on read, replay the pinned method and inputs; do not create a competing stored-result source. |
+
+**Existing stair example.** `inspect_stair_options` already calls
+`stairSummary`/`stairGeometry` in `src/lib/stairStudy.ts`; it reads the exact
+authorised multi-floor plan and computes total rise, rise per step and
+`step_formula_mm = 2 * rise_mm + going_mm` in code. `save_project_stair` stores a
+`stair_study_v1` recipe and exact parent plan revision in
+`bob.artifact_stair_studies`. The [Artifact stair owner](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19)
+owns persistence, history, shape limits and checks. Reuse this evaluator rather
+than teaching the model to reconstruct heights or introducing another stair
+formula store. Evaluating the formula and selecting an evidenced project criterion
+are separate concerns; the numeric result alone is not a suitability approval.
+
+[Construction graphs](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10)
+already execute saved operands and versioned operations in code and validate them
+on save. [Material calculations](material-planning.md#truth-classes-in-4b2a)
+own supported quantity methods and purchase arithmetic; AI-supplied manual base
+quantities must retain manual provenance. The common calculator must not relabel
+them as computed or silently convert estimates into measurements.
+
+Implementation acceptance must exercise the actual offered tool and caller scope,
+unit/rounding errors, missing inputs, exact-revision replay after reload, changed
+sources and retry without duplicate saved results. Include a stair calculation
+and a dependent construction dimension; domain formula tests alone do not prove
+the common tool or its use by a real model. [State](bob-delivery-flow.md#state)
+owns sequencing and remaining implementation.
+
 ## Opt-in manual experiment — 2026-10-03
 
 **Implemented comparison candidate; not enabled by hosted callers or deployed.**

@@ -294,6 +294,8 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 
 **Nästa handling för datadrivna ändringar:** implementera D:s versionsbundna delroller/mängdpolicy och sparade konsekvensarbete genom befintliga skriv- och kvittogränser. [Artifact](artifacts.md), [CAD](cad-adapter.md), [material](material-planning.md) och [datagränserna](#kvarstående-datagränser--kodgranskning-2026-10-10) äger kontraktet. A/B/C är tekniskt installerade; C:s avslutade CI, merge och migration/runtime/katalog-readback ligger i [verifieringen](foundation-verification.md#legacy-drawing-transition--release-c). Ingen kvarstående kodinstallation är identifierad för A/B/C. Beställarens implementations-/driftsättningsmandat gäller. Verklig medlems-, våningssängs-/mockupacceptans och kostnadsmätning samlas i E.
 
+**Kvarstående gemensamt beräkningsverktyg:** implementera [miniräknaren och modellernas lagring/versioner](ask-bob-tools.md#calculator-and-saved-calculation-models--specified-2026-10-11) genom den befintliga verktygs-/AI-kataloggränsen. Återanvänd trappans, konstruktionens och materialens kodberäkningar och domänrevisioner; verktyget är specificerat, inte installerat. Alla värden som kallas beräknade ska komma från kod med spårbara indata. Verifiera faktisk verktygsanvändning, versionsåterläsning och källändring; AI-inmatade manuella mängder får inte presenteras som beräknade. Detta kompletterar D/E utan att återöppna A/B/C:s avslutade installationer.
+
 <a id="six-outcomes-in-five-releases"></a>
 ### Sex utfall i fem leveranser
 
