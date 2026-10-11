@@ -2041,6 +2041,18 @@ test files. Total **272/272**, zero failures/skips. `npm run check:vocabulary` a
 from this workspace. No new implementation-shaped tests were added for these
 documentation changes; full build/Edge/browser gates belong to PR CI.
 
+The initial [PR #247 CI run](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38155415986)
+passes **1253/1253** tests, Edge, builds, PWA and the other browser gates, but
+fails the material-planning journey at its Shopping quantity lookup. The strict
+locator matched three `2 pcs` occurrences in the outgoing Material Plan while
+hash navigation was still replacing that view. The product files are unchanged
+from the reviewed base. The existing browser harness now waits for the destination
+`Shopping list` heading and matches the quantity prefix in the named Shopping row
+for both initial publication (1 pcs) and update (2 pcs). Source/delivered-state and
+reload assertions remain. This repairs the race without weakening the arithmetic
+check; it does not fix the authored-price defect. No local browser is installed;
+the corrected journey must pass in fresh PR CI.
+
 The missing common handler/result envelope, standalone saved graph contract and
 price correction are explicit implementation gaps. Stored requirement history
 does not prove replay dispatch for every old method, particularly D v1/v2
