@@ -988,8 +988,9 @@ historical results. Authenticated receives EXECUTE only; anon/service/PUBLIC do
 not. Existing RLS/PKs cover exact source reads. Private immutable
 `material_purchase_math_v1` is shared by purchase replay and the canonical
 writer's asserted unchanged arithmetic block, preserving existing ACL/locks.
-Install this migration, then the reviewed ask-bob/worker runtime, then
-`20261012060715_ai_calculator_catalog.sql`. Earlier AI manifests/model settings
+The core is installed as `20261012073221 project_calculator`; both reviewed Bob
+runtimes precede `20261012073416 ai_calculator_catalog` activation. Do not repeat
+these migrations. Earlier AI manifests/model settings
 and saved revisions are unchanged. The [tool owner](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
 owns method coverage and the [verification owner](../Docs/foundation-verification.md#common-calculator--2026-10-12)
 owns actual release/readback and remaining model acceptance.

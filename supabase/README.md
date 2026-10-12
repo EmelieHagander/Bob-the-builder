@@ -581,6 +581,9 @@ bounded calculation phase before the original tool-free pinned JSON-schema
 response; the shared OpenAI adapter is unchanged. All model calls use existing
 accounting/call/cost guards. Role tool keys and instructions receive new immutable
 versions; models, tiers, profiles and earlier manifests remain unchanged.
-Install its SQL reader/math helper, deploy both compatible Bob functions, then
-activate its catalog migration. [Verification](../Docs/foundation-verification.md#common-calculator--2026-10-12)
-records installation and real-model evidence; source presence alone proves none.
+The SQL reader/math helper, compatible **ask-bob 105 / bob-worker 73**, and
+catalog manifest `6482763a-214b-4022-9e32-92b42e9dac71` are installed in that
+order. [Verification](../Docs/foundation-verification.md#common-calculator--2026-10-12)
+records exact source/authentication readback, preserved revisions/settings and
+an actual Bob-selected graph preview. Specialist/member/mockup acceptance and
+the remaining method boundaries stay explicit; do not repeat this installation.

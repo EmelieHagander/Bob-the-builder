@@ -2097,24 +2097,96 @@ independent subagent review or real-model calculator acceptance is claimed.
 
 ## Common calculator — 2026-10-12
 
-**Code implementation; hosted release and actual model use still pending.**
+**Implemented, migrated, deployed and verified with an actual Bob tool call.**
 `calculate_project` shares the existing graph/stair evaluators and SQL purchase
 owner. Its [contract](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
 records exact method coverage and remaining gaps. Source/current readiness,
 manual provenance, units/rounding, invocation budget, catalog versions and
 specialists' structured response boundary have focused automated coverage.
-The latest focused pass is 62/62 tests, including canonical stair save/refresh
+The full local suite passes **1,276/1,276 tests**. The focused 62/62 pass includes canonical stair save/refresh
 and old-revision readback, construction blank v1 saved before D then replayed
 under D without rewriting count semantics, scoped invoker SQL, and provider
 phase/final-schema observations with scripted models. Additional policy/pack
-cases and final CI remain to be recorded at the reviewed head.
+cases pass in the full suite. [PR #248](https://github.com/EmelieHagander/Bob-the-builder/pull/248)
+publishes the exact tested tree `18be1cbfb922173689f132afd302431f39e21468`
+at reviewed source head `d0a8a1d915fbccc3dae3ca8a62e7f6629d589068`.
+[CI 38216748529](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748529)
+passes all **1,276 tests and 51 steps**, including canonical Edge checks and
+the intercepted browser flows. [CAD adapter 38216748542](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748542)
+and [PostgreSQL 38216748510](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748510)
+pass; the latter installs the full schema and passes **68 concurrent races**.
 
-The vocabulary check and frontend build pass. Canonical local Edge checking is
+The vocabulary check, frontend build, PWA and generated catalog checks pass. Canonical local Edge checking is
 blocked by this environment's refused `esm.sh` connection; no local browser is
-installed. Required CI must supply the exact-head Edge/browser evidence. The
-Supabase connection is readable; calculator SQL/activation are not installed.
+installed. The linked exact-source CI supplies Edge/browser evidence; no local
+browser pass is claimed.
 The migration CLI aborts in its installed Bun runtime even for `migration new
 --help`; observed UTC fallback filenames are explicitly recorded. Manual code
 and owning-contract review follow Archie/verify; no independent subagent review
-is claimed. [State](bob-delivery-flow.md#state) retains remaining release and
-product acceptance, including the separate authored-price correction.
+is claimed.
+
+### Hosted calculator release
+
+The target `yuobtgoidmmmwfqenkau` was read before installation. Both new functions
+were absent, the retained purchase writer contained exactly the reviewed
+arithmetic block, manifest `1014e17d-3fa2-46b9-a30c-e3829d5a67d6` was active,
+and there were zero active unexpired Bob jobs/models. Only the two reviewed
+migrations were applied, in SQL → both runtimes → catalog order:
+
+| Reviewed file | Installed ledger version/name |
+|---|---|
+| `20261012060203_project_calculator.sql` | `20261012073221 project_calculator` |
+| `20261012060715_ai_calculator_catalog.sql` | `20261012073416 ai_calculator_catalog` |
+
+Both new function bodies match their reviewed source exactly. Their empty
+search paths, invoker mode and authenticated-only EXECUTE grants were read
+back; anon/service/PUBLIC cannot execute them. The retained purchase writer
+matches its complete pre-release definition with only the asserted arithmetic
+block replaced. A hosted **BEGIN … ROLLBACK** smoke replays all three existing
+saved purchase revisions to their unchanged allowance/purchase quantities,
+checks decimal/increment rounding and denies outsider/anon/service reads.
+It creates no fixture rows, calls no models and commits no owner changes.
+
+| Runtime | Authentication and exact source readback |
+|---|---|
+| `ask-bob 105` | ACTIVE, existing JWT true; all **92** bundled files match; bundle `1689fa9b72819dca5106c7c5c5a85ee9b8dbfb9546d647a6105372e5a2990e71` |
+| `bob-worker 73` | ACTIVE, existing JWT false with unchanged job/capability authentication; all **90** bundled files match; bundle `653c99a2c873e5e57fc6511e30d4c5848972a0979a6a6ebebc5fbf9aa536e71e` |
+
+Submitted closures have **93/92 files**. The compiler omits only
+`src/data/provenance.ts` and the worker's type-only `bob-request.ts`, as in the
+previous release. Every previously bundled file remains present. The new
+calculator and schema-phase modules are in both bundles; no unrelated runtime
+or authentication setting changed.
+
+Canonical catalog readback returns manifest
+`6482763a-214b-4022-9e32-92b42e9dac71`, **272 definitions**. The calculator's
+contract/policy, toolbox and all six role tool-key additions match the exact
+generated publication. The six appended instructions and new schema-phase
+fragment match exactly. Exactly **13** existing identities change and **2**
+are added; all unrelated cross-app versions/hashes and all models/settings
+remain unchanged. Resolving the previous manifest reproduces its entire
+original payload, so older pinned sessions keep their original contract.
+
+`scripts/check-live-calculator.ts` ran against actual Auth and `ask-bob` using
+the existing public guest and one disposable project. It supplied a synthetic
+**1.001 m provided specification at revision 1**, two explicit 18 mm side
+choices and a 5 mm clearance choice. Bob returned **960 mm**. Content-free
+execution evidence for turn `1620f8ad-cc35-4cbd-8056-6fe02f402b4e` records
+`calculate_project` both offered and selected by `ask-bob`, followed by one
+tool event with status **calculated**. The source value/unit/truth/revision
+remained unchanged and no Artifact or requirement was created. This is an
+explicitly requested graph preview with a public advice-only account; it does
+not prove natural-language specialist choice, named-member writing or bed fit.
+
+The exact disposable project `p_caf7c27b4b5046ba9b0f5b299237c74a` was removed
+after verifying its name, guest ownership and absence of generated outputs.
+The first cleanup call returned the connector's expired-request error; the
+narrower guarded single-project delete succeeded and independent readback
+confirms cleanup. All **129 original tables / 1,392 rows** retain their exact
+pre-release counts and complete-row digests, including saved construction/CAD,
+material history and all **12 shared models / 38 shared settings**. Security
+and performance advisors add **zero** findings against the pre-release
+snapshot. Existing shared-project findings were not changed.
+
+[State](bob-delivery-flow.md#state) retains PR review/merge and the remaining
+graph/unit/history/price boundaries plus E's real member/mockup/cost acceptance.
