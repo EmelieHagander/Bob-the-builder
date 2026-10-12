@@ -2093,3 +2093,28 @@ project records, paid model calls or hosted probes were introduced by this revie
 Direct review follows the owning contracts and Archie/verify guidance; no
 independent subagent review or real-model calculator acceptance is claimed.
 [State](bob-delivery-flow.md#state) retains the next implementation and its gates.
+
+
+## Common calculator — 2026-10-12
+
+**Code implementation; hosted release and actual model use still pending.**
+`calculate_project` shares the existing graph/stair evaluators and SQL purchase
+owner. Its [contract](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+records exact method coverage and remaining gaps. Source/current readiness,
+manual provenance, units/rounding, invocation budget, catalog versions and
+specialists' structured response boundary have focused automated coverage.
+The latest focused pass is 62/62 tests, including canonical stair save/refresh
+and old-revision readback, construction blank v1 saved before D then replayed
+under D without rewriting count semantics, scoped invoker SQL, and provider
+phase/final-schema observations with scripted models. Additional policy/pack
+cases and final CI remain to be recorded at the reviewed head.
+
+The vocabulary check and frontend build pass. Canonical local Edge checking is
+blocked by this environment's refused `esm.sh` connection; no local browser is
+installed. Required CI must supply the exact-head Edge/browser evidence. The
+Supabase connection is readable; calculator SQL/activation are not installed.
+The migration CLI aborts in its installed Bun runtime even for `migration new
+--help`; observed UTC fallback filenames are explicitly recorded. Manual code
+and owning-contract review follow Archie/verify; no independent subagent review
+is claimed. [State](bob-delivery-flow.md#state) retains remaining release and
+product acceptance, including the separate authored-price correction.

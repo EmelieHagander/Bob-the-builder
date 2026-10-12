@@ -977,3 +977,19 @@ preparation with a finite lease and three explicit attempts; completion fences
 old/expired workers. Source rows and Artifact revisions remain unchanged.
 [Mobile CAD](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10) owns the viewer
 and cache contract. [PR #239](https://github.com/EmelieHagander/Bob-the-builder/pull/239) applied this migration as hosted ledger `20261010081013_cad_viewer_exports` and records exact function bodies, RLS/grants and Edge/Modal/Pages readback.
+
+
+### Common calculator read boundary — 2026-10-12
+
+`20261012060203_project_calculator.sql` adds no tables or domain writer ABI.
+Invoker `read_calculation_source` reopens exact project/physical-authorised
+multi-floor, stair and material revisions; current readiness is separate from
+historical results. Authenticated receives EXECUTE only; anon/service/PUBLIC do
+not. Existing RLS/PKs cover exact source reads. Private immutable
+`material_purchase_math_v1` is shared by purchase replay and the canonical
+writer's asserted unchanged arithmetic block, preserving existing ACL/locks.
+Install this migration, then the reviewed ask-bob/worker runtime, then
+`20261012060715_ai_calculator_catalog.sql`. Earlier AI manifests/model settings
+and saved revisions are unchanged. The [tool owner](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+owns method coverage and the [verification owner](../Docs/foundation-verification.md#common-calculator--2026-10-12)
+owns actual release/readback and remaining model acceptance.

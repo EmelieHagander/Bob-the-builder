@@ -744,5 +744,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "calculate_project",
+    "description": "Execute traceable versioned calculations in code.",
+    "how_to": "Use exact authorised source IDs/revisions. Preview a declared graph/stair; reopen saved construction/stair/material versions to replay. Code returns values, units, rounding, provenance and source readiness. Save only through the existing domain writer and its receipt; retain manual quantities and unknown inputs honestly.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

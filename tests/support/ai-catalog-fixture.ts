@@ -101,6 +101,23 @@ for(const migration of migrations){
   box.definition.contract_keys.push(...policies.map((p:any)=>'tools.'+p.name));box.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push(...policies.map((p:any)=>p.name))
   versions.set(box.key,versions.get(box.key)!+1)
  }
+ const calculatorContract=source.match(/\$calculator_contract\$([\s\S]+?)\$calculator_contract\$/)
+ if(calculatorContract){
+  const contract=JSON.parse(calculatorContract[1]),policy=JSON.parse(source.match(/\$calculator_policy\$([\s\S]+?)\$calculator_policy\$/)![1])
+  const row=structuredClone(seed.find(row=>row.key==='tools.inspect_stair_options'));row.key='tools.calculate_project'
+  row.definition={...row.definition,...contract,handler:contract.name,required_parameters:contract.parameters.required,optional_parameters:[],additional_description:policy.how_to}
+  seed.push(row);versions.set(row.key,1)
+  const box=seed.find(row=>row.key==='bob.tools');box.definition.catalog.push(policy);box.definition.contract_keys.push(row.key)
+  box.definition.shelves.push({label:'Calculations',tools:['calculate_project']});versions.set(box.key,versions.get(box.key)!+1)
+  for(const patch of JSON.parse(source.match(/\$calculator_text_patches\$([\s\S]+?)\$calculator_text_patches\$/)![1])){
+   let row=seed.find(row=>row.key===patch.key)
+   if(!row){row={key:patch.key,kind:'instruction_fragment',content:patch.content,definition:{},metadata:{},variables:[]};seed.push(row);versions.set(row.key,1)}
+   else{row.content+='\n\n'+patch.append;versions.set(row.key,versions.get(row.key)!+1)}
+  }
+  for(const name of JSON.parse(source.match(/\$calculator_roles\$([\s\S]+?)\$calculator_roles\$/)![1])){
+   const row=seed.find(row=>row.key==='role.'+name);row.definition.tool_keys.push('tools.calculate_project');versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

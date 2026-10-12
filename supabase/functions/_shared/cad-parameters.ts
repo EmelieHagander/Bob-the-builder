@@ -98,18 +98,11 @@ function sourceSnapshot(projectId:string,ref:Ref,project:Map<string,Record<strin
  return {kind:ref.kind,id:ref.id,building_id:r.building_id,space_id:r.space_id,space_revision:r.space_revision,measurement_id:r.measurement_id,measurement_revision:r.measurement_revision,value:String(r.value),unit:r.unit,truth:r.truth,description:r.source}
 }
 
-/** Evaluate a declarative DAG with decimal arithmetic. No executable model code,
- * implicit unit conversions, inferred decisions or unknown-to-zero coercion. */
-export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,raw:unknown,project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>,images=new Map<string,string>()):CadParameters{
- const plan=parseParameterPlan(raw),targets=cadParameterTargets(recipe),inputs=new Map(plan.nodes.map(n=>[n.id,n]))
- parameterSourcePins(plan)
+/** Same v1 evaluator for CAD bindings and the calculator. Units, precision and
+ * rounding remain versioned; a caller cannot inject executable expressions. */
+function parameterEvaluator(projectId:string,nodes:ParameterInput[],project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>) {
+ const inputs=new Map(nodes.map(n=>[n.id,n]))
  const result=new Map<string,CadParameters['nodes'][number]>(),active=new Set<string>()
- const missing=[...targets.keys()].filter(path=>!plan.bindings.some(b=>b.path===path))
- for(const f of plan.frames)if(f.kind==='image'&&!images.has(f.source_ref))throw new Error('coordinate_image_unread')
- const unknown=plan.nodes.filter((n):n is Extract<ParameterInput,{role:'unknown'}>=>n.role==='unknown')
- const frameGaps=plan.frames.filter(f=>f.required&&f.placement===null).map(f=>({id:f.id,unit:'scalar' as const,reason:f.reason}))
- if(unknown.length||frameGaps.length)throw new CadParameterGap([...unknown.map(({id,unit,reason})=>({id,unit,reason})),...frameGaps])
- if(missing.length)throw new CadParameterBindingGap(missing)
  function evaluate(key:string):CadParameters['nodes'][number]{
   if(result.has(key))return result.get(key)!
   if(active.has(key))throw new Error('parameter_cycle')
@@ -139,6 +132,34 @@ export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,
   const evaluated={...n,normalized:{value,unit:u},sources}
   active.delete(key);result.set(key,evaluated);return evaluated
  }
+ return {evaluate,result}
+}
+
+/** Read-only graph preview. Saved models remain in their owning domain revision. */
+export function compileParameterGraph(projectId:string,nodes:unknown,outputs:string[],project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>) {
+ const plan=parseParameterPlan({version:1,frames:[],nodes,bindings:[]})
+ parameterSourcePins(plan)
+ if(!Array.isArray(outputs)||outputs.length<1||outputs.length>64||new Set(outputs).size!==outputs.length||!outputs.every(id))throw new Error('invalid_parameter_outputs')
+ const unknown=plan.nodes.filter((n):n is Extract<ParameterInput,{role:'unknown'}>=>n.role==='unknown')
+ if(unknown.length)throw new CadParameterGap(unknown.map(({id,unit,reason})=>({id,unit,reason})))
+ const {evaluate,result}=parameterEvaluator(projectId,plan.nodes,project,physical)
+ const values=outputs.map(evaluate)
+ if(result.size!==plan.nodes.length)throw new Error('parameter_unused_node')
+ return {nodes:[...result.values()],outputs:values}
+}
+
+/** Evaluate a declarative DAG with decimal arithmetic. No executable model code,
+ * implicit unit conversions, inferred decisions or unknown-to-zero coercion. */
+export function compileCadParameters(projectId:string,recipe:CadAssemblyRequest,raw:unknown,project:Map<string,Record<string,any>>,physical:Map<string,Record<string,any>>,images=new Map<string,string>()):CadParameters{
+ const plan=parseParameterPlan(raw),targets=cadParameterTargets(recipe)
+ parameterSourcePins(plan)
+ const {evaluate,result}=parameterEvaluator(projectId,plan.nodes,project,physical)
+ const missing=[...targets.keys()].filter(path=>!plan.bindings.some(b=>b.path===path))
+ for(const f of plan.frames)if(f.kind==='image'&&!images.has(f.source_ref))throw new Error('coordinate_image_unread')
+ const unknown=plan.nodes.filter((n):n is Extract<ParameterInput,{role:'unknown'}>=>n.role==='unknown')
+ const frameGaps=plan.frames.filter(f=>f.required&&f.placement===null).map(f=>({id:f.id,unit:'scalar' as const,reason:f.reason}))
+ if(unknown.length||frameGaps.length)throw new CadParameterGap([...unknown.map(({id,unit,reason})=>({id,unit,reason})),...frameGaps])
+ if(missing.length)throw new CadParameterBindingGap(missing)
  const writes:{set:(n:number)=>void;value:number}[]=[]
  for(const b of plan.bindings){
   const t=targets.get(b.path);if(!t)throw new Error('parameter_path_missing')

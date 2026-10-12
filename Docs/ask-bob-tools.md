@@ -51,7 +51,7 @@ Legacy/manual linked needs are included in the work list even without a recorded
 
 ## Calculator and saved calculation models — specified 2026-10-11
 
-**Product decision; a common calculator tool is not implemented or installed.**
+**Product decision; the first common calculator is implemented in the 2026-10-12 branch.** Hosted activation and actual model evidence belong to the [release verification](foundation-verification.md#common-calculator--2026-10-12); code presence is not an installation claim.
 AI describes the calculation model and proposes explicit design assumptions;
 code executes the mathematics. Bob and delegated specialists must use the same
 calculation capability. A computed project value needs an executable model and
@@ -118,7 +118,7 @@ or common-tool/model acceptance. Domain owners retain their release status.
 | Candidate-sheet cutting | `constructionCutFit`, `construction-sheet-guillotine-v1`; integer six-decimal working mm, explicit kerf/trim/grain, bounded guillotine search. | Read-only assessment; saved plans pin construction and candidate sources and SQL revalidates the layout. Feasibility is not an optimal purchase count. |
 | Earlier drawing recipes | `artifactGeometry.ts`, `storageBox.ts`, `roomLayout.ts`, `buildingPlan.ts`: bounded versioned recipes, integer micrometre geometry and exact source pins. | Existing Artifact generation/layout/plan revisions; no second geometry or formula store. |
 
-The first implementation must address these concrete seams:
+The reviewed implementation seams are below. The v1 boundary and explicit remaining gaps are recorded in [Common calculator v1](#common-calculator-v1--implementation-2026-10-12):
 
 - **Reuse with typed scope.** Separate graph evaluation from CAD path binding
   without changing v1 arithmetic. Its units are only `mm`, `deg`, `scalar`;
@@ -151,6 +151,46 @@ Authored time/price display helpers are separate from these model contracts:
 while [Shopping price text](material-planning.md#authored-prices-and-display-total)
 currently has a reproduced parsing defect. Neither establishes a complete
 project effort or verified price calculation.
+
+### Common calculator v1 — implementation 2026-10-12
+
+`calculate_project` is one registered, catalog-versioned read-only capability for
+Bob, CAD research/designer/reviewer and Plan compiler/reviewer. Every specialist
+checks the same live active/schema-version policy before offering and executing
+it; policy failure never enables a fallback. All callers share twelve calculation
+attempts within the turn, including invalid attempts. Provider calls still use
+the existing aggregate call/cost budgets and authority/dispatch guards.
+
+| Request method | Executed model and persistence boundary |
+|---|---|
+| `parameter_graph_v1` | The existing six-decimal evaluator, separated from CAD path binding. Named outputs retain source snapshots, decision/estimate roles, operand IDs and operation/rounding versions. This is a preview; persist a construction graph with its canonical construction writer. |
+| `construction_parameters_v1` | Replay the exact saved construction recipe/graph with its original snapshots and validate it before returning derived nodes. A separate fresh caller read reports current-source readiness; a newer head never changes the historical result. |
+| `stair_study_v1` / `saved_stair_study_v1` | Inspect an explicit recipe on an exact authorised multi-floor plan, or reopen an exact stair revision and parent plan. Reuse `stairSummary`; return full-precision rise/formula/pitch and an explicit three-decimal display policy. Display-rounded rise is never an evaluator input. Save through `save_project_stair`. |
+| `material_purchase_v1` | Reopen an exact requirement revision and replay allowance, saved allocations, zero-clamped shortfall and purchase-increment rounding in SQL. The canonical writer and reader share `material_purchase_math_v1`. Manual base quantities remain manual. Construction blank v1/v2 bases replay from their typed immutable instance/dimension snapshots with their original count semantics. Other deterministic base methods are explicitly `stored_only`, not falsely claimed as historical replay. |
+| `pack_purchase_v1` | Reuse the caller-authorised `pack_purchase_quote` and read exact article readiness. Sum net needs before whole-pack rounding. Unknown pack size remains null with a named gap. A quote does not publish, reserve, deliver or save a purchase. |
+
+Results identify schema/method versions, named inputs/dependencies/outputs,
+units, rounding, domain owner and exact model/source revisions. `saved=false`
+means this invocation performed no write; `model.persisted` separately says
+whether it replayed an existing saved model. Proposed inputs do not become
+measurements. Source changes are readiness information, not permission to adopt
+new values. Exact database reads enforce project/physical access through the
+caller; the new RPC is invoker-only and has no anon/service grant.
+
+Structured specialists receive at most two calculation rounds with up to four
+calls in each, then their original tool-free pinned JSON-schema call. The final
+call receives exact code results, not calculation-phase prose. Provider failure,
+revocation, policy failure or an exhausted calculator stops this path honestly;
+it does not create an arithmetic fallback. CAD dependency refresh records these
+reads so a saved retry fingerprint cannot treat changed inputs as unchanged.
+
+Remaining boundaries: a standalone graph has no generic saved-model writer;
+use the existing domain revision or report that gap. General area/volume/money
+operations are not part of the v1 graph. Historical wall/CAD-only base replay,
+cutting/geometry exposure beyond the existing specialist tools and the separate
+Shopping authored-price fix remain with their existing owners. The common tool
+cannot claim those capabilities from a stored number alone. Actual model and
+member acceptance remain distinct from scripted domain/SQL tests.
 
 ## Opt-in manual experiment — 2026-10-03
 

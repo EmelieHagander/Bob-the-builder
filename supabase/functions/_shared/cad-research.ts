@@ -16,7 +16,7 @@ const FINISH_NAME='finish_cad_research'
  * exact tool results, never a small model's lossy rewrite of measurements. */
 export async function collectCadResearch(opts: {
  aiCatalog:AiCatalogSession; userId: string; messages: NonNullable<OpenAIServiceOptions['messages']>;
- tools: () => NonNullable<OpenAIServiceOptions['tools']>;
+ tools: () => NonNullable<OpenAIServiceOptions['tools']>|Promise<NonNullable<OpenAIServiceOptions['tools']>>;
  execute: (name: string, args: unknown) => Promise<unknown>;
  callModel: (o: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>;
  hasAccess: () => Promise<boolean>; deadline: number;
@@ -31,7 +31,7 @@ export async function collectCadResearch(opts: {
   const refs=evidenceRefs(evidence,opts.handoff)
   if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable')
   const catalogSchemaParameters={evidence_refs:[...refs].sort(),...(opts.handoff.requirements.length?{check_ids:opts.handoff.requirements.map(r=>r.id)}:{})}
-  const tools = [...opts.tools(),opts.aiCatalog.tool(FINISH_NAME,catalogSchemaParameters)]
+  const tools = [...await opts.tools(),opts.aiCatalog.tool(FINISH_NAME,catalogSchemaParameters)]
   const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'cad-research',
    aiFunction: 'cad-research', module: 'cad', userId: opts.userId, catalogRoleKey:'cad-research',catalogSchemaParameters,
    messages:[...messages,{role:'user',content:JSON.stringify({intake_contract:CAD_RESEARCH_CONTRACT,required_check_ids:opts.handoff.requirements.map(r=>r.id),allowed_source_refs:[...refs].sort(),rules:opts.aiCatalog.text('cad-research.readiness-rules')})},...opts.carrier?.()??[]], tools, previousResponseId, maxOutputTokens:cadResearchOutputLimit(opts.handoff.requirements.length),outputTokenLimit:cadResearchOutputLimit(opts.handoff.requirements.length),

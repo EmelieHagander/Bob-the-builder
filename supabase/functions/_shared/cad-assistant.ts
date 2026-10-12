@@ -1,3 +1,5 @@
+import {hasCalculatorContract,type ProjectCalculator} from './project-calculator.ts'
+import {callWithCalculator} from './calculator-model-call.ts'
 import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop } from './bob-budget-stop.ts'
 import {createDrawingDependencies} from './drawing-dependencies.ts'
 import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadParameters,inheritCadParameters,cadParameterSources,CadParameterGap,CadParameterSourceError,type CadParameters} from './cad-parameters.ts'
@@ -57,7 +59,7 @@ const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused r
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:ProjectCalculator;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
@@ -198,7 +200,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
    let result:unknown
    if(name==='search_project_data')return lookup.search(args)
    if(name==='read_cad_artifact'&&object(args)&&uuid(args.artifact_id)&&(args.revision===null||Number.isSafeInteger(args.revision)&&args.revision>0))return readArtifact(args.artifact_id,args.revision)
-   if(name==='search_building_knowledge'&&opts.knowledgeReader)result=await opts.knowledgeReader.execute(args)
+   if(name==='calculate_project'&&opts.calculator)result=await opts.calculator.execute(args)
+   else if(name==='search_building_knowledge'&&opts.knowledgeReader)result=await opts.knowledgeReader.execute(args)
    else if(opts.catalog?.tools.some(t=>t.function.name===name))result=await opts.catalog.read(name,args)
    else if(opts.context?.tools.some(t=>t.function.name===name))result=await opts.context.execute(name,args)
    else result={status:'invalid'}
@@ -360,7 +363,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     messages.push({role:'user',content:JSON.stringify({source_evidence:initialEvidence,incomplete_datasets:facts.incomplete,handoff,reference_refs:referenceRefs,image_catalog:imageCatalog,source_records_are_exact:true,retrieval_failures_are_physical_gaps:false})})
     const collected=await collectCadResearch({aiCatalog:opts.aiCatalog,userId:opts.userId,messages,handoff,previousAssessment:request?.payload.assessment,choiceIds:new Set(readiness.design_intent.choices.map(c=>c.id)),initialEvidence,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel:model,
      carrier:()=>{const pixels=opts.context?.carrier()??[];referencePixels.push(...pixels);return pixels},confirmDelivery:()=>opts.context?.confirmDelivery(),
-     tools:()=>[...(lookup.remaining>0?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context?.tools.filter(t=>['list_project_category','open_project_item'].includes(t.function.name))??[])],
+     tools:async()=>[...(opts.calculator&&hasCalculatorContract(opts.aiCatalog)?await opts.calculator.offered():[]),...(lookup.remaining>0?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context?.tools.filter(t=>['list_project_category','open_project_item'].includes(t.function.name))??[])],
      execute:executeRead})
     metrics.research_calls+=collected.calls;researchEvidence.push(...collected.evidence)
     researchBytes=collected.bytes;researchTruncated=collected.truncated
@@ -482,7 +485,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       return terminalFailure
      }
      reviews++;metrics.reviews++
-     const checked=await callModel({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
+     const checked=await callWithCalculator({app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',userId:opts.userId,
       catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:'bob_cad_review',
       messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
@@ -491,7 +494,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
       // Omit tools: even an empty array suppresses text.format in the shared adapter.
       // The governed setting includes reasoning tokens as well as the verdict.
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
-      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())})
+      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
      opts.context?.confirmDelivery()
      if(!await checkAuthority()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
      if(!checked.success&&checked.error==='turn_budget_exhausted')throw new Error(checked.error)
@@ -592,7 +595,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
     const firstLayout=renders===0
     const canRead=!firstLayout||opts.research===false||preRenderReadRounds<1
     const researching=lookup.remaining>0&&canRead
-    const tools=[...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(canRead&&opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(canRead&&opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL,...(lastRenderArgs?[REVISE_CAD_TOOL]:[])]:[]),CAD_BLOCKER_TOOL]
+    const tools=[...(opts.calculator&&hasCalculatorContract(opts.aiCatalog)?await opts.calculator.offered():[]),...(researching?[SEARCH_TOOL,READ_CAD_TOOL]:[]),...(canRead&&opts.knowledgeReader&&opts.knowledgeReader.remaining>0?opts.knowledgeReader.tools:[]),...(canRead&&opts.catalog&&opts.catalog.remaining>0?opts.catalog.tools:[]),...(opts.context&&opts.context.remaining>0?opts.context.tools:[]),...(renders<4&&invalidRenders<8?[RENDER_CAD_TOOL,RENDER_SAVED_CAD_TOOL,...(lastRenderArgs?[REVISE_CAD_TOOL]:[])]:[]),CAD_BLOCKER_TOOL]
     const stage=candidate?'inspect/repair':researching?'research and first render':'construct from gathered evidence'
     const carrier=opts.context?.carrier()??[]
     referencePixels.push(...carrier)
@@ -637,6 +640,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;runtimeVersi
        if(failure.stage==='cad_engine')terminalFailure=failure
        return failure
       }
+      else if(name==='calculate_project'&&opts.calculator)out=await executeRead(name,args)
       else if(name==='search_project_data')out=await lookup.search(args)
       else if(name==='search_building_knowledge'&&opts.knowledgeReader)out=await executeRead(name,args)
       else if(name==='read_cad_artifact'&&object(args)&&uuid(args.artifact_id)&&(args.revision===null||Number.isSafeInteger(args.revision)&&args.revision>0))out=await readArtifact(args.artifact_id,args.revision)??{status:'not_found'}

@@ -13,6 +13,7 @@ const specification=obj({generator:{type:'string',enum:['stair_study_v1']},versi
  required_headroom_mm:{...int,description:'Explicit project study criterion, not an automatically determined legal standard.'},
  upper_ceiling_above_floor_mm:{type:['integer','null'],description:'Flat upper ceiling height above upper finished floor. Null if unknown; never infer it from slab thickness.'},
  basis:{type:'string',enum:['provided_spec','estimated']},source:{...text,description:'Identify actual supplied dimensions or explicit reversible design assumptions.'}})
+export const STAIR_SPEC_SCHEMA=specification
 export const STAIR_INSPECT_TOOL={type:'function' as const,function:{name:'inspect_stair_options',
  description:'READ ONLY: calculate 1–4 candidate stairs on an exact current multi-floor plan. Reads the plan with current caller access (one lookup), then derives treads, turning landing, upper exit coordinates/direction and room overlaps. Reports modelled envelope/opening/headroom conflicts, missing inputs and a conservative opening rectangle. Supports straight or quarter-turn WITH SQUARE LANDING, not rounded winders/spirals. Never call a projection a stair solution. Passing these limited checks is not proof of doors, circulation, structure, safety or building approval. Recommend only by the returned evidence and stated user goals. No save or physical mutation.',
  parameters:obj({plan_id:text,plan_revision:rev,candidates:{type:'array',minItems:1,maxItems:4,items:obj({label:text,recipe:specification})}})}}

@@ -12,9 +12,12 @@ import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 
 test('D publishes only role/work and affected manuals; old catalogs and all model settings/prices remain immutable',async t=>{
- let previous!:AiCatalogManifest
- const pg=await projectSchema(async(db,name)=>{if(name==='20261011093016_ai_construction_consequences_catalog.sql')previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result});t.after(()=>pg.close())
- const current=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ let previous!:AiCatalogManifest,current:AiCatalogManifest|undefined
+ const pg=await projectSchema(async(db,name)=>{
+  if(previous&&!current)current=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  if(name==='20261011093016_ai_construction_consequences_catalog.sql')previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ });t.after(()=>pg.close())
+ current??=(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
  assert.deepEqual((await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[previous.manifest_id])).rows[0].result,previous)
  assert.deepEqual(current.models,previous.models);assert.deepEqual(current.settings,previous.settings);assert.equal(current.definitions.length,previous.definitions.length+3)
  const changed=['bob.tools','tools.save_construction_draft',...['read_construction_draft','check_construction_draft','derive_construction_lists','derive_cad_material_requirement','check_construction_cut_fit','save_construction_cut_plan','change_construction_parameters','transition_legacy_drawing','read_cad_artifact','design_project_cad'].map(n=>'tools.'+n)]

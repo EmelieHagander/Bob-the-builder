@@ -45,6 +45,18 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   assert.equal(record.artifact_id, construction.recordId); assert.equal(record.artifact_revision, 1); assert.match(record.basis, /200 x 100 x 18/)
   const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [requirement.recordId])).rows[0]
   assert.deepEqual(source.instance_ids, ['foot']); assert.deepEqual(source.blank_mm, { x: 200, y: 100, z: 18 }); assert.equal(source.material_binding.material_id, material.recordId)
+  const replay=await call('bob.read_calculation_source',[project,'material',requirement.recordId,1])
+  assert.equal(replay.calculation.base_provenance.status,'replayed');assert.equal(replay.calculation.base_provenance.version,'2')
+  assert.equal(replay.calculation.base_provenance.instance_semantics,'manufacture_snapshot_v2')
+  assert.equal(replay.calculation.base_provenance.value,1)
+ })
+ await t.test('calculator replays construction length and face area from exact typed blank snapshots',async()=>{
+  for(const [mode,q,unit] of [['length_x',.2,'m'],['area_xy',.02,'m2']] as const){
+   const saved=await call('bob.material_requirement_cad_command',[project,'create',randomUUID(),0,JSON.stringify({...fields,quantity_mode:mode})])
+   const replay=await call('bob.read_calculation_source',[project,'material',saved.id??saved.recordId,1])
+   assert.equal(replay.calculation.base_provenance.status,'replayed');assert.equal(replay.calculation.base_provenance.value,q)
+   assert.equal(replay.calculation.base_provenance.unit,unit);assert.equal(replay.calculation.base_provenance.source.artifact_revision,1)
+  }
  })
  await t.test('a second used definition saves in the same claimed turn without changing the first receipt or history', async () => {
   const read = () => call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])
