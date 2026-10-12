@@ -27,6 +27,7 @@ test('actual shared AI service opts into background, resumes tools and preserves
   source=source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/,'const createClient = (globalThis as any).__backgroundClient;')
   for(const file of ['openai-content','ai-background'])source=source.replace(`'./${file}.ts'`,JSON.stringify(new URL(`../supabase/functions/_shared/${file}.ts`,import.meta.url).href))
   source = source.replace("'./ai-catalog.ts'", JSON.stringify(new URL('../supabase/functions/_shared/ai-catalog.ts', import.meta.url).href))
+    source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
   const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
   const base={app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',prompt:'Draw',previousResponseId:'resp_prior',reasoningEffort:'high',tools:[{type:'function',function:{name:'render_cad_candidate',description:'Render',parameters:{type:'object',properties:{},required:[]}}}]}

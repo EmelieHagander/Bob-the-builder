@@ -8,7 +8,7 @@ export const BOB_REVIEW_RESERVE = { usd: 0.15, calls: 3, roles: ['cad-reviewer',
 /** Changing allocation ownership, model-call ceilings or CAD handoff behavior
  * invalidates a prior technical retry failure; it neither resets nor grants
  * the persisted budget. */
-export const BOB_MODEL_BUDGET_POLICY_REVISION = 'owner-task-period-review-limit-v4'
+export const BOB_MODEL_BUDGET_POLICY_REVISION = 'owner-task-period-structured-tools-v5'
 export type DrawingBudgetAuthority = {
  requestId: string;
  options: Pick<OpenAIServiceOptions,'app'|'coworkerId'|'module'|'functionName'|'aiFunction'|'aiDefinition'>;

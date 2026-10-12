@@ -478,7 +478,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
        design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.candidate-view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
-      // Omit tools: even an empty array suppresses text.format in the shared adapter.
+      // The calculator wrapper retains this schema while offering optional tools.
       // The governed setting includes reasoning tokens as well as the verdict.
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
       maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})

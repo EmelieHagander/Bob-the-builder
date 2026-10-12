@@ -1,6 +1,7 @@
 import { responseMessageContent, hasImageContent, prepareResponseImages, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
+import { schemaIssues } from './schema-issues.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -201,6 +202,9 @@ export interface OpenAIServiceOptions {
     };
   }>;
   tool_choice?: 'auto' | 'required' | { type: 'function'; function: { name: string } };
+  /** Trusted server opt-in: retain a strict response schema while offering
+   * tools and validate a final text answer. Legacy tool callers keep text. */
+  structuredToolOutput?: boolean;
   useHardcodedPrompt?: boolean;
 }
 
@@ -367,6 +371,9 @@ export async function callOpenAIResponses<T = unknown>(
   // Settings and catalogue in parallel; both live in the shared `ai` schema.
   const catalogRole = options.aiDefinition;
   try {
+    if (options.structuredToolOutput && (!schema || !schemaName)) {
+      throw new Error('ai_profile_incompatible: structured tools require a response schema');
+    }
     if (catalogRole) {
       if (options.model) throw new Error('ai_profile_incompatible: direct model override');
       validateAiCall(catalogRole, { app: options.app,
@@ -633,7 +640,7 @@ export async function callOpenAIResponses<T = unknown>(
     }
     
     // Add structured output format
-    if (schema && schemaName && !options.tools) {
+    if (schema && schemaName && (!options.tools || options.structuredToolOutput)) {
       requestBody.text = {
         ...(catalogRole?.providerParameters.verbosity ? { verbosity: catalogRole.providerParameters.verbosity } : {}),
         format: {
@@ -859,7 +866,7 @@ export async function callOpenAIResponses<T = unknown>(
     const hasTools = Array.isArray(options.tools) && options.tools.length > 0;
     const hasSchema = !!(options.schema && options.schemaName);
     
-    if (hasTools || !hasSchema) {
+    if (hasTools && !options.structuredToolOutput || !hasSchema) {
       await logAIUsage(aiClient, { ...usageBase, success: true });
       
       return {
@@ -874,6 +881,16 @@ export async function callOpenAIResponses<T = unknown>(
 
     // Parse JSON
     let parsedData: T | null = null;
+    if (options.structuredToolOutput) {
+      // Never recover phase prose or truncated JSON into a specialist verdict.
+      // Domain validation still owns whether this assessment is acceptable.
+      try { parsedData = JSON.parse(content); } catch { /* honest parse failure */ }
+      const valid = parsedData !== null && schemaIssues(schema!, parsedData).length === 0;
+      await logAIUsage(aiClient, { ...usageBase, success: valid });
+      return { success: valid, data: valid ? parsedData : null, usage,
+        model: currentModel, reasoningEffort: appliedEffort, responseId: responseData.id,
+        estimatedCostUsd, ...(valid ? {} : { error: 'invalid_structured_output' }) };
+    }
     try {
       parsedData = JSON.parse(content);
     } catch (_parseError) {

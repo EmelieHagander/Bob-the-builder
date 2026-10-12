@@ -2353,3 +2353,33 @@ This correction requires only compatible runtime deployment; no database or
 catalog configuration migration is needed. Real owner/model acceptance after
 the repair and optimization of the separate orchestration overhead remain open
 in [State](bob-delivery-flow.md#state).
+
+### Calculator in normal structured calls — 2026-10-12
+
+The user authorized removal of the separate calculation-selection phase. The
+implementation now retains the specialist's pinned response schema while
+offering `calculate_project` in the normal call. A direct verdict needs one
+model call; one code-calculation round followed by a verdict needs two. Up to
+two tool rounds remain bounded, followed only if necessary by a third call
+with tools closed. Continuations send paired exact code results through the
+same provider response ID instead of repeating the original context in a new
+conversation. These are fixture-proven call counts, not measured real-bed savings.
+
+The shared adapter requires a trusted `structuredToolOutput` opt-in; other apps'
+legacy tool/text contract is unchanged. Tests exercise the actual production
+request builder and response parser with only database/provider I/O replaced:
+strict schema and tools coexist on the wire, code results retain units/method
+version, completed durable results do not resubmit or duplicate charges, and
+malformed or schema-invalid verdicts fail without a repair call. Wrapper tests
+cover direct responses, preserved role/caller ceilings, round closure, invalid
+tool protocols and live authority/policy revocation. Existing CAD retry tests
+retain the exact draft and avoid another research/designer pass after a concrete
+runtime repair. The revision is `owner-task-period-structured-tools-v5`.
+
+The pinned role contracts already contain calculator guidance. The old
+`calculator.schema-phase` fragment remains unchanged for history and is no
+longer injected; no database/catalog publication is required. The exact source,
+full-suite/CI results and hosted source readback belong to
+[PR #249's release record](https://github.com/EmelieHagander/Bob-the-builder/pull/249).
+Real owner/model/mockup acceptance and cost per accepted result remain in
+[State](bob-delivery-flow.md#state).

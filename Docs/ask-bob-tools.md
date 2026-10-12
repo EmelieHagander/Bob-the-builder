@@ -177,25 +177,31 @@ measurements. Source changes are readiness information, not permission to adopt
 new values. Exact database reads enforce project/physical access through the
 caller; the new RPC is invoker-only and has no anon/service grant.
 
-Structured specialists receive at most two calculation rounds with up to four
-calls in each, then their original tool-free pinned JSON-schema call. The final
-call receives exact code results, not calculation-phase prose. Provider failure,
-revocation, policy failure or an exhausted calculator stops this path honestly;
-it does not create an arithmetic fallback. CAD dependency refresh records these
-reads so a saved retry fingerprint cannot treat changed inputs as unchanged.
+Structured specialists offer the calculator in their normal call while retaining
+the pinned strict JSON response schema. A direct verdict finishes that first
+call. Only an actual calculator request causes a continuation: code executes
+the calculation and returns the complete result as a paired tool output using
+the provider response ID. The server does not restart the original context in a
+separate final conversation. At most two tool rounds, with four calls in each,
+are allowed; a third model call closes tools if both rounds were needed.
+Provider failure, revocation, policy failure or an already exhausted calculator
+stops honestly, without a manual-arithmetic fallback. CAD dependency refresh
+records these reads so a saved retry cannot treat changed inputs as unchanged.
 
 The calculator itself executes deterministic program/SQL operations and makes
-**no AI calls**. The present structured-specialist wrapper adds model orchestration
-to choose calculations and produce the final schema; those model calls still
-consume the caller's ordinary or CAD task budget. Both calculation rounds and
-the final verdict retain the pinned specialist's output ceiling, including
-reasoning, and any explicit smaller caller ceiling. The October 12 correction
-removes the wrapper's unintended 6,000-token cap; it restores the approved
-reviewer configuration without raising a profile or task allocation. A concrete
-runtime revision releases the old technical retry stop while retaining its draft
-and accounting. [Correction evidence](foundation-verification.md#calculator-review-output-correction--2026-10-12)
-owns validation and release references. Reducing the separate orchestration
-overhead remains measured follow-up work; a code calculation is not an AI service.
+**no AI calls**. In this wrapper, no calculation normally needs one model call;
+one calculation round followed by a verdict needs two. Every model call still
+uses the caller's ordinary or CAD task budget, the pinned specialist's output
+ceiling (including reasoning) and any explicit caller ceiling. The adapter's
+`structuredToolOutput` server opt-in sends the schema alongside the tools and
+strictly parses/validates the final JSON; it never repairs truncated JSON or
+phase prose into a verdict. Existing shared-service callers retain their
+previous output contract. The historical `calculator.schema-phase` fragment
+remains immutable in the catalog but is no longer injected; the roles' existing
+calculator contracts supply the guidance, so no catalog migration is required.
+[Integration evidence](foundation-verification.md#calculator-in-normal-structured-calls--2026-10-12)
+owns validation and release references. Actual cost per accepted drawing and
+real owner/model acceptance remain to be measured.
 
 Remaining boundaries: a standalone graph has no generic saved-model writer;
 use the existing domain revision or report that gap. General area/volume/money
