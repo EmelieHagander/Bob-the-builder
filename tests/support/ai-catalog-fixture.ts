@@ -14,6 +14,17 @@ const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const taskTexts=source.match(/\$task_budget_texts\$([\s\S]+?)\$task_budget_texts\$/)
+ if(taskTexts){
+  for(const patch of JSON.parse(taskTexts[1])){
+   const row=seed.find(row=>row.key===patch.key);row.content=patch.content;versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const tool=JSON.parse(source.match(/\$task_budget_tool\$([\s\S]+?)\$task_budget_tool\$/)![1])
+  const row=seed.find(row=>row.key==='tools.design_project_cad')
+  row.definition.parameters.properties.request_id.description=tool.request_id_description
+  row.definition.additional_description=(row.definition.additional_description??'')+'\n\n'+tool.additional_description
+  versions.set(row.key,versions.get(row.key)!+1)
+ }
  if(source.includes('do $communication$')){
   const content=source.match(/'(När du formulerar besked[^']+)'/)?.[1]
   if(!content)throw new Error('Concise communication migration content missing')

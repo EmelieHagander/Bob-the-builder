@@ -7,7 +7,7 @@ export const BOB_REVIEW_RESERVE = { usd: 0.15, calls: 3, roles: ['cad-reviewer',
 
 /** Changing allocation ownership or CAD handoff behavior invalidates a prior
  * technical retry failure; it neither resets nor grants the persisted budget. */
-export const BOB_MODEL_BUDGET_POLICY_REVISION = 'drawing-ledger-immediate-review-v2'
+export const BOB_MODEL_BUDGET_POLICY_REVISION = 'owner-task-period-immediate-review-v3'
 export type DrawingBudgetAuthority = {
  requestId: string;
  options: Pick<OpenAIServiceOptions,'app'|'coworkerId'|'module'|'functionName'|'aiFunction'|'aiDefinition'>;
@@ -26,10 +26,10 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
 
 /** A stop threshold, not a provider billing cap: the last in-flight call may
  * cross it. Wrap journal replay too, so completed logical calls rebuild usage
- * exactly once on every worker segment. Never reset this per CAD consultation.
+ * exactly once on every worker segment. Never reset this per CAD consultation or worker segment.
  * Ordinary roles outside the reserve stop at the limit minus the reserve;
  * reserved ordinary roles may use the whole limit. A server-bound CAD operation
- * is accounted exactly once by its persisted request ledger instead: this
+ * is accounted exactly once by its persisted owner-task period instead: this
  * transient guard cannot override its allocation or starve Bob's final save. */
 export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE) {
  let spent = 0, calls = 0, unpriced = false

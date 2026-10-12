@@ -748,6 +748,37 @@ The migration adds request-owned gap identities, deterministic request reuse, ca
 Release order: review the exact tree and pass SQL, Edge, browser and real PostgreSQL concurrency gates; apply the migration; deploy matching `ask-bob` and `bob-worker`; verify authenticated event/receipt recovery and the frontend build. Existing worker signatures remain compatible. Older request charges are not guessed: pre-migration requests require a prospective explicit allocation. The current lifecycle/retention/authority owner is [Ask bob conversations — P2 completion](../Docs/ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Exact deployment and model proof belongs in [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 
+### Owner task budget periods — 2026-10-12
+
+Implemented by `20261012090214_drawing_task_budget.sql`; hosted installation
+status belongs to [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12).
+[CAD owns the current policy](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12), superseding the historical request allocation below.
+
+`drawing_budgets` retains the current numeric period and real originating owner
+turn. A new claimed owner message archives the old counters into private
+`drawing_budget_periods` and starts $3/24 at zero; `drawing_model_calls.budget_period`
+keeps every reservation tied to its original charge period. Existing totals are
+backfilled without reallocating or attributing old request-wide charges to a
+single historical message. The `legacy_request_scope` flag explicitly marks those old totals as
+request-wide history. New periods have exact owner-message scope.
+
+The existing actor/project claim lock serializes the total across all request
+IDs in the task. The service-only budget command and authenticated work reader
+sum current and archived counters for that same owner turn. A fresh request ID
+cannot refill the task. Loading/saving uses the existing claimed request wrapper
+and preserves its conflict, thread, membership, cancellation, restore and receipt
+guards. Only a new real instruction opens a period; archived turns cannot reopen.
+
+Direct completion and `reconcile_drawing_costs` charge the reserved period exactly
+once, including after a later message has opened another period. Cached results
+consume no new allocation; unresolved outcomes stay fenced. A deliberate owner
+UI grant remains revision-checked and uses the shared task total; Bob's automatic
+grant path is removed. The next message drops extra prior-period limits.
+
+The new history table has RLS enabled and no direct browser/service-role grants.
+Private helpers have fixed empty search paths and no raw RPC execution grants.
+Its indexes support turn aggregation and original-period receipt updates.
+
 ### Drawing request allocation — 2026-10-09
 
 Source migration `20261008160000_drawing_budget_3usd.sql` implements the owner's

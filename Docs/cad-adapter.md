@@ -652,6 +652,8 @@ open in [State](bob-delivery-flow.md#state).
 **Deployed through [PR #183](https://github.com/EmelieHagander/Bob-the-builder/pull/183); live-model acceptance remains.** [K0 evidence](foundation-verification.md#k0-construction-boundaries--2026-10-02)
 records the observed budget and stage failures. Current next action is in [State](bob-delivery-flow.md#state).
 
+**Budget history:** the request-wide allocation and automatic top-up described below are superseded by [one budget per owner task](#one-budget-per-owner-task--2026-10-12). The review, authority and recovery gates remain.
+
 Candidate review happens before publication. The server supplies `review_scope`
 with candidate stage, `saved:false` and deferred save/link/reopen checks. Intake
 checks the prerequisites for delivery, not the existence of receipts that can
@@ -741,6 +743,44 @@ or repaired runtime policy can release a previous failure on a new legitimate
 attempt; an unrelated catalog edit or new worker/turn ID cannot. Already pinned
 jobs keep their catalog snapshot, and unchanged failed work does not become an
 automatic paid retry.
+
+### One budget per owner task — 2026-10-12
+
+**Current owner mandate; implemented in this change.** The budget prevents one
+instruction's review/repair loop from running away. Here “task” means the work
+started by one real owner message, not a project or a domain Task record.
+
+Server-bound CAD research, design and review share **$3 / 24 calls per owner
+message**, across all drawing request IDs used by that message. The next distinct
+claimed owner message starts with zero spend and zero calls at those full default
+limits. It replaces the old cumulative request budget and automatic +$1/+24
+resume grant. Ordinary Bob/context/planner roles retain their existing separate
+$1/24-call turn guard; that guard also starts fresh per owner message.
+
+Worker segments, retries, new request IDs, events, configuration changes and
+renewed access do not refill the same task. A deliberately clicked owner budget
+grant can extend that current task; its extra limits do not carry into the next
+message. The threshold is checked before dispatch, so the final in-flight call
+can still cross it.
+
+Old counters and every model charge remain in accounting history. Unknown old
+outcomes cannot be redispatched; direct and periodically reconciled late charges
+belong to the period that reserved them, never the new task. New funds do not
+release an unchanged quality failure or grant approval.
+
+Loading the same saved request under the new claimed message releases only its
+cost-stop retry gate. Requirements, dependencies, geometry and source fingerprint
+remain. If sources match, the exact draft can render and receive independent
+review without another researcher/designer call. Changed sources retain normal
+freshness checks. Bob commits the verified budget cause and next-message hint
+without paying for an explanation, preserving partial writes and receipts.
+
+[Database implementation](../db/README.md#owner-task-budget-periods--2026-10-12)
+and [verification](foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12)
+own installation details and evidence. Real owner/model acceptance and measured
+savings remain in [State](bob-delivery-flow.md#state).
+
+Historical October 9 review release pins (before the task-period correction):
 
 [PR #234](https://github.com/EmelieHagander/Bob-the-builder/pull/234) merged as
 `9705a8b671695ac7a86b142989b0a8771ac051d5`, with exact reviewed tree

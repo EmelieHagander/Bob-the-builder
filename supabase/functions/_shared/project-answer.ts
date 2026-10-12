@@ -128,7 +128,7 @@ export async function runProjectAnswer(opts: {
     // A terminal design failure has a known cause. Deliver it without another
     // paid model call that can retry the same job or invent a renderer outage.
     const cadFailure=opts.cadAssistant?.failure
-    if(cadFailure?.reason==='turn_budget_exhausted')return {ok:false,error:'turn_budget_exhausted'}
+    if(cadFailure?.reason==='turn_budget_exhausted'&&typeof cadFailure.user_message!=='string')return {ok:false,error:'turn_budget_exhausted'}
     const response: OpenAIServiceResponse<string> = typeof cadFailure?.user_message==='string'
       ? {success:true,data:cadFailure.user_message,model:'server',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
       : await opts.callModel({

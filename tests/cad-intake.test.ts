@@ -373,6 +373,25 @@ test('P2: runtime repair renders the same private draft and reviews it without a
  assert.equal(result.status,'ready');assert.equal(f.design,1,'no repeat design');assert.equal(paid,before+1,'only independent review is charged');assert.equal(f.renders,1)
 })
 
+test('a new owner task reviews the retained cost-stopped draft without buying research or design again',async()=>{
+ const f=fixture();let stop=true,paid=0;const model=f.opts.callModel
+ const opts={...f.opts,callModel:async(o:any)=>{paid++;return model(o)},
+  requestModel:async(_id:string,o:any,work:()=>Promise<any>)=>stop&&o.functionName==='cad-reviewer'
+   ?{success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'turn_budget_exhausted',budget_stop:{scope:'task',reasons:['usd_limit']}}
+   :work()}
+ const first=await createCadAssistant(opts).consult(request)
+ assert.equal(first.reason,'turn_budget_exhausted');assert.equal(first.stage,'review');assert.equal(f.design,1)
+ const row=f.row!,payload=structuredClone(row.payload)
+ assert.deepEqual((payload.draft as any).recipe,recipe)
+ // The claimed new-turn SQL period opens only this cost gate, keeping sources.
+ payload.retry!.fingerprint=''
+ await f.opts.requestStore.save(row.id,row.revision,row.status,payload)
+ const before=paid;stop=false
+ const result=await createCadAssistant(opts).consult({...request,request_id:id})
+ assert.equal(result.status,'ready');assert.equal(f.design,1)
+ assert.equal(paid,before+1,'only independent review is charged after the reset')
+})
+
 
 test('P2: interrupted collecting checkpoint reuses the exact draft and clears rejected approval before failure persistence',async()=>{
  const f=fixture();let rejectReview=true,paid=0;const model=f.opts.callModel,save=f.opts.requestStore.save

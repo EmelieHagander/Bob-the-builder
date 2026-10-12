@@ -2190,3 +2190,64 @@ snapshot. Existing shared-project findings were not changed.
 
 [State](bob-delivery-flow.md#state) retains PR review/merge and the remaining
 graph/unit/history/price boundaries plus E's real member/mockup/cost acceptance.
+
+
+### Owner task budget and cost attribution — 2026-10-12
+
+**Implementation, full local suite and build verified; required CI and hosted release pending.**
+[CAD](cad-adapter.md#one-budget-per-owner-task--2026-10-12) owns the new owner
+mandate, and [database periods](../db/README.md#owner-task-budget-periods--2026-10-12)
+own accounting. PR #248 is already merged; this is its subsequent loop-guard correction.
+
+The failed hosted drawing stopped on **USD spend**, not call count: its historical
+request ledger had 16/48 calls and $4.039417/$4, all calls completed. Those costs
+spanned three executions. The latest execution alone logged approximately
+**$1.0804 of AI usage**, including $0.9666 in CAD. Independent review was blocked
+before provider dispatch; it did not cause a paid review loop in that execution.
+This is logged AI cost at recorded prices, excluding CAD infrastructure and any
+other project work; it is not a provider invoice total.
+
+| Latest CAD phase | Input tokens | Output tokens | Logged cost, USD |
+| --- | ---: | ---: | ---: |
+| Research | 32,762 | 1,723 | 0.0323 |
+| Designer: source read | 44,091 | 887 | 0.1235 |
+| Designer: calculation | 59,050 | 11,182 | 0.3154 |
+| Designer: render | 61,088 | 23,385 | 0.4954 |
+| Review | 0 | 0 | 0; stopped before dispatch |
+
+The three designer calls used 164,229 input and 35,454 output tokens, with only
+3,584 cached input tokens (2.18%). At their recorded $2.50/$0.25/$15 per million
+uncached/cached/output rates, input cost was about $0.4025 and output cost about
+$0.5318. The provider reported 34,984 reasoning tokens within output; Bob's
+calculator charges output once, not reasoning a second time. Bob's first general
+call also offered 72 tools with 196,263 bytes of tool schemas. No duplicate
+provider dispatch was found in the latest execution.
+
+This supports large context, repeated billable input and expensive output as
+actual cost drivers. OpenAI's [conversation-state guide](https://developers.openai.com/api/docs/guides/conversation-state)
+confirms that `previous_response_id` does not remove prior input from billing;
+[reasoning](https://developers.openai.com/api/docs/guides/reasoning) is billed in
+output, and [prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+requires matching prefixes. Prefix/cache optimization remains a measured follow-up;
+this change does not claim a cheaper accepted drawing or change model quality.
+
+Focused full-schema/runtime tests prove: deployment keeps old ledger totals;
+next real message resets $4/48 historical allocation to default $3/24 with zero
+spend/calls; same-task retries, new request IDs and worker/event continuations do
+not refill; task totals are shared in the work reader; deliberate owner grants
+remain idempotent; exact drafts and quality gates persist; paid results recover
+without charging again; direct and periodically reconciled late receipts charge
+old periods once; private history is denied to anon/authenticated/service roles.
+Production orchestration commits the verified cost cause and fresh-next-message
+hint without a language/model call, preserving earlier partial writes. A separate
+CAD pipeline test resumes the same cost-stopped draft with only independent
+review, without new research/design. Historical upgrade tests deliberately stop
+at their original migration boundary; current behavior uses the full schema.
+
+The installed Supabase CLI aborts before `migration new` can create a file.
+The two new filenames use observed UTC time; no historical migration is edited.
+The full local suite, vocabulary check and production build pass. Canonical local
+Edge checking is blocked by the sandbox connection to esm.sh; no browser is
+installed locally. Required CI supplies those checks. Hosted migration/runtime/
+catalog readback and original-project preservation remain release gates. Real owner
+browser/model acceptance remains in [State](bob-delivery-flow.md#state).
