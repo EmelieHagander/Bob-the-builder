@@ -2317,3 +2317,39 @@ Deployment is complete; PR review/merge remains. The next acceptance step is the
 owner's real Bob message, checking the retained bed draft and measuring the
 resulting context/cache, calls and cost. Technical probes do not establish bed
 fit, model/mockup acceptance or a reduction in cost per accepted drawing.
+
+### Calculator review output correction — 2026-10-12
+
+The next real owner retry finished at **13:56 CEST** with the existing draft
+retained and no newly saved drawing. It reached independent review, called the
+programmatic calculator, and then stopped with `model_output_limit`: all **6,000
+output tokens** in the failing reviewer response were reported as reasoning,
+without a usable verdict. The task reset worked: current CAD period 2 had
+**2/24 calls and $0.121099/$3**; the entire attempt logged **$0.230562** of AI
+usage across four calls. The failed review was not a task spending stop, and
+no completed review or accepted bed result is claimed.
+
+`calculator-model-call.ts` had inserted an explicit 6,000-token ceiling over
+the pinned reviewer profile's approved **50,000-token** ceiling. Its calculation
+phase is model orchestration; `project-calculator.ts` performs the actual
+deterministic computation without calling an AI service. [The calculator owner](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+keeps those boundaries separate. The fix preserves the role/profile and an
+explicit caller ceiling rather than hardcoding 50,000. The existing round,
+calculation, task-budget, deadline, authority and strict-schema guards remain.
+
+Regression cases reproduce the pre-fix cap for the approved reviewer, a different
+pinned profile and a larger explicit caller limit; a deliberately smaller caller
+limit remains unchanged. They verify the role ceiling before and after an actual
+code calculation and in the final tool-free schema call. A production CAD intake
+fixture proves unchanged failed-runtime retries do no paid work; the repaired
+runtime then renders the same exact draft and charges only independent review,
+with no additional research/designer pass. The runtime policy revision changes
+to `owner-task-period-review-limit-v4` so the real stored technical stop can be
+released by this repair without editing the owner packet or granting budget.
+
+The exact verified source, current full-suite/CI results and matching hosted
+function versions are recorded in [PR #249's release record](https://github.com/EmelieHagander/Bob-the-builder/pull/249).
+This correction requires only compatible runtime deployment; no database or
+catalog configuration migration is needed. Real owner/model acceptance after
+the repair and optimization of the separate orchestration overhead remain open
+in [State](bob-delivery-flow.md#state).

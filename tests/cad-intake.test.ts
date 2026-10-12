@@ -10,6 +10,7 @@ import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.
 import {shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createDrawingRequestStore} from '../supabase/functions/_shared/drawing-request-store.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
+import {BOB_MODEL_BUDGET_POLICY_REVISION} from '../supabase/functions/_shared/bob-model-budget.ts'
 const id='30000000-0000-4000-8000-000000000001'
 const measurement='30000000-0000-4000-8000-000000000002'
 const request={request_id:null,handoff,brief:'Draw the construction using current measures',area_id:null,component_id:null,step_id:null,artifact_id:null}
@@ -371,6 +372,26 @@ test('P2: runtime repair renders the same private draft and reviews it without a
  version='repaired';fail=false
  const result=await createCadAssistant(opts).consult({...request,request_id:id})
  assert.equal(result.status,'ready');assert.equal(f.design,1,'no repeat design');assert.equal(paid,before+1,'only independent review is charged');assert.equal(f.renders,1)
+})
+
+test('repairing the calculator output ceiling releases the old review stop and reuses the exact draft',async()=>{
+ const f=fixture();let version='owner-task-period-immediate-review-v3',paid=0;const model=f.opts.callModel
+ const opts={...f.opts,runtimeVersion:async()=>version,callModel:async(o:any)=>{
+  paid++
+  if(o.functionName==='cad-reviewer'&&version==='owner-task-period-immediate-review-v3')return {success:false,data:null,model:'fixture',usage:{input_tokens:1,output_tokens:6000,total_tokens:6001},error:'model_output_limit'}
+  return model(o)
+ }}
+ const first=await createCadAssistant(opts).consult(request)
+ assert.equal(first.reason,'model_output_limit');assert.equal(first.stage,'review');assert.equal(f.row?.status,'retrieval_failed')
+ const original=structuredClone(f.row!.payload.draft),before=paid
+ assert.equal((await createCadAssistant(opts).consult({...request,request_id:id})).retry_suppressed,true)
+ assert.equal(paid,before,'an unchanged failed runtime cannot start another paid review')
+ version=BOB_MODEL_BUDGET_POLICY_REVISION
+ assert.notEqual(version,'owner-task-period-immediate-review-v3')
+ const result=await createCadAssistant(opts).consult({...request,request_id:id})
+ assert.equal(result.status,'ready');assert.equal(f.design,1,'the repair must not buy another designer pass')
+ assert.equal(paid,before+1,'only the repaired independent review is charged')
+ assert.deepEqual(f.row!.payload.draft,original);assert.equal(f.renders,2)
 })
 
 test('a new owner task reviews the retained cost-stopped draft without buying research or design again',async()=>{

@@ -23,8 +23,11 @@ export async function callWithCalculator<T>(options:OpenAIServiceOptions,opts:{
   if(Date.now()>=opts.deadline)return failed('deadline')
   const tools=await opts.calculator.offered()
   if(!tools.length)return failed('calculator_policy_unavailable')
+  // Keep the specialist's governed reasoning/verdict ceiling and any explicit
+  // caller limit from phase. Calculation rounds and task spend remain bounded;
+  // a hidden 6k cap can exhaust a reviewer before it reaches the schema call.
   const response=await opts.callModel({...phase,messages:conversation,tools,previousResponseId:previous,
-   outputTokenLimit:Math.min(options.outputTokenLimit??6000,6000),timeoutMs:Math.min(options.timeoutMs??30000,opts.deadline-Date.now())})
+   timeoutMs:Math.min(options.timeoutMs??30000,opts.deadline-Date.now())})
   if(!await opts.hasAccess())throw new Error('project_denied')
   if(!response.success)return response
   if(!response.toolCalls?.length)break

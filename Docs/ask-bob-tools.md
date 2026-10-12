@@ -184,6 +184,19 @@ revocation, policy failure or an exhausted calculator stops this path honestly;
 it does not create an arithmetic fallback. CAD dependency refresh records these
 reads so a saved retry fingerprint cannot treat changed inputs as unchanged.
 
+The calculator itself executes deterministic program/SQL operations and makes
+**no AI calls**. The present structured-specialist wrapper adds model orchestration
+to choose calculations and produce the final schema; those model calls still
+consume the caller's ordinary or CAD task budget. Both calculation rounds and
+the final verdict retain the pinned specialist's output ceiling, including
+reasoning, and any explicit smaller caller ceiling. The October 12 correction
+removes the wrapper's unintended 6,000-token cap; it restores the approved
+reviewer configuration without raising a profile or task allocation. A concrete
+runtime revision releases the old technical retry stop while retaining its draft
+and accounting. [Correction evidence](foundation-verification.md#calculator-review-output-correction--2026-10-12)
+owns validation and release references. Reducing the separate orchestration
+overhead remains measured follow-up work; a code calculation is not an AI service.
+
 Remaining boundaries: a standalone graph has no generic saved-model writer;
 use the existing domain revision or report that gap. General area/volume/money
 operations are not part of the v1 graph. Historical wall/CAD-only base replay,

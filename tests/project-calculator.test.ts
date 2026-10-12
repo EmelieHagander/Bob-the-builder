@@ -118,6 +118,33 @@ test('structured specialists calculate in a bounded phase and finish with the pi
  assert.deepEqual(calls[0].tools[0].function.parameters,catalog.tool('calculate_project').function.parameters)
 })
 
+for(const [label,profileLimit,callerLimit] of [
+ ['approved reviewer ceiling',50000,undefined],
+ ['different pinned profile',18000,undefined],
+ ['explicit smaller caller ceiling',50000,2000],
+ ['explicit larger caller ceiling',50000,30000],
+] as const)test('calculator review preserves '+label+' before and after a calculation',async()=>{
+ const profileKey=catalogFixture().role('cad-reviewer').profile.prompt_key
+ const catalog=catalogFixture(manifest=>{manifest.definitions.find(row=>row.prompt_key===profileKey)!.definition.max_output_tokens=profileLimit})
+ const calculator=createProjectCalculator(options()),calls:any[]=[]
+ const reply=(extra:any={})=>({success:true,data:null,model:'fixture',responseId:'r'+calls.length,usage:{input_tokens:1,output_tokens:1,total_tokens:2},...extra})
+ const result=await callWithCalculator({app:'bob',module:'cad',coworkerId:'bob',aiFunction:'cad-reviewer',functionName:'cad-reviewer',catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:['shape']},
+  maxOutputTokens:5000,...(callerLimit===undefined?{}:{outputTokenLimit:callerLimit}),prompt:'Independently review the exact candidate.'},
+  {catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:catalogCall(async o=>{
+   calls.push(o)
+   assert.equal(o.aiDefinition?.maxOutputTokens,profileLimit,'the pinned role governs reasoning and the verdict together')
+   assert.equal(o.outputTokenLimit,callerLimit,'calculation must not silently insert a smaller caller ceiling')
+   assert.equal(o.aiDefinition?.reasoningEffort,'high')
+   if(calls.length===1)return reply({toolCalls:[{id:'calc',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]})
+   if(calls.length===2){assert.match(JSON.stringify(o.messages),/965/);return reply()}
+   assert.equal(o.tools,undefined);assert(o.schema);assert.equal(o.schemaName,'bob_cad_review')
+   assert.match(JSON.stringify(o.messages),/965/)
+   return reply({data:'independent verdict'})
+  },catalog)})
+ assert.equal(result.success,true);assert.equal(calls.length,3)
+ assert.equal(calculator.remaining,11,'one exact calculation uses the existing shared allowance')
+})
+
 test('calculator phase has no manual-arithmetic fallback after provider failure, access revocation or exhausted budget',async()=>{
  const catalog=catalogFixture(),calculator=createProjectCalculator(options());let calls=0
  const optionsCall={app:'bob',module:'living-plan',coworkerId:'bob',aiFunction:'plan-reviewer',functionName:'plan-reviewer',catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review'}

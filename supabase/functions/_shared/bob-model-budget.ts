@@ -5,9 +5,10 @@ import { budgetFailure, type BobBudgetStop } from './bob-budget-stop.ts'
  * delivery can still run after design/research work has used the rest. */
 export const BOB_REVIEW_RESERVE = { usd: 0.15, calls: 3, roles: ['cad-reviewer', 'bob-delivery-language'] as const }
 
-/** Changing allocation ownership or CAD handoff behavior invalidates a prior
- * technical retry failure; it neither resets nor grants the persisted budget. */
-export const BOB_MODEL_BUDGET_POLICY_REVISION = 'owner-task-period-immediate-review-v3'
+/** Changing allocation ownership, model-call ceilings or CAD handoff behavior
+ * invalidates a prior technical retry failure; it neither resets nor grants
+ * the persisted budget. */
+export const BOB_MODEL_BUDGET_POLICY_REVISION = 'owner-task-period-review-limit-v4'
 export type DrawingBudgetAuthority = {
  requestId: string;
  options: Pick<OpenAIServiceOptions,'app'|'coworkerId'|'module'|'functionName'|'aiFunction'|'aiDefinition'>;
