@@ -339,7 +339,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
     }
     const draft=payload.draft
     if(object(draft)&&draft.source_fingerprint===await sourceFingerprint()&&parseCadAssemblyRequest(draft.recipe)
-      &&(['collecting','draft','reviewed'].includes(request?.status??'')||request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted')){
+      &&(['collecting','draft','reviewed'].includes(request?.status??'')||request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted'
+        ||['background_failed','background_expired'].includes(request?.payload.execution_failure?.code??''))){
      resumeDraft=draft
      referencePixels.push(...opts.context?.carrier()??[])
      researchEvidence.push(...(Array.isArray(request?.payload.evidence)?request.payload.evidence:[]))

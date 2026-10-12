@@ -2,7 +2,7 @@
 
 > Navigation only. Domain truth belongs in the linked owner document/code. When sources disagree, use the precedence rules below and update stale guidance rather than keeping two current truths.
 
-- [Shared AI background calls](shared-ai-background.md) — opt-in Responses jobs, webhook recovery, app receivers and Bob unread delivery; Bob enabled after signed webhook acceptance; full model/CAD acceptance remains.
+- [Shared AI background calls](shared-ai-background.md) — opt-in Responses jobs, webhook recovery, content-free failure diagnostics, app receivers and Bob unread delivery; [failed drawing jobs](ask-bob-conversations.md#failed-drawing-background-jobs--2026-10-12) own failure status/notices; full model/CAD acceptance remains.
 
 ## Start here
 

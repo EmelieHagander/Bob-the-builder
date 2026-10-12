@@ -413,6 +413,25 @@ test('a new owner task reviews the retained cost-stopped draft without buying re
  assert.equal(paid,before+1,'only independent review is charged after the reset')
 })
 
+test('a failed background execution resumes its exact source-current draft before any new research or designer call',async()=>{
+ const f=fixture();let stop=true,paid=0;const model=f.opts.callModel
+ const opts={...f.opts,callModel:async(o:any)=>{
+  paid++
+  if(stop&&o.functionName==='cad-reviewer')return {success:false,data:null,model:'fixture',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'model_output_limit'}
+  return model(o)
+ }}
+ await createCadAssistant(opts).consult(request)
+ const row=f.row!,payload=structuredClone(row.payload),original=structuredClone(payload.draft)
+ delete payload.retry
+ payload.execution_failure={job_id:id,code:'background_expired',receipt_missing:true}
+ await f.opts.requestStore.save(row.id,row.revision,'retrieval_failed',payload)
+ const before=paid;stop=false
+ const result=await createCadAssistant(opts).consult({...request,request_id:id})
+ assert.equal(result.status,'ready');assert.equal(f.design,1)
+ assert.equal(paid,before+1,'only independent review is charged when the normal budget authority permits a new call')
+ assert.deepEqual(f.row!.payload.draft,original)
+})
+
 
 test('P2: interrupted collecting checkpoint reuses the exact draft and clears rejected approval before failure persistence',async()=>{
  const f=fixture();let rejectReview=true,paid=0;const model=f.opts.callModel,save=f.opts.requestStore.save

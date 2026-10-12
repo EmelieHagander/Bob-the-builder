@@ -1,5 +1,5 @@
 import { responseMessageContent, hasImageContent, prepareResponseImages, type OpenAIMessageContent } from './openai-content.ts';
-import { AIBackgroundPending, backgroundResponse, type BackgroundCall } from './ai-background.ts';
+import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
 /**
@@ -693,7 +693,7 @@ export async function callOpenAIResponses<T = unknown>(
 
     const responseData = options.background ? await backgroundResponse(async (name, args) => {
       const { data, error } = await aiClient.rpc(name, args).abortSignal(AbortSignal.timeout(10000));
-      if (error) throw new Error('ai_background_storage_unavailable');
+      if (error) throw new AIBackgroundStorageError(error.code, error.message);
       return data;
     }, openAIApiKey, options.app, options.background, requestBody, {
       user_id: userId ?? null, module, ai_function: aiFunction, model: currentModel,

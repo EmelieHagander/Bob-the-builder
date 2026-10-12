@@ -2383,3 +2383,12 @@ full-suite/CI results and hosted source readback belong to
 [PR #249's release record](https://github.com/EmelieHagander/Bob-the-builder/pull/249).
 Real owner/model/mockup acceptance and cost per accepted result remain in
 [State](bob-delivery-flow.md#state).
+
+
+## Background failure diagnostics — 2026-10-12
+
+**Code complete; hosted installation pending.** A retained drawing child expired without a registered provider response ID; its job/attempt failed while the operational request remained `collecting` and no private failure answer was delivered. The original transport/storage cause was not logged and cannot be reconstructed. The source fixes [shared diagnostics](shared-ai-background.md#content-free-failure-diagnostics--2026-10-12) and [Bob failure delivery](ask-bob-conversations.md#failed-drawing-background-jobs--2026-10-12), preserving the original paid-operation fencing, draft, Artifact revision and accounting.
+
+All **1,312 local tests** pass on the final implementation, including real shared-service wire behavior, HTTP/transport/acceptance failure, lost diagnostic storage, same-ID retrieval, outbox failure, provider output ceilings, private RPC/RLS boundaries, cron expiry, one unread failure answer, stale/reset/cancelled/saved/revoked authority and exact draft recovery. Vocabulary and production build pass. The four affected Edge entrypoints type-check with an explicitly temporary import mapping to the installed Supabase client; the canonical local check is blocked by esm.sh connectivity and remains a CI gate. No ordinary owner message, provider call or cost grant is manufactured for release verification.
+
+Generated source migrations are `20261012164921_bob_drawing_failure_delivery.sql` and `20261012164941_shared_ai_failure_diagnostics.sql`. Two combined hosted rollback-probe attempts did not return usable acceptance evidence: an operator cast in the probe was corrected, then the connector returned `Invalid or expired requestState`. Subsequent readback confirmed that no diagnostic table or repair had persisted, and the original drawing/request revisions remained unchanged. Native PostgreSQL CI, hosted installation/readback and preservation checks remain release gates. [State](bob-delivery-flow.md#state) owns the next action and real owner/model/mockup acceptance.

@@ -95,6 +95,6 @@ test('local image preparation failure rejects reservation without a provider POS
   const rpc = async (name: string) => { calls.push(name); return name === 'ai_job_reserve' ? { id, status: 'submitting', submit: true } : true }
   try {
     await assert.rejects(backgroundResponse(rpc, 'key', 'app', call, {}, accounting, async () => { throw new Error('context_changed') }), /context_changed/)
-    assert.deepEqual(calls, ['ai_job_reserve','ai_job_reject']); assert.equal(posts,0)
+    assert.deepEqual(calls, ['ai_job_reserve','ai_work_record_failure','ai_job_reject']); assert.equal(posts,0)
   } finally { globalThis.fetch = oldFetch }
 })
