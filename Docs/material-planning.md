@@ -336,3 +336,22 @@ Needs must be current, unarchived, share the article content unit, have current 
 
 **Still open in K4:** reconciling current endpoint/UI release evidence, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. Declared source fields are not captured manufacturer evidence; the [cross-domain data review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) records that remaining boundary. The project lock is the serialization boundary; `scripts/check-cad-lineage-concurrency.ts` covers it with seven real PostgreSQL pack races.
 
+
+
+## Calculator replay — 2026-10-12 code boundary
+
+The [common calculator](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+reopens exact material requirement revisions; preview does not create a new
+requirement or result table. `material_purchase_math_v1` is the same SQL evaluator
+used by the canonical writer and historical purchase replay: allowance once,
+upward four-decimal normalization, saved compatible allocations, zero-clamped
+shortfall and purchase-increment ceiling. The migration extracts only that
+asserted exact arithmetic block; writer authority, locking and receipts remain.
+A manual base stays manual. Construction blank method 1 retains all original
+instance snapshots; method 2 retains manufacture-only snapshots. Old values do
+not adopt today's roles, dimensions, allocations or target. Unsupported base
+replay is explicitly `stored_only`; the purchase arithmetic remains replayable.
+Pack quoting reuses the existing SQL owner and exact supplier article read.
+[Verification](foundation-verification.md#common-calculator--2026-10-12) owns
+installation/model evidence. The authored-price defect remains a separate open
+correction under [its owner](#authored-prices-and-display-total).

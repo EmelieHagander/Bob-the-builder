@@ -1,5 +1,6 @@
 import type { ConstructionTools } from '../construction-draft.ts'
 import type { AiCatalogSession } from '../ai-catalog.ts'
+import { hasCalculatorContract, type ProjectCalculator } from '../project-calculator.ts'
 import type { OperationalReader } from '../project-operations.ts'
 import type { KnowledgeReader } from '../building-knowledge.ts'
 import type { RecordDetailReader } from '../project-record-detail.ts'
@@ -23,6 +24,7 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Living plan', tools: ['compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
+  { label: 'Calculations', tools: ['calculate_project'] },
   { label: 'Drawings and CAD', tools: ['read_construction_draft', 'save_construction_draft', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
@@ -35,6 +37,7 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
  * tool never grants authority. New handlers register here, not in the model loop. */
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
+  calculator?: ProjectCalculator;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   /** The owner's current message; when present, change provenance is server-filled. */
   message?: string;
@@ -50,6 +53,8 @@ export function createBobToolSession(opts: {
     { spec: SEARCH_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.search(v) },
     { spec: PROJECTION_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectProjection(v) },
     { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
+    ...(opts.calculator&&(!opts.aiCatalog||hasCalculatorContract(opts.aiCatalog))?opts.calculator.tools.map(spec=>({spec,version:1,
+      gate:():ToolGate=>opts.calculator!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.calculator!.execute(v)})):[]),
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
     ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,

@@ -570,3 +570,20 @@ The matching immutable #214 merge `2f9e395d3d8ca397f94a516b2b1b2a111ac1f4eb` is 
 ### K4 mixed sheet supply — deployed
 
 The existing `manage_project_material` reserve/release and publish/withdraw inputs and v16 writer remain unchanged. Tool schema guidance, failure recovery and offline/hosted manuals now describe each portion of a mixed plan and honest partial success. The reviewed SQL and both matching Bob endpoints are deployed from #215 merge `38d52577`: ask-bob v87 retains JWT true and worker v55 retains JWT false/existing capability authentication. [Release evidence](../Docs/foundation-verification.md#k4-mixed-sheet-supply-hosted-release--2026-10-07) owns installation, rollback and member readback verification. [Material planning](../Docs/material-planning.md#k4-mixed-stockcatalog-supply--deployed) owns the contract; no model or manual-loading experiment is activated.
+
+
+### Calculator and structured specialists — 2026-10-12
+
+[Common calculator v1](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+uses the existing handler/policy/catalog boundary. CAD research/designer use it
+in their existing tool loops. CAD reviewer and Plan compiler/reviewer use a
+bounded calculation phase before the original tool-free pinned JSON-schema
+response; the shared OpenAI adapter is unchanged. All model calls use existing
+accounting/call/cost guards. Role tool keys and instructions receive new immutable
+versions; models, tiers, profiles and earlier manifests remain unchanged.
+The SQL reader/math helper, compatible **ask-bob 105 / bob-worker 73**, and
+catalog manifest `6482763a-214b-4022-9e32-92b42e9dac71` are installed in that
+order. [Verification](../Docs/foundation-verification.md#common-calculator--2026-10-12)
+records exact source/authentication readback, preserved revisions/settings and
+an actual Bob-selected graph preview. Specialist/member/mockup acceptance and
+the remaining method boundaries stay explicit; do not repeat this installation.

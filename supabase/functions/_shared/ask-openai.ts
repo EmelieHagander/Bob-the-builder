@@ -1,3 +1,4 @@
+import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
 import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
@@ -348,8 +349,27 @@ export async function answerWithOpenAi(opts: {
     },
   }
   const constructionTools = createConstructionTools(constructionOptions)
+  const calculator=hasCalculatorContract(aiCatalog)?createProjectCalculator({projectId:opts.projectId,hasAccess,
+    isEnabled:async()=>{const policy=await createToolPolicyReader(client,opts.projectId)();return policy.tools.some(t=>t.name==='calculate_project'&&t.active&&t.schema_version===1)},
+    readSources:constructionOptions.readSources,
+    readConstruction:async(id,revision)=>{
+      const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:null}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable');return data
+    },
+    readSource:async(kind,id,revision)=>{
+      const {data,error}=await client.rpc('read_calculation_source',{p_project:opts.projectId,p_kind:kind,p_id:id,p_revision:revision}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable');return data
+    },
+    quotePacks:async(id,revision,needs)=>{
+      const {data,error}=await client.rpc('pack_purchase_quote',{p_project:opts.projectId,p_article:id,p_article_revision:revision,p_needs:needs}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable')
+      const article=await client.rpc('read_supplier_article',{p_project:opts.projectId,p_article:id,p_revision:revision}).abortSignal(AbortSignal.timeout(12000))
+      if(article.error||article.data?.id!==id||article.data?.revision!==revision)throw new Error('calculation_source_unavailable')
+      return {...data,source_state:article.data.source_state==='current'&&!article.data.catalog_changed?'current':'changed'}
+    },
+  }):undefined
   const planAssistant = createPlanAssistant({
-    aiCatalog,
+    aiCatalog,calculator,
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, checkpointed(async(projectId:string,input:LookupInput,signal:AbortSignal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
@@ -374,7 +394,7 @@ export async function answerWithOpenAi(opts: {
   }})
 
   const cadAssistant = createCadAssistant({
-    aiCatalog,
+    aiCatalog,calculator,
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
       const previous=drawingRequestId;drawingRequestId=id
@@ -526,7 +546,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,

@@ -18,6 +18,7 @@ import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
 import { createBobToolSession, sortToolbox } from './project-tools/bob-tools.ts'
+import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
@@ -82,6 +83,7 @@ export async function runProjectAnswer(opts: {
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   /** Internal comparison only; never read from the owner's request body. */
   toolInstructions?: ToolInstructions;
+  calculator?: ProjectCalculator;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
