@@ -100,6 +100,58 @@ and a dependent construction dimension; domain formula tests alone do not prove
 the common tool or its use by a real model. [State](bob-delivery-flow.md#state)
 owns sequencing and remaining implementation.
 
+### Existing evaluators and first common-tool boundary
+
+The [calculation review](foundation-verification.md#calculation-and-formula-review--2026-10-11)
+traces the repository's evaluators through their canonical save/read boundaries.
+This inventory describes executable code; it does not establish hosted installation
+or common-tool/model acceptance. Domain owners retain their release status.
+
+| Calculation | Executable method and precision | Model/result owner |
+|---|---|---|
+| Dependent construction/CAD dimensions | `cad-parameters.ts`: `add_v1`, `subtract_v1`, `multiply_v1`, `divide_v1`; scaled BigInt, six decimals; `exact` rejects a remainder, `half_away_6` rounds ties away from zero. SQL independently recomputes on save. | Construction revision `parameters` or CAD revision `manifest.bob_parameters`: operand IDs, source snapshots, bindings and rounding. Read/inherit validates the saved graph; source changes remain separate from saved values. |
+| Stair rise, step formula, pitch and headroom | `stairStudy.ts`, `stair_study_v1` / `1`; total rise comes from pinned floor heights, rise is total/risers, step formula is twice rise plus going. Coordinates use 0.001 mm; equal-rise division and trigonometry retain floating-point results. | `bob.artifact_stair_studies` pins the recipe and parent plan revision; results derive on read. Never round every rise before deriving the total or applying a criterion. |
+| Wall net area and sheet layers | SQL `stud_wall_net_area` / `4B2b-v1`, `stud_wall_sheet_layer` / `1`; mm²→m², optional layer count, upward base normalization to 0.0001 m². Declared unit coverage must be exactly representable at that precision. | Immutable material requirement revision, drawing/measurement pins and, for layers, `sheet_layer` input snapshot. Area-based coverage does not establish cutting fit. |
+| CAD/construction blanks | SQL `cad_blank_<mode>` / `1`; `construction_blank_<mode>` / `2` in D counts manufacture instances only. Pieces, explicit axis length or box face area; quantities round upward to four decimals. | Material requirement revision plus exact Artifact/definition/mode and construction source snapshot. Earlier v1 quantities keep their original history. |
+| Allowance, allocations and purchase increment | SQL material planner: apply allowance once, round upward to four decimals, subtract confirmed compatible allocations, clamp the shortfall to zero, then round upward to the purchase increment. | Same requirement revision. A manual base remains manual even though its purchase arithmetic is derived. |
+| Aggregated supplier packs | Caller-authorised SQL `pack_purchase_quote`, `k4-pack-aggregate-v1`; sum net needs before one whole-pack ceiling. Missing pack size returns unknown. | Exact article/need revisions in quote; canonical pack-purchase revision/receipt on publication. The quote RPC exists but is not offered as a Bob calculation tool. |
+| Candidate-sheet cutting | `constructionCutFit`, `construction-sheet-guillotine-v1`; integer six-decimal working mm, explicit kerf/trim/grain, bounded guillotine search. | Read-only assessment; saved plans pin construction and candidate sources and SQL revalidates the layout. Feasibility is not an optimal purchase count. |
+| Earlier drawing recipes | `artifactGeometry.ts`, `storageBox.ts`, `roomLayout.ts`, `buildingPlan.ts`: bounded versioned recipes, integer micrometre geometry and exact source pins. | Existing Artifact generation/layout/plan revisions; no second geometry or formula store. |
+
+The first implementation must address these concrete seams:
+
+- **Reuse with typed scope.** Separate graph evaluation from CAD path binding
+  without changing v1 arithmetic. Its units are only `mm`, `deg`, `scalar`;
+  multiplication requires a scalar operand. General area/volume/money arithmetic
+  is not supported by that graph. Fixed material methods retain their SQL owners;
+  a new operation/unit contract needs its own version and save validation.
+- **Make outputs traceable.** Return method/operation versions, named input values
+  with provenance and exact source revisions, dependencies, output units and
+  rounding. Stair rise/pitch need an explicit numerical/display policy, keeping
+  their existing full-precision evaluation. Distinguish historical replay from
+  current-source readiness. Stored quantity history alone does not prove a
+  read-only replay API for every method; D's v1/v2 count semantics need separate
+  replay tests before claiming support.
+- **Offer one capability to the actual callers.** Bob's governed registration is
+  separate from CAD research/designer tool arrays. CAD and Plan reviewers/compiler
+  currently request strict JSON without tools; `openai-service.ts` omits
+  `text.format` when `tools` is supplied. Giving those roles access requires a
+  bounded calculation phase and a validated final response, preserving authority,
+  pinned catalog contracts and the existing aggregate call/cost limits.
+- **Save through the owning revision.** Previewing does not save. The supported
+  stair, construction and material models already have canonical writers and
+  receipts; reuse them and verify reload/retry. A standalone graph has no current
+  generic saved-model writer and cannot be called saved without an explicit
+  domain contract and receipt. Unsupported methods and missing inputs stay gaps.
+
+Measurement mm/cm/m conversion and catalog inch/fraction normalization already
+have exact code/SQL paths; preserve those rather than asking AI to preconvert.
+Authored time/price display helpers are separate from these model contracts:
+`savedTaskEstimate` sums recognised saved task estimates to one decimal hour,
+while [Shopping price text](material-planning.md#authored-prices-and-display-total)
+currently has a reproduced parsing defect. Neither establishes a complete
+project effort or verified price calculation.
+
 ## Opt-in manual experiment — 2026-10-03
 
 **Implemented comparison candidate; not enabled by hosted callers or deployed.**

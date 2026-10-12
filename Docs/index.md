@@ -47,7 +47,7 @@
 | material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
 | AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
-| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; opt-in manual experiment and its measured trade-offs; older discovery design kept as history |
+| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools, authority and specified common calculator | `Docs/ask-bob-tools.md` — current tool contract, existing calculation owners and first common-tool boundary; opt-in manual experiment; older discovery design kept as history |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |

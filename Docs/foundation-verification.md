@@ -2036,3 +2036,60 @@ The 89-file union of pre-release runtime dependencies matches pre-release main e
 Fresh advisors add only the expected [authenticated SECURITY DEFINER notice](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) for the new claimed-turn preparation RPC and two [INFO unused-index notices](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) for the newly installed origin indexes. The authenticated grant is intentional, fenced by authority/claim/generation before reads or locks; anonymous execution is revoked. The indexes cover the exact foreign keys and source lookup. No other advisor additions/removals or unrelated shared-project cleanup were found.
 
 Direct review follows the owning contracts and Archie/verify guidance; no independent subagent review is claimed. The focused legacy fixtures use no paid models, and installation performs no owner project edits. The existing merge-triggered [Live Bob release check 38123067569](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38123067569) also passes actual Auth/RLS/OpenAI checks with disposable project data. That automatic live health check is separate from legacy CAD/bed acceptance and does not measure whole-chain cost savings. The actual bed/mockup correction, named member readback, phone acceptance and measured whole-chain cost saving remain E. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) now retains D’s typed part roles/quantity policy and persisted consequence continuation as the next implementation.
+
+## Calculation and formula review — 2026-10-11
+
+**Repository review completed; the common calculator remains specified.** Reviewed
+code base `0416f73a76b851387220d78f4d0f4b89f847dfba`, after D's implementation
+merge and the recorded release readback. Scope is the next prioritised
+calculation boundary. These calculation sources are unchanged on
+`7a87c9f60a3034f5464633990d1cc73714e5a4b8`; D's completed installation is recorded
+in its [release evidence](#completed-hosted-release--2026-10-11).
+This pass installs nothing and does not supersede D's hosted release evidence.
+
+The [tool owner](ask-bob-tools.md#existing-evaluators-and-first-common-tool-boundary)
+now maps executable methods, precision and canonical model/result storage. The
+review followed stair inspection/save/reload, CAD/construction compilation and
+SQL graph validation, material/wall/layer/blank quantities, allowance and purchase
+rounding, supplier pack aggregation, bounded cutting and earlier Artifact
+geometry. It also checked source-unit conversion, Bob's governed registration,
+CAD research/designer arrays, strict CAD/Plan model responses, and authored
+time/price display helpers.
+
+| Probe | Evidence and limit |
+|---|---|
+| Dependent dimension | Graph unit fixture derives 960 mm from measured `1.001 m` minus two 18 mm decisions and 5 mm clearance, retaining original units/revision. Separately, the SQL graph fixture saves/reads `1001 − 41 = 960 mm` and its exact dependencies. Wrong units, cycles, omitted/unknown inputs, stale pins, arbitrary operations and implicit rounding are rejected. |
+| Rounding/replay | Graph fixtures cover signed half ties and exact-result rejection; SQL rejects normalized-value tampering and preserves historical detail/source pins. Stair source adoption changes the same saved recipe's derived results while old parent revisions stay reproducible. This is domain evidence, not common-tool acceptance. |
+| Stair numerical policy | Direct fixture with 2800 mm total rise, 17 rises and 280 mm going returns `rise_mm=164.7058823529412`, `step_formula_mm=609.4117647058824`, `pitch_degrees=30.465544919459884`. Existing code retains full-precision division/trigonometry; the common response still needs explicit output/display precision metadata. No site or suitability claim follows. |
+| Purchase arithmetic | Existing AC-14 SQL fixture: needs 60+60 pcs, 30 held, pack size 100 → net 90, one pack, surplus 10. Unknown pack size, unit mismatch, changed sources, competing claims and denied callers fail appropriately; replay does not duplicate publication. |
+| Shopping text counterexample | Source inspection and direct reproduction of the unchanged `parseCost` logic: `199,50 kr` → 19950; `100–200 kr` → 100200; empty text → 0. The editor accepts text and schema stores text. This is a reproduced display defect, not a failing quantity method or a browser/model probe. [Material owner](material-planning.md#authored-prices-and-display-total) records the open correction. |
+| Specialist integration | Bob, CAD research and designer have different tool surfaces. CAD reviewer and Plan compiler/reviewer use strict schema responses without tools; the current adapter suppresses `text.format` when tools are supplied. The first common implementation must test a bounded calculation phase and final-schema validation at these actual calls. |
+
+Local existing tests: **175/175** across 20 parameter, stair, material, sheet,
+pack, construction, cutting and Artifact geometry test files; **97/97** across eight
+unit normalization, tool session/catalog, CAD/Plan assistant and project-overview
+test files. Total **272/272**, zero failures/skips. `npm run check:vocabulary` and
+`git diff --check` pass. Dependencies reuse the identical lockfile installation
+from this workspace. No new implementation-shaped tests were added for these
+documentation changes; full build/Edge/browser gates belong to PR CI.
+
+The initial [PR #247 CI run](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38155415986)
+passes **1253/1253** tests, Edge, builds, PWA and the other browser gates, but
+fails the material-planning journey at its Shopping quantity lookup. The strict
+locator matched three `2 pcs` occurrences in the outgoing Material Plan while
+hash navigation was still replacing that view. The product files are unchanged
+from the reviewed base. The existing browser harness now waits for the destination
+`Shopping list` heading and matches the quantity prefix in the named Shopping row
+for both initial publication (1 pcs) and update (2 pcs). Source/delivered-state and
+reload assertions remain. This repairs the race without weakening the arithmetic
+check; it does not fix the authored-price defect. No local browser is installed;
+the corrected journey must pass in fresh PR CI.
+
+The missing common handler/result envelope, standalone saved graph contract and
+price correction are explicit implementation gaps. Stored requirement history
+does not prove replay dispatch for every old method, particularly D v1/v2
+manufacturing counts. No new runtime, schema, AI definition, model settings,
+project records, paid model calls or hosted probes were introduced by this review.
+Direct review follows the owning contracts and Archie/verify guidance; no
+independent subagent review or real-model calculator acceptance is claimed.
+[State](bob-delivery-flow.md#state) retains the next implementation and its gates.

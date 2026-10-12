@@ -405,8 +405,10 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await modal.getByRole('button', { name: 'Send to Shopping', exact: true }).click()
   await modal.waitFor({ state: 'hidden' })
   await page.goto(base + '#/shopping')
+  // Hash navigation can resolve before React replaces the requirement view.
+  await page.getByRole('heading', { name: 'Shopping list', exact: true }).waitFor()
   let shoppingRow = page.getByText('Windows 1180×1700', { exact: true }).locator('..')
-  await shoppingRow.getByText('1 pcs', { exact: false }).waitFor()
+  await shoppingRow.getByText(/^1 pcs ·/).waitFor()
   await shoppingRow.getByText('From material plan', { exact: true }).waitFor()
 
   const deliveredWrite = page.waitForResponse(response =>
@@ -434,8 +436,9 @@ export async function verifyMaterialPlanningBrowser(page, base, fixture, facts, 
   await modal.waitFor({ state: 'hidden' })
 
   await page.goto(base + '#/shopping')
+  await page.getByRole('heading', { name: 'Shopping list', exact: true }).waitFor()
   shoppingRow = page.getByText('Windows 1180×1700', { exact: true }).locator('..')
-  await shoppingRow.getByText('2 pcs', { exact: false }).waitFor()
+  await shoppingRow.getByText(/^2 pcs ·/).waitFor()
   await page.getByText('Got it', { exact: true }).waitFor()
   await page.reload()
   await page.getByText('Windows 1180×1700', { exact: true }).waitFor()
