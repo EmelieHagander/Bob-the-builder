@@ -2194,7 +2194,7 @@ graph/unit/history/price boundaries plus E's real member/mockup/cost acceptance.
 
 ### Owner task budget and cost attribution — 2026-10-12
 
-**Implementation, full local suite and build verified; required CI and hosted release pending.**
+**Implemented, required CI passed and hosted release verified.**
 [CAD](cad-adapter.md#one-budget-per-owner-task--2026-10-12) owns the new owner
 mandate, and [database periods](../db/README.md#owner-task-budget-periods--2026-10-12)
 own accounting. PR #248 is already merged; this is its subsequent loop-guard correction.
@@ -2246,8 +2246,74 @@ at their original migration boundary; current behavior uses the full schema.
 
 The installed Supabase CLI aborts before `migration new` can create a file.
 The two new filenames use observed UTC time; no historical migration is edited.
-The full local suite, vocabulary check and production build pass. Canonical local
-Edge checking is blocked by the sandbox connection to esm.sh; no browser is
-installed locally. Required CI supplies those checks. Hosted migration/runtime/
-catalog readback and original-project preservation remain release gates. Real owner
-browser/model acceptance remains in [State](bob-delivery-flow.md#state).
+The full local suite (**1,280 tests**), vocabulary check and production build pass.
+Canonical local Edge checking is blocked by the sandbox connection to esm.sh;
+no browser is installed locally. Required CI supplies those checks and passed on
+the deployed source: [51-step CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231107809),
+[native PostgreSQL concurrency](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231104841)
+and [CAD adapter](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231104759).
+Real owner browser/model acceptance remains in [State](bob-delivery-flow.md#state).
+
+#### Completed owner-task budget release — 2026-10-12
+
+[PR #249](https://github.com/EmelieHagander/Bob-the-builder/pull/249) contains the
+deployed source `2276937cf26d594cd342dc364e91d3204190df13`, tree
+`5a259dc7225a6aad2e8a3674321eb95bf291e752`; subsequent release-documentation
+changes do not change that executable source. Migration attempts through
+the connector failed with `Invalid or expired requestState` before execution.
+The owner approved the Dashboard fallback. Its SQL Editor executed each exact
+source with a quiescence guard and migration-ledger insert in the same transaction.
+Only these two migrations were installed, in this order around the compatible
+runtime deployment:
+
+| Source and hosted ledger version | Migration |
+| --- | --- |
+| `20261012090214` | `drawing_task_budget` |
+| `20261012090928` | `ai_task_budget_catalog` |
+
+All **six** defined/replaced SQL bodies match the reviewed migration exactly,
+with fixed empty search paths and their intended execution grants. Existing
+budgets retain period 1, their original counters and the explicit legacy
+request-scope marker, with zero origin-mapping errors. No real owner task was
+fabricated to reset them; the next claimed owner message opens its new period.
+
+| Runtime | Verified hosted result |
+| --- | --- |
+| `ask-bob 106` | ACTIVE; JWT true; all **92** bundled files match; bundle `62485d6b4d1483808fc4f8e2cd4984b6d68a239a7b47ec20813dd6f35758d457` |
+| `bob-worker 74` | ACTIVE; JWT false with existing private job/capability authentication; all **90** bundled files match; bundle `3f6f9cb7809e6ea05ae2340967ce0fff83fe76e354213ae9645e2fc052852d82` |
+
+The connector successfully deployed the exact **93/92-file** closures after the
+core SQL was installed. Only the compiler's existing type-only omissions remain:
+`src/data/provenance.ts` in both bundles and `bob-request.ts` in the worker. Every
+executable file matches the verified source; authentication modes are unchanged.
+
+The activated catalog resolves to manifest
+`08d9f59d-4eae-4f87-826d-403222192e33`, **272 definitions**, payload hash
+`64eeaa29edcf866d5bfbbb3b6f72bb8e2774bffd47bc8a147c4159b707f2ca17`.
+Exactly four existing identities advance: `bob.frame.outstanding`, both
+`feedback.bob-budget-stop.resume` fragments and `tools.design_project_cad`.
+Their entire content/definition/metadata/flow/variable payloads match the source
+publication. All other 268 identities/hashes, all shared models/settings and the
+entire previous pinned manifest `6482763a-214b-4022-9e32-92b42e9dac71` remain unchanged.
+
+A hosted **BEGIN … ROLLBACK** probe passed task sharing, fresh-message reset,
+retained draft/history, paid-result replay, unresolved-call fencing, exactly-once
+direct late charges and ordinary/service-role authority checks. It made **zero
+model dispatches**. Synthetic users and every probe write were rolled back.
+All **153 original tables** (129 Bob domain tables, 22 private tables and the two
+shared model/settings tables) retain their complete-row digests and counts,
+including the real bed's saved drawing, pending draft and historical charges.
+
+The new private history table has RLS and only the database-owner ACL. The advisor's
+informational [RLS-without-policy finding](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+is intentional for this denied-by-default private table; raw anon/authenticated/
+service reads are denied in the hosted probe. No new Bob security warning/error
+appeared. Performance advisors report the new `drawing_budgets_turn` index as
+[unused](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
+before any real new task; the previously unused call index remains. Unrelated
+shared-project findings are not altered by this release.
+
+Deployment is complete; PR review/merge remains. The next acceptance step is the
+owner's real Bob message, checking the retained bed draft and measuring the
+resulting context/cache, calls and cost. Technical probes do not establish bed
+fit, model/mockup acceptance or a reduction in cost per accepted drawing.
