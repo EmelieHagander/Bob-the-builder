@@ -150,3 +150,29 @@ test('payload retention runs with dispatch disabled and preserves delayed callba
  await invoke('shared.ai_job_deliver',[job.id])
  assert.deepEqual((await one('select context from shared_private.fixture_wakes where job=$1',[job.id])).context,context)
 })
+
+test('a reservation with no provider response ID expires after two minutes, not at the turn deadline', async () => {
+  await pg.exec("update shared_private.ai_runtime set worker_url='https://fixtureproject.supabase.co/functions/v1/ai-background-worker'")
+  const fresh = await reserve(), stale = await reserve(), accepted = await reserve()
+  await pg.query("update shared_private.ai_jobs set created_at=now()-interval '1 minute' where id=$1", [fresh.id])
+  await pg.query("update shared_private.ai_jobs set created_at=now()-interval '3 minutes' where id=$1", [stale.id])
+  await pg.query("update shared_private.ai_jobs set created_at=now()-interval '3 minutes' where id=$1", [accepted.id])
+  await invoke('shared.ai_job_accept', [accepted.id, JSON.stringify(response(accepted.id, 'in_progress'))])
+  const capability = async (id: string) => (await one('select capability from shared_private.ai_jobs where id=$1', [id])).capability
+  // Still inside the acknowledgement window: the worker keeps polling.
+  assert.deepEqual(await invoke('shared.ai_work_claim', ['job', fresh.id, await capability(fresh.id)]), { response_id: null })
+  assert.equal((await one('select status from shared_private.ai_jobs where id=$1', [fresh.id])).status, 'submitting')
+  // Acknowledged work keeps its full deadline even when it is old.
+  assert.equal((await invoke('shared.ai_work_claim', ['job', accepted.id, await capability(accepted.id)])).cancel, undefined)
+  assert.equal((await one('select status from shared_private.ai_jobs where id=$1', [accepted.id])).status, 'pending')
+  // Unacknowledged for over two minutes: expired now, delivered to the app, no provider call.
+  assert.deepEqual(await invoke('shared.ai_work_claim', ['job', stale.id, await capability(stale.id)]), { response_id: null, cancel: true })
+  const row = await one('select status,finished_at,cancel_pending from shared_private.ai_jobs where id=$1', [stale.id])
+  assert.equal(row.status, 'expired'); assert(row.finished_at); assert.equal(row.cancel_pending, false)
+  await invoke('shared.ai_job_deliver', [stale.id])
+  assert.equal((await one('select status from shared_private.fixture_wakes where job=$1', [stale.id])).status, 'expired')
+  // A late completion is still accounted for but cannot revive the expired operation.
+  await invoke('shared.ai_job_accept', [stale.id, JSON.stringify(response(stale.id))])
+  assert.deepEqual(await one('select status,response from shared_private.ai_jobs where id=$1', [stale.id]), { status: 'expired', response: null })
+  assert.equal((await one('select count(*)::int n from shared.ai_usage_events where background_job_id=$1', [stale.id])).n, 1)
+})
