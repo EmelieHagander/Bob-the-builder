@@ -2431,7 +2431,7 @@ The owner's readiness check found a subsequent deployment at **ask-bob 110 / bob
 
 Fresh preflight again found no active Bob or submitting/pending shared AI jobs. The tested implementation `805078b32ee8928b2f01302bac23b9309bbd220d` was restored without reapplying SQL: **ask-bob 111 / bob-worker 79**, retaining their existing authentication. Their bundle SHA-256 values are exactly those of the original 109/77 installation above. Independent GET readback matches every emitted source file; only the same reviewed type-only imports are omitted. All **159** protected row-set counts and complete-row digests match before/after this restoration. [Final documentation-head CI 38353775253](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775253), [native PostgreSQL/concurrency 38353775250](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775250) and [CAD adapter 38353775254](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775254) also passed at `1b7a9f2db3e747d0b0df31c20e9dd3fc110ba54c`; the restored implementation is unchanged.
 
-**The same bed request is not yet ready for another drawing-model call.** The retained request/packet still agree at revision 20, with unchanged draft hash and one failure answer. Its period-2 reservation remains incomplete and the original expired provider job still has no response ID. Live `bob.bob_drawing_budget` source MD5 is `6027ea6bba55e29826c9ee958c3c2ea2`: pending calls are selected when `m.request_id=p_id` **or** their period belongs to the current owner turn, and any pending call blocks a new reservation. Consequently, the old uncertainty still blocks this request after a new owner budget period; a budget reset alone does not resolve it. No new owner turn/model call was manufactured to demonstrate that boundary, and no unknown outcome was marked free/completed. [State](bob-delivery-flow.md#state) owns resolving this continuation boundary before real bed/model/mockup acceptance. Future deployments must retain the tested task-budget/calculator/diagnostics source.
+**Pre-integration readiness snapshot.** The same bed request was not yet ready for another drawing-model call; the integrated release below supersedes this continuation boundary. The retained request/packet still agree at revision 20, with unchanged draft hash and one failure answer. Its period-2 reservation remains incomplete and the original expired provider job still has no response ID. Live `bob.bob_drawing_budget` source MD5 is `6027ea6bba55e29826c9ee958c3c2ea2`: pending calls are selected when `m.request_id=p_id` **or** their period belongs to the current owner turn, and any pending call blocks a new reservation. Consequently, the old uncertainty still blocks this request after a new owner budget period; a budget reset alone does not resolve it. No new owner turn/model call was manufactured to demonstrate that boundary, and no unknown outcome was marked free/completed. [State](bob-delivery-flow.md#state) owns resolving this continuation boundary before real bed/model/mockup acceptance. Future deployments must retain the tested task-budget/calculator/diagnostics source.
 
 ### Integrated task recovery — 2026-10-13
 
@@ -2454,3 +2454,71 @@ fixtures verify two new immutable versions, reproducible older publications,
 unchanged models/settings and retained pinned manifests. Exact-head CI and
 hosted installation/readback are recorded below when completed; real member,
 model/mockup acceptance and measured drawing savings remain open.
+
+
+#### Completed hosted integration — 2026-10-13
+
+[PR #249](https://github.com/EmelieHagander/Bob-the-builder/pull/249) is merged as
+`b356d0491e5f27c53cb3f6549de5ba5f295cd5d2`, with the exact tested tree
+`85152395b7ecefa8f9151d67e3ff5a9e89a291c8`. Final source
+`98ae0e6c4604b344468a613358b2cfe5c14c9e8a` passes **1,324/1,324 tests**,
+[CI 38407481552](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38407481552),
+[native PostgreSQL/concurrency 38407481991](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38407481991)
+and [CAD adapter 38407481554](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38407481554).
+Canonical Edge, production build, vocabulary, PWA and phone/desktop browser
+checks pass. Main incorporates #232/#250 and the task-budget/calculator/diagnostic
+fixes; its tree is independently read back rather than inferred from merge status.
+
+With no active Bob or shared submitting/pending jobs, only these new migrations
+were installed in the existing project. Earlier task, failure, redaction and
+acknowledgement migrations were retained.
+
+| Source migration | Hosted ledger version / name |
+| --- | --- |
+| `20261013120145_ai_submission_guard.sql` | `20261013140647 / ai_submission_guard` |
+| `20261013120146_drawing_task_attempt_recovery.sql` | `20261013140648 / drawing_task_attempt_recovery` |
+| `20261013131820_ai_task_resume_catalog.sql` | `20261013140827 / ai_task_resume_catalog` |
+
+All **seven** SQL bodies match source, with fixed empty search paths and the
+expected service-only RPC/private-helper grants. Existing private RLS and
+anonymous/member denial remain. Matching runtime closures were deployed before
+catalog activation and merge; existing JWT/capability/signature modes remain.
+Independent GET readback matches every emitted source file, omitting only the
+same known type-only files as the preceding release.
+
+| Runtime | Version / emitted files | Bundle SHA-256 |
+| --- | --- | --- |
+| `ask-bob` | 112 / 93 | `006c8860ef9c1f1fac1a5980a7aa02ca5332ffaadd074a2573776f62a4824b73` |
+| `bob-worker` | 80 / 91 | `4405936b4da98046e491aea0170ef06ad49201412e9d6e38aca0e5a3a2f98994` |
+| `ai-background-worker` | 5 / 5 | `2a628c1c1b6c3bbc5cc073bef5a106e893195e7f265ebdaae159fab1c66fbd25` |
+| `ai-background-webhook` | 5 / 5 | `f9a4ae9be0d57a614ea7d80450f1b7265b7123aef3b438201fc537d42eb82d69` |
+
+Catalog activation publishes exactly **two** versions: 351 → 353. All 351 older
+version rows retain digest `177d30597c0d77f17b7fa456ce766972`. The new manifest is
+`df4c7e8c-68c9-4ec1-b778-716363b85e87`, hash
+`7331dc73a41ff1439174058c6def3e8d3a48695987dc5a2b7a98b3969a55e758`;
+it is persisted as the fourteenth Bob manifest. The previous pinned manifest
+still resolves to digest `24b98656046a73cd235e8718369037d1`. Model/settings rows
+are unchanged and the old budget paragraph is absent from the active tool guide.
+
+The hosted **BEGIN … ROLLBACK** probe passed expired-preparation and cancellation
+gates, `not_submitted` diagnostics, service/member authority and zero fabricated
+usage. Fixture receiver/jobs/diagnostics were rolled back. Across installation,
+runtime deployment, catalog activation and the probe, all **160** protected row-set
+counts and digests of existing fields match; only the four newly added nullable
+fields are excluded from the comparison. Security advisors remain seven
+categories with no added or removed findings.
+
+The original bed packet/header stay at revision **20**, with retained packet hash
+`d44aa16ef3409745f0e9badee7101394`. Its saved Artifact and original owner turn are
+unchanged. Period 2 still has **3 calls / $0.121099** known spend; the old incomplete
+reservation remains cost-unknown with no fabricated receipt, free settlement or
+new owner instruction. Installation opens no new budget period. The verified
+new-task boundary permits a distinct attempt only on a genuine next owner message
+after terminal older work; it preserves that old uncertainty and reuses paid
+usable results. Native fixtures and exact hosted body/source readback prove the
+boundary without spending on another real bed attempt.
+
+The original missing receipt's transport/storage cause remains unreconstructable.
+Ordinary member readback, the real bed/model/mockup outcome and measured cost per
+accepted drawing remain in [State](bob-delivery-flow.md#state).
