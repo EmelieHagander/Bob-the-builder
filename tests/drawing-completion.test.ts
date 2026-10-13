@@ -39,7 +39,7 @@ test('P2: request-wide reservations, replay, allocation and private results surv
  const spent=await budget('reserve','b'.repeat(64))
  assert.equal(spent.status,'budget_exhausted');assert.deepEqual(spent.budget_stop.reasons,['usd_limit'])
  assert.equal(spent.budget_stop.spent_usd,3.01);assert.equal(spent.budget_stop.usd_limit,3)
- assert.equal(spent.budget_stop.scope,'drawing_request');assert.equal(spent.budget_stop.calls,1)
+ assert.equal(spent.budget_stop.scope,'task');assert.equal(spent.budget_stop.calls,1)
  await assert.rejects(call(other,'bob.grant_drawing_budget',[project,id,1,randomUUID()]),/project_denied/)
  const grant=randomUUID();await call(owner,'bob.grant_drawing_budget',[project,id,1,grant]);await call(owner,'bob.grant_drawing_budget',[project,id,1,grant])
  assert.equal((await work()).budget.usd_limit,4,'duplicate grant never increases allocation twice')
@@ -103,6 +103,9 @@ test('P2 events: UI/chat domain changes resume the original mandate, deduplicate
  assert.equal(repeated.id,id);assert(repeated.reused,'new request UUID cannot bypass the existing identity')
  const working={brief:{...scope,brief:'Shelf'},owner_request:'Draw the shelf from saved measurements',reference_refs:[],assessment:{checks:[{id:'width',action:'measurement',blocking:true}],additional_needs:[]}}
  const saved=await service('bob_drawing_request',[project,owner,c.thread_id,turn,c.generation,'save',id,0,'needs_data',working,randomUUID()])
+ const execution=randomUUID(),key='9'.repeat(64)
+ await service('bob_drawing_budget',[project,owner,c.thread_id,turn,c.generation,id,execution,key,'reserve',null])
+ await service('bob_drawing_budget',[project,owner,c.thread_id,turn,c.generation,id,execution,key,'complete',{success:true,data:'Retained task work',model:'fixture',usage:{total_tokens:2},estimatedCostUsd:.25}])
  await service('bob_commit_turn_v2',[project,owner,c.thread_id,turn,c.generation,'Please record the missing width',{kind:'ai_assessment',references:[],sources:[],partial:true},'resp_fixture'])
  await service('bob_renew_drawing_authority',[project,owner,id,turn,{version:1,ciphertext:'fixture'},new Date(Date.now()+600000).toISOString(),'https://fixture.supabase.co/functions/v1/bob-worker'])
  await pg.query("insert into bob.tasks(id,project_id,name,status,skill,hours,materials) values('measure',$1,'Measure width','todo','novice','1h','')",[project])
@@ -120,6 +123,8 @@ test('P2 events: UI/chat domain changes resume the original mandate, deduplicate
  assert.equal((await pg.query("select count(*)::int n from bob.bob_messages where role='user'")).rows[0].n,1,'event never fabricates a user message')
  const loaded=await service('bob_drawing_request',[project,owner,c.thread_id,turn,claimed.generation,'load',id,0,null,null,null])
  assert.equal(loaded.id,id,'audited event can read its own private packet under the original instruction')
+ const eventBudget=(await pg.query<any>('select to_jsonb(b) result from bob_private.drawing_budgets b where request_id=$1',[id])).rows[0].result
+ assert.equal(eventBudget.period,1);assert.equal(eventBudget.turn_id,turn);assert.equal(eventBudget.calls,1);assert.equal(eventBudget.spent_usd,.25,'child event jobs keep the original task budget')
  await asProjectUser(pg,owner,"update bob.tasks set status='done' where id='measure'")
  assert.equal((await call(owner,'bob.drawing_request_work',[project,id])).gaps[0].blocking,true,'Task completion is no measurement evidence')
  await call(owner,'bob.cancel_drawing_request',[project,id,loaded.revision])

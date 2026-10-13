@@ -41,6 +41,7 @@ test('CAD review and recovery language send strict response schemas and no tools
     source = source.replace("'./openai-content.ts'", JSON.stringify(new URL('../supabase/functions/_shared/openai-content.ts', import.meta.url).href))
     source = source.replace("'./ai-background.ts'", JSON.stringify(new URL('../supabase/functions/_shared/ai-background.ts', import.meta.url).href))
     source = source.replace("'./ai-catalog.ts'", JSON.stringify(new URL('../supabase/functions/_shared/ai-catalog.ts', import.meta.url).href))
+    source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
     const service = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'))
     const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id: 'panel',

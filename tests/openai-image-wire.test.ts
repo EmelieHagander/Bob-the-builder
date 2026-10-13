@@ -29,6 +29,7 @@ test('actual shared service serializes image input with tool pairing, checks cat
     source=source.replace("'./openai-content.ts'",JSON.stringify(new URL('../supabase/functions/_shared/openai-content.ts',import.meta.url).href))
     source = source.replace("'./ai-background.ts'", JSON.stringify(new URL('../supabase/functions/_shared/ai-background.ts', import.meta.url).href))
     source = source.replace("'./ai-catalog.ts'", JSON.stringify(new URL('../supabase/functions/_shared/ai-catalog.ts', import.meta.url).href))
+    source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
     const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
     const data='data:image/png;base64,iVBORw0KGgo='
@@ -70,6 +71,7 @@ test('the actual image service sends authorised original bytes to edits and pres
     let source=await readFile(new URL('../supabase/functions/_shared/openai-service.ts',import.meta.url),'utf8')
     source=source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/,'const createClient = (globalThis as any).__bobEditWireClient;')
     for(const file of ['openai-content.ts','ai-background.ts','ai-catalog.ts'])source=source.replace(`'./${file}'`,JSON.stringify(new URL('../supabase/functions/_shared/'+file,import.meta.url).href))
+    source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
     const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
     const options={app:'bob',coworkerId:'bob',functionName:'project-image',prompt:'Add the build in this room.',referenceImages:[{bytes,contentType:'image/png'}]}

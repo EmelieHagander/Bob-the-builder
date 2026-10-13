@@ -14,6 +14,26 @@ const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const taskTexts=source.match(/\$task_budget_texts\$([\s\S]+?)\$task_budget_texts\$/)
+ if(taskTexts){
+  for(const patch of JSON.parse(taskTexts[1])){
+   const row=seed.find(row=>row.key===patch.key);row.content=patch.content;versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const tool=JSON.parse(source.match(/\$task_budget_tool\$([\s\S]+?)\$task_budget_tool\$/)![1])
+  const row=seed.find(row=>row.key==='tools.design_project_cad')
+  row.definition.parameters.properties.request_id.description=tool.request_id_description
+  row.definition.additional_description=(row.definition.additional_description??'')+'\n\n'+tool.additional_description
+  versions.set(row.key,versions.get(row.key)!+1)
+ }
+ const resumeGuidance=source.match(/\$resume_guidance\$([\s\S]+?)\$resume_guidance\$/)
+ if(resumeGuidance){
+  const oldGuard=source.match(/\$old_guard\$([\s\S]+?)\$old_guard\$/)![1]
+  const tool=seed.find(row=>row.key==='tools.design_project_cad')
+  tool.definition.additional_description=(tool.definition.additional_description??'').replace(oldGuard,'').trim()
+  versions.set(tool.key,versions.get(tool.key)!+1)
+  const resume=seed.find(row=>row.key==='feedback.bob-budget-stop.resume.9c3a74e182d5')
+  resume.content=resumeGuidance[1];versions.set(resume.key,versions.get(resume.key)!+1)
+ }
  if(source.includes('do $communication$')){
   const content=source.match(/'(När du formulerar besked[^']+)'/)?.[1]
   if(!content)throw new Error('Concise communication migration content missing')

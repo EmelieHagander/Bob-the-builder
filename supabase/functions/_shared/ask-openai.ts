@@ -70,8 +70,12 @@ export async function answerWithOpenAi(opts: {
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
-  const withResendNotice = (answer: string) => journal && journal.uncertainResends() > 0 && !answer.includes(RESEND_NOTICE)
-    ? answer + '\n\n' + RESEND_NOTICE : answer
+  let priorDrawingAttemptUncertain = false
+  const priorDrawingNotice='Utfallet för ett tidigare AI-försök var okänt när ett nytt försök startades. Kostnader kan därför finnas för båda försöken.'
+  const withResendNotice = (answer: string) => {
+    const notice=journal&&journal.uncertainResends()>0?RESEND_NOTICE:priorDrawingAttemptUncertain?priorDrawingNotice:null
+    return notice&&!answer.includes(notice)?answer+'\n\n'+notice:answer
+  }
   const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0, signal?:AbortSignal): Promise<T> =>
     journal ? journal.run(stream, input, work, reserve, signal) : work()
   const checkpointed = <T extends (...args:any[])=>any>(read:T) => Object.assign(read,{checkpointed:!!journal})
@@ -117,7 +121,7 @@ export async function answerWithOpenAi(opts: {
     const allowed = Math.max(1000, Math.min(timeout, wall))
     let result
     try {
-      const invoke=(recovery?:{key:string;context:Record<string,unknown>;expiresAt:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
+      const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
@@ -144,6 +148,7 @@ export async function answerWithOpenAi(opts: {
     throw error
    }
   },options.aiFunction,boundDrawing?drawingAuthority:undefined).then(result=>{
+   if(result.priorAttemptUncertain)priorDrawingAttemptUncertain=true
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result

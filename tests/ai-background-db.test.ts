@@ -116,6 +116,8 @@ test('callback failure retains result and accounting; recovery delivers once eve
    update shared_private.ai_receivers set handler_name='fixture_broken' where app='fixture';`)
  await invoke('shared.ai_job_accept',[job.id,JSON.stringify(value)])
  await assert.rejects(()=>invoke('shared.ai_job_deliver',[job.id]),/fixture_callback_down/)
+ await pg.exec('select shared_private.ai_dispatch()')
+ assert.deepEqual(await one("select phase,category,rpc_code from shared_private.ai_background_failures where job_id=$1 and phase='deliver'",[job.id]),{phase:'deliver',category:'storage',rpc_code:'P0001'})
  assert.equal((await one('select status from shared_private.ai_jobs where id=$1',[job.id])).status,'completed')
  assert.equal((await one('select count(*)::int n from shared.ai_usage_events where background_job_id=$1',[job.id])).n,1)
  await pg.exec("update shared_private.ai_receivers set enabled=false,handler_name='fixture_wake' where app='fixture'")

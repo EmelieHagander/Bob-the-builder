@@ -10,6 +10,7 @@ import {createProjectWriter} from '../supabase/functions/_shared/project-write.t
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
+import {historicalDrawingResumeDescription} from '../scripts/catalog-publication-history.ts'
 
 test('parameter publication exposes bounded nodes and exact drawing version, preserves other definitions/models and old manifests',async t=>{
  let previous!:AiCatalogManifest,published!:AiCatalogManifest
@@ -27,10 +28,9 @@ test('parameter publication exposes bounded nodes and exact drawing version, pre
  const catalog=createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest:current})
  for(const session of [catalog,catalogFixture()]){
   assert.deepEqual(session.tool('change_construction_parameters').function.parameters,CONSTRUCTION_PARAMETER_TOOL.function.parameters)
-  const executable=structuredClone(DESIGN_CAD_TOOL.function.parameters)
-  // The later budget-stop publication owns the request_id wording in the pinned publication.
-  if(session===catalog)(executable.properties as any).request_id.description=(session.tool('design_project_cad').function.parameters.properties as any).request_id.description
-  assert.deepEqual(session.tool('design_project_cad').function.parameters,executable)
+  const expected=structuredClone(DESIGN_CAD_TOOL.function.parameters)
+  if(session===catalog)expected.properties.request_id.description=historicalDrawingResumeDescription
+  assert.deepEqual(session.tool('design_project_cad').function.parameters,expected)
  }
  const toolbox=catalog.definition('bob.tools','tool_contract').definition
  assert(toolbox.catalog.some((row:any)=>row.name==='change_construction_parameters'))

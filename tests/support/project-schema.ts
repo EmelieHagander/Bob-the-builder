@@ -2,15 +2,16 @@ import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { setupSharedSocial } from './shared-social.ts'
 
-/** Full Bob schema with isolated fake Auth/Storage/shared-app contracts. */
-export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>) {
+/** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.
+ * An explicit boundary is only for testing a historical migration policy. */
+export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>, throughMigration?: string) {
   const pg = new PGlite()
-  await installProjectSchema(pg, beforeMigration ? (_db, name) => beforeMigration(pg, name) : undefined)
+  await installProjectSchema(pg, beforeMigration ? (_db, name) => beforeMigration(pg, name) : undefined, throughMigration)
   return pg
 }
 
 /** Same migrations and fake external contracts on PGlite or disposable PostgreSQL. */
-export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigration?: (pg: Pick<PGlite, 'exec'>, name: string) => Promise<void>) {
+export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigration?: (pg: Pick<PGlite, 'exec'>, name: string) => Promise<void>, throughMigration?: string) {
   await pg.exec(`
     create role anon; create role authenticated; create role service_role bypassrls; create role authenticator;
     create schema auth;
@@ -33,6 +34,7 @@ export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigra
     for (const name of (await readdir(root)).filter(f => f.endsWith('.sql')).sort()) {
       await beforeMigration?.(pg, name)
       await pg.exec(await readFile(new URL(name, root), 'utf8'))
+      if (name === throughMigration) return
     }
   }
 }

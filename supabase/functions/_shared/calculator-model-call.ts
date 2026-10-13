@@ -3,50 +3,48 @@ import { hasCalculatorContract, type ProjectCalculator } from './project-calcula
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 
-/** Structured specialists get a bounded read-only calculation phase followed
- * by their original tool-free schema call. Every call uses the existing caller
- * budget/accounting wrapper. Never weaken the shared adapter's JSON boundary. */
+/** Optional calculations belong to the specialist's normal structured call.
+ * Continue the same provider conversation only after an actual tool request;
+ * every model call retains the caller's pinned schema, limits and accounting. */
 export async function callWithCalculator<T>(options:OpenAIServiceOptions,opts:{
  catalog:AiCatalogSession;calculator?:ProjectCalculator;hasAccess:()=>Promise<boolean>;deadline:number;
  callModel:(options:OpenAIServiceOptions)=>Promise<OpenAIServiceResponse<T>>;
 }):Promise<OpenAIServiceResponse<T>>{
  if(!opts.calculator||!hasCalculatorContract(opts.catalog))return opts.callModel(options)
- const {schema,schemaName,schemaDescription,catalogSchemaKey,prompt,messages,previousResponseId,...phase}=options
- const original=messages??(prompt?[{role:'user' as const,content:prompt}]:[])
- const evidence:unknown[]=[]
+ const {prompt,messages,tools:_tools,tool_choice:_choice,previousResponseId,...structured}=options
  const failed=(error:string,model='unresolved'):OpenAIServiceResponse<T>=>({success:false,data:null,error,model,usage:{input_tokens:0,output_tokens:0,total_tokens:0}})
  if(opts.calculator.remaining===0)return failed('calculator_budget_exhausted')
- let conversation:NonNullable<OpenAIServiceOptions['messages']>=[...original,{role:'user',content:opts.catalog.text('calculator.schema-phase')}]
- let previous:string|undefined
- for(let round=0;round<2&&opts.calculator.remaining>0;round++){
+ let conversation=messages??(prompt?[{role:'user' as const,content:prompt}]:[])
+ let previous=previousResponseId
+ // At most two tool rounds, then one verdict with tools closed. A direct
+ // verdict ends on the first call; there is no preliminary calculation phase.
+ for(let round=0;round<=2;round++){
   if(!await opts.hasAccess())throw new Error('project_denied')
   if(Date.now()>=opts.deadline)return failed('deadline')
-  const tools=await opts.calculator.offered()
-  if(!tools.length)return failed('calculator_policy_unavailable')
-  const response=await opts.callModel({...phase,messages:conversation,tools,previousResponseId:previous,
-   outputTokenLimit:Math.min(options.outputTokenLimit??6000,6000),timeoutMs:Math.min(options.timeoutMs??30000,opts.deadline-Date.now())})
+  const offered=opts.calculator.remaining>0?await opts.calculator.offered():[]
+  if(opts.calculator.remaining>0&&!offered.length)return failed('calculator_policy_unavailable')
+  const tools=round<2&&offered.length?offered:undefined
+  const response=await opts.callModel({...structured,messages:conversation,tools,
+   structuredToolOutput:true,previousResponseId:previous,
+   timeoutMs:Math.min(options.timeoutMs??30000,opts.deadline-Date.now())})
   if(!await opts.hasAccess())throw new Error('project_denied')
-  if(!response.success)return response
-  if(!response.toolCalls?.length)break
-  if(!response.responseId||response.toolCalls.length>4)return failed('calculator_protocol',response.model)
+  if(!response.success||!response.toolCalls?.length)return response
+  const calls=response.toolCalls
+  if(!tools||!response.responseId||calls.length>4||
+   calls.some(call=>!call.id||!tools.some(tool=>tool.function.name===call.function.name))||
+   new Set(calls.map(call=>call.id)).size!==calls.length)return failed('calculator_protocol',response.model)
   previous=response.responseId;conversation=[]
-  for(const call of response.toolCalls){
+  for(const call of calls){
    if(!await opts.hasAccess())throw new Error('project_denied')
-   let result:Record<string,any>={status:'invalid',saved:false,reason:'tool_not_offered'}
-   try{if(call.function.name===tools[0].function.name)result=await opts.calculator.execute(JSON.parse(call.function.arguments))}
+   if(Date.now()>=opts.deadline)return failed('deadline',response.model)
+   let raw:unknown
+   try{raw=JSON.parse(call.function.arguments)}catch{raw=null}
+   let result:Record<string,any>
+   try{result=await opts.calculator.execute(raw)}
    catch(error){rethrowContinuation(error);if(error instanceof Error&&error.message==='project_denied')throw error;result={status:'invalid',saved:false}}
-   evidence.push({tool:call.function.name,result})
+   if(!await opts.hasAccess())throw new Error('project_denied')
    conversation.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(result)})
   }
  }
- if(!await opts.hasAccess())throw new Error('project_denied')
- if(Date.now()>=opts.deadline)return failed('deadline')
- // Separate provider conversation: complete exact code results, no phase prose
- // and no tools property (even [] suppresses text.format in the shared service).
- const {tools:_tools,tool_choice:_choice,...structured}=options
- const final=await opts.callModel({...structured,prompt:undefined,previousResponseId:undefined,
-  messages:[...original,{role:'user',content:JSON.stringify({calculation_evidence:evidence,calculation_phase_closed:true})}],
-  timeoutMs:Math.min(options.timeoutMs??30000,opts.deadline-Date.now())})
- if(!await opts.hasAccess())throw new Error('project_denied')
- return final
+ return failed('calculator_protocol')
 }

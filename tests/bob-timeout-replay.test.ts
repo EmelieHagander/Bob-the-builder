@@ -12,12 +12,13 @@ test('late successful read cannot replace the timeout delivered to a pending pai
  const entries:JournalEntry[]=[],oldFetch=globalThis.fetch
  let started:()=>void=()=>{}
  const readStarted=new Promise<void>(resolve=>{started=resolve})
- let lateRead:((value:typeof page)=>void)|undefined,reads=0,posts=0,reserved:any,response:any=null
+ let lateRead:((value:typeof page)=>void)|undefined,reads=0,posts=0,submissionClaims=0,reserved:any,response:any=null
  const rpc=async(name:string,args:any)=>{
-  if(name==='ai_job_reserve'){
+  if(name==='ai_job_prepare'){
    if(reserved){assert.equal(args.p_fingerprint,reserved.p_fingerprint);return {id:'ai-job',status:response?'completed':'queued',response,submit:false}}
    reserved=args;return {id:'ai-job',status:'submitting',submit:true}
   }
+  if(name==='ai_job_start_submission'){submissionClaims++;return {submit:true,status:'submitting'}}
   if(name==='ai_job_accept')return true
   throw Error(name)
  }
@@ -45,7 +46,7 @@ test('late successful read cannot replace the timeout delivered to a pending pai
   response={id:'provider-response',status:'completed',output:[{type:'function_call',name:'search_project_data',arguments:'{}'}]}
   assert.deepEqual(await run(),response)
   assert.deepEqual(await run(),response)
-  assert.equal(reads,1);assert.equal(posts,1)
+  assert.equal(reads,1);assert.equal(posts,1);assert.equal(submissionClaims,1)
  }finally{globalThis.fetch=oldFetch}
 })
 

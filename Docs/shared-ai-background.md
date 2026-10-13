@@ -24,14 +24,37 @@ Only a trusted server can call the shared RPCs. A database administrator registe
 
 ## Delivery and recovery
 
-1. Reserve the operation durably before a provider POST. Only the first reservation gets submission authority.
+1. Prepare the operation durably before local input preparation. Immediately before a provider POST, claim the service-only submission gate; only one live prepared operation receives submission authority.
 2. Start a Responses request with `background: true`, `store: true` and the opaque job ID in metadata. Persist its response ID. Re-entry returns the existing state.
 3. The raw-body signature-verified webhook persists an event inbox row before acknowledging. It performs no model work itself.
 4. A capability-authorized shared worker retrieves the authoritative provider response. Completion, token counts and the original pricing snapshot commit atomically. Duplicate or out-of-order delivery cannot create a second usage entry.
 5. A durable completion outbox wakes the registered app. App callback failure does not roll back the provider result or accounting. Callback retries are independent of provider execution.
 6. `pg_cron` and `pg_net` retrieve known response IDs if webhook delivery is delayed or lost. They never POST the same model operation again. Waiting is distinct from a failed provider attempt.
 
-The acceptance POST can have an ambiguous outcome if the network or worker dies. It is deliberately not retried blindly. A reservation that still has no provider response ID two minutes after it was created is expired by the next worker claim (`20261013103000_ai_job_unacknowledged_expiry.sql`) instead of waiting for the turn deadline, so the owner hears about the failure within minutes; the acceptance POST itself times out after 20 seconds. A later signed completion can recover its ID through provider metadata, including when the acceptance checkpoint was lost. If no receipt/event ever arrives, the absolute deadline produces a failure; exactly-once provider execution cannot be promised across an unacknowledged POST. Definite 400/401/403/404/422/429 rejection fails the operation promptly. Transient retrieval failures retry the same ID.
+The acceptance POST can have an ambiguous outcome if the network or worker dies. It is deliberately not retried blindly. A reservation that still has no provider response ID two minutes after submission intent is expired by the next worker claim; legacy reservations use creation time. Accepted response IDs retain the original absolute deadline. Local preparation cannot consume the acknowledgement window. The acceptance POST itself times out after 20 seconds. A later signed completion can recover its ID through provider metadata, including when the acceptance checkpoint was lost. Exactly-once provider execution cannot be promised across an unacknowledged POST. Definite 400/401/403/404/422/429 rejection fails the operation promptly. Transient retrieval failures retry the same ID.
+
+### Guarded submission — 2026-10-13
+
+`shared.ai_job_prepare` records `submission_state=prepared` only for a new
+operation. After local preparation, `shared.ai_job_start_submission` locks the
+job, rechecks terminal state, expiry, enabled receiver and worker configuration,
+then marks one submission intent. Cancellation or expiry during preparation
+returns without a provider POST. The intent is fenced even if the worker dies
+before POST; that narrow window remains an uncertain outcome. Legacy rows keep
+NULL submission state and are never reclassified as free.
+
+An expired never-started preparation has the bounded `not_submitted` diagnostic
+and can settle its CAD reservation at zero. A started or legacy operation without
+a receipt retains `receipt_missing` and unknown accounting. No provider usage
+event is invented. A genuine new owner task can authorize a distinct terminal
+CAD attempt under [the drawing recovery contract](cad-adapter.md#terminal-attempt-recovery--2026-10-13);
+the shared transport never resends its old logical operation.
+
+### Content-free failure diagnostics — 2026-10-12
+
+`ai-background-diagnostics.ts` emits the failed phase before attempting durable storage. Service-only `shared.ai_work_record_failure` validates the bounded shape stored in `shared_private.ai_background_failures`: job/event identity, phase, category, HTTP status, validated provider request/response IDs, allowlisted transport/application codes, SQL/PostgREST code and elapsed time. Exception messages/stacks, provider bodies, prompts, images, URLs and credentials are excluded. Private RLS and service-only RPC grants retain the existing authority boundary; rows cascade with seven-day job/event retention. Failed diagnostic storage still leaves the safe original console record.
+
+Submission, acceptance, retrieval, cancellation and callback delivery have separate phases. A received response ID remains diagnosable if acceptance storage fails. Unvalidated work capabilities cannot append diagnostics to the target operation. Database triggers record deadline expiry and definite provider failure even after the original worker disappears; a missing receipt is observed state, not a guessed network cause. The database outbox records callback SQLSTATE without copying SQLERRM. Diagnostics do not create usage charges, reopen work, repeat an uncertain POST or roll back accepted output when a callback fails. Existing deadline, same-ID retrieval and outbox recovery remain unchanged. [Bob's failure delivery](ask-bob-conversations.md#failed-drawing-background-jobs--2026-10-12) owns project status and the private answer; [verification](foundation-verification.md#background-failure-diagnostics--2026-10-12) owns release evidence.
 
 `shared.ai_job_cancel(app,key)` cancels a pending logical call; deadline expiry has the same no-late-resume rule. Known provider responses are cancelled best-effort with durable retries for up to one hour after expiry. Late terminal usage is still accounted for, but late content cannot revive the app operation. A provider cancellation request is not a claim that earlier computation was free.
 

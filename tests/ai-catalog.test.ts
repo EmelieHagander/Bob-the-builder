@@ -138,6 +138,7 @@ test('actual shared provider adapter uses pinned tier/prices, rejects override, 
     let source=await readFile(new URL('../supabase/functions/_shared/openai-service.ts',import.meta.url),'utf8')
     source=source.replace(/import \{ createClient, SupabaseClient \} from "https:[^\n]+/,'const createClient = (globalThis as any).__catalogWireClient;')
     for(const module of ['openai-content','ai-background','ai-catalog']) source=source.replace("'./"+module+".ts'",JSON.stringify(new URL('../supabase/functions/_shared/'+module+'.ts',import.meta.url).href))
+    source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
     const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
     const snapshot=manifest();snapshot.definitions.find(d=>d.definition_kind==='execution_profile')!.definition.timeout_ms=650

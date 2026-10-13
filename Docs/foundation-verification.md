@@ -2190,3 +2190,267 @@ snapshot. Existing shared-project findings were not changed.
 
 [State](bob-delivery-flow.md#state) retains PR review/merge and the remaining
 graph/unit/history/price boundaries plus E's real member/mockup/cost acceptance.
+
+
+### Owner task budget and cost attribution — 2026-10-12
+
+**Implemented, required CI passed and hosted release verified.**
+[CAD](cad-adapter.md#one-budget-per-owner-task--2026-10-12) owns the new owner
+mandate, and [database periods](../db/README.md#owner-task-budget-periods--2026-10-12)
+own accounting. PR #248 is already merged; this is its subsequent loop-guard correction.
+
+The failed hosted drawing stopped on **USD spend**, not call count: its historical
+request ledger had 16/48 calls and $4.039417/$4, all calls completed. Those costs
+spanned three executions. The latest execution alone logged approximately
+**$1.0804 of AI usage**, including $0.9666 in CAD. Independent review was blocked
+before provider dispatch; it did not cause a paid review loop in that execution.
+This is logged AI cost at recorded prices, excluding CAD infrastructure and any
+other project work; it is not a provider invoice total.
+
+| Latest CAD phase | Input tokens | Output tokens | Logged cost, USD |
+| --- | ---: | ---: | ---: |
+| Research | 32,762 | 1,723 | 0.0323 |
+| Designer: source read | 44,091 | 887 | 0.1235 |
+| Designer: calculation | 59,050 | 11,182 | 0.3154 |
+| Designer: render | 61,088 | 23,385 | 0.4954 |
+| Review | 0 | 0 | 0; stopped before dispatch |
+
+The three designer calls used 164,229 input and 35,454 output tokens, with only
+3,584 cached input tokens (2.18%). At their recorded $2.50/$0.25/$15 per million
+uncached/cached/output rates, input cost was about $0.4025 and output cost about
+$0.5318. The provider reported 34,984 reasoning tokens within output; Bob's
+calculator charges output once, not reasoning a second time. Bob's first general
+call also offered 72 tools with 196,263 bytes of tool schemas. No duplicate
+provider dispatch was found in the latest execution.
+
+This supports large context, repeated billable input and expensive output as
+actual cost drivers. OpenAI's [conversation-state guide](https://developers.openai.com/api/docs/guides/conversation-state)
+confirms that `previous_response_id` does not remove prior input from billing;
+[reasoning](https://developers.openai.com/api/docs/guides/reasoning) is billed in
+output, and [prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+requires matching prefixes. Prefix/cache optimization remains a measured follow-up;
+this change does not claim a cheaper accepted drawing or change model quality.
+
+Focused full-schema/runtime tests prove: deployment keeps old ledger totals;
+next real message resets $4/48 historical allocation to default $3/24 with zero
+spend/calls; same-task retries, new request IDs and worker/event continuations do
+not refill; task totals are shared in the work reader; deliberate owner grants
+remain idempotent; exact drafts and quality gates persist; paid results recover
+without charging again; direct and periodically reconciled late receipts charge
+old periods once; private history is denied to anon/authenticated/service roles.
+Production orchestration commits the verified cost cause and fresh-next-message
+hint without a language/model call, preserving earlier partial writes. A separate
+CAD pipeline test resumes the same cost-stopped draft with only independent
+review, without new research/design. Historical upgrade tests deliberately stop
+at their original migration boundary; current behavior uses the full schema.
+
+The installed Supabase CLI aborts before `migration new` can create a file.
+The two new filenames use observed UTC time; no historical migration is edited.
+The full local suite (**1,280 tests**), vocabulary check and production build pass.
+Canonical local Edge checking is blocked by the sandbox connection to esm.sh;
+no browser is installed locally. Required CI supplies those checks and passed on
+the deployed source: [51-step CI](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231107809),
+[native PostgreSQL concurrency](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231104841)
+and [CAD adapter](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38231104759).
+Real owner browser/model acceptance remains in [State](bob-delivery-flow.md#state).
+
+#### Completed owner-task budget release — 2026-10-12
+
+[PR #249](https://github.com/EmelieHagander/Bob-the-builder/pull/249) contains the
+deployed source `2276937cf26d594cd342dc364e91d3204190df13`, tree
+`5a259dc7225a6aad2e8a3674321eb95bf291e752`; subsequent release-documentation
+changes do not change that executable source. Migration attempts through
+the connector failed with `Invalid or expired requestState` before execution.
+The owner approved the Dashboard fallback. Its SQL Editor executed each exact
+source with a quiescence guard and migration-ledger insert in the same transaction.
+Only these two migrations were installed, in this order around the compatible
+runtime deployment:
+
+| Source and hosted ledger version | Migration |
+| --- | --- |
+| `20261012090214` | `drawing_task_budget` |
+| `20261012090928` | `ai_task_budget_catalog` |
+
+All **six** defined/replaced SQL bodies match the reviewed migration exactly,
+with fixed empty search paths and their intended execution grants. Existing
+budgets retain period 1, their original counters and the explicit legacy
+request-scope marker, with zero origin-mapping errors. No real owner task was
+fabricated to reset them; the next claimed owner message opens its new period.
+
+| Runtime | Verified hosted result |
+| --- | --- |
+| `ask-bob 106` | ACTIVE; JWT true; all **92** bundled files match; bundle `62485d6b4d1483808fc4f8e2cd4984b6d68a239a7b47ec20813dd6f35758d457` |
+| `bob-worker 74` | ACTIVE; JWT false with existing private job/capability authentication; all **90** bundled files match; bundle `3f6f9cb7809e6ea05ae2340967ce0fff83fe76e354213ae9645e2fc052852d82` |
+
+The connector successfully deployed the exact **93/92-file** closures after the
+core SQL was installed. Only the compiler's existing type-only omissions remain:
+`src/data/provenance.ts` in both bundles and `bob-request.ts` in the worker. Every
+executable file matches the verified source; authentication modes are unchanged.
+
+The activated catalog resolves to manifest
+`08d9f59d-4eae-4f87-826d-403222192e33`, **272 definitions**, payload hash
+`64eeaa29edcf866d5bfbbb3b6f72bb8e2774bffd47bc8a147c4159b707f2ca17`.
+Exactly four existing identities advance: `bob.frame.outstanding`, both
+`feedback.bob-budget-stop.resume` fragments and `tools.design_project_cad`.
+Their entire content/definition/metadata/flow/variable payloads match the source
+publication. All other 268 identities/hashes, all shared models/settings and the
+entire previous pinned manifest `6482763a-214b-4022-9e32-92b42e9dac71` remain unchanged.
+
+A hosted **BEGIN … ROLLBACK** probe passed task sharing, fresh-message reset,
+retained draft/history, paid-result replay, unresolved-call fencing, exactly-once
+direct late charges and ordinary/service-role authority checks. It made **zero
+model dispatches**. Synthetic users and every probe write were rolled back.
+All **153 original tables** (129 Bob domain tables, 22 private tables and the two
+shared model/settings tables) retain their complete-row digests and counts,
+including the real bed's saved drawing, pending draft and historical charges.
+
+The new private history table has RLS and only the database-owner ACL. The advisor's
+informational [RLS-without-policy finding](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+is intentional for this denied-by-default private table; raw anon/authenticated/
+service reads are denied in the hosted probe. No new Bob security warning/error
+appeared. Performance advisors report the new `drawing_budgets_turn` index as
+[unused](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)
+before any real new task; the previously unused call index remains. Unrelated
+shared-project findings are not altered by this release.
+
+Deployment is complete; PR review/merge remains. The next acceptance step is the
+owner's real Bob message, checking the retained bed draft and measuring the
+resulting context/cache, calls and cost. Technical probes do not establish bed
+fit, model/mockup acceptance or a reduction in cost per accepted drawing.
+
+### Calculator review output correction — 2026-10-12
+
+The next real owner retry finished at **13:56 CEST** with the existing draft
+retained and no newly saved drawing. It reached independent review, called the
+programmatic calculator, and then stopped with `model_output_limit`: all **6,000
+output tokens** in the failing reviewer response were reported as reasoning,
+without a usable verdict. The task reset worked: current CAD period 2 had
+**2/24 calls and $0.121099/$3**; the entire attempt logged **$0.230562** of AI
+usage across four calls. The failed review was not a task spending stop, and
+no completed review or accepted bed result is claimed.
+
+`calculator-model-call.ts` had inserted an explicit 6,000-token ceiling over
+the pinned reviewer profile's approved **50,000-token** ceiling. Its calculation
+phase is model orchestration; `project-calculator.ts` performs the actual
+deterministic computation without calling an AI service. [The calculator owner](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+keeps those boundaries separate. The fix preserves the role/profile and an
+explicit caller ceiling rather than hardcoding 50,000. The existing round,
+calculation, task-budget, deadline, authority and strict-schema guards remain.
+
+Regression cases reproduce the pre-fix cap for the approved reviewer, a different
+pinned profile and a larger explicit caller limit; a deliberately smaller caller
+limit remains unchanged. They verify the role ceiling before and after an actual
+code calculation and in the final tool-free schema call. A production CAD intake
+fixture proves unchanged failed-runtime retries do no paid work; the repaired
+runtime then renders the same exact draft and charges only independent review,
+with no additional research/designer pass. The runtime policy revision changes
+to `owner-task-period-review-limit-v4` so the real stored technical stop can be
+released by this repair without editing the owner packet or granting budget.
+
+The exact verified source, current full-suite/CI results and matching hosted
+function versions are recorded in [PR #249's release record](https://github.com/EmelieHagander/Bob-the-builder/pull/249).
+This correction requires only compatible runtime deployment; no database or
+catalog configuration migration is needed. Real owner/model acceptance after
+the repair and optimization of the separate orchestration overhead remain open
+in [State](bob-delivery-flow.md#state).
+
+### Calculator in normal structured calls — 2026-10-12
+
+The user authorized removal of the separate calculation-selection phase. The
+implementation now retains the specialist's pinned response schema while
+offering `calculate_project` in the normal call. A direct verdict needs one
+model call; one code-calculation round followed by a verdict needs two. Up to
+two tool rounds remain bounded, followed only if necessary by a third call
+with tools closed. Continuations send paired exact code results through the
+same provider response ID instead of repeating the original context in a new
+conversation. These are fixture-proven call counts, not measured real-bed savings.
+
+The shared adapter requires a trusted `structuredToolOutput` opt-in; other apps'
+legacy tool/text contract is unchanged. Tests exercise the actual production
+request builder and response parser with only database/provider I/O replaced:
+strict schema and tools coexist on the wire, code results retain units/method
+version, completed durable results do not resubmit or duplicate charges, and
+malformed or schema-invalid verdicts fail without a repair call. Wrapper tests
+cover direct responses, preserved role/caller ceilings, round closure, invalid
+tool protocols and live authority/policy revocation. Existing CAD retry tests
+retain the exact draft and avoid another research/designer pass after a concrete
+runtime repair. The revision is `owner-task-period-structured-tools-v5`.
+
+The pinned role contracts already contain calculator guidance. The old
+`calculator.schema-phase` fragment remains unchanged for history and is no
+longer injected; no database/catalog publication is required. The exact source,
+full-suite/CI results and hosted source readback belong to
+[PR #249's release record](https://github.com/EmelieHagander/Bob-the-builder/pull/249).
+Real owner/model/mockup acceptance and cost per accepted result remain in
+[State](bob-delivery-flow.md#state).
+
+
+## Background failure diagnostics — 2026-10-12
+
+**Deployed 2026-10-13.** A retained drawing child expired without a registered provider response ID; its job/attempt failed while the operational request remained `collecting` and no private failure answer was delivered. The original transport/storage cause was not logged and cannot be reconstructed. The installed source fixes [shared diagnostics](shared-ai-background.md#content-free-failure-diagnostics--2026-10-12) and [Bob failure delivery](ask-bob-conversations.md#failed-drawing-background-jobs--2026-10-12), preserving the original paid-operation fencing, draft, Artifact revision and accounting.
+
+All **1,312 local tests** pass on the final implementation, including real shared-service wire behavior, HTTP/transport/acceptance failure, lost diagnostic storage, same-ID retrieval, outbox failure, provider output ceilings, private RPC/RLS boundaries, cron expiry, one unread failure answer, stale/reset/cancelled/saved/revoked authority and exact draft recovery. Vocabulary and production build pass. The four affected Edge entrypoints type-check with an explicitly temporary import mapping to the installed Supabase client; the canonical local check is blocked by esm.sh connectivity and remains a CI gate. No ordinary owner message, provider call or cost grant is manufactured for release verification.
+
+The earlier two combined hosted rollback-probe attempts did not return usable acceptance evidence: an operator cast in the probe was corrected, then the connector returned `Invalid or expired requestState`. Readback at that checkpoint confirmed that no diagnostic table or repair had persisted. The authorized retry on October 13 succeeded through the connector; no browser sign-in was needed.
+
+### Hosted installation and readback — 2026-10-13
+
+The exact deployed implementation is `805078b32ee8928b2f01302bac23b9309bbd220d`, tree `61ea6ffdc91bd14cf9cec4905deef07825e679bf`. Required [CI 38284109440](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38284109440), [native PostgreSQL/concurrency 38284109436](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38284109436) and [CAD adapter 38284109437](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38284109437) all passed on that source. Canonical Edge checking, production/PWA builds and the required intercepted browser flows passed in CI; the temporary local import map is not the release evidence for those checks. Subsequent release-documentation edits do not change this implementation source.
+
+The first new application of each reviewed migration succeeded in the existing project `yuobtgoidmmmwfqenkau`. Independent ledger readback confirms:
+
+| Reviewed source migration | Hosted ledger version/name | Source SHA-256 |
+|---|---|---|
+| `20261012164921_bob_drawing_failure_delivery.sql` | `20261013053429 / bob_drawing_failure_delivery` | `d0e60af1fac5a4093334cfcd7c4b02dfa812291f604d555d2205c9b8b35e86f4` |
+| `20261012164941_shared_ai_failure_diagnostics.sql` | `20261013053641 / shared_ai_failure_diagnostics` | `33b6fefb3f0c24cb1b60c77f8c0c0443f28c63437934844f742f0b35fc46545a` |
+
+All five changed SQL bodies match the reviewed source exactly. Their empty search paths, definer modes and role grants were independently read back: anon/authenticated cannot execute these private/service commands; only the intended service entrypoints are exposed. The diagnostic table has RLS, no anon/member read or write access, and service SELECT for inspection. All seven existing security-advisor findings are unchanged; no new finding appeared. Existing task-budget/calculator migrations, model settings and the active catalog were retained.
+
+Fresh preflight found zero active Bob jobs and zero shared submitting/pending provider jobs. The four deployments preserve their existing JWT/custom-authentication settings. Independent GET readback compared every emitted file byte-for-byte with the implementation source:
+
+| Runtime | Before → installed version | Existing JWT setting | Emitted files | Installed bundle SHA-256 |
+|---|---|---|---|---|
+| `ask-bob` | 108 → 109 | true | 93 | `996cc6e2bf036df1f604f1b6abd4b25dc67446e4f37d3984cb1309e126e439bf` |
+| `bob-worker` | 76 → 77 | false; private capability authentication | 91 | `e8de3b59d6ef57b488925f9961881507b220766daa91f9a19665d1bb2693da85` |
+| `ai-background-worker` | 3 → 4 | false; private capability authentication | 5 | `80ebe05891be41895a01a5a0e658827bd1940bc06951c8dd1ff7551b275f3c78` |
+| `ai-background-webhook` | 3 → 4 | false; verified provider signature | 5 | `dea520af8dc155bf2d7fdbe47821a1582f3d9681cec91d4fb1a58a40e83d31a1` |
+
+Submitted closures contained 94/93/5/5 files. Only the expected type-only imports were omitted: `src/data/provenance.ts` in both Bob bundles and `_shared/bob-request.ts` in the worker. Both old shared-background bundles used a `functions/` root and the older helper without the optional local-preparation callback. That exact difference was reviewed before replacing them with the tested shared source; authentication/routing files otherwise matched the prior source.
+
+The repair found the still-current retained request `be654826-d1ac-4373-aa9a-1ac7a5e428a8` / child `d9ac3dbc-f605-4158-b935-218f8fa855f4`. Header and private packet now agree on revision **20**, `retrieval_failed` / `background_expired`. Packet MD5 excluding the new `execution_failure` remains **`d44aa16ef3409745f0e9badee7101394`**. One private assistant answer was appended at sequence **11** under the child-job ID; the original owner turn and earlier answer remain intact. The existing saved Artifact revision 2, paid-result history, budgets and usage are unchanged. No new drawing is claimed.
+
+Across SQL installation, **152 of 159** pre-existing Bob/shared row-set counts and complete-row digests matched. The packet/header, existing gap projection, thread/message and execution-event row sets changed with the guarded repair. Shared AI-job bookkeeping also changed between reads; that digest alone is not evidence of the original failure's cause. A fresh post-SQL baseline then matched **all 159** complete-row digests across the runtime deployment and rollback probe, including all retained work, model settings, accounting and AI jobs.
+
+A bounded hosted transaction, subsequently rolled back, verified service diagnostic storage and exact bounded fields, rejection of an extra private-text field, denied member write/read access, and idempotent repair with exactly one failure answer. Independent post-rollback readback found zero persisted diagnostic fixture rows, the same revision-20 packet hash and unchanged original AI operation `513aa8dc-8d7b-4e1a-8ab0-06829a123446`: still expired, provider response ID still absent. The unresolved original CAD reservation is retained. No owner message, provider retry, accounting completion or spending grant was manufactured.
+
+The SQL/CI/source/preservation gates are complete for this change. The original uncertain POST is not settled or blindly resent; newly observed failures can now identify their phase/code without private content. [State](bob-delivery-flow.md#state) owns ordinary member readback, real owner/model/mockup acceptance and cost per accepted result. [PR #249](https://github.com/EmelieHagander/Bob-the-builder/pull/249) remains open for review/merge.
+
+### Runtime regression and readiness — 2026-10-13
+
+The owner's readiness check found a subsequent deployment at **ask-bob 110 / bob-worker 78**. Compared with the tested implementation, both bundles had reverted the integrated calculator to the preliminary AI phase and hidden 6,000-token ceiling, removed submission/acceptance diagnostics and reverted task-budget parsing/recovery to the old request/top-up behavior. All nine differing ask-bob files were reviewed; its shared files matched the worker's copies. The shared background worker/webhook remained at the correct version 4, and both installed SQL migrations remained present. This establishes a runtime regression, not who initiated that deployment.
+
+Fresh preflight again found no active Bob or submitting/pending shared AI jobs. The tested implementation `805078b32ee8928b2f01302bac23b9309bbd220d` was restored without reapplying SQL: **ask-bob 111 / bob-worker 79**, retaining their existing authentication. Their bundle SHA-256 values are exactly those of the original 109/77 installation above. Independent GET readback matches every emitted source file; only the same reviewed type-only imports are omitted. All **159** protected row-set counts and complete-row digests match before/after this restoration. [Final documentation-head CI 38353775253](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775253), [native PostgreSQL/concurrency 38353775250](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775250) and [CAD adapter 38353775254](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775254) also passed at `1b7a9f2db3e747d0b0df31c20e9dd3fc110ba54c`; the restored implementation is unchanged.
+
+**The same bed request is not yet ready for another drawing-model call.** The retained request/packet still agree at revision 20, with unchanged draft hash and one failure answer. Its period-2 reservation remains incomplete and the original expired provider job still has no response ID. Live `bob.bob_drawing_budget` source MD5 is `6027ea6bba55e29826c9ee958c3c2ea2`: pending calls are selected when `m.request_id=p_id` **or** their period belongs to the current owner turn, and any pending call blocks a new reservation. Consequently, the old uncertainty still blocks this request after a new owner budget period; a budget reset alone does not resolve it. No new owner turn/model call was manufactured to demonstrate that boundary, and no unknown outcome was marked free/completed. [State](bob-delivery-flow.md#state) owns resolving this continuation boundary before real bed/model/mockup acceptance. Future deployments must retain the tested task-budget/calculator/diagnostics source.
+
+### Integrated task recovery — 2026-10-13
+
+The integrated #249 implementation retains main's #232 model-facing redaction
+and #250 acknowledgement expiry, together with the owner-task budget,
+calculator and private failure-delivery fixes. A fresh genuine owner task can
+authorize one distinct terminal CAD attempt; current-task replays and active
+older work remain fenced. Old unknown accounting is preserved, available paid
+output is reused, and late usage settles exactly once in its original period.
+The shared transport now rechecks one submission intent after local preparation;
+cancelled or expired preparation sends no provider POST. Legacy unacknowledged
+operations remain uncertain.
+
+Native full-schema fixtures cover old uncertainty, task fencing, paid recovery,
+late original-period billing, legacy caller completion and provider fingerprint
+compatibility, never-submitted zero settlement and service/member RPC authority.
+Runtime fixtures cover preparation-time cancellation/expiry with zero POSTs,
+safe diagnostics, replayed owner notices and ledger-free tool replies. Catalog
+fixtures verify two new immutable versions, reproducible older publications,
+unchanged models/settings and retained pinned manifests. Exact-head CI and
+hosted installation/readback are recorded below when completed; real member,
+model/mockup acceptance and measured drawing savings remain open.

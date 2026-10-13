@@ -101,7 +101,7 @@ test('revoked or cross-project sources return no calculation, and invalid calls 
  assert.equal(limited.remaining,0);assert.equal((await limited.execute(graph)).status,'budget_exhausted')
 })
 
-test('structured specialists calculate in a bounded phase and finish with the pinned tool-free JSON schema',async()=>{
+test('structured specialists continue the pinned JSON review only after an actual code calculation',async()=>{
  const catalog=catalogFixture(),calls:any[]=[]
  const calculator=createProjectCalculator(options())
  const reply=(extra:any={})=>({success:true,data:null,model:'fixture',responseId:'r'+calls.length,usage:{input_tokens:1,output_tokens:1,total_tokens:2},...extra})
@@ -109,16 +109,44 @@ test('structured specialists calculate in a bounded phase and finish with the pi
   {catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:catalogCall(async o=>{
    calls.push(o)
    if(calls.length===1)return reply({toolCalls:[{id:'calc',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]})
-   if(calls.length===2)return reply()
-   assert.equal(o.tools,undefined);assert(o.schema);assert.equal(o.schemaName,'bob_plan_review')
+   assert(o.schema);assert.equal(o.schemaName,'bob_plan_review')
+   assert.equal(o.structuredToolOutput,true);assert.equal(o.previousResponseId,'r1')
+   assert.equal(o.messages.length,1);assert.equal(o.messages[0].role,'tool');assert.equal(o.messages[0].tool_call_id,'calc')
    assert.match(JSON.stringify(o.messages),/965/);assert.doesNotMatch(JSON.stringify(o.messages),/phase draft/)
    return reply({data:{ready_to_save:true,summary:'Code result used',issues:[]}})
   },catalog)})
- assert.equal(result.success,true);assert.equal(calls.length,3);assert.equal(calls[0].schema,undefined)
+ assert.equal(result.success,true);assert.equal(calls.length,2);assert(calls[0].schema)
  assert.deepEqual(calls[0].tools[0].function.parameters,catalog.tool('calculate_project').function.parameters)
 })
 
-test('calculator phase has no manual-arithmetic fallback after provider failure, access revocation or exhausted budget',async()=>{
+for(const [label,profileLimit,callerLimit] of [
+ ['approved reviewer ceiling',50000,undefined],
+ ['different pinned profile',18000,undefined],
+ ['explicit smaller caller ceiling',50000,2000],
+ ['explicit larger caller ceiling',50000,30000],
+] as const)test('calculator review preserves '+label+' before and after a calculation',async()=>{
+ const profileKey=catalogFixture().role('cad-reviewer').profile.prompt_key
+ const catalog=catalogFixture(manifest=>{manifest.definitions.find(row=>row.prompt_key===profileKey)!.definition.max_output_tokens=profileLimit})
+ const calculator=createProjectCalculator(options()),calls:any[]=[]
+ const reply=(extra:any={})=>({success:true,data:null,model:'fixture',responseId:'r'+calls.length,usage:{input_tokens:1,output_tokens:1,total_tokens:2},...extra})
+ const result=await callWithCalculator({app:'bob',module:'cad',coworkerId:'bob',aiFunction:'cad-reviewer',functionName:'cad-reviewer',catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:['shape']},
+  maxOutputTokens:5000,...(callerLimit===undefined?{}:{outputTokenLimit:callerLimit}),prompt:'Independently review the exact candidate.'},
+  {catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:catalogCall(async o=>{
+   calls.push(o)
+   assert.equal(o.aiDefinition?.maxOutputTokens,profileLimit,'the pinned role governs reasoning and the verdict together')
+   assert.equal(o.outputTokenLimit,callerLimit,'calculation must not silently insert a smaller caller ceiling')
+   assert.equal(o.aiDefinition?.reasoningEffort,'high')
+   if(calls.length===1)return reply({toolCalls:[{id:'calc',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]})
+   assert(o.schema);assert.equal(o.schemaName,'bob_cad_review');assert.equal(o.structuredToolOutput,true)
+   assert.equal(o.previousResponseId,'r1')
+   assert.match(JSON.stringify(o.messages),/965/)
+   return reply({data:'independent verdict'})
+  },catalog)})
+ assert.equal(result.success,true);assert.equal(calls.length,2)
+ assert.equal(calculator.remaining,11,'one exact calculation uses the existing shared allowance')
+})
+
+test('calculator review has no manual-arithmetic fallback after provider failure, access revocation or exhausted budget',async()=>{
  const catalog=catalogFixture(),calculator=createProjectCalculator(options());let calls=0
  const optionsCall={app:'bob',module:'living-plan',coworkerId:'bob',aiFunction:'plan-reviewer',functionName:'plan-reviewer',catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review'}
  const result=await callWithCalculator(optionsCall,{catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>{calls++;return {success:false,data:null,error:'turn_budget_exhausted',model:'fixture',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}}})
@@ -126,6 +154,64 @@ test('calculator phase has no manual-arithmetic fallback after provider failure,
  await assert.rejects(callWithCalculator(optionsCall,{catalog,calculator,hasAccess:async()=>false,deadline:Date.now()+10000,callModel:unavailable}),/project_denied/)
  for(let i=0;i<12;i++)await calculator.execute({})
  assert.equal((await callWithCalculator(optionsCall,{catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:unavailable})).error,'calculator_budget_exhausted')
+})
+
+test('a review without arithmetic returns its first structured answer and does not consume calculator attempts',async()=>{
+ const catalog=catalogFixture(),calculator=createProjectCalculator(options()),calls:any[]=[]
+ const verdict={ready_to_save:true,summary:'No derived value needed',issues:[]}
+ const result=await callWithCalculator({app:'bob',module:'living-plan',coworkerId:'bob',aiFunction:'plan-reviewer',functionName:'plan-reviewer',catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review',prompt:'Review the responsibilities.'},
+  {catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:catalogCall(async o=>{
+   calls.push(o)
+   assert(o.schema);assert.equal(o.structuredToolOutput,true)
+   assert.deepEqual(o.messages,[{role:'user',content:'Review the responsibilities.'}])
+   return {success:true,data:verdict,model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
+  },catalog)})
+ assert.deepEqual(result.data,verdict);assert.equal(calls.length,1);assert.equal(calculator.remaining,12)
+})
+
+test('two calculator rounds are followed by one closed-tool verdict in the same provider conversation',async()=>{
+ const catalog=catalogFixture(),calculator=createProjectCalculator(options()),calls:any[]=[]
+ const result=await callWithCalculator({app:'bob',module:'living-plan',coworkerId:'bob',aiFunction:'plan-reviewer',functionName:'plan-reviewer',catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review',prompt:'Review.'},
+  {catalog,calculator,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:catalogCall(async o=>{
+   calls.push(o);assert(o.schema)
+   if(calls.length===1)return {success:true,data:null,responseId:'r1',model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},toolCalls:[{id:'c1',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]}
+   assert.equal(o.previousResponseId,'r'+(calls.length-1));assert.equal(o.messages.length,1)
+   assert.equal(o.messages[0].tool_call_id,'c'+(calls.length-1));assert.match(JSON.stringify(o.messages),/965/)
+   if(calls.length===2)return {success:true,data:null,responseId:'r2',model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2},toolCalls:[{id:'c2',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]}
+   assert.equal(o.tools,undefined);assert.equal(o.tool_choice,undefined)
+   return {success:true,data:{ready_to_save:false,summary:'Concept only',issues:[]},model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2}}
+  },catalog)})
+ assert.equal(result.success,true);assert.equal(calls.length,3);assert.equal(calculator.remaining,10)
+})
+
+for(const failure of ['unoffered_tool','duplicate_call_id','missing_response_id','too_many_calls','closed_tools'] as const)test('calculator review fails closed for '+failure,async()=>{
+ const catalog=catalogFixture(),calculator=createProjectCalculator(options());let calls=0,executed=0
+ const wrapped={...calculator,execute:async(raw:unknown)=>{executed++;return calculator.execute(raw)}}
+ const result=await callWithCalculator({app:'bob',module:'cad',coworkerId:'bob',aiFunction:'cad-reviewer',functionName:'cad-reviewer',catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review'},
+  {catalog,calculator:wrapped,hasAccess:async()=>true,deadline:Date.now()+10000,callModel:async()=>{
+   calls++
+   const call={id:'c'+calls,type:'function' as const,function:{name:failure==='unoffered_tool'?'save_project':'calculate_project',arguments:JSON.stringify(graph)}}
+   return {success:true,data:null,model:'fixture',responseId:failure==='missing_response_id'?undefined:'r'+calls,usage:{input_tokens:1,output_tokens:1,total_tokens:2},
+    toolCalls:failure==='duplicate_call_id'?[call,call]:failure==='too_many_calls'?Array.from({length:5},(_,i)=>({...call,id:'c'+i})):[call]}
+  }})
+ assert.equal(result.error,'calculator_protocol')
+ assert.equal(calls,failure==='closed_tools'?3:1);assert.equal(executed,failure==='closed_tools'?2:0)
+})
+
+test('revoked authority or calculator policy stops the review before executing or continuing',async()=>{
+ const catalog=catalogFixture()
+ for(const revoke of ['authority','policy'] as const){
+  let allowed=true,enabled=true,calls=0,reads=0
+  const calculator=createProjectCalculator(options({hasAccess:async()=>allowed,isEnabled:async()=>enabled,readSources:async()=>{reads++;return {project:new Map([[id,measurement]]),physical:new Map()}}}))
+  const work=callWithCalculator({app:'bob',module:'cad',coworkerId:'bob',aiFunction:'cad-reviewer',functionName:'cad-reviewer',catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review'},
+   {catalog,calculator,hasAccess:async()=>allowed,deadline:Date.now()+10000,callModel:async()=>{
+    calls++;if(revoke==='authority')allowed=false;else enabled=false
+    return {success:true,data:null,model:'fixture',responseId:'r1',usage:{input_tokens:1,output_tokens:1,total_tokens:2},toolCalls:[{id:'c1',type:'function',function:{name:'calculate_project',arguments:JSON.stringify(graph)}}]}
+   }})
+  if(revoke==='authority')await assert.rejects(work,/project_denied/)
+  else assert.equal((await work).error,'calculator_policy_unavailable')
+  assert.equal(calls,1);assert.equal(reads,0)
+ }
 })
 
 test('specialist offering and execution respect live policy deactivation, mismatch and failed policy reads',async()=>{

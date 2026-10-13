@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { DESIGN_CAD_TOOL } from '../supabase/functions/_shared/cad-assistant.ts'
 import { PLAN_CAD_PIECES_TOOL } from '../supabase/functions/_shared/cad-pieces.ts'
+import {historicalDrawingResumeDescription} from './catalog-publication-history.ts'
 
 const patches = [DESIGN_CAD_TOOL, PLAN_CAD_PIECES_TOOL].map(tool => ({
   key: 'tools.' + tool.function.name,
@@ -16,6 +17,8 @@ if(process.argv.includes('--check')&&readdirSync('supabase/migrations').some(nam
  cad.parameters=structuredClone(cad.parameters)
  delete (cad.parameters.properties as any).construction_revision
  cad.parameters.required=cad.parameters.required.filter(k=>k!=='construction_revision')
+ // The newer task-budget publication owns the changed resume guidance.
+ cad.parameters.properties.request_id.description=historicalDrawingResumeDescription
 }
 // The later budget-stop publication owns the drawing tool's wording.
 if(process.argv.includes('--check')&&readdirSync('supabase/migrations').some(name=>name.endsWith('_ai_budget_stop_catalog.sql'))){

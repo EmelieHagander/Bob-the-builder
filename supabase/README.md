@@ -18,6 +18,8 @@ part of the rollout so the previous live gateway cannot keep accepting requests.
 
 For current working context, five full recent messages, incremental summaries, history search and research-page limits, see [Ask bob conversations](../Docs/ask-bob-conversations.md). This September 2026 extension supersedes the Slice 0 budgets below; [write tools](../Docs/ask-bob-writes.md) own mutation authority. Launchpad remains retired as a runtime dependency; its memory-tier design informs Bob-owned context.
 
+The current [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. The next message starts a fresh full period; request/worker retries retain their period and every historical charge. [Database periods](../db/README.md#owner-task-budget-periods--2026-10-12) own reservation/reconciliation, and [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) records release status.
+
 ## Code ownership
 
 The semantic owner is [domain-dictionary.md](../Docs/domain-dictionary.md), including the 2026-09-24 Area/Step/Task review. `src/domain/vocabulary.ts` owns the generated documentation table and the pre-catalog vocabulary source; CI checks that table. The AI catalog migration imports its compact Bob/planner/CAD bundles as versioned vocabulary definitions, which subsequent catalog-backed calls consume from the database. Migration `20260924135637_unified_project_work.sql` aligns Task Project/primary-Step ownership, optional Areas, parallel Step state and separate focus. Legacy Tasks without a primary Step remain visible as unorganised work.

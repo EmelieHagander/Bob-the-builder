@@ -7,6 +7,7 @@ import { DESIGN_CAD_TOOL } from '../supabase/functions/_shared/cad-assistant.ts'
 import { PLAN_CAD_PIECES_TOOL } from '../supabase/functions/_shared/cad-pieces.ts'
 import { projectSchema } from './support/project-schema.ts'
 import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import {historicalDrawingResumeDescription} from '../scripts/catalog-publication-history.ts'
 
 const migrationName='20261010063726_cad_handoff_server_ids.sql'
 test('handoff contracts publish together, preserve active edits and pinned history, and match the executable tools',async t=>{
@@ -36,6 +37,7 @@ test('handoff contracts publish together, preserve active edits and pinned histo
   const key='tools.'+tool.function.name
   const historical=structuredClone(tool.function.parameters)
   if(tool.function.name==='design_project_cad'){
+   historical.properties.request_id.description=historicalDrawingResumeDescription
    delete (historical.properties as any).construction_revision
    historical.required=historical.required.filter(k=>k!=='construction_revision')
    assert(!Object.hasOwn(session.tool(key).function.parameters.properties,'construction_revision'))

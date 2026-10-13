@@ -3,13 +3,13 @@ import type { AiCatalogSession } from './ai-catalog.ts'
 
 const reasons = ['usd_limit','call_limit','unpriced_usage','pending_outcome','context_cleared','review_reserve','unknown'] as const
 export type BobBudgetStop = {
- scope:'turn'|'drawing_request'; reasons:(typeof reasons[number])[];
+ scope:'turn'|'drawing_request'|'task'; reasons:(typeof reasons[number])[];
  calls?:number; call_limit?:number; spent_usd?:number; usd_limit?:number; pending_calls?:number; unpriced?:boolean;
 }
 /** A Bob-owned diagnostic, not a provider error or a new allocation. */
 export function readBudgetStop(value:unknown):BobBudgetStop|undefined {
  const stop=(value as {budget_stop?:any}|null)?.budget_stop
- if(!stop||!['turn','drawing_request'].includes(stop.scope)||!Array.isArray(stop.reasons)||!stop.reasons.length||stop.reasons.length>reasons.length
+ if(!stop||!['turn','drawing_request','task'].includes(stop.scope)||!Array.isArray(stop.reasons)||!stop.reasons.length||stop.reasons.length>reasons.length
   ||stop.reasons.some((r:unknown)=>!reasons.includes(r as typeof reasons[number])))return
  const result:BobBudgetStop={scope:stop.scope,reasons:[...new Set(stop.reasons)] as BobBudgetStop['reasons']}
  for(const key of ['calls','call_limit','spent_usd','usd_limit','pending_calls'] as const){
@@ -40,7 +40,7 @@ export function budgetResumeAction(stop:BobBudgetStop|undefined,aiCatalog:AiCata
  if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return aiCatalog.text('feedback.bob-budget-stop.resume.9c3a74e182d5')
  if(stop?.reasons.includes('context_cleared'))return aiCatalog.text('feedback.bob-budget-stop.resume.f0e268bdddc1')
  if(stop?.reasons.includes('review_reserve'))return aiCatalog.text('feedback.bob-budget-stop.resume.f43f67fe832d')
- if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return stop.scope==='drawing_request'
+ if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return stop.scope==='drawing_request'||stop.scope==='task'
   ?aiCatalog.text('feedback.bob-budget-stop.resume.eefd1193bc73')
   :aiCatalog.text('feedback.bob-budget-stop.resume.51aac0199a6c')
  return aiCatalog.text('feedback.bob-budget-stop.resume.bca602f7146a')

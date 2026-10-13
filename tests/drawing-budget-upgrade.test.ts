@@ -63,7 +63,7 @@ test('drawing budget upgrade preserves request accounting, releases cost recover
       join pg_attribute a on a.attrelid=d.adrelid and a.attnum=d.adnum
       where d.adrelid='bob_private.drawing_budgets'::regclass and a.attname='usd_limit'`)
     assert.equal(rows[0].value, '1', 'fixture reproduces the missing hosted default upgrade')
-  })
+  }, migrationName)
   t.after(() => pg.close())
   const rpc = (uid: string | null, name: string, args: unknown[], role = 'authenticated') => call(pg, uid, name, args, role)
   const budget = (id: string, operation: string, key: string, execution: string, response: unknown = null) =>

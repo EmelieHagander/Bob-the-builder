@@ -2,7 +2,7 @@
 
 > Navigation only. Domain truth belongs in the linked owner document/code. When sources disagree, use the precedence rules below and update stale guidance rather than keeping two current truths.
 
-- [Shared AI background calls](shared-ai-background.md) — opt-in Responses jobs, webhook recovery, app receivers and Bob unread delivery; Bob enabled after signed webhook acceptance; full model/CAD acceptance remains.
+- [Shared AI background calls](shared-ai-background.md) — opt-in Responses jobs, webhook recovery, content-free failure diagnostics, app receivers and Bob unread delivery; [failed drawing jobs](ask-bob-conversations.md#failed-drawing-background-jobs--2026-10-12) own failure status/notices; full model/CAD acceptance remains.
 
 ## Start here
 
@@ -51,6 +51,7 @@
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
+| AI loop budget per owner message and preserved cost history | [CAD policy](cad-adapter.md#one-budget-per-owner-task--2026-10-12), [database periods](../db/README.md#owner-task-budget-periods--2026-10-12) and [cost evidence](foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) |
 | how to verify a change | `.claude/skills/verify/SKILL.md` — automated tests, build and connected-mode browser fixtures |
 | session-wide invariants | `CLAUDE.md` |
 

@@ -6,7 +6,7 @@ import {CAD_PARAMETERS_SCHEMA,parseParameterPlan,parameterSourcePins,compileCadP
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
 import {splitDimensionBindings,readPhysicalCadSources,bindPhysicalDimensions,physicalLineageSources,PhysicalCadSourceError} from './cad-physical-lineage.ts'
 import { buildCadLineage, inheritCadLineage, lineageMeasurementPins, type CadLineage } from './cad-lineage.ts'
-import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, intakeGaps, type DrawingBudgetGrant, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
+import { bindMeasuredDimensions, DIMENSION_BINDINGS_SCHEMA, collectIntakeFacts, intakeGaps, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { CAD_RESEARCH_CONTRACT, collectCadResearch } from './cad-research.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
 import { CAD_RECIPE_SCHEMA, cadIssues } from './cad-schema.ts'
@@ -136,21 +136,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
   if(raw.construction_revision!=null&&(!Number.isSafeInteger(raw.construction_revision)||raw.construction_revision<1||raw.construction_revision>999999999))return {status:'invalid',stage:'construction',saved:false,reason:'invalid_construction_revision'}
   if(raw.construction_revision!=null&&!uuid(raw.artifact_id))return {status:'invalid',stage:'construction',saved:false,reason:'construction_source_required'}
   if(used>=2)return {status:'budget_exhausted',saved:false}
-  // The owner's message resuming a cost-stopped request is the budget
-  // authorization. The grant is owner-only SQL and idempotent per turn; the
-  // packet is reloaded because the grant releases its retry gate and revision.
-  let budgetGrant:DrawingBudgetGrant|null=null
-  if(request&&opts.ownerRequest&&opts.requestStore?.grant&&request.payload.retry?.outcome?.reason==='turn_budget_exhausted'){
-   const stop=readBudgetStop(request.payload.retry.outcome)
-   if(stop?.scope==='drawing_request'&&stop.reasons.some(r=>r==='usd_limit'||r==='call_limit')){
-    budgetGrant=await opts.requestStore.grant(request.id)
-    if(budgetGrant.status==='granted'){
-     const fresh=await opts.requestStore.load(request.id)
-     if(!fresh)return {status:'unavailable',stage:'intake_store',saved:false,budget_grant:budgetGrant}
-     request=fresh
-    }
-   }
-  }
+  // Loading the claimed owner's new task opens its fresh SQL budget period.
+  // Replays and automatic continuations retain the same period; no top-up.
   const earlier=request?parseDesignHandoff(request.payload.brief.handoff):null
   if(request&&!earlier)return {status:'recovery_required',saved:false,request_id:request.id,reason:'saved_handoff_unavailable'}
   const prepared=await prepareDesignHandoff(raw.handoff,earlier,raw.requirement_changes??[],!!request?.payload.restoration)
@@ -352,7 +339,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
     }
     const draft=payload.draft
     if(object(draft)&&draft.source_fingerprint===await sourceFingerprint()&&parseCadAssemblyRequest(draft.recipe)
-      &&(['collecting','draft','reviewed'].includes(request?.status??'')||request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted')){
+      &&(['collecting','draft','reviewed'].includes(request?.status??'')||request?.payload.retry?.outcome.status==='unavailable'||request?.payload.retry?.outcome.reason==='turn_budget_exhausted'
+        ||['background_failed','background_expired'].includes(request?.payload.execution_failure?.code??''))){
      resumeDraft=draft
      referencePixels.push(...opts.context?.carrier()??[])
      researchEvidence.push(...(Array.isArray(request?.payload.evidence)?request.payload.evidence:[]))
@@ -491,7 +479,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
        design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:researchEvidence,evidence_truncated:researchTruncated,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.candidate-view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
-      // Omit tools: even an empty array suppresses text.format in the shared adapter.
+      // The calculator wrapper retains this schema while offering optional tools.
       // The governed setting includes reasoning tokens as well as the verdict.
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
       maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
@@ -818,7 +806,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
   }
   const finish=async()=>{
    const result=await attempt()
-   const outcome=budgetGrant?{...result,budget_grant:budgetGrant}:result
+   const outcome=result
    if(request&&!candidate&&retryInputs&&dependencies.complete&&!['stopped','cancelled','paused','saved','existing_request'].includes(String(outcome.status))&&!('retry_suppressed' in outcome)){
     try{await persist(outcome.status==='needs_data'?'needs_data':'retrieval_failed',{reviewed_candidate:undefined,...(object(payload.draft)?{draft:{...payload.draft,source_fingerprint:await sourceFingerprint()}}:{}),dependencies:dependencies.plan(),retry:{fingerprint:await retryFingerprint(),outcome}})}catch(error){
      rethrowContinuation(error)
