@@ -27,7 +27,7 @@ async function wire(work:(service:any,requests:any[],ledger:any[])=>Promise<void
    insert:async(row:any)=>{ledger.push(row);return {error:null}},then:(yes:any,no:any)=>Promise.resolve({data:table==='ai_models'?[{model_name:modelName,is_active:true}]:[{module_id:'living-plan',is_enabled:true}],error:null}).then(yes,no)}
   return q
  },rpc:(name:string)=>({abortSignal:async()=>{
-  assert.equal(name,'ai_job_reserve');const response=responses[replay++]
+  assert.equal(name,'ai_job_prepare');const response=responses[replay++]
   return {data:{id:'22222222-2222-4222-8222-222222222222',submit:false,status:'completed',response_id:response.id,response,
    accounting:{model:'fixture-mini-model',input_price_per_1m:1,output_price_per_1m:2,cached_price_per_1m:null}},error:null}
  }})})

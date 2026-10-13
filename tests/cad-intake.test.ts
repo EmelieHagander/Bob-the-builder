@@ -400,8 +400,9 @@ test('a new owner task reviews the retained cost-stopped draft without buying re
   requestModel:async(_id:string,o:any,work:()=>Promise<any>)=>stop&&o.functionName==='cad-reviewer'
    ?{success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'turn_budget_exhausted',budget_stop:{scope:'task',reasons:['usd_limit']}}
    :work()}
- const first=await createCadAssistant(opts).consult(request)
- assert.equal(first.reason,'turn_budget_exhausted');assert.equal(first.stage,'review');assert.equal(f.design,1)
+ const stopped=createCadAssistant(opts),first=await stopped.consult(request)
+ assert.equal(first.reason,'paused_at_limit');assert.equal(first.budget_stop,undefined)
+ assert.equal(stopped.failure?.reason,'turn_budget_exhausted');assert.equal(first.stage,'review');assert.equal(f.design,1)
  const row=f.row!,payload=structuredClone(row.payload)
  assert.deepEqual((payload.draft as any).recipe,recipe)
  // The claimed new-turn SQL period opens only this cost gate, keeping sources.
