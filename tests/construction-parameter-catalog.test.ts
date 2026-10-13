@@ -27,7 +27,10 @@ test('parameter publication exposes bounded nodes and exact drawing version, pre
  const catalog=createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest:current})
  for(const session of [catalog,catalogFixture()]){
   assert.deepEqual(session.tool('change_construction_parameters').function.parameters,CONSTRUCTION_PARAMETER_TOOL.function.parameters)
-  assert.deepEqual(session.tool('design_project_cad').function.parameters,DESIGN_CAD_TOOL.function.parameters)
+  const executable=structuredClone(DESIGN_CAD_TOOL.function.parameters)
+  // The later budget-stop publication owns the request_id wording in the pinned publication.
+  if(session===catalog)(executable.properties as any).request_id.description=(session.tool('design_project_cad').function.parameters.properties as any).request_id.description
+  assert.deepEqual(session.tool('design_project_cad').function.parameters,executable)
  }
  const toolbox=catalog.definition('bob.tools','tool_contract').definition
  assert(toolbox.catalog.some((row:any)=>row.name==='change_construction_parameters'))

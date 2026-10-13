@@ -46,6 +46,12 @@ for(const migration of migrations){
   row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
   row.metadata={...row.metadata,server_owned_values:true,saved_handoff_resume:true}
  }
+ const budgetStopContracts=source.match(/\$budget_stop_contracts\$([\s\S]+?)\$budget_stop_contracts\$/)
+ if(budgetStopContracts)for(const patch of JSON.parse(budgetStopContracts[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
+ }
  const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
  if(intakePatches)for(const patch of JSON.parse(intakePatches[1])){
   const row=seed.find(row=>row.key===patch.key)

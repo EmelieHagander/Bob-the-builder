@@ -20,8 +20,11 @@ const stairData=(extra={})=>({plan_id:id(400),plan_revision:1,recipe:makeStair()
 const needData=(extra={})=>({name:'Test panels',category:'Timber',area_id:null,task_id:null,unit:'pcs',required_quantity:'10',waste_percent:'10',purchase_increment:'3',basis:'Explicit manual count',assumptions:'Synthetic source',artifact_id:null,artifact_revision:null,target_revision:1,stock_allocations:[{id:id(600),revision:1,quantity:'2'}],component_allocations:[],...extra})
 
 before(async()=>{
- pg=await projectSchema(async(db,name)=>{if(name.endsWith('_ai_calculator_catalog.sql'))previous=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result})
- current=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ pg=await projectSchema(async(db,name)=>{
+  if(name.endsWith('_ai_calculator_catalog.sql'))previous=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+  else if(previous&&!current)current=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
+ })
+ current??=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
  await pg.query("insert into auth.users(id,email,email_confirmed_at) values($1,'calc1@test.invalid',now()),($2,'calc2@test.invalid',now()),($3,'calc3@test.invalid',now())",[user,other,both])
  await pg.exec("insert into bob.projects(id,slug,name) values('A','calculator-a','Calculator A'),('B','calculator-b','Calculator B')")
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('calc1','A','One','O',$1),('calc2','B','Other','T',$2),('calc3a','A','Both','B',$3),('calc3b','B','Both','B',$3)",[user,other,both])
