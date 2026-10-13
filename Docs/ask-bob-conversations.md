@@ -12,6 +12,30 @@ The public `guest@bob.local` identity is shared. Its chat remains device-local a
 
 The project database remains the authority for **saved** project state. Conversation explains goals, references and corrections, but is not proof that an earlier quantity, status or dimension is still current. Fresh project reads use the caller JWT, never privileged service reads. User-supplied observations and new decisions can supersede an old saved plan; proposed sizes remain specifications/estimates, not invented measured evidence.
 
+## Current requested deliverable
+
+The owner's current message defines the deliverable. Pending drawing requests
+are background working state and precede the recent conversation in the model
+input. A request to describe an image, discuss the furniture, correct its
+description or save project text does not commission CAD. Bob reads the relevant
+sources, performs the requested text write and finishes with its actual receipt;
+creating or selecting a Solution is not a prerequisite for a description edit.
+
+When the current instruction requests or continues a drawing, Bob reuses the
+matching request, requirements and source-current draft without another approval
+or duplicate work. A new task period permits work within the current mandate;
+it does not itself request a drawing. Automatic domain-event recovery remains
+the audited execution of the original drawing instruction, separate from a new
+chat request.
+
+`scripts/build-ai-drawing-intent-catalog.ts` publishes the six resume fragments
+and CAD request guidance as new immutable versions. Earlier pinned attempts keep
+their original versions. `tests/bob-drawing-delivery.test.ts` checks text delivery
+with a paused drawing on the bench; `tests/drawing-intent-catalog.test.ts` checks
+activation, preserved settings/schemas and historical manifests. Fixtures do
+not establish real model selection; hosted readback and owner acceptance remain
+separate release evidence.
+
 ## Transcript and rejected-send recovery — deployed 2026-10-02
 
 Released through [PR #181](https://github.com/EmelieHagander/Bob-the-builder/pull/181);

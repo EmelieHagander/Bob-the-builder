@@ -7,3 +7,6 @@ const parameterPublication=readFileSync(new URL('../supabase/migrations/20261010
 export const historicalDrawingResumeDescription=JSON.parse(parameterPublication.match(/\$parameter_contracts\$([\s\S]+?)\$parameter_contracts\$/)![1]).find((c:any)=>c.name==='design_project_cad').parameters.properties.request_id.description as string
 const taskPublication=readFileSync(new URL('../supabase/migrations/20261012090928_ai_task_budget_catalog.sql',import.meta.url),'utf8')
 export const historicalTaskResumeDescription=JSON.parse(taskPublication.match(/\$task_budget_tool\$([\s\S]+?)\$task_budget_tool\$/)![1]).request_id_description as string
+
+const budgetStopPublication=readFileSync(new URL('../supabase/migrations/20261013060000_ai_budget_stop_catalog.sql',import.meta.url),'utf8')
+export const historicalBudgetStopResumeDescription=JSON.parse(budgetStopPublication.match(/\$budget_stop_contracts\$([\s\S]+?)\$budget_stop_contracts\$/)![1]).find((c:any)=>c.key==='tools.design_project_cad').parameters.properties.request_id.description as string
