@@ -68,19 +68,20 @@ test('the period-opened packet resumes without an automatic allocation or a seco
 test('an exhausted task stops with its actual cause and fresh-next-message hint', async () => {
   const f = fixture({...stoppedOutcome,budget_stop:{...stoppedOutcome.budget_stop,scope:'task'}}); f.exhaust()
   const result = await f.assistant.consult(f.brief)
-  assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'turn_budget_exhausted'); assert.equal(result.stage, 'intake')
+  assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'paused_at_limit'); assert.equal(result.stage, 'intake')
   assert.equal(result.budget_grant, undefined)
   assert.equal(f.loads.length, 1)
-  assert.equal(result.budget_stop.scope, 'task')
-  assert.match(result.user_message, /kostnadsgränsen/)
-  assert.match(result.user_message, /Nästa meddelande från dig startar en ny full budget/)
+  assert.equal(result.budget_stop,undefined)
+  assert.equal(f.assistant.failure?.budget_stop.scope,'task','private diagnostics retain the real stop')
+  assert.match(result.user_message, /pausades vid en gräns/)
+  assert.doesNotMatch(JSON.stringify(result),/budget|spent_usd|usd_limit|kostnadsgräns/)
 })
 
 test('budget guidance covers new task diagnostics and compatible older request diagnostics', () => {
   for(const scope of ['task','drawing_request'] as const){
     const stop = { scope, reasons: ['usd_limit' as const] }
-    assert.match(budgetStopMessage(stop), /ny full budget/)
-    assert.match(budgetResumeAction(stop), /next owner message starts a fresh full task budget/)
-    assert.doesNotMatch(budgetStopMessage(stop), /mer budget/)
+    assert.match(budgetStopMessage(stop), /fortsätter/)
+    assert.match(budgetResumeAction(stop), /owner.*next message/)
+    assert.doesNotMatch(budgetStopMessage(stop), /budget|kostnad|\$/)
   }
 })

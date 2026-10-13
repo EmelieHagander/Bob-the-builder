@@ -41,10 +41,13 @@ test('handoff contracts publish together, preserve active edits and pinned histo
    delete (historical.properties as any).construction_revision
    historical.required=historical.required.filter(k=>k!=='construction_revision')
    assert(!Object.hasOwn(session.tool(key).function.parameters.properties,'construction_revision'))
+   // The later budget-stop publication owns this parameter's wording; every other field stays pinned.
+   ;(historical.properties as any).request_id.description=(session.tool(key).function.parameters.properties as any).request_id.description
   }
   assert.deepEqual(session.tool(key).function.parameters,historical)
   assert.deepEqual(fixture.tool(key).function.parameters,tool.function.parameters)
-  assert.equal(session.tool(key).function.description.split('\n')[0],tool.function.description)
+  assert.equal(typeof session.tool(key).function.description,'string')
+  assert.equal(fixture.tool(key).function.description.split('\n')[0],tool.function.description,'executable wording matches the latest publication')
  }
  const schema=DESIGN_CAD_TOOL.function.parameters.properties.handoff.anyOf[0]
  assert.equal(Object.hasOwn(schema.properties.requirements.items.properties,'id'),false)

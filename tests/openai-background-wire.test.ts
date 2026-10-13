@@ -12,7 +12,8 @@ test('actual shared AI service opts into background, resumes tools and preserves
  const model={model_name:'fixture-model',supports_images:true,supports_reasoning:true,is_default:true,max_output_tokens:8000,input_cost_per_1m_tokens:2,output_cost_per_1m_tokens:10,cached_input_cost_per_1m_tokens:.5}
  const id='22222222-2222-4222-8222-222222222222'
  const client={from:(table:string)=>{const q:any={select:()=>q,eq:()=>q,in:()=>q,insert:async(row:any)=>{ledger.push(row);return {error:null}},then:(yes:any,no:any)=>Promise.resolve({data:table==='ai_models'?[model]:[],error:null}).then(yes,no)};return q},rpc:(name:string,args:any)=>({abortSignal:async()=>{
-  if(name==='ai_job_reserve'){const submit=!reserved;reserved=true;return {data:{id,submit,status:stored?(stored.status==='completed'?'completed':'failed'):'pending',response_id:submit?null:'resp_background',response:stored,accounting:stored?{model:'fixture-model',input_price_per_1m:2,output_price_per_1m:10,cached_price_per_1m:.5}:undefined},error:null}}
+  if(name==='ai_job_start_submission')return {data:{submit:true,status:'submitting'},error:null}
+  if(name==='ai_job_prepare'){const submit=!reserved;reserved=true;return {data:{id,submit,status:stored?(stored.status==='completed'?'completed':'failed'):'pending',response_id:submit?null:'resp_background',response:stored,accounting:stored?{model:'fixture-model',input_price_per_1m:2,output_price_per_1m:10,cached_price_per_1m:.5}:undefined},error:null}}
   if(name==='ai_job_accept'){assert.equal(args.p_job,id);return {data:true,error:null}}
   throw new Error(name)
  }})}

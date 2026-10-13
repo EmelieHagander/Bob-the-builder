@@ -7,6 +7,9 @@ export class AIProviderHttpError extends Error {
 export class AIBackgroundStorageError extends Error {
   constructor(readonly code?: string, readonly reason?: string) { super('ai_background_storage_unavailable') }
 }
+export class AIBackgroundNotSubmitted extends Error {
+  constructor(readonly status: string) { super('ai_background_' + status) }
+}
 const transportCodes = new Set(['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'EPIPE', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET'])
 const errorCodes = new Set(['ai_response_mismatch', 'ai_operation_changed', 'ai_background_not_configured', 'invalid_job_deadline', 'ai_work_denied', 'project_denied', 'context_changed', 'unsupported_image', 'payload_too_large', 'invalid_ai_failure_diagnostic'])
 const safeRequestId = (value: unknown): value is string => typeof value === 'string' && /^(req_[a-zA-Z0-9_-]{1,160}|[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.test(value)
@@ -17,14 +20,14 @@ export function aiFailureDiagnostic(error: unknown, phase: AiFailurePhase, start
   const code = value?.cause?.code ?? value?.code
   const transportCode = typeof code === 'string' && transportCodes.has(code) ? code : null
   const timeout = value?.name === 'TimeoutError' || value?.name === 'AbortError' || transportCode?.includes('TIMEOUT') || transportCode === 'ETIMEDOUT'
-  const reason = error instanceof AIBackgroundStorageError ? error.reason : value?.message
+  const reason = error instanceof AIBackgroundNotSubmitted ? 'not_submitted' : error instanceof AIBackgroundStorageError ? error.reason : value?.message
   const errorCode = reason === 'Payload exceeds 25MB limit. Try using a smaller or compressed image.' ? 'payload_too_large'
-    : typeof reason === 'string' && errorCodes.has(reason) ? reason : null
+    : reason === 'not_submitted' || typeof reason === 'string' && errorCodes.has(reason) ? reason : null
   return {
     phase,
     category: error instanceof AIProviderHttpError ? 'http' : error instanceof AIBackgroundStorageError ? 'storage'
       : timeout ? 'timeout' : transportCode || value?.name === 'TypeError' ? 'transport'
-      : value?.name === 'SyntaxError' ? 'protocol' : phase === 'prepare' ? 'preparation' : 'unknown',
+      : error instanceof AIBackgroundNotSubmitted || value?.name === 'SyntaxError' ? 'protocol' : phase === 'prepare' ? 'preparation' : 'unknown',
     http_status: error instanceof AIProviderHttpError ? error.status : null,
     provider_request_id: error instanceof AIProviderHttpError && safeRequestId(error.requestId) ? error.requestId : null,
     response_id: safeResponseId(responseId) ? responseId : null,

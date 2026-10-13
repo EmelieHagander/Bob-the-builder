@@ -16,7 +16,8 @@ test('HTTP failure preserves status/request ID without repeating an uncertain PO
     console.error = (...args) => { logs.push(args) }
     globalThis.fetch = async () => { posts++; return new Response(secret, { status, headers: { 'x-request-id': 'req_fixture' } }) }
     const rpc = async (name: string, args: any) => {
-      if (name === 'ai_job_reserve') { const submit = !reserved; reserved = true; return { id, submit, status: rejected ? 'failed' : 'submitting' } }
+      if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { id, submit, status: rejected ? 'failed' : 'submitting' } }
       if (name === 'ai_work_record_failure') { failures.push(args); return true }
       if (name === 'ai_job_reject') { rejected = true; return null }
       throw new Error(name)
@@ -40,7 +41,8 @@ test('lost acceptance records the known response ID and SQL code without buying 
   const failures: any[] = []
   globalThis.fetch = async () => { posts++; return Response.json({ id: 'resp_accepted', status: 'queued' }) }
   const rpc = async (name: string, args: any) => {
-    if (name === 'ai_job_reserve') { const submit = !reserved; reserved = true; return { id, submit, status: 'submitting' } }
+    if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { id, submit, status: 'submitting' } }
     if (name === 'ai_job_accept') throw new AIBackgroundStorageError('40001', 'ai_response_mismatch')
     if (name === 'ai_work_record_failure') { failures.push(args.p_failure); return true }
     throw new Error(name)
@@ -59,7 +61,8 @@ test('a refused acceptance is recorded; an invalid work capability cannot append
   const writes: any[] = []
   globalThis.fetch = async () => Response.json({ id: 'resp_refused', status: 'queued' })
   const rpc = async (name: string, args: any) => {
-    if (name === 'ai_job_reserve') return { id, submit: true, status: 'submitting' }
+    if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') return { id, submit: true, status: 'submitting' }
     if (name === 'ai_job_accept') return false
     if (name === 'ai_work_record_failure') { writes.push(args); return true }
     if (name === 'ai_work_claim') throw new AIBackgroundStorageError('42501', 'ai_work_denied')
@@ -83,7 +86,8 @@ test('timeout and transport failures keep allowlisted codes; broken diagnostic s
     console.error = (...args) => { logs.push(args) }
     globalThis.fetch = async () => { throw error }
     const rpc = async (name: string, args: any) => {
-      if (name === 'ai_job_reserve') return { id, submit: true, status: 'submitting' }
+      if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') return { id, submit: true, status: 'submitting' }
       if (name === 'ai_work_record_failure') { failures.push(args.p_failure); throw new AIBackgroundStorageError('PGRST002') }
       throw new Error(name)
     }

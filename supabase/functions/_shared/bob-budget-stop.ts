@@ -26,15 +26,16 @@ export class BobBudgetError extends Error {
  readonly budget_stop:BobBudgetStop|undefined
  constructor(response:unknown,readonly stage:'intake'|'design'|'review'='design'){super('turn_budget_exhausted');this.budget_stop=readBudgetStop(response)}
 }
+/** Owner-facing. Limits are the server's business: the owner hears that the
+ * drawing paused and how it continues, never figures or allocation rules. */
 export function budgetStopMessage(stop:BobBudgetStop|undefined) {
- if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Ritförsöket pausades eftersom kostnaden eller utfallet för ett tidigare modellanrop ännu inte är klarlagt.'
+ if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'Ritförsöket pausades tills ett tidigare steg är avslutat. Skriv till mig igen om ritningen om en stund, så fortsätter jag.'
  if(stop?.reasons.includes('context_cleared'))return 'Ritförsöket pausades eftersom ett tidigare arbetsresultat inte längre finns kvar i samtalet.'
- if(stop?.reasons.includes('review_reserve'))return 'Ritförsöket stoppades innan granskning och svar, eftersom resten av turens budget är reserverad för dem.'
- const resume=stop?.scope==='drawing_request'||stop?.scope==='task'?' Nästa meddelande från dig startar en ny full budget. Jag kan fortsätta från det sparade arbetet.':''
- if(stop?.reasons.includes('usd_limit'))return 'Ritförsöket stoppades av kostnadsgränsen.'+resume
- if(stop?.reasons.includes('call_limit'))return 'Ritförsöket stoppades av gränsen för antal modellanrop.'+resume
- return 'Ritförsöket stoppades av en resursgräns; den exakta orsaken är inte tillgänglig.'
+ if(stop?.reasons.includes('review_reserve'))return 'Ritförsöket stoppades före granskning och svar i den här omgången. Skriv till mig igen om ritningen, så fortsätter jag.'
+ if(!stop)return 'Ritförsöket pausades vid en gräns; den exakta orsaken är inte tillgänglig. Skriv till mig igen om ritningen, så fortsätter jag.'
+ return 'Ritförsöket pausades vid en gräns. Skriv till mig igen om ritningen, så fortsätter jag där den stannade.'
 }
+/** Model-facing. Bob is told what to do; sizing and renewal of limits stay server-side (texts live in the AI catalog). */
 export function budgetResumeAction(stop:BobBudgetStop|undefined,aiCatalog:AiCatalogSession) {
  if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return aiCatalog.text('feedback.bob-budget-stop.resume.9c3a74e182d5')
  if(stop?.reasons.includes('context_cleared'))return aiCatalog.text('feedback.bob-budget-stop.resume.f0e268bdddc1')
@@ -43,4 +44,9 @@ export function budgetResumeAction(stop:BobBudgetStop|undefined,aiCatalog:AiCata
   ?aiCatalog.text('feedback.bob-budget-stop.resume.eefd1193bc73')
   :aiCatalog.text('feedback.bob-budget-stop.resume.51aac0199a6c')
  return aiCatalog.text('feedback.bob-budget-stop.resume.bca602f7146a')
+}
+/** What Bob sees of a stop: the pause and its next action, never the ledger. */
+export function withoutBudgetDetails<T extends Record<string,unknown>>(outcome:T):Omit<T,'budget_stop'|'budget_grant'> {
+ const {budget_stop:_stop,budget_grant:_grant,...rest}=outcome
+ return rest.reason==='turn_budget_exhausted'?{...rest,reason:'paused_at_limit'}:rest
 }

@@ -1,5 +1,5 @@
 /** Optional durable Responses transport shared by all apps. No app tools or data access. */
-import { AIProviderHttpError, AIBackgroundStorageError, recordAiFailure } from './ai-background-diagnostics.ts'
+import { AIProviderHttpError, AIBackgroundStorageError, AIBackgroundNotSubmitted, recordAiFailure } from './ai-background-diagnostics.ts'
 export { AIProviderHttpError, AIBackgroundStorageError } from './ai-background-diagnostics.ts'
 export interface BackgroundCall {
   key: string
@@ -33,7 +33,7 @@ export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string
   prepare?: () => Promise<Record<string, unknown>>): Promise<any> {
   const started = performance.now()
   let job: any
-  try { job = await rpc('ai_job_reserve', { p_app: app, p_key: call.key, p_fingerprint: call.fingerprint,
+  try { job = await rpc('ai_job_prepare', { p_app: app, p_key: call.key, p_fingerprint: call.fingerprint,
     p_receiver: call.receiver, p_context: call.context, p_expires: call.expiresAt, p_accounting: accounting }) }
   catch (error) { await recordAiFailure(rpc, 'job', null, 'reserve', error, started); throw error }
   if (job.response) return job.accounting ? { ...job.response, _shared_accounting: job.accounting } : job.response
@@ -49,6 +49,19 @@ export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string
       try { await rpc('ai_job_reject', { p_job: job.id }) }
       catch (storageError) { await recordAiFailure(rpc, 'job', job.id, 'reject', storageError, started) }
       throw error
+    }
+    // Preparation can outlive cancellation or expiry. Commit the one submission
+    // intent only while this exact operation is still open, before the POST.
+    let gate: any
+    try { gate = await rpc('ai_job_start_submission', { p_job: job.id }) }
+    catch (error) { await recordAiFailure(rpc, 'job', job.id, 'submit', error, started); throw new AIBackgroundPending(job.id, false) }
+    if (gate?.submit !== true) {
+      if (['failed','expired','cancelled','completed'].includes(gate?.status)) {
+        const error=new AIBackgroundNotSubmitted(gate.status)
+        await recordAiFailure(rpc,'job',job.id,'submit',error,started)
+        throw error
+      }
+      throw new AIBackgroundPending(job.id, false)
     }
     let response: any
     try {

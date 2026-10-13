@@ -245,8 +245,8 @@ for(const priorWrite of [false,true])for(const error of ['model_output_limit','t
   lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{failures++},commit:async value=>{committed=value},
   cadAssistant:createCadAssistant({...f.cadOptions,callModel:async()=>({success:false,data:null,model:'fixture',usage,error,...(error==='turn_budget_exhausted'?{budget_stop:{scope:'task',reasons:['usd_limit'],calls:16,call_limit:24,spent_usd:3.04,usd_limit:3}}:{})})}),
   callModel:async()=>{calls++;assert.equal(calls,1,'no paid explanation/localisation');return response(null,call('design_project_cad',cadRequest))}})
- assert(result.ok);assert.match(result.answer,error==='turn_budget_exhausted'?/kostnadsgränsen/:/Designern förbrukade sin svarsbudget/)
- if(error==='turn_budget_exhausted'){assert.match(result.answer,/ny full budget/);assert.equal(result.evidence.partial,true)}
+ assert(result.ok);assert.match(result.answer,error==='turn_budget_exhausted'?/pausades vid en gräns/:/Designern nådde sin svarsgräns/)
+ if(error==='turn_budget_exhausted'){assert.doesNotMatch(result.answer,/budget|kostnad|\$/i);assert.equal(result.evidence.partial,true)}
  assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
  assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)
 })

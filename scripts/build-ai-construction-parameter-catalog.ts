@@ -1,6 +1,6 @@
 /** Publish the bounded correction tool and exact-version drawing input. Preserve
  * live catalog edits, roles/model prices and immutable pinned manifests. */
-import {readFileSync,writeFileSync} from 'node:fs'
+import {readFileSync,readdirSync,writeFileSync} from 'node:fs'
 import {CONSTRUCTION_PARAMETER_TOOL} from '../supabase/functions/_shared/construction-draft.ts'
 import {DESIGN_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 import {historicalDrawingResumeDescription} from './catalog-publication-history.ts'

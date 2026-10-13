@@ -2432,3 +2432,25 @@ The owner's readiness check found a subsequent deployment at **ask-bob 110 / bob
 Fresh preflight again found no active Bob or submitting/pending shared AI jobs. The tested implementation `805078b32ee8928b2f01302bac23b9309bbd220d` was restored without reapplying SQL: **ask-bob 111 / bob-worker 79**, retaining their existing authentication. Their bundle SHA-256 values are exactly those of the original 109/77 installation above. Independent GET readback matches every emitted source file; only the same reviewed type-only imports are omitted. All **159** protected row-set counts and complete-row digests match before/after this restoration. [Final documentation-head CI 38353775253](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775253), [native PostgreSQL/concurrency 38353775250](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775250) and [CAD adapter 38353775254](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38353775254) also passed at `1b7a9f2db3e747d0b0df31c20e9dd3fc110ba54c`; the restored implementation is unchanged.
 
 **The same bed request is not yet ready for another drawing-model call.** The retained request/packet still agree at revision 20, with unchanged draft hash and one failure answer. Its period-2 reservation remains incomplete and the original expired provider job still has no response ID. Live `bob.bob_drawing_budget` source MD5 is `6027ea6bba55e29826c9ee958c3c2ea2`: pending calls are selected when `m.request_id=p_id` **or** their period belongs to the current owner turn, and any pending call blocks a new reservation. Consequently, the old uncertainty still blocks this request after a new owner budget period; a budget reset alone does not resolve it. No new owner turn/model call was manufactured to demonstrate that boundary, and no unknown outcome was marked free/completed. [State](bob-delivery-flow.md#state) owns resolving this continuation boundary before real bed/model/mockup acceptance. Future deployments must retain the tested task-budget/calculator/diagnostics source.
+
+### Integrated task recovery — 2026-10-13
+
+The integrated #249 implementation retains main's #232 model-facing redaction
+and #250 acknowledgement expiry, together with the owner-task budget,
+calculator and private failure-delivery fixes. A fresh genuine owner task can
+authorize one distinct terminal CAD attempt; current-task replays and active
+older work remain fenced. Old unknown accounting is preserved, available paid
+output is reused, and late usage settles exactly once in its original period.
+The shared transport now rechecks one submission intent after local preparation;
+cancelled or expired preparation sends no provider POST. Legacy unacknowledged
+operations remain uncertain.
+
+Native full-schema fixtures cover old uncertainty, task fencing, paid recovery,
+late original-period billing, legacy caller completion and provider fingerprint
+compatibility, never-submitted zero settlement and service/member RPC authority.
+Runtime fixtures cover preparation-time cancellation/expiry with zero POSTs,
+safe diagnostics, replayed owner notices and ledger-free tool replies. Catalog
+fixtures verify two new immutable versions, reproducible older publications,
+unchanged models/settings and retained pinned manifests. Exact-head CI and
+hosted installation/readback are recorded below when completed; real member,
+model/mockup acceptance and measured drawing savings remain open.

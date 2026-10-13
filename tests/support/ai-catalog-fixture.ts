@@ -25,6 +25,15 @@ for(const migration of migrations){
   row.definition.additional_description=(row.definition.additional_description??'')+'\n\n'+tool.additional_description
   versions.set(row.key,versions.get(row.key)!+1)
  }
+ const resumeGuidance=source.match(/\$resume_guidance\$([\s\S]+?)\$resume_guidance\$/)
+ if(resumeGuidance){
+  const oldGuard=source.match(/\$old_guard\$([\s\S]+?)\$old_guard\$/)![1]
+  const tool=seed.find(row=>row.key==='tools.design_project_cad')
+  tool.definition.additional_description=(tool.definition.additional_description??'').replace(oldGuard,'').trim()
+  versions.set(tool.key,versions.get(tool.key)!+1)
+  const resume=seed.find(row=>row.key==='feedback.bob-budget-stop.resume.9c3a74e182d5')
+  resume.content=resumeGuidance[1];versions.set(resume.key,versions.get(resume.key)!+1)
+ }
  if(source.includes('do $communication$')){
   const content=source.match(/'(När du formulerar besked[^']+)'/)?.[1]
   if(!content)throw new Error('Concise communication migration content missing')
@@ -56,6 +65,12 @@ for(const migration of migrations){
   versions.set(row.key,versions.get(row.key)!+1)
   row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
   row.metadata={...row.metadata,server_owned_values:true,saved_handoff_resume:true}
+ }
+ const budgetStopContracts=source.match(/\$budget_stop_contracts\$([\s\S]+?)\$budget_stop_contracts\$/)
+ if(budgetStopContracts)for(const patch of JSON.parse(budgetStopContracts[1])){
+  const row=seed.find(row=>row.key===patch.key)
+  versions.set(row.key,versions.get(row.key)!+1)
+  row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
  }
  const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
  if(intakePatches)for(const patch of JSON.parse(intakePatches[1])){

@@ -779,6 +779,33 @@ The new history table has RLS enabled and no direct browser/service-role grants.
 Private helpers have fixed empty search paths and no raw RPC execution grants.
 Its indexes support turn aggregation and original-period receipt updates.
 
+### Task attempt and submission identity — 2026-10-13
+
+`20261013120145_ai_submission_guard.sql` adds nullable preparation/submission
+state to the existing private AI job. The two new service-only RPCs separate
+local preparation from one guarded submission intent; terminal state and expiry
+are rechecked immediately before POST. Legacy NULL state preserves uncertainty.
+The two-minute no-receipt window begins at submission intent for guarded jobs.
+
+`20261013120146_drawing_task_attempt_recovery.sql` adds canonical `input_key`
+and an optional `uncertain_prior_key` link under the existing CAD reservation.
+An expression index allows one canonical input per request and task period.
+Current-task work and active older work remain fenced. After a genuinely new
+owner instruction, a terminal unusable older attempt can have a distinct opaque
+provider fingerprint. Its old reservation and late pricing stay in the original
+period. Completion supports old callers' canonical keys with exact execution
+binding; provider recovery retains the actual historical provider fingerprint.
+Known never-submitted preparations settle at zero, while legacy missing
+receipts remain unknown. Paid usable results are reused and no new owner turn,
+budget grant or project result is created by installation.
+
+Install the two cores, deploy their matching Bob/shared closures, then activate
+`20261013131820_ai_task_resume_catalog.sql`. It publishes two immutable Bob
+definitions, keeping the server ledger out of model guidance and preserving
+unrelated settings and pinned manifests. [CAD](../Docs/cad-adapter.md#terminal-attempt-recovery--2026-10-13)
+owns the task mandate and [verification](../Docs/foundation-verification.md#integrated-task-recovery--2026-10-13)
+owns the release evidence.
+
 ### Drawing request allocation — 2026-10-09
 
 Source migration `20261008160000_drawing_budget_3usd.sql` implements the owner's

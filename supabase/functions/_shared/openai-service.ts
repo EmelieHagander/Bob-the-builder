@@ -209,6 +209,8 @@ export interface OpenAIServiceOptions {
 }
 
 export interface OpenAIServiceResponse<T = unknown> {
+  /** Caller-owned recovery metadata; never provider text or input. */
+  priorAttemptUncertain?: boolean;
   success: boolean;
   data: T | null;
   usage: {

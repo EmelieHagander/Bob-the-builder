@@ -4,6 +4,17 @@ import { AIBackgroundPending, backgroundResponse, reconcileAiWork, verifyAiWebho
 import { aiWebhookHandler, aiWorkerHandler } from '../supabase/functions/_shared/ai-background-http.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 
+test('expiry or cancellation during preparation prevents every provider POST',async t=>{
+ const oldFetch=globalThis.fetch;t.after(()=>{globalThis.fetch=oldFetch})
+ for(const status of ['expired','cancelled']){
+  let closed=false,posts=0
+  globalThis.fetch=async()=>{posts++;throw Error('provider must not be reached')}
+  const rpc=async(name:string)=>name==='ai_job_prepare'?{id,submit:true,status:'submitting'}:name==='ai_job_start_submission'?{submit:!closed,status}:true
+  await assert.rejects(()=>backgroundResponse(rpc,'fixture','fixture',call,{},accounting,async()=>{closed=true;return {}}),new RegExp('ai_background_'+status))
+  assert.equal(posts,0)
+ }
+})
+
 const id = '11111111-1111-4111-8111-111111111111'
 const call = { key: 'session/model/0', fingerprint: 'a'.repeat(64), receiver: 'fixture', context: { session: 'one' }, expiresAt: '2030-01-01T00:00:00Z' }
 const accounting = { user_id: null, module: 'test', ai_function: 'designer', model: 'fixture', input_price_per_1m: 1, output_price_per_1m: 2, cached_price_per_1m: .1 }
@@ -13,7 +24,8 @@ test('long model survives restarts: one POST, retrieve same response, then journ
   let job: any = { id, status: 'submitting', response_id: null, response: null }
   const result = { id: 'resp_long', metadata: { ai_job_id: id }, status: 'completed', output: [{ type: 'function_call', name: 'render_cad_candidate', call_id: 'render1', arguments: '{}' }] }
   const rpc = async (name: string, args: any) => {
-    if (name === 'ai_job_reserve') { const submit = !reserved; reserved = true; return { ...job, submit } }
+    if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { ...job, submit } }
     if (name === 'ai_job_accept') { job.response_id = args.p_response.id; job.status = args.p_response.status; if (job.status === 'completed') job.response = args.p_response; return true }
     if (name === 'ai_work_claim') return { response_id: job.response_id }
     if (name === 'ai_work_finish') return null
@@ -41,7 +53,8 @@ test('long model survives restarts: one POST, retrieve same response, then journ
 
 test('ambiguous submission is never sent again, including loss of acceptance checkpoint', async () => {
   const oldFetch = globalThis.fetch; let posts = 0, reserved = false
-  const rpc = async (name: string) => { if (name === 'ai_job_reserve') { const submit = !reserved; reserved = true; return { id, status: 'submitting', submit } }; throw new Error('storage interrupted') }
+  const rpc = async (name: string) => { if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { id, status: 'submitting', submit } }; throw new Error('storage interrupted') }
   globalThis.fetch = async () => { posts++; throw new Error('connection lost after provider accepted') }
   try {
     for (let i = 0; i < 3; i++) await assert.rejects(() => backgroundResponse(rpc, 'key', 'appA', call, {}, accounting), AIBackgroundPending)
@@ -75,7 +88,8 @@ test('an immediate terminal POST respects cancellation committed during submissi
    let reserved=false,posts=0,stored:any=null
    const value={id:'resp_immediate',status:'completed',metadata:{ai_job_id:id},output_text:'Ready'}
    const rpc=async(name:string)=>{
-    if(name==='ai_job_reserve'){const submit=!reserved;reserved=true;return {id,submit,status:submit?'submitting':terminal,response:stored}}
+    if(name==='ai_job_start_submission')return {submit:true,status:'submitting'}
+    if(name==='ai_job_prepare'){const submit=!reserved;reserved=true;return {id,submit,status:submit?'submitting':terminal,response:stored}}
     if(name==='ai_job_accept'){if(terminal==='completed')stored=value;return true}
     throw new Error(name)
    }
@@ -92,9 +106,9 @@ test('local image preparation failure rejects reservation without a provider POS
   const oldFetch = globalThis.fetch, calls: string[] = []
   let posts = 0
   globalThis.fetch = async () => { posts++; throw new Error('unexpected provider call') }
-  const rpc = async (name: string) => { calls.push(name); return name === 'ai_job_reserve' ? { id, status: 'submitting', submit: true } : true }
+  const rpc = async (name: string) => { calls.push(name); return name === 'ai_job_prepare' ? { id, status: 'submitting', submit: true } : true }
   try {
     await assert.rejects(backgroundResponse(rpc, 'key', 'app', call, {}, accounting, async () => { throw new Error('context_changed') }), /context_changed/)
-    assert.deepEqual(calls, ['ai_job_reserve','ai_work_record_failure','ai_job_reject']); assert.equal(posts,0)
+    assert.deepEqual(calls, ['ai_job_prepare','ai_work_record_failure','ai_job_reject']); assert.equal(posts,0)
   } finally { globalThis.fetch = oldFetch }
 })

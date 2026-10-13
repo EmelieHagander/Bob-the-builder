@@ -24,14 +24,31 @@ Only a trusted server can call the shared RPCs. A database administrator registe
 
 ## Delivery and recovery
 
-1. Reserve the operation durably before a provider POST. Only the first reservation gets submission authority.
+1. Prepare the operation durably before local input preparation. Immediately before a provider POST, claim the service-only submission gate; only one live prepared operation receives submission authority.
 2. Start a Responses request with `background: true`, `store: true` and the opaque job ID in metadata. Persist its response ID. Re-entry returns the existing state.
 3. The raw-body signature-verified webhook persists an event inbox row before acknowledging. It performs no model work itself.
 4. A capability-authorized shared worker retrieves the authoritative provider response. Completion, token counts and the original pricing snapshot commit atomically. Duplicate or out-of-order delivery cannot create a second usage entry.
 5. A durable completion outbox wakes the registered app. App callback failure does not roll back the provider result or accounting. Callback retries are independent of provider execution.
 6. `pg_cron` and `pg_net` retrieve known response IDs if webhook delivery is delayed or lost. They never POST the same model operation again. Waiting is distinct from a failed provider attempt.
 
-The acceptance POST can have an ambiguous outcome if the network or worker dies. It is deliberately not retried blindly. A later signed completion can recover its ID through provider metadata, including when the acceptance checkpoint was lost. If no receipt/event ever arrives, the absolute deadline produces a failure; exactly-once provider execution cannot be promised across an unacknowledged POST. Definite 400/401/403/404/422/429 rejection fails the operation promptly. Transient retrieval failures retry the same ID.
+The acceptance POST can have an ambiguous outcome if the network or worker dies. It is deliberately not retried blindly. A reservation that still has no provider response ID two minutes after submission intent is expired by the next worker claim; legacy reservations use creation time. Accepted response IDs retain the original absolute deadline. Local preparation cannot consume the acknowledgement window. The acceptance POST itself times out after 20 seconds. A later signed completion can recover its ID through provider metadata, including when the acceptance checkpoint was lost. Exactly-once provider execution cannot be promised across an unacknowledged POST. Definite 400/401/403/404/422/429 rejection fails the operation promptly. Transient retrieval failures retry the same ID.
+
+### Guarded submission — 2026-10-13
+
+`shared.ai_job_prepare` records `submission_state=prepared` only for a new
+operation. After local preparation, `shared.ai_job_start_submission` locks the
+job, rechecks terminal state, expiry, enabled receiver and worker configuration,
+then marks one submission intent. Cancellation or expiry during preparation
+returns without a provider POST. The intent is fenced even if the worker dies
+before POST; that narrow window remains an uncertain outcome. Legacy rows keep
+NULL submission state and are never reclassified as free.
+
+An expired never-started preparation has the bounded `not_submitted` diagnostic
+and can settle its CAD reservation at zero. A started or legacy operation without
+a receipt retains `receipt_missing` and unknown accounting. No provider usage
+event is invented. A genuine new owner task can authorize a distinct terminal
+CAD attempt under [the drawing recovery contract](cad-adapter.md#terminal-attempt-recovery--2026-10-13);
+the shared transport never resends its old logical operation.
 
 ### Content-free failure diagnostics — 2026-10-12
 
