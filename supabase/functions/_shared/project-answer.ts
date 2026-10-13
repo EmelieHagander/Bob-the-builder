@@ -93,12 +93,14 @@ export async function runProjectAnswer(opts: {
   const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
   const toolbox = createBobToolSession({ ...opts, readPolicy: opts.readToolPolicy ?? seedToolPolicy })
   let previousResponseId = opts.context ? undefined : opts.previousResponseId
+  const drawingRequests=await opts.cadAssistant?.pending()
+  // Pending domain work is background context. Keep the owner's current request
+  // after it so a paused drawing cannot become the turn's newest instruction.
   let messages: OpenAIServiceOptions['messages'] = [
     { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
+    ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
-  const drawingRequests=await opts.cadAssistant?.pending()
-  if(Array.isArray(drawingRequests)&&drawingRequests.length)messages.push({role:'user',content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)})
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   const observation: TurnObservation = { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' }
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }

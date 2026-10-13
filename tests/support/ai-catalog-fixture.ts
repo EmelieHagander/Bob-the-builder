@@ -72,6 +72,19 @@ for(const migration of migrations){
   versions.set(row.key,versions.get(row.key)!+1)
   row.definition={...row.definition,description:patch.description,parameters:patch.parameters,required_parameters:patch.parameters.required,optional_parameters:[]}
  }
+ const drawingIntentTexts=source.match(/\$drawing_intent_texts\$([\s\S]+?)\$drawing_intent_texts\$/)
+ if(drawingIntentTexts){
+  for(const patch of JSON.parse(drawingIntentTexts[1])){
+   const row=seed.find(row=>row.key===patch.key)
+   row.content=patch.content;row.metadata={...row.metadata,publication:'current-owner-deliverable'}
+   versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const patch=JSON.parse(source.match(/\$drawing_intent_contract\$([\s\S]+?)\$drawing_intent_contract\$/)![1])
+  const row=seed.find(row=>row.key==='tools.design_project_cad')
+  row.definition.parameters.properties.request_id.description=patch.request_id_description
+  row.metadata={...row.metadata,publication:'current-owner-deliverable'}
+  versions.set(row.key,versions.get(row.key)!+1)
+ }
  const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
  if(intakePatches)for(const patch of JSON.parse(intakePatches[1])){
   const row=seed.find(row=>row.key===patch.key)

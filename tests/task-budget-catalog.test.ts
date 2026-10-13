@@ -45,7 +45,7 @@ test('integrated resume publishes only two new versions and keeps ledger details
   if(name!==integrated)return
   prior=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   settings=(await db.query('select * from shared.ai_settings order by app,function_name')).rows
- });t.after(()=>pg.close())
+ },integrated);t.after(()=>pg.close())
  const current=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
  assert.notEqual(current.manifest_id,prior.manifest_id);assert.deepEqual(current.models,prior.models)
  assert.deepEqual((await pg.query('select * from shared.ai_settings order by app,function_name')).rows,settings)

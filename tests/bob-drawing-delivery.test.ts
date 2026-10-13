@@ -9,6 +9,7 @@ import { BobContinuation, createBobJournal, type JournalEntry } from '../supabas
 import { runClaimedProjectTurn } from './support/main-catalog-fixture.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
 import {createProjectImageTools} from '../supabase/functions/_shared/project-image-tools.ts'
+import type {WorkingContext} from '../supabase/functions/_shared/bob-working-context.ts'
 
 /** Bob chooses his own tools. The server offers the whole toolbox, never forces a
  * tool, never replaces Bob's reply, and points out only facts it knows. */
@@ -48,6 +49,48 @@ function fixture(selected = true, available = true) {
       hasAccess: async () => true, callModel, ...extra })
   return { writer, writes, receipts, makeLookup, cadOptions, designer, run, get renders() { return renders } }
 }
+
+for(const withHistory of [false,true])
+test(`a project-description request stays last after pending drawing context and finishes after the text receipt (member history: ${withHistory})`, async () => {
+  const message='Beskriv lådorna, bokhyllan och stegen och lägg in det i projektbeskrivningen.'
+  const description='Bokhylla och stege på vänster gavel; bokhyllan till vänster om stegen. Tre utdragbara lådor på kraftiga hjul.'
+  const writes:WritePayload[]=[],receipts:WriteReadback[]=[]
+  const lookup=createProjectLookup('A',async()=>({data:{records:[{id:'A',name:'Bed',description:'Existing room context.',updated_at:time}],related:[],truncated:false},error:null}))
+  const writer=createProjectWriter('A',message,async payload=>{
+    writes.push(payload)
+    const receipt:WriteReadback={projectId:'A',dataset:'project',recordId:'A',revision:null,areaId:null,label:'Bed',operation:'updated',savedAt:time,record:{id:'A',description:payload.data.description,updated_at:time}}
+    receipts.push(receipt);return {data:receipt,error:null}
+  },async()=>({data:receipts,error:null}))
+  const f=fixture()
+  const cad=createCadAssistant({...f.cadOptions,callModel:async()=>{throw new Error('Description work must not call a drawing specialist')}})
+  cad.pending=async()=>[{id,status:'retrieval_failed',reason:'paused_at_limit'}]
+  const context:WorkingContext|undefined=withHistory?{summary:'An earlier drawing was paused.',throughSeq:0,recent:[
+    {seq:1,role:'user',text:'Rita möbeln.',state:'completed'},
+    {seq:2,role:'assistant',text:'Ritningen är pausad.',state:'completed'},
+    {seq:3,role:'user',text:message,state:'pending'},
+  ],history:{remaining:0,search:async()=>{throw new Error('No history search is needed')}}}:undefined
+  let calls=0
+  const result=await runProjectAnswer({projectId:'A',userId:'u',message,lookup,writer,context,cadAssistant:cad,hasAccess:async()=>true,callModel:async options=>{
+    calls++
+    if(calls===1){
+      assert.equal(options.messages!.at(-1)!.content,message,'the actual request must follow pending working state')
+      assert(options.messages!.slice(0,-1).some(m=>String(m.content).includes('Outstanding drawing requests')))
+      assert(options.tools!.some(t=>t.function.name==='design_project_cad'),'requested drawing work remains available; no keyword router hides it')
+      assert.equal(options.tool_choice,undefined)
+      return response(null,call('save_project_description',{description,expected_updated_at:time,request_quote:message}))
+    }
+    assert.equal(JSON.parse(String(options.messages![0].content)).status,'saved')
+    return response('Projektbeskrivningen är uppdaterad.')
+  }})
+  assert(result.ok)
+  assert.equal(result.answer,'Projektbeskrivningen är uppdaterad.')
+  assert.equal(calls,2,'no extra completion nudge or automatic drawing after the text save')
+  assert.deepEqual(writes.map(w=>w.kind),['project'])
+  assert.equal(writes[0].data.description,description)
+  assert.equal(result.evidence.partial,false)
+  assert.equal(result.evidence.writes[0].dataset,'project')
+  assert.equal(f.renders,0)
+})
 
 test('Bob runs prerequisite writes, design, review and save in one turn by his own choice', async () => {
   const f = fixture(false); let calls = 0
