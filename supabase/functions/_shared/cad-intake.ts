@@ -4,12 +4,53 @@ import type { DesignHandoff } from './cad-review.ts'
 import type { LookupInput, createProjectLookup } from './project-lookup.ts'
 
 export type IntakeCheck = { id:string; status:'known'|'assumption'|'missing'|'conflict'; blocking:boolean; source_refs:string[]; action:'none'|'bob_decision'|'measurement'|'owner_decision'; detail:string }
-export type IntakeAssessment = { checks:IntakeCheck[]; additional_needs:IntakeCheck[] }
+export type CadExecutionIssue = { kind:'candidate_validation'|'render_service'|'model_service'; detail:string; source_refs:string[] }
+export type IntakeAssessment = { checks:IntakeCheck[]; additional_needs:IntakeCheck[]; execution_issues?:CadExecutionIssue[] }
+/** An unresolved consequential owner choice is still a need when a permissive
+ * collector forgets its blocking flag. Only the same explicitly scoped canonical
+ * deferral can permit it; reversible Bob decisions retain their autonomy. */
+export function intakeGaps(assessment:IntakeAssessment|null,deferredChoiceIds:ReadonlySet<string>=new Set()):IntakeCheck[]{
+ return [...assessment?.checks??[],...assessment?.additional_needs??[]].filter(c=>c.blocking||c.status!=='known'&&c.action==='owner_decision'&&!deferredChoiceIds.has(c.id)).map(c=>({...c,blocking:true}))
+}
 const checkSchema={type:'object',additionalProperties:false,properties:{id:{type:'string'},status:{type:'string',enum:['known','assumption','missing','conflict']},blocking:{type:'boolean'},source_refs:{type:'array',items:{type:'string'},maxItems:12},action:{type:'string',enum:['none','bob_decision','measurement','owner_decision']},detail:{type:'string',maxLength:1000}},required:['id','status','blocking','source_refs','action','detail']}
-export const INTAKE_SCHEMA={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:checkSchema,maxItems:24},additional_needs:{type:'array',items:checkSchema,maxItems:20}},required:['checks','additional_needs']}
+const {id:_needId,...needProperties}=checkSchema.properties
+export const INTAKE_SCHEMA={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:checkSchema,maxItems:24},additional_needs:{type:'array',items:{...checkSchema,properties:needProperties,required:checkSchema.required.filter(key=>key!=='id')},maxItems:20},execution_issues:{type:'array',maxItems:8,description:'Historical candidate, renderer or model failures to investigate while executing CAD. These are not missing physical inputs or unresolved owner choices.',items:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:['candidate_validation','render_service','model_service']},detail:{type:'string',maxLength:1000},source_refs:{type:'array',items:{type:'string'},minItems:1,maxItems:12}},required:['kind','detail','source_refs']}}},required:['checks','additional_needs','execution_issues']}
+/** Existing check IDs come from the persisted handoff. New needs have no ID
+ * yet: allocate a bounded content identity here, then persist it with intake.
+ * Ignore IDs from older pinned tool contracts; never trust a model allocation.
+ * Status/action may change without changing a need's identity. */
+export async function prepareIntakeAssessment(value:unknown,handoff:DesignHandoff,refs:Set<string>,previous?:IntakeAssessment|null,choiceIds:ReadonlySet<string>=new Set()):Promise<IntakeAssessment|null>{
+ if(!value||typeof value!=='object'||Array.isArray(value))return null
+ const v=structuredClone(value) as Record<string,any>
+ if(!Array.isArray(v.additional_needs)||v.additional_needs.length>20)return null
+ for(const need of v.additional_needs){
+  if(!need||typeof need!=='object'||Array.isArray(need))return null
+  const keys=Object.keys(need).filter(key=>key!=='id').sort().join(',')
+  if(keys!=='action,blocking,detail,source_refs,status'||('id' in need&&typeof need.id!=='string')||typeof need.detail!=='string'||!Array.isArray(need.source_refs)||need.source_refs.some((ref:unknown)=>typeof ref!=='string'))return null
+  // A cited existing choice gets its database identity, never the model's ID.
+  // Only owner-choice needs may use canonical scoped deferrals downstream.
+  const choices=[...new Set<string>(need.source_refs)].filter(ref=>choiceIds.has(ref))
+  if(need.action==='owner_decision'&&choices.length===1){need.id=choices[0];continue}
+  const identityOf=(value:Pick<IntakeCheck,'detail'|'source_refs'>)=>JSON.stringify([value.detail.trim().replace(/\s+/g,' '),[...new Set(value.source_refs)].sort()])
+  const identity=identityOf(need)
+  const existing=previous?.additional_needs.find(check=>identityOf(check)===identity)
+  if(existing){need.id=existing.id;continue}
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(identity))
+  need.id='need_'+Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('').slice(0,32)
+ }
+ return parseIntakeAssessment(v,handoff,refs)
+}
 export function parseIntakeAssessment(value:unknown,handoff:DesignHandoff,refs:Set<string>):IntakeAssessment|null{
  const v=value as IntakeAssessment
- if(!v||Object.keys(v).sort().join(',')!=='additional_needs,checks'||!Array.isArray(v.checks)||!Array.isArray(v.additional_needs)||v.checks.length!==handoff.requirements.length||v.additional_needs.length>20)return null
+ // Older pinned manifests omit execution_issues. Accept that exact legacy shape;
+ // new issues are forwarded to CAD, never promoted to project measurement gaps.
+ if(!v||!['additional_needs,checks','additional_needs,checks,execution_issues'].includes(Object.keys(v).sort().join(','))||!Array.isArray(v.checks)||!Array.isArray(v.additional_needs)||v.checks.length!==handoff.requirements.length||v.additional_needs.length>20)return null
+ if('execution_issues' in v){
+  if(!Array.isArray(v.execution_issues)||v.execution_issues.length>8)return null
+  for(const issue of v.execution_issues){
+   if(!issue||Object.keys(issue).sort().join(',')!=='detail,kind,source_refs'||!['candidate_validation','render_service','model_service'].includes(issue.kind)||typeof issue.detail!=='string'||!issue.detail.trim()||issue.detail.length>1000||!Array.isArray(issue.source_refs)||!issue.source_refs.length||issue.source_refs.length>12||issue.source_refs.some(ref=>!refs.has(ref)))return null
+  }
+ }
  const ids=new Set<string>()
  for(const c of [...v.checks,...v.additional_needs]){
   if(!c||Object.keys(c).sort().join(',')!=='action,blocking,detail,id,source_refs,status'||typeof c.id!=='string'||!/^[a-zA-Z0-9_-]{1,40}$/.test(c.id)||ids.has(c.id)||!['known','assumption','missing','conflict'].includes(c.status)||typeof c.blocking!=='boolean'||!['none','bob_decision','measurement','owner_decision'].includes(c.action)||typeof c.detail!=='string'||!c.detail.trim()||c.detail.length>1000||!Array.isArray(c.source_refs)||c.source_refs.length>12||c.source_refs.some(r=>!refs.has(r)))return null

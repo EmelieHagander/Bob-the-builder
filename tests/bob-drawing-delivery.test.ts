@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runProjectAnswer, seedToolPolicy, type ModelCall } from '../supabase/functions/_shared/project-answer.ts'
+import { runProjectAnswer, seedToolPolicy, type ModelCall } from './support/main-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter, type WritePayload, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
 import { createCadAssistant, handoff } from './support/cad-review-fixture.ts'
 import { drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
-import { runClaimedProjectTurn } from '../supabase/functions/_shared/project-turn.ts'
+import { runClaimedProjectTurn } from './support/main-catalog-fixture.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
 import {createProjectImageTools} from '../supabase/functions/_shared/project-image-tools.ts'
 
@@ -151,7 +151,7 @@ test('a saved illustration after unsupported CAD geometry prompts one factual co
  const result=await f.run(async o=>{
   calls++;assert.equal(o.tool_choice,undefined)
   if(calls===1)return response(null,call('design_project_cad',cadRequest))
-  if(calls===2)return response(null,call('generate_project_image',{prompt:'Illustrative concept only',title:'Illustration',purpose:'proposal',target_kind:'project',target_id:'A'}))
+  if(calls===2)return response(null,call('generate_project_image',{prompt:'Illustrative concept only',title:'Illustration',purpose:'proposal',target_kind:'project',target_id:'A',reference_image_ids:[]}))
   if(calls===3){assert.equal(JSON.parse(String(o.messages![0].content)).geometry_verified,false);return response('The drawing is done.')}
   notes++;assert.match(String(note(o)?.content),/CAD attempt did not deliver a reviewed drawing/)
   return response('CAD failed. The saved image is an illustration; the drawing is unfinished.')
@@ -179,11 +179,16 @@ test('revocation stops the turn, and a closing deadline gives a text-only step',
 
 test('a worker yield replays the design and saves the drawing exactly once', async () => {
   const entries: JournalEntry[] = []; let now = 0, providerCalls = 0, renders = 0, writes = 0
+  const providerRoles: string[] = []
   const resume = () => {
     const f = fixture(), journal = createBobJournal({ entries, save: async e => { entries.push(structuredClone(e)) } }, 20000, () => now)
     const callModel: ModelCall = o => journal.run('model', o, async () => {
       providerCalls++
-      if (o.functionName === 'cad-designer') return o.messages?.some(m => m.role === 'tool') ? response('Inspected.') : response(null, call('render_cad_candidate', candidate))
+      providerRoles.push(o.functionName)
+      if (o.functionName === 'cad-designer') {
+        assert(!o.messages?.some(m => m.role === 'tool'), 'a successful render goes to independent review without a paid designer self-inspection')
+        return response(null, call('render_cad_candidate', candidate))
+      }
       const last = o.messages!.at(-1)!
       if (last.role !== 'tool') { now = 15000; return response(null, call('design_project_cad', cadRequest)) }
       if (JSON.parse(String(last.content)).status === 'ready') return response(null, call('save_cad_design', { request_quote: message }))
@@ -195,7 +200,9 @@ test('a worker yield replays the design and saves the drawing exactly once', asy
   await assert.rejects(resume(), e => e instanceof BobContinuation); now = 0
   const result = await resume()
   assert(result.ok); assert.equal(result.answer, 'Sparad.'); assert.equal(result.evidence.partial, false)
-  assert.equal(providerCalls, 5, 'each provider call runs once across the yield'); assert.equal(renders, 1); assert.equal(writes, 1)
+  assert.equal(providerCalls, 4, 'each necessary provider call runs once across the yield')
+  assert.deepEqual(providerRoles, ['ask-bob', 'cad-designer', 'ask-bob', 'ask-bob'])
+  assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
 test('a rendering result or unrelated Artifact link alone is not a saved drawing', () => {

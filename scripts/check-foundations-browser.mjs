@@ -36,7 +36,8 @@ try {
     if (tries > 40) throw new Error('Preview did not start: ' + logs)
     await new Promise(r => setTimeout(r, 250))
   }
-  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] })
+  // Deterministic software WebGL for viewer QA, not a claim about physical phone FPS.
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox', '--enable-unsafe-swiftshader'] })
   await mkdir('test-results', { recursive: true })
   for (const viewport of [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     const context = await browser.newContext({ viewport, serviceWorkers: 'block' })

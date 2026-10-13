@@ -1,3 +1,4 @@
+import { designIntent } from './support/design-intent-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +15,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   (await asProjectUser(pg, uid, `select ${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args, role)).rows[0].result
  const project = (await call('bob.create_project', [JSON.stringify({ name: 'K4 isolated fixture' })])).id
  const solution = randomUUID()
- await call('bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Concept bracket', description: 'Fixture', assumptions: 'Product unknown', tradeoffs: 'Synthetic', measurements: [] })])
+ await call('bob.solution_command', [project, 'create', solution, 0, JSON.stringify({ area_id: null, title: 'Concept bracket', description: 'Fixture', assumptions: 'Product unknown', tradeoffs: 'Synthetic', measurements: [], design_intent: designIntent() })])
  await call('bob.solution_command', [project, 'select', solution, 0, JSON.stringify({ solution_revision: 1, reason: 'Fixture' })])
  let turn = randomUUID(), claim = await call('bob.bob_claim_turn', [project, user, turn, message], null, 'service_role')
  const write = (payload: any) => call('bob.bob_project_write_v14', [project, claim.thread_id, turn, claim.generation, JSON.stringify(payload)])
@@ -30,6 +31,7 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   parameters: compileCadParameters(project, recipe, parameterPlan(recipe), new Map(), new Map()),
   materials: recipe.definitions.map((d: any) => ({ definition_id: d.id, material_id: material.recordId, material_revision: 1, part_id: null, part_revision: null })),
   joints: [{ id: 'join', method: 'glued_butt', first: { instance_id: 'foot', face: 'z_max' }, second: { instance_id: 'back', face: 'z_min' }, reason: 'Concept only' }], open_questions: ['Adhesive and raw stock unverified'] }
+ data.instance_policy={version:1,instances:recipe.instances.map((i:any)=>({instance_id:i.id,role:'build_part',quantity_policy:'manufacture',reason:'Explicit synthetic newly manufactured bracket part'}))}
  const construction = await write({ ...base, kind: 'construction', data })
  const fields: any = { name: 'Base blank', category: 'Timber', area_id: null, task_id: null, waste_percent: '0', purchase_increment: '1', assumptions: 'Concept only',
   artifact_id: construction.recordId, artifact_revision: 1, target_revision: 1, definition_id: 'base', quantity_mode: 'pieces', stock_allocations: [], component_allocations: [], change_note: 'Counted blank' }
@@ -39,10 +41,22 @@ test('construction blanks use ordinary receipts and material revisions; lineage,
   requirement = await write(payload); assert(requirement.recordId); assert.equal(requirement.revision, 1)
   assert.deepEqual(await write(payload), requirement)
   const record = (await call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])).records[0]
-  assert.equal(record.required_quantity, 1); assert.equal(record.method_key, 'construction_blank_pieces'); assert.equal(record.method_version, '1')
+  assert.equal(record.required_quantity, 1); assert.equal(record.method_key, 'construction_blank_pieces'); assert.equal(record.method_version, '2')
   assert.equal(record.artifact_id, construction.recordId); assert.equal(record.artifact_revision, 1); assert.match(record.basis, /200 x 100 x 18/)
   const source: any = (await asProjectUser(pg, user, 'select * from bob.material_requirement_construction_sources where requirement_id=$1', [requirement.recordId])).rows[0]
   assert.deepEqual(source.instance_ids, ['foot']); assert.deepEqual(source.blank_mm, { x: 200, y: 100, z: 18 }); assert.equal(source.material_binding.material_id, material.recordId)
+  const replay=await call('bob.read_calculation_source',[project,'material',requirement.recordId,1])
+  assert.equal(replay.calculation.base_provenance.status,'replayed');assert.equal(replay.calculation.base_provenance.version,'2')
+  assert.equal(replay.calculation.base_provenance.instance_semantics,'manufacture_snapshot_v2')
+  assert.equal(replay.calculation.base_provenance.value,1)
+ })
+ await t.test('calculator replays construction length and face area from exact typed blank snapshots',async()=>{
+  for(const [mode,q,unit] of [['length_x',.2,'m'],['area_xy',.02,'m2']] as const){
+   const saved=await call('bob.material_requirement_cad_command',[project,'create',randomUUID(),0,JSON.stringify({...fields,quantity_mode:mode})])
+   const replay=await call('bob.read_calculation_source',[project,'material',saved.id??saved.recordId,1])
+   assert.equal(replay.calculation.base_provenance.status,'replayed');assert.equal(replay.calculation.base_provenance.value,q)
+   assert.equal(replay.calculation.base_provenance.unit,unit);assert.equal(replay.calculation.base_provenance.source.artifact_revision,1)
+  }
  })
  await t.test('a second used definition saves in the same claimed turn without changing the first receipt or history', async () => {
   const read = () => call('bob.read_project_work', [project, JSON.stringify({ resource: 'requirement', record_id: requirement.recordId, after_id: null })])

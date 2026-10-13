@@ -5,7 +5,7 @@ import seed from '../supabase/functions/_shared/building-knowledge-seed.json' wi
 import {createKnowledgeReader,searchKnowledge} from '../supabase/functions/_shared/building-knowledge.ts'
 import {isBobAnswerEvidence} from '../src/data/bobEvidence.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import {runClaimedProjectTurn} from '../supabase/functions/_shared/project-turn.ts'
+import {runClaimedProjectTurn} from './support/main-catalog-fixture.ts'
 
 // The original seed hashes sorted UTF-8 JSON with a space after each separator,
 // excluding only content_sha256. Keep that register contract as fields evolve.

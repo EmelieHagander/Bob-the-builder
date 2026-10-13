@@ -1,15 +1,17 @@
+import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
 import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
+import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
-import {drawingResumeReply} from './drawing-resume-reply.ts'
+import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { hydrateCurrentView, createCurrentViewReader, type CurrentViewClient } from './current-view.ts'
 import { createCurrentViewGuard } from './current-view-guard.ts'
 import { parseBobScreen, type BobScreenPointer, type CurrentView } from '../../../src/domain/bobScreen.ts'
 import {createDrawingBudget} from './drawing-budget.ts'
 import {createDrawingRequestStore} from './drawing-request-store.ts'
-import { createBobModelBudget } from './bob-model-budget.ts'
+import { createBobModelBudget, isDrawingModelCall, type DrawingBudgetAuthority } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { hasImageContent } from './openai-content.ts'
@@ -28,6 +30,7 @@ import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
 import { createMediaAdapter, resolveMediaImage } from './project-context/media.ts'
+import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, generateImage } from './openai-service.ts'
@@ -38,12 +41,14 @@ import type { ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
+import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
+  imageIds?: string[];
   background?: { drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
@@ -58,19 +63,24 @@ export async function answerWithOpenAi(opts: {
   const internal = createClient(url, serviceKey, {
     db: { schema: 'bob' }, auth: { persistSession: false, autoRefreshToken: false },
   })
+  const shared = createClient(url, serviceKey, {
+    db: { schema: 'shared' }, auth: { persistSession: false, autoRefreshToken: false },
+  })
+  let aiCatalog: AiCatalogSession
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
   const withResendNotice = (answer: string) => journal && journal.uncertainResends() > 0 && !answer.includes(RESEND_NOTICE)
     ? answer + '\n\n' + RESEND_NOTICE : answer
-  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0): Promise<T> =>
-    journal ? journal.run(stream, input, work, reserve) : work()
+  const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0, signal?:AbortSignal): Promise<T> =>
+    journal ? journal.run(stream, input, work, reserve, signal) : work()
+  const checkpointed = <T extends (...args:any[])=>any>(read:T) => Object.assign(read,{checkpointed:!!journal})
   const rpc = async (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
     const { p_generation: _generation, ...stable } = args
     return memo('rpc:' + name, stable, async () => {
       const { data, error } = await client.rpc(name, args).abortSignal(signal)
       return { data, error }
-    })
+    },0,signal)
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -88,10 +98,19 @@ export async function answerWithOpenAi(opts: {
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   const modelBudget = createBobModelBudget()
-  const callModel = async (options: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => modelBudget.run(async () => {
+  const callModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
+   const options = applyCatalogModelOptions(aiCatalog, requested)
+   const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
+    ?{requestId:drawingRequestId,options}:undefined
+   const boundDrawing=isDrawingModelCall(drawingAuthority,options.aiFunction)
+   return modelBudget.run(async () => {
    const timeout = options.timeoutMs ?? 120000
    const asyncModels = !!(opts.background?.asyncModels && opts.background.jobId)
-   try{return await memo('model:' + options.functionName, options, async identity => {
+   // Localisation has its own journal stream. Existing jobs may contain the old
+   // free-form drawing answer at work-router's next position; do not replay it
+   // as a phrasebook or collide with its fingerprint during a release.
+   const modelStream=options.catalogSchemaKey==='bob_delivery_language'?'model:delivery-language-v1':'model:'+options.functionName
+   try{return await memo(modelStream, options, async identity => {
     await beforeDispatch?.()
     const started = performance.now()
     const wall = journal ? journal.remaining() + 8000 : Infinity
@@ -106,7 +125,7 @@ export async function answerWithOpenAi(opts: {
           ...recovery,
         } } : {}),
       })
-      result=drawingRequestId&&drawingBudget?await drawingBudget(drawingRequestId,options,invoke):await invoke()
+      result=boundDrawing&&drawingAuthority&&drawingBudget?await drawingBudget(drawingAuthority.requestId,options,invoke):await invoke()
     } catch (error) {
       if (error instanceof AIBackgroundPending) throw new BobContinuation('yield', 'ai_wait', { id: error.jobId, accepted: error.accepted, role: options.aiFunction })
       throw error
@@ -124,18 +143,19 @@ export async function answerWithOpenAi(opts: {
     if(error instanceof Error&&error.message==='provider_retry_exhausted')return {success:false,data:null,model:'unavailable',usage:{input_tokens:0,output_tokens:0,total_tokens:0},error:'provider_retry_exhausted'}
     throw error
    }
-  },options.aiFunction).then(result=>{
+  },options.aiFunction,boundDrawing?drawingAuthority:undefined).then(result=>{
    const stop=readBudgetStop(result)
    if(stop)console.warn('[Bob budget stop]',JSON.stringify({role:options.aiFunction,job_id:opts.background?.jobId??null,...stop}))
    return result
   })
+  }
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
-    return { ...adapter,
-      count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal)),
-      list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args)),
+    return { ...adapter,checkpointed:!!journal,
+      count: (signal: AbortSignal) => memo('media:count', {}, () => adapter.count(signal),0,signal),
+      list: (...args: Parameters<typeof adapter.list>) => memo('media:list', args[0], () => adapter.list(...args),0,args[1]),
       open: async (...args: Parameters<typeof adapter.open>) => {
-        const opened = await memo('media:open', args[0], () => adapter.open(...args))
+        const opened = await memo('media:open', args[0], () => adapter.open(...args),0,args[1])
         // Rebuild the resolver registry from compact checkpoints on every resume.
         if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
         return opened
@@ -143,11 +163,11 @@ export async function answerWithOpenAi(opts: {
       // current() remains LIVE, including for already-replayed image evidence.
     }
   }
-  const lookupTransport = (projectId: string, input: LookupInput, signal: AbortSignal) =>
+  const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
     rpc('search_bob_project_data_v8', {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
-    }, signal)
+    }, signal))
   const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32)
   const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48)
   const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
@@ -176,6 +196,19 @@ export async function answerWithOpenAi(opts: {
     return { ok: false, error: 'turn_in_flight' }
   }
   const claimedServer = claim.mode === 'server' && claim.status === 'claimed' ? claim : null
+  try {
+    // The private job journal pins configuration, not project authority. Fresh
+    // caller reads and live enabled checks still guard each execution boundary.
+    const manifest = await memo('ai-catalog', { app: 'bob' }, () => createAiCatalogSession(shared, { app: 'bob' }).load())
+    aiCatalog = createAiCatalogSession(shared, { app: 'bob', manifest })
+    await aiCatalog.load()
+  } catch (error) {
+    rethrowContinuation(error)
+    if (claimedServer) {
+      try { await conversations.fail(opts.projectId, opts.userId, claimedServer.thread_id, opts.clientTurnId, claimedServer.generation) } catch { /* lease recovery */ }
+    }
+    return { ok: false, error: 'ai_catalog_unavailable' }
+  }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
   const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now()}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
@@ -222,6 +255,8 @@ export async function answerWithOpenAi(opts: {
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
   const projectContext = createProjectContext({
+    reviewInstruction: aiCatalog.text('drawing-review.instruction'),
+    imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
     adapters: [mediaAdapter()],
     hasAccess, sources: lookup.sources,
     ...(claimedServer ? { describe: (record: Opened, description: string) => memo('media:describe', { ref: record.item.ref, version: record.version, description }, async () => {
@@ -232,12 +267,63 @@ export async function answerWithOpenAi(opts: {
       return true
     }) } : {}),
   })
+  let attachedImageIds:string[]=[]
+  if (!opts.background?.drawingRequestId) {
+    try {
+      attachedImageIds=claimedServer&&threadId
+        ?await conversations.captureImages({projectId:opts.projectId,userId:opts.userId,threadId,turnId:opts.clientTurnId,generation:claimedServer.generation},opts.imageIds)
+        :opts.imageIds??[]
+      await prepareChatImages(projectContext,attachedImageIds)
+    } catch(error){
+      rethrowContinuation(error)
+      if(claimedServer&&threadId)try{await conversations.fail(opts.projectId,opts.userId,threadId,opts.clientTurnId,claimedServer.generation)}catch{/* lease recovery */}
+      return {ok:false,error:'context_unavailable'}
+    }
+  }
   const knowledgeReader = createKnowledgeReader(hasAccess)
   const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
   const catalogReader = createMaterialCatalogReader(opts.projectId,
-    (input, signal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal),
+    checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
     hasAccess, lookup.sources)
+  const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
+    const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
+    // Replaying a recorded gate reconstructs an earlier completed operation.
+    // Fresh dispatch guards use the caller directly, before new provider work.
+    const {data,error}=await(fresh
+      ?client.rpc('read_design_readiness',args).abortSignal(AbortSignal.timeout(12000))
+      :rpc('read_design_readiness',args,AbortSignal.timeout(12000)))
+    if(error)throw new Error('design_readiness_unavailable')
+    const result=parseDesignReadiness(data)
+    if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
+    return result
+  }
   const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    readDesignReadiness,
+    prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await client.rpc('prepare_construction_role_change',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_role_preparation_failed'}
+      return data
+    },
+    prepareConsequence:async(payload:import('./project-write.ts').WritePayload)=>{
+      // Progress/source gates are live reads, not replayed segment snapshots.
+      const {data,error}=await client.rpc('prepare_construction_consequence',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_consequence_preparation_failed'}
+      return data
+    },
+    readChanges:async(id:string,revision:number,after:string|null)=>{
+      const {data,error}=await client.rpc('read_construction_changes',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('construction_changes_unavailable');return data
+    },
+    prepareLegacyTransition:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_legacy_construction_transition',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}
+      return data
+    },
+    prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
+      return data
+    },
     // Earlier RPC results reconstruct a resumed turn. A current-source gate
     // must bypass that journal before it calls a list/check result current.
     readCurrent:async(id:string)=>{
@@ -263,13 +349,33 @@ export async function answerWithOpenAi(opts: {
     },
   }
   const constructionTools = createConstructionTools(constructionOptions)
+  const calculator=hasCalculatorContract(aiCatalog)?createProjectCalculator({projectId:opts.projectId,hasAccess,
+    isEnabled:async()=>{const policy=await createToolPolicyReader(client,opts.projectId)();return policy.tools.some(t=>t.name==='calculate_project'&&t.active&&t.schema_version===1)},
+    readSources:constructionOptions.readSources,
+    readConstruction:async(id,revision)=>{
+      const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:null}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable');return data
+    },
+    readSource:async(kind,id,revision)=>{
+      const {data,error}=await client.rpc('read_calculation_source',{p_project:opts.projectId,p_kind:kind,p_id:id,p_revision:revision}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable');return data
+    },
+    quotePacks:async(id,revision,needs)=>{
+      const {data,error}=await client.rpc('pack_purchase_quote',{p_project:opts.projectId,p_article:id,p_article_revision:revision,p_needs:needs}).abortSignal(AbortSignal.timeout(12000))
+      if(error)throw new Error('calculation_source_unavailable')
+      const article=await client.rpc('read_supplier_article',{p_project:opts.projectId,p_article:id,p_revision:revision}).abortSignal(AbortSignal.timeout(12000))
+      if(article.error||article.data?.id!==id||article.data?.revision!==revision)throw new Error('calculation_source_unavailable')
+      return {...data,source_state:article.data.source_state==='current'&&!article.data.catalog_changed?'current':'changed'}
+    },
+  }):undefined
   const planAssistant = createPlanAssistant({
+    aiCatalog,calculator,
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
-    makeLookup: () => createProjectLookup(opts.projectId, async(projectId,input,signal)=>{
+    makeLookup: () => createProjectLookup(opts.projectId, checkpointed(async(projectId:string,input:LookupInput,signal:AbortSignal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
       const {data,error}=await rpc('project_plan_read',{p_project:projectId,p_revision:null},signal)
       return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
-    }, 10_000, 128, 512*1024),
+    }), 10_000, 128, 512*1024),
     callModel,
   })
   const drawingRequestCall=async(raw:Record<string,unknown>)=>{
@@ -288,12 +394,13 @@ export async function answerWithOpenAi(opts: {
   }})
 
   const cadAssistant = createCadAssistant({
-    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')})),
+    aiCatalog,calculator,
+    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
       const previous=drawingRequestId;drawingRequestId=id
       try{return await work()}finally{drawingRequestId=previous}
     },
-    ...(claimedServer?{requestStore:createDrawingRequestStore({projectId:opts.projectId,binding,journal,
+    ...(claimedServer?{requestStore:createDrawingRequestStore({aiCatalog,projectId:opts.projectId,binding,journal,
       privateCall:drawingRequestCall,
       // One stable id per piece key; the unkeyed id keeps its existing journal identity.
       newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
@@ -309,6 +416,7 @@ export async function answerWithOpenAi(opts: {
       },
     })}:{}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
+    readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
@@ -335,8 +443,9 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await rpc('read_cad_shell',{p_project:opts.projectId,p_shell:id,p_revision:revision},AbortSignal.timeout(10000))
       if(error)throw new Error('cad_shell_read_unavailable');return data
     },
-    readArtifact:async(id,revision)=>{
-      const {data,error}=await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
+    readArtifact:async(id,revision,fresh)=>{
+      const args={p_project:opts.projectId,p_artifact:id,p_revision:revision}
+      const {data,error}=await(fresh?client.rpc('read_cad_artifact',args).abortSignal(AbortSignal.timeout(10000)):rpc('read_cad_artifact',args,AbortSignal.timeout(10000)));
       if(error)throw new Error('cad_read_unavailable');
       if(!data){
         const draft=await constructionOptions.read(id,revision,null) as Record<string,any>
@@ -349,8 +458,8 @@ export async function answerWithOpenAi(opts: {
       })
       return {...data,current_step_ids:links}
     },
-    catalog:createMaterialCatalogReader(opts.projectId,(input,signal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal),hasAccess,lookup.sources),
-    context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources}),
+    catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources),
+    context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -358,28 +467,53 @@ export async function answerWithOpenAi(opts: {
     // No invented user turn, model-written mandate or generic project tool loop.
     const request=await drawingRequestCall({p_operation:'load',p_id:opts.background.drawingRequestId})
     if(!request)return {ok:false,error:'drawing_request_unavailable'}
-    if(request.status==='saved')return {ok:true,projectId:opts.projectId,answer:'Ritningen är redan sparad.',evidence:{kind:'ai_assessment',references:[],sources:[],partial:false,writes:request.receipt?[request.receipt]:[]}}
+    if(request.status==='saved'){
+      if(!confirmedDrawingReceipt(request.receipt,opts.projectId))return {ok:false,error:'drawing_save_unconfirmed'}
+      const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome:{status:'already_saved'},drawingReceipt:request.receipt,hasAccess,callModel})
+      return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:[],partial:false,writes:[request.receipt]}}
+    }
     if(['paused','cancelled'].includes(request.status))return {ok:false,error:'drawing_request_inactive'}
     const outcome:Record<string,any>=await cadAssistant.consult({...request.payload.brief,request_id:request.id})
     const candidate=cadAssistant.candidate
-    let saved=false
+    let drawingReceipt
     if(candidate&&writer){
       const receipt=await writer.commit({kind:'cad',record_id:candidate.artifact_id,expected_updated_at:null,expected_revision:candidate.expected_revision,request_quote:opts.message.slice(0,500),data:candidate})
-      if(receipt.status!=='saved')return {ok:false,error:'drawing_save_unconfirmed'}
+      if(receipt.status!=='saved'||!confirmedDrawingReceipt(receipt.receipt,opts.projectId))return {ok:false,error:'drawing_save_unconfirmed'}
       await cadAssistant.markSaved()
-      saved=true
+      drawingReceipt=receipt.receipt
     }
     journal?.check()
-    const answer=await drawingResumeReply({message:opts.message,userId:opts.userId,outcome,saved,hasAccess,callModel})
+    const saved=!!drawingReceipt
+    const answer=await drawingResumeReply({projectId:opts.projectId,message:opts.message,userId:opts.userId,outcome,drawingReceipt,receipts:writer?.receipts,hasAccess,callModel})
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
     return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }
-  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,
+  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
-    generate: async prompt => {
-      const result = await memo('image:generate', prompt, async () => {
-        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,timeoutMs:100000})
+    generate: async (prompt,referenceIds) => {
+      const role = aiCatalog.role('project-image')
+      const unopened=referenceIds.filter(id=>!projectContext.openedImageRefs().includes('image:'+id))
+      await prepareChatImages(projectContext,unopened)
+      // Compact, exact-version checkpoints; re-authorise/download original
+      // bytes only inside a fresh provider dispatch. Missing photos never turn
+      // a requested photo edit into an unrelated text-only generation.
+      const references=await Promise.all(referenceIds.map(id=>mediaAdapter().open('image:'+id,AbortSignal.timeout(12000))))
+      const inputReferences=references.map(r=>({id:r.source.recordId,version:r.version}))
+      if(references.reduce((total,r)=>total+r.bytes,0)>16*1024*1024)return {ok:false as const,error:'unsupported_image_references'}
+      if(!await projectContext.validate())throw new Error('context_changed')
+      const result = await memo('image:generate', { prompt, references:inputReferences, manifestId: role.manifestId, roleVersionId: role.roleVersionId }, async () => {
+        if(!await hasAccess())throw new Error('project_denied')
+        const referenceImages=await Promise.all(references.map(async r=>{
+          const data=await resolveMediaImage(opts.projectId,mediaTransport,r,AbortSignal.timeout(12000))
+          const match=data.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/)
+          if(!match)throw new Error('unsupported_image')
+          const binary=atob(match[2]),bytes=new Uint8Array(binary.length)
+          for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i)
+          return {contentType:match[1] as 'image/png'|'image/jpeg'|'image/webp',bytes}
+        }))
+        const generated = await generateImage({app:'bob',coworkerId:'bob',functionName:'project-image',userId:opts.userId,prompt,referenceImages,timeoutMs:100000,aiDefinition:role})
         if (!generated.ok) return generated
+        if(!await hasAccess()||!await projectContext.validate())throw new Error('context_changed')
         let encoded = ''; for (let i=0;i<generated.image.length;i+=8192) encoded+=String.fromCharCode(...generated.image.subarray(i,i+8192))
         return {ok:true as const,image:btoa(encoded)}
       },100000)
@@ -407,11 +541,12 @@ export async function answerWithOpenAi(opts: {
   },hasAccess)
   try {
   const result=await runClaimedProjectTurn({
+    aiCatalog,
     observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
@@ -437,6 +572,7 @@ export async function answerWithOpenAi(opts: {
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({
+      groundingInstruction: aiCatalog.text('bob.grounding'),
       projectId: opts.projectId, message: opts.message, lookup: imageGrounding, hasAccess, deadline,
       validateImages: () => projectContext.validate(),
       callModel,

@@ -45,7 +45,7 @@ jobs:
       - name: Verify the real CAD engine before deployment
         env:
           PYTHONPATH: cad-worker
-        run: python -m unittest cad-worker/test_worker.py
+        run: python -m unittest cad-worker/test_worker.py cad-worker/test_wireframe.py
       - name: Deploy on-demand CAD service
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}

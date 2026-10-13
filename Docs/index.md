@@ -14,8 +14,11 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
-| next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; the active stage lives there, not in this index |
+| next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; [six data-driven outcomes in five releases](bob-delivery-flow.md#six-outcomes-in-five-releases); the active stage lives there, not in this index |
 | end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — cross-domain target, remaining P3 named-member acceptance and P4 cases; actual implemented/released scope lives with domain owners |
+| data-driven handoff gaps and server-owned changes/status | [Data boundary review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) — reviewed gaps, existing guards and domain routing; remaining implementation is in State |
+| exact instance roles and persisted affected-output continuation | [Artifact role/work owner](artifacts.md#instance-roles-and-affected-outputs--release-d) — manufacturing policy, retries and preserved work; [installation evidence](foundation-verification.md#construction-instance-roles-and-consequences--release-d) |
+| AI-designed models with code-executed mathematics; calculator and formula versions | [Calculator contract](ask-bob-tools.md#calculator-and-saved-calculation-models--specified-2026-10-11) — common calculator v1 code boundary, existing stair/construction/material evaluators and domain-owned persistence; release and remaining scope are in State |
 | five primary outcome use cases and their release acceptance | `Docs/user-stories.md` → Product mandate — 2026-09-24; UC-001–005 |
 | baseline audit of Bob's actual context, models and tools | `Docs/bob-context-audit-2026-09-24.md` — dated findings before corrective implementation |
 | general audit of Bob's tool use and unfinished work after PR #146 | `Docs/bob-tool-autonomy-audit-2026-09-25.md` — live configuration, reproducible runtime findings, test-policy drift and outcome acceptance |
@@ -30,19 +33,21 @@
 | frontend/UI conventions | `Docs/ui-index.md` + `.claude/agents/vera.md` |
 | documentation placement/precedence | `.claude/agents/archie.md` and `Docs/index.md` |
 | data model, live/mock modes, auth membership | `db/README.md` + `src/data/database.ts` |
+| existing construction/version relationships versus remaining schema and workflow gaps | [Database authority assessment](../db/README.md#construction-data-authority-and-remaining-extensions) — deployed bounded changes and typed drawing lineage; remaining targeted extensions |
 | share a Building or selected projects with a household / invite an existing friend | `Docs/user-stories.md` → BOB-US-038 / BOB-US-059 + `db/README.md` → Household and friend sharing |
 | volunteers joining with only a name / optional allergies when food is planned | `Docs/user-stories.md` → BOB-US-038 + `db/README.md` → Name-only volunteer access |
 | preserve old Areas through archive/restore | `db/README.md` → Area archive and volunteer drawing reader; `Docs/ui-index.md` |
 | volunteer task drawing reader and its release boundary | `Docs/artifacts.md` → Volunteer task drawings; `db/README.md` → capability endpoints |
 | deliberate organisation of older Tasks / preserved history | `Docs/living-project-plan.md` → Older work organisation and Area lifecycle |
 | household physical-edit authority versus project collaboration | `Docs/building-model.md` → §11.1A + `db/README.md` → Effective authority and revocation |
-| project image storage, attachments and manual task steps | `Docs/media-and-steps.md` |
+| project image storage, chat photos/reference mockups, attachments and manual task steps | `Docs/media-and-steps.md` |
 | measurements, provenance history and existing components | `Docs/project-facts.md` |
 | solution alternatives, evidence and selected target versions | `Docs/solutions.md` |
-| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md` |
+| construction checkpoints, drawings, source freshness, Project-home previews, work-Step links and exact lineage | `Docs/artifacts.md`; [parameter changes and version ownership](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) are deployed in B; [legacy transition](artifacts.md#legacy-drawing-transition--release-c) is deployed in C; D is technically installed; real acceptance remains in State |
 | material requirements, deterministic quantities, construction cut plans, stock/reuse, supplier articles, pack purchases and Shopping handoff | `Docs/material-planning.md` |
 | Ask bob / OpenAI / scoped project lookup | `supabase/README.md` |
-| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools and authority | `Docs/ask-bob-tools.md` — current contract 2026-09-27; opt-in manual experiment and its measured trade-offs; older discovery design kept as history |
+| AI personas, colleague titles/purposes, tool contracts, tiers, activation and pinned definition manifests | [AI definition catalog](../supabase/README.md#ai-definition-catalog-and-model-tiers) — versioned DB authority; release installation and real-model acceptance tracked separately |
+| Ask bob's whole-toolbox bench, shelves, waiting/used-up tools, authority and specified common calculator | `Docs/ask-bob-tools.md` — current tool contract, existing calculation owners and first common-tool boundary; opt-in manual experiment; older discovery design kept as history |
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
@@ -139,7 +144,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 ## AI / Ask bob
 
 - [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract and active State**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and staged delivery. Domain owners distinguish implemented, deployed and remaining target scope. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in PR/CI or the archive below.
-- `supabase/README.md` — current provider path, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
+- `supabase/README.md` — provider path, versioned AI definition catalog, per-app model tiers, pinned manifests, activation/rollback, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-tools.md` — **tool-system owner**: since 2026-09-27 the whole permitted toolbox is offered every step on named shelves, with waiting/used-up tools listed and no forced tool choice; caller authority and execution fences are unchanged. The earlier core/on-demand tiers and list/load discovery are kept as history. Does not claim the generic drawing engine is built.
 - `Docs/bob-tool-autonomy-audit-2026-09-25.md` — **dated audit after PR #146**: actual models/loadout, general completion gaps, discovery and budget failures, CAD feedback and behavioural verification; follow the domain owners for implementation contracts.
 - `Docs/bob-ai-runtime-review-2026-09-27.md` — **dated review after PR #149, compared with Launchpad**: the path of one request, every model role in a turn, the tool surface per phase, the background-hop budget, and ranked findings (answer replaced by a notice, quote-as-authorisation, approval chains, forced continuation, missing archive tools) with an ordered fix list; a review, not a contract.
@@ -148,7 +153,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - `Docs/ask-bob-context-implementation.md` — **remaining technical landing plan with current source map** for that contract: frontend surface snapshot, strict screen-pointer wire shape, per-surface hydration, backend module seams, additive catalog RPC, adapters, router/lens shadow mode, list/open rollout, image vision, Librarian, deployment/rollback and verification gates.
 - `Docs/ask-bob-conversations.md` — **conversation state owner**: private transcript, working memory, explicit reset, durable background turns and server-driven continuation; provider erasure remains planned; per-user/project privacy and release gates.
 - `supabase/functions/_shared/project-lookup.ts` — bounded briefing/lookup dispatcher and source metadata.
-- `supabase/functions/_shared/project-answer.ts` — scoped research/write loop, assembled tool surface and fixed cross-tool truth rules.
+- `supabase/functions/_shared/project-answer.ts` — scoped research/write loop and assembled catalog-backed tool/prompt surface.
+- `supabase/functions/_shared/ai-catalog.ts` — pinned definition manifest and role/profile/tier/tool/output resolution; owning contract in `supabase/README.md`.
 - `supabase/functions/_shared/project-tools/` — caller-scoped policy reader, exact handler registration and per-turn discovery/loading/dispatch.
 - `supabase/functions/_shared/ask-openai.ts` — direct OpenAI backend.
 - `supabase/functions/_shared/serve-bob.ts` and `supabase/functions/ask-bob/` — authenticated OpenAI endpoint for Bob. The old `ask-launchpad/` contains only a retirement response.

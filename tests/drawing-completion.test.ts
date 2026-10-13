@@ -198,7 +198,7 @@ test('P2: an unpriced transport failure cannot release its uncertain reservation
  assert.deepEqual(await budget('request',{functionName:'cad-designer'} as any,async()=>failure),failure)
  assert.deepEqual(operations,['reserve'])
 })
-test('P2 events: a chat turn\'s own project writes do not resume the request it just failed',async t=>{
+for(const failure of [{stage:'intake',lateWrites:false},{stage:'cad_engine',lateWrites:true}])test(`P2 events: ${failure.stage} failure does not resume on the same chat turn's writes`,async t=>{
  const pg=await projectSchema();t.after(()=>pg.close())
  await pg.exec(`create schema cron; create schema net; create function net.http_post(url text,headers jsonb,body jsonb,timeout_milliseconds integer) returns bigint language sql as 'select 1::bigint'`)
  const owner=randomUUID(),turn=randomUUID(),id=randomUUID()
@@ -216,7 +216,10 @@ test('P2 events: a chat turn\'s own project writes do not resume the request it 
  // The turn saves measurements after it was queued, then the designer fails.
  await bump();await bump()
  await call(owner,'bob.create_drawing_request',[project,secret.thread_id,turn,claim.generation,id,scope])
- await service('bob_drawing_request',[project,owner,secret.thread_id,turn,claim.generation,'save',id,0,'retrieval_failed',{brief:{...scope},owner_request:'80x165x12 cm',reference_refs:[]},randomUUID()])
+ await service('bob_drawing_request',[project,owner,secret.thread_id,turn,claim.generation,'save',id,0,'retrieval_failed',{brief:{...scope},owner_request:'Synthetic concept',reference_refs:[],retry:{fingerprint:'a'.repeat(64),outcome:{status:'unavailable',stage:failure.stage,saved:false,reason:'fixture_failure'}}},randomUUID()])
+ // Bob records an execution Task after the designer returned its failure.
+ // This is the production ordering the checkpoint-only guard did not cover.
+ if(failure.lateWrites){await bump();await bump()}
  await service('bob_finish_job',[queued.jobId,claim.claimToken,null])
  await service('bob_dispatch_jobs',[])
  assert.equal(await resumes(),0,'the turn\'s own writes are not new data for its failed request')

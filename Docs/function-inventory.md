@@ -1,5 +1,36 @@
 # bob — current capability & gap inventory
 
+## Versioned instance roles and affected-output work — release D
+
+Explicit instance roles now control deterministic manufacturing lists/needs/cuts. Construction revisions record linked pending output work; normal writers recalculate the same identities, preserve commitments/performed work, and reuse receipts after interruption. Reference geometry and the exact drawn role version remain visible. Historical unknown roles require explicit classification. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns the contract; [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d) records release/installation status. Calculator implementation and actual bed/mockup/member/cost acceptance remain in [State](bob-delivery-flow.md#state).
+
+## Guarded legacy drawing transition — deployed 2026-10-11
+
+`transition_legacy_drawing` copies exact older geometry/parameter provenance server-side or reuses a matching checkpoint. Missing metadata returns explicit grouped gaps, receipts make retries stable, and an exact typed origin permits the first checked CAD save under the original drawing identity. Numeric correction then uses B's saved parameter IDs and exact revision. [Artifact](artifacts.md#legacy-drawing-transition--release-c) and [database](../db/README.md#construction-data-authority-and-remaining-extensions) own the contract; [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback. [D's role/continuation release](#versioned-instance-roles-and-affected-output-work--release-d) and E's actual bed/mockup/member/cost acceptance are tracked in [State](bob-delivery-flow.md#six-outcomes-in-five-releases).
+
+## Bounded construction changes and exact drawings — deployed 2026-10-10
+
+Release B saves a numeric delta against existing construction input IDs, recomputes dependent dimensions through the existing compiler/writer and gives the drawing job that exact saved construction revision. Checked rendering bypasses geometry design/research; retries keep their checkpoint and immutable history. A typed same-project relation supplies exact construction-to-drawing readback. Existing claim, source, readiness, review and receipt guards remain in force. [Artifacts](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) owns the contract and [verification](foundation-verification.md#bounded-construction-changes--release-b) records [PR #244](https://github.com/EmelieHagander/Bob-the-builder/pull/244), CI and hosted installation. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains D’s part roles/consequence continuation and E’s real member/mockup/cost acceptance. Older drawings require the explicit installed C transition before using this bounded path.
+
+## Shared design advice and purpose readiness — deployed 2026-10-09
+
+**Deployed through [PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236); named-member acceptance remains open.**
+The existing Solution revision now carries shared expert advice, actual choices,
+original-image roles, required features and a bounded next-output purpose. Bob's
+write/read/target paths expose it, and Solutions has read-only choice/history
+disclosure. Canonical readiness gates new construction saves and paid CAD work;
+designer/reviewer and CAD save consume the same exact selected revision and image
+versions. Legacy reads and historical replay remain available. No new model,
+budget allocation or universal owner-approval step is added.
+
+[Solutions](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) owns
+packet semantics; [CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09)
+owns consumption. [Release evidence](foundation-verification.md#expert-advice-and-design-readiness-release--2026-10-09)
+records the applied migrations, active catalog, exact runtime and Pages release.
+[State](bob-delivery-flow.md#state) retains
+ordinary named-member advice/mockup acceptance; controlled checks do not close
+those outcome gates.
+
 ## K1 construction checkpoints — deployed, model acceptance pending
 
 Bob now has registered tools to create, list, read and revise persistent

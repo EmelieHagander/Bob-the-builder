@@ -32,11 +32,11 @@ def main():
     }
     opener = urllib.request.build_opener(NoRedirect)
 
-    def request(body, token):
+    def request(body, token, path='/render'):
         headers = {"Content-Type": "application/json"}
         if token:
             headers["Authorization"] = "Bearer " + token
-        req = urllib.request.Request(endpoint, data=json.dumps(body).encode(), headers=headers, method="POST")
+        req = urllib.request.Request(url.rstrip('/')+path, data=json.dumps(body).encode(), headers=headers, method="POST")
         # Matches the existing Edge transport's deadline, including cold start.
         with opener.open(req, timeout=45) as response:
             data = response.read(6 * 1024 * 1024 + 1)
@@ -94,7 +94,19 @@ def main():
                 raise RuntimeError("Unexpected CAD rejection status") from None
         else:
             raise RuntimeError("CAD accepted an unauthorized or invalid request")
-    summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, hashes, dimensions and authorization.\n\n"
+    source_hash=hashlib.sha256(json.dumps(dict(profile='kernel-edges-v1',recipe=recipe),sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    wireframe=request(dict(recipe=recipe,source_hash=source_hash),os.environ['BOB_CAD_TOKEN'],'/wireframe')
+    if (wireframe.get('profile')!='kernel-edges-v1' or wireframe.get('source_hash')!=source_hash
+        or wireframe.get('engine')!='build123d-0.13.0' or wireframe.get('instances')!=recipe['instances']
+        or wireframe.get('bounds')!={'min':[0,0,0],'max':[45,70,900]}
+        or len(wireframe.get('definitions',[{}])[0].get('positions',[]))!=72):
+        raise RuntimeError('Live wireframe does not contain the 12 native box edges')
+    for token,status in [('',401),('invalid-smoke-token',401),(os.environ['BOB_CAD_TOKEN'],422)]:
+        try: request({},token,'/wireframe')
+        except urllib.error.HTTPError as exc:
+            if exc.code!=status: raise RuntimeError('Unexpected wireframe rejection status') from None
+        else: raise RuntimeError('Wireframe accepted an unauthorized or invalid request')
+    summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, native wireframe edges, hashes, dimensions and authorization.\n\n"
                f"First authenticated request: {elapsed:.2f} seconds.\n\n"
                f"Set Supabase Edge secret `BOB_CAD_URL` to `{endpoint}`.\n"
                "Set `BOB_CAD_TOKEN` to the same runtime secret stored in GitHub.\n"

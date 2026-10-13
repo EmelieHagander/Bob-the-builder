@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+
+const kernelWireframes = JSON.parse(readFileSync(new URL('../tests/fixtures/cad-wireframes.json',import.meta.url),'utf8'))
+const stable = value => JSON.stringify(value, (_key,v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:a>b?1:0)) : v)
 
 const generationKey = (id, revision) => `${id}:${revision}`
 
@@ -50,19 +54,35 @@ export function createArtifactsFixture(timestamp, assets, facts, solutions) {
   const sources = new Map()
   const shellRead = shellReadFor(records, shellPieces)
   const sourceStatus = id => sources.get(id) ?? {source_state:'current',source_reasons:[]}
+  const viewerCache = new Map()
   const fixture = { records, histories, generations, parametric, cad, workLinks, shells, shellPieces, shellCommands: [], sources, physical, rejectNext: false, rejectPreview: false,
+    viewerCalls: [], viewerExports: 0, rejectViewer: false,
     async handle(request, url, respond) {
       const table = url.pathname.split('/').at(-1)
       const handled = [
         'artifacts','artifact_source_status','artifact_source_changes','current_artifacts','artifact_revisions','artifact_revision_details','artifact_measurement_details',
         'artifact_generation_details','artifact_geometry_input_details','artifact_command','artifact_geometry_command',
         'project_buildings','project_spaces','artifact_parametric_recipes','artifact_box_command','artifact_cad_revisions','current_drawing_overview','current_drawing_steps',
-        'read_cad_shell','cad_shell_command',
+        'read_cad_shell','cad_shell_command','cad-viewer',
       ]
       if (!handled.includes(table)) return false
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       const reply = async options => { await respond(options); return true }
       const fail = message => reply({ status: 409, json: { message } })
+      if(table==='cad-viewer') {
+        const pin=request.postDataJSON();fixture.viewerCalls.push(pin)
+        assert.equal(pin.project_id,'A');assert(request.headers().authorization?.startsWith('Bearer '))
+        assert.equal(typeof pin.retry,'boolean')
+        const key=generationKey(pin.artifact_id,pin.revision),row=cad.get(key)
+        if(fixture.rejectViewer) return reply({json:{status:'failed',retry_allowed:true}})
+        if(!viewerCache.has(key)) {
+          const match=Object.values(kernelWireframes).find(f=>stable(f.recipe)===stable(row?.recipe))
+          if(!match) return reply({json:{status:'failed',retry_allowed:true}})
+          viewerCache.set(key,match.geometry);fixture.viewerExports++
+        }
+        const {retry:_retry,...source}=pin
+        return reply({json:{status:'ready',source,geometry:viewerCache.get(key)}})
+      }
       if(table==='artifacts')return reply({json:records.get(eq('id'))?.project_id===eq('project_id')?{current_revision:records.get(eq('id')).revision}:null})
 
       if(table==='read_cad_shell') {

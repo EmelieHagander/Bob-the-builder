@@ -1,11 +1,12 @@
 /** Generic project actions. Domain commands remain the authority boundary. */
+import { DESIGN_INTENT_SCHEMA, parseDesignIntent } from './project-design-intent.ts'
 const str={type:'string'},nullable={type:['string','null']},integer={type:'integer'}
 const quote={type:'string',description:'Exact quote from the current request; its scope includes delegated ordinary prerequisites.'}
 const refs={type:'array',maxItems:20,items:{type:'object',additionalProperties:false,properties:{id:str,revision:integer},required:['id','revision']}}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties:{...properties,request_quote:quote},required:[...Object.keys(properties),'request_quote']}}}}
 export const EXPERT_TOOLS=[
  tool('archive_project_measurement','Archive or restore an exact measurement revision. Archive removes it from active use while retaining history and drawing lineage. Read current measurement and affected evidence first.',{record_id:str,expected_revision:integer,action:{type:'string',enum:['archive','restore']}}),
- tool('save_project_solution','Create or revise a solution alternative. This records a design choice and assumptions; it does not select the project target or certify construction.',{record_id:nullable,expected_revision:integer,area_id:nullable,title:str,description:str,assumptions:str,tradeoffs:str,measurements:refs,change_note:str}),
+ tool('save_project_solution','Create or revise the shared solution and expert advice for its next deliverable. Read existing choices and references first. source_media_id binds the primary same-project image; design_intent records purpose, preserved features, alternatives, recommendation, evidence, consequences and actual decisions. Reuse prior owner choices and delegated technical decisions; an unresolved choice or delegation alone is not a selected direction. Explicit null clears either field. Selecting this revision is a separate target command; neither record certifies construction.',{record_id:nullable,expected_revision:integer,area_id:nullable,title:str,description:str,assumptions:str,tradeoffs:str,source_media_id:{...nullable,format:'uuid'},design_intent:{anyOf:[DESIGN_INTENT_SCHEMA,{type:'null'}]},measurements:refs,change_note:str}),
  tool('select_project_target','Select an exact saved solution revision as the project target within the owner\'s delegated design intent. Read the current target and solution first. Selection records intent, never measured truth or structural approval.',{record_id:str,expected_revision:integer,solution_revision:integer,area_id:nullable,reason:str}),
  tool('update_project_task_work','Update the status and assigned project people of an existing Task. Preserve the desired full assignee list. Done records reported work, not independent verification of the plan\'s completion criteria.',{record_id:str,expected_updated_at:str,status:{type:'string',enum:['todo','doing','done','blocked']},person_ids:{type:'array',maxItems:40,uniqueItems:true,items:str}}),
 ]
@@ -22,6 +23,10 @@ export function parseExpertWrite(name:string,v:Record<string,any>){
  if(name==='select_project_target')return v.record_id&&(v.area_id===null||text(v.area_id,200))&&Number.isSafeInteger(v.solution_revision)&&v.solution_revision>0&&text(v.reason,2000)?{...base,kind:'target' as const,data:{solution_revision:v.solution_revision,area_id:v.area_id,reason:v.reason}}:null
  if(name!=='save_project_solution'||v.record_id!==null&&v.area_id!==null||(v.record_id===null?v.expected_revision!==0:v.expected_revision<1)||v.area_id!==null&&!text(v.area_id,200)
    ||!text(v.title,200)||!text(v.description,6000)||!text(v.assumptions,4000,true)||!text(v.tradeoffs,4000,true)||!text(v.change_note,1000)
+   ||Object.hasOwn(v,'source_media_id')&&v.source_media_id!==null&&!uuid(v.source_media_id)
+   ||Object.hasOwn(v,'design_intent')&&v.design_intent!==null&&!parseDesignIntent(v.design_intent)
    ||!Array.isArray(v.measurements)||v.measurements.length>20||v.measurements.some((m:any)=>!m||!uuid(m.id)||!Number.isSafeInteger(m.revision)||m.revision<1))return null
- return {...base,kind:'solution' as const,data:{title:v.title,description:v.description,assumptions:v.assumptions,tradeoffs:v.tradeoffs,measurements:v.measurements,...(v.record_id===null?{area_id:v.area_id}:{change_note:v.change_note})}}
+ return {...base,kind:'solution' as const,data:{title:v.title,description:v.description,assumptions:v.assumptions,tradeoffs:v.tradeoffs,measurements:v.measurements,
+   ...(Object.hasOwn(v,'source_media_id')?{source_media_id:v.source_media_id}:{}),...(Object.hasOwn(v,'design_intent')?{design_intent:v.design_intent}:{}),
+   ...(v.record_id===null?{area_id:v.area_id}:{change_note:v.change_note})}}
 }

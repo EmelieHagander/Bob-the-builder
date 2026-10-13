@@ -7,6 +7,10 @@ project_id = "bob-the-builder"
 [functions.ask-bob]
 verify_jwt = true
 
+# Account JWT plus caller-scoped drawing/source reads before cached CAD bytes.
+[functions.cad-viewer]
+verify_jwt = true
+
 # Retired endpoint: returns 410 without calling a provider or reading project data.
 [functions.ask-launchpad]
 verify_jwt = true

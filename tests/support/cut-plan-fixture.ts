@@ -1,3 +1,4 @@
+import { designIntent } from './design-intent-fixture.ts'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './project-schema.ts'
@@ -5,13 +6,14 @@ import { parameterPlan } from './cad-parameter-fixture.ts'
 import { compileCadParameters } from '../../supabase/functions/_shared/cad-parameters.ts'
 import { constructionLists } from '../../supabase/functions/_shared/construction-lists.ts'
 import { constructionCutFit } from '../../supabase/functions/_shared/construction-cut-fit.ts'
+import { manufacturePolicy } from './construction-instance-policy-fixture.ts'
 
 export async function cutPlanFixture(t: any) {
  const pg=await projectSchema();t.after(()=>pg.close()); const user=randomUUID(),other=randomUUID(),message='Save a cut plan for the existing blanks. Keep stock, needs and Shopping unchanged.'
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[user,'cut-plan@test.example',other,'outsider@test.example'])
  const rpc=async(name:string,args:any[],uid:string|null=user,role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
  const project=(await rpc('bob.create_project',[JSON.stringify({name:'Cut plan isolated fixture'})])).id, solution=randomUUID()
- await rpc('bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Concept bracket',description:'Fixture',assumptions:'Product unknown',tradeoffs:'Synthetic',measurements:[]})])
+ await rpc('bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Concept bracket',description:'Fixture',assumptions:'Product unknown',tradeoffs:'Synthetic',measurements:[],design_intent:designIntent()})])
  await rpc('bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Fixture'})])
  const turn=randomUUID(),claim=await rpc('bob.bob_claim_turn',[project,user,turn,message],null,'service_role')
  const write=(p:any,uid=user)=>rpc('bob.bob_project_write_v15',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)],uid)
@@ -20,6 +22,7 @@ export async function cutPlanFixture(t: any) {
  const placement=(x:number,z:number)=>({x,y:0,z,rx:0,ry:0,rz:0})
  const recipe:any={contract_version:1,units:'mm',assembly_id:'bracket',definitions:[{id:'base',primitive:'box',material_ref:null,x_mm:200,y_mm:100,z_mm:18},{id:'upright',primitive:'box',material_ref:null,x_mm:18,y_mm:100,z_mm:100}],instances:[{id:'foot',definition_id:'base',placement:placement(0,0)},{id:'back',definition_id:'upright',placement:placement(0,18)}],views:['front']}
  const constructionData:any={key:'construction',title:'Two-part bracket',description:'Concept',area_id:null,target_revision:1,change_note:'Fixture',recipe,parameters:compileCadParameters(project,recipe,parameterPlan(recipe),new Map(),new Map()),materials:recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null})),joints:[{id:'join',method:'glued_butt',first:{instance_id:'foot',face:'z_max'},second:{instance_id:'back',face:'z_min'},reason:'Concept'}],open_questions:['Hardware/access unknown']}
+ constructionData.instance_policy=manufacturePolicy(recipe)
  const construction=await write({...base,kind:'construction',data:constructionData})
  const needs=[]
  for(const definition_id of ['base','upright']){

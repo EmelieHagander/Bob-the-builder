@@ -2,6 +2,8 @@ import { CAD_PARAMETERS_SCHEMA } from './cad-parameters.ts'
 import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
 import { CAD_ARRAYS_SCHEMA } from './cad-arrays.ts'
 import { frameParameterIds } from './cad-frames.ts'
+import { DIMENSION_BINDINGS_SCHEMA } from './cad-intake.ts'
+import { splitDimensionBindings } from './cad-physical-lineage.ts'
 
 /** Repairs send only what changed. The server applies the change set to the exact
  * input of this consult's last new-geometry render and re-runs the same render,
@@ -13,13 +15,14 @@ const recipeItems=(name:Collection)=>name==='arrays'?CAD_ARRAYS_SCHEMA:(CAD_RECI
 const ids={type:'array',maxItems:256,items:{type:'string'}}
 const nullableText=(max:number)=>({type:['string','null'],maxLength:max})
 export const REVISE_CAD_TOOL={type:'function' as const,function:{name:'revise_cad_candidate',
- description:'Repair your last new-geometry render by sending only what changed; everything else is kept exactly. upsert replaces items with the same id (or adds them); remove deletes by id. Removing a definition, instance, array, clearance or motion also removes the bindings under its path; unreferenced decision/estimate/derived nodes are dropped. Add bindings for every new or changed numeric field. The result is rendered, provenance-checked and reviewed exactly like render_cad_candidate and returns the full exact recipe. Use render_cad_candidate only for a fresh construction.',
- parameters:{type:'object',additionalProperties:false,required:['upsert','remove','views','title','description','assumptions'],properties:{
+ description:'Repair your last successfully rendered new geometry by sending only what changed; everything else is kept exactly. upsert replaces items with the same id (or adds them); remove deletes by id. Removing a definition, instance, array, clearance or motion also removes the bindings under its path; unreferenced decision/estimate/derived nodes are dropped. Add parameter bindings for every new or changed numeric field. dimension_bindings:null keeps the dimension source pins; an array replaces the entire list. When changing a measured dimension or swapping axes, update both dimension_bindings and the corresponding source nodes/parameter bindings together. Retain every unchanged source pin. The result is rendered, provenance-checked and reviewed exactly like render_cad_candidate and returns the full exact recipe. A rejected patch does not become the next patch base. Use render_cad_candidate only for a fresh construction.',
+ parameters:{type:'object',additionalProperties:false,required:['upsert','remove','dimension_bindings','views','title','description','assumptions'],properties:{
   upsert:{type:'object',additionalProperties:false,required:[...COLLECTIONS,'nodes','bindings'],properties:{
    ...Object.fromEntries(COLLECTIONS.map(name=>[name,{...recipeItems(name),minItems:0}])),
    nodes:{...(CAD_PARAMETERS_SCHEMA.properties as Record<string,any>).nodes,minItems:0},
    bindings:{...(CAD_PARAMETERS_SCHEMA.properties as Record<string,any>).bindings,minItems:0}}},
   remove:{type:'object',additionalProperties:false,required:[...COLLECTIONS,'nodes','bindings'],properties:{...Object.fromEntries(COLLECTIONS.map(name=>[name,ids])),nodes:ids,bindings:{...ids,description:'Binding paths'}}},
+  dimension_bindings:{anyOf:[{type:'null'},DIMENSION_BINDINGS_SCHEMA]},
   views:{anyOf:[{type:'null'},(CAD_RECIPE_SCHEMA.properties as Record<string,any>).views]},
   title:nullableText(200),description:nullableText(6000),assumptions:nullableText(3500)}}}}
 
@@ -50,6 +53,14 @@ export function applyCadRevision(last:Record<string,any>|null,change:unknown):{a
  plan.bindings=merge(plan.bindings,c.remove.bindings,c.upsert.bindings,'path','bindings')
  plan.nodes=merge(plan.nodes,c.remove.nodes,c.upsert.nodes,'id','nodes')
  if(missing.length)throw new Error('revision_unknown_ids:'+missing.slice(0,10).join(','))
+ // Legacy pinned tools omit this field. Keep their source pins, while allowing
+ // current tools to rotate/reassign both provenance maps in the same patch.
+ if(c.dimension_bindings!==null&&c.dimension_bindings!==undefined){
+  splitDimensionBindings(c.dimension_bindings)
+  next.dimension_bindings=structuredClone(c.dimension_bindings)
+ }
+ const definitionIds=new Set(recipe.definitions.map((d:any)=>d.id))
+ next.dimension_bindings=(next.dimension_bindings??[]).filter((b:any)=>!c.remove.definitions.includes(b.definition_id)||definitionIds.has(b.definition_id))
  // Drop nodes nothing reaches any more, and say which, so a dropped measurement is visible.
  const byId=new Map(plan.nodes.map((n:any)=>[n.id,n])),reached=new Set<string>()
  const reach=(id:string)=>{if(reached.has(id))return;reached.add(id);const n:any=byId.get(id);if(n?.role==='derived')n.operands?.forEach(reach)}

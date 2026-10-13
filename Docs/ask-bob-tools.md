@@ -17,9 +17,15 @@ Current View and the remaining broader catalog/router/Librarian design are disti
 
 ## Current toolbox contract — 2026-09-27
 
+**Definition ownership changes in the 2026-10-09 catalog implementation.**
+[The AI catalog owner](../supabase/README.md#ai-definition-catalog-and-model-tiers)
+describes database versions, request manifests and tiers. This changes the source
+of offered contracts; it preserves the bench, execution gates and inline-manual
+baseline below. Hosted installation is recorded separately in the release PR.
+
 **Supersedes the two-tier core/on-demand loading, `list_tools`/`load_tool` discovery and phase preloads described in [Product rule](#product-rule) and [Prepare, discover, load, execute](#prepare-discover-load-execute).** Those sections remain as history of the September 21–26 design. The dated [runtime review](bob-ai-runtime-review-2026-09-27.md) records why.
 
-- **One bench.** Every catalog row that is active, has a registered handler with a matching schema version and passes its server gate is offered on every tool-enabled model step. Its description joins the catalog description, the code description and the full `how_to` guide. There is no discovery round and no model-interpreted capability search.
+- **One bench.** Every policy row that is active, has a registered handler with a matching schema version and passes its server gate is offered on every tool-enabled model step. The exact parameter schema and description come from the pinned `tool_contract` database version; migrated descriptions retain the previous technical guidance and inline manual. There is no discovery round and no model-interpreted capability search.
 - **Shelves.** The system prompt lists the bench on fixed shelves (`TOOLBOX_SHELVES` in `project-tools/bob-tools.ts`): records, project/phases/Areas, living plan, Tasks and build days, measurements and design decisions, drawings and CAD, materials, images, building, knowledge. A test requires every active catalog row to sit on a shelf.
 - **Waiting and used up.** A tool whose prerequisite does not exist yet (for example `save_cad_design` before a reviewed candidate) or whose budget is used is not offered, but its shelf entry says so. A caller who may not use a tool (for example a guest and any write) sees neither the tool nor its shelf entry.
 - **Bob chooses.** The server never sets `tool_choice` for Bob or the CAD designer. Phase is no longer a loading hint; `always_load` and `preload_phases` stay in the catalog as data but do not change the bench.
@@ -28,6 +34,163 @@ Current View and the remaining broader catalog/router/Librarian design are disti
 
 The current synthetic payload and its limits are recorded in the [runtime baseline](foundation-verification.md#k2-runtime-payload-baseline--2026-10-03). Stable prefixes may be cacheable; actual provider cache usage and cost require measurement.
 
+Deployed release B adds `change_construction_parameters` to the Drawings and CAD shelf and existing write-budget gate. The model sends changed saved input IDs, values/units/reasons or exact source revisions; the handler owns geometry compilation and unchanged metadata. The [Artifact owner](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) owns its boundaries and explicit downstream construction version. The generated catalog publication updates only this tool, `design_project_cad` and the toolbox, preserving immutable older manifests and role/model settings. Earlier pinned manifests omit the new handler while keeping their own existing tool bench. [Verification](foundation-verification.md#bounded-construction-changes--release-b) records hosted activation and remaining real member acceptance.
+
+Release C adds `transition_legacy_drawing` on the same shelf/write gate. The database owns the copied geometry/graph and atomic origin/receipt; the model cannot send a replacement recipe or dimensions. Null evidence returns grouped gaps; exact existing-checkpoint reuse returns a `reused` Artifact receipt without creating a construction revision. The catalog adds this contract and updates only the CAD reader/render manuals and toolbox. Older immutable manifests omit the handler even when live tool policy includes it. [Artifact](artifacts.md#legacy-drawing-transition--release-c) owns first-pin/history semantics and [verification](foundation-verification.md#legacy-drawing-transition--release-c) owns installation/readback.
+
+
+## Construction roles and continued changes — release D
+
+Three versioned catalog tools extend the existing Drawings/CAD shelf: `change_construction_roles`, `read_construction_changes` and `continue_construction_change`. [Artifact](artifacts.md#instance-roles-and-affected-outputs--release-d) owns roles and output-history semantics, [material](material-planning.md#role-aware-manufacturing-and-continuation--release-d) owns deterministic quantity/layout reuse, and [CAD](cad-adapter.md#reference-geometry-and-exact-role-versions--release-d) owns exact rendering. Full construction saves also expose nullable versioned `instance_policy`. Older pinned schemas may omit it; the runtime preserves uncertainty/inheritance and never assigns default manufacturing roles.
+
+Read saved change work after numeric, role or full construction revisions. Follow all pages. Queue readback includes compact public receipt headers rather than repeating whole output packets; reopen the exact output when its details are needed. Process need items before cuts; drawing items return exact existing pins for `design_project_cad`. `action=recalculate` carries no quantities/geometry/placement inputs. For a linked Step, inspect changed outputs and necessary ordinary plan/work actions, then `action=record_work_review` with the exact current plan `output_revision` and an honest note. Work reviews retain completed/performed history and never claim physical verification. Blocking commitments/allocations require their normal resolution commands.
+
+Preparation and queue reads use fresh caller RPCs rather than replaying an old journal progress snapshot. The writer repeats guards under the database lock and stores the original operation receipt. Already completed items are reused; stale heads and changed operations stop instead of duplicating outputs. The existing per-turn write/call/cost budgets remain unchanged. A saved queue supports later continuation; it does not promise every linked output fits inside one turn. Install both D core migrations and matching ask-bob/worker sources before activating the D catalog. Earlier manifests and all model/role settings/prices remain immutable.
+
+Legacy/manual linked needs are included in the work list even without a recorded model. `needs_requirement_model` requires an explicit supported definition/mode through `derive_cad_material_requirement`, under the same need ID and exact changed construction revision. Model inputs must not be guessed from a name, free-text basis or old quantity. Normal typed source publication then completes that item. An explicit ordinary archive instead retires a no-longer-required need, preserving its original model/quantity/history.
+
+## Calculator and saved calculation models — specified 2026-10-11
+
+**Product decision; the first common calculator is implemented in the 2026-10-12 branch.** Hosted activation and actual model evidence belong to the [release verification](foundation-verification.md#common-calculator--2026-10-12); code presence is not an installation claim.
+AI describes the calculation model and proposes explicit design assumptions;
+code executes the mathematics. Bob and delegated specialists must use the same
+calculation capability. A computed project value needs an executable model and
+traceable inputs, not arithmetic copied from an AI answer. Keep measured inputs,
+design decisions, estimates and derived results distinct.
+
+Expose a common calculator tool through the existing registered-handler,
+versioned AI-contract and policy seams. It must execute supported, versioned
+methods or a validated declarative dependency graph, with named inputs, units and
+an explicit rounding policy. Do not execute arbitrary model-authored code or
+expressions through `eval`. An unsupported formula or missing input is a concrete
+gap; it must not trigger a model-arithmetic fallback or an invented zero. Extending
+the supported operations/methods is a reviewed code change.
+
+One tool surface does not require one new formula table or a second calculation
+engine. Preserve the existing owners and distinguish three layers:
+
+| Layer | Version and storage owner |
+|---|---|
+| Reusable method and supported operations | Versioned executable code. Fixed domain methods reuse their current evaluator; the AI catalog owns the offered tool contract, not the mathematical definition. A changed formula gets a new method version; existing saved versions keep their original semantics and remain replayable. |
+| Project model, inputs and dependencies | The existing domain revision: construction parameter graph, stair recipe with exact source plan, or material requirement basis. Project-specific declarative formulas belong with that revision. Source values are read from authorised exact database revisions; AI supplies references, not copied source values. Explicit proposed inputs retain decision/estimate provenance. |
+| Calculation result | Returned by code with method/operation versions, input provenance, units and rounding. A saved result/basis belongs to the same owning domain revision through its canonical writer and receipt. Where results are derived on read, replay the pinned method and inputs; do not create a competing stored-result source. |
+
+**Existing stair example.** `inspect_stair_options` already calls
+`stairSummary`/`stairGeometry` in `src/lib/stairStudy.ts`; it reads the exact
+authorised multi-floor plan and computes total rise, rise per step and
+`step_formula_mm = 2 * rise_mm + going_mm` in code. `save_project_stair` stores a
+`stair_study_v1` recipe and exact parent plan revision in
+`bob.artifact_stair_studies`. The [Artifact stair owner](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19)
+owns persistence, history, shape limits and checks. Reuse this evaluator rather
+than teaching the model to reconstruct heights or introducing another stair
+formula store. Evaluating the formula and selecting an evidenced project criterion
+are separate concerns; the numeric result alone is not a suitability approval.
+
+[Construction graphs](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10)
+already execute saved operands and versioned operations in code and validate them
+on save. [Material calculations](material-planning.md#truth-classes-in-4b2a)
+own supported quantity methods and purchase arithmetic; AI-supplied manual base
+quantities must retain manual provenance. The common calculator must not relabel
+them as computed or silently convert estimates into measurements.
+
+Implementation acceptance must exercise the actual offered tool and caller scope,
+unit/rounding errors, missing inputs, exact-revision replay after reload, changed
+sources and retry without duplicate saved results. Include a stair calculation
+and a dependent construction dimension; domain formula tests alone do not prove
+the common tool or its use by a real model. [State](bob-delivery-flow.md#state)
+owns sequencing and remaining implementation.
+
+### Existing evaluators and first common-tool boundary
+
+The [calculation review](foundation-verification.md#calculation-and-formula-review--2026-10-11)
+traces the repository's evaluators through their canonical save/read boundaries.
+This inventory describes executable code; it does not establish hosted installation
+or common-tool/model acceptance. Domain owners retain their release status.
+
+| Calculation | Executable method and precision | Model/result owner |
+|---|---|---|
+| Dependent construction/CAD dimensions | `cad-parameters.ts`: `add_v1`, `subtract_v1`, `multiply_v1`, `divide_v1`; scaled BigInt, six decimals; `exact` rejects a remainder, `half_away_6` rounds ties away from zero. SQL independently recomputes on save. | Construction revision `parameters` or CAD revision `manifest.bob_parameters`: operand IDs, source snapshots, bindings and rounding. Read/inherit validates the saved graph; source changes remain separate from saved values. |
+| Stair rise, step formula, pitch and headroom | `stairStudy.ts`, `stair_study_v1` / `1`; total rise comes from pinned floor heights, rise is total/risers, step formula is twice rise plus going. Coordinates use 0.001 mm; equal-rise division and trigonometry retain floating-point results. | `bob.artifact_stair_studies` pins the recipe and parent plan revision; results derive on read. Never round every rise before deriving the total or applying a criterion. |
+| Wall net area and sheet layers | SQL `stud_wall_net_area` / `4B2b-v1`, `stud_wall_sheet_layer` / `1`; mm²→m², optional layer count, upward base normalization to 0.0001 m². Declared unit coverage must be exactly representable at that precision. | Immutable material requirement revision, drawing/measurement pins and, for layers, `sheet_layer` input snapshot. Area-based coverage does not establish cutting fit. |
+| CAD/construction blanks | SQL `cad_blank_<mode>` / `1`; `construction_blank_<mode>` / `2` in D counts manufacture instances only. Pieces, explicit axis length or box face area; quantities round upward to four decimals. | Material requirement revision plus exact Artifact/definition/mode and construction source snapshot. Earlier v1 quantities keep their original history. |
+| Allowance, allocations and purchase increment | SQL material planner: apply allowance once, round upward to four decimals, subtract confirmed compatible allocations, clamp the shortfall to zero, then round upward to the purchase increment. | Same requirement revision. A manual base remains manual even though its purchase arithmetic is derived. |
+| Aggregated supplier packs | Caller-authorised SQL `pack_purchase_quote`, `k4-pack-aggregate-v1`; sum net needs before one whole-pack ceiling. Missing pack size returns unknown. | Exact article/need revisions in quote; canonical pack-purchase revision/receipt on publication. The quote RPC exists but is not offered as a Bob calculation tool. |
+| Candidate-sheet cutting | `constructionCutFit`, `construction-sheet-guillotine-v1`; integer six-decimal working mm, explicit kerf/trim/grain, bounded guillotine search. | Read-only assessment; saved plans pin construction and candidate sources and SQL revalidates the layout. Feasibility is not an optimal purchase count. |
+| Earlier drawing recipes | `artifactGeometry.ts`, `storageBox.ts`, `roomLayout.ts`, `buildingPlan.ts`: bounded versioned recipes, integer micrometre geometry and exact source pins. | Existing Artifact generation/layout/plan revisions; no second geometry or formula store. |
+
+The reviewed implementation seams are below. The v1 boundary and explicit remaining gaps are recorded in [Common calculator v1](#common-calculator-v1--implementation-2026-10-12):
+
+- **Reuse with typed scope.** Separate graph evaluation from CAD path binding
+  without changing v1 arithmetic. Its units are only `mm`, `deg`, `scalar`;
+  multiplication requires a scalar operand. General area/volume/money arithmetic
+  is not supported by that graph. Fixed material methods retain their SQL owners;
+  a new operation/unit contract needs its own version and save validation.
+- **Make outputs traceable.** Return method/operation versions, named input values
+  with provenance and exact source revisions, dependencies, output units and
+  rounding. Stair rise/pitch need an explicit numerical/display policy, keeping
+  their existing full-precision evaluation. Distinguish historical replay from
+  current-source readiness. Stored quantity history alone does not prove a
+  read-only replay API for every method; D's v1/v2 count semantics need separate
+  replay tests before claiming support.
+- **Offer one capability to the actual callers.** Bob's governed registration is
+  separate from CAD research/designer tool arrays. CAD and Plan reviewers/compiler
+  currently request strict JSON without tools; `openai-service.ts` omits
+  `text.format` when `tools` is supplied. Giving those roles access requires a
+  bounded calculation phase and a validated final response, preserving authority,
+  pinned catalog contracts and the existing aggregate call/cost limits.
+- **Save through the owning revision.** Previewing does not save. The supported
+  stair, construction and material models already have canonical writers and
+  receipts; reuse them and verify reload/retry. A standalone graph has no current
+  generic saved-model writer and cannot be called saved without an explicit
+  domain contract and receipt. Unsupported methods and missing inputs stay gaps.
+
+Measurement mm/cm/m conversion and catalog inch/fraction normalization already
+have exact code/SQL paths; preserve those rather than asking AI to preconvert.
+Authored time/price display helpers are separate from these model contracts:
+`savedTaskEstimate` sums recognised saved task estimates to one decimal hour,
+while [Shopping price text](material-planning.md#authored-prices-and-display-total)
+currently has a reproduced parsing defect. Neither establishes a complete
+project effort or verified price calculation.
+
+### Common calculator v1 — implementation 2026-10-12
+
+`calculate_project` is one registered, catalog-versioned read-only capability for
+Bob, CAD research/designer/reviewer and Plan compiler/reviewer. Every specialist
+checks the same live active/schema-version policy before offering and executing
+it; policy failure never enables a fallback. All callers share twelve calculation
+attempts within the turn, including invalid attempts. Provider calls still use
+the existing aggregate call/cost budgets and authority/dispatch guards.
+
+| Request method | Executed model and persistence boundary |
+|---|---|
+| `parameter_graph_v1` | The existing six-decimal evaluator, separated from CAD path binding. Named outputs retain source snapshots, decision/estimate roles, operand IDs and operation/rounding versions. This is a preview; persist a construction graph with its canonical construction writer. |
+| `construction_parameters_v1` | Replay the exact saved construction recipe/graph with its original snapshots and validate it before returning derived nodes. A separate fresh caller read reports current-source readiness; a newer head never changes the historical result. |
+| `stair_study_v1` / `saved_stair_study_v1` | Inspect an explicit recipe on an exact authorised multi-floor plan, or reopen an exact stair revision and parent plan. Reuse `stairSummary`; return full-precision rise/formula/pitch and an explicit three-decimal display policy. Display-rounded rise is never an evaluator input. Save through `save_project_stair`. |
+| `material_purchase_v1` | Reopen an exact requirement revision and replay allowance, saved allocations, zero-clamped shortfall and purchase-increment rounding in SQL. The canonical writer and reader share `material_purchase_math_v1`. Manual base quantities remain manual. Construction blank v1/v2 bases replay from their typed immutable instance/dimension snapshots with their original count semantics. Other deterministic base methods are explicitly `stored_only`, not falsely claimed as historical replay. |
+| `pack_purchase_v1` | Reuse the caller-authorised `pack_purchase_quote` and read exact article readiness. Sum net needs before whole-pack rounding. Unknown pack size remains null with a named gap. A quote does not publish, reserve, deliver or save a purchase. |
+
+Results identify schema/method versions, named inputs/dependencies/outputs,
+units, rounding, domain owner and exact model/source revisions. `saved=false`
+means this invocation performed no write; `model.persisted` separately says
+whether it replayed an existing saved model. Proposed inputs do not become
+measurements. Source changes are readiness information, not permission to adopt
+new values. Exact database reads enforce project/physical access through the
+caller; the new RPC is invoker-only and has no anon/service grant.
+
+Structured specialists receive at most two calculation rounds with up to four
+calls in each, then their original tool-free pinned JSON-schema call. The final
+call receives exact code results, not calculation-phase prose. Provider failure,
+revocation, policy failure or an exhausted calculator stops this path honestly;
+it does not create an arithmetic fallback. CAD dependency refresh records these
+reads so a saved retry fingerprint cannot treat changed inputs as unchanged.
+
+Remaining boundaries: a standalone graph has no generic saved-model writer;
+use the existing domain revision or report that gap. General area/volume/money
+operations are not part of the v1 graph. Historical wall/CAD-only base replay,
+cutting/geometry exposure beyond the existing specialist tools and the separate
+Shopping authored-price fix remain with their existing owners. The common tool
+cannot claim those capabilities from a stored number alone. Actual model and
+member acceptance remain distinct from scripted domain/SQL tests.
 
 ## Opt-in manual experiment — 2026-10-03
 
@@ -82,18 +245,20 @@ call remains tool-free; directory availability does not promise an unbounded loo
 
 ## One catalog and one handler-registration seam
 
-`bob.tool_catalog` is operator-owned **surface metadata**: stable name, short
-trigger description, long `how_to`, schema version, core flag, preload phases and
-active flag. Authenticated identities can read it; ordinary users cannot modify
-it. It contains no private project data, tool credentials, executable code or
-per-user grants. Catalog visibility by itself is not execution authority.
+`bob.tool_catalog` retains operator-owned **live policy metadata**: stable name,
+schema version, active flag and legacy descriptions/loading fields. Authenticated
+identities can read it; ordinary users cannot modify it. The AI catalog's
+`tools.<name>` definition owns the model-facing description, manual and exact
+JSON parameter schema. Its immutable version is pinned for the turn. Neither
+catalog contains project facts, credentials, executable code or per-user grants.
 
 `project-tools/bob-tools.ts` is the sole registration seam connecting a catalog
-name to its real validated schema, handler and server-derived eligibility gate.
-The runtime intersects BOTH sources. A catalog row with no registered handler,
-a disabled row or a mismatched schema version never becomes callable. Exact
-schemas are sourced from the executable contract, not a separately editable JSON
-copy in a database. Adding a new handler does not require editing the model loop.
+name to a validated handler and server-derived eligibility gate. The runtime
+intersects the live policy, pinned tool contract and registration. A missing
+contract, unregistered handler, disabled policy row or mismatched schema version
+cannot become callable. Database schema changes must remain compatible with the
+registered validator/handler; activation cannot add executable behavior. Adding
+a new handler does not require editing the model loop.
 
 `catalog-seed.json` is the complete migrated offline policy, including inactive
 rows and phase preloads. `tool-catalog-parity.test.ts` installs all migrations and
@@ -102,6 +267,12 @@ failed live reads never fall back to the seed. Operator edits must be recorded i
 a new migration and regenerated seed to retain parity. The dated
 [September 25 audit](bob-tool-autonomy-audit-2026-09-25.md) preserves the earlier drift.
 Already committed migrations are never edited to change a live loadout.
+
+After catalog rollout, legacy policy/manual parity does not determine the active
+provider schema. Activate a new AI definition version for model-facing contract
+edits, and preserve the separate live policy/handler compatibility checks. The
+[catalog owner](../supabase/README.md#authoring-activation-and-release) owns
+activation and rollback.
 
 There is no new grant editor in this slice. Eligibility reuses the actual
 capabilities of the authorised turn: for example, a shared guest has no claimed

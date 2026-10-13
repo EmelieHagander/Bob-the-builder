@@ -12,12 +12,37 @@ export async function setupSharedSocial(pg: Pick<PGlite, 'exec'>) {
     create type shared.ai_reasoning_effort as enum ('minimal','low','medium','high');
     create table shared.ai_models(
       model_name text primary key,
+      provider text not null default 'openai',
+      model_type shared.ai_model_type,
       is_active boolean not null default true,
+      is_current_for_type boolean not null default false,
+      is_default boolean not null default false,
       supports_image_output boolean not null default false,
-      supports_reasoning boolean not null default true
+      supports_reasoning boolean not null default true,
+      supports_images boolean not null default true,
+      supports_json_schema boolean not null default true,
+      max_output_tokens integer not null default 65536,
+      input_cost_per_1m_tokens numeric not null default 1,
+      output_cost_per_1m_tokens numeric not null default 2,
+      cached_input_cost_per_1m_tokens numeric
     );
-    insert into shared.ai_models(model_name,is_active,supports_reasoning)
-      values('gpt-5.4',true,true),('gpt-5.4-mini',true,true),('gpt-5.4-nano',true,true);
+    insert into shared.ai_models(model_name,model_type,is_current_for_type)
+      values('gpt-5.4','standard',true),('gpt-5.4-mini','mini',true),('gpt-5.4-nano','nano',true);
+    insert into shared.ai_models(model_name,model_type,is_current_for_type,supports_image_output,supports_reasoning,supports_images,supports_json_schema)
+      values('gpt-image-2','image',true,true,false,false,false);
+    create table shared.ai_prompts(
+      id uuid primary key default gen_random_uuid(),
+      app text not null,
+      prompt_key text not null,
+      label text not null,
+      description text,
+      content text not null default '',
+      flow text,
+      available_variables jsonb not null default '[]',
+      updated_at timestamptz not null default clock_timestamp(),
+      updated_by uuid references auth.users(id),
+      unique(app,prompt_key)
+    );
     create table shared.ai_settings(
       id uuid primary key default gen_random_uuid(),
       app text not null,

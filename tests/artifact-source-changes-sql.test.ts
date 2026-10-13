@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {compileCadParameters,inheritCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {test} from 'node:test'
 import {parameterPlan,parameterPacket} from './support/cad-parameter-fixture.ts'
@@ -18,7 +19,7 @@ test('P3 deltas: exact project source revisions and affected parameters respect 
  const measurement=randomUUID(),solution=randomUUID()
  const fact={subject:'Panel width',value:'1.001',unit:'m',truth:'measured',source:'Tape at marked endpoints',required:true}
  await call(owner,'bob.evidence_command',[project,'measurement','create',measurement,0,JSON.stringify(fact)])
- await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'Concept',assumptions:'Fit unverified',tradeoffs:'Simple',measurements:[]})])
+ await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'Concept',assumptions:'Fit unverified',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await call(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Use design'})])
  const m:any=(await asProjectUser(pg,owner,'select * from bob.current_measurements where id=$1',[measurement])).rows[0]
  const recipe={contract_version:1,units:'mm',assembly_id:'shelf',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:1001,y_mm:300,z_mm:18}],instances:[{id:'panel-1',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
@@ -28,7 +29,7 @@ test('P3 deltas: exact project source revisions and affected parameters respect 
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
   title:'Source-bound shelf',description:'Concept',assumptions:'No structural certification',target_revision:1,measurements:[{id:measurement,revision:1}],
   source_artifact_id:null as string|null,source_revision:null as number|null,part_ids:[] as string[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
+  packet:{recipe,manifest:{...designManifest(project,solution),bob_parameters:parameterPacket(project,recipe as any,lineage),engine:{name:'build123d'},assembly_id:'shelf',bob_lineage:lineage},files:{front:'PHN2Zz48L3N2Zz4=',step:'SYNTHETIC_PRIVATE_EXPORT'}}}}
  const save=(p:any)=>call(owner,'bob.bob_project_write_v11',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
  const read=(id:string,rev:number|null=null)=>call(owner,'bob.read_cad_artifact',[project,id,rev])
  const plan=parameterPlan(recipe as any,[{definition_id:'panel',dimension:'x_mm',measurement_id:measurement,revision:1}])

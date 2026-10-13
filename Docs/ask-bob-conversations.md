@@ -19,10 +19,13 @@ Released through [PR #181](https://github.com/EmelieHagander/Bob-the-builder/pul
 records the exact tested source and served bundle. The real shelf acceptance remains open.
 
 Every saved owner message remains visible in sequence, including failed and pending
-turns. Failed execution is labelled separately from message persistence. Only a
-matching turn reply can settle its retry state; independently delivered drawing
-events do not hide or acknowledge the owner's message. A newer owner message
-supersedes the older retry action while retaining the full visible history.
+turns. Failed execution is labelled separately from message persistence. A
+matching turn reply settles its ordinary retry state; independently delivered
+drawing events do not hide or acknowledge the owner's message. The
+[exact drawing-recovery correction](#exact-drawing-request-recovery-status--2026-10-09)
+below adds a narrowly scoped budget-stop projection, with separate release status.
+A newer owner message supersedes the older retry action while retaining the full
+visible history.
 
 Before an ordinary member sends, the drawer retains one attempted message, its
 idempotency UUID and frozen screen pointer in tab-scoped session storage keyed by
@@ -43,6 +46,66 @@ with both terminal and pending older work, retained original instructions, reloa
 explicit same-ID retry, duplicate prevention and failed/successful reset at
 320/390/1280 px. Pure transcript/retention cases live in
 `tests/bob-transcript.test.ts`. These fixtures do not close the real shelf/CAD gate.
+
+### Exact drawing-request recovery status — 2026-10-09
+
+**Deployed 2026-10-09 through [PR #235](https://github.com/EmelieHagander/Bob-the-builder/pull/235).**
+The existing bed request completed independent review and canonical save after
+its original ordinary turn had failed at the budget guard. The browser still
+appended that old turn's synthetic spending-stop notice after the saved reply.
+[The verification owner](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns the actual recovery evidence and remaining browser acceptance.
+
+The authenticated `bob_job_status` RPC retains its historical outer `status` and
+`error`. An additive `drawingRecovery` projection identifies exact linked
+`requestIds`, `scope: 'drawing'` and `status: 'queued' | 'running' | 'completed'`,
+with nullable `expiresAt` and `progress`. It requires current project access and
+the caller's active private thread. Every request matches the Project, owner,
+thread and original turn; each uses its latest matching event job. Completed
+recovery requires every linked request to be saved, its exact Artifact receipt
+and historical revision to exist, its latest event job to be completed, and a
+completed assistant event message with `partial: false` and that exact saved
+write receipt. A legitimately newer Artifact head does not invalidate the saved
+historical revision. Prose, a merely ready candidate or an unrelated reply is
+insufficient.
+
+An exact queued/running recovery with a valid future expiry projects pending
+drawing progress for the original unfinished turn, including after a non-budget
+failure. It does not claim completion. Terminal completion has the narrower
+budget-stop rule below.
+
+Only an outer `failed / turn_budget_exhausted` plus this exact completed drawing
+projection removes the synthetic budget-stop notice and its obsolete retry
+state. The original user message, failed `delivery_state`, ordinary job and
+assistant event remain intact. The client uses a separate `deliveryRecovery`
+marker for recovered drawing work; it does not declare the whole ordinary turn
+completed. A non-budget failure retains ordinary retry/notice behavior even when
+its drawing is saved. Missing, malformed, cancelled or unrelated recovery cannot
+settle the failed turn. The RPC is read-only: it cannot enqueue work, renew
+authority, grant budget or alter messages.
+
+An open, visible, idle member drawer checks content-free inbox/status every ten
+seconds and on focus, visibility or inbox events. An unchanged stopped turn gets
+its status checked before full history is fetched; history refresh is justified
+by a changed inbox or valid exact recovery. The drawer observes delivery without
+resending the owner message, preserves draft and scroll, and fences late reads
+by the existing project/account, send and reset scope.
+
+The retained outgoing-message rules above are unchanged. A recovered drawing
+does not acknowledge a different message rejected at 409 or an uncertain send;
+that copy still needs its exact user-turn receipt or explicit dismissal.
+
+[CI 37989030600](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37989030600)
+passed 1,093 tests and reset/recovery browser fixtures at 320/390/1280 px.
+[Pages 37991195981](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37991195981)
+deployed merge `a77de7431f3c4ef0a7b866c142e6c050550ac216` successfully. The status
+migration is applied; `ask-bob` v93 and `bob-worker` v61 are unchanged. During the
+investigation the owner cleared the private thread at 20:40:02Z, before the status
+migration: old jobs, messages and working packet were deleted, while the saved
+request and Artifact revision remain. That old
+turn can no longer supply a live completed-status probe. Isolated SQL and CI
+browser fixtures prove the correction; ordinary named-owner browser acceptance
+remains in [State](bob-delivery-flow.md#state).
 
 ## Explicit T1 / T2 / T3 context
 
@@ -88,7 +151,22 @@ Preparation is synchronous before answering, not Launchpad's separate fold worke
 
 The first answer call starts a **new** provider chain containing fresh rules/briefing, the older brief labelled untrusted conversational data, and T1's original roles/text. The previous user-turn cursor is not used. Within the current turn only, tool results continue through server-owned Responses ids. The final id is still stored by existing commit machinery, but no longer supplies next-turn memory. Clearing Bob context does not promise erasure of already-retained provider objects.
 
-The original approved persona remains byte-for-byte unchanged. Separate server rules ask for concise, concrete construction proposals, ordinary reversible working decisions and consistent dimension stacks. They do not grant safety certification, inspection/image capabilities, deletion, purchases, assignment or broader write authority. The listed available tools remain the capability authority.
+The 2026-10-09 [AI catalog implementation](../supabase/README.md#ai-definition-catalog-and-model-tiers) supersedes the earlier byte-for-byte persona guarantee. Bob and colleagues use short second-person personas with separate technical contracts. Their definitions, output schemas and execution profiles are database versions; this does not grant broader write authority or change the transcript/summary behavior. Listed registered tools and real backend checks remain the capability authority.
+
+### Pinned AI definitions during continuation
+
+Before model work, the turn journal pins one service-resolved AI catalog manifest.
+Its exact prompt, role, profile, tier binding and model capability/price versions
+survive worker continuation and retry. An operator's new activation applies to
+new manifests; it cannot change the input of an already-journalled model call.
+Membership, live tool policy, record freshness and the function/module enable
+switch remain fresh checks. A manifest records configuration, not execution
+permission or project truth. [The catalog owner](../supabase/README.md#one-turn-one-configuration-snapshot)
+owns resolution, version activation and release evidence.
+
+`context-summary` remains the existing bounded private conversation fold. An
+explicitly disabled memory-agent proposal in the catalog does not add a separate
+intelligent worker, project-memory store or autonomous archive/forget lifecycle.
 
 ## Research and execution budget
 
@@ -186,6 +264,14 @@ A receipt-only recovery with no prepared notices can use one small read-only
 localisation call before settlement. Complete provider failure or no remaining
 budget uses language-neutral warning/open/saved marks and original labels.
 That path preserves partial evidence and never re-executes writes.
+
+### Receipt-owned drawing event replies — 2026-10-10
+
+**Implemented and technically deployed; actual member acceptance remains in [State, release E](bob-delivery-flow.md#six-outcomes-in-five-releases).** [Verification](foundation-verification.md#receipt-owned-drawing-event-replies--2026-10-10) owns the test, CI and exact deployed-file readback evidence. Drawing-event replies use this same phrasebook/notice composer instead of the separate free `drawing_resume_reply` answer. Only an explicit CAD-writer/request-store receipt for the current project establishes a delivered drawing; provisional `saved` flags and free `outcome.user_message` do not. Other verified writes remain partial results. The message includes exact receipt titles and revisions, original gaps and the actual technical/recovery cause; it cannot manufacture a new owner permission question.
+
+Known CAD-engine failures, exhausted drawing budgets and already-saved request acknowledgements need no fresh language call. Seeded phrases remain usable; otherwise the existing language-neutral marks and original labels preserve the result. Missing-data notices may prepare the existing outcome-independent phrasebook once. Localisation receives the owner's language request, not the domain outcome or receipt it might rewrite. Access is rechecked before and after delivery.
+
+Phrasebook calls have a separate `model:delivery-language-v1` journal stream. An exact matching phrasebook already recorded under work-router can be reused from the same turn without provider dispatch; a former free drawing answer has a different input/schema and is not reused as language data. Old work-router slots stay intact. No catalog schema/profile, storage table, write authority or budget reset is added by this release. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains the staged implementation and required gates.
 
 `bob.execution_events` is service-only with RLS and no anon/authenticated grants.
 It stores random run/turn correlation IDs, role/status, time, tokens, known cost
@@ -290,6 +376,8 @@ The pattern follows Launchpad's async dispatch, continuation driver and resume p
 
 Each worker has a 140-second segment budget. Completed model responses, exact domain RPC results, CAD packets, media context and generated image bytes are checkpointed before proceeding. Re-entering the existing orchestration replays those results to rebuild loaded tools, specialist candidates and counters, then continues at the first unfinished operation. Input fingerprints stop divergent replay; domain revisions still guard new writes. If a write committed before its checkpoint was saved, the existing SQL receipt ledger reconciles the identical operation. A yield is an internal scheduling signal, never a failed user turn or invented user approval. Main model calls allow 100 seconds within a fresh segment; specialist budgets remain bounded. Transient provider errors can yield to a later attempt. Standard/high main-model settings and the canonical shared AI service are unchanged.
 
+Journaled read deadlines seal either the result or the abort before checkpointing. Lookup, catalog and media readers wait for that checkpoint before delivering an outcome; a late SDK success cannot replace a timeout that Bob already saw. A pending shared AI job also pins the operation fingerprint and job identity before yielding. Changed input stops before another reservation or provider send. These markers grant no extra retry allowance, and membership, source freshness and image authority remain live checks.
+
 The original short-lived caller JWT is encrypted with AES-GCM, bound to user/project/turn, and stored only in `bob_private`. The key derives from the existing server secret with a Bob-specific domain separator. No refresh tokens or synthetic named-user tokens are used. Every resumed worker revalidates the original Auth user; all domain operations keep that caller JWT and RLS. Project access, tool policy and retained image authority are checked live. Service access is limited to job/transcript metadata, content-free Bob execution diagnostics and existing shared AI configuration/accounting.
 
 Jobs end by the earlier of caller-token expiry or 20 minutes, with the 60-claim and stall limits below. Terminal handling clears the encrypted token and operation journal immediately; terminal job metadata expires after seven days. A paid image generation whose outcome was lost after dispatch is stopped explicitly rather than silently generated a second time. Provider requests interrupted before a response/checkpoint may be billed and retried; this is not an exactly-once provider-billing guarantee. Domain writes retain their existing idempotency guarantee.
@@ -386,7 +474,7 @@ Bob-owned domain changes advance a project event revision. The existing queue st
 
 Authority remains the initiating member's ordinary short-lived access JWT, sealed using the existing credential transport, with a maximum twenty-minute execution window. The signed-in app renews authority only for existing active delegated requests through authenticated `renew_requests`; this cannot create work, restore cleared context or increase budget. A closed/expired session leaves `authorization_needed` visible in request work. Membership, generation, cancellation and restored-plan revisions remain fresh backend gates. No refresh token, synthetic JWT, service-role domain writer or cross-member takeover is introduced.
 
-Each new request starts with the existing $1 / 24-call stopping policy, now reserved and accounted across turns, worker segments and retries. The cost threshold is checked before each call; the last in-flight call can exceed it. Identical model inputs recover their private result without another paid dispatch. Unknown outcomes remain reserved; known late provider charges reconcile exactly once from Bob's shared AI usage receipt. Private result payloads disappear with the thread; minimal accounting remains with the request. Unpriced or unresolved usage blocks further spending. A separate owner-only, idempotent budget command adds $1 / 24 calls without changing the work mandate; the UI presents that concrete allocation before applying it. Older project requests receive no inferred historical costs or free refill: their pre-migration accounting is marked untracked, with zero further allocation until explicitly extended.
+The initial P2 release used a $1 / 24-call request policy; [the current drawing allocation and budget ownership](cad-adapter.md#drawing-request-budget-and-review--2026-10-09) supersedes that starting amount and the ordinary-turn boundary. Request spending remains reserved and accounted across turns, worker segments and retries. The cost threshold is checked before each call; the last in-flight call can exceed it. Identical model inputs recover their private result without another paid dispatch. Unknown outcomes remain reserved; known late provider charges reconcile exactly once from Bob's shared AI usage receipt. Private result payloads disappear with the thread; minimal accounting remains with the request. Unpriced or unresolved usage blocks further spending. A separate owner-only, idempotent budget command adds $1 / 24 calls without changing the work mandate; the UI presents that concrete allocation before applying it. Older project requests receive no inferred historical costs or free refill: their pre-migration accounting is marked untracked, with zero further allocation until explicitly extended.
 
 Project Home and linked Task detail read the same request projection after reload, with current status, shared links, budget and owner controls. A saved historical Artifact is linked at its exact revision. Private context restoration remains the explicit P2c command; opening the app cannot silently recover erased requirements. P0's real user outcome and P4's broader product acceptance remain separate gates in [State](bob-delivery-flow.md#state).
 

@@ -198,6 +198,7 @@ export const getProjectArtifactHistory = artifacts.history
 export const editProjectArtifact = artifacts.edit
 export const commandCadShell = artifacts.shellCommand
 export const getCadShellPieceRecipes = artifacts.shellPieceRecipes
+export const getCadWireframe = artifacts.wireframe
 export const getMaterialStock = materialPlanning.stock
 export const getMaterialStockVersion = materialPlanning.stockVersion
 export const getMaterialStockHistory = materialPlanning.stockHistory

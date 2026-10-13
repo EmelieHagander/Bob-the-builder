@@ -748,6 +748,50 @@ The migration adds request-owned gap identities, deterministic request reuse, ca
 Release order: review the exact tree and pass SQL, Edge, browser and real PostgreSQL concurrency gates; apply the migration; deploy matching `ask-bob` and `bob-worker`; verify authenticated event/receipt recovery and the frontend build. Existing worker signatures remain compatible. Older request charges are not guessed: pre-migration requests require a prospective explicit allocation. The current lifecycle/retention/authority owner is [Ask bob conversations — P2 completion](../Docs/ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Exact deployment and model proof belongs in [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 
+### Drawing request allocation — 2026-10-09
+
+Source migration `20261008160000_drawing_budget_3usd.sql` implements the owner's
+$3 allocation for a drawing request. It raises the default and tracked open
+requests below $3, retaining all calls and charges. A prior cost-stop retry
+fingerprint is released and a project event is bumped; saved, cancelled and
+legacy-untracked requests are excluded. Grants, uncertain outcomes, caller
+authority and canonical save receipts keep their existing boundaries.
+
+The October 9 investigation found the migration absent and the hosted default
+still $1. After [PR #234](https://github.com/EmelieHagander/Bob-the-builder/pull/234),
+worker 61 was deployed before ask-bob 93, then the exact existing migration was
+applied as **20261009194934 / drawing_budget_3usd**. Readback confirms default $3
+and two tracked open-request upgrades, preserving spent USD, call counts,
+drafts and other working data while clearing their cost-stop retry fingerprints.
+[Release evidence](../Docs/foundation-verification.md#drawing-request-loop-budget-release--2026-10-09)
+records source hashes and acceptance limits; [CAD budget and review](../Docs/cad-adapter.md#drawing-request-budget-and-review--2026-10-09)
+owns the runtime contract. Do not reapply this migration.
+
+### Drawing recovery status — 2026-10-09
+
+`20261009203935_bob_drawing_recovery_status.sql` adds read-only `drawingRecovery`
+metadata to the existing caller-only `bob_job_status` API. It scopes proof to
+the current member's active private thread and exact originating owner turn.
+Completion requires saved Artifact receipts for all linked requests, existing
+Artifact revisions and matching completed event replies; fresh event executions
+can report queued/running progress. The original ordinary job status, failed
+messages, budget and saved project records remain unchanged. No read enqueues
+work. Existing invoker wrapper, private helper grants and empty search path are
+retained; reset/revoked/foreign access cannot inherit recovery proof.
+
+The reviewed migration was applied as **20261009210458 /
+bob_drawing_recovery_status** after
+[PR #235](https://github.com/EmelieHagander/Bob-the-builder/pull/235). Private-body
+and public-wrapper/OID/grant readback match the reviewed source. A rollback-only
+SQL role probe confirmed current queued/completed status, reset isolation,
+outsider/anonymous denial and unchanged request, budget, job and message counts.
+The old private turn returns no status after the owner's reset; its saved project
+Artifact remains. No Edge deployment was required. The
+[conversation owner](../Docs/ask-bob-conversations.md#exact-drawing-request-recovery-status--2026-10-09)
+owns the released display/retry semantics; [incident and release evidence](../Docs/foundation-verification.md#drawing-recovery-status-investigation--2026-10-09)
+owns exact source pins, Pages proof and the remaining ordinary browser acceptance.
+Do not reapply this migration.
+
 ### P3 screen context and source changes — applied
 
 Migration `20260930112431_bob_p3_context_and_source_changes.sql` adds private `bob_turn_screens` keyed by logical thread/turn, strict pointer validation, claimed-turn capture, v2 enqueue and claim/status recovery. Original focus, including omission, is immutable across retries; JSON object key order does not create a different pointer. Service-only capture/enqueue/claim commands retain actor/generation assertions; private rows have no browser-readable policy. The authenticated status endpoint returns only the initiating user's permitted turn. Screen pointers contain no fact labels, credentials or private assessment prose.
@@ -851,6 +895,42 @@ baseline. The immutable Edge release is recorded by the verification owner.
 
 Additive migration `20261004112211_checked_construction_drawings.sql` guards new CAD packets pinned to existing construction revisions. It reuses Artifact identities, full CAD parameter graphs, caller reads and claimed-turn receipts; no new construction/BOM register or write surface is added. Publication locks source/catalog heads and compares the complete recipe apart from requested views, parameters and target/Area. A drawing revision cannot silently drop/change construction identity; exact archive/restore copies keep history. Source assessments include construction/catalog drift. `read_cad_artifact` adds only safe annotation/source-pin metadata under its existing project authority. No auth/RLS policy or model settings are weakened. [Artifact contract](../Docs/artifacts.md#k3--exact-construction-drawing-lineage) owns behavior and [verification](../Docs/foundation-verification.md#k3-checked-construction-drawings--2026-10-04) owns actual migration/release status.
 
+## Construction data authority and remaining extensions
+
+**Release B's bounded command and typed drawing relation are merged, migrated and deployed through [PR #244](https://github.com/EmelieHagander/Bob-the-builder/pull/244).** The earlier [database review](../Docs/foundation-verification.md#database-relationship-review--2026-10-10) records the foundation before this change; [release B verification](../Docs/foundation-verification.md#bounded-construction-changes--release-b) owns exact migration/runtime/catalog readback and remaining real acceptance. [Delivery State](../Docs/bob-delivery-flow.md#state) owns remaining work; [Artifacts](../Docs/artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) owns the bounded-change/version contract. Other extensions below remain planned.
+
+The database already supports separate construction and drawing identities, exact revisions, historical source links and guarded writes. Construction recipes, parameter graphs, material pins and joints are versioned JSONB in `artifact_construction_revisions`. JSONB is suitable for this variable assembly graph: the SQL validators check units, recompute derived values, verify source versions and preserve the meaning of reused identities. Replacing it with one generic row per number would not supply missing semantics or repair the AI handoff.
+
+Material provenance in `material_requirement_construction_sources` and saved `material_cut_plan_revisions` has composite foreign keys to exact construction revisions. Requirement, cut-plan, stock and purchase links also retain exact revisions. Release B adds `artifact_construction_drawings`, keyed by drawing Artifact/revision, with same-project foreign keys to the drawing and exact construction revision and indexes for downstream source lookup. The existing `validate_cad_construction_source` trigger retains source-head locks and equality of saved geometry/parameters. The typed relation derives only from its validated `manifest.bob_construction` pin; a mismatch on update is rejected. Existing pinned history is backfilled without editing CAD/construction records; legacy absence stays explicit. The CAD table's `source_artifact_id/source_revision` still refers to another **CAD** revision and is not reused for this relationship.
+
+`prepare_construction_parameter_change` checks caller authority, active claimed turn, quote, current nonarchived construction and the existing receipt ledger. The guarded writer repeats these checks under the project lock, reconstructs unchanged metadata from the database and delegates to existing construction readiness/parameter/source validators. It consumes one ordinary write receipt, with the canonical delta stored independently of compiled geometry for exact replay. Authenticated callers may read the new relation under project RLS; they cannot mutate it. `read_cad_artifact` returns its typed `construction_source` or null for genuine legacy absence; the runtime consumes that source identity. Install `20261010222601_construction_parameter_changes.sql`, deploy both compatible Bob functions, then activate `20261010222920_ai_construction_parameter_catalog.sql`. Existing immutable AI manifests and all role/model settings are preserved.
+
+Release C adds `artifact_construction_origins`, keyed by exact legacy drawing ID/revision, with same-project foreign keys to the drawing and initial construction revision. Source and project foreign-key lookups are indexed. Authenticated has project-filtered SELECT only; direct mutation, anon and service table grants are revoked. No historical records are backfilled or rewritten. `read_cad_artifact` exposes nullable `construction_transition`; `construction_source` continues to identify only a rendered K3 revision.
+
+`prepare_legacy_construction_transition` is an authenticated claimed-turn RPC with fixed empty search path, quote/key guards, exact receipt replay, project/head locks, readiness and source checks. The private writer repeats preparation, delegates creation to the existing construction validator or reuses an exact matching checkpoint, then stores one receipt and exact origin atomically. `validate_legacy_construction_transition` requires this origin when a historical CAD identity first acquires a construction pin; the baseline topology/stable IDs survive numeric corrections. Existing K3 guards remain authoritative for current sources, checked geometry and later identity retention. Install `20261011070724_legacy_construction_transition.sql`, deploy both compatible Bob functions, then activate `20261011071316_ai_legacy_transition_catalog.sql`. Old pinned manifests and role/model settings remain unchanged. See [Artifact transition](../Docs/artifacts.md#legacy-drawing-transition--release-c) for gap and history semantics.
+
+| Boundary | Reuse / remaining change |
+|---|---|
+| Parameter correction | Release B reuses the saved graph, stable node IDs, expected revisions, claimed-turn receipts and checks through the bounded command and downstream exact-checkpoint read. Acceptance/installation evidence lives with verification, not in the schema alone. |
+| Meaning of measurements and parts | D adds exact [instance role/quantity policy](#instance-policy-and-change-work--release-d). Measurement property/reference points remain a separate extension. Current source/decision/estimate/derived node roles already distinguish numeric provenance; they do not identify a reference-only part or define what a free-text project measurement measures. Preserve legacy uncertainty. |
+| Construction-to-drawing lookup | B supplies the indexed exact rendered reference; C supplies the guarded legacy origin and first-pin transition. D supplies [persisted affected-output continuation](#instance-policy-and-change-work--release-d). |
+| Consequence continuation | Reuse existing typed source links, freshness checks and request/receipt recovery. D persists the affected-output work and results so interruption can resume it; a new revision must not silently rewrite reservations, purchases or performed work. Exact storage belongs with the existing domain/workflow owners, not a second universal facts register. |
+| Supplier evidence and delivery status | Captured product-source evidence needs a structured reference that extracted fields can cite, plus ingestion/validation. Delivery status already has authoritative receipts; consuming them in code is a runtime fix and does not require another status table. |
+
+These are targeted contract, relationship and workflow extensions. The reviewed findings do not justify replacing Postgres, rebuilding all tables, or treating a schema addition alone as closure of the end-to-end flow.
+
+### Instance policy and change work — release D
+
+`artifact_construction_instance_policies` is an immutable child of the same-project exact construction revision. Version-1 JSON is validated against every recipe instance and fixed role/quantity pairs. A deferred inheritance trigger carries previously classified stable IDs to later constructor revisions; no historical rows are backfilled. The original eight-column constructor table and CAD recipe contract stay unchanged. `read_construction_draft` adds nullable exact `instance_policy`; the CAD reader joins the exact typed drawn source. Legacy reader bodies live in `bob_private`, not as new public RPCs.
+
+`construction_change_sets` uniquely pins one same-project constructor/from/to revision. `construction_change_items` has exactly one typed drawing, requirement, cut-plan or Step identity, with foreign keys to the original and completed exact output versions. The deferred constructor trigger captures linked current outputs after policy inheritance. Normal canonical source writes complete matching pending items; completed revisions/readback and public receipts where available survive interruptions. Steps instead require a current-plan review and preserve performed work. Queue tables have project-filtered SELECT only; direct authenticated/anon/service mutations are revoked.
+
+`prepare_construction_role_change` and `prepare_construction_consequence` bind authenticated project authority, current claimed turn, exact request quote, operation key/replay and project lock. The outer existing v14/v16 writer repeats preparation and delegates data writes to the normal domain commands. Current reservations, Shopping/purchase commitments and allocations return explicit review blockers; there is no automatic release. Role-aware requirement selection and independent SQL cut replay preserve existing identity/quantity/source/capacity guards. Old layouts and version-1 quantity history are not rewritten.
+
+Legacy/manual linked needs are captured without inferring missing model inputs; preparation returns `needs_requirement_model` until explicit canonical derivation supplies a typed exact source. A deferred current-archive trigger can retire a no-longer-required need under the current construction head without inventing a model. Cut-plan reserve/publish wrappers require all current roles to be known, including for historical plans. Unknown roles suppress current coverage without releasing held capacity. Release/withdrawal retain the previous command bodies; old helper aliases have no authenticated execution grant.
+
+Install `20261011090115_construction_instance_roles.sql` and `20261011091128_construction_change_work.sql`, deploy the matching ask-bob and worker closures, then activate `20261011093016_ai_construction_consequences_catalog.sql`. Only the reviewed Bob contracts/catalog rows change; model/role settings and unrelated apps remain untouched. [Artifact](../Docs/artifacts.md#instance-roles-and-affected-outputs--release-d) owns semantics and [verification](../Docs/foundation-verification.md#construction-instance-roles-and-consequences--release-d) owns actual installed versions/readback.
+
 ## K4 construction blank requirements
 
 `20261005173845_construction_blank_requirements.sql` adds provenance under existing `material_requirement_revisions` in `bob.material_requirement_construction_sources`, with project RLS and caller SELECT only. The construction-capable `material_requirement_cad_command` uses ordinary project access, current Artifact/catalog source checks, canonical instance counting and the existing material arithmetic/write receipts. New writes cannot forge quantity or deterministic identity. A project lock serializes duplicate-active-source checking, write and reservations; changed source or expected revision conflicts. Historical provenance stays pinned.
@@ -884,3 +964,33 @@ The reviewed migration is installed in the existing project as `20261006163926 /
 ## K4 mixed sheet supply — deployed
 
 `20261006211841_cut_plan_mixed_supply.sql` replaces only the two existing guarded commitment functions and the combined plan reader, then updates the two tool manuals. Stock allocation and Shopping contribution derivation filter actual used sheets by their existing source kind; no new tables, policies, writer ABI or timeout changes. Existing privileges are retained by CREATE OR REPLACE. The CLI again aborted in its native Bun runtime even for `migration new --help`; the filename uses observed UTC. [Material planning](../Docs/material-planning.md#k4-mixed-stockcatalog-supply--deployed) owns independent partial-success semantics and exact coverage fields. Applied as `20261007090620 / cut_plan_mixed_supply`; exact bodies, authority/RLS/manual parity, unchanged 8-second budget, rollback-only mixed behavior and retained-plan member readback are [verified](../Docs/foundation-verification.md#k4-mixed-sheet-supply-hosted-release--2026-10-07).
+
+
+### Mobile CAD display cache
+
+`20261010070522_cad_viewer_exports.sql` adds a rebuildable `bob.cad_viewer_exports`
+sidecar and the service-only invoker RPCs `claim_cad_viewer_export` /
+`finish_cad_viewer_export`. The key is immutable CAD revision, recipe hash and
+display profile. Project members may read matching rows under RLS; anonymous
+reads, member writes and member RPC execution are denied. Claiming serializes
+preparation with a finite lease and three explicit attempts; completion fences
+old/expired workers. Source rows and Artifact revisions remain unchanged.
+[Mobile CAD](../Docs/cad-adapter.md#mobile-cad-viewer--2026-10-10) owns the viewer
+and cache contract. [PR #239](https://github.com/EmelieHagander/Bob-the-builder/pull/239) applied this migration as hosted ledger `20261010081013_cad_viewer_exports` and records exact function bodies, RLS/grants and Edge/Modal/Pages readback.
+
+
+### Common calculator read boundary — 2026-10-12
+
+`20261012060203_project_calculator.sql` adds no tables or domain writer ABI.
+Invoker `read_calculation_source` reopens exact project/physical-authorised
+multi-floor, stair and material revisions; current readiness is separate from
+historical results. Authenticated receives EXECUTE only; anon/service/PUBLIC do
+not. Existing RLS/PKs cover exact source reads. Private immutable
+`material_purchase_math_v1` is shared by purchase replay and the canonical
+writer's asserted unchanged arithmetic block, preserving existing ACL/locks.
+The core is installed as `20261012073221 project_calculator`; both reviewed Bob
+runtimes precede `20261012073416 ai_calculator_catalog` activation. Do not repeat
+these migrations. Earlier AI manifests/model settings
+and saved revisions are unchanged. The [tool owner](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+owns method coverage and the [verification owner](../Docs/foundation-verification.md#common-calculator--2026-10-12)
+owns actual release/readback and remaining model acceptance.

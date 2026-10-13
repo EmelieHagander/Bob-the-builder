@@ -2,7 +2,7 @@
 // account access to a real project. The operator removes the printed fixture
 // project afterwards; project deletion is deliberately not a client capability.
 import assert from 'node:assert/strict'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
 import { createClient } from '@supabase/supabase-js'
 
@@ -15,6 +15,53 @@ const client = createClient(url, key, { db: { schema: 'bob' }, auth: { persistSe
 const checked = result => { if (result.error) throw new Error(result.error.message); return result.data }
 let signedIn = false
 let fixtureProject, fixtureImage
+// Advice-only probe snapshot: project identity/phase plus the fixture's primary
+// work/design/material records and phase/plan history. These caller-scoped reads
+// intentionally exclude people/Auth/private history and are never printed.
+// The public guest has no ProjectWriter; this is a guest behavior observation,
+// not a writable named-member permission/restraint acceptance test.
+const snapshotFields = {
+  areas: 'id,name,description,phase,archived_at,updated_at',
+  tasks: 'id,area_id,primary_step_id,name,instructions,status,updated_at',
+  materials: 'id,name,qty,area_label,supplier,status,cost,category,category_icon,sort_order,updated_at',
+  events: 'id,title,day,time,place,status,updated_at',
+  phase_history: 'id,scope_kind,area_id,from_phase,to_phase,reason,recorded_at',
+  project_plans: 'project_id,current_revision,next_revision,updated_at',
+  project_plan_revisions: 'revision,status,summary,reason,decided_at',
+  project_targets: 'project_id,current_revision',
+  solutions: 'id,area_id,current_revision',
+  measurements: 'id,area_id,current_revision',
+  existing_components: 'id,area_id,current_revision',
+  stock_items: 'id,current_revision',
+  material_requirements: 'id,current_revision',
+  artifacts: 'id,area_id,current_revision',
+  media_assets: 'id,title,purpose,state,updated_at',
+  media_links: 'id,media_id,area_id,task_id,step_id',
+}
+function snapshotDigest(rows) {
+  // Order by serialized rows so no database default row order affects equality.
+  const content = rows.map(row => JSON.stringify(row)).sort()
+  return { count: rows.length, sha256: createHash('sha256').update(JSON.stringify(content)).digest('hex') }
+}
+async function projectSnapshot(projectId) {
+  const project = checked(await client.from('projects').select('id,name,description,phase,start_date,end_date,updated_at').eq('id', projectId))
+  assert.equal(project.length, 1, 'The disposable project must remain visible')
+  const entries = await Promise.all(Object.entries(snapshotFields).map(async ([table, fields]) => {
+    const rows = checked(await client.from(table).select(fields).eq('project_id', projectId).limit(101))
+    assert(rows.length <= 100, `Disposable snapshot limit exceeded for ${table}`)
+    return [table, snapshotDigest(rows)]
+  }))
+  return { projects: snapshotDigest(project), ...Object.fromEntries(entries) }
+}
+function exactBobText(summary) {
+  // ask-bob's tool loop returns plain model text in summary, not a JSON output
+  // schema. Preserve it instead of guessing fields or rephrasing the answer.
+  assert.equal(typeof summary, 'string', 'Bob must return model text')
+  const text = summary.trim()
+  assert(text.length > 0, 'Bob must return nonempty model text')
+  return text
+}
+
 // Deliberately neutral metadata: the color can only come from actual pixels.
 function colorFixture() {
   const crc = bytes => {
@@ -86,6 +133,31 @@ try {
   assert(focus.evidence.sources.some(source => source.dataset === 'image_pixels' && source.recordId === imageId), 'Pixels must reach a successful real model call')
   assert(focus.evidence.references?.some(reference => reference.id === 'timber.moisture' && reference.version === '2026-09-30.1'), 'The model must consume the deployed knowledge package')
   assert.match(focus.summary, /röd|red/i, 'Neutral metadata cannot reveal the fixture color')
+  // One additional logical Bob request, with a caller-chosen UUID so the
+  // operator can attribute catalog/model events exactly through turn_id.
+  // No tool names or expected wording are supplied for this qualitative probe.
+  const ideaTurnId = randomUUID()
+  const beforeIdea = await projectSnapshot(project.id)
+  const idea = checked(await client.functions.invoke('ask-bob', { body: {
+    action: 'send', projectId: project.id, clientTurnId: ideaTurnId,
+    message: 'Jag vill bygga en liten fristående trädgårdsbänk för två personer. Jag har ännu inga bestämda mått och har inte valt material. Hjälp mig förstå vad vi ska börja med och vad nästa steg är. Ge mig först ett kort råd; gör inga projektändringar, beställ inga ritningar och ta inte hjälp av kollegor ännu. Vem av oss behöver mäta och kontrollera platsen, och vad behöver du få veta från mig? Svara på svenska.',
+  } }))
+  assert.equal(idea.backend, 'openai', 'The idea probe must reach the actual provider')
+  assert.equal(idea.projectId, project.id)
+  assert.equal(idea.evidence?.kind, 'ai_assessment')
+  assert(Array.isArray(idea.evidence?.sources), 'Source disclosure must be present')
+  assert(idea.evidence.sources.every(source => source.projectId === project.id), 'Advice sources must stay in the disposable project')
+  assert.equal(idea.evidence?.writes?.length ?? 0, 0, 'Advice must have no committed project writes')
+  const afterIdea = await projectSnapshot(project.id)
+  // Comparing fingerprints avoids dumping fixture records if an assertion fails.
+  assert.equal(JSON.stringify(afterIdea), JSON.stringify(beforeIdea), 'Observed disposable fixture data must remain unchanged')
+  console.log(JSON.stringify({
+    BOB_CATALOG_IDEA_TURN_ID: ideaTurnId,
+    backend: idea.backend,
+    answer: exactBobText(idea.summary),
+  }))
+  console.log('Natural-language idea probe: actual answer recorded; disposable fixture integrity preserved. Answer quality is an observation, not a lexical pass/fail rule.')
+
   // The shared public guest deliberately has local-only conversation state.
   // Private member persistence is a separate named-session acceptance gate.
   const threads = checked(await client.from('bob_threads').select('id').eq('project_id', project.id).eq('owner_user_id', auth.user.id))

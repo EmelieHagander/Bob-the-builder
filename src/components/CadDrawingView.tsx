@@ -2,9 +2,16 @@ import type { CadDrawing } from '../data/artifacts'
 import { cadParts, cadCutListCsv } from '../data/cadParts'
 import type { DrawingSourceStatus } from '../data/drawingSources'
 import { CadSourceMap } from './CadSourceMap'
+import { lazy, Suspense, useCallback, useState } from 'react'
+const WireframeView = lazy(() => import('./CadWireframeView').catch(() => ({ default: WireframeUnavailable })))
+function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) {
+ return <div role="alert"><p>The 3D viewer could not be loaded. Check the connection and try again.</p><button type="button" className="btn" onClick={()=>onFallback('')}>Show saved drawing</button></div>
+}
 
 /** SVG is an image document, never injected into the page's DOM. */
-export function CadDrawingView({value,title,projectId,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>>;title:string;projectId?:string;sourceStatus?:DrawingSourceStatus}){
+export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>>;title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus}){
+ const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
+ const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
  const names:Record<string,string>={front:'Front',right:'Right',top:'Top',isometric:'Overview'}
  const checks=value.manifest?.checks
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
@@ -15,6 +22,13 @@ export function CadDrawingView({value,title,projectId,sourceStatus}:{value:Pick<
   <p className="foundation-hint">Concept · dimensions in mm. Site fit and construction checks remain as stated in the drawing assumptions.</p>
   {value.source_changed&&<p role="alert" className="solution-attention">The source construction has changed. This detail still shows its recorded revision.</p>}
   <CadSourceMap recipe={value.recipe} manifest={value.manifest} projectId={projectId} sourceStatus={sourceStatus} />
+  {projectId&&artifactId&&revision&&<div className="foundation-actions">
+   <button type="button" className="btn" aria-pressed={interactive} onClick={()=>{setNotice('');setInteractive(v=>!v)}}>{interactive?'Close 3D view':'View in 3D'}</button>
+  </div>}
+  {notice&&<p role="status" className="foundation-hint">{notice}</p>}
+  {interactive&&projectId&&artifactId&&revision&&<Suspense fallback={<p role="status">Loading the 3D viewer…</p>}>
+   <WireframeView projectId={projectId} artifactId={artifactId} revision={revision} title={title} onFallback={fallback}/>
+  </Suspense>}
   {Object.entries(names).filter(([key])=>value.files[key]).map(([key,label])=><figure key={key} style={{margin:'12px 0'}}>
    <img alt={`${title} — ${label}`} src={`data:image/svg+xml;base64,${value.files[key]}`} style={{width:'100%',maxHeight:480,objectFit:'contain',background:'white',border:'1px solid var(--line)'}} />
    <figcaption><a download={`${key}.svg`} href={`data:image/svg+xml;base64,${value.files[key]}`}>{label} · download drawing</a></figcaption>

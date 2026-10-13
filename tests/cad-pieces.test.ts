@@ -1,7 +1,9 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
-import {createCadPieces} from '../supabase/functions/_shared/cad-pieces.ts'
+import { createCadPieces as createCadPiecesImplementation } from '../supabase/functions/_shared/cad-pieces.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+const createCadPieces=(opts:Omit<Parameters<typeof createCadPiecesImplementation>[0],'aiCatalog'>)=>createCadPiecesImplementation({...opts,aiCatalog:catalogFixture()})
 import {handoff} from './support/cad-review-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
@@ -27,6 +29,8 @@ test('pieces are stored as separate requests with stable keys, then released tog
  assert.deepEqual(Object.keys(saved[0].payload.brief).sort(),['area_id','artifact_id','brief','component_id','handoff','step_id'],'consult accepts the stored brief as is')
  assert.match(saved[1].payload.brief.brief,/Piece 2 of 3 \(piece_1\) of "Guest room"/)
  assert.equal(saved[0].payload.owner_request,'Rita gästrummet')
+ assert.match(saved[0].payload.brief.handoff.requirements[0].id,/^req_[a-f0-9]{32}$/)
+ assert.deepEqual(saved[0].payload.brief.handoff.requirements,handoff.requirements)
  assert.deepEqual(released,[['id-piece:piece_0','id-piece:piece_1','id-piece:piece_2']])
  assert.equal((await pieces.execute(input()) as any).status,'budget_exhausted','one split per turn')
 })

@@ -1,11 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { createCadAssistant } from './support/cad-parameter-fixture.ts'
-import { createDrawingRequestStore } from '../supabase/functions/_shared/drawing-request-store.ts'
+import { createDrawingRequestStore as createDrawingRequestStoreImplementation } from '../supabase/functions/_shared/drawing-request-store.ts'
+import {catalogFixture} from './support/ai-catalog-fixture.ts'
+const createDrawingRequestStore=(opts:Omit<Parameters<typeof createDrawingRequestStoreImplementation>[0],'aiCatalog'>)=>createDrawingRequestStoreImplementation({...opts,aiCatalog:catalogFixture()})
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { budgetResumeAction, budgetStopMessage } from '../supabase/functions/_shared/bob-budget-stop.ts'
-import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { budgetResumeAction as budgetResumeActionImplementation, budgetStopMessage } from '../supabase/functions/_shared/bob-budget-stop.ts'
+import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
+
+const budgetResumeAction=(stop:Parameters<typeof budgetResumeActionImplementation>[0])=>budgetResumeActionImplementation(stop,catalogFixture())
 
 const id = '30000000-0000-4000-8000-000000000191'
 const turn = '30000000-0000-4000-8000-000000000192'
@@ -53,7 +58,7 @@ const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id
 const metadata = { purpose: 'project', title: 'Concept', description: 'Synthetic grant test', assumptions: 'Site fit unverified', target_revision: 1, measurements: [] }
 const reply = (name?: string, args: unknown = {}) => ({ success: true, data: null, responseId: 'response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
   ...(name ? { toolCalls: [{ id: 'call', type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
-const assessment = { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
+const assessment = { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Concept dimensions supplied in the request.' }], additional_needs: [] }
 const stoppedOutcome = { status: 'unavailable', stage: 'intake', saved: false, reason: 'turn_budget_exhausted',
   budget_stop: { scope: 'drawing_request', reasons: ['usd_limit'], calls: 9, call_limit: 24, spent_usd: 1.15, usd_limit: 1 } }
 
@@ -136,6 +141,12 @@ test('budget stop guidance distinguishes the request limit from the turn limit',
   assert.match(budgetResumeAction(request), /next message about this drawing continues it/)
   assert.doesNotMatch(budgetResumeAction(request), /try again|budget|allocation/, 'no magic words, no ledger')
   assert.match(budgetResumeAction({ scope: 'turn', reasons: ['call_limit'] }), /next message continues this same request_id/)
+  for(const name of ['design_project_cad','restore_drawing_request'])assert.doesNotMatch(catalogFixture().tool(name).function.description, /budget|allocation|\$/, name+' description keeps the ledger server-side')
+  assert.doesNotMatch(catalogFixture().text('bob.frame.outstanding'), /budget/)
   assert.match(budgetStopMessage(request), /Skriv till mig igen om ritningen/)
   assert.doesNotMatch(budgetStopMessage({ scope: 'turn', reasons: ['usd_limit'] }), /mer budget/)
+})
+
+test('the budget-stop publication is reproducible from executable declarations', () => {
+  assert.match(execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-budget-stop-catalog.ts', '--check'], { encoding: 'utf8' }), /Verified budget-stop publication/)
 })

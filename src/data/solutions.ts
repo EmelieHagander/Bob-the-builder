@@ -1,11 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
+import { parseDesignIntent, type DesignIntent } from '../../supabase/functions/_shared/project-design-intent.ts'
 
 export interface Solution {
   id: string; projectId: string; areaId: string | null; revision: number
   title: string; description: string; assumptions: string; tradeoffs: string
   imageId: string | null; imageTitle: string; archived: boolean
   reason: string; actor: string; recordedAt: string
+  designIntent: DesignIntent | null
+  designIntentState: 'available' | 'missing' | 'invalid'
 }
 export interface SolutionMeasurement {
   id: string; revision: number; subject: string; value: string | null; unit: string
@@ -30,10 +33,12 @@ function checked<T>(result: { data: T; error: { message: string } | null }): T {
   return result.data
 }
 function solution(r: Row): Solution {
+  const intent = r.design_intent == null ? null : parseDesignIntent(r.design_intent)
   return { id: r.solution_id, projectId: r.project_id, areaId: r.area_id ?? null, revision: r.revision,
     title: r.title, description: r.description, assumptions: r.assumptions, tradeoffs: r.tradeoffs,
     imageId: r.source_media_id, imageTitle: r.source_media_title, archived: r.archived,
-    reason: r.change_note, actor: r.actor_label, recordedAt: r.recorded_at }
+    reason: r.change_note, actor: r.actor_label, recordedAt: r.recorded_at,
+    designIntent: intent, designIntentState: intent ? 'available' : r.design_intent == null ? 'missing' : 'invalid' }
 }
 function decision(r: Row): TargetDecision {
   return { projectId: r.project_id, areaId: r.area_id ?? null, revision: r.revision, solutionId: r.solution_id,
@@ -60,6 +65,7 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     guard()
     if (!r) throw new Error('Solution version unavailable. Reload to check access.')
     scoped([r], projectId)
+    if (r.solution_id !== id || r.revision !== revision) throw new Error('Solution version mismatch. Reload this exact version.')
     const refs = checked(await db.from('solution_measurement_details').select('*').eq('project_id', projectId)
       .eq('solution_id', id).eq('solution_revision', revision).order('measurement_id').limit(20)) as Row[]
     guard()

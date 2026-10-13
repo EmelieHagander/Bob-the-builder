@@ -66,6 +66,9 @@ jobs:
       - name: Verify Bob conversation reset and recovery
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-reset-browser.mjs
+      - name: Verify Bob chat images and photo mockup delivery
+        if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
+        run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-bob-images-browser.mjs
       - name: Verify household sharing and friend invitation UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" node scripts/check-sharing-browser.mjs

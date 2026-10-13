@@ -1,6 +1,8 @@
-import { DESIGN_HANDOFF_SCHEMA, parseDesignHandoff } from './cad-review.ts'
+import { HANDOFF_INPUT_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
+import type { DesignHandoff } from './cad-review.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { DrawingRequestStore } from './cad-intake.ts'
+import type { AiCatalogSession } from './ai-catalog.ts'
 
 /** A build too large for one designer answer is split into pieces. Each piece is
  * its own drawing request with its own budget; the existing drawing-event queue
@@ -18,24 +20,28 @@ export const PLAN_CAD_PIECES_TOOL={type:'function' as const,function:{name:'plan
   area_id:nullable,
   pieces:{type:'array',minItems:2,maxItems:12,items:{type:'object',additionalProperties:false,required:['piece_key','brief','component_id','handoff'],properties:{
    piece_key:{type:'string',pattern:KEY.source,description:'Stable short key, e.g. wall_north, floor, roof, bunk_bed.'},
-   brief:{type:'string',maxLength:5000},component_id:nullable,handoff:DESIGN_HANDOFF_SCHEMA}}}}}}}
+   brief:{type:'string',maxLength:5000},component_id:nullable,handoff:HANDOFF_INPUT_SCHEMA}}}}}}}
 
-export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerRequest:string|null;hasAccess:()=>Promise<boolean>}){
+export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession}){
  let used=0
  return {tools:opts.requestStore?.releasePieces?[PLAN_CAD_PIECES_TOOL]:[],get remaining(){return Math.max(0,1-used)},
  async execute(raw:unknown){
   const store=opts.requestStore
   if(!store?.releasePieces)return {status:'unavailable',saved:false}
-  if(used>=1)return {status:'budget_exhausted',saved:false,next_action:'Pieces were already queued in this turn. Read them with read_drawing_requests.'}
+  if(used>=1)return {status:'budget_exhausted',saved:false,next_action:opts.aiCatalog.text('feedback.cad-pieces.next-action.6318eb66b0fd')}
   const v=raw as any
   if(!exact(v,['assembly_title','assembly_brief','area_id','pieces'])||!text(v.assembly_title,200)||!text(v.assembly_brief,3000)||(v.area_id!==null&&!text(v.area_id,200))
    ||!Array.isArray(v.pieces)||v.pieces.length<2||v.pieces.length>12)return {status:'invalid',saved:false}
-  const keys=new Set<string>(),issues:{piece_key:unknown;reason:string}[]=[]
+  const keys=new Set<string>(),issues:{piece_key:unknown;reason:string}[]=[],handoffs=new Map<string,DesignHandoff>()
   for(const p of v.pieces){
    if(!exact(p,['piece_key','brief','component_id','handoff'])||!KEY.test(p.piece_key)||keys.has(p.piece_key)){issues.push({piece_key:p?.piece_key,reason:'invalid_piece'});continue}
    keys.add(p.piece_key)
    if(!text(p.brief,5000)||(p.component_id!==null&&!uuid(p.component_id)))issues.push({piece_key:p.piece_key,reason:'invalid_piece'})
-   else if(!parseDesignHandoff(p.handoff))issues.push({piece_key:p.piece_key,reason:'invalid_handoff'})
+   else {
+    const prepared=await prepareDesignHandoff(p.handoff)
+    if('reason' in prepared)issues.push({piece_key:p.piece_key,reason:prepared.reason})
+    else handoffs.set(p.piece_key,prepared.handoff)
+   }
   }
   // Validate everything before storing anything: a half-stored split is harder to explain than none.
   if(issues.length)return {status:'invalid',saved:false,issues}
@@ -43,8 +49,8 @@ export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerReq
   used++
   const pieces:{piece_key:string;request_id:string|null;status:string}[]=[]
   for(const [index,p] of v.pieces.entries()){
-   const brief={area_id:v.area_id,component_id:p.component_id,step_id:null,artifact_id:null,handoff:p.handoff,
-    brief:`Piece ${index+1} of ${v.pieces.length} (${p.piece_key}) of "${v.assembly_title}". Whole build: ${v.assembly_brief}\n\nThis piece: ${p.brief}`.slice(0,6000)}
+   const brief={area_id:v.area_id,component_id:p.component_id,step_id:null,artifact_id:null,handoff:handoffs.get(p.piece_key)!,
+    brief:opts.aiCatalog.text('cad.piece-brief',{position:index+1,count:v.pieces.length,piece_key:p.piece_key,assembly_title:v.assembly_title,assembly_brief:v.assembly_brief,piece_brief:p.brief}).slice(0,6000)}
    try{
     const saved=await store.save(null,0,'collecting',{brief,owner_request:opts.ownerRequest,reference_refs:[]},'piece:'+p.piece_key)
     pieces.push({piece_key:p.piece_key,request_id:saved.id,status:'queued'})
@@ -63,6 +69,6 @@ export function createCadPieces(opts:{requestStore?:DrawingRequestStore;ownerReq
   }
   for(const p of pieces)if(p.status==='queued'&&!released.includes(p.request_id!))p.status='stored_not_started'
   return {status:released.length?'queued':'not_started',saved:false,pieces,
-   next_action:'Tell the owner which pieces were queued. Each is designed and saved separately after this reply, one at a time, while the owner has Bob open; saved pieces appear in this conversation. Do not call design_project_cad for queued pieces in this turn. existing_request pieces are already in progress; stored_not_started pieces start with design_project_cad and their request_id; not_stored pieces were not created. When the pieces are saved, combine them with compose_cad_shell (placement_basis shared_origin at 0,0,0) so the owner sees the whole build, then link each piece to the plan Step that builds it with link_cad_shell_steps.'}
+   next_action:opts.aiCatalog.text('feedback.cad-pieces.next-action.a8cb04d07c6d')}
  }}
 }

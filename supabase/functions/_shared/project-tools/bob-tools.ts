@@ -1,4 +1,6 @@
 import type { ConstructionTools } from '../construction-draft.ts'
+import type { AiCatalogSession } from '../ai-catalog.ts'
+import { hasCalculatorContract, type ProjectCalculator } from '../project-calculator.ts'
 import type { OperationalReader } from '../project-operations.ts'
 import type { KnowledgeReader } from '../building-knowledge.ts'
 import type { RecordDetailReader } from '../project-record-detail.ts'
@@ -22,7 +24,8 @@ export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Living plan', tools: ['compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
-  { label: 'Drawings and CAD', tools: ['read_construction_draft', 'save_construction_draft', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
+  { label: 'Calculations', tools: ['calculate_project'] },
+  { label: 'Drawings and CAD', tools: ['read_construction_draft', 'save_construction_draft', 'change_construction_parameters', 'transition_legacy_drawing', 'change_construction_roles', 'read_construction_changes', 'continue_construction_change', 'check_construction_draft', 'derive_construction_lists', 'design_project_cad', 'plan_cad_pieces', 'compose_cad_shell', 'read_cad_shell', 'link_cad_shell_steps', 'read_drawing_requests', 'read_drawing_request_work', 'link_drawing_gap', 'ensure_drawing_gap_task', 'cancel_drawing_request', 'restore_drawing_request', 'save_cad_design', 'link_project_drawing', 'save_project_building_plan', 'inspect_building_projection', 'save_project_stair', 'inspect_stair_options', 'create_project_room_layout', 'edit_project_room_layout', 'save_project_drawing'] },
   { label: 'Materials, stock and Shopping', tools: ['search_material_catalog', 'read_material_catalog', 'save_catalog_definition', 'manage_project_material', 'derive_cad_material_requirement', 'check_construction_cut_fit', 'save_construction_cut_plan', 'delete_shopping_item'] },
   { label: 'Images and mockups', tools: ['list_project_category', 'open_project_item', 'describe_project_image', 'generate_project_image', 'attach_project_image', 'detach_project_image', 'finalize_project_image'] },
   { label: 'Building and site', tools: ['save_building_context'] },
@@ -33,6 +36,8 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
 /** Sole handler-registration seam. Catalog names/descriptions are data; offering a
  * tool never grants authority. New handlers register here, not in the model loop. */
 export function createBobToolSession(opts: {
+  aiCatalog?: AiCatalogSession;
+  calculator?: ProjectCalculator;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   /** The owner's current message; when present, change provenance is server-filled. */
   message?: string;
@@ -42,15 +47,18 @@ export function createBobToolSession(opts: {
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
-  const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? shelfOf(def.spec.function.name) })
+  const shelves = opts.aiCatalog?.definition('bob.tools', 'tool_contract').definition.shelves as typeof TOOLBOX_SHELVES | undefined
+  const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? (shelves ? shelves.find(s => s.tools.includes(def.spec.function.name))?.label ?? 'Other tools' : shelfOf(def.spec.function.name)) })
   const registered: ToolDefinition[] = [
     { spec: SEARCH_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.search(v) },
     { spec: PROJECTION_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectProjection(v) },
     { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
+    ...(opts.calculator&&(!opts.aiCatalog||hasCalculatorContract(opts.aiCatalog))?opts.calculator.tools.map(spec=>({spec,version:1,
+      gate:():ToolGate=>opts.calculator!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.calculator!.execute(v)})):[]),
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
-    ...WRITE_TOOLS.map(spec => ({ spec, version: 1,
-      ...(spec.function.name === 'propose_project_plan' ? { waitingFor: 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
+    ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
+      ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
         : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
@@ -60,8 +68,10 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => opts.projectContext!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.projectContext!.execute(spec.function.name, v),
     })),
-    ...(opts.constructionTools?.tools ?? []).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => opts.constructionTools!.remaining > 0 && (!['save_construction_draft','save_construction_cut_plan'].includes(spec.function.name) || (opts.writer?.remaining ?? 0) > 0) ? 'available' : 'budget_exhausted',
+    // New handlers can be installed before catalog activation; an older
+    // durable manifest keeps its own bench instead of failing on the new row.
+    ...(opts.constructionTools?.tools ?? []).filter(spec=>!['change_construction_parameters','transition_legacy_drawing','change_construction_roles','read_construction_changes','continue_construction_change'].includes(spec.function.name)||!opts.aiCatalog||opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.'+spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => opts.constructionTools!.remaining > 0 && (!['save_construction_draft','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) || (opts.writer?.remaining ?? 0) > 0) ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.constructionTools!.execute(spec.function.name, v),
     })),
     ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
@@ -75,7 +85,7 @@ export function createBobToolSession(opts: {
     ...(opts.cadAssistant ? [
       ...(opts.cadAssistant.lifecycleTools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.cadAssistant!.lifecycleRemaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.lifecycle(spec.function.name,v)})),
       ...opts.cadAssistant.tools.map(spec => ({spec,version:3,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
-      {spec:SAVE_CAD_TOOL,version:1,waitingFor:'appears when design_project_cad returns a reviewed candidate',
+      {spec:SAVE_CAD_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.cad-ready') ?? 'appears when design_project_cad returns a reviewed candidate',
        gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
         const c=opts.cadAssistant!.candidate;if(!c)return {status:'missing_context'}
@@ -89,7 +99,7 @@ export function createBobToolSession(opts: {
       execute: (v: unknown) => opts.planAssistant!.consult(spec.function.name, v),
     })),
     ...(opts.planAssistant ? [{
-      spec:SAVE_COMPILED_PLAN_TOOL,version:1,waitingFor:'appears when compile_project_plan or edit_project_plan returns proposal_ready',
+      spec:SAVE_COMPILED_PLAN_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.plan-ready') ?? 'appears when compile_project_plan or edit_project_plan returns proposal_ready',
       gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.planAssistant!.canSave?'available':'missing_context',
       execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
@@ -99,12 +109,19 @@ export function createBobToolSession(opts: {
       },
     }] : []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions })
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions,
+    ...(opts.aiCatalog ? { catalogTool: (name, parameters) => opts.aiCatalog!.tool(name, parameters),
+      feedback: (key, variables) => opts.aiCatalog!.text('tools.feedback.' + key, variables),
+      catalogToolVersion: name => {
+        const version = (opts.aiCatalog!.definition('tools.' + name, 'tool_contract').definition.envelope as { schema_version?: unknown })?.schema_version
+        if (!Number.isSafeInteger(version) || Number(version) < 1) throw new Error('tool_catalog_unavailable')
+        return Number(version)
+      } } : {}) })
 }
 
 /** Present shelves in their fixed order, and tools in shelf order. */
-export function sortToolbox<T extends { name: string; group: string }>(entries: T[]): T[] {
-  const shelfIndex = (group: string) => { const i = TOOLBOX_SHELVES.findIndex(s => s.label === group); return i < 0 ? TOOLBOX_SHELVES.length : i }
-  const toolIndex = (e: T) => { const s = TOOLBOX_SHELVES.find(x => x.label === e.group); const i = s ? s.tools.indexOf(e.name) : -1; return i < 0 ? 999 : i }
+export function sortToolbox<T extends { name: string; group: string }>(entries: T[], shelves = TOOLBOX_SHELVES): T[] {
+  const shelfIndex = (group: string) => { const i = shelves.findIndex(s => s.label === group); return i < 0 ? shelves.length : i }
+  const toolIndex = (e: T) => { const s = shelves.find(x => x.label === e.group); const i = s ? s.tools.indexOf(e.name) : -1; return i < 0 ? 999 : i }
   return entries.slice().sort((a, b) => shelfIndex(a.group) - shelfIndex(b.group) || toolIndex(a) - toolIndex(b) || (a.name < b.name ? -1 : 1))
 }

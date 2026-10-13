@@ -2,10 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
-import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
+import { createProjectContext } from './support/colleague-catalog-fixture.ts'
 import { createMediaAdapter, type MediaRow } from '../supabase/functions/_shared/project-context/media.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
+import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
 import { hasImageContent } from '../supabase/functions/_shared/openai-content.ts'
 import type { ModelCall } from './support/bob-model-routing.ts'
@@ -32,7 +33,7 @@ function fixture(model: ModelCall) {
   const writer = createProjectWriter('A', 'Inspect the concept', async () => { throw new Error('No write requested') },
     async () => ({ data: [], error: null }), async () => ({ data: { generation: 2, receipts: [] }, error: null }))
   const deadline = Date.now() + 200000
-  const callModel = createGroundedModelCall({ projectId: 'A', message: 'Inspect the concept', lookup, hasAccess,
+  const callModel = createGroundedModelCall({ groundingInstruction: catalogFixture().text('bob.grounding'), projectId: 'A', message: 'Inspect the concept', lookup, hasAccess,
     validateImages: () => projectContext.validate(), deadline, callModel: model })
   return { opts: { projectId: 'A', userId: 'userA', message: 'Inspect the concept', generation: 1,
     lookup, writer, projectContext, hasAccess, deadline, callModel, fail: async () => {} }, reads, get downloads() { return downloads } }
@@ -42,7 +43,7 @@ test('actual claimed visual loop delivers pixels and fresh contradictory facts t
   let calls = 0, committed: unknown
   const f = fixture(async options => {
     calls++
-    assert.match(options.systemMessage!, /You are Bob/)
+    assert(options.systemMessage!.startsWith(catalogFixture().text('bob.persona')))
     if (calls === 1) {
       assert(!hasImageContent(options.messages))
       return { ...success, data: null, responseId: 'resp_open', toolCalls: [{ id: 'open', type: 'function', function: {
@@ -70,7 +71,7 @@ test('actual claimed visual loop delivers pixels and fresh contradictory facts t
 })
 
 test('the same production loop can skip images without added measurement reads or a router-model call', async () => {
-  const f = fixture(async o => { assert(!hasImageContent(o.messages)); assert.match(o.systemMessage!, /You are Bob/); return success })
+  const f = fixture(async o => { assert(!hasImageContent(o.messages)); assert(o.systemMessage!.startsWith(catalogFixture().text('bob.persona'))); return success })
   const answer = await runClaimedProjectTurn(f.opts)
   assert(answer.ok); assert.equal(f.downloads, 0); assert.deepEqual(f.reads, ['project'])
 })

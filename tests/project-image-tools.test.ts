@@ -14,3 +14,17 @@ test('successful image generation discloses illustration provenance and review s
  assert.equal(r.project_id,'A');assert.equal(r.target_kind,'plan_step');assert.equal(r.target_id,'step')
  assert.match(r.review_instruction,/no CAD review/)
 })
+test('a photo mockup keeps exact reference identities and never falls back after a failed reference read',async()=>{
+ const photo='10000000-0000-4000-8000-000000000001',f=fixture(),received:any[]=[]
+ f.opts.generate=async(...input:any[])=>{received.push(input);return {ok:true as const,image:png()}}
+ const t=createProjectImageTools({...f.opts,defaultImageIds:[photo]})
+ const result=await t.execute('generate_project_image',args)
+ assert.deepEqual(received[0],[args.prompt,[photo]])
+ assert.deepEqual(result.reference_image_ids,[photo])
+ const fresh=fixture();fresh.opts.generate=async()=>{throw new Error('reference unavailable')}
+ const failed=await createProjectImageTools(fresh.opts).execute('generate_project_image',{...args,reference_image_ids:[photo]})
+ assert.equal(failed.saved,false);assert.equal(failed.stage,'reference_images');assert.equal(fresh.calls.length,0)
+ const noRefs=fixture();noRefs.opts.generate=f.opts.generate
+ await createProjectImageTools({...noRefs.opts,defaultImageIds:[photo]}).execute('generate_project_image',{...args,reference_image_ids:[]})
+ assert.deepEqual(received[1],[args.prompt,[]],'explicit no-reference illustration is preserved')
+})

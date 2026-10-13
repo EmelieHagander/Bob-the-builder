@@ -7,3 +7,9 @@
 .shell3d-legend li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; overflow-wrap: anywhere; }
 .shell3d-swatch { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 4px; border: 1px solid var(--ink-soft); }
 .shell3d-swatch[data-flagged] { outline: 2px dashed var(--clay); outline-offset: 2px; }
+.cad-wireframe { min-width: 0; }
+.cad-wireframe .ui-field { margin: 8px 0; }
+.cad-wireframe-fullscreen { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; gap: var(--space-2); padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: var(--canvas); overflow: auto; }
+.cad-wireframe-fullscreen .shell3d-viewport { flex: 1; min-height: 220px; height: auto; }
+.cad-wireframe-fullscreen .shell3d-controls { flex: none; }
+.cad-wireframe-fullscreen button { min-width: 44px; min-height: 44px; }

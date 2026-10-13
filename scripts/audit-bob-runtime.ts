@@ -7,9 +7,8 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { BOB_PERSONA } from '../supabase/functions/_shared/bob-prompt.ts'
-import { BOB_TRUTH_RULES } from '../supabase/functions/_shared/project-answer.ts'
-import { domainVocabulary } from '../src/domain/vocabulary.ts'
+import { bobCatalog, bobPersona, bobContract, buildBobSystemMessage, runProjectAnswer } from '../tests/support/main-catalog-fixture.ts'
+import { createCadAssistant, createPlanAssistant, createProjectContext } from '../tests/support/colleague-catalog-fixture.ts'
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
@@ -17,17 +16,14 @@ import { checkedToolSnapshot, type ToolInstructions } from '../supabase/function
 import seed from '../supabase/functions/_shared/project-tools/catalog-seed.json' with { type: 'json' }
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
-import { createProjectContext } from '../supabase/functions/_shared/project-context/dispatcher.ts'
 import { createMaterialCatalogReader } from '../supabase/functions/_shared/material-catalog.ts'
 import { createKnowledgeReader } from '../supabase/functions/_shared/building-knowledge.ts'
 import { createOperationalReader } from '../supabase/functions/_shared/project-operations.ts'
 import { createRecordDetailReader } from '../supabase/functions/_shared/project-record-detail.ts'
 import { createProjectImageTools } from '../supabase/functions/_shared/project-image-tools.ts'
-import { createPlanAssistant } from '../supabase/functions/_shared/plan-assistant.ts'
-import { createCadAssistant } from '../supabase/functions/_shared/cad-assistant.ts'
 import { createGroundedModelCall } from '../supabase/functions/_shared/project-grounding.ts'
-import { buildBobSystemMessage, runProjectAnswer } from '../supabase/functions/_shared/project-answer.ts'
 import { parameterPlan } from '../tests/support/cad-parameter-fixture.ts'
+import { designIntent, designIntentPin } from '../tests/support/design-intent-fixture.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
 import { createExecutionMetrics, type ExecutionEvent } from '../supabase/functions/_shared/execution-metrics.ts'
 import { measureRuntimeInput, measureRuntimeOutput } from './support/runtime-audit-metrics.ts'
@@ -44,12 +40,16 @@ globalThis.fetch = async () => { throw new Error('Runtime audit attempted networ
 const useSeed = !catalogArg || catalogArg === '--seed'
 const catalog = checkedToolSnapshot({ phase: null, tools: useSeed ? seed
   : JSON.parse(await readFile(catalogArg, 'utf8')) }).tools
-const handoff={deliverable:'Synthetic shelf concept',requirements:[{id:'shape',requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null}],coordinates:{origin:null,positive_x:null,positive_y:null,positive_z:'up'},views:['front','top'],unresolved:['Site fit']}
+const {requirementId}=await import('../supabase/functions/_shared/cad-handoff.ts')
+const shapeId=await requirementId({requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null})
+const handoff={deliverable:'Synthetic shelf concept',requirements:[{id:shapeId,requirement:'Keep the requested shelf dimensions',basis:'user_request',source_ref:null}],coordinates:{origin:null,positive_x:null,positive_y:null,positive_z:'up'},views:['front','top'],unresolved:['Site fit']}
 const id = '50000000-0000-4000-8000-000000000001'
 const stamp = '2026-10-03T00:00:00Z'
 let responseSequence = 0
 const calls: any[] = []
 const executionEvents: ExecutionEvent[] = []
+const systemParts={persona:bobPersona,rules:bobContract,vocabulary:bobCatalog.text('domain.vocabulary.bob'),method:bobCatalog.text('bob.method')}
+const systemPartBytes=Object.fromEntries(Object.entries(systemParts).map(([key,text])=>[key,Buffer.byteLength(text)]))
 const metrics = createExecutionMetrics({ runId: 'synthetic-audit', turnId: 'synthetic-turn', startedAt: 0, write: async e => { executionEvents.push(e) } })
 function measured(scenario: string, model: (o: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>, history: string[] = []) {
   return async (options: OpenAIServiceOptions) => {
@@ -58,7 +58,7 @@ function measured(scenario: string, model: (o: OpenAIServiceOptions) => Promise<
     const elapsed = performance.now() - start
     await metrics.model(options, result, elapsed)
     calls.push({ scenario, role: options.functionName, call: calls.filter(c => c.scenario === scenario && c.role === options.functionName).length + 1,
-      ...input, ...(options.functionName === 'ask-bob' ? { system_sections_utf8_bytes: { persona: Buffer.byteLength(BOB_PERSONA), rules: Buffer.byteLength(BOB_TRUTH_RULES), vocabulary: Buffer.byteLength(domainVocabulary('bob')), toolbox_and_separators: input.content_utf8_bytes.system - Buffer.byteLength(BOB_PERSONA + BOB_TRUTH_RULES + domainVocabulary('bob')) } } : {}), execution_metric_role: executionEvents.at(-1)?.role, output: measureRuntimeOutput(result), fixture_elapsed_ms: elapsed,
+      ...input, ...(options.functionName === 'ask-bob' ? { system_sections_utf8_bytes: { ...systemPartBytes, toolbox_and_separators: input.content_utf8_bytes.system - Object.values(systemPartBytes).reduce((sum,bytes)=>sum+bytes,0) } } : {}), execution_metric_role: executionEvents.at(-1)?.role, output: measureRuntimeOutput(result), fixture_elapsed_ms: elapsed,
       provider_usage: null, provider_cost_usd: null, provider_latency_ms: null })
     return result
   }
@@ -89,8 +89,9 @@ function fixture(phase: string | null, message = 'Skapa en uppgift för att mät
     receipts.push(receipt); return { data: receipt, error: null }
   }, async () => ({ data: receipts, error: null }), async () => ({ data: { generation: 1, receipts }, error: null }))
   const hasAccess = async () => true, deadline = Date.now() + 300000
-  const base = { projectId: 'synthetic', userId: 'synthetic-user', hasAccess, deadline }
+  const base = { aiCatalog: bobCatalog, projectId: 'synthetic', userId: 'synthetic-user', hasAccess, deadline }
   const constructionTools = createConstructionTools({ projectId: 'synthetic', message, writer, hasAccess, now: () => new Date(stamp),
+    readDesignReadiness: async (targetRevision, purpose, areaId = null) => ({ status: 'ready', project_id: 'synthetic', area_id: areaId, target_revision: targetRevision, solution_id: id, solution_revision: 1, purpose, design_intent: designIntent(), issues: [], deferred_choice_ids: [], pin: designIntentPin('synthetic', id, 1, targetRevision, areaId) }),
     read: async (artifact, revision) => artifact === null ? { projectId: 'synthetic', status: 'ok', items: structuredClone(drafts.slice(-1)) }
       : artifact !== id || !drafts.length ? { projectId: 'synthetic', status: 'not_found' }
       : { ...structuredClone(drafts[(revision ?? drafts.length) - 1]), current_revision: drafts.length },
@@ -248,7 +249,7 @@ const readProbe = lookup()
 const readInput = { dataset: 'project', query: null, status: null, area_id: null, record_id: null }
 for (let i = 0; i < 32; i++) await readProbe.search(readInput)
 let grounding: any
-await createGroundedModelCall({ projectId: 'synthetic', message: 'Compare the reference.', lookup: lookup(48), hasAccess: async () => true,
+await createGroundedModelCall({ groundingInstruction:bobCatalog.text('bob.grounding'), projectId: 'synthetic', message: 'Compare the reference.', lookup: lookup(48), hasAccess: async () => true,
   validateImages: async () => true, deadline: Date.now() + 30000, callModel: async o => { grounding = o.messages?.at(-1)?.content; return response('Synthetic answer') } })({
   messages: [{ role: 'user', content: [{ type: 'image_url', image_url: 'data:image/png;base64,c3ludGhldGlj' }] }],
 } as any)
@@ -260,7 +261,7 @@ const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id
 const candidate = { purpose: 'project', parameter_plan: parameterPlan(recipe), dimension_bindings: [], recipe, source_artifact_id: null, source_revision: null, part_ids: [], title: 'Synthetic shelf', description: 'Synthetic audit geometry',
   assumptions: 'No physical verification', target_revision: 1, measurements: [] }
 const broken = structuredClone(candidate) as any; delete broken.recipe.definitions[0].y_mm
-const cadCalls: any[] = []; let renders = 0
+const cadCalls: any[] = [], cadReviewerCalls: any[] = []; let renders = 0
 const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true, makeLookup: () => lookup(40),
   deadline: Date.now() + 300000, available: true, readArtifact: noIO,
   render: async r => { renders++; const bounds = { min: [0, 0, 0], max: [600, 250, 18], size: [600, 250, 18] }
@@ -268,8 +269,12 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
       instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
     files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES',top:'SYNTHETIC_TOP_PNG_BYTES'} } },
   callModel: measured('cad-repair', async o => {
-    if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
-    if(o.schemaName==='bob_cad_review')return response({verdict:'pass',summary:'Synthetic review',requirements:{shape:{status:'met',evidence:'Synthetic geometry'}},issues:[]});cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
+    if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
+    if(o.schemaName==='bob_cad_review'){
+      cadReviewerCalls.push(structuredClone(o))
+      return response({verdict:'pass',summary:'Synthetic review',requirements:{[shapeId]:{status:'met',evidence:'Synthetic geometry'}},issues:[]})
+    }
+    cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') }),
 })
 const cadResult = await cad.consult({ handoff, brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: null })
@@ -277,13 +282,16 @@ const cadReturns = cadCalls.flatMap(o => o.messages ?? []).filter(m => m.role ==
 assert.equal(cadResult.status, 'ready', JSON.stringify(cadResult))
 assert(cad.candidate, 'Only an independently reviewed candidate may be offered for saving')
 assert.equal(renders, 1, 'Valid geometry must reach the synthetic transport once; invalid geometry must not.')
+const deliveredGeneratedPixels = (options: any[]) => ['SYNTHETIC_PNG_BYTES', 'SYNTHETIC_TOP_PNG_BYTES'].every(png =>
+  options.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) =>
+    p.type === 'image_url' && p.image_url?.url === 'data:image/png;base64,' + png))))
 
 let fourthTools: string[] = [], researchCalls = 0
 const researchLookup = lookup(40)
 const research = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true,
   makeLookup: () => researchLookup, deadline: Date.now() + 300000, available: true, readArtifact: noIO, render: noIO,
   callModel: measured('cad-read-boundary', async o => {
-    if(o.functionName==='cad-research')return response(null, 'finish_cad_research', { checks: [{ id: 'shape', status: 'known', blocking: false, source_refs: ['requirement:shape'], action: 'none', detail: 'Explicit request' }], additional_needs: [] })
+    if(o.functionName==='cad-research')return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit request' }], additional_needs: [] })
     researchCalls++; if (researchCalls <= 3) return response(null, 'search_project_data', readInput)
     fourthTools = (o.tools ?? []).map(t => t.function.name)
     return response(null, 'report_cad_blocker', { reason: 'missing_constraint', explanation: 'Synthetic stopping condition for the audit.' }) }),
@@ -299,9 +307,11 @@ for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_
 })).status)
 assert.equal(writeStatuses.filter(s => s === 'saved').length, 9)
 
-const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/bob-prompt.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
+const sourceFiles = ['scripts/audit-bob-runtime.ts', 'scripts/support/runtime-audit-metrics.ts', 'supabase/functions/_shared/ai-catalog.ts', 'supabase/functions/_shared/bob-prompt.ts', 'supabase/functions/_shared/project-answer.ts', 'supabase/functions/_shared/project-tools/session.ts', 'supabase/functions/_shared/project-tools/bob-tools.ts', 'supabase/functions/_shared/construction-draft.ts', 'supabase/functions/_shared/construction-checks.ts', 'supabase/functions/_shared/cad-assistant.ts', 'supabase/functions/_shared/cad-research.ts', 'supabase/functions/_shared/cad-review.ts', 'supabase/functions/_shared/execution-metrics.ts']
 const sourceHashes = Object.fromEntries(await Promise.all(sourceFiles.map(async path => [path, createHash('sha256').update(await readFile(new URL('../' + path, import.meta.url))).digest('hex')])))
 return { report_version: 1, tool_instruction_mode: toolInstructions, manual_strategy: toolInstructions === 'inline' ? null : manualStrategy, manual_reads: manualReads, source_sha256: sourceHashes, fixture_date: stamp, catalog_sha256: createHash('sha256').update(JSON.stringify(catalog)).digest('hex'),
+  ai_catalog_definition_sha256:createHash('sha256').update(JSON.stringify(bobCatalog.manifest().definitions)).digest('hex'),
+  ai_catalog_source:'explicit synthetic migration-seed fixture (not hosted configuration)',
   evidence_class: 'controlled runtime mechanics; model and I/O are synthetic',
   catalog_source: useSeed ? 'current repository seed (not live policy)' : 'explicit caller-supplied snapshot (not live policy)', active_catalog_tools: catalog.filter(r => r.active).length,
   measurement_contract: { units: 'UTF-8 bytes; not tokens', boundary: 'Local callModel options before shared provider formatting/configuration', retained_history: 'previousResponseId may carry unmeasured provider context', content_accounting: 'UTF-8 content values; local_input_json_bytes separately includes local serialization overhead', coverage: 'Bob/task/construction and CAD intake/designer/reviewer; plan specialist and memory-fold calls are not exercised', usage: 'Synthetic replies; provider usage, caching, cost and latency unavailable' },
@@ -309,9 +319,10 @@ return { report_version: 1, tool_instruction_mode: toolInstructions, manual_stra
   calls, execution_roles: [...new Set(executionEvents.filter(e => e.kind === 'model').map(e => e.role))],
   surfaces, toolbox_shelves: discovery, premature,
   reserved_image_grounding: { remaining: readProbe.remaining, project: groundingData.project.status, measurements: groundingData.measurements.status, provider_still_called: true },
-  cad: { status: cadResult.status, calls: cadCalls.length, renders, returned_to_designer: cadReturns.map(r => ({ status: r.status, reason: r.reason ?? null })),
-    generated_pixels_delivered: cadCalls.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) => p.type === 'image_url'))),
-    svg_bytes_delivered: JSON.stringify(cadCalls).includes('SYNTHETIC_SVG_BYTES'),
+  cad: { status: cadResult.status, calls: cadCalls.length, reviewer_calls: cadReviewerCalls.length, renders, returned_to_designer: cadReturns.map(r => ({ status: r.status, reason: r.reason ?? null })),
+    generated_pixels_delivered: deliveredGeneratedPixels([...cadCalls, ...cadReviewerCalls]),
+    generated_pixels_delivered_to_reviewer: deliveredGeneratedPixels(cadReviewerCalls),
+    svg_bytes_delivered: JSON.stringify([...cadCalls, ...cadReviewerCalls]).includes('SYNTHETIC_SVG_BYTES'),
     research_boundary_status: researchResult.status, research_tools_on_fourth_call: fourthTools, unused_lookup_calls: researchLookup.remaining },
   write_statuses_for_nine_tasks: writeStatuses,
   drawing_receipt_check_accepts_any_saved_drawing: drawingSaved([{ dataset: 'artifacts', revision: 1, record: { cad: true } }] as any,

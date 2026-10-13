@@ -59,6 +59,20 @@ Arithmetic stays numeric in project truth. The legacy `bob.materials.qty` author
 
 Units are not silently converted in 4B. Allocated material stock must use the same unit as the requirement. Existing reusable components may only satisfy `pcs` requirements.
 
+### Authored prices and display total
+
+`bob.materials.cost` is authored text, separate from numeric requirement quantities
+and supplier pack counts. The current Shopping `parseCost` strips all nondigits
+before summing: `1 920 kr` contributes 1920, but `199,50 kr` contributes 19950 and
+`100–200 kr` contributes 100200; empty text contributes zero. The ordinary editor
+accepts these strings. This is a known display calculation defect, reproduced in
+the [calculation review](foundation-verification.md#calculation-and-formula-review--2026-10-11),
+not verified money arithmetic. A correction must preserve decimal amounts and
+currency and expose unknown/range inputs honestly before the common calculator
+can offer a price total. The existing deterministic quantity/pack methods do not
+consume this text and are unaffected. No price-parser correction is included in
+that documentation review.
+
 ## Material requirements and lineage
 
 `bob.material_requirements` owns requirement identity and current revision. `bob.material_requirement_revisions` is append-only and keeps:
@@ -208,9 +222,9 @@ Before marking the material-planning foundation delivered, prove the 4B2a requir
 
 The first K4 boundary derives a concept BOM and one local box-blank cut row per actual saved instance through `derive_construction_lists`. It reuses K2's exact current caller-scoped checkpoint and catalog check. Assembly dependencies are an explicit design proposal over joint IDs: all joints must appear once, unknown references and dependency cycles are rejected, and legitimate physical joint cycles remain permitted. A valid dependency graph does not establish tool access, clamping or intermediate stability. Missing order, raw-stock format, kerf, grain, hardware products/quantities and access remain explicit gaps. No area sum is treated as a raw-sheet count.
 
-`derive_cad_material_requirement` also accepts a current construction Artifact/revision, without requiring a rendered drawing. It counts actual instances and derives supported blank piece/length/area quantities from canonical computed dimensions using the existing arithmetic and requirement revisions. `construction_blank_*` / version `1` identifies this method. `material_requirement_construction_sources` is provenance under those existing revisions: source Artifact/revision, definition, quantity mode, actual instance IDs, local dimensions and exact material/part pins. It creates no second BOM, stock or Shopping register. The caller reads normal requirements and may inspect this provenance under project RLS.
+`derive_cad_material_requirement` also accepts a current construction Artifact/revision, without requiring a rendered drawing. It counts actual instances and derives supported blank piece/length/area quantities from canonical computed dimensions using the existing arithmetic and requirement revisions. Version `1` identified the original method; [release D](#role-aware-manufacturing-and-continuation--release-d) supersedes new derivations with classified manufacture-instance version `2`. `material_requirement_construction_sources` is provenance under those existing revisions: source Artifact/revision, definition, quantity mode, actual instance IDs, local dimensions and exact material/part pins. It creates no second BOM, stock or Shopping register. The caller reads normal requirements and may inspect this provenance under project RLS.
 
-An active same-construction/definition/mode need cannot be created twice; the existing project lock serializes that check and write. Recalculation revises the same need, retaining its old history and source dimensions. Archive/restore carry the exact provenance forward; restore checks current sources and cannot reintroduce a duplicate active need. Manual revisions cannot strip this deterministic proof; use the derive path for recalculation. A changed construction head or changed catalog/physical source marks the need for review. The UI labels these quantities as **unallocated blanks**, shows the raw-stock fit gap, and disables Shopping; it does not present pieces as buy-ready sheets or route them through the unrelated wall calculator. Bob recalculates through the construction-capable derive path. Stock/reuse allocations and publishing to Shopping are rejected in SQL until a persisted cut plan and current raw-stock capacity can support them, including manual needs pointing to the same construction. Existing CAD/wall/manual material paths retain their own contracts.
+An active same-construction/definition/mode need cannot be created twice; the existing project lock serializes that check and write. Recalculation revises the same need, retaining its old history and source dimensions. Archive/restore carry the exact provenance forward; restore checks current sources and cannot reintroduce a duplicate active need. Manual revisions cannot strip this deterministic proof; use the derive path for recalculation. A changed construction head or changed catalog/physical source marks the need for review. The UI labels these quantities as **unallocated blanks**, shows the raw-stock fit gap, and disables Shopping; it does not present pieces as buy-ready sheets or route them through the unrelated wall calculator. Bob recalculates through the construction-capable derive path. Stock/reuse allocations and publishing to Shopping are rejected in SQL until a persisted cut plan and current raw-stock capacity can support them, including manual needs pointing to the same construction. Wall/manual contracts remain; new legacy CAD quantities require [D classification](#role-aware-manufacturing-and-continuation--release-d).
 
 This is the first concept list/save/readback outcome, not completion of K4. The next boundary below assesses candidate-sheet layouts. Whole-piece capacity reservations, compatible Shopping contributions, sourced hardware amounts and persistently linked/access-checked assembly work remain subsequent K4 work. [State](bob-delivery-flow.md#state) and [verification](foundation-verification.md#k4-construction-blank-lists--2026-10-05) own release and actual-model status.
 
@@ -223,6 +237,18 @@ Inputs explicitly name candidate sheet formats/counts, exact used material revis
 The deterministic bounded guillotine search returns each blank's placement/orientation, ordered straight cuts and offcuts in mm. Working geometry uses integer arithmetic at the catalog's six-decimal precision, with full kerf between pieces and pre-removed edge trim. Existing boundary edges need no extra kerf. A positive layout establishes geometric feasibility only for the returned source, inputs and `construction-sheet-guillotine-v1` calculation version. It is not an optimal sheet count, purchase quantity, machine/access approval or proof of stock condition. Limits are 24 blanks, 16 candidate sheets and 20,000 search states; `no_layout_found`/`search_limit` leave fit unresolved for other orders/cutting strategies rather than declaring general impossibility.
 
 The result is not persisted and expires when any source/input changes. **Stock/reuse allocation and Shopping remain blocked in SQL**, including after a positive candidate assessment. The next boundary must persist a canonical cut plan under the existing requirements, pin current physical stock/product formats, reserve whole-piece capacity under concurrency and recheck freshness before publishing compatible Shopping contributions. [State](bob-delivery-flow.md#state) owns the next action; [verification](foundation-verification.md#k4-candidate-sheet-fit--2026-10-06-0826z) distinguishes tests, hosted release and real-member/model acceptance.
+
+### Role-aware manufacturing and continuation — release D
+
+The [Artifact role policy](artifacts.md#instance-roles-and-affected-outputs--release-d) now selects manufacturing instances per exact construction revision. `construction-blanks-role-v1` lists only `manufacture` instances in BOM/cuts, preserving their full visible-recipe P-labels. Retained members, complete prefabricated items and reference objects have separate lists and explicit availability/condition/procurement gaps. Unknown roles stop quantities. A definition reused by differently classified instances does not collapse their roles.
+
+New saved blank derivations use `construction_blank_*` method version **2**, counting only manufacture instances with the existing deterministic dimension/unit arithmetic. Version-1 history, source dimensions, identities and quantities remain unchanged. New drawing-only legacy derivations must first use C's construction transition and explicit classification; an older label is not quantity evidence. This supersedes the earlier count-every-visible-instance behavior, not the manual/wall calculation contracts.
+
+Saved [affected-output work](artifacts.md#instance-roles-and-affected-outputs--release-d) recalculates the same requirement identities, then the same cutting plan from its stored candidate/grain/source inputs. SQL repeats source, quantity, layout and capacity validation under the existing project lock. New/removed definitions cannot silently create purchases or invent cutting inputs. Removed manufacturing needs are archived normally; if every member is retained/excluded, the historical plan remains unchanged/stale and its saved consequence is retired as inapplicable. Reservations, published Shopping, committed purchases and existing allocations block automatic continuation until resolved by normal commands. An infeasible or incomplete retained cutting model returns a gap and preserves history. The guillotine mathematics remains version 1; the exact source-role revision is separate.
+
+Linked legacy/manual needs without a recorded executable model are captured too, but return `needs_requirement_model`. Bob must explicitly choose a supported definition/mode through the ordinary derivation tool, keeping that need ID and the exact changed construction revision. Free-text basis, labels and old quantities are never parsed into invented model inputs. Normal typed source publication completes that saved item; the original manual/history row remains unchanged. If the need is no longer required, an explicit ordinary archive retires its item; only the current canonical archive settles work for the current construction head.
+
+New stock reservations and Shopping publication also require classified current construction instances, including for older saved plans. An unknown policy makes current coverage false while retaining the historical layout, held capacity and commitment records. Normal release/withdrawal remains available to resolve an existing commitment.
 
 ### K4 saved cutting plans — 2026-10-06
 
@@ -292,7 +318,7 @@ Once that boundary is implemented and technically verified, run a separately sco
 
 ## K4 supplier articles and pack purchases
 
-**Status: reviewed code and isolated tests; not applied to the hosted project.** [Verification](foundation-verification.md#k4-supplier-articles-and-pack-purchases--code-2026-10-07) owns test evidence. This implements the product/pack prerequisite above. It does not run the physical member/model trial.
+**Status: reviewed code and isolated tests; hosted migration presence rechecked 2026-10-10.** [Earlier verification](foundation-verification.md#k4-supplier-articles-and-pack-purchases--code-2026-10-07) owns test evidence. [Current schema readback](foundation-verification.md#data-authority-gap-review--2026-10-10) supersedes the earlier “not applied” claim: migration `20261007140000_supplier_article_packs` and its product/pack tables are present. That read-only check does not establish the full endpoint/UI release or physical member/model acceptance. Reconcile the remaining release evidence before the separate trial; do not reapply the migration.
 
 **Supplier article.** `supplier_articles`/`supplier_article_revisions` hold project-private, versioned declared product evidence over one exact readable catalog item revision. Each revision names supplier or manufacturer, article number and variant, a source URL or document with version/date, and `supported_fields`: the fields the source actually states. `purchase_unit`, `content_per_purchase_unit` and `content_unit` describe the purchase unit. A known pack size is only accepted when `purchase_unit` and `content_per_purchase_unit` are listed as source-supported; otherwise it is null and the pack count is **unresolved**. Generic catalog definitions keep no mandatory SKU. Revise creates a new revision; withdraw marks the article withdrawn without deleting history. Reads return `product_bound=true` and keep `suitability_verified=false` and `physical_verified=false`: an article is not stock inspection, joint suitability or structural approval.
 
@@ -308,5 +334,24 @@ Needs must be current, unarchived, share the article content unit, have current 
 
 **Bob and UI.** `manage_project_material` adds `resource=product` (create/revise/withdraw) and `resource=pack_purchase` (publish/withdraw) through the existing v16 claimed-turn writer with normal receipts and replay. `read_project_work` adds `product` and `pack_purchase`, and Shopping rows carry `pack_source`. Shopping shows the pack count, content, total need after stock, surplus, declared article/source and the pinned needs. Direct clients have project-scoped SELECT only.
 
-**Still open in K4:** applying this migration to the hosted project, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. The project lock is the serialization boundary; `scripts/check-cad-lineage-concurrency.ts` covers it with seven real PostgreSQL pack races.
+**Still open in K4:** reconciling current endpoint/UI release evidence, the separately scoped physical member/model trial with real stock/product inputs, product-bound hardware quantities per joint and linked/access-checked assembly. Declared source fields are not captured manufacturer evidence; the [cross-domain data review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) records that remaining boundary. The project lock is the serialization boundary; `scripts/check-cad-lineage-concurrency.ts` covers it with seven real PostgreSQL pack races.
 
+
+
+## Calculator replay — 2026-10-12 code boundary
+
+The [common calculator](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+reopens exact material requirement revisions; preview does not create a new
+requirement or result table. `material_purchase_math_v1` is the same SQL evaluator
+used by the canonical writer and historical purchase replay: allowance once,
+upward four-decimal normalization, saved compatible allocations, zero-clamped
+shortfall and purchase-increment ceiling. The migration extracts only that
+asserted exact arithmetic block; writer authority, locking and receipts remain.
+A manual base stays manual. Construction blank method 1 retains all original
+instance snapshots; method 2 retains manufacture-only snapshots. Old values do
+not adopt today's roles, dimensions, allocations or target. Unsupported base
+replay is explicitly `stored_only`; the purchase arithmetic remains replayable.
+Pack quoting reuses the existing SQL owner and exact supplier article read.
+[Verification](foundation-verification.md#common-calculator--2026-10-12) owns
+installation/model evidence. The authored-price defect remains a separate open
+correction under [its owner](#authored-prices-and-display-total).

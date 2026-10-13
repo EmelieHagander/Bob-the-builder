@@ -1,3 +1,4 @@
+import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -10,7 +11,7 @@ import { createBobToolSession } from '../supabase/functions/_shared/project-tool
 import { seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 import { createRecordDetailReader } from '../supabase/functions/_shared/project-record-detail.ts'
 
-let pg:PGlite, project:string, otherProject:string, steps:string[], otherStep:string, drawing:string
+let pg:PGlite, project:string, otherProject:string, steps:string[], otherStep:string, drawing:string, solution:string
 const owner=randomUUID(),stranger=randomUUID(),message='Koppla ritningen till arbetet.'
 const query=(uid:string|null,sql:string,args:unknown[]=[],role='authenticated')=>asProjectUser(pg,uid,sql,args,role)
 const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
@@ -25,8 +26,8 @@ before(async()=>{
  project=(await call(owner,'bob.create_project',[JSON.stringify({name:'Drawing work'})])).id
  otherProject=(await call(stranger,'bob.create_project',[JSON.stringify({name:'Other project'})])).id
  steps=await plan(project,owner);otherStep=(await plan(otherProject,stranger))[0]
- const solution=randomUUID()
- await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'A design',assumptions:'Proposed',tradeoffs:'Simple',measurements:[]})])
+ solution=randomUUID()
+ await call(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Shelf',description:'A design',assumptions:'Proposed',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
  await call(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Use this design'})])
  drawing=randomUUID()
  await call(owner,'bob.artifact_command',[project,'create',drawing,0,JSON.stringify({area_id:null,title:'Shelf drawing',description:'Work drawing',kind:'detail',status:'concept',assumptions:'Fit remains unverified',measurements:[],target_revision:1,source_media_id:null})])
@@ -105,7 +106,7 @@ test('CAD save scope enters the same work links; archive copies do not resurrect
  const c=await claimed()
  const payload={kind:'cad',record_id:null,expected_updated_at:null,expected_revision:0,request_quote:message,data:{
   title:'CAD shelf',description:'Generic construction',assumptions:'Concept only',target_revision:1,measurements:[{id:measurement,revision:1}],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:steps[0],artifact_id:null,expected_revision:0,
-  packet:{recipe,manifest:{bob_parameters:parameterPacket(project,recipe as any),engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}}
+  packet:{recipe,manifest:{...designManifest(project,solution),bob_parameters:parameterPacket(project,recipe as any),engine:{name:'build123d'},assembly_id:'shelf'},files:{front:'PHN2Zz48L3N2Zz4=',step:'PRIVATE_LARGE_STEP_EXPORT'}}}}
  const saved=await c.rpc(payload)
  assert.deepEqual(saved.record.step_ids,[steps[0]])
  const preview:any=(await query(owner,'select * from bob.current_drawing_overview where id=$1',[saved.recordId])).rows[0]

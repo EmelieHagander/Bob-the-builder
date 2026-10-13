@@ -1,3 +1,4 @@
+import type { AiCatalogSession } from './ai-catalog.ts'
 import type { ConstructionTools } from './construction-draft.ts'
 import { createDeliveryLanguage } from './delivery-language.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
@@ -15,10 +16,13 @@ import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
 import type { createProjectLookup } from './project-lookup.ts'
+import type { ProjectCalculator } from './project-calculator.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 
 /** Production orchestration, injected for failure/retry tests without an AI key. */
 export async function runClaimedProjectTurn(opts: {
+  aiCatalog: AiCatalogSession;
+  calculator?: ProjectCalculator;
   projectId: string; userId: string; message: string; generation?: number; previousResponseId?: string;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter; callModel: ModelCall;
   hasAccess: () => Promise<boolean>;

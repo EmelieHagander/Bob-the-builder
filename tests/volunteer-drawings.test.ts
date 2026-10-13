@@ -1,3 +1,4 @@
+import { designIntent, designManifest } from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -25,7 +26,7 @@ async function fixture() {
   const steps = plan.record.steps.map((s: any) => s.id)
   const task = (await call('bob.create_work_task', [project, steps[0], null, 'Build box', 'novice', '1h'])).id
   const solution = randomUUID()
-  await call('bob.solution_command', [project, 'create', solution, 0, json({ area_id: null, title: 'Box', description: 'Design', assumptions: 'Unverified', tradeoffs: '', measurements: [] })])
+  await call('bob.solution_command', [project, 'create', solution, 0, json({ area_id: null, title: 'Box', description: 'Design', assumptions: 'Unverified', tradeoffs: '', measurements: [], design_intent: designIntent() })])
   await call('bob.solution_command', [project, 'select', solution, 0, json({ solution_revision: 1, reason: 'Fixture' })])
   const invite = randomBytes(32).toString('hex'), secret = randomBytes(32).toString('hex')
   const link = await call('bob.create_volunteer_link', [project, 'Test participants', invite, 30])
@@ -96,8 +97,10 @@ test('CAD and parametric geometry use the saved recipe; CAD manifests and model 
   const f = await fixture(), id = await drawing(f)
   const definitions = [{ id: 'panel', primitive: 'box', x_mm: 800, y_mm: 400, z_mm: 18 }]
   const cadRecipe:any={contract_version:1,units:'mm',assembly_id:'fixture',definitions,instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
-  await pg.query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)', [f.project, id,
-    json({ ...cadRecipe, privateField: 'NOT_SHARED' }), json({ bob_parameters:parameterPacket(f.project,cadRecipe),internal: 'NOT_SHARED' }), json({ front: 'PHN2Zy8+', top: 'PHN2Zy8+', step: 'NOT_SHARED', log: 'NOT_SHARED' })])
+  // Admin-only synthetic row setup still supplies the owner's canonical intent
+  // and caller identity; the readiness trigger remains active.
+  await query('insert into bob.artifact_cad_revisions(project_id,artifact_id,artifact_revision,recipe,manifest,files) values($1,$2,1,$3,$4,$5)', [f.project, id,
+    json({ ...cadRecipe, privateField: 'NOT_SHARED' }), json({ ...designManifest(f.project, f.solution), bob_parameters:parameterPacket(f.project,cadRecipe),internal: 'NOT_SHARED' }), json({ front: 'PHN2Zy8+', top: 'PHN2Zy8+', step: 'NOT_SHARED', log: 'NOT_SHARED' })], owner, 'postgres')
   const d = await read(f, id)
   assert.deepEqual(d.content.cad, { recipe: { definitions }, files: { front: 'PHN2Zy8+', top: 'PHN2Zy8+' }, source_changed: false })
   assert.doesNotMatch(json(d), /NOT_SHARED/)

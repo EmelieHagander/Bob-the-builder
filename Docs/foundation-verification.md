@@ -1683,3 +1683,510 @@ The [material owner's prepared acceptance gate](material-planning.md#k4-product-
 - Not covered: hosted installation and an actual member/model trial with real stock/product inputs.
 - Prepared, not run: `.github/workflows/live-pack-purchase.yml` (dispatch-only, main) runs `scripts/run-live-pack-purchase.mjs` → `scripts/check-live-pack-purchase.ts`. One paid turn in the retained K2/K3 verification project: Bob estimates the shelf's 5,0×80 screw need from the saved screwed joints, records the Byggmax 15 st variant (ART.NR 249687, read from the product page on 2026-10-07; 200/700 st show no article number) and publishes whole packs. Code re-derives the pack count and surplus and checks that blanks, construction, cut plan and stock are unchanged. Requires the migration and ask-bob/bob-worker deploy first.
 
+### Drawing request loop budget release — 2026-10-09
+
+[PR #234](https://github.com/EmelieHagander/Bob-the-builder/pull/234) is merged and deployed. Merge `9705a8b671695ac7a86b142989b0a8771ac051d5` matches reviewed head `c0d71a74c9d896029fd7e725f02464cd5e538c5d`, tree `98d7097d52cdfd43b939fda625de3d88545f417c`. Independent code reviews found no release blocker. [CAD budget and review](cad-adapter.md#drawing-request-budget-and-review--2026-10-09) owns the runtime contract.
+
+The real bed job `d1ccfb0e-9ed2-42ed-b716-e16d2c5dfeed` stopped at the ordinary turn's $0.85 boundary after six successful provider calls costing $1.159521; its request ledger was separately $2.203370 against $2 after an owner grant. Two renders existed, with no review or canonical save. This was a conflicting accounting boundary rather than the 20-minute job expiry. The deployed runtime gives server-bound CAD calls one persistent request ledger, reviews a valid render immediately, stops an identical rejected candidate before another renderer/reviewer call and invalidates recovery only for relevant CAD dependencies. Ordinary Bob and unbound calls keep their existing guard.
+
+Final local suite passed **1080/1080**. Exact-head [CI 37980764170](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37980764170) passed tests, Edge checks with the original network dependency, vocabulary, builds and all required browser gates. [CAD adapter 37980764021](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37980764021) passed the real Python worker and adapter checks. Focused verification covers request-scope accounting, review/repair and no-progress behavior, runtime fingerprints, isolated SQL upgrade preservation, idempotent owner grants, pending/unpriced boundaries and journal replay. No new SQL function or schema was introduced.
+
+Fresh main/tree and quiescence checks found zero live queued/running Bob jobs. **bob-worker was deployed first**, then ask-bob, before the allocation migration could awaken recovery. Hosted source readback matches every included immutable bundle file (81 worker, 83 ask-bob); the pre-existing bundler omissions are type-only provenance and the worker's unused HTTP-handler dependency. Authentication settings are unchanged.
+
+| Endpoint | Version/status | Authentication | Deployment JSON SHA-256 | Hosted bundle SHA-256 |
+|---|---|---|---|---|
+| bob-worker | 61 / ACTIVE | JWT false; existing job capability | `dd91448af2286c8d2ff8d131f68d470e3447ef7bc909ca04d6160830362ee3dd` | `85b6c05ca283016372659c7f5a307d510eaa2b4950a6654e23c997e8f18db6ec` |
+| ask-bob | 93 / ACTIVE | JWT true | `9746901a65d2c4c45e352ed1e074f46163a3332b950f4e9858d80c5b38f3a4a4` | `58a3d84e3df236b75205308402a7760f5b680cc34e92abf5d368d9cc49fed6c0` |
+
+Existing source `supabase/migrations/20261008160000_drawing_budget_3usd.sql`, SHA-256 `a9f4de4f471c64a46ec292eda485b7043e5fa41eeca221827e51db32be835b90`, was applied to unchanged project `yuobtgoidmmmwfqenkau` as **20261009194934 / drawing_budget_3usd**. Its prior absence explained the hosted $1 default. Readback now confirms default $3 and exactly two eligible upgrades:
+
+| Request | USD limit before → after | Spent USD retained | Calls/cap retained | Budget revision before → after | Draft MD5 retained | Working payload excluding retry MD5 retained |
+|---|---|---|---|---|---|---|
+| `3bc79294-7c78-4ca0-a97a-0e5dea4f672b` / bed | 2 → 3 | 2.203370 | 9/48 | 2 → 3 | `9ac55210c25c616893fc9dcfd4a2c195` | `41dadf22189992444bc847eacd2acfcf` |
+| `c49d7325-52fb-4341-92cc-52db28f7ceb6` / existing test | 1 → 3 | 1.119091 | 12/24 | 1 → 2 | `cae5e41bbf2d8ddcd2e3b8a5e8f3017a` | `e9e91765c8e423fa91144f151f4d1c02` |
+
+Both retain zero pending charges, `unpriced=false`, their request identities and historical retry outcomes; cost-stop fingerprints are cleared. Security advisor category/count baseline matches exactly. Performance categories/counts match except unused-index notices decreased from 382 to 380; no indexes or policies were changed. This is a baseline comparison, not a clean global advisor report.
+
+The merge also triggered [Live Bob release check 37982456317](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456317), which passed actual guest Auth/RLS, OpenAI tools, image pixels and knowledge checks, plus [Pages 37982456363](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456363) and [CAD adapter 37982456375](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37982456375), both successful. The live check finished at 19:47Z, before the new Edge deployment at 19:48Z, and did not exercise CAD; it is continuity smoke evidence, not acceptance of the new CAD budget runtime. Its fourth disposable guest project is `p_b09d5b5514ce4bec92a2199fcd4cb102`; the script removed its image bytes/metadata through ordinary caller commands but does not delete the project. Guarded project cleanup remains in State alongside the three previously recorded fixtures. This task did not rerun the paid workflow.
+
+At release readback no new bed job had started. The historical failed job stays failed; a fresh authorized continuation can reuse the same request and draft. No user message was impersonated and no new paid acceptance turn was submitted. Actual authenticated model recovery through independent review, canonical save and member readback remains the acceptance gate. The $3 dispatch threshold is finite and a final in-flight call can exceed it; completion is not guaranteed. A later owner message after a request USD/call stop can grant the existing idempotent +$1/+24 calls on that request; automatic recovery does not refill the ledger. [State](bob-delivery-flow.md#state) owns the next action.
+
+### Drawing recovery status investigation — 2026-10-09
+
+The owner's new interruption report after #234 exposed a separate status-projection problem. Read-only hosted inspection found the drawing recovery actually completed at **20:17:57Z / 22:17 Swedish time**. Event job `75d8631f-44f1-4fda-b1d0-188b2cec2d1c` uses original owner turn `6aa673cd-5d1f-4f6f-94b5-611d404969cb`; the original ordinary job `d1ccfb0e-9ed2-42ed-b716-e16d2c5dfeed` remains historically failed at 17:58Z.
+
+| Evidence | Hosted readback |
+|---|---|
+| Same request | `3bc79294-7c78-4ca0-a97a-0e5dea4f672b`, saved revision 28 |
+| Canonical artifact | `2ba8576b-c4c3-4136-9b7f-f31ecb6caa7d`, revision 1, concept, saved at 20:17:43Z; header/working receipts and input hash match |
+| New assistant delivery | Sequence 13, event-job turn ID, completed, “Ritningen är sparad.”; partial=false and exact artifact write receipt |
+| Older owner delivery | Sequence 12, original turn ID, still failed; its instruction remains visible |
+| Added model work | One successful mini CAD reviewer call, $0.166613, then delivery-language call $0.009033; no repeat designer call |
+| Persistent drawing budget | $2.369983 / $3, 10 calls / 48, budget revision 3, unpriced=false |
+
+This establishes the new request-ledger review/save path on the named owner's existing work. It does not establish physical safety, full mixed-goal owner-turn completion or ordinary browser reread. The saved artifact remains explicitly a concept.
+
+The frontend reproduced an additional current-sounding budget-stop notice after the completed saved reply: transcript recovery retained the old unfinished user turn, `bob_job_status` read only its failed ordinary job, and the event reply deliberately used a different turn ID. An already-open idle drawer also did not reload when a new delegated reply arrived. The correction adds owner/thread/origin-scoped drawing recovery status without rewriting historical failed messages, and refreshes the existing drawer from inbox changes. Unrelated replies, incomplete requests and mixed non-CAD goals do not become ordinary-turn completion receipts.
+
+**Technical correction released; named-owner browser acceptance remains separate.** [Conversation owner](ask-bob-conversations.md) owns recovery semantics; [State](bob-delivery-flow.md#state) owns the remaining design and acceptance work. No paid test turn was submitted by this investigation.
+
+#### Recovery-status release and reset boundary
+
+[PR #235](https://github.com/EmelieHagander/Bob-the-builder/pull/235) was independently reviewed and merged as `a77de7431f3c4ef0a7b866c142e6c050550ac216`. Reviewed head `0d0beb1659f2d621fe926797cf0f8f76830849e4` has tree `4f9e4cad4d6ba1e12d20945351ed0f3d766eb73a`. [Exact-head CI 37989030600](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37989030600) passed **1093/1093** tests, original Edge checks, builds, PWA and all browser gates, including reset/recovery at **320, 390 and 1280 px**. CAD adapter run 37989030418 and lineage-concurrency run 37989030505 passed. The browser fixture exercises late saved replies, idle refresh, draft retention, reload and unrelated-failure isolation without another ask-bob POST. Screenshots were uploaded as artifact 11644618105; local retrieval returned HTTP 403, so this session does not claim additional human visual review of those screenshots.
+
+Hosted migration **20261009210458 / bob_drawing_recovery_status** applies reviewed source `supabase/migrations/20261009203935_bob_drawing_recovery_status.sql`, SHA-256 **27e397dcebaa6b6b0c98d50596ebe4257a228907fff2cd9ce5cae3042d93f146**. Private helper OID 70452 has expected body MD5 `85f8884c91953cd4a66edd6b4ce8407a`; public invoker OID 64911/body MD5 `779702cce313e8487f7373bbafe3541f` is unchanged. Both keep empty search paths and postgres/authenticated-only EXECUTE; anonymous and service-role EXECUTE remain denied. [Pages run 37991195981](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37991195981) published the exact merge successfully at **21:06:08Z**; post-merge CAD adapter run 37991195982 passed. No Edge source changed or was redeployed; ask-bob 93 / worker 61 remain the runtime endpoints.
+
+The owner reset the private conversation at **20:40:02Z**, after the successful-save observation above and before this migration. Reset retained request `3bc79294-7c78-4ca0-a97a-0e5dea4f672b` as saved with a detached thread and its Artifact receipt, and removed old private jobs/messages/working packet. The old completed-recovery live probe was therefore replaced, without recreating history. A rolled-back operator SQL-role simulation reads the old turn as null, current correction turn `bb6f8d6e-d4f3-47db-a98a-d076d75566ae` as queued with fresh expiry/progress, and comparison turn `e98c7060-fa21-41d6-b90c-a38b476b755f` as completed; outsider and anonymous calls are denied. Its record digests stayed unchanged. This is database-role readback, not signed-in member HTTP/browser acceptance. Exact completed recovery is proved by isolated SQL and CI fixtures.
+
+Immediate pre/post-migration digests also match for the retained saved request (`b760b2029a24a7ad6a9d3032f4042bab`), request budget (`13a3b42e9cee1edf88e2786b008fd12e`) and historical CAD revision (`89939ad69bf22e612cc41feeeea9fbf4`). This preservation claim starts after the owner's reset. Security advisor categories/counts are unchanged; performance counts are unchanged except unused-index notices 378→377, without an index/schema change.
+
+#### Mockup fidelity and shared design intent
+
+The owner subsequently reported that the concept differs from the mockup: ladder orientation, missing display bookshelf, missing drawers and insufficient gable infill. Readback and rendering of saved CAD revision 1 confirm a ladder at the left of its front view, no bookshelf/drawer definitions or instances, and open lower gables; **two full mattress-support decks are present**. Bob's saved comparison additionally reports a mirrored guard opening and missing storage modules. The original private handoff was removed by the owner's reset, so this investigation cannot prove exactly where each original image feature was lost.
+
+The existing selected Solution revision 1 still describes a simple compact bed with storage undecided and no source-media link. The deployed first-layout prompt already requires the whole construction and required functions; it defers optional joinery, fasteners and decorative details. Designer and reviewer already receive technical text and reference images. The narrower observed gap is that the mockup's defining features were not established in the visible selected design intent. During the initial connector inspection, private mockup metadata and the owner's/Bob's descriptions were readable but the original pixels could not be fetched. The later owner-supplied screenshots below provide direct visual evidence.
+
+**Proposed, not implemented:** Bob reconciles the visible selected Solution with the chosen references and explicit prior owner choices before another design handoff. A concise, versioned object brief records reference roles, viewing orientation, defining form, required functions, dimensions, free choices and unresolved differences. Designer and reviewer use that same brief and original references; only consequential unresolved choices need the owner's decision. The owner's new correction job was observed read-only and was neither interrupted nor duplicated.
+
+### Mockup screenshot comparison — 2026-10-09
+
+At **23:18 Swedish time**, the owner supplied screenshots `14287.png` and `14286.png` showing the project's references `13424.png` (room mockup) and `13713.png` (bunk-bed concept). They were inspected directly alongside renderings of the exact saved CAD revision 1. Independent visual review agrees with the comparison below. This resolves the earlier screenshot-visibility limitation; it does not claim retrieval of the native private-storage files.
+
+| Design feature | Visible reference evidence | Saved CAD revision 1 |
+|---|---|---|
+| Ladder and entry | Ladder at the right when facing the shown foot gable; upper entry aligned with it. Concept captions identify ladder on the gable and opening at the foot end. | Ladder and entry on the left in the CAD front view. |
+| Book display | Integrated front-facing book display left of the ladder, with shelves and panel backing. | No bookshelf/display definition or instance. |
+| Drawers | Three drawer fronts under the open long side; concept text explicitly describes three pull-out drawers and grip cut-outs. | No drawer/storage definitions or instances. |
+| Panelled form | Horizontal timber panels on the upper long side and filled parts of the visible foot gable; the ladder entry remains open. | Simplified flat upper guards and open lower gable, without the display/panel module. |
+| Mattress support | Hidden construction is not established by these renderings. | Two full 18 mm support decks exist. |
+
+Three drawers are now a source-backed design feature, rather than an unverified count. The shown foot gable is partly panelled, not fully sealed. The hidden head gable, exact dimensions, joins, drawer hardware and rib-versus-sheet mattress support cannot be inferred reliably from these images. Keep measured/specification sources separate from visual design intent. Both images agree on the central arrangement; any material detail difference still needs a designated controlling reference or a recorded design choice.
+
+The owner confirms Bob could read these project images and already identify several errors. The gap is therefore preserving and checking design intent before accepting the CAD candidate, rather than lack of image access in Bob. Proposed acceptance should cover the agreed feature list, orientation and reference fidelity alongside numeric and functional checks. No prompt, schema or runtime change was made for this new proposal.
+
+### Expert advice and design readiness — 2026-10-09
+
+The owner clarified that the bed was not ready for designer handoff: the mattress-support construction should first have been discussed with Bob acting as an expert adviser. Matching the mockup alone would not resolve that missing construction decision. This is the owner's reported missing advisory step; the deleted original private handoff cannot establish every earlier discussion.
+
+Before #236, read-only code review and an independent audit found these seams:
+
+- `cad-intake.ts` distinguishes `owner_decision`, `bob_decision` and measurements, but accepts missing/assumed owner decisions marked nonblocking. There is no recorded significance, advisory recommendation or decision-authority check.
+- `cad-assistant.ts` admits the ordinary design path when retrieval is complete, a target exists and no assessment checks are marked blocking. Target existence is not evidence of an informed chosen construction.
+- Its checked-construction path renders the saved checkpoint without researcher/designer intake. Readiness only at `design_project_cad` would therefore miss important choices already fixed by `save_construction_draft`.
+- `DesignHandoff` has free-text deliverable and unresolved checks; review can pass with unresolved requirements. This accommodates honest concepts but does not encode whether a pending decision blocks the particular output.
+
+The specified responsibility is broader than a visual brief: Bob identifies material choices, researches applicable evidence, explains relevant alternatives and practical consequences, recommends a supported direction, and records the resulting decision or genuine open issue in the evolving selected Solution. Existing owner decisions and delegated authority count; a technical detail does not automatically require permission. Engineering correctness belongs to investigation/verification, not an uninformed owner vote.
+
+The [Solution owner](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) owns shared intent and advice; [CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09) owns readiness consumption. The subsequent release below implements this boundary. Readiness depends on the next deliverable's purpose. An exploratory appearance sketch can explicitly leave a support question open; developing construction cannot silently settle it by embedding an unexplained default into geometry. Unrelated reversible work can continue.
+
+Named-member acceptance still covers advice and supported resolution before a significant geometry-dependent choice; supported autonomous choices within mandate; reuse of earlier decisions after chat reset; purpose-appropriate concept deferrals; and retrieval failures remaining unavailable rather than guessed. At this clarification checkpoint only documentation changed; the subsequent implementation and technical release are recorded below.
+
+### Expert advice and design readiness release — 2026-10-09
+
+[PR #236](https://github.com/EmelieHagander/Bob-the-builder/pull/236) merged as
+`9300aa90ab0bfd3c923802e88405975cb52a0809`, exact reviewed tree
+`fe3d1c76e90638c2cebc40824523f40e4535ea70`. The domain owners are
+[Solutions](solutions.md#shared-expert-advice-and-design-intent--2026-10-09) and
+[CAD](cad-adapter.md#expert-advice-and-design-readiness--2026-10-09).
+
+[CI 37996963538](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963538)
+passed **1139/1139** tests, real Edge checks and every browser gate, including
+advice/choices, historical reload and original references at **320/390/1280 px**.
+[CAD 37996963521](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963521)
+passed 12 real Python worker tests;
+[PostgreSQL 37996963520](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37996963520)
+passed 62 concurrency cases. Screenshot artifact **11648121696** was created,
+but pixel materialization returned HTTP 403; this record claims automated browser
+proof, without additional manual visual inspection.
+
+| Reviewed migration source | SHA-256 | Hosted ledger |
+| --- | --- | --- |
+| `20261009214214_solution_design_readiness.sql` | `8a4c24ad48d1e4a8d37015a667be9f8640a13e55f62d29ff430b899af1fa9c60` | `20261009221621 / solution_design_readiness` |
+| `20261009214611_ai_design_readiness_catalog.sql` | `5a2d25d0e92c8177501afa6e1dfe31317066b5eb811364487432d603bec71554` | `20261009221638 / ai_design_readiness_catalog` |
+
+Ten hosted SQL function-body hashes match the isolated expected definitions.
+All ten immutable catalog definitions are active; resolved catalog hash is
+`08dc61413375b08461cc0a5cd5fe502db8f15b7c28be83b73c626ed8998ad1cc`.
+
+| Endpoint | Hosted status | Authentication retained | Exact packaged-source readback |
+| --- | --- | --- | --- |
+| `bob-worker` | 62 / ACTIVE | `verify_jwt=false`, existing job capability | All 82 included files match |
+| `ask-bob` | 94 / ACTIVE | `verify_jwt=true` | All 84 included files match |
+
+The read-only SQL-role probe of the actual bed Area `a_br_sang`, target decision
+1 and selected Solution revision 1 returns legacy `needs_data /
+design_intent_required`, without a fabricated ready pin. The original CAD remains
+readable. Outsider, anonymous and service-role access are denied. Deployment
+before/after hashes match for Solutions, targets, the original CAD, private
+requests and budgets. Jobs/messages were compared within the post-deployment
+read-only role probe under repeatable read. Security and performance advisor
+category/count groups are unchanged. This is SQL-role simulation, not signed-in
+HTTP or semantic owner acceptance.
+
+[Pages 37998296214](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37998296214)
+published the exact merge at **22:17:16Z** to
+https://emeliehagander.github.io/Bob-the-builder/.
+[Live Bob 37998296738](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/37998296738)
+passed after runtime/catalog deployment: ordinary guest Auth/RLS, actual OpenAI
+lookup, neutral red image pixels and versioned knowledge, with no private server
+history. Idea turn `a3207805-ebcb-430e-8765-884c966af0e4` advises on place and
+measurements first. Its 190 words and seven input items remain a brevity-quality
+observation, not a style-acceptance pass. Fixture
+`p_908f30c8ba26451182ba48d416722a6c` completed normal-API image cleanup and guarded
+project deletion; exact fixture Project/people/Task/material/media readback is
+zero. Actual bed project data stayed unchanged through the guest probe. Technical
+installation is complete. Ordinary named-member
+expert-choice/design acceptance, reference fidelity and broader P0/P4 outcomes
+remain open in [State](bob-delivery-flow.md#state).
+
+## CAD handoff ID regression — 2026-10-10
+
+The real resumed bunk-bed request had 15 persisted requirements. Bob returned
+10 paraphrased requirements with unrelated IDs; merging by those IDs produced
+25 and failed the strict 24-item validator before CAD dispatch. Repeated paid Bob
+steps could not repair that schema failure.
+
+The regression now tests the complete intake/design/review path: the 10 invented
+IDs retain the original 15 canonical requirements, reach one designer/render,
+and cannot repeat completed work. New IDs are server-generated for direct and
+split-piece requests. Separate tests cover exact replay, genuine additions,
+existing-ID updates, unknown references, preserved restoration, unchanged limits,
+and atomic catalog publication with fault-injected rollback. Provider-wire, K3,
+budget-grant and runtime-audit fixtures now reference server-owned identities.
+
+The new migration preserves all unrelated active definitions, model bindings,
+policy envelopes and immutable pinned history. Release validation, exact hosted
+source/schema readback and deployment status are recorded in the release PR.
+This change does not itself regenerate the owner's drawing or establish visual
+acceptance of the bed.
+
+## Data authority gap review — 2026-10-10
+
+Read-only review of main `9c3d363e8ebf78fb1258b3a68b4f395ed40d0267` traced source selection, parameter compilation, construction/CAD handoff, quantities, product evidence and resumed delivery. [Delivery flow](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) owns the remaining cross-domain boundaries; existing specialist contracts remain authoritative.
+
+Three controlled counterexamples used the actual TypeScript functions and synthetic values, with **zero paid model calls and zero production writes**:
+
+- `drawingResumeReply`: a stub language response saying the drawing was saved was accepted with `saved=false` and a `cad_engine` failure. This establishes a missing output-authority boundary, not a finding that an actual member received that exact text in this pass.
+- `constructionLists`: a valid single box named as reference context was counted as one blank. `cad-schema.ts` has no typed build/reference role. A suggestive name does not supply the missing classification; no owner's material need was changed or alleged incorrect here.
+- `supplierArticleFields`: a synthetic article with a never-fetched example URL and declared pack fields passed shape validation. Source citation is declared evidence, not a captured-source receipt. SQL requires source fields and supported-field declarations but does not ingest the supplier page.
+
+Focused existing checks passed **45/45**, no failures: `cad-parameters`, `construction-lists`, `project-design-intent`, `drawing-runtime`, `plan-edits` and `drawing-resume-reply`. These verify current mechanical guards, canonical feature handoff and retry selection; passing them does not close the counterexamples. The construction-requirement source/command inspection also confirms that changed checkpoints flag old needs and require an explicit revision of the same need rather than automatically updating the whole downstream chain. Hosted measurement columns confirm free-text `subject` with optional component ownership, without a typed property/reference-point contract.
+
+Hosted readback found migration `20261007140000_supplier_article_packs` in the migration ledger, and its supplier-article revisions, pack-purchase tables and command functions present. This supersedes the older “not applied” wording only for database installation. This pass did not establish matching current endpoint/UI product execution or physical member/model acceptance; those remaining evidence checks stay in State. Do not reapply the installed migration based on the old code-only checkpoint.
+
+Direct operator review followed the repository's source/owner and verification guidance. No independent subagent review, new runtime change, migration, deployment or visual acceptance is claimed by this audit.
+
+## Database relationship review — 2026-10-10
+
+Read-only hosted schema review against main `b511583a990166fcaaf3e471e3fceb2f6dee8390` inspected 21 construction, Artifact, measurement, requirement, cut-plan and purchase tables. All inspected primary/unique/foreign-key constraints were validated and all inspected tables had RLS enabled. This is a scoped structural readback, not a complete policy, performance or application-acceptance audit.
+
+Installed/enabled CAD triggers include construction-source, design-intent, parameter-lineage and full parameter-graph validation; construction updates have the immutable-revision trigger. Actual function bodies confirm exact source-head/recipe/parameter checks, numeric recomputation and reused identity guards. The authenticated role has SELECT and no direct INSERT/UPDATE/DELETE on construction revisions, CAD revisions or construction requirement provenance. Cut-plan and requirement provenance have composite foreign keys to exact construction revisions. The construction pin on a drawing is guarded JSON metadata, while the CAD source foreign key targets another CAD revision; these are distinct. Legacy CAD without a construction pin is still permitted.
+
+Hosted column/index readback confirms the remaining free-text measurement semantics, JSON construction graph, declared supplier source fields and lack of an indexed typed construction-source reference on the CAD table. [The database owner](../db/README.md#construction-data-authority-and-remaining-extensions) records the reused foundation and planned targeted extensions. The earlier controlled counterexamples remain open; schema support does not close workflow acceptance. This pass used no paid model calls and made no production data/schema changes. No new runtime test, migration, Edge release or independent subagent review is claimed.
+
+## Receipt-owned drawing event replies — 2026-10-10
+
+The controlled free-answer finding from the earlier review is corrected in source: drawing status now requires a valid explicit current-project Artifact receipt from the CAD writer/request store; provisional saved flags and free user-message fields cannot establish delivery. Other receipts are retained as partial work. Original gap/cause text and exact receipt revisions remain visible; localisation only prepares the pre-existing phrasebook. Known CAD failures, budget stops and already-saved acknowledgement paths dispatch no language model. The journal preserves old work-router slots and reuses an exact recorded phrasebook without dispatch.
+
+Focused regression checks pass **13/13**, covering the contradictory saved answer, missing/wrong-project/invalid/deleted receipts, actual versioned save, partial work, prepared phrases, budget and CAD stops, continuation/access loss, legacy phrasebook reuse and changed-language/free-answer isolation. The full local suite passes **1,203/1,203**, with no failures. Vocabulary validation, production build and diff whitespace checks pass. The local full Edge check could not fetch its existing esm.sh dependency because the workspace connection was refused; the completed [CI run 38086341965](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38086341965) provides successful Edge/type, test, build and browser-fixture gates. All 51 recorded CI steps succeeded.
+
+[PR #243](https://github.com/EmelieHagander/Bob-the-builder/pull/243) merged as `aa894b323711e6009a804d0f8ca156f1a75900f5`. Its source tree `ce917ae01d8ea4f9095874d6958a87f4dcfcc8ee` matches the reviewed release candidate exactly. Deployment changes only the four shared modules for reply composition, localisation and journal reuse; no database migration or production project-record write is included.
+
+| Runtime | Installed version / state | Bundle hash / exact file readback |
+|---|---|---|
+| `ask-bob` | 101, ACTIVE; existing JWT verification enabled | `c32f78e53c61d4177eafb72a92e1b07d4cea9bec7cb758dd0ed50e7448e17158`; all 87 files equal the reviewed payload |
+| `bob-worker` | 69, ACTIVE; existing capability authentication retained | `ccbdcea84843033665959c2a8e70d0bed1729f21907148f67812ba5699fee6e6`; all 85 files equal the reviewed payload |
+
+These checks use synthetic values and no paid models. Direct review followed the owning contracts and the repository's Archie/verify guidance; no independent subagent review or actual member visual acceptance is claimed. The deployed-file readback establishes installation, not the real drawing/mockup outcome or a measured whole-chain cost saving. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains legacy conversion C next after B's technical release and the remaining member/cost acceptance in E.
+
+## Bounded construction changes — release B
+
+**Merged, migrated and deployed through [PR #244](https://github.com/EmelieHagander/Bob-the-builder/pull/244), 2026-10-10.** The [Artifact owner](artifacts.md#parameter-changes-before-drawing--specified-2026-10-10) defines the numeric delta and independent revisions; [database owner](../db/README.md#construction-data-authority-and-remaining-extensions) defines the command, exact relation and installation order. This is steps 2–3 of [State](bob-delivery-flow.md#six-outcomes-in-five-releases), with legacy conversion C and real member/mockup/cost acceptance E separate. Reviewed head `cafb72538414c318b497b2a0787da505c69d53d3` and merge `36624e789f432a42482d5c30cafb4958d7b84406` share exact tree `e777c63df5444697ca816b121967b719117d227e`.
+
+Focused tests pass **22/22** through full-schema SQL and actual tool registration. A 600 → 700 mm frame recomputes its inner board 564 → 664 mm and right placement 582 → 682 mm, retaining parts, materials, joints and immutable revision 1. Source-bound changes use canonical measurement values; fabricated values, role/unit/identity/formula/binding/topology changes, unknowns, stale revisions and revoked authority cannot save. Two prepared writes from the same head allow only one commit. Exact receipt replay makes no new source read/recompilation, including after later head/source changes.
+
+The SQL chain changes a construction input, saves drawing revision 2 with exact `construction_source` revision 2 and keeps drawing revision 1 intact. A later source change/archive retains the historical typed pin. Caller RLS isolates projects and rejects relation mutation. CAD tests stop missing, malformed, changed or substituted versions before rendering/review; failed rendering retains the checkpoint for retry. All checked render/retry cases prohibit geometry-designer calls. All missing controlling inputs return together before further source reads. Catalog tests preserve existing model settings, unrelated definitions and immutable old manifests; generated contracts match executable tools. A real tool-bench fixture also preserves older pinned manifests when live policy includes the new tool: their existing handlers remain offered and the absent new contract cannot dispatch.
+
+Before installation, hosted readback confirms the current writer/reader bodies match main and all 87 `ask-bob` v101 / 85 `bob-worker` v69 files match the base commit `f867ad9f50e7154777a8b9f681f55cced0f2659b`. There are four construction and five CAD revision records, one valid existing construction pin, no invalid pins and no typed relation yet. Aggregate record digests are retained for migration comparison; no owner project identifiers or transcript data are required. The Supabase CLI crashed on `--version`; new filenames use actual UTC timestamps rather than fabricated CLI output.
+
+The full local suite passes **1,215/1,215** with four workers; final focused contracts pass **22/22** and publication regressions **11/11**. Production build, vocabulary and whitespace validation pass. The local Edge check could not fetch its existing esm.sh dependency; the final source instead passed CI Edge/type checks. [CI 38093908153](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38093908153) passes **1,215/1,215**, zero failures/skips, and all **51** steps including build, PWA and browser fixtures. [CAD adapter 38093908063](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38093908063) and [CAD lineage concurrency 38093908167](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38093908167) pass for the same reviewed head.
+
+Only the two reviewed migrations were installed, in the required order: core → both runtimes → catalog activation. Managed ledger identities differ from source filenames and are retained explicitly:
+
+| Source migration | Installed managed identity |
+|---|---|
+| `20261010222601_construction_parameter_changes.sql` | `20261010232323 construction_parameter_changes` |
+| `20261010222920_ai_construction_parameter_catalog.sql` | `20261010232357 ai_construction_parameter_catalog` |
+
+Hosted readback matches all five new function bodies exactly and both retained writer/reader bodies to the pre-release source. All four construction and five CAD records retain their complete-row digests (`ad98a2dd473938130e95291e3ab24a9b` / `9b925c9bdb13c3e6ac2c45d4acff3092`), checked immediately before and after installation. The one existing valid pin has one exact typed relation; no mismatch or fabricated legacy checkpoint is introduced. RLS is enabled, the three required indexes and same-project foreign keys are present, authenticated has only project-filtered SELECT, and anon/service have no relation grants. All reviewed functions have an empty fixed search path and no anon/service execution grants.
+
+| Runtime | Installed state | Bundle hash / exact file readback |
+|---|---|---|
+| `ask-bob` | 102, ACTIVE; existing JWT verification enabled | `d4552ecd400fdffa1736a47c0876b554e7c42b7a9cc9dad48f819255849c973a`; all 88 files equal the reviewed payload |
+| `bob-worker` | 70, ACTIVE; existing capability authentication retained | `e209c86181fc7181363fe174e7eb1b55b1458c18fdbfa51e7d948da25bae9d33`; all 86 files equal the reviewed payload |
+
+Active catalog manifest `894387f2-331d-43ae-ae63-6038448be7ce` has 266 definitions: `change_construction_parameters` v1, `design_project_cad` v4 and `bob.tools` v3 match the published executable contracts. All four models/settings and unrelated definitions remain unchanged. Resolving prior manifest `4b0545fe-264b-4e6a-8611-f3c1d3508965` reproduces its complete original content.
+
+Fresh security/performance advisors add one expected authenticated SECURITY DEFINER warning for `prepare_construction_parameter_change` and two INFO unused-index notices for the new relation. The helper's deliberate authenticated grant is fenced by the existing claimed-turn/generation/authority check before reads or locks; no anonymous grant is present. The indexes cover required foreign keys and source lookup and have just been installed. No other advisor additions were found against the pre-release snapshot; no unrelated shared-project cleanup was performed.
+
+These checks run without paid models or owner project writes; no actual bed correction, real member/phone visual acceptance or measured cost saving is claimed. Direct review follows Archie/verify guidance and the owning contracts; no independent subagent review is claimed. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) retains C's guarded legacy conversion next, including the bed drawing without a construction checkpoint, and A/B's real member/mockup/cost acceptance in E.
+
+
+## Construction instance roles and consequences — release D
+
+**2026-10-11: implementation merged; hosted installation is partial and blocked by the Supabase connector's request-state error.** Scope: exact constructor-revision instance policy, bounded classification, role-aware manufacturing selection, persisted linked output work and canonical same-identity continuation. No owner geometry/roles/history are backfilled, no model/price settings change, and no purchases/reservations/performed work are automatically rewritten. The common calculator remains specified for review after D; real bed/mockup/member and cost acceptance remain E.
+
+Reviewed seams: saved construction/role validation → K2 concept checks → full K3 geometry/policy pin → requirement source proof and independent cut replay → affected-output capture/completion → current-plan work review. Tests cover mixed roles sharing a definition, legacy uncertainty, inherited roles, exact numeric recompilation, same-output retries, stale heads/claims, cross-project/RLS/raw-write denial, reserved capacity, committed Shopping, retirement with preserved history, exact drawn roles and completed-work preservation. Compact paged queue receipts keep whole output packets out of routine progress reads. Four additional real PostgreSQL lock races are part of `check-cad-lineage-concurrency.ts`.
+
+Local vocabulary and production build pass. Local Edge checking is blocked by the existing restricted `esm.sh` dependency fetch; PR CI must provide the actual Deno pass. Local Node 24/PGlite exhibited the known native V8 crash in a combined run; isolated affected suites pass, and the required CI suite remains authoritative. No local browser is installed; inspect the PR's intercepted browser gates rather than claim a local browser pass. Review followed Archie's existing prompt manually; no independent agent review is claimed.
+
+Preflight: remote main `d729d2de426c921622ea0c8cc8009a8e042984da`; hosted ask-bob 103 / worker 71; active C manifest `5f863393-a903-4ccf-a7b7-7e891709fbe3`, 267 definitions. All seven replaced/read-wrapped source bodies match the full migration baseline. Hosted v16 is the earlier CAD-shell wrapper rather than the repository's later Step-link wrapper; D renames/preserves that actual body and delegates unrelated operations, without installing unrelated pending work. Baseline 4 constructor rows hash `ad98a2dd473938130e95291e3ab24a9b`; 5 CAD rows hash `f3e48d971f27b9f739c77ebb19f67327` under the same ordered full-row digest query. D tables are absent. Model/settings hashes are `eaded0d9bf3b84b6d52d9b1196bba0e4` / `d71fb90595904ce11791b01aa559d8b8`.
+
+The final isolated role/change-work suite passes **27/27**, D/C catalog compatibility **4/4** and stock reservation regressions **11/11**. The late boundary review covers historical unclassified cut plans: new reserve/publish calls stop, current coverage becomes false and existing held capacity can be released normally without rewriting history. Linked manual needs without recorded models are captured with an explicit model-review gap; a canonical code-derived model under the same identity closes the item and preserves the original quantity. The read/stock/Shopping wrappers retain actual prior bodies and remove authenticated access to bypass aliases.
+
+`scripts/check-construction-consequences-release.sql` passes against the isolated full schema and is included in the disposable PostgreSQL CI harness. It uses ordinary claimed authenticated writers to save/read exact roles, preserve geometry/history, resume both needs under their original identities, retire the retained member's need, replay original receipts and deny raw/outsider access, then unconditionally rolls back. Hosted execution belongs to the installation gate below; it makes no model or HTTP request. The final recovery review adds explicit canonical archive settlement for a no-longer-required legacy/manual need; a current archive retires only its saved item, while original quantities and other work stay intact. The first PR CI attempt passed 1,247 assertions but stopped in an unchanged Shopping suite with Node 24.21/V8 `jit_page_->allocations_.erase(addr)` failure; this is not an assertion pass for the omitted cases. A second head passed 1,252 assertions but hit the same native failure in another cut-plan suite. This matches the reported [Node 24 Wasm code-GC failure](https://github.com/nodejs/node/issues/66366); the observed stack and upstream report support that diagnosis, not a Bob assertion failure. `npm test` now adds `--no-wasm-code-gc` only to the test process, retaining all tests and production runtime settings. Remove the workaround after a validated Node backport/runtime update. The final-head CI gate remains required.
+
+### Resumed release readback — 2026-10-11
+
+**Historical partial checkpoint, superseded by the [completed hosted release](#completed-hosted-release--2026-10-11) below.** The connector failure and pending installation statements in this subsection describe the earlier pass.
+
+[PR #246](https://github.com/EmelieHagander/Bob-the-builder/pull/246) is merged as `e04fb99798500f1fd113272293710d1013c44385`. Reviewed head `196bca34ad4339d18659f720f51df7222541a678` and the merge have the exact same tree `9afe77a85138851c944a18bf5f70bc23d2dcdd59`. Final [CI 38133104071](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38133104071) passes **1,253/1,253 tests**, all **51 job steps**, original Edge checks, build, PWA and intercepted browser gates. [CAD adapter 38133104051](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38133104051), [PostgreSQL concurrency 38133104052](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38133104052) and dependency checks also pass. The PostgreSQL harness includes the rollback-only D smoke and four D lock races. The local consequence-catalog builder reproduces the reviewed migration exactly.
+
+The merge's [Pages deployment 38134313330](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38134313330) and existing [Live Bob check 38134313414](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38134313414) pass. That automatic generic live check ran before D backend installation; it is not evidence that D roles/continuation or the actual bed/mockup journey work through a model.
+
+| Reviewed source | Hosted readback | Remaining action |
+|---|---|---|
+| `20261011090115_construction_instance_roles.sql` | Installed as `20261011110635 construction_instance_roles`; all **16** directly defined/replaced function bodies match the reviewed source byte-for-byte | Preserve this migration; do not reapply or backfill historical roles |
+| `20261011091128_construction_change_work.sql` | No ledger entry; both change-work tables and the six additional helpers/readers are absent; v16 retains its previous body | Apply this exact complete migration once through the supported migration path |
+| `20261011093016_ai_construction_consequences_catalog.sql` | No ledger entry; the three new tool definitions are absent | Activate only after both compatible runtimes and core readback pass |
+
+Two bounded attempts to apply only `construction_change_work` returned `McpServerError: Invalid or expired requestState` (`-32602`, `invalid_request_state`). Fresh ledger/table/catalog reads after the attempts confirm that no second-core or catalog migration was installed. This is a connector failure, not a SQL test failure or a reported automatic approval-review rejection. The only installed D core remains the first migration above. There are **zero** active queued/running unexpired Bob jobs at the readback. No owner request was submitted or rerun.
+
+Both hosted functions still carry C: **ask-bob 103 / ACTIVE / JWT true**, **bob-worker 71 / ACTIVE / JWT false with its existing job authentication**. All 88/86 existing package files were read before preparing the reviewed D closures; no old file is dropped. The prepared D source closure contains **91/90 files**, including role/continuation modules and required type dependencies. It has not been deployed. Keep the current runtimes until the second core is installed, preserve their existing authorization and deploy the exact reviewed source rather than current unreviewed main.
+
+Readback preserves active C manifest `5f863393-a903-4ccf-a7b7-7e891709fbe3` with **267 definitions**, payload hash `aef172c7991f2bbebb425d0e380afa456019e84b22711dab515c0f10de8ae128` and exact stored-payload MD5 `def33ecaa974aeb44e429c033ba15021`. All 267 active prompt/version identities and hashes were captured before any attempted write. No D role policy has been created for an existing construction. Original-data fingerprints below are the resumed pass's baseline, not a claim that the hosted D smoke ran:
+
+| Rows | Count | Complete-row MD5 |
+|---|---:|---|
+| Construction revisions | 4 | `6fdc8107865b7cfede58e24372b134e8` |
+| CAD revisions | 5 | `988a3a99c79fca3d877e7582594d3a23` |
+| Material requirement revisions | 3 | `bafb60fdf6da48146de925fa90ca5df9` |
+| Cutting plan revisions | 1 | `341613b9ef747eaa06574d6addd1c20e` |
+| Pack purchase revisions | 1 | `2266b66b403f974c80b2f753a1fa89a2` |
+| Project plan steps | 20 | `f77ead39b9898b5fd6428be0bf65bedd` |
+| All shared model rows | 12 | `54039f71c0a99ac650140704e021da03` |
+| All shared setting rows | 38 | `76133bec5a3feea1ee1a1cd3858e4978` |
+
+The fingerprint expression is `md5(coalesce(jsonb_agg(to_jsonb(t) order by ...)::text,'[]'))`: construction/CAD sort by `(project_id, artifact_id, artifact_revision)`; other rows sort by `to_jsonb(t)::text`. Instance policies, reservation revisions and cut-plan Shopping revisions each have zero rows and MD5 `d751713988987e9331980363e24189ce`. Final readback after both failed attempts reproduces every resumed-pass row count/digest above, the complete C manifest and all 267 active prompt/version identities/hashes. The earlier pass's exact aggregation expression was not recovered, so its different hashes are not a cross-pass preservation comparison. Fresh security/performance advisors were captured before the attempted second migration; no post-D advisory result is claimed.
+
+Resume with fresh target/head/ledger/quiescence checks, install the exact second core, deploy both compatible closures preserving authentication, and run `scripts/check-construction-consequences-release.sql` as one rollback-only transaction. Read back all **23** D function bodies, table constraints/RLS/grants, preserved pre-D v16 delegation and the original-data fingerprints. Then publish the exact D catalog and verify three new contracts, all changed contracts/manuals, preserved C manifest, unrelated definitions and all model/settings. Complete hosted smoke/source/hash/manifest evidence here before closing D in State. Hosted SQL smoke, runtime deployment and D catalog activation remain unperformed; calculator review follows D and real-member/bed/mockup/cost acceptance remains E.
+
+### Completed hosted release — 2026-10-11
+
+The owner explicitly approved the browser fallback after the connector's expired-request errors. The signed-in dashboard was verified against project `yuobtgoidmmmwfqenkau`. The second core and D catalog were applied from the exact reviewed files, with migration-history registration in the same transaction and bounded guards against duplicate installation, changed prerequisites and active jobs. The first core was preserved. The editor contents were copied back and SHA-256 checked against each prepared package before Run. Browser installation success and independent connector ledger readback agree.
+
+| Reviewed file | Installed version | Exact source SHA-256 |
+|---|---|---|
+| `20261011091128_construction_change_work.sql` | `20261011161202 construction_change_work` | `7f1d3d646fc8808c0b7c9905e367195b789002832ab057685c2dc8391832d2b2` |
+| `20261011093016_ai_construction_consequences_catalog.sql` | `20261011161711 ai_construction_consequences_catalog` | `534368e6cae7ca15e9cb2715fc1324844b03df65cd21f4f2113430b65288b1d5` |
+
+All **23** directly defined/replaced D function bodies match the reviewed source byte-for-byte. The preserved pre-consequence v16 delegate retains MD5 `d47f5e218fdd73349e57e77da111665b`. All three D tables have RLS, authenticated SELECT only, and no anonymous read or raw authenticated writes; the two change-work tables retain their **6/20 constraints**. The ordinary-writer `scripts/check-construction-consequences-release.sql` passed on hosted PostgreSQL as one **BEGIN … ROLLBACK** transaction: saved/read exact roles, preserved geometry and old needs, continued the same two need identities, retired the retained member's need, replayed original receipts, and denied raw/outsider access. Synthetic users and all test rows were rolled back. No HTTP/model/CAD acceptance call was submitted.
+
+Both functions now run the reviewed `196bca34ad4339d18659f720f51df7222541a678` runtime (tree `9afe77a85138851c944a18bf5f70bc23d2dcdd59`):
+
+| Runtime | Status / authentication | Source readback |
+|---|---|---|
+| `ask-bob 104` | ACTIVE, existing JWT verification true | All **90** bundled files match the reviewed closure; bundle `22d4cd507c1cca1c5f2ae4b36d4072224c38a4abdcb444c8dfb083ce7e49172d` |
+| `bob-worker 72` | ACTIVE, existing JWT false and capability/job authentication retained | All **88** bundled files match; bundle `c62099dd08e1be2600a00a73777a395fe0ed61081ecbe8662a6c16b6c2b4b6b2` |
+
+Submitted closures contained **91/90 files**. The compiler omitted the newly supplied `src/data/provenance.ts` from both bundles and the worker's `bob-request.ts`, which the worker imports only for `BobTurnInput`. No prior 88/86 package file was dropped and no executable source differs. Runtime deployment used the connector successfully; only the two pending migrations required the approved dashboard fallback.
+
+The catalog builder reproduces the committed SQL exactly. Independent readback reconstructs and matches all **14** changed/new tool contracts, their manuals and metadata, the toolbox publication and three tool-policy rows. Exactly the expected **12** existing definition identities changed and **3** were added; all **267** unrelated cross-app register identities/version hashes remain intact. Canonical `shared.resolve_ai_catalog('bob')` returns manifest `1014e17d-3fa2-46b9-a30c-e3829d5a67d6`, **270 definitions**, payload hash `df5313319d34fb3148cb92a3239692a48f297617605d7aa83640b2016126f003`, and the three new contracts `change_construction_roles`, `read_construction_changes`, `continue_construction_change`. Earlier C manifest `5f863393-a903-4ccf-a7b7-7e891709fbe3` retains all 267 definitions and its exact MD5/hash; old pinned sessions remain available.
+
+Before/after fingerprints reproduce **every count and complete-row digest in the historical checkpoint above**, including all 4 construction, 5 CAD, 3 need, 1 cut-plan, 1 pack-purchase and 20 work-step rows, the zero pre-existing policy/reservation/Shopping rows, and all **12 shared model / 38 shared setting rows**. There were zero active unexpired queued/running jobs at both release guards. Owner project content was not edited.
+
+Post-install security advisors flag the two deliberately authenticated SECURITY DEFINER preparation RPCs; both retain the reviewed claimed-turn/project authorization and empty search_path, and the hosted/CI access tests pass. [Security advisor guidance](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) describes that deliberate exposure and the required review. Performance advisors report **9** uncovered composite foreign-key index suggestions on the new item table plus newly unused indexes; this is a non-blocking index follow-up, not a failed behavior or authorization test. [Foreign-key index guidance](https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys) owns that recommendation. No claim of a globally clean shared database is made.
+
+This closes D's technical installation gate. Final-head CI evidence remains the 1,253-test/51-step/68-PostgreSQL checks recorded above; it is not a new model acceptance result. Formula/calculator review is the next owner-prioritized action in [State](bob-delivery-flow.md#state). Real-member reload, bed/mockup correction and measured model-chain cost remain E.
+
+## Legacy drawing transition — release C
+
+**Merged, migrated and deployed through [PR #245](https://github.com/EmelieHagander/Bob-the-builder/pull/245), 2026-10-11.** The [Artifact owner](artifacts.md#legacy-drawing-transition--release-c) defines exact geometry/provenance capture, grouped gaps, retry receipts and first-pin/history semantics; the [database owner](../db/README.md#construction-data-authority-and-remaining-extensions) defines storage and rollout. Reviewed head `78a2f0cce498b9819d3e115eb149a30dbcbc8622` and merge `2350eb270feaf2fc6377c3991888865a6b810f5a` share exact tree `77f47526fff6fc4d99599820c57c8ea23cdc4d1f`.
+
+Final [CI 38121946833](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38121946833) passes **1,222/1,222 tests** and all **51 steps**, including Edge/type/build and browser fixtures. [CAD adapter 38121946835](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38121946835) and [PostgreSQL lineage concurrency 38121946870](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38121946870) also complete successfully on that exact head. Focused final PostgreSQL/CAD/catalog/policy checks pass **8/8**: exact copied IDs/graph, numeric correction, same-drawing new revision, lost-response replay after head changes, duplicate preparation, stale heads, matching/mismatched reuse, missing historical graph, first-pin bypass, RLS/claim fences, fresh dispatch, render recovery and project deletion. Vocabulary, production build, all three append-only catalog builders and whitespace checks pass.
+
+The frontend also completed [GitHub Pages deployment 38123423594](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38123423594) from release-docs main `fcdf05c30bd0c637eee961d05b96b4d27ebeb9cb`; both build and deploy jobs pass. Its product code is identical to the reviewed merge. This publishes the client’s reused-Artifact receipt support as well as the server runtime changes. Closing and reopening Bob loads the updated installed/web app, as described in the README.
+
+Local full runs encountered native V8/PGlite crashes in unchanged cut-plan suites; isolated retries pass **13/13** and **11/11**. Final CI supplies the complete suite result. The local full Edge check could not fetch the pre-existing esm.sh dependency; CI supplies successful Edge checking. No local browser is installed; the browser evidence is CI with intercepted fixtures, not a real member/phone acceptance or paid CAD generation.
+
+| Reviewed repository migration | Hosted managed ledger | Installation order |
+|---|---|---|
+| `20261011070724_legacy_construction_transition.sql` | `20261011075652 legacy_construction_transition` | Core first: exact legacy origin, claimed preparation/writer, reader and first-pin guard |
+| `20261011071316_ai_legacy_transition_catalog.sql` | `20261011075806 ai_legacy_transition_catalog` | Activation after both matching runtimes and exact runtime/core readback |
+
+The pinned Supabase CLI aborted on `--version`; the UTC filename fallback is recorded in the core source. Only these two reviewed migrations were applied. The managed ledger timestamps are recorded separately rather than rewriting source history. Hosted readback matches **five** new function bodies and **three** retained writer/reader/K3 bodies exactly. All **four construction** and **five CAD** records retain their complete-row digests (`ad98a2dd473938130e95291e3ab24a9b` / `9b925c9bdb13c3e6ac2c45d4acff3092`). There are **zero origins** after installation, so no owner drawing was backfilled; the existing one rendered relation remains unchanged. RLS, authenticated SELECT-only/project policy, no anon/service grants, three indexes and four exact-key constraints are verified. Drawing/project deletion cascades origin metadata; construction provenance retains its exact revision foreign key. All reviewed functions have a fixed empty search path and no anon/service execution grants.
+
+| Runtime | Installed state | Bundle hash / exact readback |
+|---|---|---|
+| `ask-bob` | 103, ACTIVE; existing JWT verification enabled | `0a630981878b1f72e3729a3ba7453b3f1167a66d20fac88cb6e8628dcb8c2993`; all 88 files equal the reviewed payload |
+| `bob-worker` | 71, ACTIVE; existing capability authentication retained | `b19a4960662ea8d8b4176084fed82de3210587c70983ec88b5f46a55d95c763d`; all 86 files equal the reviewed payload |
+
+The 89-file union of pre-release runtime dependencies matches pre-release main exactly. Deployment replaces only seven reviewed shared runtime/data/policy files; unrelated files and authentication settings are preserved. Active manifest `5f863393-a903-4ccf-a7b7-7e891709fbe3` has **267 definitions**, with transition v1, CAD reader v2, CAD design v5 and toolbox v4. The transition wire schema matches the actual registered tool. All four models/settings and unrelated definitions remain unchanged, and resolving prior manifest `894387f2-331d-43ae-ae63-6038448be7ce` reproduces its complete original content. Historical builders and pinned benches remain compatible.
+
+Fresh advisors add only the expected [authenticated SECURITY DEFINER notice](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) for the new claimed-turn preparation RPC and two [INFO unused-index notices](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index) for the newly installed origin indexes. The authenticated grant is intentional, fenced by authority/claim/generation before reads or locks; anonymous execution is revoked. The indexes cover the exact foreign keys and source lookup. No other advisor additions/removals or unrelated shared-project cleanup were found.
+
+Direct review follows the owning contracts and Archie/verify guidance; no independent subagent review is claimed. The focused legacy fixtures use no paid models, and installation performs no owner project edits. The existing merge-triggered [Live Bob release check 38123067569](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38123067569) also passes actual Auth/RLS/OpenAI checks with disposable project data. That automatic live health check is separate from legacy CAD/bed acceptance and does not measure whole-chain cost savings. The actual bed/mockup correction, named member readback, phone acceptance and measured whole-chain cost saving remain E. [State](bob-delivery-flow.md#six-outcomes-in-five-releases) now retains D’s typed part roles/quantity policy and persisted consequence continuation as the next implementation.
+
+## Calculation and formula review — 2026-10-11
+
+**Repository review completed; the common calculator remains specified.** Reviewed
+code base `0416f73a76b851387220d78f4d0f4b89f847dfba`, after D's implementation
+merge and the recorded release readback. Scope is the next prioritised
+calculation boundary. These calculation sources are unchanged on
+`7a87c9f60a3034f5464633990d1cc73714e5a4b8`; D's completed installation is recorded
+in its [release evidence](#completed-hosted-release--2026-10-11).
+This pass installs nothing and does not supersede D's hosted release evidence.
+
+The [tool owner](ask-bob-tools.md#existing-evaluators-and-first-common-tool-boundary)
+now maps executable methods, precision and canonical model/result storage. The
+review followed stair inspection/save/reload, CAD/construction compilation and
+SQL graph validation, material/wall/layer/blank quantities, allowance and purchase
+rounding, supplier pack aggregation, bounded cutting and earlier Artifact
+geometry. It also checked source-unit conversion, Bob's governed registration,
+CAD research/designer arrays, strict CAD/Plan model responses, and authored
+time/price display helpers.
+
+| Probe | Evidence and limit |
+|---|---|
+| Dependent dimension | Graph unit fixture derives 960 mm from measured `1.001 m` minus two 18 mm decisions and 5 mm clearance, retaining original units/revision. Separately, the SQL graph fixture saves/reads `1001 − 41 = 960 mm` and its exact dependencies. Wrong units, cycles, omitted/unknown inputs, stale pins, arbitrary operations and implicit rounding are rejected. |
+| Rounding/replay | Graph fixtures cover signed half ties and exact-result rejection; SQL rejects normalized-value tampering and preserves historical detail/source pins. Stair source adoption changes the same saved recipe's derived results while old parent revisions stay reproducible. This is domain evidence, not common-tool acceptance. |
+| Stair numerical policy | Direct fixture with 2800 mm total rise, 17 rises and 280 mm going returns `rise_mm=164.7058823529412`, `step_formula_mm=609.4117647058824`, `pitch_degrees=30.465544919459884`. Existing code retains full-precision division/trigonometry; the common response still needs explicit output/display precision metadata. No site or suitability claim follows. |
+| Purchase arithmetic | Existing AC-14 SQL fixture: needs 60+60 pcs, 30 held, pack size 100 → net 90, one pack, surplus 10. Unknown pack size, unit mismatch, changed sources, competing claims and denied callers fail appropriately; replay does not duplicate publication. |
+| Shopping text counterexample | Source inspection and direct reproduction of the unchanged `parseCost` logic: `199,50 kr` → 19950; `100–200 kr` → 100200; empty text → 0. The editor accepts text and schema stores text. This is a reproduced display defect, not a failing quantity method or a browser/model probe. [Material owner](material-planning.md#authored-prices-and-display-total) records the open correction. |
+| Specialist integration | Bob, CAD research and designer have different tool surfaces. CAD reviewer and Plan compiler/reviewer use strict schema responses without tools; the current adapter suppresses `text.format` when tools are supplied. The first common implementation must test a bounded calculation phase and final-schema validation at these actual calls. |
+
+Local existing tests: **175/175** across 20 parameter, stair, material, sheet,
+pack, construction, cutting and Artifact geometry test files; **97/97** across eight
+unit normalization, tool session/catalog, CAD/Plan assistant and project-overview
+test files. Total **272/272**, zero failures/skips. `npm run check:vocabulary` and
+`git diff --check` pass. Dependencies reuse the identical lockfile installation
+from this workspace. No new implementation-shaped tests were added for these
+documentation changes; full build/Edge/browser gates belong to PR CI.
+
+The initial [PR #247 CI run](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38155415986)
+passes **1253/1253** tests, Edge, builds, PWA and the other browser gates, but
+fails the material-planning journey at its Shopping quantity lookup. The strict
+locator matched three `2 pcs` occurrences in the outgoing Material Plan while
+hash navigation was still replacing that view. The product files are unchanged
+from the reviewed base. The existing browser harness now waits for the destination
+`Shopping list` heading and matches the quantity prefix in the named Shopping row
+for both initial publication (1 pcs) and update (2 pcs). Source/delivered-state and
+reload assertions remain. This repairs the race without weakening the arithmetic
+check; it does not fix the authored-price defect. No local browser is installed;
+the corrected journey must pass in fresh PR CI.
+
+The missing common handler/result envelope, standalone saved graph contract and
+price correction are explicit implementation gaps. Stored requirement history
+does not prove replay dispatch for every old method, particularly D v1/v2
+manufacturing counts. No new runtime, schema, AI definition, model settings,
+project records, paid model calls or hosted probes were introduced by this review.
+Direct review follows the owning contracts and Archie/verify guidance; no
+independent subagent review or real-model calculator acceptance is claimed.
+[State](bob-delivery-flow.md#state) retains the next implementation and its gates.
+
+
+## Common calculator — 2026-10-12
+
+**Implemented, migrated, deployed and verified with an actual Bob tool call.**
+`calculate_project` shares the existing graph/stair evaluators and SQL purchase
+owner. Its [contract](ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
+records exact method coverage and remaining gaps. Source/current readiness,
+manual provenance, units/rounding, invocation budget, catalog versions and
+specialists' structured response boundary have focused automated coverage.
+The full local suite passes **1,276/1,276 tests**. The focused 62/62 pass includes canonical stair save/refresh
+and old-revision readback, construction blank v1 saved before D then replayed
+under D without rewriting count semantics, scoped invoker SQL, and provider
+phase/final-schema observations with scripted models. Additional policy/pack
+cases pass in the full suite. [PR #248](https://github.com/EmelieHagander/Bob-the-builder/pull/248)
+publishes the exact tested tree `18be1cbfb922173689f132afd302431f39e21468`
+at reviewed source head `d0a8a1d915fbccc3dae3ca8a62e7f6629d589068`.
+[CI 38216748529](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748529)
+passes all **1,276 tests and 51 steps**, including canonical Edge checks and
+the intercepted browser flows. [CAD adapter 38216748542](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748542)
+and [PostgreSQL 38216748510](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38216748510)
+pass; the latter installs the full schema and passes **68 concurrent races**.
+
+The vocabulary check, frontend build, PWA and generated catalog checks pass. Canonical local Edge checking is
+blocked by this environment's refused `esm.sh` connection; no local browser is
+installed. The linked exact-source CI supplies Edge/browser evidence; no local
+browser pass is claimed.
+The migration CLI aborts in its installed Bun runtime even for `migration new
+--help`; observed UTC fallback filenames are explicitly recorded. Manual code
+and owning-contract review follow Archie/verify; no independent subagent review
+is claimed.
+
+### Hosted calculator release
+
+The target `yuobtgoidmmmwfqenkau` was read before installation. Both new functions
+were absent, the retained purchase writer contained exactly the reviewed
+arithmetic block, manifest `1014e17d-3fa2-46b9-a30c-e3829d5a67d6` was active,
+and there were zero active unexpired Bob jobs/models. Only the two reviewed
+migrations were applied, in SQL → both runtimes → catalog order:
+
+| Reviewed file | Installed ledger version/name |
+|---|---|
+| `20261012060203_project_calculator.sql` | `20261012073221 project_calculator` |
+| `20261012060715_ai_calculator_catalog.sql` | `20261012073416 ai_calculator_catalog` |
+
+Both new function bodies match their reviewed source exactly. Their empty
+search paths, invoker mode and authenticated-only EXECUTE grants were read
+back; anon/service/PUBLIC cannot execute them. The retained purchase writer
+matches its complete pre-release definition with only the asserted arithmetic
+block replaced. A hosted **BEGIN … ROLLBACK** smoke replays all three existing
+saved purchase revisions to their unchanged allowance/purchase quantities,
+checks decimal/increment rounding and denies outsider/anon/service reads.
+It creates no fixture rows, calls no models and commits no owner changes.
+
+| Runtime | Authentication and exact source readback |
+|---|---|
+| `ask-bob 105` | ACTIVE, existing JWT true; all **92** bundled files match; bundle `1689fa9b72819dca5106c7c5c5a85ee9b8dbfb9546d647a6105372e5a2990e71` |
+| `bob-worker 73` | ACTIVE, existing JWT false with unchanged job/capability authentication; all **90** bundled files match; bundle `653c99a2c873e5e57fc6511e30d4c5848972a0979a6a6ebebc5fbf9aa536e71e` |
+
+Submitted closures have **93/92 files**. The compiler omits only
+`src/data/provenance.ts` and the worker's type-only `bob-request.ts`, as in the
+previous release. Every previously bundled file remains present. The new
+calculator and schema-phase modules are in both bundles; no unrelated runtime
+or authentication setting changed.
+
+Canonical catalog readback returns manifest
+`6482763a-214b-4022-9e32-92b42e9dac71`, **272 definitions**. The calculator's
+contract/policy, toolbox and all six role tool-key additions match the exact
+generated publication. The six appended instructions and new schema-phase
+fragment match exactly. Exactly **13** existing identities change and **2**
+are added; all unrelated cross-app versions/hashes and all models/settings
+remain unchanged. Resolving the previous manifest reproduces its entire
+original payload, so older pinned sessions keep their original contract.
+
+`scripts/check-live-calculator.ts` ran against actual Auth and `ask-bob` using
+the existing public guest and one disposable project. It supplied a synthetic
+**1.001 m provided specification at revision 1**, two explicit 18 mm side
+choices and a 5 mm clearance choice. Bob returned **960 mm**. Content-free
+execution evidence for turn `1620f8ad-cc35-4cbd-8056-6fe02f402b4e` records
+`calculate_project` both offered and selected by `ask-bob`, followed by one
+tool event with status **calculated**. The source value/unit/truth/revision
+remained unchanged and no Artifact or requirement was created. This is an
+explicitly requested graph preview with a public advice-only account; it does
+not prove natural-language specialist choice, named-member writing or bed fit.
+
+The exact disposable project `p_caf7c27b4b5046ba9b0f5b299237c74a` was removed
+after verifying its name, guest ownership and absence of generated outputs.
+The first cleanup call returned the connector's expired-request error; the
+narrower guarded single-project delete succeeded and independent readback
+confirms cleanup. All **129 original tables / 1,392 rows** retain their exact
+pre-release counts and complete-row digests, including saved construction/CAD,
+material history and all **12 shared models / 38 shared settings**. Security
+and performance advisors add **zero** findings against the pre-release
+snapshot. Existing shared-project findings were not changed.
+
+[State](bob-delivery-flow.md#state) retains PR review/merge and the remaining
+graph/unit/history/price boundaries plus E's real member/mockup/cost acceptance.

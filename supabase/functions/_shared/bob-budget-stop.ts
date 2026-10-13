@@ -1,4 +1,5 @@
 import type { OpenAIServiceResponse } from './openai-service.ts'
+import type { AiCatalogSession } from './ai-catalog.ts'
 
 const reasons = ['usd_limit','call_limit','unpriced_usage','pending_outcome','context_cleared','review_reserve','unknown'] as const
 export type BobBudgetStop = {
@@ -34,13 +35,15 @@ export function budgetStopMessage(stop:BobBudgetStop|undefined) {
  if(!stop)return 'Ritförsöket pausades vid en gräns; den exakta orsaken är inte tillgänglig. Skriv till mig igen om ritningen, så fortsätter jag.'
  return 'Ritförsöket pausades vid en gräns. Skriv till mig igen om ritningen, så fortsätter jag där den stannade.'
 }
-/** Model-facing. Bob is told what to do, not how limits are sized or renewed. */
-export function budgetResumeAction(stop:BobBudgetStop|undefined) {
- if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return 'A previous step of this drawing is still being settled. Tell the owner the drawing is paused and finish this reply; do not retry in this turn. It continues on a later message about it.'
- if(stop?.reasons.includes('context_cleared'))return 'Restore the same request through its existing context-recovery path. Do not create a new request.'
- if(stop?.reasons.includes('review_reserve'))return 'Design work reached this turn\'s limit before review. Review or deliver what exists; do not dispatch more design work in this turn.'
- if(stop?.scope==='turn')return 'This turn\'s work limit is reached. Tell the owner what exists and that the next message continues this same request_id; do not retry in this turn.'
- return 'This drawing paused at a limit. Tell the owner plainly and finish this reply; do not read requests or sources to look for a way around it. The owner\'s next message about this drawing continues it: call design_project_cad at once with this same request_id, brief and handoff.'
+/** Model-facing. Bob is told what to do; sizing and renewal of limits stay server-side (texts live in the AI catalog). */
+export function budgetResumeAction(stop:BobBudgetStop|undefined,aiCatalog:AiCatalogSession) {
+ if(stop?.reasons.some(r=>r==='pending_outcome'||r==='unpriced_usage'))return aiCatalog.text('feedback.bob-budget-stop.resume.9c3a74e182d5')
+ if(stop?.reasons.includes('context_cleared'))return aiCatalog.text('feedback.bob-budget-stop.resume.f0e268bdddc1')
+ if(stop?.reasons.includes('review_reserve'))return aiCatalog.text('feedback.bob-budget-stop.resume.f43f67fe832d')
+ if(stop?.reasons.some(r=>r==='usd_limit'||r==='call_limit'))return stop.scope==='drawing_request'
+  ?aiCatalog.text('feedback.bob-budget-stop.resume.eefd1193bc73')
+  :aiCatalog.text('feedback.bob-budget-stop.resume.51aac0199a6c')
+ return aiCatalog.text('feedback.bob-budget-stop.resume.bca602f7146a')
 }
 /** What Bob sees of a stop: the pause and its next action, never the ledger. */
 export function withoutBudgetDetails<T extends Record<string,unknown>>(outcome:T):Omit<T,'budget_stop'|'budget_grant'> {

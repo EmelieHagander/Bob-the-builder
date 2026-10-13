@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { prepareWorkingContext, type ContextFrame } from '../supabase/functions/_shared/bob-working-context.ts'
+import { prepareWorkingContext, type ContextFrame } from './support/colleague-catalog-fixture.ts'
 import { checkedBrief, readStoredBrief, BRIEF_LIMITS } from '../supabase/functions/_shared/bob-conversation-brief.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import type { ModelCall } from '../supabase/functions/_shared/project-answer.ts'

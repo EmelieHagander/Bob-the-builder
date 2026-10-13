@@ -1,5 +1,6 @@
 import { responseMessageContent, hasImageContent, prepareResponseImages, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, backgroundResponse, type BackgroundCall } from './ai-background.ts';
+import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
 /**
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
@@ -77,6 +78,11 @@ interface AiModelRow {
   supports_reasoning: boolean;
 }
 
+interface AiSettingsRow {
+  module_id: string; is_enabled: boolean; model?: string; max_output_tokens?: number;
+  reasoning_effort?: string; prompt_template?: string;
+}
+
 const MODEL_CACHE_TTL_MS = 60_000;
 let modelCache: { rows: AiModelRow[]; at: number } | null = null;
 
@@ -98,6 +104,14 @@ async function loadModels(aiClient: SupabaseClient): Promise<AiModelRow[]> {
   const rows = (data ?? []) as AiModelRow[];
   modelCache = { rows, at: now };
   return rows;
+}
+
+/** Configuration and prices stay pinned, but an explicit model retirement is a
+ * live allow-list revocation. A current-tier change alone does not retire it. */
+async function loadPinnedModel(aiClient: SupabaseClient, role: ResolvedAiRole): Promise<AiModelRow[]> {
+  const { data, error } = await aiClient.from('ai_models').select('model_name,is_active').eq('model_name',role.model.model_name);
+  if (error || !data?.some(row => row.model_name === role.model.model_name && row.is_active === true)) return [];
+  return [role.model];
 }
 
 /**
@@ -139,6 +153,14 @@ export interface OpenAIServiceOptions {
   workspaceId?: string;
   userId?: string;
   model?: string; // Override model selection (e.g., 'gpt-5-mini')
+  /** Trusted server-only, immutable request manifest. Opt-in preserves other
+   * apps' settings contract; catalog callers never fall back to legacy rows. */
+  aiDefinition?: ResolvedAiRole;
+  catalogRoleKey?: string;
+  catalogSchemaKey?: string;
+  catalogVariables?: AiVariables;
+  catalogSchemaParameters?: Record<string, unknown>;
+  catalogToolParameters?: Record<string, Record<string, unknown>>;
   maxOutputTokens?: number;
   /** Explicit per-call ceiling for bounded internal routing. Does not alter app settings. */
   outputTokenLimit?: number;
@@ -305,8 +327,9 @@ export async function callOpenAIResponses<T = unknown>(
     coworkerId,
     functionName,
     userId,
-    timeoutMs = 120000
+    timeoutMs: requestedTimeoutMs = 120000
   } = options;
+  const timeoutMs = Math.min(requestedTimeoutMs,options.aiDefinition?.timeoutMs ?? Infinity);
 
   const maxOutputTokens = options.maxOutputTokens || 4000;
 
@@ -342,11 +365,22 @@ export async function callOpenAIResponses<T = unknown>(
   const aiClient = createAiClient();
 
   // Settings and catalogue in parallel; both live in the shared `ai` schema.
+  const catalogRole = options.aiDefinition;
+  try {
+    if (catalogRole) {
+      if (options.model) throw new Error('ai_profile_incompatible: direct model override');
+      validateAiCall(catalogRole, { app: options.app,
+        images: hasImageContent(options.messages) || !!options.images?.some(image => image.mimeType !== 'application/pdf'),
+        tools: !!options.tools?.length, schema: !!schema, });
+    }
+  } catch (error) {
+    return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: catalogRole?.model.model_name ?? 'unresolved', error: error instanceof Error ? error.message : 'ai_profile_incompatible' };
+  }
   const [modelsResult, settingsResult] = await Promise.all([
-    loadModels(aiClient),
+    catalogRole ? loadPinnedModel(aiClient,catalogRole) : loadModels(aiClient),
     aiClient
       .from('ai_settings')
-      .select('model, max_output_tokens, temperature, reasoning_effort, module_id, prompt_template, is_enabled, metadata')
+      .select(catalogRole ? 'module_id,is_enabled' : 'model,max_output_tokens,temperature,reasoning_effort,module_id,prompt_template,is_enabled,metadata')
       .eq('app', options.app)
       .eq('coworker_id', coworkerId)
       .eq('function_name', functionName)
@@ -354,7 +388,8 @@ export async function callOpenAIResponses<T = unknown>(
   ]);
 
   const models = modelsResult;
-  const { data: allSettings, error: settingsError } = settingsResult;
+  const { error: settingsError } = settingsResult;
+  const allSettings = settingsResult.data as unknown as AiSettingsRow[] | null;
 
   if (settingsError) {
     console.warn(`[OpenAI Service] Settings lookup failed: ${settingsError.message}`);
@@ -362,6 +397,10 @@ export async function callOpenAIResponses<T = unknown>(
 
   const settings = allSettings?.find((s: { module_id: string }) => s.module_id === module) ||
                    allSettings?.find((s: { module_id: string }) => s.module_id === 'global') || null;
+
+  if (catalogRole && (settingsError || !settings)) {
+    return { success: false, data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, model: catalogRole.model.model_name, error: 'ai_profile_missing: function enablement' };
+  }
 
   // The kill switch: the owner turned this function off. Reported as a normal
   // failure so the caller's existing error path handles it.
@@ -377,11 +416,11 @@ export async function callOpenAIResponses<T = unknown>(
 
   // Explicit override, else the setting row, else the catalogue default.
   const defaultModelRow = models.find((m) => m.is_default) || models[0];
-  const configuredModel = options.model || settings?.model || defaultModelRow?.model_name;
+  const configuredModel = catalogRole?.model.model_name || options.model || settings?.model || defaultModelRow?.model_name;
 
   // The catalogue IS the allow-list — no hardcoded array to keep in sync.
   let modelRow = models.find((m) => m.model_name === configuredModel);
-  if (!modelRow) {
+  if (!modelRow && !catalogRole) {
     if (configuredModel) {
       console.warn(
         `[OpenAI Service] Model "${configuredModel}" is not in the active catalogue, falling back to ${defaultModelRow?.model_name}`
@@ -396,8 +435,8 @@ export async function callOpenAIResponses<T = unknown>(
       success: false,
       data: null,
       usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 },
-      model: FALLBACK_MODEL,
-      error: 'No active AI model is configured'
+      model: catalogRole?.model.model_name ?? FALLBACK_MODEL,
+      error: catalogRole ? 'ai_tier_unavailable: model retired or allow-list unavailable' : 'No active AI model is configured'
     };
   }
 
@@ -407,7 +446,7 @@ export async function callOpenAIResponses<T = unknown>(
   // Never ask for more than the model can actually produce.
   const dbMaxTokens = settings?.max_output_tokens || 0;
   const configuredMaxTokens = Math.min(
-    Math.max(dbMaxTokens, maxOutputTokens),
+    catalogRole ? catalogRole.maxOutputTokens : Math.max(dbMaxTokens, maxOutputTokens),
     modelRow.max_output_tokens,
     options.outputTokenLimit && options.outputTokenLimit > 0 ? options.outputTokenLimit : Number.POSITIVE_INFINITY
   );
@@ -416,7 +455,9 @@ export async function callOpenAIResponses<T = unknown>(
   const dbPromptTemplate = settings?.prompt_template?.trim() || '';
   let effectiveSystemMessage: string;
   
-  if (options.useHardcodedPrompt === true) {
+  if (catalogRole) {
+    effectiveSystemMessage = systemMessage ?? catalogRole.systemMessage;
+  } else if (options.useHardcodedPrompt === true) {
     effectiveSystemMessage = systemMessage || '';
   } else if (dbPromptTemplate) {
     effectiveSystemMessage = dbPromptTemplate;
@@ -523,6 +564,11 @@ export async function callOpenAIResponses<T = unknown>(
       input: inputMessages,
       ...modelParams
     };
+    if (catalogRole) {
+      const { verbosity, size: _size, quality: _quality, output_format: _format, background: _background, ...parameters } = catalogRole.providerParameters;
+      Object.assign(requestBody, parameters);
+      if (verbosity) requestBody.text = { verbosity };
+    }
     
     // Add reasoning effort ONLY for reasoning-capable models.
     //
@@ -536,7 +582,7 @@ export async function callOpenAIResponses<T = unknown>(
     // effort is the main cost and latency dial, and it belongs next to the
     // model choice in shared.ai_settings rather than compiled into each function.
     // Call sites that pass reasoningEffort still work as a fallback.
-    const effectiveEffort = settings?.reasoning_effort || options.reasoningEffort;
+    const effectiveEffort = catalogRole ? catalogRole.reasoningEffort : settings?.reasoning_effort || options.reasoningEffort;
     const appliedEffort = effectiveEffort && modelRow.supports_reasoning ? effectiveEffort : null;
     if (appliedEffort) {
       requestBody.reasoning = { effort: appliedEffort };
@@ -589,6 +635,7 @@ export async function callOpenAIResponses<T = unknown>(
     // Add structured output format
     if (schema && schemaName && !options.tools) {
       requestBody.text = {
+        ...(catalogRole?.providerParameters.verbosity ? { verbosity: catalogRole.providerParameters.verbosity } : {}),
         format: {
           type: "json_schema",
           name: schemaName,
@@ -1082,6 +1129,7 @@ async function logAIUsage(
  * ══════════════════════════════════════════════════════════════════════════ */
 
 const IMAGES_ENDPOINT = "https://api.openai.com/v1/images/generations";
+const IMAGE_EDITS_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
 export interface ImageCallOptions {
   /** Owning app, by schema name: 'hearth' | 'akr' | 'bob' | 'maidin'. */
@@ -1093,11 +1141,14 @@ export interface ImageCallOptions {
   /** What to draw. A non-empty prompt_template setting is prepended as art
    *  direction, so the house style can be retuned without a deploy. */
   prompt: string;
+  /** Caller-authorised originals for a reference-based edit. Never persisted here. */
+  referenceImages?: { bytes: Uint8Array; contentType: 'image/png' | 'image/jpeg' | 'image/webp' }[];
   /** Portrait by default — cards and plates are portrait artefacts. */
   size?: "1024x1024" | "1024x1536" | "1536x1024";
   quality?: "low" | "medium" | "high";
   /** Override the configured model. Still checked against the catalogue. */
   model?: string;
+  aiDefinition?: ResolvedAiRole;
   timeoutMs?: number;
 }
 
@@ -1133,41 +1184,54 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   // ledger — no end-user JWT is in scope inside this service.
   const aiClient = createAiClient();
 
+  const catalogRole = options.aiDefinition;
+  try {
+    if (catalogRole) {
+      if (options.model) throw new Error('ai_profile_incompatible: direct model override');
+      validateAiCall(catalogRole, { app: options.app, imageOutput: true, images: !!options.referenceImages?.length });
+    }
+  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : 'ai_profile_incompatible' }; }
   const [models, settingsResult] = await Promise.all([
-    loadModels(aiClient),
+    catalogRole ? loadPinnedModel(aiClient,catalogRole) : loadModels(aiClient),
     aiClient
       .from('ai_settings')
-      .select('model, module_id, prompt_template, is_enabled')
+      .select(catalogRole ? 'module_id,is_enabled' : 'model,module_id,prompt_template,is_enabled')
       .eq('app', options.app)
       .eq('coworker_id', options.coworkerId)
       .eq('function_name', options.functionName)
       .in('module_id', [module, 'global']),
   ]);
 
-  const allSettings = settingsResult.data;
+  const allSettings = settingsResult.data as unknown as AiSettingsRow[] | null;
   const settings = allSettings?.find((s: { module_id: string }) => s.module_id === module) ||
                    allSettings?.find((s: { module_id: string }) => s.module_id === 'global') || null;
+
+  if (catalogRole && (settingsResult.error || !settings)) return { ok: false, error: 'ai_profile_missing: function enablement' };
 
   if (settings && settings.is_enabled === false) return { ok: false, error: "disabled" };
 
   // Only a model that can actually produce an image. The catalogue flag is the
   // gate, so switching image models stays a row edit like everything else.
   const imageModels = models.filter((m) => m.supports_image_output);
-  const requested = options.model ?? settings?.model;
-  const model = imageModels.find((m) => m.model_name === requested) ?? imageModels[0];
+  const requested = catalogRole?.model.model_name ?? options.model ?? settings?.model;
+  const model = imageModels.find((m) => m.model_name === requested) ?? (catalogRole ? undefined : imageModels[0]);
 
   if (!model) {
     console.error("[OpenAI Service] No image-capable model in shared.ai_models");
-    return { ok: false, error: "no_model" };
+    return { ok: false, error: catalogRole ? 'ai_tier_unavailable: model retired or allow-list unavailable' : "no_model" };
   }
+  const references = options.referenceImages ?? [];
+  if (references.length && (!model.supports_images || references.length > 4
+    || references.some(r => !['image/png','image/jpeg','image/webp'].includes(r.contentType) || !r.bytes.length || r.bytes.length > 6 * 1024 * 1024)
+    || references.reduce((total,r) => total + r.bytes.length,0) > 16 * 1024 * 1024)) return { ok: false, error: 'unsupported_image_references' };
 
   // A prompt override in the database wins as art direction; the caller's
   // prompt is the subject appended to it.
-  const artDirection = settings?.prompt_template?.trim();
+  const artDirection = catalogRole ? catalogRole.systemMessage : settings?.prompt_template?.trim();
   const prompt = artDirection ? `${artDirection}\n\n${options.prompt}` : options.prompt;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 180_000);
+  const timer = setTimeout(() => controller.abort(), Math.min(options.timeoutMs ?? 180_000,catalogRole?.timeoutMs ?? Infinity));
 
   const base = {
     app: options.app,
@@ -1180,16 +1244,25 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
   };
 
   try {
-    const res = await fetch(IMAGES_ENDPOINT, {
+    const parameters = {
+      model: model.model_name,
+      prompt,
+      size: catalogRole?.providerParameters.size ?? options.size ?? "1024x1536",
+      quality: catalogRole?.providerParameters.quality ?? options.quality ?? "high",
+      n: 1,
+    };
+    let body: string | FormData = JSON.stringify(parameters);
+    if (references.length) {
+      const form = new FormData();
+      for (const [name,value] of Object.entries(parameters)) form.append(name,String(value));
+      references.forEach((reference,i) => form.append('image[]',new Blob([new Uint8Array(reference.bytes)],{type:reference.contentType}),
+        `reference-${i + 1}.${reference.contentType === 'image/jpeg' ? 'jpg' : reference.contentType === 'image/webp' ? 'webp' : 'png'}`));
+      body = form;
+    }
+    const res = await fetch(references.length ? IMAGE_EDITS_ENDPOINT : IMAGES_ENDPOINT, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: model.model_name,
-        prompt,
-        size: options.size ?? "1024x1536",
-        quality: options.quality ?? "high",
-        n: 1,
-      }),
+      headers: { "Authorization": `Bearer ${apiKey}`, ...(references.length ? {} : {"Content-Type": "application/json"}) },
+      body,
       signal: controller.signal,
     });
 
@@ -1208,13 +1281,13 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
       return { ok: false, error };
     }
 
-    const body = await res.json();
-    const b64: string | undefined = body?.data?.[0]?.b64_json;
+    const responseBody = await res.json();
+    const b64: string | undefined = responseBody?.data?.[0]?.b64_json;
 
     const usage = {
-      input_tokens: body?.usage?.input_tokens || 0,
-      output_tokens: body?.usage?.output_tokens || 0,
-      total_tokens: body?.usage?.total_tokens || 0,
+      input_tokens: responseBody?.usage?.input_tokens || 0,
+      output_tokens: responseBody?.usage?.output_tokens || 0,
+      total_tokens: responseBody?.usage?.total_tokens || 0,
     };
     const costUsd = computeCostUsd(model, usage);
     console.log(
@@ -1224,7 +1297,7 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
     await logAIUsage(aiClient, {
       ...base,
       inputTokens: usage.input_tokens,
-      cachedInputTokens: body?.usage?.input_tokens_details?.cached_tokens || 0,
+      cachedInputTokens: responseBody?.usage?.input_tokens_details?.cached_tokens || 0,
       outputTokens: usage.output_tokens,
       reasoningTokens: 0,
       totalTokens: usage.total_tokens,

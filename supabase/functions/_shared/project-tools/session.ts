@@ -75,7 +75,7 @@ export function serverRequestQuote(message: string): string {
 
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const onDemand = opts.toolInstructions === 'on_demand'
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
@@ -97,12 +97,17 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   }
   function resolve(row: ToolPolicy) {
     const def = handlers.get(row.name)
-    if (!row.active || !def || def.version !== row.schema_version) return { state: 'unavailable' as const, def }
+    if (!row.active || !def || def.version !== row.schema_version || (opts.catalogToolVersion && opts.catalogToolVersion(row.name) !== def.version)) return { state: 'unavailable' as const, def }
     return { state: def.gate(), def }
   }
-  const description = (row: ToolPolicy, def: ToolDefinition, includeManual: boolean) =>
-    [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
-  const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => ({
+  const description = (row: ToolPolicy, def: ToolDefinition, includeManual: boolean) => opts.catalogTool
+    ? opts.catalogTool(row.name, { include_manual: includeManual }).function.description
+    : [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
+  const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => opts.catalogTool
+    ? opts.catalogTool(row.name, { include_manual: !onDemand, server_quote: quote !== undefined,
+        ...(row.name === 'list_project_category' && object(def.spec.function.parameters.properties) && object(def.spec.function.parameters.properties.category)
+          ? { categories: def.spec.function.parameters.properties.category.enum } : {}) })
+    : ({
     type: 'function', function: { name: row.name,
       description: description(row, def, !onDemand),
       parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
@@ -127,7 +132,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       if (onDemand && visible.size) {
-        specs.push(structuredClone(DESCRIBE_TOOL)); offered.set(DESCRIBE_TOOL.function.name, 1)
+        specs.push(opts.catalogTool ? opts.catalogTool(DESCRIBE_TOOL.function.name, {}) : structuredClone(DESCRIBE_TOOL)); offered.set(DESCRIBE_TOOL.function.name, 1)
         shelf.push({ name: DESCRIBE_TOOL.function.name, group: 'Tool manuals', state: 'offered' })
       }
       return specs
@@ -152,16 +157,16 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
           ...(resolved.state === 'missing_context' && resolved.def.waitingFor ? { waiting_for: resolved.def.waitingFor } : {}) })
       }
       const row = current.tools.find(r => r.name === name)
-      if (!row) { record('execute', name, 'invalid'); return safeStatus('invalid', 'There is no tool with that name. Use a tool from your toolbox.') }
+      if (!row) { record('execute', name, 'invalid'); return safeStatus('invalid', opts.feedback?.('invalid') ?? 'There is no tool with that name. Use a tool from your toolbox.') }
       const { state, def } = resolve(row)
       if (state !== 'available' || !def) {
         record('execute', name, state)
-        return safeStatus(state, state === 'missing_context' && def?.waitingFor ? `Not available yet: ${def.waitingFor}` : undefined)
+        return safeStatus(state, state === 'missing_context' && def?.waitingFor ? opts.feedback?.('waiting', { waiting: def.waitingFor }) ?? `Not available yet: ${def.waitingFor}` : undefined)
       }
       // The set offered to one model step is a fence: a tool that became available
       // later in the same batch is callable from the next step, not retroactively.
-      if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', 'This tool became available after this step began. Call it again in your next step.') }
-      if (offered.get(name) !== row.schema_version) return safeStatus('contract_changed', 'This tool changed during the turn. Use the version offered on your next step.')
+      if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', opts.feedback?.('not-offered') ?? 'This tool became available after this step began. Call it again in your next step.') }
+      if (offered.get(name) !== row.schema_version) return safeStatus('contract_changed', opts.feedback?.('contract-changed') ?? 'This tool changed during the turn. Use the version offered on your next step.')
       const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
       try {
         const result = await def.execute(input)

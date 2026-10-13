@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { createProjectWriter, parseProjectWrite, WRITE_TOOLS, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { runClaimedProjectTurn } from './support/bob-model-routing.ts'
-import { BOB_PERSONA } from '../supabase/functions/_shared/bob-prompt.ts'
+import { bobPersona } from './support/main-catalog-fixture.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
 
 const time='2026-09-17T12:00:00.000Z'
@@ -119,7 +119,7 @@ test('clear approval A leads through the real tool loop to one save and compact 
   const result=await runClaimedProjectTurn({...base(),writer:f.writer,
     callModel:async options=>{
       calls++
-      assert(options.systemMessage!.startsWith(BOB_PERSONA))
+      assert(options.systemMessage!.startsWith(bobPersona))
       assert(options.tools?.some(t=>t.function.name==='save_project_task'))
       if(calls===1)return {success:true,data:null,model:'fixture',responseId:'resp_tool',usage,toolCalls:[{id:'call_1',type:'function',function:{name:'save_project_task',arguments:JSON.stringify(args)}}]}
       const output=JSON.parse(options.messages![0].content!)

@@ -1,7 +1,7 @@
 import {test,before,after} from 'node:test'
 import assert from 'node:assert/strict'
 import {editPlanSnapshot} from '../supabase/functions/_shared/plan-edit.ts'
-import {createPlanAssistant} from '../supabase/functions/_shared/plan-assistant.ts'
+import {createPlanAssistant} from './support/colleague-catalog-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import type {PGlite} from '@electric-sql/pglite'

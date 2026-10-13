@@ -8,6 +8,8 @@ import { createProjectWriter, WRITE_TOOLS } from '../supabase/functions/_shared/
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { modelParameters } from '../supabase/functions/_shared/project-tools/session.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
+import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}, time='2026-09-21T08:00:00Z'
 const userId='00000000-0000-4000-8000-000000000001'
 const message='Spara uppgiften att kontrollmäta öppningen.'
@@ -28,7 +30,13 @@ function fixture() {
 
 test('real claimed loop offers the task tool with its guide from the first step, executes and persists its receipt',async()=>{
   const f=fixture();let calls=0,committed:any
-  const result=await runClaimedProjectTurn({...f.opts,commit:async r=>{committed=r},callModel:async o=>{
+  const manifest=structuredClone(catalogFixture().manifest())
+  manifest.manifest_id='task-guide-revision'
+  const taskDefinition=manifest.definitions.find(row=>row.prompt_key==='tools.save_project_task')!
+  taskDefinition.definition.description='Save or revise the project Task.'
+  taskDefinition.definition.additional_description='HOSTED_TASK_GUIDE_MARKER: read current ownership, then save the requested Task.'
+  const aiCatalog=createAiCatalogSession({rpc:async()=>{throw new Error('Pinned guide must not reload')}},{app:'bob',manifest})
+  const result=await runClaimedProjectTurn({...f.opts,aiCatalog,commit:async r=>{committed=r},callModel:async o=>{
     calls++
     assert.equal(o.tool_choice,undefined)
     const task=o.tools?.find(t=>t.function.name==='save_project_task')
@@ -36,7 +44,8 @@ test('real claimed loop offers the task tool with its guide from the first step,
       assert(task,'no discovery round: the tool is on the bench')
       assert.deepEqual(task.function.parameters,modelParameters(WRITE_TOOLS.find(t=>t.function.name==='save_project_task')!.function.parameters))
       assert(!('request_quote' in (task.function.parameters.properties as object)),'Bob is never asked for a quote')
-      assert.match(task.function.description,/Create or revise a Task/);assert.equal(f.writes,0)
+      assert.equal(task.function.description,aiCatalog.tool('save_project_task',{include_manual:true}).function.description)
+      assert.match(task.function.description,/HOSTED_TASK_GUIDE_MARKER/);assert.equal(f.writes,0)
       const {request_quote:_quote,...modelArgs}=args
       return response('save_project_task',modelArgs,calls)
     }
@@ -47,6 +56,19 @@ test('real claimed loop offers the task tool with its guide from the first step,
   assert.equal(result.evidence.writes?.[0].recordId,'taskNew');assert(isBobAnswerEvidence(result.evidence,'A'))
   assert.deepEqual(committed.evidence,result.evidence)
   assert(!result.evidence.sources.some(s=>/tool_catalog/.test(s.dataset)),'Tool guidance is not a project observation')
+})
+
+test('a pinned schema version must match both the live policy and executable handler before a tool is offered or run',async()=>{
+  const f=fixture(),manifest=structuredClone(catalogFixture().manifest())
+  manifest.manifest_id='future-task-contract'
+  const task=manifest.definitions.find(row=>row.prompt_key==='tools.save_project_task')!
+  ;(task.definition.envelope as {schema_version:number}).schema_version=2
+  const aiCatalog=createAiCatalogSession({rpc:async()=>{throw new Error('Pinned contract must not reload')}},{app:'bob',manifest})
+  const toolbox=createBobToolSession({...f.opts,aiCatalog,readPolicy:f.opts.readToolPolicy})
+  assert(!(await toolbox.prepare()).some(tool=>tool.function.name==='save_project_task'))
+  assert(!toolbox.toolbox.some(entry=>entry.name==='save_project_task'))
+  assert.equal((await toolbox.execute('save_project_task',args)).status,'unavailable')
+  assert.equal(f.writes,0)
 })
 
 test('guest has no write tools on the bench and a guessed write is refused',async()=>{
