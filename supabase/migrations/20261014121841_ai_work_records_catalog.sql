@@ -66,19 +66,15 @@ declare contracts jsonb:=$bound_edit_contracts$[
                 "type": "string",
                 "enum": [
                   "set",
-                  "append_text",
-                  "remove"
+                  "append_text"
                 ]
               },
               "path": {
                 "type": "string"
               },
               "value_json": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "JSON-encoded new value. null only for remove. append_text appends the decoded string verbatim."
+                "type": "string",
+                "description": "JSON-encoded new value. Use the string null to clear an explicitly nullable content field."
               }
             },
             "required": [
@@ -140,19 +136,15 @@ declare contracts jsonb:=$bound_edit_contracts$[
                 "type": "string",
                 "enum": [
                   "set",
-                  "append_text",
-                  "remove"
+                  "append_text"
                 ]
               },
               "path": {
                 "type": "string"
               },
               "value_json": {
-                "type": [
-                  "string",
-                  "null"
-                ],
-                "description": "JSON-encoded new value. null only for remove. append_text appends the decoded string verbatim."
+                "type": "string",
+                "description": "JSON-encoded new value. Use the string null to clear an explicitly nullable content field."
               }
             },
             "required": [
@@ -210,6 +202,109 @@ declare contracts jsonb:=$bound_edit_contracts$[
         "target_ref",
         "source_ref",
         "action",
+        "reason",
+        "request_quote"
+      ]
+    }
+  },
+  {
+    "name": "change_task_readiness",
+    "description": "Change a Task need or dependency using a task_ref from read_work_context. Existing needs/dependencies use their zero-based item_index; additions and confirmation use null. add_dependency chooses another Task source_ref and optional checkpoint_index from its instruction_steps; all other actions use source_ref/checkpoint_index=null. add_need authors only /kind(tool|information), /label and /notes; edit_need changes only /label or /notes and preserves readiness. set_need_ready uses ready=true/false from actual evidence; other actions ready=null. Dependency addition and readiness confirmation use note; other actions note=null. Unused changes is []. Confirmation still requires no blockers and never invents inspection evidence.",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_ref": {
+          "type": "string"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "add_dependency",
+            "remove_dependency",
+            "add_need",
+            "edit_need",
+            "set_need_ready",
+            "remove_need",
+            "confirm_readiness"
+          ]
+        },
+        "item_index": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkpoint_index": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "set",
+                  "append_text"
+                ]
+              },
+              "path": {
+                "type": "string"
+              },
+              "value_json": {
+                "type": "string",
+                "description": "JSON-encoded new value. Use the string null to clear an explicitly nullable content field."
+              }
+            },
+            "required": [
+              "op",
+              "path",
+              "value_json"
+            ]
+          }
+        },
+        "ready": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "request_quote": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_ref",
+        "action",
+        "item_index",
+        "source_ref",
+        "checkpoint_index",
+        "changes",
+        "ready",
+        "note",
         "reason",
         "request_quote"
       ]
@@ -333,6 +428,18 @@ declare contracts jsonb:=$bound_edit_contracts$[
       "complete"
     ],
     "active": true
+  },
+  {
+    "name": "change_task_readiness",
+    "description": "Change one Task dependency or need from its exact read context.",
+    "how_to": "Read the Task and prerequisite first. Choose returned refs and item indices. Preserve other needs and dependencies; readiness requires actual evidence and canonical blocker checks.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
   }
 ]$bound_edit_policies$::jsonb;
  append jsonb:=$bound_edit_append$[
@@ -382,6 +489,10 @@ declare contracts jsonb:=$bound_edit_contracts$[
   },
   {
     "key": "tools.delete_shopping_item",
+    "text": " Superseded for fresh manifests by read_work_context and explicit edit_work_record/create_work_record/change_work_relation/change_work_state. Runtime binds identity, exact snapshot, scope and preserved data."
+  },
+  {
+    "key": "tools.manage_task_readiness",
     "text": " Superseded for fresh manifests by read_work_context and explicit edit_work_record/create_work_record/change_work_relation/change_work_state. Runtime binds identity, exact snapshot, scope and preserved data."
   }
 ]$bound_edit_append$::jsonb;

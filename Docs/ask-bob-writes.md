@@ -96,7 +96,7 @@ rewritten by installation.
 
 **Source implementation; not yet deployed.** `project-work-records.ts` adds
 `read_work_context`, `edit_work_record`, `create_work_record`,
-`change_work_relation` and `change_work_state`. These replace twelve legacy
+`change_work_relation`, `change_work_state` and `change_task_readiness`. These replace thirteen legacy
 writes for Area/Task content, measurements and archive/restore, Task status and
 assignees, build days and scheduled Tasks, Area lifecycle, project phase and
 schedule, and Shopping deletion. They use opaque read refs and whitelisted
@@ -110,7 +110,7 @@ to unknown. An image-backed measurement cannot be duplicated through base-copy;
 edit its existing identity or use an explicit evidence operation. Content edits
 retain that image, exact truth/source and history. Build day edits retain the
 complete scheduled Task list and never change RSVP. Relation changes add/remove
-one member rather than asking Bob to replace the whole set. Schedule edits merge
+one member rather than asking Bob to replace the whole set. Readiness changes select existing needs/dependencies and checkpoint indices from the read, merge only changed need content, and keep real readiness evidence explicit. Schedule edits merge
 unchanged dates; clearing still requires both null. Canonical archive, phase,
 completion and deletion rules remain authoritative.
 
@@ -128,8 +128,8 @@ then the generated catalog; a source commit alone does not activate these tools.
 | Family | Current boundary / remaining work |
 | --- | --- |
 | Description, solution content, alternative creation, selection, evidence | Technically deployed in #254/#255; real member/model acceptance remains. |
-| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation above is source-only; twelve legacy write contracts are disabled only after its catalog activation. |
-| Task readiness | `manage_task_readiness` still exposes dependency/need/instruction IDs and revisions; bind reads and edit deltas. |
+| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation above is source-only; thirteen legacy write contracts are disabled only after its catalog activation. |
+| Task readiness | Third implementation binds dependencies, checkpoint selections and need changes to complete Task reads; new needs start unresolved and canonical confirmation rejects blockers. |
 | Living plan | Compiler/edit/save already retain server candidates. Decision, focus, Task/evidence links and nested proposal identities still need audited bound actions. |
 | Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
 | Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |

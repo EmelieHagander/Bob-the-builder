@@ -882,5 +882,17 @@
       "complete"
     ],
     "active": true
+  },
+  {
+    "name": "change_task_readiness",
+    "description": "Change one Task dependency or need from its exact read context.",
+    "how_to": "Read the Task and prerequisite first. Choose returned refs and item indices. Preserve other needs and dependencies; readiness requires actual evidence and canonical blocker checks.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
   }
 ]

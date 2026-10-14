@@ -1079,5 +1079,5 @@ recovers exact committed retries before freshness and preserves canonical domain
 rules and receipts. Task-assignee/event-Task parent triggers also serialize direct
 relation writes with Bob replacements. This does not grant new project authority.
 Install core, both runtime endpoints, then `20261014121841_ai_work_records_catalog.sql`.
-The separate publication retires twelve legacy writes only for fresh manifests.
+The separate publication retires thirteen legacy writes only for fresh manifests.
 See [write ownership](../Docs/ask-bob-writes.md) for coverage and remaining families.

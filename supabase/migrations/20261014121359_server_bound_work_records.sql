@@ -12,6 +12,11 @@ begin
   select to_jsonb(r) into rec from bob.tasks r where r.project_id=p_project and r.id=p_id;
   select jsonb_build_object('people',coalesce(jsonb_agg(jsonb_build_object('id',p.id,'name',p.name) order by p.id),'[]')) into relations
    from bob.task_assignees a join bob.people p on p.id=a.person_id and p.project_id=p_project where a.task_id=p_id;
+  relations:=relations||jsonb_build_object(
+   'needs',coalesce((select jsonb_agg(to_jsonb(n) order by n.id) from bob.task_needs n where n.project_id=p_project and n.task_id=p_id),'[]'),
+   'dependencies',coalesce((select jsonb_agg(to_jsonb(d) order by d.id) from bob.task_dependency_status d where d.project_id=p_project and d.task_id=p_id),'[]'),
+   'instructions',coalesce((select jsonb_agg(to_jsonb(i) order by i.position) from bob.task_steps i where i.project_id=p_project and i.task_id=p_id),'[]'),
+   'readiness',(select to_jsonb(r) from bob.current_task_readiness r where r.project_id=p_project and r.task_id=p_id));
  when 'measurements' then select to_jsonb(r) into rec from bob.current_measurements r where r.project_id=p_project and r.id::text=p_id;
  when 'build_days' then
   select to_jsonb(r) into rec from bob.events r where r.project_id=p_project and r.id=p_id;
@@ -85,10 +90,14 @@ begin
   or jsonb_typeof(domain) is distinct from 'object' or domain->>'kind' is null or domain->>'kind' not in ('area','task','measurement','measurement_state','task_work','operational','lifecycle')
   or domain-'kind'-'data' is distinct from p_payload-'kind'-'data' or octet_length(p_payload::text)>180000
   or coalesce(length(p_payload->>'request_quote'),0) not between 1 and 500 or msg is null or position(p_payload->>'request_quote' in msg)=0 then raise exception 'invalid_bound_work' using errcode='22023';end if;
- if domain->>'kind'='operational' and domain#>>'{data,resource}' is distinct from 'build_day' then raise exception 'invalid_bound_work' using errcode='22023';end if;
+ if domain->>'kind'='operational' and coalesce(domain#>>'{data,resource}','') not in ('build_day','task_work') then raise exception 'invalid_bound_work' using errcode='22023';end if;
  if domain->>'kind'='lifecycle' and coalesce(domain#>>'{data,action}','') not in ('archive_area','restore_area','delete_task','delete_build_day','delete_shopping_item','set_project_phase','set_area_phase','set_schedule') then raise exception 'invalid_bound_work' using errcode='22023';end if;
  perform 1 from bob.projects where id=p_project for no key update;
- if domain->>'record_id' is null then
+ if domain->>'kind'='operational' and domain#>>'{data,resource}'='task_work' then
+  op:='bound_work:readiness:'||jsonb_build_array(domain#>>'{data,task_id}',domain#>>'{data,action}',domain->>'record_id',md5(pins::text),
+   case when domain#>>'{data,action}'='add_need' then lower(btrim(domain#>>'{data,fields,label}'))
+    when domain#>>'{data,action}'='add_dependency' then jsonb_build_array(domain#>>'{data,fields,prerequisite_task_id}',domain#>>'{data,fields,prerequisite_step_id}')::text else md5(pins::text) end)::text;
+ elsif domain->>'record_id' is null then
   op:='bound_work:new:'||jsonb_build_array(domain->>'kind',pins->0->>'resource',pins->0->>'key',lower(btrim(coalesce(domain#>>'{data,name}',domain#>>'{data,subject}',domain#>>'{data,fields,title}'))))::text;
  else
   op:='bound_work:'||jsonb_build_array(domain->>'kind',domain->>'record_id',md5(pins::text))::text;
@@ -100,7 +109,9 @@ begin
   case pin->>'resource'
   when 'project' then perform 1 from bob.projects where id=p_project and id=pin->>'key' for update;
   when 'areas' then perform 1 from bob.areas where project_id=p_project and id=pin->>'key' for update;
-  when 'tasks' then perform 1 from bob.tasks where project_id=p_project and id=pin->>'key' for update;
+  when 'tasks' then
+   perform 1 from bob.tasks where project_id=p_project and id=pin->>'key' for update;
+   perform 1 from bob.task_steps where project_id=p_project and task_id=pin->>'key' order by id for share;
   when 'measurements' then perform 1 from bob.measurements where project_id=p_project and id::text=pin->>'key' for update;
   when 'build_days' then perform 1 from bob.events where project_id=p_project and id=pin->>'key' for update;
   when 'people' then perform 1 from bob.people where project_id=p_project and id=pin->>'key' for share;
@@ -112,11 +123,16 @@ begin
   if actual is null or actual is distinct from pin then raise exception 'record_changed' using errcode='40001';end if;
  end loop;
  -- Every existing destination must be among the exact locked snapshots.
- if domain->>'record_id' is not null and not exists(select 1 from jsonb_array_elements(pins) p where p->>'key'=domain->>'record_id' and p->>'resource'=case domain->>'kind'
+ if not (domain->>'kind'='operational' and domain#>>'{data,resource}'='task_work') and domain->>'record_id' is not null and not exists(select 1 from jsonb_array_elements(pins) p where p->>'key'=domain->>'record_id' and p->>'resource'=case domain->>'kind'
   when 'area' then 'areas' when 'task' then 'tasks' when 'task_work' then 'tasks' when 'measurement' then 'measurements' when 'measurement_state' then 'measurements' when 'operational' then 'build_days'
   else case domain#>>'{data,action}' when 'archive_area' then 'areas' when 'restore_area' then 'areas' when 'set_area_phase' then 'areas' when 'delete_task' then 'tasks' when 'delete_build_day' then 'build_days' when 'delete_shopping_item' then 'shopping' else 'project' end end)
  then raise exception 'unbound_work_target' using errcode='22023';end if;
- if domain->>'record_id' is null then
+ if domain->>'kind'='operational' and domain#>>'{data,resource}'='task_work' then
+  pin:=pins->0;
+  if pin->>'resource' is distinct from 'tasks' or pin->>'key' is distinct from domain#>>'{data,task_id}' then raise exception 'unbound_work_target' using errcode='22023';end if;
+  if domain->>'record_id' is not null and not exists(select 1 from jsonb_array_elements(case when domain#>>'{data,action}'='remove_dependency' then pin#>'{relations,dependencies}' else pin#>'{relations,needs}' end) n where n->>'id'=domain->>'record_id') then raise exception 'unbound_readiness_item' using errcode='22023';end if;
+  if domain#>>'{data,action}'='add_dependency' and not exists(select 1 from jsonb_array_elements(pins) p where p->>'resource'='tasks' and p->>'key'=domain#>>'{data,fields,prerequisite_task_id}' and (domain#>>'{data,fields,prerequisite_step_id}' is null or exists(select 1 from jsonb_array_elements(p#>'{relations,instructions}') i where i->>'id'=domain#>>'{data,fields,prerequisite_step_id}'))) then raise exception 'unbound_prerequisite' using errcode='22023';end if;
+ elsif domain->>'record_id' is null then
   pin:=pins->0;
   if domain->>'kind'='task' then
    if (pin->>'resource'='areas' and pin->>'key'=domain#>>'{data,area_id}' and domain#>>'{data,step_id}' is null

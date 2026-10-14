@@ -1,3 +1,4 @@
+import { schemaIssues } from '../supabase/functions/_shared/schema-issues.ts'
 import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -171,4 +172,52 @@ test('durable restart rebuilds exact refs and transport inputs while access is c
  assert.equal((await run()).status,'saved');data[0].record.description='Later data'
  assert.equal((await run()).status,'saved');assert.equal(reads,1);assert.equal(writes,1)
  allowed=false;assert.equal((await run()).status,'denied');assert.equal(writes,1)
+})
+test('readiness needs use saved indices and preserve other values; new needs start unresolved',async()=>{
+ await claim();const{tools,payloads}=setup()
+ const args=(task_ref:string,action:string,overrides:Record<string,unknown>={})=>({task_ref,action,item_index:null,source_ref:null,checkpoint_index:null,changes:[],ready:null,note:null,reason:'Requested readiness change',request_quote:quote,...overrides})
+ let t=await choose(tools,'tasks','Finish panel')
+ const add=args(t.ref,'add_need',{changes:[set('/label','Saw available'),set('/notes','Check actual availability')]})
+ let result=await tools.execute('change_task_readiness',add);assert.equal(result.status,'saved',JSON.stringify(result));assert.equal((await tools.execute('change_task_readiness',add)).status,'saved')
+ t=await choose(tools,'tasks','Finish panel');assert.equal(t.content.needs[0].ready,false)
+ assert.ok(!JSON.stringify(t.content).includes('taskA2'));assert.equal((await tools.execute('change_task_readiness',args(t.ref,'edit_need',{item_index:0,changes:[set('/notes','Owner will bring the saw')]}))).status,'saved')
+ const id=(await pg.query("select id from bob.task_needs where task_id='taskA2'")).rows[0].id
+ let row:any=(await pg.query('select * from bob.task_needs where id=$1',[id])).rows[0];assert.equal(row.label,'Saw available');assert.equal(row.ready,false);assert.equal(row.notes,'Owner will bring the saw')
+ t=await choose(tools,'tasks','Finish panel');await asProjectUser(pg,uid,"select bob.work_plan_command('A','taskA2','revise_need',$1,$2,'{\"label\":\"Saw availability changed\",\"notes\":\"Other caller\",\"ready\":false}')",[id,row.revision])
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'set_need_ready',{item_index:0,ready:true}))).status,'conflict')
+ t=await choose(tools,'tasks','Finish panel');assert.equal((await tools.execute('change_task_readiness',args(t.ref,'set_need_ready',{item_index:0,ready:true}))).status,'saved')
+ row=(await pg.query('select * from bob.task_needs where id=$1',[id])).rows[0];assert.equal(row.label,'Saw availability changed');assert.equal(row.notes,'Other caller');assert.equal(row.ready,true)
+ assert.equal((await rpc(payloads[0])).error,null,'original creation retry survives need revisions')
+ t=await choose(tools,'tasks','Finish panel');assert.equal((await tools.execute('change_task_readiness',args(t.ref,'remove_need',{item_index:0}))).status,'saved')
+ assert.equal((await pg.query('select count(*) n from bob.task_needs where id=$1',[id])).rows[0].n,0)
+})
+test('dependencies bind Task and checkpoint from reads; readiness confirmation cannot bypass blockers',async()=>{
+ await claim();const checkpoint=randomUUID()
+ await pg.query("insert into bob.task_steps(id,project_id,task_id,title,position,is_checkpoint,required,created_by) values($1,'A','taskA','Inspect cut',1,true,true,$2)",[checkpoint,uid])
+ const{tools}=setup(),args=(task_ref:string,action:string,overrides:Record<string,unknown>={})=>({task_ref,action,item_index:null,source_ref:null,checkpoint_index:null,changes:[],ready:null,note:null,reason:'Requested dependency',request_quote:quote,...overrides})
+ let t=await choose(tools,'tasks','Finish panel'),source=await choose(tools,'tasks','Assemble panel')
+ assert.equal(source.content.instruction_steps[0].title,'Inspect cut')
+ let result=await tools.execute('change_task_readiness',args(t.ref,'add_dependency',{source_ref:source.ref,checkpoint_index:0,note:'Inspect before finishing'}));assert.equal(result.status,'saved',JSON.stringify(result))
+ const row:any=(await pg.query("select * from bob.task_dependencies where task_id='taskA2'")).rows[0];assert.equal(row.prerequisite_task_id,'taskA');assert.equal(row.prerequisite_step_id,checkpoint)
+ t=await choose(tools,'tasks','Finish panel');assert.equal(t.content.dependencies[0].satisfied,false)
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'confirm_readiness',{note:'Review'}))).status,'invalid')
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'remove_dependency',{item_index:0}))).status,'saved')
+ assert.equal((await pg.query("select count(*) n from bob.task_dependencies where task_id='taskA2'")).rows[0].n,0)
+ // Changing the prerequisite after a read cannot silently bind its new checkpoint state.
+ t=await choose(tools,'tasks','Finish panel');source=await choose(tools,'tasks','Assemble panel')
+ await pg.query('update bob.task_steps set completed_at=clock_timestamp(),completed_by=$2,revision=revision+1 where id=$1',[checkpoint,uid])
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'add_dependency',{source_ref:source.ref,checkpoint_index:0,note:'Current checkpoint'}))).status,'conflict')
+ source=await choose(tools,'tasks','Assemble panel');t=await choose(tools,'tasks','Finish panel')
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'add_dependency',{source_ref:source.ref,checkpoint_index:0,note:'Re-add intentionally after removal'}))).status,'saved')
+ t=await choose(tools,'tasks','Finish panel');assert.equal(t.content.dependencies[0].satisfied,true)
+ assert.equal((await tools.execute('change_task_readiness',args(t.ref,'remove_dependency',{item_index:0}))).status,'saved')
+ await pg.exec("update bob.areas set phase='build' where id='areaA'")
+ t=await choose(tools,'tasks','Finish panel');const confirmed=await tools.execute('change_task_readiness',args(t.ref,'confirm_readiness',{note:'Owner reported prerequisites checked'}));assert.equal(confirmed.status,'saved',JSON.stringify(confirmed))
+ assert.equal((await choose(tools,'tasks','Finish panel')).content.readiness.readiness_state,'ready')
+
+})
+
+test('published readiness schema permits actions without content changes',()=>{
+ const schema=WORK_RECORD_TOOLS.find(t=>t.function.name==='change_task_readiness')!.function.parameters
+ assert.deepEqual(schemaIssues(schema,{task_ref:'work_example',action:'set_need_ready',item_index:0,source_ref:null,checkpoint_index:null,changes:[],ready:true,note:null,reason:'Actual availability reported',request_quote:quote}),[])
 })
