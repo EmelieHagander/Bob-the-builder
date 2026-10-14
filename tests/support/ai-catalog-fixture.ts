@@ -14,6 +14,22 @@ const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const boundEditContracts=source.match(/\$bound_edit_contracts\$([\s\S]+?)\$bound_edit_contracts\$/)
+ if(boundEditContracts){
+  const policies=JSON.parse(source.match(/\$bound_edit_policies\$([\s\S]+?)\$bound_edit_policies\$/)![1])
+  for(const patch of JSON.parse(boundEditContracts[1])){
+   const row=structuredClone(seed.find(row=>row.key==='tools.save_project_description'));row.key='tools.'+patch.name
+   row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policies.find((p:any)=>p.name===patch.name).how_to}
+   row.definition.envelope.schema_version=1
+   row.metadata={publication:'server-bound-edits',server_fields:patch.name==='edit_project_record'?['request_quote']:[]}
+   seed.push(row);versions.set(row.key,1)
+  }
+  for(const patch of JSON.parse(source.match(/\$bound_edit_append\$([\s\S]+?)\$bound_edit_append\$/)![1])){
+   const row=seed.find(row=>row.key===patch.key);row.definition.additional_description=(row.definition.additional_description??'')+patch.text;versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const box=seed.find(row=>row.key==='bob.tools');versions.set(box.key,versions.get(box.key)!+1)
+  for(const policy of policies){box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.'+policy.name);box.definition.shelves.find((s:any)=>s.label==='Project records and memory').tools.push(policy.name)}
+ }
  const taskTexts=source.match(/\$task_budget_texts\$([\s\S]+?)\$task_budget_texts\$/)
  if(taskTexts){
   for(const patch of JSON.parse(taskTexts[1])){

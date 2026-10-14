@@ -74,7 +74,7 @@ test('mandatory source publication activates seven versions atomically, preservi
   prior=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   settings=(await db.query('select * from shared.ai_settings order by app,function_name')).rows
   versions=(await db.query('select * from shared.ai_prompt_versions order by id')).rows
- });t.after(()=>pg.close())
+ },publication);t.after(()=>pg.close())
  const resolve=async(id:string|null=null)=>(await pg.query<any>("select shared.resolve_ai_catalog('bob',$1) result",[id])).rows[0].result
  const current=await resolve(),changed=new Set(['tools.design_project_cad','tools.save_cad_design','tools.plan_cad_pieces','tools.save_construction_draft','tools.check_construction_draft','bob.frame.outstanding','feedback.cad-assistant.next-action.facd61c3e829'])
  assert.deepEqual(current.models,prior.models);assert.deepEqual(await resolve(prior.manifest_id),prior)

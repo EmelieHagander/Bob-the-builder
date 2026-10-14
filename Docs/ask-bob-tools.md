@@ -15,6 +15,12 @@ conversation compaction or the selected-image grounding repair. See
 Current View and the remaining broader catalog/router/Librarian design are distinguished in
 [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target). The image-only catalog/list/open tools do not imply that general architecture is implemented.
 
+The first server-bound edit adapter is implemented in source for project descriptions
+and existing solutions: `read_project_edit_context` returns bound selections and
+`edit_project_record` accepts only content changes. The owning write contract
+records the exact scope, catalog/runtime rollout order and remaining tool families.
+This is not evidence of hosted activation or full-system migration.
+
 ## Data edit responsibility — specified 2026-10-14
 
 [Server-bound edits and canonical data reuse](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14)

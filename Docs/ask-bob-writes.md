@@ -15,6 +15,49 @@ accurate descriptions of existing implementations until their handlers migrate.
 > change; the system binds its target, retrieves existing data and preserves
 > everything the change does not address.
 
+### First implementation: project description and existing solutions
+
+**Source implementation, not yet hosted release evidence.**
+`project-edits.ts` exposes `read_project_edit_context` and `edit_project_record`.
+The reader returns complete, caller-scoped snapshots, human scope labels and
+opaque selections, two records per page. Selected solutions retain the exact
+selected revision; a newer head is disclosed and cannot be adopted silently.
+Measurement evidence retains its original value, unit, truth and source.
+
+The editor accepts only a selection, bounded sequential content changes and a
+reason. It binds request provenance, identity, scope, the version actually read,
+measurement pins and image links on the server. It preserves untouched nested
+features and decisions, generates IDs for new feature/choice entries, and resets
+design alignment to draft unless the edit explicitly supplies a supported new
+alignment. Text can be appended without retransmitting the existing description.
+Identity, parent, evidence-link and whole-list replacement paths are rejected.
+
+`read_bob_edit_context` is a caller-authorized invoker read. The claimed-turn
+`bob_project_write_v17` wrapper delegates to the existing domain writer. A selected
+solution revision and its target pointer advance in one transaction; both have
+canonical receipts. Stale solution/target pins reject the entire operation.
+An exact retry returns the original receipt; a changed retry conflicts. Durable
+read/write journaling recreates the same selections after a worker restart,
+while project authority is checked live. New manifests route legacy solution
+edits to this adapter and disable the legacy description replacement tool.
+An unresolved bound edit prevents creating a replacement alternative in that turn.
+Historical pinned manifests retain their original handler path.
+
+**Remaining scope:** creating/selecting alternatives, changing evidence links,
+and other write families still use their existing contracts. This slice does
+not claim that all Bob tools are free of model-supplied database fields. Editing
+an unselected alternative does not change a selected target. Reconciling an old
+selected revision with a newer alternative is an explicit separate decision.
+
+**Release order:** apply the additive core migration, deploy both `ask-bob` and
+`bob-worker`, then apply the generated catalog publication. Verify ordinary
+member access, read/edit/readback, stale/conflicting updates, receipt recovery
+and a real model run before calling it deployed acceptance. Catalog publication
+is separate so a handler upload alone cannot silently change active contracts.
+The isolated tests cover the real SQL/RLS/ledger path, downstream rollback,
+server restart, model-facing contract and completion after correction. They do
+not measure live model latency or cost.
+
 ### Responsibility boundary
 
 | Concern | Bob's responsibility | System responsibility |

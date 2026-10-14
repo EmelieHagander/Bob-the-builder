@@ -753,5 +753,23 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "edit_project_record",
+    "description": "Apply requested content changes to a previously read project description or solution.",
+    "how_to": "Read the edit context first. Send only edit_ref, content changes and a reason. The server binds the current request and preserves unmodified sources and decisions. A selected solution revision and its selected target advance together. On conflict re-read and reconsider; never create a replacement. Changes are applied sequentially. Source identity edits are not part of this first adapter.",
+    "schema_version": 1,
+    "active": true,
+    "always_load": true,
+    "preload_phases": []
+  },
+  {
+    "name": "read_project_edit_context",
+    "description": "Read complete project description or solution content for a server-bound edit.",
+    "how_to": "Select a returned edit_ref. The runtime owns identity, scope, versions and unchanged data. selected_solutions returns exact selected revisions and scopes; solutions returns alternatives. Use next_ref for further results.",
+    "schema_version": 1,
+    "active": true,
+    "always_load": true,
+    "preload_phases": []
   }
 ]

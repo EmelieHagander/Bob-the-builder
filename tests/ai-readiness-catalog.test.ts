@@ -58,7 +58,7 @@ test('fresh catalog tools have the exact executable schema and policy; original 
   const legacy = legacyCatalogFixture()
   assert(!('design_intent' in (legacy.tool('save_project_solution').function.parameters.properties as object)))
   assert.equal(legacy.definition('tools.save_project_solution').version, 1)
-  assert.equal(catalog.definition('tools.save_project_solution').version, 2)
+  assert.equal(catalog.definition('tools.save_project_solution').definition.envelope.schema_version, 2)
   const hosted = row(current, 'tools.save_project_solution')
   assert.deepEqual(hosted.definition.parameters, tool.function.parameters)
   const policy = (await pg.query<any>("select schema_version,how_to from bob.tool_catalog where name='save_project_solution'")).rows[0]
