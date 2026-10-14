@@ -539,7 +539,7 @@ await query(await readFile(new URL('./check-construction-consequences-release.sq
  const f=unbound,id=randomUUID(),scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
  const tx=(sql:string,tail='',service=false)=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${service?'set local role service_role;':`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`}${sql};${tail}commit;`
  const write=(p:any)=>`select bob.bob_project_write_v16(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
- const call=async(sql:string)=>JSON.parse((await query(tx(sql))).split('\n').find(line=>line.startsWith('{'))!)
+ const call=async(sql:string)=>JSON.parse((await query(tx(sql))).split('\n').filter(line=>line.startsWith('{')).at(-1)!)
  const base={record_id:null,expected_revision:0,expected_updated_at:null,request_quote:f.payload.request_quote}
  const material=await call(write({...base,kind:'catalog',data:{action:'ensure',key:'adopt-material',kind:'material',name:'Adoption fixture plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}))
  const recipe=f.payload.data.packet.recipe,parameters=parameterPacket(f.project,recipe)
