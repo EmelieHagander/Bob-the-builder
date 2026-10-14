@@ -1,3 +1,4 @@
+import type { SolutionActions } from './project-solution-actions.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import type { ConstructionTools } from './construction-draft.ts'
@@ -29,7 +30,7 @@ export async function runClaimedProjectTurn(opts: {
   hasAccess: () => Promise<boolean>;
   projectContext?: ProjectContext;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
-  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;

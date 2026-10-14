@@ -17,7 +17,8 @@ accurate descriptions of existing implementations until their handlers migrate.
 
 ### First implementation: project description and existing solutions
 
-**Source implementation, not yet hosted release evidence.**
+**Technically deployed through PR #254; ordinary-member/model acceptance remains open.**
+[Release evidence](foundation-verification.md#server-bound-project-edits--2026-10-14) records exact source, authentication and catalog readback.
 `project-edits.ts` exposes `read_project_edit_context` and `edit_project_record`.
 The reader returns complete, caller-scoped snapshots, human scope labels and
 opaque selections, two records per page. Selected solutions retain the exact
@@ -43,8 +44,8 @@ edits to this adapter and disable the legacy description replacement tool.
 An unresolved bound edit prevents creating a replacement alternative in that turn.
 Historical pinned manifests retain their original handler path.
 
-**Remaining scope:** creating/selecting alternatives, changing evidence links,
-and other write families still use their existing contracts. This slice does
+**Remaining deployed scope:** creating/selecting alternatives, changing evidence links,
+and other write families still use their existing contracts until the next publication ships. This slice does
 not claim that all Bob tools are free of model-supplied database fields. Editing
 an unselected alternative does not change a selected target. Reconciling an old
 selected revision with a newer alternative is an explicit separate decision.
@@ -57,6 +58,46 @@ is separate so a handler upload alone cannot silently change active contracts.
 The isolated tests cover the real SQL/RLS/ledger path, downstream rollback,
 server restart, model-facing contract and completion after correction. They do
 not measure live model latency or cost.
+
+### Next implementation: alternatives, selection and evidence links
+
+**Source implementation; not yet deployed.** `project-solution-actions.ts` adds
+`read_solution_context`, `create_solution_alternative`,
+`select_solution_alternative` and `change_solution_evidence`. The read returns
+paged, caller-scoped alternatives, selected versions, scopes, measurement truth
+and image metadata. Opaque refs are held only in the turn; raw identities,
+concurrency fields and request quotes are absent from model inputs.
+
+Creation is explicit and separate from revision/selection. A bound base copies
+all saved content and evidence pins, then applies only the requested differences.
+With no base, only new content is authored. Existing IDs remain on the server;
+the database generates the new solution identity. Creation never selects it.
+Unresolved edits, evidence changes or selection failures cannot be repaired by
+creating another alternative. The new catalog disables both legacy solution
+creation and target selection while preserving older pinned manifests.
+
+Selection binds the exact read solution and destination target revisions. A
+newer solution head or concurrent target change rejects the action. Evidence
+changes add/remove one measurement, set/clear the primary image, or add/remove
+one design image reference. Additions bind source revisions/timestamps; removals
+use indices from the complete solution read. Source values, truth, other links,
+features and decisions are preserved. Evidence changes reset alignment to draft;
+selected context advances the same target atomically. Image metadata does not
+claim pixel inspection or measured geometry.
+
+The additive `read_bob_solution_context` invoker and claimed-turn v18 wrapper
+retain the existing domain writers, project locks, receipts, budgets and live
+authority. Exact replay is checked before source freshness; subsequent intentional
+selections have separate operation keys. Read/write journals preserve the exact
+choices across restarts. Install core, both runtimes, then the separate immutable
+catalog publication. No existing data, model settings or older manifests are
+rewritten by installation.
+
+Remaining migration families are Area/Task content and assignments; measurements
+and components; plan/work links and lifecycle; materials, catalog, procurement
+and build days; drawing/image links and older geometry inputs. Existing
+construction and calculation adapters must be audited for nested source IDs as
+well as top-level fields. This next slice does not make those contracts migrated.
 
 ### Responsibility boundary
 

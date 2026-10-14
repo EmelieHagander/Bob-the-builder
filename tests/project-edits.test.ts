@@ -47,7 +47,7 @@ const turn = '30000000-0000-4000-8000-000000000001'
 before(async () => {
   pg = await projectSchema(async (db, name) => {
     if (name.endsWith('_ai_server_bound_edits_catalog.sql')) beforeCatalog = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
-  })
+  }, '20261014105502_ai_server_bound_edits_catalog.sql')
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())', [user,'one@example.test',other,'other@example.test'])
   await pg.exec("insert into bob.projects(id,slug,name,description) values('A','a','Project A','Original description'),('B','b','Private B','Private description')")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('otherB','B','Other','OB',$2)", [user,other])

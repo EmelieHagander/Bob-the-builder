@@ -2522,3 +2522,40 @@ boundary without spending on another real bed attempt.
 The original missing receipt's transport/storage cause remains unreconstructable.
 Ordinary member readback, the real bed/model/mockup outcome and measured cost per
 accepted drawing remain in [State](bob-delivery-flow.md#state).
+
+
+## Server-bound project edits — 2026-10-14
+
+[PR #254](https://github.com/EmelieHagander/Bob-the-builder/pull/254) merged as
+`ff2ede06b28440d514aecbf4d2ca9f8760c3cda3`, tree
+`748a9f707f7ea12ded2c5018faa6441d7095ef08`. Final PR CI
+[38554880035](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38554880035)
+and lineage concurrency
+[38554880117](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38554880117)
+passed, including full tests, normal-import Edge checks, build and browser gates.
+
+| Installed item | Readback |
+| --- | --- |
+| Core | Hosted `20261014114147`, `server_bound_project_edits`; exact source `20261014104842_server_bound_project_edits.sql`. |
+| ask-bob | ACTIVE v119, JWT true; bundle `f4efdd0fdc641694936d5c6cea6f9d5f9949c7c96532d4cdc79bef98f92179b9`. |
+| bob-worker | ACTIVE v87, JWT false with unchanged custom authentication; bundle `31d11a97a331a8bc0e8e1091e720bf254af6a85311358fae7707ae578d93e453`. |
+| Catalog | Hosted `20261014114222`, `ai_server_bound_edits_catalog`; exact source `20261014105502_ai_server_bound_edits_catalog.sql`. |
+| Resolved manifest | `347b69d0-3c08-4563-adfc-76c4ca5a540f`; both new tool contracts v1 and both live policies active. |
+
+Before upload, every deployed file matched the merge parent. After upload, all
+93 returned ask-bob files and 91 worker files matched the merged source exactly.
+Only type-only `provenance.ts` and, for the worker, `bob-request.ts` were omitted
+by the bundler. Core preceded both runtimes; catalog activation followed both
+source readbacks. The public reader/writer are invokers with empty search paths;
+the private writer retains its explicit claim/access guards. Authenticated has
+execute, anon and service_role do not. Security advisors returned seven finding
+categories across the shared project, none naming the new functions; existing
+unrelated findings were not changed by this release.
+
+Isolated tests cover caller/RLS/claimed-turn read–edit–readback, preservation,
+concurrent target rejection, downstream rollback, exact retry, successive edits,
+restart and model-loop completion after correction. This is a technical release:
+no ordinary-member Auth/HTTP acceptance or actual-model run of the new tools was
+performed during deployment. No live latency/cost improvement is asserted.
+[The write owner](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14)
+tracks remaining tool families and the next source-only solution-action slice.

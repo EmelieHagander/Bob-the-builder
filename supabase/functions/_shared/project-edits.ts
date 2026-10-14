@@ -92,7 +92,7 @@ export async function applyProjectDelta(snapshot: EditSnapshot, changes: unknown
   return record
 }
 
-function display(snapshot: EditSnapshot) {
+export function displayEditSnapshot(snapshot: EditSnapshot) {
   const r = snapshot.record
   const intent = r.design_intent ? structuredClone(r.design_intent) : null
   if (intent) {
@@ -136,7 +136,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
               || (input.resource === 'project_description' ? !safeText(snapshot.record.updated_at, 60) : !Number.isSafeInteger(snapshot.record.revision))) return unavailable()
             const ref = 'edit_' + await fingerprint(snapshot)
             contexts.set(ref, structuredClone(snapshot))
-            entries.push({ edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: display(snapshot) })
+            entries.push({ edit_ref: ref, scope: snapshot.scope_label, selected: snapshot.target !== null, selected_version_is_current: snapshot.target === null || snapshot.head_revision === undefined || snapshot.head_revision === snapshot.record.revision, content: displayEditSnapshot(snapshot) })
             const dataset = snapshot.resource === 'project_description' ? 'project' : 'solutions'
             if (opts.sources && !opts.sources.some(s => s.dataset === dataset && s.recordId === snapshot.record.id)) opts.sources.push({ projectId: opts.projectId, dataset, recordId: snapshot.record.id, label: snapshot.record.title ?? snapshot.scope_label, retrievedAt: new Date().toISOString(), updatedAt: snapshot.record.updated_at ?? snapshot.record.recorded_at ?? null, truth: 'unknown' })
           }
@@ -166,7 +166,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
       if (invalid && result.status === 'invalid') return fail(invalid)
       // The canonical receipt stays in the writer for delivery/recovery. The
       // model gets content and outcome, never a new set of IDs to transcribe.
-      return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: display({ ...snapshot!, record: result.receipt!.record }) } : result
+      return result.status === 'saved' ? { status: 'saved', selected_updated: snapshot?.target !== null && snapshot?.resource !== 'project_description', message: 'Saved the same record. Read again before another edit.', content: displayEditSnapshot({ ...snapshot!, record: result.receipt!.record }) } : result
     },
   }
 }
