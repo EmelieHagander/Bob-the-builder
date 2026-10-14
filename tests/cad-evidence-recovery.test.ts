@@ -1,13 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant} from './support/cad-parameter-fixture.ts'
+import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
+import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { shapeId, handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 const id = '30000000-0000-4000-8000-000000000091'
 const sourceId = '30000000-0000-4000-8000-000000000092'
-const request = { request_id: null, handoff, brief: 'Draw this concept.', area_id: null, component_id: null, step_id: 'work', artifact_id: null }
+const request = { request_id: null, handoff, brief: 'Draw this concept.', area_id: null, component_id: null, step_id: 'work', artifact_id: fixtureConstructionId, construction_revision:1 }
 const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id: 'p0-recovery',
   definitions: [{ id: 'panel', primitive: 'box' as const, material_ref: null, x_mm: 600, y_mm: 300, z_mm: 18 }],
   instances: [{ id: 'panel', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front' as const, 'top' as const] }
@@ -42,18 +43,9 @@ function fixture() {
         if (renderedThisConsultation && broken.has(q.dataset)) return { data: null, error: { code: 'backend_error' } }
         return { data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }
       }, 1000, 40),
-      readArtifact: async key => key === sourceId ? { recipe: structuredClone(recipe), revision: 1 } : null,
-      render: async r => { renders++; renderedThisConsultation = true; return { recipe: r, manifest: { instances: r.instances }, files: { front: 'PRIVATE_EXPORT' }, previews: { front: 'PRIVATE_PIXELS', top: 'PRIVATE_PIXELS' } } },
-      callModel: async o => {
-        if (o.functionName === 'cad-research') return reply('finish_cad_research', assessment)
-        if (o.functionName === 'cad-reviewer') { reviews++; return reviewReply() }
-        designerCalls++
-        if (options.finalRound && designerCalls < 10) return reply('search_project_data', { dataset: 'measurements', query: null, status: null, area_id: null, record_id: null, after_id: null })
-        if (options.finalRound || designerCalls % 2 === 1) return options.savedPart
-          ? reply('render_saved_cad_candidate', { ...metadata, source_artifact_id: sourceId, source_revision: 1, part_ids: ['panel'] })
-          : reply('render_cad_candidate', { ...metadata, recipe, dimension_bindings: [] })
-        return reply()
-      },
+      ...checkedCadFixture('A',recipe),
+      render: async r => { renders++; renderedThisConsultation=true; return checkedCadFixture('A',recipe).packet(r,{files:{front:'PRIVATE_EXPORT'},previews:{front:'PRIVATE_PIXELS',top:'PRIVATE_PIXELS'}}) },
+      callModel: async o => { assert.equal(o.functionName,'cad-reviewer'); reviews++; return reviewReply() },
     })
   }
   return { assistant, broken, statuses, reads, failCheckpoint: () => { checkpointsFail = true },
@@ -69,7 +61,7 @@ test('P0: all failed mandatory reads return together, preserve the draft and can
   assert.equal(f.row?.status, 'retrieval_failed')
   assert.deepEqual(f.row?.payload.incomplete, result.incomplete_datasets)
   assert.deepEqual((f.row?.payload.draft as any).recipe, recipe)
-  assert.deepEqual(f.row?.payload.assessment, assessment)
+  assert.deepEqual((f.row?.payload.draft as any).construction.artifact_id,fixtureConstructionId)
   assert(!JSON.stringify(f.row).includes('PRIVATE_'))
   assert(!f.statuses.includes('reviewed')); assert.equal(f.reviews, 0); assert.equal(a.metrics.reviews, 0)
   assert.equal(a.candidate, null); assert.equal(a.quality, null); assert.equal(a.remaining, 0)
@@ -104,14 +96,6 @@ test('P0: a failed retrieval checkpoint cannot expose a candidate or turn into a
   await a.markSaved(); assert.equal(f.row?.status, 'draft')
   assert.deepEqual(await a.consult(request), result); assert.equal(f.renders, 1)
 })
-
-for (const [name, options] of [['saved detail', { savedPart: true }], ['last designer call', { finalRound: true }]] as const) {
-  test(`P0: ${name} cannot bypass mandatory review evidence`, async () => {
-    const f = fixture(), a = f.assistant(options), result = await a.consult(request)
-    assert.equal(result.status, 'unavailable'); assert.equal(result.stage, 'review')
-    assert.equal(a.candidate, null); assert.equal(f.reviews, 0); assert.equal(f.renders, 1)
-  })
-}
 
 test('P0: a failed second consultation clears an earlier pending approval', async () => {
   const f = fixture(); f.broken.clear()

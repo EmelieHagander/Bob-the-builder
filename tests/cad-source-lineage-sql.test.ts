@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {test} from 'node:test'
@@ -8,7 +10,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {handoff} from './support/cad-review-fixture.ts'
 
 test('P1: exact lineage round-trips through SQL, rejects forged metadata and survives history',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Save this source-bound construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result

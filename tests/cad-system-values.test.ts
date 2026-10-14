@@ -10,25 +10,7 @@ import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.
 const assessment={checks:handoff.requirements.map(r=>({id:r.id,status:'known',blocking:false,source_refs:['requirement:'+r.id],action:'none',detail:'Requested concept'})),additional_needs:[]}
 const refs=new Set(handoff.requirements.map(r=>'requirement:'+r.id))
 const need={status:'assumption',blocking:false,source_refs:[],action:'bob_decision',detail:'Choose concept dimensions for bookshelf, drawers and filled end panel'}
-const recipe={contract_version:1 as const,units:'mm' as const,assembly_id:'concept',definitions:[{id:'panel',primitive:'box' as const,material_ref:null,x_mm:800,y_mm:600,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front' as const,'top' as const]}
 const reply=(name:string,args:unknown)=>({success:true,data:null,model:'fixture',responseId:'cursor',usage:{input_tokens:1,output_tokens:1,total_tokens:2},toolCalls:[{id:'call',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]})
-
-for(const legacy of [undefined,2,999])test(`render uses database target 7 with model target ${legacy}`,async()=>{
- let renders=0
- const assistant=createCadAssistant({projectId:'A',userId:'u',research:false,available:true,deadline:Date.now()+200000,hasAccess:async()=>true,
-  makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:7,solution_id:'selected'}]:[],related:[],truncated:false},error:null}),1000,40),
-  readArtifact:async()=>null,render:async r=>{renders++;return {recipe:r,manifest:{},files:{},previews:{front:'pixels',top:'pixels'}}},
-  callModel:async o=>{
-   if(o.functionName==='cad-reviewer')return reviewReply()
-   for(const name of ['render_cad_candidate','render_saved_cad_candidate']){
-    const schema=o.tools!.find(t=>t.function.name===name)!.function.parameters as any
-    assert(!Object.hasOwn(schema.properties,'target_revision'));assert(!schema.required.includes('target_revision'))
-   }
-   return reply('render_cad_candidate',{recipe,purpose:'project',title:'Concept',description:'Requested concept',assumptions:'Site fit remains unverified',measurements:[],...(legacy===undefined?{}:{target_revision:legacy})})
-  }})
- assert.equal((await assistant.consult({handoff,brief:'Draw the requested concept',area_id:null,component_id:null,step_id:null,artifact_id:null})).status,'ready')
- assert.equal(renders,1);assert.equal(assistant.candidate?.target_revision,7);assert.equal(assistant.candidate?.expected_revision,0)
-})
 
 test('new intake needs receive stable server IDs; existing persisted identities are reused',async()=>{
  const first=await prepareIntakeAssessment({...assessment,additional_needs:[need]},handoff,refs)

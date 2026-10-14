@@ -4,6 +4,7 @@ import {createCadAssistant} from '../supabase/functions/_shared/cad-assistant.ts
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {catalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
 import {fixtureDesignReadiness,createProjectContext} from './support/colleague-catalog-fixture.ts'
+import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {shapeId,handoff} from './support/cad-review-fixture.ts'
 import type {DesignReadiness} from '../supabase/functions/_shared/project-design-intent.ts'
@@ -12,12 +13,12 @@ const solution='44444444-4444-4444-8444-444444444444'
 const artifact='11111111-1111-4111-8111-111111111111'
 const image='33333333-3333-4333-8333-333333333333'
 const recipe:any={contract_version:1,units:'mm',assembly_id:'generic_fixture',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:600,y_mm:300,z_mm:18}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front','top']}
-const request={request_id:null,brief:'Draw the discussed object',handoff,area_id:null,component_id:null,step_id:null,artifact_id:null}
+const request={request_id:null,brief:'Draw the discussed object',handoff,area_id:null,component_id:null,step_id:null,artifact_id:fixtureConstructionId,construction_revision:1}
 const reply=(data:unknown)=>({success:true,data,model:'fixture',responseId:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2}})
 const renderReply=()=>({...reply(null),toolCalls:[{id:'render',type:'function' as const,function:{name:'render_cad_candidate',arguments:JSON.stringify({purpose:'project',recipe,parameter_plan:parameterPlan(recipe),dimension_bindings:[],title:'Discussed object',description:'A scoped concept',assumptions:'Physical fit still needs verification',target_revision:1,measurements:[]})}}]})
 function fixture(){
  const catalog=catalogFixture(),seen:any[]=[]
- let readiness=fixtureDesignReadiness('A',solution),renders=0
+ let readiness=fixtureDesignReadiness('A',solution,1,null,'construction'),renders=0
  const model=async(o:any)=>{
   seen.push(o)
   if(o.functionName==='cad-reviewer')return reply(JSON.stringify({verdict:'pass',summary:'Reviewed exact concept',requirements:Object.fromEntries(o.catalogSchemaParameters.requirement_ids.map((id:string)=>[id,{status:'met',evidence:'Exact recipe and generated views'}])),issues:[]}))
@@ -25,9 +26,9 @@ function fixture(){
  }
  const opts={aiCatalog:catalog,projectId:'A',userId:'owner',ownerRequest:'Draw the discussed object',research:false,available:true,deadline:Date.now()+300000,hasAccess:async()=>true,
   makeLookup:()=>createProjectLookup('A',async(_project,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:solution,solution_revision:1}]:[],related:[],truncated:false},error:null}),1000,40),
-  readDesignReadiness:async()=>structuredClone(readiness),readArtifact:async()=>null,
+  readDesignReadiness:async()=>structuredClone(readiness),...checkedCadFixture('A',recipe),
   callModel:async(o:any,guard?:()=>Promise<void>)=>{await guard?.();return catalogCall(model,catalog)(o)},
-  render:async(r:any,_source?:unknown,guard?:()=>Promise<void>)=>{await guard?.();renders++;return {recipe:r,manifest:{instances:r.instances},files:{front:'fixture'},previews:Object.fromEntries(r.views.map((v:string)=>[v,'fixture-pixels']))}},
+  render:async(r:any,_source?:unknown,guard?:()=>Promise<void>)=>{await guard?.();renders++;return checkedCadFixture('A',recipe).packet(r)},
  }
  return {opts,seen,model,get readiness(){return readiness},setReadiness:(value:DesignReadiness)=>{readiness=value},get renders(){return renders}}
 }
@@ -38,22 +39,22 @@ test('missing or unready canonical intent prevents CAD paid work, including an a
   const unready={...f.readiness,status:'needs_data' as const,pin:null,issues:[{code:'choice_open',choice_id:'support',message:'Investigate and recommend a support solution before geometry'}]}
   const assistant=createCadAssistant({...f.opts,
    readDesignReadiness:mode==='missing'?undefined:async(_revision,p)=>{purpose=p;return unready},
-   readArtifact:async()=>mode==='construction'?{source_kind:'construction',artifact_id:artifact,revision:1,recipe,target_revision:1}:null,
+   readArtifact:f.opts.readArtifact,
    checkConstruction:async()=>{throw Error('readiness precedes construction dispatch')},
    callModel:async()=>{calls++;throw Error('unready intent must precede paid work')},
   })
-  const result=await assistant.consult({...request,artifact_id:mode==='construction'?artifact:null})
+  const result=await assistant.consult(request)
   assert.equal(result.stage,'design_readiness');assert.equal(result.saved,false);assert.equal(calls,0);assert.equal(f.renders,0)
   assert.equal(assistant.candidate,null)
   if(mode==='construction')assert.equal(purpose,'construction')
  }
 })
-test('designer and independent reviewer receive the same selected intent pin and every required feature',async()=>{
+test('the independent reviewer receives the same selected intent pin and every required feature',async()=>{
  const f=fixture()
  f.readiness.design_intent!.features.push({id:'storage',description:'Preserve the discussed integral storage module',basis:'user_request',source_ref:null})
  const a=createCadAssistant(f.opts)
  assert.equal((await a.consult(request)).status,'ready')
- assert.deepEqual(f.seen.map(o=>o.functionName),['cad-designer','cad-reviewer'])
+ assert.deepEqual(f.seen.map(o=>o.functionName),['cad-reviewer'])
  const contexts=f.seen.map(o=>JSON.parse(o.messages.find((m:any)=>typeof m.content==='string'&&JSON.parse(m.content).design_readiness)?.content))
  for(const context of contexts){assert.deepEqual(context.design_readiness.pin,f.readiness.pin);assert(context.handoff.requirements.some((r:any)=>r.id==='intent_storage'))}
  assert.deepEqual(a.candidate?.packet.manifest.bob_design_intent,f.readiness.pin)
@@ -63,7 +64,7 @@ test('an Area without its own target can inherit the Project design intent while
  const f=fixture(),area='a_fixture',requestedAreas:(string|null|undefined)[]=[],reads:(string|null)[]=[]
  f.readiness.area_id=area
  assert.equal(f.readiness.pin?.area_id,null,'the canonical pin belongs to the effective Project target')
- const a=createCadAssistant({...f.opts,
+ const a=createCadAssistant({...f.opts,...checkedCadFixture('A',recipe,{area_id:area}),
   makeLookup:()=>createProjectLookup('A',async(_project,q)=>{
    reads.push(q.area_id)
    return {data:{records:q.dataset==='target'&&q.area_id===null?[{id:'project',revision:1,solution_id:solution,solution_revision:1}]:[],related:[],truncated:false},error:null}
@@ -77,7 +78,7 @@ test('an Area without its own target can inherit the Project design intent while
  assert.equal(a.candidate?.packet.manifest.bob_design_intent.area_id,null)
 })
 test('readiness for another exact Area cannot authorize the requested Area even when the solution is identical',async()=>{
- const f=fixture(),wrong=fixtureDesignReadiness('A',solution,1,'a_other')
+ const f=fixture(),wrong=fixtureDesignReadiness('A',solution,1,'a_other','construction')
  const a=createCadAssistant({...f.opts,readDesignReadiness:async()=>wrong,callModel:async()=>{throw Error('wrong Area precedes paid work')}})
  const result=await a.consult({...request,area_id:'a_fixture'})
  assert.equal(result.stage,'design_readiness');assert.equal(result.reason,'design_intent_changed')
@@ -92,7 +93,7 @@ test('an unresolved canonical feature overrides a permissive reviewer and cannot
   return reply(JSON.stringify({verdict:'pass',summary:'Simplified concept',requirements:{[shapeId]:{status:'met',evidence:'Base form'},intent_storage:{status:'unresolved',evidence:'Storage was omitted from simplification'}},issues:[]}))
  }})
  const result=await a.consult(request)
- assert.equal(result.status,'incomplete');assert.equal(result.reason,'no_progress');assert.equal(f.renders,1)
+ assert.equal(result.status,'needs_data');assert.equal(result.stage,'review');assert.equal(f.renders,1)
  assert.equal(a.candidate,null);assert.equal(a.quality,null)
 })
 test('selected reference images are opened automatically and their exact versions accompany the reviewed geometry',async()=>{
@@ -109,11 +110,11 @@ test('an actual new render dispatch rechecks intent and stops before rendering a
  let stale=false,freshReads=0
  const a=createCadAssistant({...f.opts,
   readDesignReadiness:async(_revision,_purpose,_area,fresh)=>{if(fresh)freshReads++;return stale?{...f.readiness,status:'conflict',pin:null,issues:[{code:'target_changed',choice_id:null,message:'Reload the selected Solution'}]}:structuredClone(f.readiness)},
-  callModel:async(o,guard)=>{const result=await model(o,guard);stale=true;return result},
+  render:async(r,source,guard)=>{stale=true;await guard?.();throw Error('changed intent must block rendering')},
  })
  const result=await a.consult(request)
  assert.equal(result.stage,'design_readiness');assert.equal(result.reason,'design_readiness_changed')
- assert.equal(f.renders,0);assert.equal(a.candidate,null);assert(freshReads>=2)
+ assert.equal(f.renders,0);assert.equal(a.candidate,null);assert(freshReads>=1)
 })
 test('an unavailable selected original reference stops before collector, designer or reviewer work',async()=>{
  const f=fixture();f.readiness.design_intent!.features.push({id:'shape',description:'Selected silhouette',basis:'user_request',source_ref:null})
@@ -125,7 +126,7 @@ test('an unavailable selected original reference stops before collector, designe
 test('authority loss inside the actual new render dispatch stays denied rather than becoming a renderer failure',async()=>{
  const f=fixture(),model=f.opts.callModel
  let allowed=true
- const a=createCadAssistant({...f.opts,hasAccess:async()=>allowed,callModel:async(o,guard)=>{const result=await model(o,guard);allowed=false;return result}})
+ const a=createCadAssistant({...f.opts,hasAccess:async()=>allowed,render:async(r,source,guard)=>{allowed=false;await guard?.();throw Error('revoked')}})
  await assert.rejects(a.consult(request),/project_denied/)
  assert.equal(f.renders,0);assert.equal(a.candidate,null)
 })
@@ -134,7 +135,7 @@ test('explicit bounded illustration deferral remains available while constructio
  readiness.design_intent!.choices.push({id:'support',question:'Which support construction?',alternatives:[],recommendation:'',basis:'',consequences:'',geometry_dependency:true,status:'deferred',selected_direction:null,decision_authority:'bob',decision_basis:'',deferral:{scope:'illustration',reason:'This output explores external proportions only'}})
  readiness.deferred_choice_ids=['support'];f.setReadiness(readiness)
  const a=createCadAssistant(f.opts)
- assert.equal((await a.consult(request)).status,'ready')
- assert.equal(a.candidate?.packet.manifest.bob_design_intent.purpose,'illustration')
- assert(f.seen.every(o=>JSON.stringify(o.messages).includes('external proportions only')))
+ const result=await a.consult(request)
+ assert.equal(result.stage,'design_readiness');assert.equal(result.reason,'design_intent_changed')
+ assert.equal(f.renders,0);assert.equal(f.seen.length,0)
 })

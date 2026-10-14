@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -19,7 +21,7 @@ const call = async (uid: string | null, name: string, args: unknown[], role = 'a
 const row = async (sql: string, args: unknown[] = []) => (await pg.query<any>(sql, args)).rows[0]
 
 before(async () => {
-  pg = await projectSchema()
+  pg = await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql')
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())', [owner, 'tidy-owner@example.test', stranger, 'tidy-stranger@example.test'])
   project = (await call(owner, 'bob.create_project', [JSON.stringify({ name: 'Tidy work' })])).id
   other = (await call(stranger, 'bob.create_project', [JSON.stringify({ name: 'Other' })])).id

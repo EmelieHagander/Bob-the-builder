@@ -32,7 +32,7 @@ test('task guidance publishes four immutable versions, preserving models, settin
  expected.additional_description=actual.additional_description
  assert.deepEqual(actual,expected,'only the budget guidance fields change')
  assert.match(actual.additional_description,/fresh \$3 \/ 24-call CAD period/)
- const executable=structuredClone(catalogFixture().tool('design_project_cad').function.parameters)
+ const executable=structuredClone(old.parameters)
  executable.properties.request_id.description=historicalTaskResumeDescription
  assert.deepEqual(executable,actual.parameters)
  assert.match(execFileSync(process.execPath,['--import','tsx','scripts/build-ai-task-budget-catalog.ts','supabase/migrations/'+publication,'--check'],{encoding:'utf8'}),/Verified task budget catalog/)

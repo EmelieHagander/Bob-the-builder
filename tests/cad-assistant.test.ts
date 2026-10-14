@@ -1,193 +1,65 @@
-import {domainVocabulary} from '../src/domain/vocabulary.ts'
-import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAssistant, shapeId, handoff, reviewReply} from './support/cad-review-fixture.ts'
-import {createCadAssistant as createReviewedCadAssistant} from './support/cad-parameter-fixture.ts'
+import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
+import {fixtureConstructionId,checkedCadFixture} from './support/checked-cad-fixture.ts'
+import {handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
-import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
-import {createProjectContext} from './support/colleague-catalog-fixture.ts'
-import {createMediaAdapter,type MediaRow} from '../supabase/functions/_shared/project-context/media.ts'
-import {hasImageContent} from '../supabase/functions/_shared/openai-content.ts'
-const id='30000000-0000-4000-8000-000000000001'
-const recipe:CadAssemblyRequest={contract_version:1,units:'mm',assembly_id:'bed',definitions:[{id:'post',primitive:'box',material_ref:null,x_mm:45,y_mm:70,z_mm:1800},{id:'panel',primitive:'box',material_ref:null,x_mm:800,y_mm:600,z_mm:18}],instances:[{id:'bed.post',definition_id:'post',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}},{id:'drawer.base',definition_id:'panel',placement:{x:100,y:0,z:30,rx:0,ry:0,rz:0}}],views:['front','top']}
-const request={handoff,brief:'Rita lådorna och behåll deras mått.',area_id:null,component_id:null,step_id:null,artifact_id:null}
-const candidate={recipe,source_artifact_id:null,source_revision:null,part_ids:[],title:'Lådor',description:'Under sängen',assumptions:'Design specifications; fit to be checked',target_revision:1,measurements:[]}
-const response=(name?:string,args?:unknown)=>({success:true,data:name?null:'Ritningen är klar.',model:'fixture',responseId:'resp',usage:{input_tokens:1,output_tokens:1,total_tokens:2},...(name?{toolCalls:[{id:'call',type:'function' as const,function:{name,arguments:JSON.stringify(args)}}]}:{})})
-function fixture(){let calls=0;const seen:any[]=[];let allowed=true
- const opts={projectId:'A',userId:'u',hasAccess:async()=>allowed,deadline:Date.now()+200000,available:true,
-  makeLookup:()=>createProjectLookup('A',async(_p,input)=>({data:{records:input.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:[],related:[],truncated:false},error:null}),1000,40),
-  callModel:async(o:any)=>{seen.push(o);return calls++===0?response('render_cad_candidate',candidate):response()},
-  render:async(r:CadAssemblyRequest)=>({recipe:r,manifest:{bounding_box_mm:{size:[800,600,1800]},instances:r.instances},files:{front:'Zml4dHVyZQ=='}}),
-  readArtifact:async()=>({revision:2,recipe:structuredClone(recipe)})}
- return {opts,seen,deny:()=>{allowed=false}}
+const recipe:any={contract_version:1,units:'mm',assembly_id:'panel',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:18,y_mm:80,z_mm:200}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front','top']}
+const request={request_id:null,brief:'Draw the saved panel',handoff,area_id:null,component_id:null,step_id:null,artifact_id:fixtureConstructionId,construction_revision:1}
+function fixture(extra:any={}){
+ const source=checkedCadFixture('A',recipe);let reads=0,models=0,renders=0
+ const opts={projectId:'A',userId:'owner',hasAccess:async()=>true,ownerRequest:'Draw the saved panel',deadline:Date.now()+200000,available:true,
+  makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:'44444444-4444-4444-8444-444444444444'}]:[],related:[],truncated:false},error:null}),1000,40),
+  readArtifact:async()=>{reads++;return structuredClone(source.draft)},checkConstruction:source.checkConstruction,
+  render:async(r:any,pin:any)=>{renders++;assert.deepEqual(pin,{artifact_id:fixtureConstructionId,revision:1});return source.packet(r)},
+  callModel:async(o:any)=>{models++;assert.equal(o.aiFunction,'cad-reviewer');return reviewReply()},...extra}
+ return {assistant:createCadAssistant(opts),source,counts:()=>({reads,models,renders})}
 }
-test('CAD designer has an independent model config and renders without a paid self-inspection',async()=>{const f=fixture();const a=createCadAssistant(f.opts);const result=await a.consult(request);assert.equal(result.status,'ready');assert(a.candidate);assert.equal(f.seen.length,1);assert(f.seen[0].systemMessage.includes(domainVocabulary('cad')));assert.equal(f.seen[0].functionName,'cad-designer');assert(f.seen[0].tools.some((t:any)=>t.function.name==='render_cad_candidate'));assert.equal(a.metrics.reviews,1);assert.equal(result.saved,false)})
-test('detail selection reuses exact source dimensions and placements instead of rebuilding them',async()=>{const f=fixture();let n=0;f.opts.callModel=async()=>n++===0?response('render_saved_cad_candidate',(({recipe,...rest})=>rest)({...candidate,source_artifact_id:id,source_revision:2,part_ids:['drawer.base']})):response();const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'ready');assert.deepEqual(a.candidate!.packet.recipe.instances,[recipe.instances[1]]);assert.deepEqual(a.candidate!.packet.recipe.definitions,[recipe.definitions[1]]);assert.equal(a.candidate!.source_revision,2)})
-test('a failed repair invalidates the old candidate; failure cannot save stale success',async()=>{
- const f=fixture();let n=0
- const a=createReviewedCadAssistant({...f.opts,research:false,
-  render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
-  callModel:async o=>o.functionName==='cad-reviewer'?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Repair the dimensions',requirements:[{id:shapeId,status:'failed',evidence:'Dimensions need repair'}],issues:[]})}:++n===1?response('render_cad_candidate',candidate):n===2?response('render_cad_candidate',{...candidate,recipe:{...recipe,python:'not allowed'}}):response(),
- })
- assert.equal((await a.consult(request)).status,'incomplete');assert.equal(a.candidate,null)
-})
-test('missing infrastructure is explicit and makes no provider call',async()=>{const f=fixture();f.opts.available=false;const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).stage,'cad_engine');assert.equal(f.seen.length,0);assert.equal(a.candidate,null)})
-test('access revocation prevents generation and has no candidate',async()=>{const f=fixture();f.deny();const a=createCadAssistant(f.opts);await assert.rejects(a.consult(request),/project_denied/);assert.equal(f.seen.length,0);assert.equal(a.candidate,null)})
-test('stale measurement references stop the same design without guessing replacements',async()=>{const f=fixture();let n=0,renders=0;f.opts.callModel=async()=>n++===0?response('render_cad_candidate',{...candidate,measurements:[{id,revision:1}]}):response();f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}};const a=createCadAssistant(f.opts);assert.equal((await a.consult(request)).status,'needs_data');assert.equal(renders,0)})
-
-
-test('CAD revisions inherit current work links instead of a removed historical Step',async()=>{
- for(const links of [[],['current-step'],['current-step','other-step']]){
-  const f=fixture(),a=createCadAssistant({...f.opts,readArtifact:async()=>({revision:2,recipe:structuredClone(recipe),step_id:'retired-step',current_step_ids:links})})
-  assert.equal((await a.consult({...request,artifact_id:id})).status,'ready')
-  assert.equal(a.candidate!.step_id,links.length===1?links[0]:null)
-  assert.equal(a.candidate!.expected_revision,2)
+test('every unbound project request stops before model work or CAD, even when legacy geometry is available',async()=>{
+ for(const mode of ['new','legacy','retained_draft'] as const){
+  let saves=0
+  const legacy={id:'33333333-3333-4333-8333-333333333333',revision:1,status:'draft',payload:{brief:{...request,artifact_id:null,construction_revision:null},draft:{recipe},reference_refs:[]}}
+  const f=fixture({readArtifact:async()=>({revision:3,recipe}),...(mode==='retained_draft'?{requestStore:{load:async()=>legacy,save:async()=>{saves++;throw Error('must not save')}}}:{})})
+  const out=await f.assistant.consult({...request,artifact_id:mode==='legacy'?fixtureConstructionId:null,construction_revision:null,request_id:mode==='retained_draft'?legacy.id:null,handoff:mode==='retained_draft'?null:handoff})
+  assert.equal(out.reason,'construction_required');assert.equal(out.saved,false);assert.equal(out.stage,'construction')
+  assert.equal(f.counts().models,0);assert.equal(f.counts().renders,0);assert.equal(saves,0);assert.equal(f.assistant.candidate,null)
+  assert.equal(f.assistant.metrics.consultations,0);assert.equal(f.assistant.remaining,2)
+  assert(out.required_tools.includes('save_construction_draft'))
  }
 })
-
-test('CAD restart restores the rendered candidate without rendering or asking the model twice',async()=>{
- const f=fixture(),entries:JournalEntry[]=[];let now=0,renders=0,reviews=0
- const run=()=>{
-  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},20000,()=>now)
-  return createReviewedCadAssistant({...f.opts,research:false,
-   callModel:o=>journal.run('model:'+o.functionName,o,async()=>o.functionName==='cad-reviewer'?(reviews++,reviewReply()):f.opts.callModel(o),10000),
-   render:r=>journal.run('cad:render',r,async()=>{renders++;const packet=await f.opts.render(r);now=15000;return {...packet,previews:{front:'fixture',top:'fixture'}}}),
-  })
- }
- await assert.rejects(run().consult(structuredClone(request)),e=>e instanceof BobContinuation&&e.kind==='yield')
- assert.equal(renders,1);assert.equal(f.seen.length,1)
- now=0
- const resumed=run()
- assert.equal((await resumed.consult(structuredClone(request))).status,'ready')
- assert.deepEqual(resumed.candidate!.packet.recipe,recipe)
- assert.equal(renders,1);assert.equal(f.seen.length,1);assert.equal(reviews,1)
+test('an already saved historical request is a receipt, never a new CAD attempt',async()=>{
+ const receipt={recordId:fixtureConstructionId,revision:3}
+ const f=fixture({requestStore:{load:async()=>({id:'33333333-3333-4333-8333-333333333333',status:'saved',receipt,payload:{}})}})
+ const out=await f.assistant.consult({...request,request_id:'33333333-3333-4333-8333-333333333333',artifact_id:null,construction_revision:null})
+ assert.equal(out.status,'already_saved');assert.deepEqual(out.receipt,receipt);assert.deepEqual(f.counts(),{reads:0,models:0,renders:0})
 })
-
-test('missing or explicitly cleared targets return actionable prerequisites before spending CAD attempts',async()=>{
- for(const cleared of [false,true]){
-  const f=fixture();let reads=0
-  f.opts.makeLookup=()=>createProjectLookup('A',async()=>{reads++;return {data:{records:cleared?[{id:'area',revision:2,solution_id:null}]:[],related:[],truncated:false},error:null}},1000,40)
-  const a=createCadAssistant(f.opts)
-  assert.equal((await a.consult({...request,area_id:cleared?'area':null})).status,'prerequisite_required')
-  assert.equal(reads,1,'a cleared area target must not silently fall back to the project target')
-  assert.equal(a.remaining,2);assert.equal(f.seen.length,0)
-  assert.deepEqual(a.requiredTools,['save_project_solution','select_project_target'])
+test('a valid exact source renders once and uses only independent review, regardless of the old research setting',async()=>{
+ for(const research of [undefined,true,false]){
+  const f=fixture({research});assert.equal((await f.assistant.consult(request)).status,'ready')
+  assert.equal(f.counts().renders,1);assert.equal(f.counts().models,1)
+  assert.equal(f.assistant.metrics.research_calls,0);assert.equal(f.assistant.metrics.reviews,1)
+  assert.deepEqual(f.assistant.candidate?.packet.recipe,recipe)
+  assert.equal(f.assistant.candidate?.packet.manifest.bob_construction.artifact_id,fixtureConstructionId)
  }
 })
-
-test('CAD research has a bounded stage and exact measurement verification remains available after it',async()=>{
- const f=fixture();let calls=0,renders=0,readers=0
- // Exhaust only the designer's research reader. Exact measurement verification
- // and independent review have separate readers with sufficient baseline budget.
- f.opts.makeLookup=()=>createProjectLookup('A',async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:id}]:i.dataset==='measurements'?[{id,revision:1}]:[],related:[],truncated:false},error:null}),1000,++readers===1?4:40)
- f.opts.callModel=async(o:any)=>{
-  calls++
-  if(calls<=3)return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})
-  assert(!o.tools.some((t:any)=>t.function.name==='search_project_data'))
-  return calls===4?response('render_cad_candidate',{...candidate,measurements:[{id,revision:1}]}):response()
+test('missing source material/joint checks cannot fall back to free design or consume CAD consultations',async()=>{
+ for(const status of ['needs_data','unavailable','conflict']){
+  const f=fixture({checkConstruction:async()=>({status,checked:{concept_ready:false,issues:[{code:'material_or_joint_missing'}]}})})
+  const out=await f.assistant.consult(request);assert.equal(out.stage,'construction');assert.equal(out.reason,'construction_not_ready')
+  assert.equal(f.counts().models,0);assert.equal(f.counts().renders,0);assert.equal(f.assistant.remaining,2)
  }
- f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
- const a=createCadAssistant(f.opts)
- assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1);assert.equal(calls,4)
- assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
 })
-
-test('CAD pins the database target instead of an invented model revision',async()=>{
- const f=fixture();let calls=0,renders=0
- f.opts.callModel=async()=>calls++===0?response('render_cad_candidate',{...candidate,target_revision:9}):response()
- f.opts.render=async r=>{renders++;return {recipe:r,manifest:{},files:{}}}
- const a=createCadAssistant(f.opts)
- assert.equal((await a.consult(request)).status,'ready');assert.equal(renders,1)
- assert.equal(a.candidate?.target_revision,1)
+test('unavailable infrastructure and revoked authority spend no model/render operation',async()=>{
+ const unavailable=fixture({available:false});assert.equal((await unavailable.assistant.consult(request)).stage,'cad_engine');assert.equal(unavailable.counts().models,0);assert.equal(unavailable.counts().renders,0)
+ const denied=fixture({hasAccess:async()=>false});await assert.rejects(denied.assistant.consult(request),/project_denied/);assert.deepEqual(denied.counts(),{reads:0,models:0,renders:0})
 })
-
-function imageFixture(){
- const f=fixture(),reads:string[]=[],sources:any[]=[];let downloads=0
- const row:MediaRow={id,project_id:'A',title:'Earlier cabinet concept',purpose:'reference',state:'ready',content_type:'image/png',
-  byte_size:8,width:2,height:2,bucket_id:'bob-project-media',object_path:`A/${id}`,created_at:'2026-09-01T00:00:00Z',updated_at:'2026-09-01T00:00:00Z'}
- const context=()=>createProjectContext({hasAccess:f.opts.hasAccess,sources,adapters:[createMediaAdapter('A',{
-  count:async()=>1,list:async()=>[row],read:async key=>key===id?{...row}:null,
-  download:async()=>{downloads++;return Uint8Array.from([137,80,78,71,13,10,26,10])},
- })]})
- f.opts.makeLookup=()=>createProjectLookup('A',async(_p,input)=>{
-  reads.push(input.dataset)
-  return {data:{records:input.dataset==='target'?[{id:'project',revision:1,solution_id:id}]
-   :input.dataset==='project'?[{id:'A',description:'Current design: 1320 mm wide; access opening on the room-facing edge.'}]
-   :input.dataset==='measurements'?[{id,revision:2,subject:'Current width',value:'1320',unit:'mm',truth:'provided_spec'}]:[],related:[],truncated:false},error:null}
- },1000,40)
- return {...f,row,reads,sources,context,get downloads(){return downloads}}
-}
-test('CAD receives Bob-selected original pixels beside fresh project facts after Bob has consumed the carrier',async()=>{
- const f=imageFixture(),parent=f.context(),child=f.context()
- await parent.execute('open_project_item',{refs:[`image:${id}`]})
- parent.confirmDelivery()
- assert.deepEqual(parent.carrier(),[])
- const a=createCadAssistant({...f.opts,context:child,referenceImageRefs:()=>parent.openedImageRefs()})
- assert.equal((await a.consult(request)).status,'ready')
- assert.equal(f.downloads,2,'the specialist reopens through its own authorised adapter')
- assert(hasImageContent(f.seen[0].messages),'a parent caption/brief is not a substitute for actual pixels')
- const reminder=String(f.seen[0].messages.at(-1).content)
- assert.match(reminder,/1320/);assert.match(reminder,/room-facing edge/);assert.match(reminder,/provided_spec/)
- assert.equal(f.reads[0],'target');assert(f.reads.filter(x=>x==='project').length>=2);assert.equal(f.reads.filter(x=>x==='project').length,f.reads.filter(x=>x==='measurements').length)
- assert.equal(f.seen.length,1);assert.equal(a.metrics.reviews,1)
- assert(a.sources.some(s=>s.dataset==='measurements'&&s.recordId===id))
-})
-
-test('an unavailable selected reference stops CAD instead of silently inventing the missing layout',async()=>{
- const f=imageFixture(),parent=f.context()
- await parent.execute('open_project_item',{refs:[`image:${id}`]});parent.confirmDelivery()
- f.row.state='deleting'
- const a=createCadAssistant({...f.opts,context:f.context(),referenceImageRefs:()=>parent.openedImageRefs()})
- const result=await a.consult(request)
- assert.equal(result.status,'unavailable');assert.equal(result.stage,'reference_images')
- assert.equal(f.seen.length,0);assert.equal(f.downloads,1);assert.equal(a.candidate,null)
-})
-
-test('images independently opened by CAD also get current measurements on their delivery call',async()=>{
- const f=imageFixture();let calls=0
- f.opts.callModel=async o=>{
-  f.seen.push(o);calls++
-  if(calls===1)return response('open_project_item',{refs:[`image:${id}`]})
-  if(calls===2){assert(hasImageContent(o.messages));assert.match(String(o.messages!.at(-1)!.content),/1320/);return response('render_cad_candidate',candidate)}
-  return response()
- }
- const a=createCadAssistant({...f.opts,context:f.context()})
- assert.equal((await a.consult(request)).status,'ready');assert.equal(f.downloads,1)
- assert.equal(f.reads[0],'target');assert(f.reads.filter(x=>x==='project').length>=2);assert.equal(f.reads.filter(x=>x==='project').length,f.reads.filter(x=>x==='measurements').length)
-})
-
-test('revoked reference evidence blocks the next CAD model call and invalidates the candidate',async()=>{
- const f=imageFixture()
- f.opts.render=async recipe=>{f.row.state='deleting';return {recipe,manifest:{},files:{}}}
- const a=createCadAssistant({...f.opts,context:f.context(),referenceImageRefs:()=>[`image:${id}`]})
- await assert.rejects(a.consult(request),/project_denied/)
- assert.equal(f.seen.length,1,'do not send another provider call against revoked evidence')
- assert.equal(a.candidate,null)
-})
-
-test('invalid geometry reports the exact missing field without spending a render before the corrected candidate is reviewed',async()=>{
- const f=fixture();let calls=0,renders=0
- const broken=structuredClone(candidate);delete (broken.recipe.definitions[0] as any).y_mm
- f.opts.render=async r=>{renders++;return {recipe:r,manifest:{bounding_box_mm:{size:[800,600,1800]},instances:r.instances},files:{front:'fixture'},previews:{front:'cGl4ZWxz'}}}
- f.opts.callModel=async(o:any)=>{
-  if(++calls===1)return response('render_cad_candidate',broken)
-  if(calls===2){const result=JSON.parse(o.messages[0].content);assert.equal(result.status,'invalid');assert(result.issues.some((i:any)=>i.path==='recipe.definitions[0].y_mm'));assert.equal(result.renders_remaining,4);return response('render_cad_candidate',candidate)}
-  throw new Error('no paid designer inspection after a successful render')
- }
- const result=await createCadAssistant(f.opts).consult(request)
- assert.equal(result.status,'ready');assert.equal(renders,1);assert.equal(calls,2)
-})
-test('designer retains research tools beyond three calls and can investigate a problem after rendering',async()=>{
- const f=fixture();let calls=0,reviews=0
- const a=createReviewedCadAssistant({...f.opts,research:false,
- render:async r=>({...await f.opts.render(r),previews:{front:'fixture',top:'fixture'}}),
- callModel:async(o:any)=>{
-  if(o.functionName==='cad-reviewer')return ++reviews===1?{...reviewReply(),data:JSON.stringify({verdict:'revise',summary:'Investigate the placement',requirements:[{id:shapeId,status:'failed',evidence:'Placement needs correction'}],issues:[]})}:reviewReply()
-  calls++
-  if(calls<=4||calls===6){assert(o.tools.some((t:any)=>t.function.name==='search_project_data'));return response('search_project_data',{dataset:'tasks',query:null,status:null,area_id:null,record_id:null,after_id:null})}
-  if(calls===5)return response('render_cad_candidate',candidate)
-  return response('render_cad_candidate',{...candidate,recipe:{...recipe,instances:[{...recipe.instances[0],placement:{...recipe.instances[0].placement,x:30}},recipe.instances[1]]}})
- }})
- assert.equal((await a.consult(request)).status,'ready');assert.equal(calls,7);assert.equal(reviews,2)
+test('an older unbound request can bind its first checked source once, retaining the request and original requirements',async()=>{
+ const id='33333333-3333-4333-8333-333333333333'
+ let row:any={id,revision:1,status:'draft',payload:{brief:{...request,artifact_id:null,construction_revision:null},owner_request:request.brief,reference_refs:[]}}
+ const f=fixture({requestStore:{load:async()=>structuredClone(row),save:async(key:any,expected:number,status:string,payload:any)=>{assert.equal(key,id);assert.equal(expected,row.revision);row={id,revision:expected+1,status,payload:structuredClone(payload)};return structuredClone(row)}}})
+ const out=await f.assistant.consult({...request,request_id:id,handoff:null})
+ assert.equal(out.status,'ready');assert.equal(out.request_id,id);assert.equal(row.payload.brief.artifact_id,fixtureConstructionId);assert.equal(row.payload.brief.construction_revision,1)
+ assert.deepEqual(row.payload.brief.handoff.requirements,handoff.requirements)
+ const changed=await f.assistant.consult({...request,request_id:id,handoff:null,artifact_id:'22222222-2222-4222-8222-222222222222'})
+ assert.equal(changed.reason,'drawing_scope_changed');assert.equal(f.counts().renders,1)
 })

@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { before, after, test } from 'node:test'
@@ -21,7 +23,7 @@ async function plan(pid:string,uid:string) {
  return (await call(uid,'bob_private.project_plan_decide',[pid,0,draft.record.revision,'approve','Proceed'],'postgres')).record.steps.map((s:any)=>s.id)
 }
 before(async()=>{
- pg=await projectSchema()
+ pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql')
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'drawing-owner@example.test',stranger,'drawing-stranger@example.test'])
  project=(await call(owner,'bob.create_project',[JSON.stringify({name:'Drawing work'})])).id
  otherProject=(await call(stranger,'bob.create_project',[JSON.stringify({name:'Other project'})])).id

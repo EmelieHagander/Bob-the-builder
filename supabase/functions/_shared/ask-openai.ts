@@ -425,10 +425,13 @@ export async function answerWithOpenAi(opts: {
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
     callModel,
-    render:(recipe,source,beforeDispatch)=>memo('cad:render',source?{recipe,drawing_source:source}:recipe,async()=>{
+    render:(recipe,source,beforeDispatch)=>{
+     if(!source)throw new Error('checked_construction_source_required')
+     return memo('cad:render',{recipe,drawing_source:source},async()=>{
       await beforeDispatch?.()
       return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
-    },45000),
+     },45000)
+    },
     checkConstruction:async(id,revision,fresh)=>{
      const check=()=>checkedConstructionForDrawing({...constructionOptions,
       // The actual operation reads fresh caller data. Recorded gate outcomes

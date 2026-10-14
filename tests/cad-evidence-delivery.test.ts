@@ -1,9 +1,13 @@
+import {parameterPacket} from './support/cad-parameter-fixture.ts'
+import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
+import {checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
+import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 import { designIntent } from './support/design-intent-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
-import {createCadAssistant} from './support/cad-parameter-fixture.ts'
+import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
@@ -29,7 +33,13 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
   const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id: 'p0-shelf',
     definitions: [{ id: 'panel', primitive: 'box' as const, material_ref: null, x_mm: 600, y_mm: 300, z_mm: 18 }],
     instances: [{ id: 'panel', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front' as const, 'top' as const] }
-  const request = { request_id: null, brief: message, handoff, area_id: null, component_id: null, step_id: step, artifact_id: null }
+  const sourceTurn=randomUUID(),sourceClaim=await call(null,'bob.bob_claim_turn',[project,owner,sourceTurn,message],'service_role')
+  const writeSource=(payload:any)=>call(owner,'bob.bob_project_write_v16',[project,sourceClaim.thread_id,sourceTurn,sourceClaim.generation,JSON.stringify(payload)])
+  const mat=await writeSource({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'mat',kind:'material',name:'Plywood concept',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
+  const source=await writeSource({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'checkpoint',title:'Shelf construction',description:'Synthetic single physical part',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters:parameterPacket(project,recipe),materials:[{definition_id:'panel',material_id:mat.recordId,material_revision:1,part_id:null,part_revision:null}],joints:[],open_questions:['Strength remains unverified'],instance_policy:manufacturePolicy(recipe)}})
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,sourceClaim.thread_id,sourceTurn,sourceClaim.generation],'service_role')
+  const constructionOptions={projectId:project,message,hasAccess:async()=>true,read:(id:string,revision:number|null)=>call(owner,'bob.read_construction_draft',[project,id,revision,null]),readCatalog:(id:string,revision:number)=>call(owner,'bob.catalog_read',[project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})]),readSources:async()=>({project:new Map(),physical:new Map()})}
+  const request = { request_id: null, brief: message, handoff, area_id: null, component_id: null, step_id: step, artifact_id: source.recordId, construction_revision:1 }
   const privateStep = Buffer.from('PRIVATE_STEP_EXPORT').toString('base64')
   const reply = (data: string | null, name?: string, args: unknown = {}) => ({ success: true, data, responseId: randomUUID(), model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
     ...(name ? { toolCalls: [{ id: randomUUID(), type: 'function' as const, function: { name, arguments: JSON.stringify(args) } }] } : {}) })
@@ -52,16 +62,12 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
       catch (e: any) { return { data: null, error: { code: e.code, message: e.message } } }
     }, 5000, 40)
     const cadAssistant = createCadAssistant({ projectId: project, userId: owner, ownerRequest: message, available: true, deadline: Date.now() + 300000,
-      hasAccess: async () => true, makeLookup, readArtifact: async () => null,
+      hasAccess: async () => true, makeLookup, readArtifact: async (id,revision) => ({...await call(owner,'bob.read_construction_draft',[project,id,revision,null]),source_kind:'construction'}),checkConstruction:(id,revision)=>checkedConstructionForDrawing(constructionOptions,id,revision),
       readDesignReadiness: (targetRevision, purpose, areaId) => call(owner, 'bob.read_design_readiness', [project, areaId ?? null, targetRevision, purpose]),
       // Match the production packet contract; rendering itself is still mocked.
-      render: async r => { renders++; return { recipe: r, manifest: { engine: { name: 'build123d' }, assembly_id: r.assembly_id, instances: r.instances },
+      render: async (r,drawingSource) => { renders++; return { recipe: r, manifest: { engine: { name: 'build123d' }, assembly_id: r.assembly_id,drawing_source:drawingSource, instances: r.instances,bounding_box_mm:{min:[0,0,0],max:[600,300,18],size:[600,300,18]},checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'} },
         files: { front: 'PHN2Zz48L3N2Zz4=', top: 'PHN2Zz48L3N2Zz4=', step: privateStep }, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } } },
-      callModel: async o => {
-        if (o.functionName === 'cad-research') return reply(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Synthetic concept requirement' }], additional_needs: [] })
-        if (o.functionName === 'cad-reviewer') { reviews++; return reviewReply() }
-        return ++designerCalls === 1 ? reply(null, 'render_cad_candidate', { purpose: 'project', recipe, dimension_bindings: [], title: 'Shelf concept', description: 'Synthetic construction', assumptions: 'Not certified or measured site fit', target_revision: 1, measurements: [] }) : reply('Ready for review.')
-      },
+      callModel: async o => { assert.equal(o.functionName,'cad-reviewer'); reviews++; return reviewReply() },
     })
     return { writer, cadAssistant, makeLookup, receipts, errors, get writes() { return writes }, get renders() { return renders }, get reviews() { return reviews },
       finish: () => call(null, 'bob.bob_fail_turn_v2', [project, owner, claim.thread_id, turn, claim.generation], 'service_role') }

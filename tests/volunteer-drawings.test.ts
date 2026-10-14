@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import { designIntent, designManifest } from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { after, before, test } from 'node:test'
@@ -17,7 +19,7 @@ const query = (sql: string, args: unknown[] = [], uid: string | null = owner, ro
 async function call(name: string, args: unknown[], role = 'authenticated'): Promise<any> {
   return (await query(`select ${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args, role === 'authenticated' || role === 'postgres' ? owner : null, role)).rows[0].result
 }
-before(async () => { pg = await projectSchema(); await pg.query('insert into auth.users values($1,$2,now())', [owner, 'drawing-reader@example.test']) })
+before(async () => { pg = await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql'); await pg.query('insert into auth.users values($1,$2,now())', [owner, 'drawing-reader@example.test']) })
 after(() => pg.close())
 async function fixture() {
   const project = (await call('bob.create_project', [json({ name: 'Volunteer drawing proof' })])).id

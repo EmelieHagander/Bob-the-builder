@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import {parameterPacket} from '../tests/support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from '../tests/support/construction-instance-policy-fixture.ts'
+import {handoff} from '../tests/support/cad-review-fixture.ts'
 import {constructionLists} from '../supabase/functions/_shared/construction-lists.ts'
 import {constructionCutFit} from '../supabase/functions/_shared/construction-cut-fit.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
@@ -58,7 +59,9 @@ async function gate(key:number){
 }
 
 assert.equal(await query("select count(*) from pg_namespace where nspname in ('bob','auth','shared','storage')"),'0','Refusing to alter a non-empty database')
-await installProjectSchema({exec:async(sql:string)=>{await query(sql);return []}})
+// Earlier numeric/request races use explicit historical unbound CAD packets.
+// Apply the mandatory-source boundary after those cases, then test it below.
+await installProjectSchema({exec:async(sql:string)=>{await query(sql);return []}},undefined,'20261013175429_ai_drawing_intent_catalog.sql')
 await query(await readFile(new URL('./check-construction-consequences-release.sql',import.meta.url),'utf8'))
 console.log('PASS: construction role/consequence release transaction rolled back')
 const fixture=await readFile(new URL('./cad-lineage-concurrency-fixture.sql',import.meta.url),'utf8')
@@ -524,4 +527,37 @@ for(const kind of ['viewer-claim','viewer-retry']) {
  assert.equal(Number(await query(`select attempts from bob.cad_viewer_exports where artifact_id=${literal(saved.recordId)}`)),kind==='viewer-retry'?2:1)
  console.log(`PASS ${kind}: observed lock wait; exactly one export lease and attempt`);cases++
 }
+await query(await readFile(new URL('../supabase/migrations/20261014062043_checked_construction_required.sql',import.meta.url),'utf8'))
+await query(await readFile(new URL('../supabase/migrations/20261014062144_ai_checked_construction_catalog.sql',import.meta.url),'utf8'))
+await query('drop table if exists public.cad_race_fixture;'+fixture)
+const unbound=await json('select data from public.cad_race_fixture')
+const failUnbound=await start(`begin;select set_config('request.jwt.claims',${literal(JSON.stringify({sub:unbound.actor}))},true);set local role authenticated;select bob.bob_project_write_v16(${literal(unbound.project)},${literal(unbound.claim.thread_id)},${literal(unbound.turn_id)},${unbound.claim.generation},${literal(JSON.stringify(unbound.payload))});commit;`).done
+assert.notEqual(failUnbound.code,0);assert.match(failUnbound.stderr,/construction_pin_required/)
+await query(await readFile(new URL('./check-construction-consequences-release.sql',import.meta.url),'utf8'))
+// Two actual sessions cannot adopt different first sources at one request CAS.
+{
+ const f=unbound,id=randomUUID(),scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
+ const tx=(sql:string,tail='',service=false)=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';${service?'set local role service_role;':`select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;`}${sql};${tail}commit;`
+ const write=(p:any)=>`select bob.bob_project_write_v16(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(p))})`
+ const call=async(sql:string)=>JSON.parse((await query(tx(sql))).split('\n').filter(line=>line.startsWith('{')).at(-1)!)
+ const base={record_id:null,expected_revision:0,expected_updated_at:null,request_quote:f.payload.request_quote}
+ const material=await call(write({...base,kind:'catalog',data:{action:'ensure',key:'adopt-material',kind:'material',name:'Adoption fixture plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:f.payload.request_quote,source_seq:null}}))
+ const recipe=f.payload.data.packet.recipe,parameters=parameterPacket(f.project,recipe)
+ const sources=[]
+ for(const key of ['source-a','source-b'])sources.push(await call(write({...base,kind:'construction',data:{key,title:key,description:'Synthetic single panel',area_id:null,target_revision:1,change_note:'Initial',recipe,parameters,materials:[{definition_id:'panel',material_id:material.recordId,material_revision:1,part_id:null,part_revision:null}],joints:[],open_questions:['Concept only'],instance_policy:manufacturePolicy(recipe)}})))
+ await query(tx(`select bob.create_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},${literal(JSON.stringify(scope))})`))
+ const initial={brief:{...scope,brief:f.payload.request_quote,handoff},owner_request:f.payload.request_quote,reference_refs:[]}
+ const packet=(working:any,expected:number,key:string)=>`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},'save',${literal(id)},${expected},'needs_data',${literal(JSON.stringify(working))},${literal(key)})`
+ await query(tx(packet(initial,0,'parked'),'',true))
+ const adoption=(source:any)=>({...initial,brief:{...initial.brief,artifact_id:source.recordId,construction_revision:1}})
+ const key=770000+cases,barrier=await gate(key),leader=start(tx(packet(adoption(sources[0]),1,'adopt-a'),`select pg_advisory_xact_lock(${key});`,true));let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(tx(packet(adoption(sources[1]),1,'adopt-b'),'',true));await waiting(follower.app,pid)}finally{await barrier.close()}
+ const first=await leader.done,second=await follower!.done
+ assert.equal(first.code,0,first.stderr);assert.notEqual(second.code,0);assert.match(second.stderr,/revision_conflict|drawing_scope_changed/)
+ const bound=await json(`select jsonb_build_object('scope',r.scope,'revision',r.revision,'brief',p.payload->'brief') from bob_private.project_drawing_requests r join bob_private.drawing_requests p using(id) where id=${literal(id)}`)
+ assert.equal(bound.revision,2);assert.equal(bound.scope.artifact_id,sources[0].recordId);assert.equal(bound.brief.artifact_id,sources[0].recordId)
+ assert.deepEqual(bound.brief.handoff,handoff)
+ console.log('PASS first source adoption: observed real CAS lock wait; one source, exact packet and original requirements');cases++
+}
+console.log('PASS mandatory source: native PostgreSQL rejects unbound publication; checked construction/consequence release still passes')
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)

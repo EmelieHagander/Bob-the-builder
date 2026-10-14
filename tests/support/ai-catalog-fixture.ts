@@ -85,6 +85,18 @@ for(const migration of migrations){
   row.metadata={...row.metadata,publication:'current-owner-deliverable'}
   versions.set(row.key,versions.get(row.key)!+1)
  }
+ const checkedContracts=source.match(/\$checked_construction_contracts\$([\s\S]+?)\$checked_construction_contracts\$/)
+ if(checkedContracts){
+  const contracts=JSON.parse(checkedContracts[1]),append=JSON.parse(source.match(/\$checked_construction_append\$([\s\S]+?)\$checked_construction_append\$/)![1]),feedback=JSON.parse(source.match(/\$checked_construction_feedback\$([\s\S]+?)\$checked_construction_feedback\$/)![1])
+  for(const key of new Set<string>([...contracts,...append,feedback].map((p:any)=>p.key))){
+   const row=seed.find(row=>row.key===key)
+   const contract=contracts.find((p:any)=>p.key===key),extra=append.find((p:any)=>p.key===key)
+   if(contract)row.definition={...row.definition,description:contract.description,parameters:contract.parameters,required_parameters:contract.parameters.required,optional_parameters:[]}
+   if(extra){if(row.kind==='instruction_fragment')row.content+='\n\n'+extra.content;else row.definition.additional_description=(row.definition.additional_description??'')+'\n\n'+extra.content}
+   if(feedback.key===key)row.content=feedback.content
+   row.metadata={...row.metadata,publication:'checked-construction-required'};versions.set(key,versions.get(key)!+1)
+  }
+ }
  const intakePatches=source.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)
  if(intakePatches)for(const patch of JSON.parse(intakePatches[1])){
   const row=seed.find(row=>row.key===patch.key)

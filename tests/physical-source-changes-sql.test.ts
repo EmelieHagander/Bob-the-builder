@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {test} from 'node:test'
@@ -9,7 +11,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {handoff} from './support/cad-review-fixture.ts'
 
 test('P3 deltas: exact physical snapshot revisions disappear safely on source-scope revocation',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const owner=randomUUID(),reader=randomUUID(),stranger=randomUUID()
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now()),($5,$6,now())',[owner,'physical-owner@example.test',reader,'physical-reader@example.test',stranger,'physical-stranger@example.test'])
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result

@@ -1,3 +1,4 @@
+import {checkedCadFixture,fixtureConstructionId} from '../tests/support/checked-cad-fixture.ts'
 /** Read-only, synthetic runtime audit. No network, credentials or real model.
  * Usage: node --import tsx scripts/audit-bob-runtime.ts [catalog-json | --seed | --compare]
  * Default: current repository seed; an explicit catalog path is never upgraded silently.
@@ -263,10 +264,10 @@ const candidate = { purpose: 'project', parameter_plan: parameterPlan(recipe), d
 const broken = structuredClone(candidate) as any; delete broken.recipe.definitions[0].y_mm
 const cadCalls: any[] = [], cadReviewerCalls: any[] = []; let renders = 0
 const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true, makeLookup: () => lookup(40),
-  deadline: Date.now() + 300000, available: true, readArtifact: noIO,
+  deadline: Date.now() + 300000, available: true, ...checkedCadFixture('synthetic',recipe),
   render: async r => { renders++; const bounds = { min: [0, 0, 0], max: [600, 250, 18], size: [600, 250, 18] }
     return { recipe: r, manifest: { bounding_box_mm: bounds,
-      instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
+      checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},instances: r.instances.map(i => ({ id: i.id, definition_id: i.definition_id, bounding_box_mm: bounds })) },
     files: { front: 'SYNTHETIC_SVG_BYTES', top: 'SYNTHETIC_SVG_BYTES' }, previews: {front:'SYNTHETIC_PNG_BYTES',top:'SYNTHETIC_TOP_PNG_BYTES'} } },
   callModel: measured('cad-repair', async o => {
     if(o.functionName==='cad-research') return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit synthetic dimensions' }], additional_needs: [] })
@@ -277,7 +278,7 @@ const cad = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user
     cadCalls.push(structuredClone(o)); return cadCalls.length === 1 ? response(null, 'render_cad_candidate', broken)
     : cadCalls.length === 2 ? response(null, 'render_cad_candidate', candidate) : response('The synthetic candidate is ready.') }),
 })
-const cadResult = await cad.consult({ handoff, brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: null })
+const cadResult = await cad.consult({ handoff, brief: 'Draw a shelf concept.', area_id: null, component_id: null, step_id: null, artifact_id: fixtureConstructionId, construction_revision:1 })
 const cadReturns = cadCalls.flatMap(o => o.messages ?? []).filter(m => m.role === 'tool').map(m => JSON.parse(m.content))
 assert.equal(cadResult.status, 'ready', JSON.stringify(cadResult))
 assert(cad.candidate, 'Only an independently reviewed candidate may be offered for saving')
@@ -286,19 +287,10 @@ const deliveredGeneratedPixels = (options: any[]) => ['SYNTHETIC_PNG_BYTES', 'SY
   options.some(o => (o.messages ?? []).some((m: any) => Array.isArray(m.content) && m.content.some((p: any) =>
     p.type === 'image_url' && p.image_url?.url === 'data:image/png;base64,' + png))))
 
-let fourthTools: string[] = [], researchCalls = 0
-const researchLookup = lookup(40)
-const research = createCadAssistant({ projectId: 'synthetic', userId: 'synthetic-user', hasAccess: async () => true,
-  makeLookup: () => researchLookup, deadline: Date.now() + 300000, available: true, readArtifact: noIO, render: noIO,
-  callModel: measured('cad-read-boundary', async o => {
-    if(o.functionName==='cad-research')return response(null, 'finish_cad_research', { checks: [{ id: shapeId, status: 'known', blocking: false, source_refs: ['requirement:'+shapeId], action: 'none', detail: 'Explicit request' }], additional_needs: [] })
-    researchCalls++; if (researchCalls <= 3) return response(null, 'search_project_data', readInput)
-    fourthTools = (o.tools ?? []).map(t => t.function.name)
-    return response(null, 'report_cad_blocker', { reason: 'missing_constraint', explanation: 'Synthetic stopping condition for the audit.' }) }),
-})
-const researchResult = await research.consult({ handoff, brief: 'Read four needed records before drawing.', area_id: null, component_id: null, step_id: null, artifact_id: null })
-
-assert.equal(researchResult.status, 'blocked')
+const fourthTools:string[]=[]
+const research = createCadAssistant({projectId:'synthetic',userId:'synthetic-user',hasAccess:async()=>true,makeLookup:()=>lookup(40),deadline:Date.now()+300000,available:true,readArtifact:noIO,render:noIO,callModel:noIO})
+const researchResult=await research.consult({handoff,brief:'Draw without a saved construction.',area_id:null,component_id:null,step_id:null,artifact_id:null})
+assert.equal(researchResult.status,'needs_data');assert.equal(researchResult.reason,'construction_required')
 
 const w = fixture('planning'), writeStatuses: string[] = []
 for (let i = 0; i < 9; i++) writeStatuses.push((await w.opts.writer.write('save_project_task', {
@@ -323,7 +315,7 @@ return { report_version: 1, tool_instruction_mode: toolInstructions, manual_stra
     generated_pixels_delivered: deliveredGeneratedPixels([...cadCalls, ...cadReviewerCalls]),
     generated_pixels_delivered_to_reviewer: deliveredGeneratedPixels(cadReviewerCalls),
     svg_bytes_delivered: JSON.stringify([...cadCalls, ...cadReviewerCalls]).includes('SYNTHETIC_SVG_BYTES'),
-    research_boundary_status: researchResult.status, research_tools_on_fourth_call: fourthTools, unused_lookup_calls: researchLookup.remaining },
+    research_boundary_status: researchResult.status, research_tools_on_fourth_call: fourthTools, unused_lookup_calls: research.remaining },
   write_statuses_for_nine_tasks: writeStatuses,
   drawing_receipt_check_accepts_any_saved_drawing: drawingSaved([{ dataset: 'artifacts', revision: 1, record: { cad: true } }] as any,
     [{ operation: 'execute', name: 'save_cad_design', status: 'saved' }]),

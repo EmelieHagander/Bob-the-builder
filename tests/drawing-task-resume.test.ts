@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createCadAssistant } from './support/cad-parameter-fixture.ts'
+import { createCadAssistant } from './support/colleague-catalog-fixture.ts'
+import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
 import type { DrawingRequest, DrawingRequestStore } from '../supabase/functions/_shared/cad-intake.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
@@ -22,7 +23,7 @@ const stoppedOutcome = { status: 'unavailable', stage: 'intake', saved: false, r
   budget_stop: { scope: 'drawing_request', reasons: ['usd_limit'], calls: 9, call_limit: 24, spent_usd: 1.15, usd_limit: 1 } }
 
 function fixture(stopped: Record<string, any> = stoppedOutcome) {
-  const brief = { request_id: id, handoff, brief: 'Draw this concept.', area_id: null, component_id: null, step_id: 'work', artifact_id: null }
+  const brief = { request_id: id, handoff, brief: 'Draw this concept.', area_id: null, component_id: null, step_id: 'work', artifact_id: fixtureConstructionId, construction_revision:1 }
   let row: DrawingRequest = { id, revision: 3, status: 'retrieval_failed',
     payload: { brief, owner_request: 'Draw this concept.', reference_refs: [], retry: { fingerprint: '', outcome: structuredClone(stopped) } } }
   const loads: number[] = []
@@ -43,14 +44,9 @@ function fixture(stopped: Record<string, any> = stoppedOutcome) {
   const assistant = createCadAssistant({ requestStore: store, projectId: 'A', userId: 'u', ownerRequest: 'Try again please', hasAccess: async () => true, available: true, deadline: Date.now() + 300000,
     requestModel: async (_id, _o, work) => reserveExhausted ? { success: false, data: null, model: 'unavailable', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'turn_budget_exhausted', budget_stop: stopped.budget_stop } as any : work(),
     makeLookup: () => createProjectLookup('A', async (_p, q) => ({ data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }), 1000, 40),
-    readArtifact: async () => null,
-    render: async r => ({ recipe: r, manifest: { instances: r.instances }, files: { front: 'PRIVATE_EXPORT' }, previews: { front: 'PRIVATE_PIXELS', top: 'PRIVATE_PIXELS' } }),
-    callModel: async o => {
-      if (o.functionName === 'cad-research') return reply('finish_cad_research', assessment)
-      if (o.functionName === 'cad-reviewer') return reviewReply()
-      designerCalls++
-      return designerCalls % 2 === 1 ? reply('render_cad_candidate', { ...metadata, recipe, dimension_bindings: [] }) : reply()
-    },
+    ...checkedCadFixture('A',recipe),
+    render:async r=>checkedCadFixture('A',recipe).packet(r),
+    callModel:async o=>{assert.equal(o.functionName,'cad-reviewer');return reviewReply()},
   })
   return { assistant, brief, loads, get row() { return row }, exhaust: () => { reserveExhausted = true } }
 }
@@ -68,7 +64,7 @@ test('the period-opened packet resumes without an automatic allocation or a seco
 test('an exhausted task stops with its actual cause and fresh-next-message hint', async () => {
   const f = fixture({...stoppedOutcome,budget_stop:{...stoppedOutcome.budget_stop,scope:'task'}}); f.exhaust()
   const result = await f.assistant.consult(f.brief)
-  assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'paused_at_limit'); assert.equal(result.stage, 'intake')
+  assert.equal(result.status, 'unavailable'); assert.equal(result.reason, 'paused_at_limit'); assert.equal(result.stage, 'review')
   assert.equal(result.budget_grant, undefined)
   assert.equal(f.loads.length, 1)
   assert.equal(result.budget_stop,undefined)
