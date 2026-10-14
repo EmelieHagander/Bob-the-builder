@@ -66,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'bound_work' | 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -253,6 +253,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           invalidAttempts++
           if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
           if (payload.kind === 'bound_solution' && ['40001','PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The solution or selected direction changed after this read. Read the edit context again and reconsider the change; never create a replacement alternative.' }
+          if (payload.kind === 'bound_work' && ['40001','40P01','PT409','23505'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The work record, scope or its relationships changed. Read work context again and apply only the intended delta; never create a replacement.' }
           if (error.code === '42501') return { status: 'denied', reason: 'access' }
           if (['construction','construction_roles','construction_consequence','operational','cut_plan'].includes(payload.kind) && /construction_instance_roles_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No quantity or cut was saved. Read the exact construction and explicitly classify its saved instance IDs with change_construction_roles; historical roles remain unknown until recorded.' }
           if (payload.kind === 'construction_roles' && /invalid_(?:instance_policy|construction_role)/.test(error.message ?? '')) return { status: 'invalid', message: 'No role change saved. Use distinct existing instance IDs and the matching role/quantity policy with an honest reason. Read the current construction before retrying.' }
@@ -285,7 +286,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
               if (issue) return { status: 'invalid', message: issue.message, validation: { code: 'domain_fields', fields: issue.fields } }
             }
             if (payload.kind === 'catalog') return { status: 'invalid', message: 'The catalog rejected this definition. No change made. Read the exact part/material profile and pinned material revision. Put required part dimensions in properties using the profile field keys; compatible material properties are inherited server-side, and notes are not dimension fields. If the current definition already matches, reuse it instead of revising metadata.' }
-            if (payload.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
+            if (payload.kind === 'lifecycle' || payload.kind === 'bound_work' && (payload.data.domain as WritePayload)?.kind === 'lifecycle') return { status: 'invalid', message: 'No change made. ' + (LIFECYCLE_REASON.exec(error.message ?? '')?.[0] ?? 'The project rejected this change; read the current record and check its state.') }
             if (payload.kind.startsWith('plan_')) return { status: 'invalid', message: 'The living plan rejected this command. No canonical plan was silently changed. Read the current plan, reuse only exact Step/Requirement IDs from it, keep completed history, and use current project evidence IDs/revisions.' }
             return { status: 'invalid', message: 'The database rejected this command. No change made; check fields, source, current revision and record state.' }
           }

@@ -20,9 +20,7 @@ and existing solutions: `read_project_edit_context` returns bound selections and
 `edit_project_record` accepts only content changes. The owning write contract
 records the exact scope, catalog/runtime rollout order and remaining tool families.
 [Release evidence](foundation-verification.md#server-bound-project-edits--2026-10-14)
-separates installation from open ordinary-member/model acceptance. The next source
-slice adds explicit alternative creation, selection and evidence-link changes;
-its separate publication is not yet active. Other write families remain migration work.
+separates installation from open ordinary-member/model acceptance. The second deployed slice adds explicit alternative creation, selection and evidence-link changes (#255). The next source slice replaces thirteen work-record writes with bound content, create, relation and state actions; its publication is not yet active. The owning write document inventories the remaining families.
 
 ## Data edit responsibility — specified 2026-10-14
 

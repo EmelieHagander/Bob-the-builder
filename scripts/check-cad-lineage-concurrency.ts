@@ -561,3 +561,41 @@ await query(await readFile(new URL('./check-construction-consequences-release.sq
 }
 console.log('PASS mandatory source: native PostgreSQL rejects unbound publication; checked construction/consequence release still passes')
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)
+// Server-bound work wrappers: real relation-only writes and identical creates.
+for(const name of ['20261014104842_server_bound_project_edits.sql','20261014114416_server_bound_solution_actions.sql','20261014121359_server_bound_work_records.sql'])await query(await readFile(new URL('../supabase/migrations/'+name,import.meta.url),'utf8'))
+for(const kind of ['assignee-first','status-first','event-link-first','event-save-first','new-task-replay']) {
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture'),area='race-area-'+randomUUID(),task='race-task-'+randomUUID(),person='race-person-'+randomUUID(),event='race-event-'+randomUUID()
+ await query(`insert into bob.areas(id,project_id,slug,name) values(${literal(area)},${literal(f.project)},${literal(area)},'Race Area');insert into bob.tasks(id,project_id,area_id,name) values(${literal(task)},${literal(f.project)},${literal(area)},'Race Task');insert into bob.people(id,project_id,name,initials) values(${literal(person)},${literal(f.project)},'Race Helper','RH');insert into bob.events(id,project_id,slug,title) values(${literal(event)},${literal(f.project)},${literal(event)},'Race Day');`)
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;${sql};${tail}commit;`
+ const context=async(resource:string,id:string)=>JSON.parse((await query(tx(`select bob.read_bob_work_snapshot(${literal(f.project)},${literal(resource)},${literal(id)})`))).split('\n').at(-1)!)
+ let domain:any,pin:any,mutation:string
+ const base={record_id:task,expected_revision:null,expected_updated_at:null,request_quote:f.payload.request_quote}
+ if(kind.startsWith('event-')){
+  pin=await context('build_days',event)
+  domain={...base,kind:'operational',record_id:event,expected_revision:0,expected_updated_at:pin.record.updated_at,data:{resource:'build_day',action:'revise',fields:{title:'Race Day',day:'',time:'10:00',place:'',food:'',task_ids:[]}}}
+  // event_tasks are command-only; use the fixture admin session to prove the trigger,
+  // independently of the Bob writer's project lock and timestamp changes.
+  mutation=`insert into bob.event_tasks values(${literal(f.project)},${literal(event)},${literal(task)})`
+ }else if(kind==='new-task-replay'){
+  pin=await context('areas',area);domain={...base,kind:'task',record_id:null,data:{area_id:area,name:'One new Task',instructions:''}};mutation=''
+ }else{
+  pin=await context('tasks',task);domain={...base,kind:'task_work',expected_updated_at:pin.record.updated_at,data:{status:'doing',person_ids:[]}}
+  mutation=`insert into bob.task_assignees values(${literal(task)},${literal(person)})`
+ }
+ const payload={...domain,kind:'bound_work',data:{pins:[pin],domain}},save=`select bob.bob_project_write_v19(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(payload))})`
+ const firstMutation=kind.endsWith('-first')&&!['status-first','event-save-first'].includes(kind)
+ const mutationTx=(tail='')=>kind.startsWith('event-')?`begin;set local statement_timeout='30s';${mutation};${tail}commit;`:tx(mutation,tail)
+ const key=790000+cases,barrier=await gate(key),leader=start(firstMutation?mutationTx(`select pg_advisory_xact_lock(${key});`):tx(save,`select pg_advisory_xact_lock(${key});`));let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(firstMutation||kind==='new-task-replay'?tx(save):mutationTx());await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ if(firstMutation){assert.notEqual(follow.code,0);assert.match(follow.stderr,/record_changed/)}else assert.equal(follow.code,0,follow.stderr)
+ if(kind==='new-task-replay'){
+  assert.equal(await query(`select count(*) from bob.tasks where project_id=${literal(f.project)} and name='One new Task'`),'1')
+  const receipt=(out:string)=>JSON.parse(out.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+  assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout))
+ }else if(kind.startsWith('event-'))assert.equal(await query(`select count(*) from bob.event_tasks where event_id=${literal(event)}`),'1','concurrent scheduled Task is preserved')
+ else assert.equal(await query(`select count(*) from bob.task_assignees where task_id=${literal(task)}`),'1','concurrent assignee is preserved')
+ console.log(`PASS bound work ${kind}: observed parent lock wait; exact snapshot/replay and relation preservation checked`);cases++
+}
+console.log(`${cases} total PostgreSQL races passed including server-bound work records.`)

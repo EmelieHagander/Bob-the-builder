@@ -807,5 +807,92 @@
     "always_load": true,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_work_context",
+    "description": "Read server-bound work records and relation choices.",
+    "how_to": "Read the relevant work records first. Reuse returned refs; provide only intended deltas. Never transcribe IDs, versions, scope or unchanged values. Creation cannot repair a failed edit. Unknown stays unknown; canonical domain rules remain authoritative.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build",
+      "complete"
+    ],
+    "active": true
+  },
+  {
+    "name": "edit_work_record",
+    "description": "Change only requested content on an existing work record.",
+    "how_to": "Read the relevant work records first. Reuse returned refs; provide only intended deltas. Never transcribe IDs, versions, scope or unchanged values. Creation cannot repair a failed edit. Unknown stays unknown; canonical domain rules remain authoritative.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build",
+      "complete"
+    ],
+    "active": true
+  },
+  {
+    "name": "create_work_record",
+    "description": "Explicitly create new work from a read scope and optional base.",
+    "how_to": "Read the relevant work records first. Reuse returned refs; provide only intended deltas. Never transcribe IDs, versions, scope or unchanged values. Creation cannot repair a failed edit. Unknown stays unknown; canonical domain rules remain authoritative.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build",
+      "complete"
+    ],
+    "active": true
+  },
+  {
+    "name": "change_work_relation",
+    "description": "Add or remove one assignment or scheduled Task.",
+    "how_to": "Read the relevant work records first. Reuse returned refs; provide only intended deltas. Never transcribe IDs, versions, scope or unchanged values. Creation cannot repair a failed edit. Unknown stays unknown; canonical domain rules remain authoritative.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build",
+      "complete"
+    ],
+    "active": true
+  },
+  {
+    "name": "change_work_state",
+    "description": "Change lifecycle or Task status on an exact read record.",
+    "how_to": "Read the relevant work records first. Reuse returned refs; provide only intended deltas. Never transcribe IDs, versions, scope or unchanged values. Creation cannot repair a failed edit. Unknown stays unknown; canonical domain rules remain authoritative.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "concept",
+      "design",
+      "planning",
+      "build",
+      "complete"
+    ],
+    "active": true
+  },
+  {
+    "name": "change_task_readiness",
+    "description": "Change one Task dependency or need from its exact read context.",
+    "how_to": "Read the Task and prerequisite first. Choose returned refs and item indices. Preserve other needs and dependencies; readiness requires actual evidence and canonical blocker checks.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [
+      "planning",
+      "build"
+    ],
+    "active": true
   }
 ]
