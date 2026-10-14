@@ -1,3 +1,4 @@
+import type { WorkRecords } from './project-work-records.ts'
 import type { SolutionActions } from './project-solution-actions.ts'
 import type { ProjectEdits } from './project-edits.ts'
 import type { ConstructionTools } from './construction-draft.ts'
@@ -87,7 +88,7 @@ export async function runProjectAnswer(opts: {
   toolInstructions?: ToolInstructions;
   calculator?: ProjectCalculator;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
-  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }): Promise<ProjectAnswer> {
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
@@ -213,7 +214,7 @@ export async function runProjectAnswer(opts: {
     observe(closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: facts.length > 0 || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        partial: facts.length > 0 || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

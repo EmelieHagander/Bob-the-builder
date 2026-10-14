@@ -44,8 +44,7 @@ edits to this adapter and disable the legacy description replacement tool.
 An unresolved bound edit prevents creating a replacement alternative in that turn.
 Historical pinned manifests retain their original handler path.
 
-**Remaining deployed scope:** creating/selecting alternatives, changing evidence links,
-and other write families still use their existing contracts until the next publication ships. This slice does
+**Remaining deployed scope:** alternative/selection/evidence actions are now covered by the second implementation below; other write families retain their existing contracts until their separate publication ships. This slice does
 not claim that all Bob tools are free of model-supplied database fields. Editing
 an unselected alternative does not change a selected target. Reconciling an old
 selected revision with a newer alternative is an explicit separate decision.
@@ -59,9 +58,9 @@ The isolated tests cover the real SQL/RLS/ledger path, downstream rollback,
 server restart, model-facing contract and completion after correction. They do
 not measure live model latency or cost.
 
-### Next implementation: alternatives, selection and evidence links
+### Second implementation: alternatives, selection and evidence links
 
-**Source implementation; not yet deployed.** `project-solution-actions.ts` adds
+**Technically deployed through PR #255; ordinary-member/model acceptance remains open.** `project-solution-actions.ts` adds
 `read_solution_context`, `create_solution_alternative`,
 `select_solution_alternative` and `change_solution_evidence`. The read returns
 paged, caller-scoped alternatives, selected versions, scopes, measurement truth
@@ -93,11 +92,54 @@ choices across restarts. Install core, both runtimes, then the separate immutabl
 catalog publication. No existing data, model settings or older manifests are
 rewritten by installation.
 
-Remaining migration families are Area/Task content and assignments; measurements
-and components; plan/work links and lifecycle; materials, catalog, procurement
-and build days; drawing/image links and older geometry inputs. Existing
-construction and calculation adapters must be audited for nested source IDs as
-well as top-level fields. This next slice does not make those contracts migrated.
+### Third implementation: work records and their relations
+
+**Source implementation; not yet deployed.** `project-work-records.ts` adds
+`read_work_context`, `edit_work_record`, `create_work_record`,
+`change_work_relation` and `change_work_state`. These replace twelve legacy
+writes for Area/Task content, measurements and archive/restore, Task status and
+assignees, build days and scheduled Tasks, Area lifecycle, project phase and
+schedule, and Shopping deletion. They use opaque read refs and whitelisted
+content deltas. Project/Area/current Plan Step/component scope is resolved from
+the read; complete existing content and relations stay server-side.
+
+Creation is separate and explicit. The database generates identity; copied bases
+and destination scopes must still match their reads. New Tasks start todo and
+unassigned; copying content never copies completion. New measurements default
+to unknown. An image-backed measurement cannot be duplicated through base-copy;
+edit its existing identity or use an explicit evidence operation. Content edits
+retain that image, exact truth/source and history. Build day edits retain the
+complete scheduled Task list and never change RSVP. Relation changes add/remove
+one member rather than asking Bob to replace the whole set. Schedule edits merge
+unchanged dates; clearing still requires both null. Canonical archive, phase,
+completion and deletion rules remain authoritative.
+
+`read_bob_work_context`/`read_bob_work_snapshot` are invoker reads. Claimed-turn
+v19 locks and compares complete server snapshots, including relation membership,
+before delegating to existing commands. Parent-lock triggers serialize direct
+Task-assignee and event-Task writes with full-set replacements, including initially
+empty sets. Exact committed retry precedes freshness; separate operation keys
+allow successive intentional changes and never take another writer's receipt.
+Old durable manifests and RPC names remain unchanged. Install core, both runtimes,
+then the generated catalog; a source commit alone does not activate these tools.
+
+### Remaining migration inventory
+
+| Family | Current boundary / remaining work |
+| --- | --- |
+| Description, solution content, alternative creation, selection, evidence | Technically deployed in #254/#255; real member/model acceptance remains. |
+| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation above is source-only; twelve legacy write contracts are disabled only after its catalog activation. |
+| Task readiness | `manage_task_readiness` still exposes dependency/need/instruction IDs and revisions; bind reads and edit deltas. |
+| Living plan | Compiler/edit/save already retain server candidates. Decision, focus, Task/evidence links and nested proposal identities still need audited bound actions. |
+| Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
+| Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |
+| Image and drawing links | Attachment/detachment, finalization, drawing links and lifecycle choices still need complete bound source/target reads. |
+| Building, room and stair inputs | Bind existing physical context, source dimensions, current geometry and unchanged saved values. |
+| Construction and CAD | Existing candidate/draft/calculation adapters already own portions of identity and derivation; audit every nested source/definition/instance/Step reference and stateful update before declaring this family complete. |
+
+This inventory describes migration work, not exceptions to the ownership rule.
+Do not remove a capability from the active bench before its replacement covers
+its canonical behavior and preservation/concurrency tests.
 
 ### Responsibility boundary
 

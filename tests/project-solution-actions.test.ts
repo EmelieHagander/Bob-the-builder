@@ -19,7 +19,7 @@ const quote='Make an explicit alternative and select it; link the recorded width
 const set=(path:string,value:unknown)=>({op:'set',path,value_json:JSON.stringify(value)})
 let pg:Awaited<ReturnType<typeof projectSchema>>,thread:string,generation:number,beforeCatalog:any
 before(async()=>{
-  pg=await projectSchema(async(db,name)=>{if(name.endsWith('_ai_solution_actions_catalog.sql'))beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest})
+  pg=await projectSchema(async(db,name)=>{if(name.endsWith('_ai_solution_actions_catalog.sql'))beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest},'20261014114816_ai_solution_actions_catalog.sql')
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[user,'one@example.test',other,'other@example.test'])
   await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Project A'),('B','b','Private B'); insert into bob.areas(id,project_id,slug,name) values('areaA','A','assembly','Assembly'),('areaB','B','other','Other')")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('otherB','B','Other','OB',$2)",[user,other])

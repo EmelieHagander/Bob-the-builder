@@ -1054,7 +1054,7 @@ owns method coverage and the [verification owner](../Docs/foundation-verificatio
 owns actual release/readback and remaining model acceptance.
 
 
-### Server-bound solution actions — source implementation 2026-10-14
+### Server-bound solution actions — technically deployed 2026-10-14
 
 `20261014114416_server_bound_solution_actions.sql` adds the caller-scoped
 `read_bob_solution_context` invoker and claimed-turn v18 writer wrapper. Creation
@@ -1065,6 +1065,19 @@ operations preserve exact receipts and project serialization, with source checks
 after exact retry lookup. Selected evidence updates delegate the atomic v17
 solution-plus-target operation. No table, data backfill or global setting change
 is introduced. Apply core, deploy both Bob runtimes, then publish
-`20261014114816_ai_solution_actions_catalog.sql`. The prior v17 slice is installed;
-[this next publication's status and scope](../Docs/ask-bob-writes.md#next-implementation-alternatives-selection-and-evidence-links)
-remain separate from that technical release.
+`20261014114816_ai_solution_actions_catalog.sql`. The v17 and v18 slices are installed;
+[release evidence](../Docs/foundation-verification.md#server-bound-solution-actions--2026-10-14) separates installation from ordinary-member/model acceptance.
+
+
+### Server-bound work records — source extension 2026-10-14
+
+`20261014121359_server_bound_work_records.sql` adds caller-scoped invoker work
+snapshots and paged reads, plus the claimed-turn v19 wrapper. The runtime binds
+content deltas, creates, relation changes and state actions to complete read
+snapshots. The wrapper locks canonical heads/parents, compares relation sets,
+recovers exact committed retries before freshness and preserves canonical domain
+rules and receipts. Task-assignee/event-Task parent triggers also serialize direct
+relation writes with Bob replacements. This does not grant new project authority.
+Install core, both runtime endpoints, then `20261014121841_ai_work_records_catalog.sql`.
+The separate publication retires twelve legacy writes only for fresh manifests.
+See [write ownership](../Docs/ask-bob-writes.md) for coverage and remaining families.

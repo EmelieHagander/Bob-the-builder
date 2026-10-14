@@ -2558,4 +2558,37 @@ restart and model-loop completion after correction. This is a technical release:
 no ordinary-member Auth/HTTP acceptance or actual-model run of the new tools was
 performed during deployment. No live latency/cost improvement is asserted.
 [The write owner](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14)
-tracks remaining tool families and the next source-only solution-action slice.
+tracks the next work-record slice and the remaining tool families.
+
+
+## Server-bound solution actions — 2026-10-14
+
+[PR #255](https://github.com/EmelieHagander/Bob-the-builder/pull/255) merged as
+`4bff7fe5260dbaf8d473a92a05896bb40e1f9022`, tree
+`e64c81c2b97b97764c5031686b3b61aefc607019`. Final-head CI
+[38560940693](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38560940693)
+and concurrency
+[38560940898](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38560940898)
+passed, including full tests, normal Edge imports, build and all browser gates.
+
+| Installed item | Readback |
+| --- | --- |
+| Core | Hosted `20261014122025`, `server_bound_solution_actions`; source `20261014114416_server_bound_solution_actions.sql`. |
+| ask-bob | ACTIVE v120, JWT true; bundle `e91fdcf7c9a911cd0c88472495f510e291377b0a93fbd50b535082c3c3614d3e`. |
+| bob-worker | ACTIVE v88, existing JWT false/custom auth; bundle `990dff38b858642fbb32c59580478a4b706a93f6a33e296baecd8db12d0e24ee`. |
+| Catalog | Hosted `20261014122103`, `ai_solution_actions_catalog`; source `20261014114816_ai_solution_actions_catalog.sql`. |
+| Resolved manifest | `46fe1288-6f81-4766-ab41-f15b582004a8`; four new contracts with server-filled write provenance. |
+
+The previous deployed source matched the merge parent before upload. All 94
+emitted ask-bob files and 92 worker files then matched the merged tree exactly;
+the bundler omitted only type-only files. Core preceded both runtimes and catalog
+activation followed both source readbacks. Public reader/writer remain invokers,
+the private writer remains a guarded definer, all have empty search_path and
+only authenticated execute. No security-advisor findings name the new functions.
+The new work-record implementation is not part of this deployment.
+
+Isolated tests cover alternative creation/copy, no create-on-failed-edit fallback,
+exact selection/source CAS, image/measurement preservation, atomic selected-target
+updates, rollback, distinct retry receipts and journal restart. This is technical
+deployment evidence, not ordinary-member Auth/HTTP or actual-model acceptance.
+No measured live latency/cost improvement is asserted.
