@@ -66,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -174,7 +174,8 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
   if (!isProjectWriteReceipt(r, projectId) || !r.record || r.record.id !== r.recordId
     || (r.dataset === 'artifacts' && (r.record.revision !== r.revision || r.record.area_id !== r.areaId))
     || (['catalog','plan','cut_plans'].includes(r.dataset) && r.record.revision !== r.revision)) throw new Error('Invalid write receipt')
-  return { ...r, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
+  const { related_receipts: _related, ...clean } = r as WriteReadback & { related_receipts?: unknown }
+  return { ...clean, record: withDerivedStair(withDerivedBuildingPlan(withDerivedRoomLayout(r.record, projectId), projectId), projectId) }
 }
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)
@@ -232,6 +233,15 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       else if (result.status === 'saved') corrections.delete(key)
       return result
     },
+    /** Server-resolved target identity also owns correction bookkeeping. A
+     * re-read may change the token/version without hiding another failed edit. */
+    async commitBound(name: string, target: string, payload: WritePayload | null): Promise<WriteResult> {
+      const result = await this.commit(payload)
+      const key = JSON.stringify([name, target])
+      if (result.status === 'invalid' || result.status === 'conflict') corrections.add(key)
+      else if (result.status === 'saved') { corrections.delete(key); corrections.delete(JSON.stringify([name, 'unbound'])) }
+      return result
+    },
     async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
@@ -242,6 +252,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
         if (error) {
           invalidAttempts++
           if (error.message?.includes('turn_not_claimed')) return { status: 'denied' }
+          if (payload.kind === 'bound_solution' && ['40001','PT409'].includes(error.code ?? '')) return { status: 'conflict', message: 'No change made. The solution or selected direction changed after this read. Read the edit context again and reconsider the change; never create a replacement alternative.' }
           if (error.code === '42501') return { status: 'denied', reason: 'access' }
           if (['construction','construction_roles','construction_consequence','operational','cut_plan'].includes(payload.kind) && /construction_instance_roles_required/.test(error.message ?? '')) return { status: 'invalid', message: 'No quantity or cut was saved. Read the exact construction and explicitly classify its saved instance IDs with change_construction_roles; historical roles remain unknown until recorded.' }
           if (payload.kind === 'construction_roles' && /invalid_(?:instance_policy|construction_role)/.test(error.message ?? '')) return { status: 'invalid', message: 'No role change saved. Use distinct existing instance IDs and the matching role/quantity policy with an honest reason. Read the current construction before retrying.' }
@@ -281,6 +292,14 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)
+        if (payload.kind === 'bound_solution') {
+          const related = (data as { related_receipts?: unknown }).related_receipts
+          if (!Array.isArray(related) || related.length !== (payload.data.target === null ? 0 : 1)) throw new Error('Missing bound edit receipts')
+          const confirmed = related.map(r => checkedReceipt(r, projectId))
+          if (confirmed.some(r => r.dataset !== 'target' || r.record.solution_id !== receipt.recordId || r.record.solution_revision !== receipt.revision)) throw new Error('Mismatched bound selection receipt')
+          confirmed.forEach(remember)
+          used += related.length
+        }
         used++; remember(receipt)
         return { status: 'saved', receipt }
       } catch (error) {

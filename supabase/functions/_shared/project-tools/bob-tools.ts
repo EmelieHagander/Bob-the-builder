@@ -1,3 +1,4 @@
+import type { ProjectEdits } from '../project-edits.ts'
 import type { ConstructionTools } from '../construction-draft.ts'
 import type { AiCatalogSession } from '../ai-catalog.ts'
 import { hasCalculatorContract, type ProjectCalculator } from '../project-calculator.ts'
@@ -19,7 +20,7 @@ import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyR
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
 export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
-  { label: 'Project records and memory', tools: ['search_project_data', 'read_project_record_section', 'read_project_work', 'search_conversation_history'] },
+  { label: 'Project records and memory', tools: ['read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_record_section', 'read_project_work', 'search_conversation_history'] },
   { label: 'Project, phases and Areas', tools: ['save_project_description', 'set_project_phase', 'update_project_schedule', 'save_project_area', 'archive_project_area'] },
   { label: 'Living plan', tools: ['compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
@@ -44,9 +45,10 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
-  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
+  const boundEdits = !!opts.projectEdits && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.edit_project_record'))
   const shelves = opts.aiCatalog?.definition('bob.tools', 'tool_contract').definition.shelves as typeof TOOLBOX_SHELVES | undefined
   const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? (shelves ? shelves.find(s => s.tools.includes(def.spec.function.name))?.label ?? 'Other tools' : shelfOf(def.spec.function.name)) })
   const registered: ToolDefinition[] = [
@@ -57,12 +59,20 @@ export function createBobToolSession(opts: {
       gate:():ToolGate=>opts.calculator!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.calculator!.execute(v)})):[]),
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
+    ...(opts.projectEdits?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => spec.function.name === 'edit_project_record' ? !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted' : opts.projectEdits!.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.projectEdits!.execute(spec.function.name, v),
+    })),
     ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
       ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
+        : boundEdits && spec.function.name === 'save_project_description' ? 'not_allowed'
+        : boundEdits && spec.function.name === 'save_project_solution' && opts.writer.unresolvedTools.includes('edit_project_record') ? 'missing_context'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
         : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
-      execute: (v: unknown) => opts.writer!.write(spec.function.name, v),
+      execute: (v: unknown) => boundEdits && spec.function.name === 'save_project_solution' && !!v && typeof v === 'object' && 'record_id' in v && v.record_id !== null
+        ? opts.writer!.commitBound('edit_project_record', 'unbound', null).then(result => ({ ...result, message: 'No change made. Read the existing solution with read_project_edit_context and revise it through edit_project_record. Never create an alternative to repair a failed edit.' }))
+        : opts.writer!.write(spec.function.name, v),
     })),
     ...(opts.projectContext?.tools ?? []).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => opts.projectContext!.remaining > 0 ? 'available' : 'budget_exhausted',
