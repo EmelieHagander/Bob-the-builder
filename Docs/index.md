@@ -144,6 +144,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
+- [Server-bound edits and canonical data reuse](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14) — **owner decision, specified 2026-10-14; implementation incomplete**: Bob reads and changes data while the runtime owns identities, concurrency and reuse of canonical values. Includes create/revise separation, preservation rules and acceptance gates.
+
 - [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract and active State**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and staged delivery. Domain owners distinguish implemented, deployed and remaining target scope. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in PR/CI or the archive below.
 - `supabase/README.md` — provider path, versioned AI definition catalog, per-app model tiers, pinned manifests, activation/rollback, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
 - `Docs/ask-bob-tools.md` — **tool-system owner**: since 2026-09-27 the whole permitted toolbox is offered every step on named shelves, with waiting/used-up tools listed and no forced tool choice; caller authority and execution fences are unchanged. The earlier core/on-demand tiers and list/load discovery are kept as history. Does not claim the generic drawing engine is built.

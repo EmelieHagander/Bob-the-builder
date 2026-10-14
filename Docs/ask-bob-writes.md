@@ -2,6 +2,119 @@
 
 This document owns the source/runtime contract for bounded project writes. Hosted release evidence belongs in the merged release PR and [foundation verification](foundation-verification.md). Dated extension sections below retain their original rollout context; current tool availability comes from the live catalog and handlers.
 
+## Server-bound edits and canonical data reuse — owner decision 2026-10-14
+
+**Status: specified architecture principle; implementation remains incomplete.**
+This section owns the model/runtime responsibility boundary for data edits across
+Bob and his specialists. It refines delivery-flow decision D5. It supersedes any
+earlier guidance that makes the model copy database IDs, concurrency versions or
+unchanged saved fields into a write. Historical payload descriptions below remain
+accurate descriptions of existing implementations until their handlers migrate.
+
+> Bob can inspect and change project data. The model expresses the intended
+> change; the system binds its target, retrieves existing data and preserves
+> everything the change does not address.
+
+### Responsibility boundary
+
+| Concern | Bob's responsibility | System responsibility |
+| --- | --- | --- |
+| Inspect and choose | Read relevant records, compare sources and identify the intended object or relationship | Return authorized, bounded data with meaning, units, source, truth state and freshness; resolve the selection to exact identities |
+| Identity and scope | Select an existing object from grounded context; resolve genuine ambiguity | Own database IDs, project/Area/parent bindings, actor, turn and operation identity; never require the model to transcribe or generate these |
+| Existing values | Understand the data and deliberately propose corrections where needed | Fetch canonical values and retain untouched fields, references, decisions and relationships |
+| Changed values | Supply genuinely new content, a supported design choice or an explicit correction with its basis | Validate permitted fields, units, source/provenance and domain rules; save through the owning command |
+| Reuse and derivation | Choose relevant sources and a supported calculation or relationship | Bind exact source versions, perform deterministic calculations and propagate dependency changes |
+| Persistence | Explain verified results and remaining gaps | Enforce concurrency, permissions, atomicity, idempotency, history and readback receipts |
+
+This is not a read-only role for Bob and not a requirement to ask the owner before
+every edit. Existing delegated authority still applies. Bob must be able to inspect
+saved data, correct an incorrect measurement with appropriate new evidence, change
+a design dimension, revise text and relationships, and select a different source.
+A stored value is not immutable merely because it already exists.
+
+### Required tool behavior
+
+1. **Bind the target before editing.** Use verified current context or a selection
+   from authorized read results. An opaque server-issued selection reference may
+   be used when needed; it is not a model-authored database ID, permission or
+   substitute for validation. Do not guess by name, silently select the first
+   match, or equate the current screen with the user's intended target.
+2. **Send changes, not reconstructed records.** Expose bounded domain edits.
+   Omitted fields are preserved; clearing/removing a value is explicit. Nested
+   collections and relationships need explicit add/change/remove semantics so a
+   small edit cannot replace an entire list. A deliberate full text rewrite is
+   supported when it is the requested change, not required for unrelated updates.
+3. **Reuse saved data directly.** A value already available from a relevant,
+   authorized source is referenced and hydrated by the system, not copied through
+   model prose or a specialist handoff. Do not duplicate records merely to carry
+   data between tools. New literals remain necessary for new owner input or
+   supported design decisions; their meaning and provenance must be retained.
+4. **Pin what was read.** Capture the revision/timestamp server-side when the
+   target and sources are read. Check those preconditions at commit. Never fetch
+   a newer version merely to make a stale write succeed. A conflicting change
+   triggers bounded rereading/reconciliation, not blind overwrite.
+5. **Separate revise from create.** Editing an existing object preserves its
+   identity and appends the appropriate history. Creating a genuinely new object
+   or alternative is an explicit operation. An invalid edit must never become a
+   create by clearing an ID, changing a version to zero or supplying a new name.
+6. **Keep uncertainty and authority visible.** Existing data can be stale,
+   conflicting, inaccessible, assumed or wrong. Select/adopt sources deliberately;
+   never promote an estimate to measured truth or a concept to checked
+   construction. Domain permissions and source-refresh rules still apply.
+7. **Resolve completion from the actual operation.** Return field-specific
+   validation failures and an actionable correction. A successful correction
+   resolves the same rejected operation; saving a different object cannot hide
+   it. Completion checks must address a real remaining gap, not request another
+   model answer solely because already-resolved bookkeeping survived replay.
+8. **Preserve the established write boundary.** Caller authority, same-project
+   checks, claimed turns, generation fencing, deterministic calculations,
+   transactionally saved receipts and downstream version lineage remain
+   mandatory. Automatic field binding grants no additional access.
+
+### Example and implementation boundary
+
+For “add a back panel behind the bookcase and include slatted bases for both beds”,
+Bob reads the selected solution and proposes the relevant additions. The runtime
+binds the same solution and read version, preserves the existing gable/ladder/
+drawer choices and source links, saves the revision and handles any required
+target-selection command under its own domain rules. It does not ask Bob to
+resubmit all IDs, measurement links or unchanged choices.
+
+These additions are concept requirements until an actual construction version
+contains supported parts, materials, joints and unresolved questions. Text alone
+does not satisfy the construction-before-drawing boundary.
+
+The 2026-10-14 investigation found an existing-solution edit rejected because it
+supplied both `record_id` and `area_id`. The diagnostic reported
+`domain_fields` without naming a field. Bob then changed only `record_id` to
+null and `expected_revision` to zero, creating a different alternative. The
+original rejected target remained unresolved and triggered a completion check
+that returned the same answer. This illustrates a tool-contract gap, not an
+accepted repair strategy. Relevant current seams are
+`project-expert-tools.ts`, `project-write.ts`, `project-answer.ts` and the
+versioned tool definitions; changing this document does not change live schemas.
+
+### Acceptance required for implementation
+
+- An ordinary edit requires no model-supplied database ID, revision, timestamp
+  or unchanged record payload.
+- Bob can read and intentionally change existing values and relationships within
+  his mandate; untouched fields, source pins and prior decisions survive.
+- An edit creates one new revision of the same object; a new alternative requires
+  an explicit create operation.
+- Ambiguous selection, stale versions and inaccessible/cross-project references
+  fail honestly without guessing, bypassing authority or overwriting newer work.
+- Replayed requests reuse their exact receipts. Corrected writes resolve the
+  corresponding failure; unresolved or uncertain writes remain visible.
+- Existing source values and calculated results reach downstream tools through
+  validated bindings, with provenance and required change consequences preserved.
+- A real small-edit run is checked for content, reload/readback, identity/history
+  preservation, actual model calls, latency and cost. Deterministic tests alone
+  do not establish the live-model acceptance or a speed improvement.
+
+Implementation order and outstanding release/member gates live in
+[delivery-flow State](bob-delivery-flow.md#state).
+
 ## First scope
 
 The exact approved persona remains unchanged. Its separate server authority layer now allows action on a clear request or approval of an already specified option, without another permission loop. The actual per-call tool list remains the capability authority.

@@ -15,6 +15,15 @@ conversation compaction or the selected-image grounding repair. See
 Current View and the remaining broader catalog/router/Librarian design are distinguished in
 [the context owner](ask-bob-context.md#implemented-scope-and-remaining-target). The image-only catalog/list/open tools do not imply that general architecture is implemented.
 
+## Data edit responsibility — specified 2026-10-14
+
+[Server-bound edits and canonical data reuse](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14)
+owns the owner-approved target: Bob can inspect and change data; the runtime binds
+identity, read versions and existing values. New and revised tool contracts must
+follow it. Existing model-supplied IDs/full-record payloads are migration work,
+not an exception to the principle. This documentation does not activate new
+catalog schemas or change the deployed toolbox.
+
 ## Current toolbox contract — 2026-09-27
 
 **Definition ownership changes in the 2026-10-09 catalog implementation.**
