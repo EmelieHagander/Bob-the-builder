@@ -82,6 +82,11 @@ begin
   if not exists(select 1 from bob.current_solutions s where s.project_id=p_project and s.id::text=p_payload->>'record_id' and s.revision::text=d->>'solution_revision' and not s.archived) then raise exception 'source_changed' using errcode='40001';end if;
   domain:=p_payload||jsonb_build_object('kind','target');
  else
+  -- A receipt owned by the content editor is not this action's retry. Check the
+  -- read head before delegation so an identical inner payload cannot move that
+  -- other action's ledger entry and invalidate its future exact retry.
+  if not exists(select 1 from bob.current_solutions s where s.project_id=p_project and s.id::text=p_payload->>'record_id'
+   and s.revision::text=p_payload->>'expected_revision' and not s.archived) then raise exception 'record_changed' using errcode='40001';end if;
   for pin in select value from jsonb_array_elements(d->'sources') loop
    if pin->>'resource'='measurements' then
     if pin-array['resource','id','revision']::text[]<>'{}' or not(pin?&array['resource','id','revision']) then raise exception 'invalid_source_pin' using errcode='22023';end if;

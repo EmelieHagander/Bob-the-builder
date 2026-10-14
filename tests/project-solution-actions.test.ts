@@ -150,6 +150,15 @@ test('a stale copied base cannot create a replacement; blank creation receives s
   assert.equal(saved.content.assumptions,'');assert.equal(saved.content.design_intent,null);assert.deepEqual(saved.content.measurements,[])
   assert.equal((await actions.execute('select_solution_alternative',{scope_ref:scope.ref,solution_ref:saved.ref,reason:'Choose Area alternative',request_quote:quote})).status,'saved')
 })
+test('an evidence action cannot take over the content editor receipt for an identical stale inner payload',async()=>{
+  const s:any=((await read({resource:'selected_solutions',query:'Original bed',after:null})).data as any[])[0]
+  const data={target:s.target,solution:{...Object.fromEntries(['title','description','assumptions','tradeoffs','source_media_id','design_intent'].map(k=>[k,s.record[k]])),measurements:s.measurements,change_note:'Same requested content'}}
+  const content:WritePayload={kind:'bound_solution',record_id:s.record.id,expected_revision:s.record.revision,expected_updated_at:null,request_quote:quote,data}
+  const saved=await rpc(content);assert.equal(saved.error,null)
+  const evidence:WritePayload={...content,kind:'bound_solution_evidence',data:{...data,sources:[]}}
+  assert.equal((await rpc(evidence)).error?.code,'40001')
+  assert.deepEqual(await rpc(content),saved,'content editor retains its exact retry receipt')
+})
 test('new catalog removes legacy solution writes, omits database inputs, and preserves older manifests and model settings',async()=>{
   const live=(await pg.query<any>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
   assert.ok(beforeCatalog,'publication exists')
