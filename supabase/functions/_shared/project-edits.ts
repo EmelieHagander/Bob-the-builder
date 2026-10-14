@@ -158,7 +158,7 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
         if (snapshot.target && snapshot.head_revision !== undefined && snapshot.head_revision !== snapshot.record.revision) throw new Error('The selected version is older than this solution’s latest version. Read the alternatives and reconcile the selected direction explicitly before editing; do not overwrite newer work.')
         const record = await applyProjectDelta(snapshot, v.changes, v.reason)
         payload = snapshot.resource === 'project_description'
-          ? { kind: 'project', record_id: opts.projectId, expected_updated_at: snapshot.record.updated_at, expected_revision: null, request_quote: v.request_quote, data: { description: record.description } }
+          ? { kind: 'bound_project', record_id: opts.projectId, expected_updated_at: snapshot.record.updated_at, expected_revision: null, request_quote: v.request_quote, data: { description: record.description } }
           : { kind: 'bound_solution', record_id: snapshot.record.id, expected_updated_at: null, expected_revision: snapshot.record.revision, request_quote: v.request_quote,
               data: { target: snapshot.target, solution: { title: record.title, description: record.description, assumptions: record.assumptions, tradeoffs: record.tradeoffs, source_media_id: record.source_media_id, design_intent: record.design_intent, measurements: snapshot.measurements, change_note: v.reason } } }
       } catch (error) { rethrowContinuation(error); invalid = error instanceof Error ? error.message : 'Invalid content changes.' }

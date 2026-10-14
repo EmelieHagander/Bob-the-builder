@@ -66,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -299,7 +299,6 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (confirmed.some(r => r.dataset !== 'target' || r.record.solution_id !== receipt.recordId || r.record.solution_revision !== receipt.revision)) throw new Error('Mismatched bound selection receipt')
           confirmed.forEach(remember)
           used += related.length
-          delete (receipt as WriteReadback & { related_receipts?: unknown }).related_receipts
         }
         used++; remember(receipt)
         return { status: 'saved', receipt }

@@ -126,6 +126,12 @@ test('project description binds its timestamp and appends without copying existi
   const saved=await edits.execute('edit_project_record',args)
   assert.equal(saved.status,'saved',JSON.stringify(saved));assert.equal(saved.content.description,'Original description\nAdded detail')
   assert.equal(saved.selected_updated,false)
+  assert.deepEqual(await edits.execute('edit_project_record',args),saved,'an exact retry reuses its original receipt')
+  const next=await edits.execute('read_project_edit_context',{resource:'project_description',query:null,next_ref:null})
+  const nextArgs={...args,edit_ref:next.entries[0].edit_ref,changes:[{op:'append_text',path:'/description',value_json:JSON.stringify('\nSecond detail')}]}
+  const second=await edits.execute('edit_project_record',nextArgs)
+  assert.equal(second.status,'saved',JSON.stringify(second));assert.equal(second.content.description,'Original description\nAdded detail\nSecond detail')
+  assert.equal((await edits.execute('edit_project_record',{...args,changes:[set('/description','Stale replacement')]})).status,'conflict')
 })
 
 test('journal replay rebuilds the same selection and write without refreshing CAS or duplicating a save', async () => {

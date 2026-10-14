@@ -42,6 +42,22 @@ returns jsonb language plpgsql security definer set search_path='' as $$
 declare d jsonb:=p_payload->'data'; pin jsonb; target bob.current_target; domain jsonb; selection jsonb; result jsonb; selected_receipt jsonb;
  saved bob_private.bob_write_receipts; op text; message text;
 begin
+ if p_payload->>'kind'='bound_project' then
+  perform bob_private.bob_assert_write_claim(p_project,p_thread,p_turn,p_generation);
+  if p_payload->>'record_id' is distinct from p_project or p_payload->>'expected_updated_at' is null then raise exception 'invalid_bound_edit' using errcode='22023'; end if;
+  op:='bound_project:'||p_project||':'||(p_payload->>'expected_updated_at');
+  select * into saved from bob_private.bob_write_receipts where project_id=p_project and actor_id=auth.uid() and turn_id=p_turn and operation_key=op;
+  if found then
+   if saved.payload is distinct from p_payload then raise exception 'record_changed' using errcode='40001'; end if;
+   return saved.receipt;
+  end if;
+  domain:=p_payload||jsonb_build_object('kind','project');
+  result:=bob_private.bob_project_write_v16(p_project,p_thread,p_turn,p_generation,domain);
+  update bob_private.bob_write_receipts set operation_key=op,payload=p_payload
+   where project_id=p_project and actor_id=auth.uid() and turn_id=p_turn and payload=domain and receipt=result;
+  if not found then raise exception 'bound_edit_receipt_missing' using errcode='22023'; end if;
+  return result;
+ end if;
  if p_payload->>'kind' is distinct from 'bound_solution' then return bob_private.bob_project_write_v16(p_project,p_thread,p_turn,p_generation,p_payload); end if;
  perform bob_private.bob_assert_write_claim(p_project,p_thread,p_turn,p_generation);
  select text into message from bob.bob_messages where thread_id=p_thread and turn_id=p_turn and role='user';

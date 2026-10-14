@@ -256,7 +256,7 @@ export async function answerWithOpenAi(opts: {
   }
   // The v17 wrapper adds atomic bound edits and preserves the claimed-turn ledger.
   const writer = claimedServer ? createProjectWriter(opts.projectId, opts.message,
-    payload => rpc(payload.kind === 'bound_solution' ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
+    payload => rpc(['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
   ) : undefined
