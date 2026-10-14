@@ -66,7 +66,7 @@ export const WRITE_TOOLS = [
   }),
 ]
 export interface WritePayload {
-  kind: 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
+  kind: 'bound_solution_create' | 'bound_solution_target' | 'bound_solution_evidence' | 'bound_project' | 'bound_solution' | 'construction_roles' | 'construction_consequence' | 'legacy_construction' | 'construction_parameters' | 'cad_shell' | 'cad_shell_steps' | 'supplier_article' | 'pack_purchase' | 'cut_plan_shopping' | 'cut_plan_stock' | 'cut_plan' | 'construction' | 'operational' | 'drawing_link' | 'image_reserve' | 'image_finalize' | 'image_link' | 'cad' | 'measurement_state' | 'solution' | 'target' | 'task_work' | 'project' | 'area' | 'task' | 'measurement' | 'drawing' | 'room_layout' | 'building_context' | 'multifloor' | 'stair' | 'catalog' | 'plan_proposal' | 'plan_decision' | 'plan_evidence' | 'plan_task' | 'plan_focus' | 'lifecycle'
   record_id: string | null
   expected_updated_at: string | null
   expected_revision: number | null
@@ -292,7 +292,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           throw new Error('Unknown write result')
         }
         const receipt = checkedReceipt(data, projectId)
-        if (payload.kind === 'bound_solution') {
+        if (payload.kind === 'bound_solution' || payload.kind === 'bound_solution_evidence') {
           const related = (data as { related_receipts?: unknown }).related_receipts
           if (!Array.isArray(related) || related.length !== (payload.data.target === null ? 0 : 1)) throw new Error('Missing bound edit receipts')
           const confirmed = related.map(r => checkedReceipt(r, projectId))

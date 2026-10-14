@@ -1052,3 +1052,19 @@ these migrations. Earlier AI manifests/model settings
 and saved revisions are unchanged. The [tool owner](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
 owns method coverage and the [verification owner](../Docs/foundation-verification.md#common-calculator--2026-10-12)
 owns actual release/readback and remaining model acceptance.
+
+
+### Server-bound solution actions — source implementation 2026-10-14
+
+`20261014114416_server_bound_solution_actions.sql` adds the caller-scoped
+`read_bob_solution_context` invoker and claimed-turn v18 writer wrapper. Creation
+binds an optional existing solution head; selection binds a scope target and
+solution revision; evidence additions bind exact measurement revisions or image
+timestamps. The existing solution/domain commands remain authoritative. All
+operations preserve exact receipts and project serialization, with source checks
+after exact retry lookup. Selected evidence updates delegate the atomic v17
+solution-plus-target operation. No table, data backfill or global setting change
+is introduced. Apply core, deploy both Bob runtimes, then publish
+`20261014114816_ai_solution_actions_catalog.sql`. The prior v17 slice is installed;
+[this next publication's status and scope](../Docs/ask-bob-writes.md#next-implementation-alternatives-selection-and-evidence-links)
+remain separate from that technical release.

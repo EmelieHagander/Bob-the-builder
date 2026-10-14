@@ -21,7 +21,7 @@ for(const migration of migrations){
    const row=structuredClone(seed.find(row=>row.key==='tools.save_project_description'));row.key='tools.'+patch.name
    row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],additional_description:policies.find((p:any)=>p.name===patch.name).how_to}
    row.definition.envelope.schema_version=1
-   row.metadata={publication:'server-bound-edits',server_fields:patch.name==='edit_project_record'?['request_quote']:[]}
+   row.metadata={publication:'server-bound-edits',server_fields:patch.parameters.required.includes('request_quote')?['request_quote']:[]}
    seed.push(row);versions.set(row.key,1)
   }
   for(const patch of JSON.parse(source.match(/\$bound_edit_append\$([\s\S]+?)\$bound_edit_append\$/)![1])){

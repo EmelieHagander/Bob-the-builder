@@ -771,5 +771,41 @@
     "active": true,
     "always_load": true,
     "preload_phases": []
+  },
+  {
+    "name": "read_solution_context",
+    "description": "Read bound alternatives, scopes and sources",
+    "how_to": "Choose returned refs; do not construct IDs or copy source values. Image metadata is not inspected pixels.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "create_solution_alternative",
+    "description": "Create an explicit new alternative from content changes",
+    "how_to": "Read scope and optional base first. Copy known content automatically; never create as recovery from a failed edit. Selection is separate.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "select_solution_alternative",
+    "description": "Select a read solution in a read scope",
+    "how_to": "Read the current scope and latest alternative; the server binds revisions. Changed state requires reconsideration.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "change_solution_evidence",
+    "description": "Change one source link while preserving other solution data",
+    "how_to": "Read selected_solutions and source choices. Bind existing measurement truth and exact revision; preserve all unrelated content. Re-read after saving.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
   }
 ]
