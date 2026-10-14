@@ -439,56 +439,55 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
      if(reviews>=3||renders>=4){candidate=null;partial=true;return {status:'incomplete',stage:'review',saved:false,review}}
      return {status:'revise',saved:false,review}
    }
-   if(construction){
-    const ready=await refreshConstruction()
-    if(ready?.status!=='ready')return constructionFailure(ready)
-    runtimeVersion=await opts.runtimeVersion?.()
-    await dependencies.refresh(executeRead)
-    retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,design_intent:readiness.pin,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
-    const currentFingerprint=await retryFingerprint()
-    if(request?.payload.retry?.fingerprint===currentFingerprint)return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
-     next_action:catalogText("feedback.cad-assistant.next-action.d7dc5f3db6a2")}
-    used++;metrics.consultations++
-    await persist('collecting',{retry:undefined})
-    if(construction.target_revision!==selected.revision||raw.area_id!==(construction.area_id??null))return constructionFailure({status:'conflict'})
-    const recipe=parseCadAssemblyRequest({...structuredClone(construction.recipe),views:[...handoff.views]})
-    if(!recipe)return constructionFailure({status:'unavailable'})
-    if(recipe.instances.length>24)return {status:'unsupported',stage:'annotations',saved:false,reason:'annotation_instance_limit',request_id:request?.id??null,
-     next_action:catalogText("feedback.cad-assistant.next-action.c0e108a49e51")}
-    const parameters=inheritCadParameters(opts.projectId,construction.recipe,construction.parameters,recipe)
-    const measurements=parameterSourcePins(parameters).project
-    const lineage=buildCadLineage(opts.projectId,recipe,[],new Map(),handoff.coordinates)
-    const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
-     source_artifact_id:null,source_revision:null,part_ids:[],area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:drawingArtifactId,expected_revision:expected}
-    const pin={version:1,project_id:opts.projectId,artifact_id:construction.artifact_id,revision:construction.revision,check:ready.checked}
-    researchEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
-    await persist('draft',{draft:{...metadata,recipe,lineage,parameters,construction:pin}})
-    renders++;metrics.renders++
-    let packet:CadPacket
-    try{packet=await opts.render(recipe,{artifact_id:construction.artifact_id,revision:construction.revision},constructionDispatchGuard)}catch(error){
-     rethrowContinuation(error)
-     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','checked_construction_unavailable','checked_construction_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
-     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
-    }
-    if(packet.manifest.annotations?.coverage!=='complete'||packet.manifest.annotations?.version!==1)
-     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'annotations_unavailable',next_action:catalogText("feedback.cad-assistant.next-action.2015f7a2f7e9")}
-    const bounds=packet.manifest.bounding_box_mm,expectedBounds=ready.checked.bounds_mm,collisions=packet.manifest.checks?.collisions
-    const visibleIds=new Set(recipe.instances.map(i=>i.id)),referenceIds=new Set(ready.checked.reference_instance_ids??[])
-    if(!bounds||!expectedBounds||['min','max','size'].some(key=>!Array.isArray(bounds[key])||bounds[key].length!==3||bounds[key].some((v:number,i:number)=>!Number.isFinite(v)||Math.abs(v-expectedBounds[key][i])>0.001))
-     ||collisions?.status!=='complete'||!Array.isArray(collisions.overlaps)||collisions.overlaps.some((overlap:any)=>
-      !visibleIds.has(overlap.first_id)||!visibleIds.has(overlap.second_id)||overlap.first_id===overlap.second_id
-      ||(!referenceIds.has(overlap.first_id)&&!referenceIds.has(overlap.second_id))))
-     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'construction_geometry_disagrees',next_action:catalogText("feedback.cad-assistant.next-action.482e8923bc81")}
-    packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
-    candidate={...metadata,packet};reviewPending=true
-    const checked=await reviewCurrentCandidate()
-    if(checked.status==='revise'){
-     candidate=null;acceptedReview=null;partial=true
-     return {status:'needs_data',stage:'review',saved:false,request_id:request?.id??null,review:checked.review,
-      next_action:catalogText("feedback.cad-assistant.next-action.dd56867affba")}
-    }
-    return checked
+   if(!construction)return constructionFailure({status:'unavailable'})
+   const ready=await refreshConstruction()
+   if(ready?.status!=='ready')return constructionFailure(ready)
+   runtimeVersion=await opts.runtimeVersion?.()
+   await dependencies.refresh(executeRead)
+   retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,design_intent:readiness.pin,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
+   const currentFingerprint=await retryFingerprint()
+   if(request?.payload.retry?.fingerprint===currentFingerprint)return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
+    next_action:catalogText("feedback.cad-assistant.next-action.d7dc5f3db6a2")}
+   used++;metrics.consultations++
+   await persist('collecting',{retry:undefined})
+   if(construction.target_revision!==selected.revision||raw.area_id!==(construction.area_id??null))return constructionFailure({status:'conflict'})
+   const recipe=parseCadAssemblyRequest({...structuredClone(construction.recipe),views:[...handoff.views]})
+   if(!recipe)return constructionFailure({status:'unavailable'})
+   if(recipe.instances.length>24)return {status:'unsupported',stage:'annotations',saved:false,reason:'annotation_instance_limit',request_id:request?.id??null,
+    next_action:catalogText("feedback.cad-assistant.next-action.c0e108a49e51")}
+   const parameters=inheritCadParameters(opts.projectId,construction.recipe,construction.parameters,recipe)
+   const measurements=parameterSourcePins(parameters).project
+   const lineage=buildCadLineage(opts.projectId,recipe,[],new Map(),handoff.coordinates)
+   const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
+    source_artifact_id:null,source_revision:null,part_ids:[],area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:drawingArtifactId,expected_revision:expected}
+   const pin={version:1,project_id:opts.projectId,artifact_id:construction.artifact_id,revision:construction.revision,check:ready.checked}
+   researchEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
+   await persist('draft',{draft:{...metadata,recipe,lineage,parameters,construction:pin}})
+   renders++;metrics.renders++
+   let packet:CadPacket
+   try{packet=await opts.render(recipe,{artifact_id:construction.artifact_id,revision:construction.revision},constructionDispatchGuard)}catch(error){
+    rethrowContinuation(error)
+    if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','checked_construction_unavailable','checked_construction_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
+    return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
    }
+   if(packet.manifest.annotations?.coverage!=='complete'||packet.manifest.annotations?.version!==1)
+    return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'annotations_unavailable',next_action:catalogText("feedback.cad-assistant.next-action.2015f7a2f7e9")}
+   const bounds=packet.manifest.bounding_box_mm,expectedBounds=ready.checked.bounds_mm,collisions=packet.manifest.checks?.collisions
+   const visibleIds=new Set(recipe.instances.map(i=>i.id)),referenceIds=new Set(ready.checked.reference_instance_ids??[])
+   if(!bounds||!expectedBounds||['min','max','size'].some(key=>!Array.isArray(bounds[key])||bounds[key].length!==3||bounds[key].some((v:number,i:number)=>!Number.isFinite(v)||Math.abs(v-expectedBounds[key][i])>0.001))
+    ||collisions?.status!=='complete'||!Array.isArray(collisions.overlaps)||collisions.overlaps.some((overlap:any)=>
+     !visibleIds.has(overlap.first_id)||!visibleIds.has(overlap.second_id)||overlap.first_id===overlap.second_id
+     ||(!referenceIds.has(overlap.first_id)&&!referenceIds.has(overlap.second_id))))
+    return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'construction_geometry_disagrees',next_action:catalogText("feedback.cad-assistant.next-action.482e8923bc81")}
+   packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
+   candidate={...metadata,packet};reviewPending=true
+   const checked=await reviewCurrentCandidate()
+   if(checked.status==='revise'){
+    candidate=null;acceptedReview=null;partial=true
+    return {status:'needs_data',stage:'review',saved:false,request_id:request?.id??null,review:checked.review,
+     next_action:catalogText("feedback.cad-assistant.next-action.dd56867affba")}
+   }
+   return checked
   }catch(error){
    rethrowContinuation(error);candidate=null;acceptedReview=null;partial=true
    if(error instanceof Error&&error.message==='project_denied')throw error

@@ -1,3 +1,4 @@
+import {handoff} from './support/cad-review-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -40,6 +41,30 @@ test('every new SQL CAD publication requires a source; genuine historical packet
  const copies=(await pg.query('select recipe,manifest,files from bob.artifact_cad_revisions where artifact_id=$1 order by artifact_revision',[legacy.recordId])).rows
  assert.equal(copies.length,3);assert(copies.every(row=>JSON.stringify(row)===JSON.stringify(copies[0])))
  assert.equal((await pg.query('select count(*)::int n from bob.artifact_construction_revisions where project_id=$1',[project!])).rows[0].n,0,'no invented construction or materials')
+ // A real older paused request adopts its first source in the existing atomic
+ // packet transaction, with the same CAS and requirements, never a new ID.
+ const requestId=randomUUID(),scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
+ await rpc('bob.create_drawing_request',[project!,claim.thread_id,turn,claim.generation,requestId,JSON.stringify(scope)])
+ const privateRpc=async(uid:string,name:string,args:any[],role='service_role'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
+ const savePacket=(working:any,expected:number,key:string)=>privateRpc(owner,'bob.bob_drawing_request',[project!,owner,claim.thread_id,turn,claim.generation,'save',requestId,expected,'needs_data',JSON.stringify(working),key])
+ const initial={brief:{...scope,brief:message,handoff,construction_revision:null},owner_request:message,reference_refs:[]}
+ const parked=await savePacket(initial,0,'parked');assert.equal(parked.id,requestId)
+ const mat=await write({kind:'catalog',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{action:'ensure',key:'mat',kind:'material',name:'Fixture plywood',aliases:[],profile_code:'sheet_stock',profile_revision:1,categories:['wood.plywood','sheet'],properties:{thickness:{value:'18',unit:'mm',truth:'provided_spec',parameter:null,note:''}},material_id:null,material_revision:null,notes:'',source_kind:'design_choice',source_quote:message,source_seq:null}})
+ const construction=await write({kind:'construction',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{key:'source',title:'Panel construction',description:'Single synthetic part',area_id:null,target_revision:1,change_note:'Initial',recipe:payload.data.packet.recipe,parameters:payload.data.packet.manifest.bob_parameters,materials:[{definition_id:'panel',material_id:mat.recordId,material_revision:1,part_id:null,part_revision:null}],joints:[],open_questions:['Concept only']}})
+ const adopted={...initial,brief:{...initial.brief,artifact_id:construction.recordId,construction_revision:1}}
+ const beforeAdoption=(await pg.query('select scope,revision from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0]
+ for(const mutate of [(p:any)=>p.brief.artifact_id=legacy.recordId,(p:any)=>p.brief.construction_revision=2,(p:any)=>p.brief.area_id='other']){
+  const bad=structuredClone(adopted);mutate(bad)
+  await assert.rejects(savePacket(bad,parked.revision,randomUUID()),/drawing_scope_changed|recovery_required/)
+  assert.deepEqual((await pg.query('select scope,revision from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0],beforeAdoption)
+ }
+ const bound=await savePacket(adopted,parked.revision,'adopt');assert.equal(bound.id,requestId);assert.deepEqual(bound.payload.brief.handoff,handoff)
+ assert.equal((await pg.query<any>('select scope from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0].scope.artifact_id,construction.recordId)
+ assert.deepEqual(await savePacket(adopted,parked.revision,'adopt'),bound,'exact retry stays its original receipt after source binding')
+ const switched=structuredClone(adopted);switched.brief.artifact_id=legacy.recordId
+ await assert.rejects(savePacket(switched,bound.revision,'switch'),/drawing_scope_changed|recovery_required/)
+ assert.equal((await pg.query<any>('select scope from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0].scope.artifact_id,construction.recordId)
+
 })
 
 test('mandatory source publication activates seven versions atomically, preserving pinned manifests, model/settings and other definitions',async t=>{
