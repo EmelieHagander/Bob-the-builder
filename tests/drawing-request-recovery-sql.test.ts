@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +11,7 @@ import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-
 import {handoff} from './support/cad-review-fixture.ts'
 
 for(const lifetime of ['legacy','project','restored'])test(`P2: ${lifetime} request completion and canonical CAD receipt are atomic, isolated and recoverable across turns`,async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Save the reviewed construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result

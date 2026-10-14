@@ -1,9 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {type CadPacket} from '../supabase/functions/_shared/cad-assistant.ts'
-import {createCadAssistant} from './support/cad-parameter-fixture.ts'
+import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import type { CadAssemblyRequest } from '../supabase/functions/_shared/cad-adapter.ts'
+import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import { handoff, reviewReply } from './support/cad-review-fixture.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
@@ -13,7 +14,7 @@ const recipe: CadAssemblyRequest = { contract_version: 1, units: 'mm', assembly_
   instances: [{ id: 'panel-1', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front', 'top'] }
 const design = { recipe, title: 'P0 concept', description: 'Synthetic concept, not physical evidence',
   assumptions: 'Working dimensions; physical fit remains unverified', target_revision: 1, measurements: [], dimension_bindings: [] }
-const request = { brief: 'Draw the concept now.', handoff, area_id: null, component_id: null, step_id: null, artifact_id: null }
+const request = { brief: 'Draw the concept now.', handoff, area_id: null, component_id: null, step_id: null, artifact_id: fixtureConstructionId, construction_revision:1 }
 
 type Failure = 'none' | 'backend' | 'truncated' | 'repeated_cursor' | 'page_limit' | 'denied' | 'irrelevant_plan'
 function fixture(failure: Failure) {
@@ -33,15 +34,9 @@ function fixture(failure: Failure) {
   }, 1000, 40)
   const assistant = createCadAssistant({ research: false, projectId: 'A', userId: 'u',
     ownerRequest: request.brief, hasAccess: async () => true, makeLookup, available: true,
-    deadline: Date.now() + 300000, readArtifact: async () => null,
-    render: async (r): Promise<CadPacket> => { renders++; return { recipe: r, manifest: { instances: r.instances },
-      files: { front: 'Zml4dHVyZQ==' }, previews: Object.fromEntries(r.views.map(view => [view, 'Zml4dHVyZQ=='])) } },
-    callModel: async o => {
-      if (o.functionName === 'cad-reviewer') { reviewCalls++; return reviewReply() }
-      if (++designerCalls === 1) return { ...response(null), toolCalls: [{ id: 'render', type: 'function' as const,
-        function: { name: 'render_cad_candidate', arguments: JSON.stringify(design) } }] }
-      return response('Ready for independent review.')
-    },
+    deadline: Date.now() + 300000, ...checkedCadFixture('A',recipe),
+    render: async (r): Promise<CadPacket> => { renders++; return checkedCadFixture('A',recipe).packet(r) },
+    callModel: async o => { assert.equal(o.functionName,'cad-reviewer'); reviewCalls++; return reviewReply() },
   })
   return { assistant, reads, get renders() { return renders }, get reviewCalls() { return reviewCalls } }
 }

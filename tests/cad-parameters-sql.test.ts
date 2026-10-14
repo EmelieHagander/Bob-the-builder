@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {compileCadParameters,inheritCadParameters} from '../supabase/functions/_shared/cad-parameters.ts'
 import {test} from 'node:test'
@@ -9,7 +11,7 @@ import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {handoff} from './support/cad-review-fixture.ts'
 
 test('P1 graph: authoritative SQL rejects omitted and tampered controlling parameters',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Save this source-bound construction.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
@@ -106,7 +108,7 @@ test('P1 graph: authoritative SQL rejects omitted and tampered controlling param
 
 import {readFile} from 'node:fs/promises'
 test('P1 graph-only physical formula and room frame cross the authenticated SQL save/read/detail boundary',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  await pg.exec(await readFile(new URL('../scripts/check-cad-lineage-release.sql',import.meta.url),'utf8'))
  assert.equal((await pg.query('select count(*) count from bob.projects')).rows[0].count,0,'Release smoke must roll back its synthetic writes')
 })
@@ -120,7 +122,7 @@ test('P1 upgrade keeps genuine historical geometry partial without a backfill or
   const saved:any=(await asProjectUser(pg,f.actor,'select bob.bob_project_write_v11($1,$2,$3,$4,$5) result',[f.project,f.claim.thread_id,f.turn_id,f.claim.generation,JSON.stringify(f.payload)])).rows[0].result
   f.saved=saved
   await pg.query('update public.cad_race_fixture set data=$1',[JSON.stringify(f)])
- });t.after(()=>pg.close())
+ },'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const f:any=(await pg.query('select data from public.cad_race_fixture')).rows[0].data
  const read=async(id:string)=>(await asProjectUser(pg,f.actor,'select bob.read_cad_artifact($1,$2,null) result',[f.project,id])).rows[0].result as any
  assert.equal((await read(f.saved.recordId)).parameter_state,'legacy_partial')

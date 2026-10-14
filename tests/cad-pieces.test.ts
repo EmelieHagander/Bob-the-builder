@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import { createCadPieces as createCadPiecesImplementation } from '../supabase/functions/_shared/cad-pieces.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
-const createCadPieces=(opts:Omit<Parameters<typeof createCadPiecesImplementation>[0],'aiCatalog'>)=>createCadPiecesImplementation({...opts,aiCatalog:catalogFixture()})
+const createCadPieces=(opts:any)=>createCadPiecesImplementation({projectId:'p_fixture',checkConstruction:async(id,revision)=>({status:'ready',draft:{projectId:'p_fixture',artifact_id:id,revision,area_id:null}}),...opts,aiCatalog:catalogFixture()})
 import {handoff} from './support/cad-review-fixture.ts'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
 const input=(n=3)=>({assembly_title:'Guest room',assembly_brief:'Origin at the inner north-west floor corner; +x east, +y south, +z up.',area_id:null,
- pieces:Array.from({length:n},(_,i)=>({piece_key:'piece_'+i,brief:'Piece '+i,component_id:null,handoff}))})
+ pieces:Array.from({length:n},(_,i)=>({piece_key:'piece_'+i,brief:'Piece '+i,component_id:null,handoff,artifact_id:'10000000-0000-4000-8000-'+String(i+1).padStart(12,'0'),construction_revision:1}))})
 function fakeStore(opts:{reuse?:string;fail?:string;release?:(ids:string[])=>Promise<{released:string[]}>}={}){
  const saved:{key:string;payload:any;status:string}[]=[]
  return {saved,store:{list:async()=>[],load:async()=>null,
@@ -26,7 +26,9 @@ test('pieces are stored as separate requests with stable keys, then released tog
  const out:any=await pieces.execute(input())
  assert.equal(out.status,'queued')
  assert.deepEqual(saved.map(s=>[s.key,s.status]),[['piece:piece_0','collecting'],['piece:piece_1','collecting'],['piece:piece_2','collecting']])
- assert.deepEqual(Object.keys(saved[0].payload.brief).sort(),['area_id','artifact_id','brief','component_id','handoff','step_id'],'consult accepts the stored brief as is')
+ assert.deepEqual(Object.keys(saved[0].payload.brief).sort(),['area_id','artifact_id','brief','component_id','construction_revision','handoff','step_id'],'consult accepts the stored checked-source brief as is')
+ assert.equal(saved[0].payload.brief.artifact_id,input().pieces[0].artifact_id)
+ assert.equal(saved[0].payload.brief.construction_revision,1)
  assert.match(saved[1].payload.brief.brief,/Piece 2 of 3 \(piece_1\) of "Guest room"/)
  assert.equal(saved[0].payload.owner_request,'Rita gästrummet')
  assert.match(saved[0].payload.brief.handoff.requirements[0].id,/^req_[a-f0-9]{32}$/)
@@ -42,6 +44,20 @@ test('an invalid piece stores nothing',async()=>{
  const dup=input();dup.pieces[2].piece_key='piece_0'
  assert.equal((await createCadPieces({requestStore:store,ownerRequest:null,hasAccess:async()=>true}).execute(dup) as any).status,'invalid')
  assert.equal((await createCadPieces({requestStore:store,ownerRequest:null,hasAccess:async()=>true}).execute(input(1)) as any).status,'invalid','a single piece belongs in design_project_cad')
+})
+test('missing or unready construction in any piece prevents every store and release',async()=>{
+ for(const mode of ['missing','unready','foreign'] as const){
+  const {store,saved}=fakeStore(),v=input();let checks=0,releases=0
+  store.releasePieces=async()=>{releases++;return {released:[]}}
+  if(mode==='missing'){delete (v.pieces[1] as any).artifact_id;delete (v.pieces[1] as any).construction_revision}
+  const out:any=await createCadPieces({requestStore:store,ownerRequest:'Draw these saved pieces',hasAccess:async()=>true,checkConstruction:async(id:string,revision:number,fresh:boolean)=>{
+   checks++;assert.equal(fresh,true)
+   if(mode==='unready'&&id===v.pieces[1].artifact_id)return {status:'needs_data'}
+   return {status:'ready',draft:{projectId:mode==='foreign'?'foreign':'p_fixture',artifact_id:id,revision,area_id:null}}
+  }}).execute(v)
+  assert.equal(out.status,'needs_data');assert.equal(out.stage,'construction');assert.equal(saved.length,0);assert.equal(releases,0)
+  assert.equal(checks,mode==='missing'?0:v.pieces.length)
+ }
 })
 test('one piece failing to store does not stop the others; existing requests are reported, not released',async()=>{
  const {store}=fakeStore({reuse:'piece_0',fail:'piece_1'})

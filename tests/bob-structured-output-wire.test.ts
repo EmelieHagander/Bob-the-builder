@@ -1,8 +1,9 @@
+import {checkedCadFixture,fixtureConstructionId} from './support/checked-cad-fixture.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
-import {createCadAssistant} from './support/cad-parameter-fixture.ts'
+import {createCadAssistant} from './support/colleague-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createDeliveryLanguage, DELIVERY_MEANINGS } from './support/colleague-catalog-fixture.ts'
 import { shapeId, handoff } from './support/cad-review-fixture.ts'
@@ -50,12 +51,12 @@ test('CAD review and recovery language send strict response schemas and no tools
     const reply = { success: true, data: 'Inspect the rendered panel', responseId: 'designer-response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
     let designerCalls = 0
     const cad = createCadAssistant({ aiCatalog:catalog,research:false, projectId: 'A', userId: 'u', ownerRequest: 'Draw the panel', available: true,
-      deadline: Date.now() + 300000, hasAccess: async () => true, readArtifact: async () => null,
+      deadline: Date.now() + 300000, hasAccess: async () => true, ...checkedCadFixture('A',recipe),
       makeLookup: () => createProjectLookup('A', async (_p, q) => ({ data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }), 1000, 40),
-      render: async r => ({ recipe: r, manifest: {}, files: {}, previews: { front: 'Zml4dHVyZQ==', top: 'Zml4dHVyZQ==' } }),
-      callModel: async o => o.functionName === 'cad-reviewer' ? service.callOpenAIResponses(o) : ++designerCalls === 1 ? { ...reply, toolCalls: [{ id: 'render', type: 'function', function: { name: 'render_cad_candidate', arguments: JSON.stringify({ recipe, title: 'Panel', description: 'Synthetic panel', assumptions: 'Concept only', target_revision: 1, measurements: [], source_artifact_id: null, source_revision: null, part_ids: [] }) } }] } : reply,
+      render:async r=>checkedCadFixture('A',recipe).packet(r),
+      callModel:async o=>service.callOpenAIResponses(o),
     })
-    assert.equal((await cad.consult({ handoff, brief: 'Draw the panel', area_id: null, component_id: null, step_id: null, artifact_id: null })).status, 'ready')
+    assert.equal((await cad.consult({ handoff, brief: 'Draw the panel', area_id: null, component_id: null, step_id: null, artifact_id: fixtureConstructionId, construction_revision:1 })).status, 'ready')
     const format = createDeliveryLanguage({ aiCatalog:catalog,userId: 'u', message: 'Continue in English', hasAccess: async () => true, callModel: service.callOpenAIResponses })
     assert.equal(await format({ notice: 'incomplete' }), language.incomplete)
     assert.equal(requests.length, 2)

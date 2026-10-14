@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { runProjectAnswer, seedToolPolicy, type ModelCall } from './support/main-catalog-fixture.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter, type WritePayload, type WriteReadback } from '../supabase/functions/_shared/project-write.ts'
-import { createCadAssistant, handoff } from './support/cad-review-fixture.ts'
+import { createCadAssistant } from './support/colleague-catalog-fixture.ts'
+import { handoff, reviewReply } from './support/cad-review-fixture.ts'
+import { checkedCadFixture, fixtureConstructionId } from './support/checked-cad-fixture.ts'
 import { drawingSaved } from '../supabase/functions/_shared/project-delivery.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { runClaimedProjectTurn } from './support/main-catalog-fixture.ts'
@@ -26,7 +28,7 @@ const recipe: CadAssemblyRequest = { contract_version: 1, units: 'mm', assembly_
   definitions: [{ id: 'side', primitive: 'box', x_mm: 18, y_mm: 360, z_mm: 840, material_ref: null }],
   instances: [{ id: 'cabinet.side', definition_id: 'side', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front', 'top'] }
 const candidate = { recipe, source_artifact_id: null, source_revision: null, part_ids: [], title: 'Cabinet concept', description: 'Synthetic geometry fixture', assumptions: 'Working dimensions, not measured fit or strength.', target_revision: 1, measurements: [] }
-const cadRequest = { handoff, brief: 'Draw the cabinet concept with explicit assumptions.', area_id: null, component_id: null, step_id: null, artifact_id: null }
+const cadRequest = { handoff, brief: 'Draw the cabinet concept with explicit assumptions.', area_id: null, component_id: null, step_id: null, artifact_id: fixtureConstructionId, construction_revision: 1 }
 const note = (o: Parameters<ModelCall>[0]) => o.messages?.find(m => m.role === 'user' && String(m.content).startsWith('[Server note'))
 function fixture(selected = true, available = true) {
   let target = selected, renders = 0
@@ -42,8 +44,8 @@ function fixture(selected = true, available = true) {
     receipts.push(receipt); return { data: receipt, error: null }
   }, async () => ({ data: receipts, error: null }), async () => ({ data: { generation: 2, receipts }, error: null }))
   const cadOptions = { projectId: 'A', userId: 'u', hasAccess: async () => true, makeLookup, deadline: Date.now() + 300000, available,
-    readArtifact: async () => null, render: async (r: CadAssemblyRequest) => { renders++; return { recipe: r, manifest: { bounding_box_mm: { size: [18, 360, 840] }, instances: r.instances }, files: { front: 'Zml4dHVyZQ==' } } } }
-  const designer: ModelCall = async o => o.messages?.some(m => m.role === 'tool') ? response('Inspected.') : response(null, call('render_cad_candidate', candidate))
+    ...checkedCadFixture('A', recipe), render: async (r: CadAssemblyRequest) => { renders++; return checkedCadFixture('A', recipe).packet(r) } }
+  const designer: ModelCall = async o => { assert.equal(o.functionName,'cad-reviewer'); return reviewReply() }
   const run = (callModel: ModelCall, cadModel: ModelCall = designer, extra = {}) =>
     runProjectAnswer({ projectId: 'A', userId: 'u', message, lookup: makeLookup(), writer, cadAssistant: createCadAssistant({ ...cadOptions, callModel: cadModel }),
       hasAccess: async () => true, callModel, ...extra })
@@ -92,7 +94,7 @@ test(`a project-description request stays last after pending drawing context and
   assert.equal(f.renders,0)
 })
 
-test('Bob runs prerequisite writes, design, review and save in one turn by his own choice', async () => {
+test('Bob resolves the target, renders a saved construction, reviews and saves in one turn by his own choice', async () => {
   const f = fixture(false); let calls = 0
   const result = await f.run(async o => {
     assert.equal(o.schemaName, undefined, 'no routing or intent classifier call'); assert.equal(o.tool_choice, undefined, 'nothing is forced')
@@ -175,14 +177,14 @@ test('disabled catalog policy and an unavailable CAD engine are respected and Bo
   }
 })
 
-test('an explicit indispensable CAD blocker returns to Bob without repeated rendering attempts', async () => {
+test('a rejected checked drawing returns to Bob without repeated rendering attempts', async () => {
   const f = fixture(); let calls = 0, cadCalls = 0
   const result = await f.run(async o => {
     if (++calls === 1) return response(null, call('design_project_cad', cadRequest))
-    assert.equal(JSON.parse(String(o.messages![0].content)).status, 'blocked')
+    assert.equal(JSON.parse(String(o.messages![0].content)).status, 'needs_data')
     return response('Den fria formen stöds inte av ritmotorn. Välj raka skivor, så ritar jag direkt.')
-  }, async () => { cadCalls++; return response(null, call('report_cad_blocker', { reason: 'unsupported_geometry', explanation: 'The requested freeform surface is unsupported.' })) })
-  assert(result.ok); assert.equal(cadCalls, 1); assert.equal(calls, 2); assert.equal(f.renders, 0); assert.equal(f.writes.length, 0)
+  }, async () => { cadCalls++; return ({...reviewReply(),data:JSON.stringify({...JSON.parse(reviewReply().data),verdict:'revise',issues:[{severity:'error',code:'readability',correction:'Make the labels readable'}]})}) })
+  assert(result.ok); assert.equal(cadCalls, 1); assert.equal(calls, 2); assert.equal(f.renders, 1); assert.equal(f.writes.length, 0)
   assert.match(result.answer, /fria formen/)
 })
 
@@ -198,9 +200,9 @@ test('a saved illustration after unsupported CAD geometry prompts one factual co
   if(calls===3){assert.equal(JSON.parse(String(o.messages![0].content)).geometry_verified,false);return response('The drawing is done.')}
   notes++;assert.match(String(note(o)?.content),/CAD attempt did not deliver a reviewed drawing/)
   return response('CAD failed. The saved image is an illustration; the drawing is unfinished.')
- },async()=>response(null,call('report_cad_blocker',{reason:'unsupported_geometry',explanation:'The requested shape is unsupported.'})),{imageTools:images})
+ },async()=>({...reviewReply(),data:JSON.stringify({...JSON.parse(reviewReply().data),verdict:'revise',issues:[{severity:'error',code:'readability',correction:'Make the labels readable'}]})}),{imageTools:images})
  assert(result.ok);assert.equal(notes,1);assert.equal(calls,4)
- assert.equal(result.evidence.partial,true);assert.equal(f.renders,0)
+ assert.equal(result.evidence.partial,true);assert.equal(f.renders,1)
  assert(!f.writes.some(w=>w.kind==='cad'))
  assert.match(result.answer,/drawing is unfinished/)
 })
@@ -228,9 +230,9 @@ test('a worker yield replays the design and saves the drawing exactly once', asy
     const callModel: ModelCall = o => journal.run('model', o, async () => {
       providerCalls++
       providerRoles.push(o.functionName)
-      if (o.functionName === 'cad-designer') {
+      if (o.functionName === 'cad-reviewer') {
         assert(!o.messages?.some(m => m.role === 'tool'), 'a successful render goes to independent review without a paid designer self-inspection')
-        return response(null, call('render_cad_candidate', candidate))
+        return reviewReply()
       }
       const last = o.messages!.at(-1)!
       if (last.role !== 'tool') { now = 15000; return response(null, call('design_project_cad', cadRequest)) }
@@ -244,7 +246,7 @@ test('a worker yield replays the design and saves the drawing exactly once', asy
   const result = await resume()
   assert(result.ok); assert.equal(result.answer, 'Sparad.'); assert.equal(result.evidence.partial, false)
   assert.equal(providerCalls, 4, 'each necessary provider call runs once across the yield')
-  assert.deepEqual(providerRoles, ['ask-bob', 'cad-designer', 'ask-bob', 'ask-bob'])
+  assert.deepEqual(providerRoles, ['ask-bob', 'cad-reviewer', 'ask-bob', 'ask-bob'])
   assert.equal(renders, 1); assert.equal(writes, 1)
 })
 
@@ -288,7 +290,7 @@ for(const priorWrite of [false,true])for(const error of ['model_output_limit','t
   lookup:f.makeLookup(),writer:f.writer,hasAccess:async()=>true,fail:async()=>{failures++},commit:async value=>{committed=value},
   cadAssistant:createCadAssistant({...f.cadOptions,callModel:async()=>({success:false,data:null,model:'fixture',usage,error,...(error==='turn_budget_exhausted'?{budget_stop:{scope:'task',reasons:['usd_limit'],calls:16,call_limit:24,spent_usd:3.04,usd_limit:3}}:{})})}),
   callModel:async()=>{calls++;assert.equal(calls,1,'no paid explanation/localisation');return response(null,call('design_project_cad',cadRequest))}})
- assert(result.ok);assert.match(result.answer,error==='turn_budget_exhausted'?/pausades vid en gräns/:/Designern nådde sin svarsgräns/)
+ assert(result.ok);assert.match(result.answer,error==='turn_budget_exhausted'?/pausades vid en gräns/:/Granskaren nådde sin svarsgräns/)
  if(error==='turn_budget_exhausted'){assert.doesNotMatch(result.answer,/budget|kostnad|\$/i);assert.equal(result.evidence.partial,true)}
  assert.deepEqual(committed,result);assert.equal(failures,0);assert.equal(result.providerResponseId,undefined)
  assert.equal(result.evidence.writes?.length??0,priorWrite?1:0)

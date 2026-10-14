@@ -1,3 +1,5 @@
+// Historical unbound CAD write wrappers are exercised against their original policy.
+// Latest checked construction publication/readback is covered by checked-construction tests.
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
@@ -62,7 +64,7 @@ before(async () => {
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','One','OA',$1),('twoB','B','Two','TB',$2)", [one,two])
   await setupSharedSocial(pg)
   const dir = new URL('../supabase/migrations/', import.meta.url)
-  for (const f of (await readdir(dir)).filter(f => f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f, dir), 'utf8'))
+  for (const f of (await readdir(dir)).filter(f => f.endsWith('.sql')&&f<='20261013175429_ai_drawing_intent_catalog.sql').sort()) await pg.exec(await readFile(new URL(f, dir), 'utf8'))
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('bothA','A','Both','BA',$1),('bothB','B','Both','BB',$1),('guestA','A','Guest','G',$2)", [both,guest])
   await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','entry','Entry'),('areaB','B','private','Private'); insert into bob.tasks(id,area_id,name,hours) values('taskA','areaA','Original','2h'),('taskB','areaB','Private work','')")
 })

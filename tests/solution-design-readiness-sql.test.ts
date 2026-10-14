@@ -1,3 +1,5 @@
+// Historical unbound CAD policy fixtures; the mandatory-source boundary and
+// current authenticated construction/drawing path are tested in checked-construction-*.test.ts.
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -8,7 +10,7 @@ import {parseDesignIntent,parseDesignReadiness,type DesignIntent} from '../supab
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 
 test('shared SolutionVersion advice, references and readiness fence construction and CAD at SQL',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close())
  const owner=randomUUID(),outsider=randomUUID(),message='Develop the synthetic fixture within my delegated design choices.'
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'intent-owner@example.test',outsider,'intent-outsider@example.test'])

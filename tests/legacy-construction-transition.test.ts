@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -17,10 +18,14 @@ import {designIntent,designManifest} from './support/design-intent-fixture.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 
 test('legacy transition uses canonical geometry, exact receipts and guarded same-identity drawing publication',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close());const owner=randomUUID(),outsider=randomUUID()
+ const pg=await projectSchema(undefined,'20261013175429_ai_drawing_intent_catalog.sql');t.after(()=>pg.close());const owner=randomUUID(),outsider=randomUUID()
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[owner,'legacy-owner@example.test',outsider,'legacy-outsider@example.test'])
  const rpc=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
+ const historicalGuard=readFileSync('supabase/migrations/20261011090115_construction_instance_roles.sql','utf8').match(/create or replace function bob_private\.validate_cad_construction_source\(\) returns trigger[\s\S]+?end \$\$;/)![0]
  const fixture=async()=>{
+  // Seed genuine legacy geometry under its historical publication policy, then
+  // apply the mandatory source before every transition/render/publication case.
+  await pg.exec(historicalGuard)
   const message='Connect my existing drawing to a construction and correct its dimensions.',project=(await rpc(owner,'bob.create_project',[JSON.stringify({name:'Legacy fixture'})])).id,solution=randomUUID(),turn=randomUUID()
   await rpc(owner,'bob.solution_command',[project,'create',solution,0,JSON.stringify({area_id:null,title:'Bracket',description:'Synthetic',assumptions:'Unknown strength',tradeoffs:'Simple',measurements:[],design_intent:designIntent()})])
   await rpc(owner,'bob.solution_command',[project,'select',solution,0,JSON.stringify({solution_revision:1,reason:'Synthetic target'})])
@@ -42,6 +47,7 @@ test('legacy transition uses canonical geometry, exact receipts and guarded same
   }
   const legacyInput:any={kind:'cad',record_id:null,expected_revision:0,expected_updated_at:null,request_quote:message,data:{title:'Legacy bracket',description:'Synthetic saved concept',assumptions:'No fabrication approval',target_revision:1,measurements:[],source_artifact_id:null,source_revision:null,part_ids:[],area_id:null,component_id:null,step_id:null,artifact_id:null,expected_revision:0,packet:{recipe,manifest:baseManifest,files:{front:'PHN2Zy8+'}}}}
   const legacy=await saveDrawing(legacyInput)
+  await pg.exec(readFileSync('supabase/migrations/20261014062043_checked_construction_required.sql','utf8'))
   const readDrawing=(id=legacy.recordId,revision:number|null=null)=>rpc(owner,'bob.read_cad_artifact',[project,id,revision])
   const readConstruction=(id:string,revision:number|null=null)=>rpc(owner,'bob.read_construction_draft',[project,id,revision,null])
   const materials=recipe.definitions.map((d:any)=>({definition_id:d.id,material_id:material.recordId,material_revision:1,part_id:null,part_revision:null}))
@@ -122,7 +128,7 @@ test('legacy transition uses canonical geometry, exact receipts and guarded same
   assert.deepEqual(await f.write(first),saved)
   assert.equal((await pg.query('select count(*) n from bob.artifact_construction_revisions where project_id=$1',[f.project])).rows[0].n,1)
   const stale=await fixture(),p=stale.payload(stale.input);assert.equal((await stale.prepare(p)).status,'ready')
-  await stale.saveDrawing({...stale.legacyInput,record_id:stale.legacy.recordId,expected_revision:1,data:{...stale.legacyInput.data,artifact_id:stale.legacy.recordId,expected_revision:1}})
+  await rpc(owner,'bob.artifact_command',[stale.project,'archive',stale.legacy.recordId,1,'{}'])
   await assert.rejects(stale.write(p),/legacy_drawing_changed/)
   assert.equal((await pg.query('select count(*) n from bob.artifact_construction_revisions where project_id=$1',[stale.project])).rows[0].n,0)
  })

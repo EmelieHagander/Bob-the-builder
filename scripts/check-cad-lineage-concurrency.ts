@@ -58,7 +58,9 @@ async function gate(key:number){
 }
 
 assert.equal(await query("select count(*) from pg_namespace where nspname in ('bob','auth','shared','storage')"),'0','Refusing to alter a non-empty database')
-await installProjectSchema({exec:async(sql:string)=>{await query(sql);return []}})
+// Earlier numeric/request races use explicit historical unbound CAD packets.
+// Apply the mandatory-source boundary after those cases, then test it below.
+await installProjectSchema({exec:async(sql:string)=>{await query(sql);return []}},undefined,'20261013175429_ai_drawing_intent_catalog.sql')
 await query(await readFile(new URL('./check-construction-consequences-release.sql',import.meta.url),'utf8'))
 console.log('PASS: construction role/consequence release transaction rolled back')
 const fixture=await readFile(new URL('./cad-lineage-concurrency-fixture.sql',import.meta.url),'utf8')
@@ -524,4 +526,12 @@ for(const kind of ['viewer-claim','viewer-retry']) {
  assert.equal(Number(await query(`select attempts from bob.cad_viewer_exports where artifact_id=${literal(saved.recordId)}`)),kind==='viewer-retry'?2:1)
  console.log(`PASS ${kind}: observed lock wait; exactly one export lease and attempt`);cases++
 }
+await query(await readFile(new URL('../supabase/migrations/20261014062043_checked_construction_required.sql',import.meta.url),'utf8'))
+await query(await readFile(new URL('../supabase/migrations/20261014062144_ai_checked_construction_catalog.sql',import.meta.url),'utf8'))
+await query('drop table if exists public.cad_race_fixture;'+fixture)
+const unbound=await json('select data from public.cad_race_fixture')
+const failUnbound=await start(`begin;select set_config('request.jwt.claims',${literal(JSON.stringify({sub:unbound.actor}))},true);set local role authenticated;select bob.bob_project_write_v16(${literal(unbound.project)},${literal(unbound.claim.thread_id)},${literal(unbound.turn_id)},${unbound.claim.generation},${literal(JSON.stringify(unbound.payload))});commit;`).done
+assert.notEqual(failUnbound.code,0);assert.match(failUnbound.stderr,/construction_pin_required/)
+await query(await readFile(new URL('./check-construction-consequences-release.sql',import.meta.url),'utf8'))
+console.log('PASS mandatory source: native PostgreSQL rejects unbound publication; checked construction/consequence release still passes')
 console.log(`${cases} PostgreSQL races passed; synthetic database may now be discarded.`)
