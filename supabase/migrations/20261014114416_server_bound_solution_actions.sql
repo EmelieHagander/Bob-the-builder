@@ -80,6 +80,8 @@ begin
   domain:=p_payload||jsonb_build_object('kind','solution','data',d->'solution');
  elsif kind='bound_solution_target' then
   if not exists(select 1 from bob.current_solutions s where s.project_id=p_project and s.id::text=p_payload->>'record_id' and s.revision::text=d->>'solution_revision' and not s.archived) then raise exception 'source_changed' using errcode='40001';end if;
+  if coalesce((select t.revision from bob.current_target t where t.project_id=p_project and t.area_id is not distinct from (d->>'area_id')),0)
+   is distinct from (p_payload->>'expected_revision')::integer then raise exception 'target_changed' using errcode='40001';end if;
   domain:=p_payload||jsonb_build_object('kind','target');
  else
   -- A receipt owned by the content editor is not this action's retry. Check the

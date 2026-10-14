@@ -69,6 +69,9 @@ test('scope and exact solution are bound; stale selection conflicts; intentional
   assert.equal((await rpc(payloads[0])).error,null,'original retry survives later selection')
   const current:any=(await read({resource:'selected_solutions',query:null,after:null})).data
   assert.equal(current[0].record.id,original)
+  const staleScope=(await choose(actions,'scopes','Project A'))[0]
+  await asProjectUser(pg,user,"select bob.solution_command('A','select',$1,$2,$3::jsonb)",[original,current[0].target.revision,JSON.stringify({solution_revision:1,reason:'Another caller selected'})])
+  assert.equal((await actions.execute('select_solution_alternative',{...args,scope_ref:staleScope.ref})).status,'conflict','a change outside this turn is also a conflict')
 })
 test('measurement link removal and addition preserve content, exact evidence and selection; changed source never refreshes silently',async()=>{
   const {actions,payloads,writer}=setup(),selected=(await choose(actions,'selected_solutions'))[0]
