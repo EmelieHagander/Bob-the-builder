@@ -2592,3 +2592,69 @@ exact selection/source CAS, image/measurement preservation, atomic selected-targ
 updates, rollback, distinct retry receipts and journal restart. This is technical
 deployment evidence, not ordinary-member Auth/HTTP or actual-model acceptance.
 No measured live latency/cost improvement is asserted.
+
+## Server-bound work records — 2026-10-15 readback
+
+[PR #256](https://github.com/EmelieHagander/Bob-the-builder/pull/256) merged as
+`906ef1653b82aeb9350fc0e29d40bc09d19b8903`. Its head
+`3cee5d767e9299b95f55c21ca7731d7abc7c1877` passed CI
+[38565491057](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38565491057)
+and PostgreSQL concurrency
+[38565491110](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38565491110).
+The continuation inspected installed state before attempting publication.
+
+| Installed item | Readback |
+| --- | --- |
+| Core | Hosted `20261014132349`, `server_bound_work_records`; exact statement equals source `20261014121359_server_bound_work_records.sql`. All five function bodies match source, empty search paths and intended invoker/guarded-definer ACLs. |
+| ask-bob | ACTIVE v121, JWT true; bundle `426c2e3481782978bcfd0ce8e69ab92e826df7c944418ab726424915d6951690`; all 95 emitted files match merged source. |
+| bob-worker | ACTIVE v89, existing JWT false/custom auth; bundle `08dfd8b318629cd8cc4f5c4acda2e1690f0cdf03c5ad6ba982dcae3123205859`; all 93 emitted files match merged source. |
+| Catalog | **Not installed.** No ledger entry for `ai_work_records_catalog`; all six new tool policies/contracts absent. Prior project/solution tools remain active. |
+
+Two attempts to apply only the reviewed `20261014121841_ai_work_records_catalog.sql`
+failed at the Supabase connector with `Invalid or expired requestState`
+(`INVALID_ARGUMENT`, `invalid_request_state`). Readback after each still showed
+no publication. No alternative SQL write path was used to bypass the failure.
+No new runtime upload or actual-model request was made. No Bob/provider work was
+active at the pre-publication check.
+
+Before/after aggregate hashes matched for 155 of 156 inspected table rowsets,
+including project data, AI settings, models and catalogs. The one difference was
+`bob_private.drawing_authorities`, whose count fell from one to zero; existing
+expiry cleanup can delete these rows, but this check does not establish the
+cause. It does not justify a blanket claim that every runtime table was unchanged.
+Focused work/solution/runtime tests passed 40/40 locally. This is an installation
+and blocker report, not ordinary-member or actual-model acceptance.
+
+## Server-bound plan focus and Task links — source verification 2026-10-15
+
+[PR #257](https://github.com/EmelieHagander/Bob-the-builder/pull/257) covers only
+current-plan focus and existing Task associations.
+Local PGlite tests exercise full migrations, caller RLS and claimed writes:
+set/clear focus without changing parallel Step states; link/move/unlink while
+preserving Task instructions/status/assignees; stale focus, Task and relation-only
+changes; wrong project, forged targets, missing claims and raw ID rejection;
+paged reads; old-manifest preservation; server-filled provenance; and restart
+replay with live access revocation. Seven new tests and the affected readiness
+catalog/runtime suites passed (27/27). The initial full suite passed 1271/1273;
+two stale publication/wiring assertions were corrected, leaving historical
+migrations unchanged. The new catalog has its own reproducibility check.
+
+Local production build and vocabulary checks passed. Local `check:edge` could
+not fetch the existing esm.sh Supabase dependency (connection refused); normal
+Edge imports and browser gates therefore require CI. Seven additional real
+PostgreSQL races cover mutation-first/save-first focus/Step/link changes and duplicate
+link replay, with observed lock waits; CI owns their execution evidence.
+
+Direct manual review checked caller authority, complete read binding, canonical
+command delegation, receipt ownership and old-manifest compatibility. It found
+and closed a direct service Step-edit race by locking the selected Step/revision
+before snapshot comparison; the seven plan tests passed again. Archie's document
+workflow was applied manually to keep contracts, forward-looking State and
+release evidence with their existing owners; no independent steward run is
+claimed. The PR records final-head CI/concurrency results before merge.
+
+Supabase CLI help and migration creation both aborted in the installed native
+Bun runtime. Additive filenames use observed UTC as the documented fallback;
+no successful CLI generation is claimed. Core, runtime and catalog for this
+slice have not been deployed. No live user project was edited, and no real-model,
+bunk-bed/mockup, reload or cost acceptance is claimed.

@@ -94,7 +94,7 @@ rewritten by installation.
 
 ### Third implementation: work records and their relations
 
-**Source implementation; not yet deployed.** `project-work-records.ts` adds
+**Core and both runtimes installed through PR #256; catalog activation blocked as of 2026-10-15.** [Release readback](foundation-verification.md#server-bound-work-records--2026-10-15-readback) records the connector failure and the inactive tools. `project-work-records.ts` adds
 `read_work_context`, `edit_work_record`, `create_work_record`,
 `change_work_relation`, `change_work_state` and `change_task_readiness`. These replace thirteen legacy
 writes for Area/Task content, measurements and archive/restore, Task status and
@@ -123,14 +123,36 @@ allow successive intentional changes and never take another writer's receipt.
 Old durable manifests and RPC names remain unchanged. Install core, both runtimes,
 then the generated catalog; a source commit alone does not activate these tools.
 
+### Fourth implementation: current plan focus and Task links
+
+**Source implementation; not deployed.** `project-plan-links.ts` adds
+`read_plan_link_context`, `change_plan_focus` and `change_plan_task_link`.
+The reader exposes current approved plan/Step/Task content, scope labels and
+opaque refs. The server retains the exact plan head, complete Task/Step records
+and current-plan link set. Focus changes preserve parallel Step states. Link,
+move and unlink delegate to the canonical plan command and retain Task content,
+status, assignments and unrelated links; move intentionally replaces primary
+ownership and its previous primary association. These actions neither create
+Tasks nor approve a proposal or certify completion.
+
+The claimed-turn v20 wrapper locks the plan head before Tasks, checks full read
+snapshots, and owns separate retry receipts. Exact retries return the original
+receipt without reversing later changes. A parent trigger serializes direct
+relation writes with the plan command; no member write grant is added. Reads and
+writes use the existing durable journal and live access checks. A fresh catalog
+retires only `set_project_plan_focus` and `link_project_plan_task`; pinned older
+manifests keep their original handlers. Install core, both runtimes, then the
+separate generated catalog. Plan decisions, evidence links and nested proposal
+identities remain outside this slice.
+
 ### Remaining migration inventory
 
 | Family | Current boundary / remaining work |
 | --- | --- |
 | Description, solution content, alternative creation, selection, evidence | Technically deployed in #254/#255; real member/model acceptance remains. |
-| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation above is source-only; thirteen legacy write contracts are disabled only after its catalog activation. |
+| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation core/runtime installed; catalog blocked. Thirteen legacy write contracts are disabled only after activation. |
 | Task readiness | Third implementation binds dependencies, checkpoint selections and need changes to complete Task reads; new needs start unresolved and canonical confirmation rejects blockers. |
-| Living plan | Compiler/edit/save already retain server candidates. Decision, focus, Task/evidence links and nested proposal identities still need audited bound actions. |
+| Living plan | Compiler/edit/save already retain server candidates. Focus/Task links are implemented in the fourth slice, awaiting release. Decisions, evidence links and nested proposal identities still need bound actions. |
 | Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
 | Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |
 | Image and drawing links | Attachment/detachment, finalization, drawing links and lifecycle choices still need complete bound source/target reads. |

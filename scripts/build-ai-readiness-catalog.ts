@@ -16,6 +16,7 @@ const policy = (JSON.parse(readFileSync('supabase/functions/_shared/project-tool
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_consequences_catalog.sql'))||!['change_construction_roles','read_construction_changes','continue_construction_change'].includes(row.name))
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_calculator_catalog.sql'))||row.name!=='calculate_project')
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_server_bound_edits_catalog.sql'))||!['read_project_edit_context','edit_project_record','read_solution_context','create_solution_alternative','select_solution_alternative','change_solution_evidence','read_work_context','edit_work_record','create_work_record','change_work_relation','change_work_state','change_task_readiness'].includes(row.name))
+  .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_plan_links_catalog.sql'))||!['read_plan_link_context','change_plan_focus','change_plan_task_link'].includes(row.name))
 const changed = new Map<string, any>()
 const row = (key: string) => structuredClone(baseline.find(item => item.key === key) ?? (() => { throw new Error('Missing catalog key ' + key) })())
 function publish(item: any) {
