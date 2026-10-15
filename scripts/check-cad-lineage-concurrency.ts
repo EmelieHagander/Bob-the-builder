@@ -599,3 +599,39 @@ for(const kind of ['assignee-first','status-first','event-link-first','event-sav
  console.log(`PASS bound work ${kind}: observed parent lock wait; exact snapshot/replay and relation preservation checked`);cases++
 }
 console.log(`${cases} total PostgreSQL races passed including server-bound work records.`)
+
+await query(await readFile(new URL('../supabase/migrations/20261015101954_server_bound_plan_links.sql',import.meta.url),'utf8'))
+for(const kind of ['focus-first','focus-save-first','link-first','link-save-first','link-replay']) {
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture'),step=randomUUID(),other=randomUUID(),task='plan-task-'+randomUUID()
+ await query(`insert into bob.project_plans(project_id,current_revision,next_revision) values(${literal(f.project)},null,2);
+ insert into bob.project_plan_revisions(project_id,revision,status,summary,reason,proposed_by,approved_by,decided_at) values(${literal(f.project)},1,'approved','Race','Fixture',${literal(f.actor)},${literal(f.actor)},now());
+ insert into bob.project_plan_steps(project_id,plan_revision,step_id,position,title,goal,state,responsible_kind) values(${literal(f.project)},1,${literal(step)},1,'First','Work','active','bob'),(${literal(f.project)},1,${literal(other)},2,'Second','Work','active','bob');
+ update bob.project_plans set current_revision=1 where project_id=${literal(f.project)};
+ insert into bob.tasks(id,project_id,name,instructions) values(${literal(task)},${literal(f.project)},'Preserved Task','Do not replace');`)
+ const tx=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local lock_timeout='20s';select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;${sql};${tail}commit;`
+ const context=async(resource:string,id:string)=>JSON.parse((await query(tx(`select bob.read_bob_plan_link_snapshot(${literal(f.project)},${literal(resource)},${literal(id)})`))).split('\n').at(-1)!)
+ const pins=[await context('steps',step)]
+ const focus=kind.startsWith('focus'),base={record_id:null,expected_revision:1,expected_updated_at:null,request_quote:f.payload.request_quote}
+ if(!focus)pins.push(await context('tasks',task))
+ const domain={...base,kind:focus?'plan_focus':'plan_task',data:focus?{step_id:step}:{action:'link',step_id:step,task_id:task}}
+ const payload={...base,kind:'bound_plan_link',data:{pins,domain}},save=`select bob.bob_project_write_v20(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(JSON.stringify(payload))})`
+ const mutation=focus?`update bob.project_plans set focus_step_id=${literal(other)},updated_at=clock_timestamp() where project_id=${literal(f.project)}`:`insert into bob.project_plan_step_tasks(project_id,step_id,task_id,position,linked_by) values(${literal(f.project)},${literal(other)},${literal(task)},1,${literal(f.actor)})`
+ const mutate=(tail='')=>`begin;set local statement_timeout='30s';${mutation};${tail}commit;`
+ const firstMutation=['focus-first','link-first'].includes(kind),key=800000+cases,barrier=await gate(key)
+ const leader=start(firstMutation?mutate(`select pg_advisory_xact_lock(${key});`):tx(save,`select pg_advisory_xact_lock(${key});`));let follower:ReturnType<typeof start>|undefined
+ try{const pid=await waiting(leader.app,barrier.pid);follower=start(firstMutation||kind==='link-replay'?tx(save):mutate());await waiting(follower.app,pid)}finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done;assert.equal(lead.code,0,lead.stderr)
+ if(firstMutation){assert.notEqual(follow.code,0);assert.match(follow.stderr,/record_changed/)}else assert.equal(follow.code,0,follow.stderr)
+ if(focus)assert.equal(await query(`select focus_step_id from bob.project_plans where project_id=${literal(f.project)}`),other)
+ else {
+  assert.equal(await query(`select count(*) from bob.project_plan_step_tasks where task_id=${literal(task)}`),kind==='link-save-first'?'2':'1')
+  assert.equal(await query(`select instructions from bob.tasks where id=${literal(task)}`),'Do not replace')
+  if(kind==='link-replay'){
+   const receipt=(out:string)=>JSON.parse(out.split('\n').find(line=>line.startsWith('{')&&line.includes('"recordId"'))!)
+   assert.deepEqual(receipt(lead.stdout),receipt(follow.stdout))
+  }
+ }
+ console.log(`PASS bound plan ${kind}: real head lock wait; stale read/replay and concurrent links preserved`);cases++
+}
+console.log(`${cases} total PostgreSQL races passed including server-bound plan links.`)

@@ -894,5 +894,32 @@
       "build"
     ],
     "active": true
+  },
+  {
+    "name": "read_plan_link_context",
+    "description": "Read current plan Steps and Tasks as server-bound choices.",
+    "how_to": "Read plan, steps or tasks; page through relevant results. Returned refs bind current state. This is not approval or evidence of completion.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "change_plan_focus",
+    "description": "Choose or clear Bob focus using a saved read.",
+    "how_to": "Set with a Step ref or clear with a plan ref from read_plan_link_context. Parallel Step execution states and all work remain unchanged.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
+  },
+  {
+    "name": "change_plan_task_link",
+    "description": "Organise existing Tasks through server-bound plan links.",
+    "how_to": "Read both Step and Task with read_plan_link_context. link adds an association, move changes primary ownership, unlink removes that association. Preserve work status/content, people and unrelated links. Never reconstruct IDs or versions.",
+    "schema_version": 1,
+    "always_load": true,
+    "preload_phases": [],
+    "active": true
   }
 ]

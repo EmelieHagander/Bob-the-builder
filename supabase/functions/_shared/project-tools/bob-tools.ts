@@ -1,3 +1,4 @@
+import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
 import { SUPERSEDED_WORK_TOOLS, type WorkRecords } from '../project-work-records.ts'
 import type { SolutionActions } from '../project-solution-actions.ts'
 import type { ProjectEdits } from '../project-edits.ts'
@@ -24,7 +25,7 @@ import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyR
 export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
   { label: 'Project records and memory', tools: ['change_task_readiness', 'read_work_context', 'edit_work_record', 'create_work_record', 'change_work_relation', 'change_work_state', 'read_solution_context', 'create_solution_alternative', 'select_solution_alternative', 'change_solution_evidence', 'read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_record_section', 'read_project_work', 'search_conversation_history'] },
   { label: 'Project, phases and Areas', tools: ['save_project_description', 'set_project_phase', 'update_project_schedule', 'save_project_area', 'archive_project_area'] },
-  { label: 'Living plan', tools: ['compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
+  { label: 'Living plan', tools: ['read_plan_link_context', 'change_plan_focus', 'change_plan_task_link', 'compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
   { label: 'Measurements and design decisions', tools: ['save_project_measurement', 'archive_project_measurement', 'save_project_solution', 'select_project_target'] },
   { label: 'Calculations', tools: ['calculate_project'] },
@@ -47,10 +48,11 @@ export function createBobToolSession(opts: {
   toolInstructions?: ToolInstructions;
   knowledgeReader?: KnowledgeReader;
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
-  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planAssistant?: ReturnType<typeof createPlanAssistant>;
+  operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const boundEdits = !!opts.projectEdits && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.edit_project_record'))
+  const boundPlanLinks = !!opts.planLinks && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.change_plan_task_link'))
   const boundWork = !!opts.workRecords && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.edit_work_record'))
   const boundSolutions = !!opts.solutionActions && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.create_solution_alternative'))
   const shelves = opts.aiCatalog?.definition('bob.tools', 'tool_contract').definition.shelves as typeof TOOLBOX_SHELVES | undefined
@@ -75,9 +77,14 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => spec.function.name === 'read_work_context' ? opts.workRecords!.remaining > 0 ? 'available' : 'budget_exhausted' : !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.workRecords!.execute(spec.function.name, v),
     })),
+    ...(opts.planLinks?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => spec.function.name === 'read_plan_link_context' ? opts.planLinks!.remaining > 0 ? 'available' : 'budget_exhausted' : !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      execute: (v: unknown) => opts.planLinks!.execute(spec.function.name, v),
+    })),
     ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
       ...(spec.function.name === 'propose_project_plan' ? { waitingFor: opts.aiCatalog?.text('tools.waiting.plan-direct') ?? 'use save_compiled_project_plan for a plan compiled or edited in this turn' } : {}),
       gate: (): ToolGate => !opts.writer ? 'not_allowed'
+        : boundPlanLinks && SUPERSEDED_PLAN_LINK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundWork && SUPERSEDED_WORK_TOOLS.includes(spec.function.name) ? 'not_allowed'
         : boundSolutions && ['save_project_solution', 'select_project_target'].includes(spec.function.name) ? 'not_allowed'
         : boundEdits && spec.function.name === 'save_project_description' ? 'not_allowed'

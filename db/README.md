@@ -1069,7 +1069,7 @@ is introduced. Apply core, deploy both Bob runtimes, then publish
 [release evidence](../Docs/foundation-verification.md#server-bound-solution-actions--2026-10-14) separates installation from ordinary-member/model acceptance.
 
 
-### Server-bound work records — source extension 2026-10-14
+### Server-bound work records — partial installation 2026-10-15
 
 `20261014121359_server_bound_work_records.sql` adds caller-scoped invoker work
 snapshots and paged reads, plus the claimed-turn v19 wrapper. The runtime binds
@@ -1080,4 +1080,18 @@ rules and receipts. Task-assignee/event-Task parent triggers also serialize dire
 relation writes with Bob replacements. This does not grant new project authority.
 Install core, both runtime endpoints, then `20261014121841_ai_work_records_catalog.sql`.
 The separate publication retires thirteen legacy writes only for fresh manifests.
+Core and both runtimes are installed; catalog publication is blocked by the
+Supabase connector. See [readback](../Docs/foundation-verification.md#server-bound-work-records--2026-10-15-readback).
 See [write ownership](../Docs/ask-bob-writes.md) for coverage and remaining families.
+
+### Server-bound plan links — source extension 2026-10-15
+
+`20261015101954_server_bound_plan_links.sql` adds caller-scoped invoker snapshots
+and bounded reads for the current approved plan, Steps and Tasks. Claimed-turn
+v20 binds focus and Task associations to complete reads, locks plan then Task,
+compares link membership and delegates to existing domain commands. Exact retry
+receipts precede freshness checks. A plan-parent trigger serializes relation
+writes; existing RLS/grants remain in force. Install core, both runtimes, then
+`20261015102328_ai_plan_links_catalog.sql`. The publication preserves older
+manifests and retires only the two replaced legacy contracts. This slice does not
+change plan approval/evidence or claim hosted/model acceptance.
