@@ -76,13 +76,16 @@ begin
   or jsonb_typeof(domain) is distinct from 'object' or coalesce(domain->>'kind','') not in ('plan_focus','plan_task')
   or domain-'kind'-'data' is distinct from p_payload-'kind'-'data' or octet_length(p_payload::text)>180000
   or coalesce(length(p_payload->>'request_quote'),0) not between 1 and 500 or msg is null or position(p_payload->>'request_quote' in msg)=0 then raise exception 'invalid_bound_plan_link' using errcode='22023';end if;
- -- Keep plan -> task ordering used by the canonical command.
+ -- Keep plan -> task ordering used by the canonical command. Lock the selected
+ -- Step/revision too so direct service edits cannot race snapshot validation.
  perform 1 from bob.project_plans where project_id=p_project for update;
  op:='bound_plan_link:'||jsonb_build_array(domain->>'kind',domain#>>'{data,action}',domain#>>'{data,step_id}',domain#>>'{data,task_id}',md5(pins::text))::text;
  select * into saved from bob_private.bob_write_receipts where project_id=p_project and actor_id=auth.uid() and turn_id=p_turn and operation_key=op;
  if found then if saved.payload is distinct from p_payload then raise exception 'record_changed' using errcode='40001';end if;return saved.receipt;end if;
  for pin in select value from jsonb_array_elements(pins) order by value->>'resource',value->>'key' loop
   if pin->>'project_id' is distinct from p_project or pin->>'key' is null or pin->>'key' is distinct from pin#>>'{record,id}' then raise exception 'invalid_plan_link_pin' using errcode='22023';end if;
+  if pin->>'resource'='plan' then perform 1 from bob.project_plan_revisions where project_id=p_project and revision=(pin#>>'{head,current_revision}')::integer for update;end if;
+  if pin->>'resource'='steps' then perform 1 from bob.project_plan_steps where project_id=p_project and plan_revision=(pin#>>'{head,current_revision}')::integer and step_id::text=pin->>'key' for update;end if;
   if pin->>'resource'='tasks' then perform 1 from bob.tasks where project_id=p_project and id=pin->>'key' for update;end if;
   actual:=bob.read_bob_plan_link_snapshot(p_project,pin->>'resource',pin->>'key');
   if actual is null or actual is distinct from pin then raise exception 'record_changed' using errcode='40001';end if;
