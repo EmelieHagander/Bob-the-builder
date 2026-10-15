@@ -2627,7 +2627,8 @@ and blocker report, not ordinary-member or actual-model acceptance.
 
 ## Server-bound plan focus and Task links — source verification 2026-10-15
 
-The fourth slice covers only current-plan focus and existing Task associations.
+[PR #257](https://github.com/EmelieHagander/Bob-the-builder/pull/257) covers only
+current-plan focus and existing Task associations.
 Local PGlite tests exercise full migrations, caller RLS and claimed writes:
 set/clear focus without changing parallel Step states; link/move/unlink while
 preserving Task instructions/status/assignees; stale focus, Task and relation-only
@@ -2640,9 +2641,17 @@ migrations unchanged. The new catalog has its own reproducibility check.
 
 Local production build and vocabulary checks passed. Local `check:edge` could
 not fetch the existing esm.sh Supabase dependency (connection refused); normal
-Edge imports and browser gates therefore require CI. Five additional real
-PostgreSQL races cover mutation-first/save-first focus/link changes and duplicate
+Edge imports and browser gates therefore require CI. Seven additional real
+PostgreSQL races cover mutation-first/save-first focus/Step/link changes and duplicate
 link replay, with observed lock waits; CI owns their execution evidence.
+
+Direct manual review checked caller authority, complete read binding, canonical
+command delegation, receipt ownership and old-manifest compatibility. It found
+and closed a direct service Step-edit race by locking the selected Step/revision
+before snapshot comparison; the seven plan tests passed again. Archie's document
+workflow was applied manually to keep contracts, forward-looking State and
+release evidence with their existing owners; no independent steward run is
+claimed. The PR records final-head CI/concurrency results before merge.
 
 Supabase CLI help and migration creation both aborted in the installed native
 Bun runtime. Additive filenames use observed UTC as the documented fallback;
