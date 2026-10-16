@@ -80,7 +80,7 @@ export function createCurrentViewGuard(opts: { initial: CurrentView; read: () =>
         if (initial.status !== 'ok') return true
         const fresh = await opts.read()
         if (!await opts.hasAccess() || fresh.status !== 'ok' || fresh.projectId !== initial.projectId || fresh.surface !== initial.surface
-          || !equal(fresh.warnings, initial.warnings) || !equal(fresh.viewer, initial.viewer)
+          || !equal(fresh.viewer, initial.viewer)
           || !equal(Object.keys(fresh.focus).sort(), Object.keys(initial.focus).sort())) return false
         if (Object.entries(initial.focus).some(([key, entity]) => entity?.id !== fresh.focus[key as keyof CurrentView['focus']]?.id)
           || initial.project?.id !== fresh.project?.id) return false
@@ -100,11 +100,19 @@ export function createCurrentViewGuard(opts: { initial: CurrentView; read: () =>
           // Scope and every untouched field remain in expected; only the proven slot advances.
           if (source.dataset === 'project') expected.project = fresh.project
           else if (source.dataset === 'areas') expected.focus.area = fresh.focus.area
-          else if (source.dataset === 'tasks') expected.focus.task = fresh.focus.task
+          else if (source.dataset === 'tasks') {
+            expected.focus.task = fresh.focus.task
+            // This warning describes the bounded preview, not a competing edit.
+            // Only the complete, exact own readback above may change it.
+            expected.warnings = expected.warnings.filter(warning => warning !== 'task_instructions_truncated')
+            if (String(receipt.record.instructions).length > 1200) expected.warnings.push('task_instructions_truncated')
+          }
           else if (source.dataset === 'events') expected.focus.event = fresh.focus.event
           else if (source.dataset === 'plan') expected.focus.planStep = fresh.focus.planStep
           expected.sources[expected.sources.findIndex(item => sourceKey(item) === sourceKey(source))] = source
         }
+        if (!equal([...expected.warnings].sort(), [...fresh.warnings].sort())) return false
+        expected.warnings = [...fresh.warnings]
         if (!equal(expected, fresh)) return false
         accepted = structuredClone(fresh)
         return true

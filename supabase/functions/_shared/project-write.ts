@@ -185,8 +185,15 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   let uncertain = false
   let settled = false
   const receipts: WriteReadback[] = []
+  const seenReceipts = new Set<string>()
   const corrections = new Set<string>()
   const remember = (r: WriteReadback) => {
+    // Recovery returns committed receipts in database order. Replaying an older
+    // operation must return its original result without rolling this projection
+    // back from a later write that recovery has already verified.
+    const key = JSON.stringify([r.dataset, r.recordId, r.operation, r.revision ?? null, r.savedAt])
+    if (seenReceipts.has(key)) return
+    seenReceipts.add(key)
     const i=receipts.findIndex(old=>old.dataset===r.dataset&&old.recordId===r.recordId)
     if(i<0)receipts.push(r);else receipts[i]=r
   }

@@ -16,6 +16,16 @@ Existing `project-context/dispatcher.ts` supplies an **image-only** catalog, met
 
 **Acceptance boundary:** CI covers strict/foreign pointers, navigation/reload, private recovery, own changes versus concurrent edits and revocation; hosted role/RPC checks cover private capture and permissions. The ordinary guest/model probe proves focused Task hydration, actual relevant pixels and knowledge-package consumption while keeping guest server history absent. Ordinary named-member background/private-readback acceptance remains open in [State](bob-delivery-flow.md#state); these proof types do not substitute for one another.
 
+### Own-write continuation corrections — 2026-10-16
+
+Source fix, not yet deployed: a verified Task readback may add or remove its
+`task_instructions_truncated` preview warning when instructions cross 1,200
+characters. Other warning, scope, access and source changes still fail closed.
+Recovered receipts retain the latest committed record projection while earlier
+operations replay; returning an old operation result must not roll that projection
+back. Regression coverage reproduces both stops observed in the October 15
+ribbotten Task runs and checks continued rejection of external changes.
+
 ## Decision
 
 Bob should receive **exactly the information needed for the current question, when it is needed**.
