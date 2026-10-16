@@ -39,11 +39,30 @@ function display(s: WorkSnapshot) {
 }
 export function createWorkRecords(opts: {
   projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>;
+  readSnapshot?: (input: { resource: WorkResource; key: string }) => PromiseLike<{ data: unknown; error: unknown }>;
   read: (input: { resource: WorkResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
   const snapshots = new Map<string, WorkSnapshot>(), pages = new Map<string, { resource: WorkResource; query: string | null; after: string }>()
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
+  const register = async (s: WorkSnapshot) => {
+    const ref = 'work_' + await fingerprint(s)
+    snapshots.set(ref, structuredClone(s))
+    return { ref, scope: s.scope_label, content: display(s) }
+  }
+  const refresh = async (resource: WorkResource, key: string) => {
+    if (!opts.readSnapshot) return null
+    try {
+      if (!await opts.hasAccess()) return null
+      const { data, error } = await opts.readSnapshot({ resource, key })
+      if (error || !data || typeof data !== 'object' || Array.isArray(data) || JSON.stringify(data).length > 240000 || !await opts.hasAccess()) return null
+      const s = data as WorkSnapshot
+      if (s.project_id !== opts.projectId || s.resource !== resource || s.key !== key || s.record?.id !== key || !s.relations || typeof s.relations !== 'object' || Array.isArray(s.relations)) return null
+      // New immutable refs preserve stale-read detection and exact-retry keys.
+      // A journaled readback rebuilds the same ref after a durable continuation.
+      return await register(s)
+    } catch (error) { rethrowContinuation(error); return null }
+  }
   const canonical = (resource: WorkResource, r: Record<string, any>, s: WorkSnapshot | null, reason: string, quote: string, scope?: WorkSnapshot) => {
     const base = { record_id: s?.record.id ?? null, expected_updated_at: s?.record.updated_at ?? null, expected_revision: s?.record.revision ?? 0, request_quote: quote }
     if (resource === 'areas') return parseProjectWrite('save_project_area', { record_id: base.record_id, expected_updated_at: base.expected_updated_at, name: r.name, description: r.description, request_quote: quote }, opts.projectId, quote)
@@ -69,7 +88,7 @@ export function createWorkRecords(opts: {
           const entries = []
           for (const s of data.slice(0, 2) as WorkSnapshot[]) {
             if (s.project_id !== opts.projectId || s.resource !== input.resource || !s.record || !s.relations || s.key !== s.record.id || !nonempty(s.key, 200)) return unavailable()
-            const ref = 'work_' + await fingerprint(s); snapshots.set(ref, structuredClone(s)); entries.push({ ref, scope: s.scope_label, content: display(s) })
+            entries.push(await register(s))
           }
           let next_ref: string | null = null
           if (data.length > 2) { const cursor = { ...input, after: data[1].key }; next_ref = 'page_' + await fingerprint({ project: opts.projectId, ...cursor }); pages.set(next_ref, cursor) }
@@ -162,7 +181,17 @@ export function createWorkRecords(opts: {
         payload = { kind: 'bound_work', record_id: domain.record_id, expected_revision: domain.expected_revision, expected_updated_at: domain.expected_updated_at, request_quote: v.request_quote, data: { pins, domain } }
       } catch (error) { rethrowContinuation(error); issue = error instanceof Error ? error.message : 'Invalid action.' }
       const result = await opts.writer.commitBound(name, key, payload)
-      return result.status === 'saved' ? { status: 'saved', message: 'Saved. Read the work record again before further changes.' } : issue && result.status === 'invalid' ? { ...result, message: 'No change made. ' + issue } : result
+      if (result.status === 'saved' || result.status === 'conflict') {
+        const deleted = name === 'change_work_state' && v.action === 'delete' && result.status === 'saved'
+        const target = s ?? (result.status === 'saved' && result.receipt ? { resource: v.resource as WorkResource, key: result.receipt.recordId } : null)
+        const current = !deleted && target ? await refresh(target.resource, target.key) : null
+        const feedback = result.status === 'saved' ? { status: 'saved', message: deleted ? 'Deleted.' : 'Saved. Read the work record again before further changes.' } : result
+        return current ? { ...feedback, current, message: result.status === 'saved'
+          ? 'Saved. current is the fresh work record; use current.ref for the next change.'
+          : 'No change made. current is the fresh target; reconsider the intended delta using current.ref. Read other scope or source records again if they changed. Never create a replacement.' }
+          : { ...feedback, ...(!deleted && opts.readSnapshot ? { refresh_status: 'unavailable' } : {}) }
+      }
+      return issue && result.status === 'invalid' ? { ...result, message: 'No change made. ' + issue } : result
     },
   }
 }

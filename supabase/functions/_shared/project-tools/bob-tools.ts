@@ -50,6 +50,7 @@ export function createBobToolSession(opts: {
   context?: WorkingContext; projectContext?: ProjectContext; readPolicy: ToolPolicyReader;
   operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
 }) {
+  const writeGate = (): ToolGate => !opts.writer ? 'not_allowed' : opts.writer.uncertain ? 'write_uncertain' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted'
   const readGate = (): ToolGate => opts.lookup.remaining > 0 ? 'available' : 'budget_exhausted'
   const boundEdits = !!opts.projectEdits && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.edit_project_record'))
   const boundPlanLinks = !!opts.planLinks && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.change_plan_task_link'))
@@ -66,19 +67,19 @@ export function createBobToolSession(opts: {
     { spec: HISTORY_TOOL, version: 1, gate: () => !opts.context ? 'missing_context' : opts.context.history.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: v => opts.context!.history.search(v) },
     ...(opts.projectEdits?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => spec.function.name === 'edit_project_record' ? !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted' : opts.projectEdits!.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => spec.function.name === 'edit_project_record' ? writeGate() : opts.projectEdits!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.projectEdits!.execute(spec.function.name, v),
     })),
     ...(opts.solutionActions?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => spec.function.name === 'read_solution_context' ? opts.solutionActions!.remaining > 0 ? 'available' : 'budget_exhausted' : !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => spec.function.name === 'read_solution_context' ? opts.solutionActions!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.solutionActions!.execute(spec.function.name, v),
     })),
     ...(opts.workRecords?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => spec.function.name === 'read_work_context' ? opts.workRecords!.remaining > 0 ? 'available' : 'budget_exhausted' : !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => spec.function.name === 'read_work_context' ? opts.workRecords!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.workRecords!.execute(spec.function.name, v),
     })),
     ...(opts.planLinks?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => spec.function.name === 'read_plan_link_context' ? opts.planLinks!.remaining > 0 ? 'available' : 'budget_exhausted' : !opts.writer ? 'not_allowed' : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => spec.function.name === 'read_plan_link_context' ? opts.planLinks!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.planLinks!.execute(spec.function.name, v),
     })),
     ...WRITE_TOOLS.map(spec => ({ spec, version: spec.function.name === 'save_project_solution' ? 2 : 1,
@@ -90,7 +91,7 @@ export function createBobToolSession(opts: {
         : boundEdits && spec.function.name === 'save_project_description' ? 'not_allowed'
         : boundEdits && spec.function.name === 'save_project_solution' && opts.writer.unresolvedTools.includes('edit_project_record') ? 'missing_context'
         : spec.function.name==='propose_project_plan'&&opts.planAssistant?.compilationAttempted ? 'missing_context'
-        : opts.writer.remaining > 0 ? 'available' : 'budget_exhausted',
+        : writeGate(),
       execute: (v: unknown) => boundEdits && spec.function.name === 'save_project_solution' && !!v && typeof v === 'object' && 'record_id' in v && v.record_id !== null
         ? opts.writer!.commitBound('edit_project_record', 'unbound', null).then(result => ({ ...result, message: 'No change made. Read the existing solution with read_project_edit_context and revise it through edit_project_record. Never create an alternative to repair a failed edit.' }))
         : opts.writer!.write(spec.function.name, v),
@@ -102,7 +103,7 @@ export function createBobToolSession(opts: {
     // New handlers can be installed before catalog activation; an older
     // durable manifest keeps its own bench instead of failing on the new row.
     ...(opts.constructionTools?.tools ?? []).filter(spec=>!['change_construction_parameters','transition_legacy_drawing','change_construction_roles','read_construction_changes','continue_construction_change'].includes(spec.function.name)||!opts.aiCatalog||opts.aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.'+spec.function.name)).map(spec => ({ spec, version: 1,
-      gate: (): ToolGate => opts.constructionTools!.remaining > 0 && (!['save_construction_draft','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) || (opts.writer?.remaining ?? 0) > 0) ? 'available' : 'budget_exhausted',
+      gate: (): ToolGate => ['save_construction_draft','change_construction_parameters','transition_legacy_drawing','change_construction_roles','continue_construction_change','save_construction_cut_plan'].includes(spec.function.name) && writeGate() !== 'available' ? writeGate() : opts.constructionTools!.remaining > 0 ? 'available' : 'budget_exhausted',
       execute: (v: unknown) => opts.constructionTools!.execute(spec.function.name, v),
     })),
     ...(opts.catalogReader?.tools ?? []).map(spec => ({ spec, version: 1,
@@ -117,7 +118,7 @@ export function createBobToolSession(opts: {
       ...(opts.cadAssistant.lifecycleTools??[]).map(spec=>({spec,version:1,gate:():ToolGate=>opts.cadAssistant!.lifecycleRemaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.lifecycle(spec.function.name,v)})),
       ...opts.cadAssistant.tools.map(spec => ({spec,version:3,gate:():ToolGate=>opts.cadAssistant!.remaining>0?'available':'budget_exhausted',execute:(v:unknown)=>opts.cadAssistant!.consult(v)})),
       {spec:SAVE_CAD_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.cad-ready') ?? 'appears when design_project_cad returns a reviewed candidate',
-       gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
+       gate:():ToolGate=>writeGate()!=='available'?writeGate():opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
         const c=opts.cadAssistant!.candidate;if(!c)return {status:'missing_context'}
         const receipt=await opts.writer!.commit({kind:'cad',record_id:c.artifact_id,expected_updated_at:null,expected_revision:c.expected_revision,request_quote:(v as any).request_quote,data:c})
@@ -131,7 +132,7 @@ export function createBobToolSession(opts: {
     })),
     ...(opts.planAssistant ? [{
       spec:SAVE_COMPILED_PLAN_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.plan-ready') ?? 'appears when compile_project_plan or edit_project_plan returns proposal_ready',
-      gate:():ToolGate=>!opts.writer?'not_allowed':opts.writer.remaining<=0?'budget_exhausted':opts.planAssistant!.canSave?'available':'missing_context',
+      gate:():ToolGate=>writeGate()!=='available'?writeGate():opts.planAssistant!.canSave?'available':'missing_context',
       execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string') return {status:'invalid',saved:false}
         const proposal=opts.planAssistant!.compiledProposal

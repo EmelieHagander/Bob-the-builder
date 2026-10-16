@@ -267,6 +267,7 @@ export async function answerWithOpenAi(opts: {
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
   const workRecords = createWorkRecords({ projectId: opts.projectId, writer, hasAccess,
+    readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
     read: input => rpc('read_bob_work_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
   const solutionActions = createSolutionActions({ projectId: opts.projectId, writer, hasAccess,

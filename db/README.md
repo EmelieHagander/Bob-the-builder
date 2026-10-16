@@ -1095,3 +1095,18 @@ writes; existing RLS/grants remain in force. Install core, both runtimes, then
 `20261015102328_ai_plan_links_catalog.sql`. The publication preserves older
 manifests and retires only the two replaced legacy contracts. This slice does not
 change plan approval/evidence or claim hosted/model acceptance.
+
+### Bob writer conflict transport — source correction 2026-10-16
+
+`20261016205152_bob_write_conflict_transport.sql` replaces only the public
+v16–v20 writer adapters, preserving signatures, invoker security, empty search
+paths and existing ACLs. A serialization failure or deadlock from the delegated
+write rolls back inside the adapter and returns `PT409` with its original message.
+This prevents PostgREST 14 from repeatedly executing stale application conflicts
+(`record_changed`, `turn_not_claimed`) inside one HTTP request. Genuine aborted
+transaction conflicts also return to Bob for a fresh read; they are not blindly
+retried with stale pins. Validation/permission errors keep their existing codes.
+No data or private canonical writer is changed. The pinned Supabase CLI crashed
+on both help and migration creation; this UTC filename uses the documented manual
+fallback. Apply before deploying both runtimes; hosted ledger/runtime proof belongs
+in [foundation verification](../Docs/foundation-verification.md).

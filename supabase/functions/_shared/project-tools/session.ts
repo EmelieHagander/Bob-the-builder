@@ -11,7 +11,7 @@ export const DESCRIBE_TOOL: ToolSpec = { type: 'function', function: {
   description: 'Read the current usage manual for a tool on your bench by exact name when you need its detailed workflow. Read-only; does not load, enable or execute the tool.',
   parameters: { type: 'object', additionalProperties: false, properties: { name: { type: 'string' } }, required: ['name'] },
 } }
-export type ToolGate = 'available' | 'not_allowed' | 'missing_context' | 'budget_exhausted'
+export type ToolGate = 'available' | 'not_allowed' | 'missing_context' | 'budget_exhausted' | 'write_uncertain'
 export interface ToolDefinition {
   spec: ToolSpec
   version: number
@@ -73,6 +73,8 @@ export function serverRequestQuote(message: string): string {
   return out
 }
 
+const WRITE_UNCERTAIN = 'A previous write has an unverified outcome. Further writes are paused for recovery; this is not an exhausted write budget. Do not repeat it or claim it failed.'
+
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; feedback?: (key: string, variables?: Record<string, string>) => string }) {
@@ -129,7 +131,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         visible.set(row.name, row.schema_version)
         const group = def.group ?? 'Other tools'
         if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version); shelf.push({ name: row.name, group, state: 'offered' }) }
-        else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
+        else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'write_uncertain' ? { waitingFor: WRITE_UNCERTAIN } : state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       if (onDemand && visible.size) {
         specs.push(opts.catalogTool ? opts.catalogTool(DESCRIBE_TOOL.function.name, {}) : structuredClone(DESCRIBE_TOOL)); offered.set(DESCRIBE_TOOL.function.name, 1)
@@ -161,7 +163,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       const { state, def } = resolve(row)
       if (state !== 'available' || !def) {
         record('execute', name, state)
-        return safeStatus(state, state === 'missing_context' && def?.waitingFor ? opts.feedback?.('waiting', { waiting: def.waitingFor }) ?? `Not available yet: ${def.waitingFor}` : undefined)
+        return safeStatus(state, state === 'write_uncertain' ? WRITE_UNCERTAIN : state === 'missing_context' && def?.waitingFor ? opts.feedback?.('waiting', { waiting: def.waitingFor }) ?? `Not available yet: ${def.waitingFor}` : undefined)
       }
       // The set offered to one model step is a fence: a tool that became available
       // later in the same batch is callable from the next step, not retroactively.

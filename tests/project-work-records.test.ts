@@ -32,7 +32,8 @@ async function claim(){
 }
 const read=async(input:{resource:WorkResource;query:string|null;after:string|null},user=uid)=>({data:(await asProjectUser(pg,user,'select bob.read_bob_work_context($1,$2,$3,$4) result',['A',input.resource,input.query,input.after])).rows[0].result,error:null})
 async function rpc(payload:WritePayload,user=uid){try{return{data:(await asProjectUser(pg,user,'select bob.bob_project_write_v19($1,$2,$3,$4,$5::jsonb) result',['A',thread,turn,generation,JSON.stringify(payload)])).rows[0].result,error:null}}catch(e:any){return{data:null,error:{code:e.code,message:e.message}}}}
-function setup(){const payloads:WritePayload[]=[];const writer=createProjectWriter('A',quote,p=>{payloads.push(structuredClone(p));return rpc(p)},async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}));return{payloads,writer,tools:createWorkRecords({projectId:'A',writer,hasAccess:async()=>true,read})}}
+const readSnapshot=async(input:{resource:WorkResource;key:string})=>({data:(await asProjectUser(pg,uid,'select bob.read_bob_work_snapshot($1,$2,$3) result',['A',input.resource,input.key])).rows[0].result,error:null})
+function setup(){const payloads:WritePayload[]=[];const writer=createProjectWriter('A',quote,p=>{payloads.push(structuredClone(p));return rpc(p)},async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}));return{payloads,writer,tools:createWorkRecords({projectId:'A',writer,hasAccess:async()=>true,read,readSnapshot})}}
 const choose=async(tools:ReturnType<typeof createWorkRecords>,resource:WorkResource,query:string|null=null)=>{const r=await tools.execute('read_work_context',{resource,query,next_ref:null});assert.equal(r.status,'ok',JSON.stringify(r));return r.entries[0]}
 const edit=(ref:string,changes:unknown[])=>({ref,changes,reason:'Requested correction',request_quote:quote})
 const state=(ref:string,action:string,value:string|null=null)=>({ref,action,value,reason:'Requested state',request_quote:quote})
@@ -161,16 +162,16 @@ test('new contracts activate together without rewriting older manifests or model
 })
 test('durable restart rebuilds exact refs and transport inputs while access is checked live',async()=>{
  const entries:JournalEntry[]=[],data:any=(await read({resource:'areas',query:'Assembly group',after:null})).data
- let allowed=true,reads=0,writes=0
+ let allowed=true,reads=0,writes=0,refreshes=0
  const run=async()=>{
   const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
   const writer=createProjectWriter('A',quote,p=>journal.run('write',p,async()=>{writes++;return{data:{projectId:'A',dataset:'areas',recordId:'areaA',label:'Assembly group',operation:'updated',savedAt:'2026-10-14T12:00:00Z',record:{id:'areaA',name:'Assembly group',description:'Journal content'}},error:null}}),async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}))
-  const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>allowed,read:input=>journal.run('read',input,async()=>{reads++;return{data,error:null}})})
+  const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>allowed,read:input=>journal.run('read',input,async()=>{reads++;return{data,error:null}}),readSnapshot:input=>journal.run('snapshot',input,async()=>{refreshes++;const snapshot=structuredClone(data[0]);snapshot.record.description='Journal content';return{data:snapshot,error:null}})})
   const rows=await tools.execute('read_work_context',{resource:'areas',query:'Assembly group',next_ref:null});if(rows.status!=='ok')return rows
   return tools.execute('edit_work_record',edit(rows.entries[0].ref,[set('/description','Journal content')]))
  }
- assert.equal((await run()).status,'saved');data[0].record.description='Later data'
- assert.equal((await run()).status,'saved');assert.equal(reads,1);assert.equal(writes,1)
+ const saved=await run();assert.equal(saved.status,'saved');assert.equal(saved.current.content.description,'Journal content');data[0].record.description='Later data'
+ assert.deepEqual(await run(),saved);assert.equal(reads,1);assert.equal(writes,1);assert.equal(refreshes,1)
  allowed=false;assert.equal((await run()).status,'denied');assert.equal(writes,1)
 })
 test('readiness needs use saved indices and preserve other values; new needs start unresolved',async()=>{
@@ -220,4 +221,95 @@ test('dependencies bind Task and checkpoint from reads; readiness confirmation c
 test('published readiness schema permits actions without content changes',()=>{
  const schema=WORK_RECORD_TOOLS.find(t=>t.function.name==='change_task_readiness')!.function.parameters
  assert.deepEqual(schemaIssues(schema,{task_ref:'work_example',action:'set_need_ready',item_index:0,source_ref:null,checkpoint_index:null,changes:[],ready:true,note:null,reason:'Actual availability reported',request_quote:quote}),[])
+})
+
+test('fresh immutable refs support sequential edits, conflict repair and another task in one turn',async()=>{
+ await claim()
+ await pg.exec("insert into bob.tasks(id,project_id,area_id,name,instructions) values('smoothA','A','areaA','Smooth sequence','Original'),('smoothB','A','areaA','Smooth second','Keep me')")
+ const {tools,writer,payloads}=setup()
+ const first=await choose(tools,'tasks','Smooth sequence'),second=await choose(tools,'tasks','Smooth second'),person=await choose(tools,'people','Helper')
+ const append=edit(first.ref,[{op:'append_text',path:'/instructions',value_json:JSON.stringify(' + requested')}])
+ const saved=await tools.execute('edit_work_record',append)
+ assert.equal(saved.status,'saved');assert.notEqual(saved.current.ref,first.ref);assert.equal(saved.current.content.instructions,'Original + requested')
+ // An exact retry still uses the original immutable snapshot and cannot append twice.
+ const retry=await tools.execute('edit_work_record',append);assert.equal(retry.status,'saved');assert.deepEqual(payloads[0],payloads[1])
+ const stale=await tools.execute('change_work_state',state(first.ref,'status','doing'))
+ assert.equal(stale.status,'conflict');assert.equal(stale.current.ref,saved.current.ref)
+ assert.equal(writer.uncertain,false);assert.ok(writer.remaining>0)
+ const doing=await tools.execute('change_work_state',state(stale.current.ref,'status','doing'))
+ assert.equal(doing.status,'saved');assert.equal(doing.current.content.status,'doing')
+ const assigned=await tools.execute('change_work_relation',{target_ref:doing.current.ref,source_ref:person.ref,action:'add',reason:'Requested assignment',request_quote:quote})
+ assert.equal(assigned.status,'saved');assert.deepEqual(assigned.current.content.people,[{name:'Helper'}])
+ const need=await tools.execute('change_task_readiness',{task_ref:assigned.current.ref,action:'add_need',item_index:null,source_ref:null,checkpoint_index:null,changes:[set('/label','Check drill')],ready:null,note:null,reason:'Requested need',request_quote:quote})
+ assert.equal(need.status,'saved');assert.equal(need.current.content.needs[0].ready,false)
+ assert.equal((await tools.execute('edit_work_record',edit(second.ref,[set('/instructions','Next task instructions')]))).status,'saved')
+ assert.equal(writer.uncertain,false);assert.equal(writer.hasUnresolvedWrites,false)
+ const rows:any[]=(await pg.query("select id,instructions,status from bob.tasks where id in ('smoothA','smoothB') order by id")).rows
+ assert.deepEqual(rows,[{id:'smoothA',instructions:'Original + requested',status:'doing'},{id:'smoothB',instructions:'Next task instructions',status:'todo'}])
+ // A concurrent human edit is never silently rebased onto an older ref.
+ await pg.exec("update bob.tasks set instructions='Human changed instructions' where id='smoothA'")
+ const conflict=await tools.execute('edit_work_record',edit(need.current.ref,[set('/name','Smooth renamed')]))
+ assert.equal(conflict.status,'conflict');assert.equal(conflict.current.content.instructions,'Human changed instructions')
+ assert.equal((await tools.execute('edit_work_record',edit(conflict.current.ref,[set('/name','Smooth renamed')]))).status,'saved')
+ assert.equal((await pg.query("select instructions from bob.tasks where id='smoothA'")).rows[0].instructions,'Human changed instructions')
+})
+test('created records return usable fresh refs; deletes do not attempt a missing-record refresh',async()=>{
+ await claim();const {tools,writer}=setup(),scope=await choose(tools,'areas','Assembly group')
+ const created=await tools.execute('create_work_record',{resource:'tasks',scope_ref:scope.ref,base_ref:null,changes:[set('/name','Fresh created')],reason:'Requested new work',request_quote:quote})
+ assert.equal(created.status,'saved');assert.equal(created.current.content.name,'Fresh created')
+ assert.equal((await tools.execute('change_work_state',state(created.current.ref,'status','doing'))).status,'saved')
+ const current=await choose(tools,'tasks','Fresh created')
+ const deleted=await tools.execute('change_work_state',state(current.ref,'delete'))
+ assert.equal(deleted.status,'saved');assert.equal(deleted.current,undefined);assert.equal(deleted.refresh_status,undefined);assert.equal(writer.uncertain,false)
+})
+test('failed, foreign and revoked refreshes never change a verified save into an unknown write or leak refs',async()=>{
+ await claim()
+ for(const mode of ['failed','foreign','revoked']){
+  let allowed=true
+  const {writer}=setup()
+  const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>allowed,read,readSnapshot:async input=>{
+   if(mode==='failed')throw Error('Read unavailable')
+   const value=await readSnapshot(input)
+   if(mode==='foreign')(value.data as any).project_id='B'
+   if(mode==='revoked')allowed=false
+   return value
+  }})
+  const target=await choose(tools,'tasks','Smooth second')
+  const result=await tools.execute('edit_work_record',edit(target.ref,[set('/instructions','Verified '+mode)]))
+  assert.equal(result.status,'saved');assert.equal(result.current,undefined);assert.equal(result.refresh_status,'unavailable');assert.equal(writer.uncertain,false)
+ }
+})
+test('uncertain writes pause subsequent tool calls honestly without disabling reads',async()=>{
+ const writer=createProjectWriter('A',quote,async()=>{throw Error('Lost response')},async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}))
+ const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>true,read,readSnapshot})
+ const session=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup:createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null})),writer,workRecords:tools,readPolicy:seedToolPolicy})
+ await session.prepare()
+ const target=(await session.execute('read_work_context',{resource:'tasks',query:'Smooth second',next_ref:null})).entries[0]
+ assert.equal((await session.execute('edit_work_record',edit(target.ref,[set('/instructions','Unverified')]))).status,'unknown')
+ const paused=await session.execute('change_work_state',state(target.ref,'status','doing'))
+ assert.equal(paused.status,'write_uncertain');assert.match(paused.message,/unverified outcome/)
+ const offered=await session.prepare()
+ assert.ok(offered.some(t=>t.function.name==='read_work_context'));assert.ok(!offered.some(t=>t.function.name==='edit_work_record'))
+ const shelf=session.toolbox.find(t=>t.name==='edit_work_record')!
+ assert.equal(shelf.state,'waiting');assert.match(shelf.waitingFor!,/not an exhausted write budget/)
+})
+test('every active writer returns one transport conflict, preserves authorization and rolls back delegated work',async()=>{
+ await pg.exec('create table public.write_transport_probe(n integer); insert into public.write_transport_probe values(0)')
+ for(let version=16;version<=20;version++){
+  const signature=`bob.bob_project_write_v${version}(text,uuid,uuid,bigint,jsonb)`
+  const privileges:any=(await pg.query("select p.prosecdef,p.proconfig,has_function_privilege('authenticated',p.oid,'execute') member,has_function_privilege('anon',p.oid,'execute') anon,has_function_privilege('service_role',p.oid,'execute') service from pg_proc p where p.oid=$1::regprocedure",[signature])).rows[0]
+  assert.equal(privileges.prosecdef,false);assert.ok(privileges.proconfig.includes('search_path=""'));assert.equal(privileges.member,true);assert.equal(privileges.anon,false);assert.equal(privileges.service,false)
+  for(const code of ['40001','40P01','42501','22023']){
+   // The replacement exists only in a rolled-back test transaction. It simulates
+   // a domain failure after mutation, including real transaction conflicts.
+   const stop=new Error('rollback fixture')
+   await assert.rejects(pg.transaction(async tx=>{
+    await tx.exec(`create or replace function bob_private.bob_project_write_v${version}(p_project text,p_thread uuid,p_turn uuid,p_generation bigint,p_payload jsonb) returns jsonb language plpgsql security definer set search_path='' as $$begin update public.write_transport_probe set n=n+1;raise exception 'fixture_conflict' using errcode='${code}';end$$`)
+    await tx.exec(`do $$begin perform bob.bob_project_write_v${version}('A',null,null,1,'{}');raise exception 'expected_failure';exception when sqlstate '${['40001','40P01'].includes(code)?'PT409':code}' then if sqlerrm<>'fixture_conflict' then raise;end if;end$$`)
+    assert.equal((await tx.query('select n from public.write_transport_probe')).rows[0].n,0)
+    throw stop
+   }),e=>e===stop)
+  }
+  await assert.rejects(asProjectUser(pg,other,`select bob.bob_project_write_v${version}('A',null,null,1,'{}')`),(e:any)=>e.code==='42501')
+ }
 })
