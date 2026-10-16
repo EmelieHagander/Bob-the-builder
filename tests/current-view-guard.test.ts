@@ -149,3 +149,56 @@ test('external focus mutation during a real model call blocks its subsequent wri
     }})
   assert(!answer.ok);assert.equal(answer.error,'context_unavailable');assert.equal(writes,0)
 })
+
+test('own Task edits may cross the preview truncation boundary in either direction', async () => {
+  for (const [before, after] of [['Short', 'x'.repeat(1684)], ['x'.repeat(1684), 'Short']]) {
+    const f = fixture()
+    f.initial.focus.task!.instructions = before.slice(0, 1200)
+    f.initial.warnings = before.length > 1200 ? ['task_instructions_truncated'] : []
+    f.current = structuredClone(f.initial)
+    f.saveTask()
+    f.receipts[0].record.instructions = after
+    f.current.focus.task!.instructions = after.slice(0, 1200)
+    f.current.warnings = after.length > 1200 ? ['task_instructions_truncated'] : []
+    const guard = createCurrentViewGuard({ initial: f.initial, read: async () => f.current,
+      hasAccess: async () => true, receipts: () => f.receipts })
+    assert.equal(await guard.validate(), true, 'a verified own edit explains its preview warning')
+    f.current.warnings.push('area_archived')
+    assert.equal(await guard.validate(), false, 'unrelated warning changes remain blocked')
+  }
+})
+
+test('replaying an earlier saved edit cannot replace the latest recovered Task readback', async () => {
+  const f = fixture()
+  f.saveTask(t2)
+  const first = structuredClone(f.receipts[0])
+  f.saveTask(t3)
+  const latest = structuredClone(f.receipts[1])
+  const writer = createProjectWriter('A', 'Update task', async () => ({ data: first, error: null }),
+    async () => ({ data: [first, latest], error: null }),
+    async () => ({ data: { generation: 2, receipts: [first, latest] }, error: null }))
+  const guard = createCurrentViewGuard({ initial: f.initial, read: async () => f.current,
+    hasAccess: async () => true, receipts: () => writer.receipts })
+  await writer.recover()
+  assert.equal(await guard.validate(), true)
+  const result = await writer.write('save_project_task', { record_id: 't', area_id: 'a', step_id: step,
+    name: 'Updated task', instructions: 'After', expected_updated_at: t1, request_quote: 'Update task' })
+  assert.equal(result.status, 'saved')
+  assert.equal(await guard.validate(), true, 'resume must retain the latest verified state while replaying old steps')
+  let calls = 0
+  const answer = await runProjectAnswer({ projectId: 'A', userId: 'caller', message: 'Update task',
+    currentView: f.initial, validateCurrentView: guard.validate, writer, hasAccess: async () => true,
+    lookup: createProjectLookup('A', async () => ({ data: { records: [{ id: 'A', name: 'Project' }], related: [], truncated: false }, error: null })),
+    callModel: async () => {
+      calls++
+      const base = { success: true, model: 'fixture', responseId: 'resume-' + calls, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
+      return calls === 1 ? { ...base, data: null, toolCalls: [{ id: 'replay', type: 'function', function: {
+        name: 'save_project_task', arguments: JSON.stringify({ record_id: 't', area_id: 'a', step_id: step,
+          name: 'Updated task', instructions: 'After', expected_updated_at: t1, request_quote: 'Update task' }) } }] }
+        : { ...base, data: 'The task is updated. Here is the next step.' }
+    } })
+  assert.equal(answer.ok, true)
+  assert.equal(calls, 2, 'the normal answer is reached after replay')
+  f.current.sources.find(source => source.dataset === 'tasks')!.updatedAt = '2026-09-30T12:00:03Z'
+  assert.equal(await guard.validate(), false, 'an external later edit is still rejected')
+})
