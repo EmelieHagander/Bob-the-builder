@@ -123,6 +123,34 @@ allow successive intentional changes and never take another writer's receipt.
 Old durable manifests and RPC names remain unchanged. Install core, both runtimes,
 then the generated catalog; a source commit alone does not activate these tools.
 
+### Sequential work changes and conflict recovery — 2026-10-16
+
+Source correction (hosted proof is recorded separately in foundation verification):
+all five active public writer routes, v16–v20, translate an aborted serialization
+or deadlock into `PT409`. PostgREST must return that conflict once instead of
+retrying the same stale payload internally. The exception rolls back the entire
+delegated write; private domain implementations, caller identity, RLS, grants,
+claim checks and receipt transactions stay unchanged. `turn_not_claimed` remains
+terminal in the runtime. This also covers older pinned manifests using v16.
+
+After a saved non-delete work action or a known conflict, the runtime reads the
+complete target through caller-authorized `read_bob_work_snapshot`. The response
+includes `current` with a new immutable ref and human-facing content for the next
+change. Old refs remain bound to their original snapshots: an exact retry cannot
+append twice, and a changed stale request cannot overwrite a concurrent edit.
+Readbacks are journaled so worker continuation reconstructs the same refs.
+Create returns the saved identity's ref; readiness refreshes its parent Task;
+delete does not attempt to reopen a removed record. A failed, foreign or revoked
+readback never creates a ref or changes a verified save into an unknown write.
+Scope/source conflicts may still require rereading those related records.
+
+An uncertain write pauses subsequent write tools with `write_uncertain`, while
+reads remain available. It must not be described as an exhausted write budget.
+The normal write/correction limits, lifecycle rules and completion evidence still
+apply. Regression fixtures cover chained content/status/assignment/readiness
+changes, another Task, concurrent edits, exact retries, caller revocation,
+durable readback replay and transaction rollback at all five public routes.
+
 ### Fourth implementation: current plan focus and Task links
 
 **Source implementation; not deployed.** `project-plan-links.ts` adds
