@@ -18,13 +18,15 @@ Existing `project-context/dispatcher.ts` supplies an **image-only** catalog, met
 
 ### Own-write continuation corrections — 2026-10-16
 
-Source fix, not yet deployed: a verified Task readback may add or remove its
+Deployed correction: a verified Task readback may add or remove its
 `task_instructions_truncated` preview warning when instructions cross 1,200
 characters. Other warning, scope, access and source changes still fail closed.
 Recovered receipts retain the latest committed record projection while earlier
 operations replay; returning an old operation result must not roll that projection
 back. Regression coverage reproduces both stops observed in the October 15
 ribbotten Task runs and checks continued rejection of external changes.
+See [hosted release evidence](foundation-verification.md#own-write-continuation--hosted-release-2026-10-16)
+for the immutable source, runtime readback and remaining model-acceptance boundary.
 
 ## Decision
 

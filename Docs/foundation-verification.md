@@ -2658,3 +2658,38 @@ Bun runtime. Additive filenames use observed UTC as the documented fallback;
 no successful CLI generation is claimed. Core, runtime and catalog for this
 slice have not been deployed. No live user project was edited, and no real-model,
 bunk-bed/mockup, reload or cost acceptance is claimed.
+
+## Own-write continuation — hosted release 2026-10-16
+
+[PR #258](https://github.com/EmelieHagander/Bob-the-builder/pull/258) fixes the two
+reproduced Task continuation stops: a verified own write crossing the 1,200-character
+preview boundary, and an older idempotent receipt replacing the latest recovered
+record projection. The [context contract](ask-bob-context.md#own-write-continuation-corrections--2026-10-16)
+owns the behavior; unrelated warnings, scope/access changes and external edits
+still stop the turn.
+
+All 1,275 local tests, production build and vocabulary checks passed.
+[CI run 38952838339](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38952838339)
+also passed, including Edge type-check and all browser gates. Merge
+`8248653a7a8e0b8781daac83d4e13704ebea9d0c` has the exact tested tree
+`2381a81caa9e68028443f76017e3d8d0273b3752`.
+
+Both functions were deployed from that immutable source, preserving authentication:
+
+| Runtime | Installed state | Bundle SHA-256 |
+| --- | --- | --- |
+| ask-bob | Version 123, ACTIVE, JWT verification enabled | `6264d8f83b05c7cf854565a85d78fac7c89510c13aac008987ebb0d608e1b6f1` |
+| bob-worker | Version 91, ACTIVE, existing custom capability authentication / JWT verification disabled | `c73ae880e60e41379d6f12eb1fed8b9e924d927613cde90b46819adde9c6c993` |
+
+Every returned runtime file matched the uploaded source: 96 for ask-bob and 94
+for bob-worker. No previous runtime file was missing. The prior closures matched
+the candidate except for the two fixed modules. Live HTTP checks returned 204
+for ask-bob OPTIONS and 401 for unauthenticated POST to both endpoints.
+[Pages run 38955493276](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38955493276)
+successfully published the merge.
+
+No database migrations, prompt/model configuration changes or user project writes
+were part of this release. Existing saved changes and historical recovery messages
+were retained. A fresh ordinary-member/model continuation after this deployment
+has not been exercised; source/readback, deterministic regressions and transport
+checks do not substitute for that acceptance.
