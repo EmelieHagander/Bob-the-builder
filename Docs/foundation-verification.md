@@ -3110,3 +3110,53 @@ remains a semantic acceptance concern: this technical fix does not establish
 that Bob will finish without another “continue”. Task/todo text/status quality,
 the drawing against the original mockup and full-chain cost also remain in
 [State](bob-delivery-flow.md#state).
+
+## Bob visible status and loading — 2026-10-17
+
+[PR #263](https://github.com/EmelieHagander/Bob-the-builder/pull/263) keeps
+automatic work status above the composer while older messages scroll. Activity,
+confirmed save count and the server's last activity time remain visible beside
+Stop/Reconnect. A failed status read reports the connection problem. Initial
+conversation loading, including member lookup, has a 20-second deadline; retry
+preserves the draft and fences late completion. Older-page reads are bounded too.
+The [conversation owner](ask-bob-conversations.md#visible-work-status-and-bounded-loading)
+owns these semantics.
+
+Tested source `6b857b308796bb174b42151207bb92d658791e58`, tree
+`40cda3899489b4fba8c3a53b753fbb5abcaf2e71`, merged as
+`5a7d74691e82e94da1ee34b834ac2c43d2a715c6` with that exact tree.
+[CI 39039043664](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39039043664)
+passed every recorded step: full tests, vocabulary, Edge checks, production/live
+builds, PWA and all connected browser flows. The chat flow passes slow member
+lookup, timeout/late completion/retry, actual older-history scrolling, status-only
+polling, connection recovery, preserved reading position/draft, completion, Stop
+and reset at 320/390/1280 px. All three status screenshots and the 320 px timeout
+image were directly inspected; artifact SHA-256
+`f5459ac81977c67715ef0f85fb818a0b8333bbf1359f98af7d08c574a43c47c3`.
+The older-reading fixture opens enough history to exceed the follow-at-end
+threshold and waits for pagination anchoring before testing updates. There was
+no local browser pass. The production build, vocabulary/PWA checks and 18 focused
+history/transcript/deadline tests also pass locally.
+
+[Pages 39040416910](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39040416910)
+published the merge. Public HTML/JavaScript/CSS were read back from the
+[Bob app](https://emeliehagander.github.io/Bob-the-builder/):
+`assets/index-BJeglht3.js`, SHA-256
+`0a66004d286c94e34bf91138bfa4a5d960a1adf2ec3cdb28aa71eeb32bce4082`;
+CSS `assets/index-DTtMn9DB.css`, SHA-256
+`be057f8490ac58fd6f2fdd85f785754bb3e0b89e52122d507635c1ba96023f50`.
+The bundle contains the new status/loading labels, older-message action and
+correct Supabase project URL; CSS contains the persistent status layout. This
+is public asset verification, not the owner's actual phone acceptance.
+
+This correction publishes no Edge function, database migration, AI definition or
+model setting and submits no owner/model request. The preceding continuation
+policy and GPT-5.4/high selection are retained. Read-only inspection found both
+ordinary owner tests technically completed, with saved replies. The construction
+test still delivered no new CAD: its reply reports 25 instances against the
+24-instance annotation boundary, followed by a separate exact-request
+`construction_not_ready` notice. The request remains `needs_data`. That later
+notice also exposes internal recovery instructions; language and receipt-bound
+status quality remain acceptance concerns. Creating a future Task does not by
+itself complete the delegated CAD work. Keep those open actions in
+[State](bob-delivery-flow.md#state); this UI release does not close them.

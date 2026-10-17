@@ -292,14 +292,16 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg (2026-10-17):** ladda om appen, öppna det befintliga
-våningssängssamtalet och låt beställaren fortsätta från den sparade konstruktionen.
-Pröva snabb inläsning, äldre meddelanden och fortsatt behörigt arbete genom
-nästa konstruktions-/CAD-gräns enligt
-[återspelnings- och historikreleasen](foundation-verification.md#bob-history-replay-release-2026-10-17).
-Behovet av en extra ”fortsätt” ska fortfarande bedömas som modellbeteende;
-kraschfixen ersätter inte verklig medlemsacceptans. Uppgifts-/todoändringens
-textkvalitet och status ingår fortfarande i acceptansen. GPT-5.4/high behålls;
+**Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
+det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,
+automatisk synlig arbetsstatus och återförsök enligt
+[status- och laddningsreleasen](foundation-verification.md#bob-visible-status-and-loading--2026-10-17).
+Fortsatt konstruktionsacceptans ska visa att ett ordinärt format-/uppdelningshinder
+leder till fortsatt behörigt arbete, i stället för bara en ny Task och ett avslut.
+Pröva att ritningsnotiser speglar exakt begäran och sparat resultat med begripligt
+språk; råa interna återhämtningsinstruktioner hör inte hemma i ägarsvaret.
+Behovet av en extra ”fortsätt”, uppgifts-/todotextens kvalitet och status ingår
+fortfarande i acceptansen. GPT-5.4/high behålls;
 modellbyte förblir uppskjutet tills resultatet kan bedömas.
 [Konversationsägaren](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
 äger fortsatt arbete och den redan aktiverade policygränsen enligt
