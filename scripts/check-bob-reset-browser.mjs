@@ -362,6 +362,10 @@ try {
     await drawer.getByRole('button',{name:'Stop',exact:true}).waitFor({state:'hidden'})
     assert.equal(cancelCalls,3)
     sendMode = 'normal'
+    // Stop queues a project refresh on close. Start with a fully loaded drawer
+    // so the following race pauses a reopening read, not its initial history load.
+    await page.reload(); drawer = await open()
+    await drawer.locator('button:enabled', {hasText:'New conversation'}).waitFor()
     // A slow read started by reopening must not overwrite a newly sent answer.
     const freshBefore = await drawer.getByText('FRESH ANSWER', {exact:true}).count()
     await drawer.getByRole('button', {name:'Close Ask bob',exact:true}).click()
