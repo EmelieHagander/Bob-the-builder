@@ -85,6 +85,34 @@ def main():
         with Image.open(BytesIO(raw)) as image:
             if sum(image.convert('L').histogram()[:200]) < 16:
                 raise RuntimeError("CAD returned an unreadable preview")
+    # Exercise the old failure boundary and actual sheet pagination in production.
+    large={**recipe,'assembly_id':'deployment.paged','views':['front'],
+           'definitions':[{'id':'block','primitive':'box','material_ref':None,'x_mm':10,'y_mm':20,'z_mm':30}],
+           'instances':[{'id':f'part{i:03}','definition_id':'block','placement':{'x':(i%16)*20,'y':0,'z':(i//16)*50,'rx':0,'ry':0,'rz':0}} for i in range(128)]}
+    large_started=time.monotonic()
+    paged=request({'recipe':large,'drawing_source':source},os.environ['BOB_CAD_TOKEN'])
+    large_elapsed=time.monotonic()-large_started
+    notes=paged['manifest']['annotations']['views']['front']
+    if (paged['manifest'].get('drawing_source')!=source or notes.get('coverage')!='complete'
+        or [p['instance_id'] for p in notes['parts']]!=[i['id'] for i in large['instances']]):
+        raise RuntimeError('Large drawing dropped or changed saved parts')
+    page_keys={'front','front.sheet2','front.sheet3','front.sheet4'}
+    if set(paged['previews'])!=page_keys or set(paged['manifest']['previews'])!=page_keys:
+        raise RuntimeError('Large drawing omitted review sheets')
+    large_svg=base64.b64decode(paged['files']['front'],validate=True)
+    large_hash=hashlib.sha256(large_svg).hexdigest()
+    if large_hash!=paged['manifest']['exports']['front']['sha256']:
+        raise RuntimeError('Large SVG hash mismatch')
+    if len([e for e in ET.fromstring(large_svg) if e.get('id','').startswith('DrawingPage')])!=4:
+        raise RuntimeError('Large SVG omitted numbered sheets')
+    for key in page_keys:
+        raw=base64.b64decode(paged['previews'][key],validate=True)
+        metadata=paged['manifest']['previews'][key]
+        if hashlib.sha256(raw).hexdigest()!=metadata['sha256'] or metadata['source_sha256']!=large_hash:
+            raise RuntimeError('Review sheet is not bound to the full saved SVG')
+        with Image.open(BytesIO(raw)) as image:
+            if max(image.size)!=1024 or sum(image.convert('L').histogram()[:200])<100:
+                raise RuntimeError('Review sheet is not visible at full preview resolution')
     for body, token, status in [({}, "", 401), ({}, "invalid-smoke-token", 401),
                                 ({}, os.environ["BOB_CAD_TOKEN"], 422)]:
         try:
@@ -108,6 +136,7 @@ def main():
         else: raise RuntimeError('Wireframe accepted an unauthorized or invalid request')
     summary = (f"CAD smoke test passed: STEP + four SVGs + four source-bound PNG previews, native wireframe edges, hashes, dimensions and authorization.\n\n"
                f"First authenticated request: {elapsed:.2f} seconds.\n\n"
+               f"128-part drawing: four full-resolution source-bound sheets in {large_elapsed:.2f} seconds.\n\n"
                f"Set Supabase Edge secret `BOB_CAD_URL` to `{endpoint}`.\n"
                "Set `BOB_CAD_TOKEN` to the same runtime secret stored in GitHub.\n"
                "This does not yet verify Bob's authenticated project-save journey.\n")

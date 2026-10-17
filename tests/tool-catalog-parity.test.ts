@@ -14,7 +14,7 @@ test('historical policy keeps seed parity and current policy matches only the th
  let historical:ToolPolicy[]|undefined
  const pg=await projectSchema(async(db,name)=>{
   if(name===publication)historical=(await db.query<ToolPolicy>(policySql)).rows
- })
+ },'20261017102000_bob_continuation_catalog.sql')
  try{
   assert(historical,'the pre-publication policy boundary was inspected')
   assert.deepEqual(historical,sorted(seed),'the frozen policy still exactly represents its historical migration boundary')

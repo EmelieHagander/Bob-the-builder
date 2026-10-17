@@ -292,6 +292,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Pågående CAD-publicering (2026-10-17):** verifiera och publicera
+[sidindelad märkning](foundation-verification.md#paged-cad-annotations--2026-10-17)
+i ordningen testad PR → Modal med verkligt flerbladsprov → båda Bob-funktionerna
+→ enbart katalogmigrationen för sidindelning. Den separata 24-delsspärren ska
+ersättas av automatisk presentation av den oförändrade konstruktionen.
+Beställarens nästa vanliga ritningsprov måste fortfarande använda aktuell exakt
+konstruktionsrevision och återläsa ett faktiskt sparat ritningskvitto.
+
 **Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
 det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,
 automatisk synlig arbetsstatus och återförsök enligt

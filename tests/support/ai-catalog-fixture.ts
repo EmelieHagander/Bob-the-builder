@@ -225,6 +225,21 @@ for(const migration of migrations){
   agent.metadata={...published(agent.metadata),work_completion_version:2,work_allowance_version:1};versions.set(agent.key,versions.get(agent.key)!+1)
  }
 
+ const pageManuals=source.match(/\$cad_page_manuals\$([\s\S]+?)\$cad_page_manuals\$/)
+ if(pageManuals){
+  const manuals=JSON.parse(pageManuals[1]),box=seed.find(row=>row.key==='bob.tools')
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata;row.metadata={...rest,publication:'cad-annotation-pages-v1'};versions.set(row.key,versions.get(row.key)!+1)}
+  for(const patch of manuals){
+   const row=seed.find(row=>row.key==='tools.'+patch.name)
+   row.definition.additional_description=patch.mode==='replace'?patch.text:(row.definition.additional_description??'')+'\n\n'+patch.text
+   publish(row)
+   const policy=box.definition.catalog.find((p:any)=>p.name===patch.name)
+   policy.how_to=patch.mode==='replace'?patch.text:(policy.how_to??'')+'\n\n'+patch.text
+  }
+  publish(box)
+  const feedback=JSON.parse(source.match(/\$cad_page_feedback\$([\s\S]+?)\$cad_page_feedback\$/)![1]),row=seed.find(row=>row.key===feedback.key)
+  row.content=feedback.content;publish(row)
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

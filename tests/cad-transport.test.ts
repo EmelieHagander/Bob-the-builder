@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createCadTransport} from '../supabase/functions/_shared/cad-transport.ts'
-import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
+import {cadPreviewKeys,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 const recipe:CadAssemblyRequest={contract_version:1,units:'mm',assembly_id:'fixture',definitions:[{id:'part',primitive:'box',x_mm:10,y_mm:20,z_mm:30,material_ref:null}],instances:[{id:'one',definition_id:'part',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front']}
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jx1sAAAAASUVORK5CYII='
 const hash=async(encoded:string)=>Buffer.from(await crypto.subtle.digest('SHA-256',Buffer.from(encoded,'base64'))).toString('hex')
@@ -36,4 +36,25 @@ test('construction envelope preserves recipe and refuses a different source revi
  assert.equal((await render(recipe,source)).manifest.drawing_source.revision,3)
  p.manifest.drawing_source={...source,revision:2}
  await assert.rejects(render(recipe,source),/cad_construction_source_mismatch/)
+})
+test('every numbered sheet is required, hash checked and retained for independent review',async()=>{
+ const r=structuredClone(recipe),p:any=await packet()
+ r.instances=Array.from({length:33},(_,i)=>({...structuredClone(recipe.instances[0]),id:'part'+i.toString().padStart(3,'0')}))
+ p.manifest.instances=r.instances.map(i=>({...p.manifest.instances[0],id:i.id}))
+ p.previews['front.sheet2']=png
+ p.manifest.previews['front.sheet2']={...p.manifest.previews.front,file:'front.sheet2.png'}
+ const fetcher=(async()=>new Response(JSON.stringify(p))) as typeof fetch
+ const render=createCadTransport('https://fixture.invalid/render','fixture',fetcher)
+ const saved=await render(r)
+ assert.deepEqual(Object.keys(saved.previews!),cadPreviewKeys(r))
+ assert.equal(saved.manifest.preview_metadata['front.sheet2'].source_sha256,await hash(p.files.front))
+ for(const change of [(v:any)=>delete v.previews['front.sheet2'],(v:any)=>v.previews.extra=png,
+   (v:any)=>v.manifest.previews['front.sheet2'].source_sha256='0'.repeat(64),
+   (v:any)=>v.previews['front.sheet2']='not png']){
+  const bad=structuredClone(p);change(bad)
+  await assert.rejects(createCadTransport('https://fixture.invalid/render','fixture',(async()=>new Response(JSON.stringify(bad))) as typeof fetch)(r),/cad_previews_missing|invalid_cad_preview/)
+ }
+ const boundary={...r,instances:Array.from({length:512},(_,i)=>({...r.instances[0],id:'p'+i})),views:['front','right','top','isometric'] as CadAssemblyRequest['views']}
+ assert.equal(cadPreviewKeys(boundary).length,64)
+ assert(cadPreviewKeys(boundary).includes('isometric.sheet16'))
 })

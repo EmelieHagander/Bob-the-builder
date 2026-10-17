@@ -45,7 +45,11 @@ jobs:
       - name: Run real build123d worker tests
         env:
           PYTHONPATH: cad-worker
-        run: python -m unittest cad-worker/test_worker.py cad-worker/test_wireframe.py
+        run: python -m unittest cad-worker/test_annotations.py cad-worker/test_worker.py cad-worker/test_wireframe.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cad-annotation-pages
+          path: test-results/cad/
       - uses: actions/setup-node@v4
         with:
           node-version: 24

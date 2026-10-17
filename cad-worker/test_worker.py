@@ -23,6 +23,32 @@ def fixture():
     }
 
 class CadWorkerTest(unittest.TestCase):
+    def test_larger_models_keep_all_parts_and_full_size_sheet_previews(self):
+        import xml.etree.ElementTree as ET
+        for count in (25,128):
+            r=fixture();r['views']=['front']
+            r['definitions']=[{'id':'block','primitive':'box','material_ref':None,'x_mm':10,'y_mm':20,'z_mm':30}]
+            r['instances']=[{'id':f'part{i:03}','definition_id':'block','placement':{'x':(i%16)*20,'y':0,'z':(i//16)*50,'rx':0,'ry':0,'rz':0}} for i in range(count)]
+            with self.subTest(count=count),tempfile.TemporaryDirectory() as tmp:
+                result=render_assembly(r,tmp,{'artifact_id':'11111111-1111-4111-8111-111111111111','revision':7})
+                self.assertEqual(result['annotations']['coverage'],'complete')
+                self.assertEqual(len(result['annotations']['views']['front']['parts']),count)
+                keys=['front']+[f'front.sheet{i}' for i in range(2,math.ceil(count/32)+1)]
+                self.assertEqual(list(result['previews']),keys)
+                svg=Path(tmp,'front.svg').read_bytes()
+                for key in keys:
+                    self.assertEqual(result['previews'][key]['source_sha256'],hashlib.sha256(svg).hexdigest())
+                    with Image.open(Path(tmp,key+'.png')) as image:
+                        self.assertEqual(max(image.size),1024)
+                        self.assertGreater(sum(image.convert('L').histogram()[:200]),100)
+                    self.assertEqual(result['previews'][key]['sha256'],hashlib.sha256(Path(tmp,key+'.png').read_bytes()).hexdigest())
+                # Persist reviewable synthetic pages in CI; no owner data.
+                import os, shutil
+                if os.environ.get('CI'):
+                    output=Path('test-results/cad');output.mkdir(parents=True,exist_ok=True)
+                    for key in keys: shutil.copy(Path(tmp,key+'.png'),output/f'{count}-{key}.png')
+                    shutil.copy(Path(tmp,'front.svg'),output/f'{count}-front.svg')
+
     def test_annotated_views_identify_exact_instances_and_dimensions_before_hashing(self):
         import xml.etree.ElementTree as ET
         r=fixture()

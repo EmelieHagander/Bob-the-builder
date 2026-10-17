@@ -11,6 +11,11 @@ export type CadDrawingSource={artifact_id:string;revision:number}
 export type CadClearance={id:string;first_id:string;second_id:string;min_mm:number}
 export type CadMotion={id:string;moving_ids:string[];obstacle_ids:string[];delta:{x:number;y:number;z:number}}
 export type CadAssemblyRequest={contract_version:1;units:'mm';assembly_id:string;definitions:CadPrimitive[];instances:CadInstance[];views:CadView[];clearances?:CadClearance[];motions?:CadMotion[]}
+/** Presentation pages do not divide or alter the saved construction. */
+export const CAD_PARTS_PER_PAGE=32
+export function cadPreviewKeys(recipe:CadAssemblyRequest){
+ return recipe.views.flatMap(view=>Array.from({length:Math.ceil(recipe.instances.length/CAD_PARTS_PER_PAGE)},(_,i)=>i===0?view:`${view}.sheet${i+1}`))
+}
 export type CadAssemblyResult={contract_version:1;engine:{name:'build123d';version:'0.13.0';units:'mm'};assembly_id:string;
   bounding_box_mm:{min:number[];max:number[];size:number[]};definitions:CadPrimitive[];
   instances:{id:string;definition_id:string;bounding_box_mm:{min:number[];max:number[];size:number[]}}[];
@@ -70,7 +75,7 @@ function checkedGeometry(v:unknown,r:CadAssemblyRequest){
   return true
 }
 function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<string,any>) {
- if(!obj(value)||!exact(value,['version','coverage','views'])||value.version!==1||value.coverage!==(recipe.instances.length<=24?'complete':'partial')||!obj(value.views)
+ if(!obj(value)||!exact(value,['version','coverage','views'])||value.version!==1||value.coverage!=='complete'||!obj(value.views)
   ||Object.keys(value.views).sort().join(',')!==[...recipe.views].sort().join(','))return false
  const definitions=new Map(recipe.definitions.map(d=>[d.id,d]))
  const parts=[...recipe.instances].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0).map((i,index)=>{
