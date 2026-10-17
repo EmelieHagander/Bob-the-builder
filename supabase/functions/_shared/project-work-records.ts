@@ -73,7 +73,7 @@ export function applyWorkDeltaV2(resource: WorkResource, record: Record<string, 
   }
   return result
 }
-function display(s: WorkSnapshot) {
+function display(s: WorkSnapshot): Record<string, unknown> {
   const fields = contentFields[s.resource] ?? (s.resource === 'people' ? ['name', 'initials', 'role'] : s.resource === 'plan_steps' ? ['title', 'goal', 'state', 'notes'] : s.resource === 'components' ? ['name', 'description', 'condition', 'truth'] : ['name', 'quantity', 'unit', 'status'])
   return { ...pick(s.record, fields), ...(s.record.archived !== undefined ? { archived: s.record.archived } : {}), ...(s.record.archived_at !== undefined ? { archived: s.record.archived_at !== null } : {}), ...(s.record.phase ? { phase: s.record.phase } : {}), ...(s.record.status ? { status: s.record.status } : {}), ...(s.resource === 'measurements' ? { has_source_image: !!s.record.source_media_id } : {}), ...Object.fromEntries(Object.entries(s.relations).map(([k, rows]) => [k === 'instructions' ? 'instruction_steps' : k, Array.isArray(rows) ? rows.map((r: any) => k === 'needs' ? pick(r, ['kind', 'label', 'notes', 'ready']) : k === 'dependencies' ? pick(r, ['prerequisite_task_name', 'prerequisite_step_title', 'note', 'satisfied']) : k === 'instructions' ? { ...pick(r, ['title', 'instructions', 'is_checkpoint', 'required']), completed: r.completed_at !== null } : ({ name: r.name ?? r.title })) : k === 'readiness' && rows ? { ...pick(rows, ['readiness_state', 'blocker_count', 'review_note']), blockers: (rows.blockers ?? []).map((b: any) => pick(b, ['kind', 'label'])) } : rows])) }
 }
