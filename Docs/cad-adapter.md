@@ -30,10 +30,12 @@ This behavior is enabled only for new execution identities with
 reads and role/consequence preparations so their own later writes cannot rewrite
 an earlier model input. Version 1 and older jobs retain their operation sequence;
 write authority and source checks still run inside the actual SQL command.
-Deploy both Bob endpoints before publishing
+Both Bob endpoints were deployed and read back before activation of
 `20261017180143_cad_source_renewal_catalog.sql`, which advances only the CAD tool
-instruction and its toolbox manual. Deployment and owner acceptance are recorded
-in [verification](foundation-verification.md#cad-source-renewal--2026-10-17).
+instruction and its toolbox manual. The installed migration is named
+`cad_source_renewal_catalog`; compare name/content rather than filename timestamps.
+Deployment evidence and the remaining owner acceptance are recorded in
+[verification](foundation-verification.md#cad-source-renewal--2026-10-17).
 
 ## First contract
 

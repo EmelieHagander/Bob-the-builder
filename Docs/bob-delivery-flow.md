@@ -292,16 +292,15 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa CAD-grind (2026-10-17):** verifiera rättningen av säker källförnyelse
-och återupptagning, publicera båda Bob-tjänsterna och aktivera deras två matchande
-katalogdefinitioner. Våningssängens begäran är bunden till konstruktion 3 medan
-källan nu är 5. Ägarförsöket nekades version 4; den senare rollskrivningen ändrade
-en tidigare läsning av ändringsarbete och bröt återupptagningen. Den automatiska
-ritningskörningen slutade också med ett tekniskt fel vars exakta orsak inte
-bevarades i diagnostiken. [CAD-kontraktet](cad-adapter.md#explicit-source-renewal--2026-10-17)
-äger rättningen. [Releasebevis](foundation-verification.md#cad-source-renewal--2026-10-17)
-och beställarens vanliga Bob-test ska visa samma begäran, bevarade krav, sparad
-ritning och återläsning.
+**Nästa CAD-grind (2026-10-17):** kör beställarens vanliga Bob-test på samma
+väntande begäran för våningssängen. Bob ska läsa och kontrollera samma konstruktions
+aktuella version (senast observerad 5), uttryckligen förnya begärans källversion
+och bevara alla krav. Verifiera oberoende granskning, sparad ritning och återläsning
+efter omladdning utan dubbla uppdrag eller förlorade resultat. Tekniska fixturer
+ersätter inte detta modell-/CAD-prov. [CAD-kontraktet](cad-adapter.md#explicit-source-renewal--2026-10-17)
+äger beteendet och [releasebeviset](foundation-verification.md#cad-source-renewal--2026-10-17)
+äger den avslutade publiceringen/aktiveringen. Om det äldre automatiska felet
+återkommer behövs innehållsfri diagnostik för dess tidigare obevarade undantag.
 
 **Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
 det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,

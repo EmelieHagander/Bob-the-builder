@@ -3193,7 +3193,7 @@ The two matching CAD manuals in `bob.tool_catalog` changed; executable schemas s
 <a id="cad-source-renewal--2026-10-17"></a>
 ## CAD source renewal — 2026-10-17
 
-**Status: implementation and preflight; publication and owner acceptance pending.**
+**Status: deployed and activated; ordinary owner/model/CAD acceptance pending.**
 The exact owner turn `d94d90b6-6675-40b4-b754-e2fc8e043608` attempted the existing
 request `4d7de67b-ed9b-4249-9873-a5c776207824` with construction revision 4,
 while the saved request pinned revision 3. Its later role write saved revision 5.
@@ -3210,4 +3210,53 @@ renewal, preserved requirements, discarded old candidates/retries, stale/missing
 source and authority rejection, historical replay, actual SQL role revision and
 idempotent reconstruction. Catalog publication advances exactly two definitions;
 models, reasoning, work policy and historical manifests stay unchanged.
-The ordinary owner/model/CAD drawing test remains required after publication.
+Release evidence:
+
+- Tested head `f462ad37dbdd6bb1656056775a53fb943c7d27c3`, tree
+  `8d131bf0a7458c7e41938094f2124b3856642341`.
+  [PR #265](https://github.com/EmelieHagander/Bob-the-builder/pull/265) merged as
+  `08366db79a603218553c547ab770679906cd7048` with that exact tree.
+  [CI 39057511898](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39057511898)
+  passed all 1,394 tests, Edge checks, production build and browser checks.
+  CAD adapter `39057511951` and lineage concurrency `39057511912` also passed.
+- Both Edge functions were published before activation. All 98 transitive source
+  files matched the tested head before upload; installed `ask-bob` **129**
+  (`verify_jwt=true`) returned 96 exact source files, and `bob-worker` **97**
+  (`verify_jwt=false`, own authentication) returned 94. Only type-only imports
+  were absent from bundle readback. Their bundle SHA-256 values are
+  `93dff79d197ed8a75e9041a6071032f58938fea54f1ff06765c3a9194d987fba`
+  and `ba13bfb1758c5ab5bd0bdd13f10399353e6e0de1d6696b32b872dd7a7a412c55`.
+  Unauthenticated POSTs returned 401 at both endpoints.
+- [Pages 39066130466](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39066130466)
+  published the exact merge successfully. The application and both JS/CSS assets
+  returned HTTP 200; frontend bytes retain the prior status/loading release.
+  Post-merge CAD adapter `39066130332` and
+  [Live Bob release check 39066130496](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39066130496)
+  passed. The latter exercised actual Auth, member-scoped PostgREST, OpenAI tool
+  use/source disclosure, non-member 403, retired endpoint 410, and the separate
+  guest image/knowledge fixture; it did not generate the owner's bed drawing.
+- Only `cad_source_renewal_catalog` was applied, registered as
+  **`20261017201919`**. Its single stored statement exactly matches source
+  `20261017180143_cad_source_renewal_catalog.sql`, SHA-256
+  `8b4ad2fbeba280fe773d966d6c650c728b5984b2b7d0cce1ae81a33aea14b4f2`.
+  Do not reapply by comparing filename timestamps.
+- Readback changed exactly **two of 290** active definition IDs/payload hashes:
+  `bob.tools` 12→13 and `tools.design_project_cad` 12→13, both publication
+  `cad-source-renewal-v1`. All other active definitions remained identical.
+  Resolved manifest `9c169b50-54c4-4605-be35-e90a8a3a9332` contains 290 definitions.
+  Both prior manifests (`1eb0889f-6eb3-4983-8a13-a1e13d1e56ba`,
+  `63efc114-9458-4a29-8776-abd41aeec423`) retained their payload/content hashes.
+- Model/settings hashes stayed `3017d0f9b423562788cc987d6ceb1bac` /
+  `d71fb90595904ce11791b01aa559d8b8`; the resolved Bob profile remains
+  **GPT-5.4/high**. Contract version 3 remains `work_completion_version=2`,
+  `work_allowance_version=1`, with its existing definition ID unchanged.
+
+The real-schema fixture proves current-source validation → reviewed candidate →
+atomic CAD save → exact readback on the same request with preserved requirements.
+Its renderer/reviewer are synthetic. The ordinary owner/model/CAD drawing test
+remains required: use the pending bed request and explicitly check/adopt its
+current construction revision (last observed 5), then verify independent review,
+saved drawing and reload. No owner construction/request was manually changed or
+new owner model turn submitted by this release. The older automatic failure's
+unretained underlying exception remains unknown; capture content-free diagnostic
+detail if it recurs.
