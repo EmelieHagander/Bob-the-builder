@@ -2693,3 +2693,58 @@ were part of this release. Existing saved changes and historical recovery messag
 were retained. A fresh ordinary-member/model continuation after this deployment
 has not been exercised; source/readback, deterministic regressions and transport
 checks do not substitute for that acceptance.
+
+
+## Write conflicts and sequential work — hosted release 2026-10-17
+
+[PR #259](https://github.com/EmelieHagander/Bob-the-builder/pull/259) corrects the
+October 16 run that saved Task text, then repeatedly retried a stale status write.
+Expected SQLSTATE `40001` application conflicts were retried inside PostgREST,
+turning a recoverable conflict into an unknown outcome. The [write contract](ask-bob-writes.md#sequential-work-changes-and-conflict-recovery--2026-10-16)
+owns transport mapping, fresh immutable read refs and honest write-paused feedback.
+
+All 1,280 local tests, build and vocabulary checks passed; the final focused
+work-record suite passed all 20 cases. [CI 704](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38965908103)
+and [PostgreSQL concurrency](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38965908262)
+passed, including Edge type checking and every required browser gate.
+Merge `9e1ce03683abeff2a8ede7fbf9c804e29536487b` has the exact tested tree
+`6977a80d0143234b812763c5a5d4a99583b45002`.
+[Pages publication](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/38968438456)
+completed successfully. The initial function upload returned no outcome and was
+interrupted; live version/hash inspection confirmed it had not installed before
+the successful retry. Neither migration nor project writes were repeated.
+
+`20261016205152_bob_write_conflict_transport.sql` was applied as hosted ledger
+`20261016211843 / bob_write_conflict_transport`, source SHA-256
+`2023038c6d4a3ce066886c53e35aebe91a4403cda29ba21e008213914fe3712f`.
+Live catalog inspection confirms all five public writer adapters are PL/pgSQL,
+map aborted conflicts to PT409, retain invoker security and empty search paths,
+and remain executable by authenticated callers, not anon or service_role.
+Private domain commands and their authority were not replaced.
+
+A hosted SQL fixture exercised normal authenticated project authority, a
+service-only turn claim, then authenticated writes. It verified three saved
+actions (content, status, a second Task), exact retry, and eleven conflict
+responses across the public routes, including stale bound content and expired
+claims. All fixture Project, Task, turn and receipt changes were deliberately
+rolled back and their absence asserted. This is real database/role proof, not
+an HTTP timing measurement or an ordinary-member OpenAI conversation.
+
+| Runtime | Installed state | Bundle SHA-256 |
+| --- | --- | --- |
+| ask-bob | Version 124, ACTIVE, JWT verification enabled | `9a82ae691b1a531d5a07bc955b26d858c080201b6f8e97e06c1846e709a67adf` |
+| bob-worker | Version 92, ACTIVE, existing custom capability authentication / JWT verification disabled | `da767245bb1469adc6683e89674cb26f1895f99a6570e977a5c0c002d02353fa` |
+
+All returned runtime source files matched the uploaded tested source exactly:
+96 for ask-bob and 94 for bob-worker. Bundling omitted type-only/unreferenced
+files as in the previous release. Live OPTIONS returned 204; unauthenticated
+POST returned 401 for both functions. No Bob jobs were active before deployment.
+
+Current catalog `627f30a8-de42-4706-8dd0-861166510503` exposes work content,
+create, relation, readiness and state tools plus plan focus/Task links at schema
+version 1. The work-record catalog and plan-link core/catalog migrations are
+present in the hosted ledger; this supersedes the older installation blockers.
+This release did not change the catalog or model settings. No real user project
+content or historical chat was edited. Fresh ordinary-member/model continuation
+with these new runtime versions remains an acceptance check; deterministic,
+SQL-role and source-readback proof do not substitute for it.

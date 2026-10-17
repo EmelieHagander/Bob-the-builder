@@ -94,7 +94,7 @@ rewritten by installation.
 
 ### Third implementation: work records and their relations
 
-**Core and both runtimes installed through PR #256; catalog activation blocked as of 2026-10-15.** [Release readback](foundation-verification.md#server-bound-work-records--2026-10-15-readback) records the connector failure and the inactive tools. `project-work-records.ts` adds
+**Technically active, verified 2026-10-17.** The [current readback](foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17) supersedes the catalog blocker in the [October 15 installation record](foundation-verification.md#server-bound-work-records--2026-10-15-readback). Ordinary-member/model acceptance remains separate. `project-work-records.ts` adds
 `read_work_context`, `edit_work_record`, `create_work_record`,
 `change_work_relation`, `change_work_state` and `change_task_readiness`. These replace thirteen legacy
 writes for Area/Task content, measurements and archive/restore, Task status and
@@ -125,7 +125,9 @@ then the generated catalog; a source commit alone does not activate these tools.
 
 ### Sequential work changes and conflict recovery — 2026-10-16
 
-Source correction (hosted proof is recorded separately in foundation verification):
+Deployed through [PR #259](https://github.com/EmelieHagander/Bob-the-builder/pull/259);
+[hosted verification](foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17)
+records the migration, both runtime readbacks and acceptance limits.
 all five active public writer routes, v16–v20, translate an aborted serialization
 or deadlock into `PT409`. PostgREST must return that conflict once instead of
 retrying the same stale payload internally. The exception rolls back the entire
@@ -153,7 +155,7 @@ durable readback replay and transaction rollback at all five public routes.
 
 ### Fourth implementation: current plan focus and Task links
 
-**Source implementation; not deployed.** `project-plan-links.ts` adds
+**Technically active, verified 2026-10-17.** [Current readback](foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17) confirms the installed core, runtime and catalog; ordinary-member/model acceptance remains separate. `project-plan-links.ts` adds
 `read_plan_link_context`, `change_plan_focus` and `change_plan_task_link`.
 The reader exposes current approved plan/Step/Task content, scope labels and
 opaque refs. The server retains the exact plan head, complete Task/Step records
@@ -178,9 +180,9 @@ identities remain outside this slice.
 | Family | Current boundary / remaining work |
 | --- | --- |
 | Description, solution content, alternative creation, selection, evidence | Technically deployed in #254/#255; real member/model acceptance remains. |
-| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation core/runtime installed; catalog blocked. Thirteen legacy write contracts are disabled only after activation. |
+| Areas, Tasks, measurements, build days, assignments, schedule/phase/basic lifecycle | Third implementation core/runtime/catalog verified active. Thirteen legacy write contracts are replaced for fresh manifests; member/model acceptance remains. |
 | Task readiness | Third implementation binds dependencies, checkpoint selections and need changes to complete Task reads; new needs start unresolved and canonical confirmation rejects blockers. |
-| Living plan | Compiler/edit/save already retain server candidates. Focus/Task links are implemented in the fourth slice, awaiting release. Decisions, evidence links and nested proposal identities still need bound actions. |
+| Living plan | Compiler/edit/save already retain server candidates. Focus/Task links are active in the fourth slice, with member/model acceptance still separate. Decisions, evidence links and nested proposal identities still need bound actions. |
 | Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
 | Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |
 | Image and drawing links | Attachment/detachment, finalization, drawing links and lifecycle choices still need complete bound source/target reads. |

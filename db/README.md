@@ -1080,8 +1080,9 @@ rules and receipts. Task-assignee/event-Task parent triggers also serialize dire
 relation writes with Bob replacements. This does not grant new project authority.
 Install core, both runtime endpoints, then `20261014121841_ai_work_records_catalog.sql`.
 The separate publication retires thirteen legacy writes only for fresh manifests.
-Core and both runtimes are installed; catalog publication is blocked by the
-Supabase connector. See [readback](../Docs/foundation-verification.md#server-bound-work-records--2026-10-15-readback).
+Core, both runtimes and catalog are verified installed as of 2026-10-17.
+[Current readback](../Docs/foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17)
+supersedes the connector blocker in the [October 15 record](../Docs/foundation-verification.md#server-bound-work-records--2026-10-15-readback).
 See [write ownership](../Docs/ask-bob-writes.md) for coverage and remaining families.
 
 ### Server-bound plan links — source extension 2026-10-15
@@ -1097,6 +1098,9 @@ manifests and retires only the two replaced legacy contracts. This slice does no
 change plan approval/evidence or claim hosted/model acceptance.
 
 ### Bob writer conflict transport — source correction 2026-10-16
+
+Applied as hosted ledger `20261016211843 / bob_write_conflict_transport`; both
+runtimes are deployed and verified on 2026-10-17. See [release evidence](../Docs/foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17).
 
 `20261016205152_bob_write_conflict_transport.sql` replaces only the public
 v16–v20 writer adapters, preserving signatures, invoker security, empty search
