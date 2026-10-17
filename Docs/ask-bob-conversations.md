@@ -44,6 +44,41 @@ failure with saved receipts preserved. No model or reasoning tier changes in thi
 release. [Hosted release evidence](foundation-verification.md#bob-continuation-release-2026-10-17)
 records the installed runtime/catalog and the remaining ordinary owner acceptance.
 
+## Recent transcript window and construction-check replay — 2026-10-17
+
+The browser initially requests the latest five transcript rows, with one look-ahead
+row for a stable sequence cursor. **Show older messages** loads preceding pages
+without replacing the draft or moving the reader to the newest reply. Tail refresh
+retains older pages already opened. Pending/retry state still comes from the latest
+owner turn and its authenticated exact-turn job status, including when independent
+event replies push that owner message outside the visible window.
+
+An account/project-scoped memory cache keeps only the recent preview for up to eight
+projects in the current page session. It is cleared on account changes, sign-out and
+confirmed reset. It is not persistent storage, model memory, permission or current
+job state. A preview can render during revalidation; send/reset actions stay disabled
+until fresh server state is known. A failed sync offers Retry conversation rather
+than silently switching a private member conversation to a device-local history.
+Running durable work polls only content-free job progress and reloads the recent
+transcript on settlement. Older history remains in the database; Bob's existing
+five-message working context, older brief and exact recall are unchanged.
+
+The observed failed construction run stopped with `continuation_changed` at
+`model:ask-bob:22` after its own later material revision. A prior construction check
+had combined checkpointed records with an unrecorded current-source gate; replay
+then changed that earlier tool result and the following paid model fingerprint.
+New execution identities pin `constructionReplayVersion=1`. Their interactive
+construction source check is checkpointed per logical check position: replay uses
+the historical observation, while a later new check reads current state. Existing
+identities without the flag retain their journal sequence. Live caller authority
+and independent fresh CAD render/review gates remain required. No journal mismatch
+guard is disabled and no paid operation is silently retried as a different input.
+
+This code correction does not itself establish semantic owner acceptance: Bob
+still needs to demonstrate that he creates ordinary missing prerequisites instead
+of ending with a statement that they are missing. A replay fix or a faster drawer
+does not prove construction correctness, CAD readiness or complete delegation.
+
 ## Ownership and authority
 
 Drawing-request recovery is owned by [CAD adapter — P2a](cad-adapter.md#p2a--request-recovery). It is deployed through [PR #165](https://github.com/EmelieHagander/Bob-the-builder/pull/165). It adds an intake retry condition across turns and binds completion to the CAD receipt without creating a second transcript or broadening private-thread access.

@@ -1,6 +1,7 @@
 // Run against the production build with CI's dummy live configuration. Only
 // HTTP responses are fixtures: sign-in, navigation, database.ts and React are real.
 import assert from 'node:assert/strict'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
@@ -128,7 +129,7 @@ try {
       if (url.pathname === '/rest/v1/bob_messages') {
         const threadId = url.searchParams.get('thread_id')?.replace(/^eq\./, '') ?? ''
         const history = [...histories.values()].find(item => item.thread === threadId)
-        return respond({ json: history ? history.messages.filter(row => row.delivery_state === 'completed') : [] })
+        return respond({ json: history ? bobHistoryRows(history.messages.filter(row => row.delivery_state === 'completed'), url) : [] })
       }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') return respond({ json: null })
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })

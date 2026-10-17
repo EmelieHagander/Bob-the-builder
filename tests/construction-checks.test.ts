@@ -1,7 +1,8 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
-import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {createConstructionTools,constructionCurrentReader} from '../supabase/functions/_shared/construction-draft.ts'
+import {createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {designIntent,designIntentPin} from './support/design-intent-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
 
@@ -17,6 +18,44 @@ function fixture(){
  return {draft,catalog}
 }
 const check=(draft:any,catalog:any)=>checkConstruction(draft,catalog,'2026-10-03')
+test('own source revision after a check does not change an earlier paid model input on resume',async()=>{
+ const {draft,catalog}=fixture(),entries:JournalEntry[]=[]
+ const store={entries,save:async(entry:JournalEntry)=>{entries.push(structuredClone(entry))}}
+ let sourceState='current',reads=0,paid=0,allowed=true
+ const run=async()=>{
+  const journal=createBobJournal(store,Infinity)
+  const tools=createConstructionTools({projectId:project,message:'Continue the same construction',unlimitedWork:true,
+   hasAccess:async()=>allowed,read:async()=>structuredClone(draft),readSources:async()=>({project:new Map(),physical:new Map()}),
+   readCatalog:async()=>({projectId:project,status:'ok',record:catalog.get(material+'@1')}),
+   readCurrent:constructionCurrentReader(async()=>{reads++;return {...draft,source_state:sourceState}},journal,1),now:()=>new Date('2026-10-17')})
+  const earlier=await tools.execute('check_construction_draft',{artifact_id:artifact,revision:1})
+  if(earlier.status==='denied')return {earlier,latest:earlier}
+  const reply=await journal.run('model:ask-bob',{toolResult:earlier},async()=>{paid++;return 'Revise the catalog source, then check the construction again.'})
+  assert.match(reply,/check/)
+  sourceState='changed' // a later saved tool revises this checkpoint's material
+  const latest=await tools.execute('check_construction_draft',{artifact_id:artifact,revision:1})
+  return {earlier,latest}
+ }
+ const initial=await run()
+ assert.equal(initial.earlier.status,'checked');assert.equal(initial.latest.status,'conflict')
+ const resumed=await run()
+ assert.deepEqual(resumed,initial,'historical output is identical after its own later write')
+ assert.equal(paid,1,'the earlier paid model result was reused')
+ assert.equal(reads,2,'two logical checks, no extra source read on replay')
+ allowed=false
+ const denied=await run()
+ assert.equal(denied.earlier.status,'denied','current access still fences replay')
+})
+
+test('old execution identities keep live construction checks without inserting a new journal stream',async()=>{
+ const entries:JournalEntry[]=[]
+ const journal=createBobJournal({entries,save:async entry=>{entries.push(entry)}},Infinity)
+ let reads=0
+ const read=constructionCurrentReader(async()=>({revision:++reads}),journal)
+ assert.equal((await read(artifact)).revision,1)
+ assert.equal((await read(artifact)).revision,2)
+ assert.equal(entries.length,0)
+})
 test('construction save identifies missing binding paths so the same request can correct them without a lookup retry',async()=>{
  const {parameterPlan}=await import('./support/cad-parameter-fixture.ts')
  const {draft}=fixture(),message='Save this shelf concept.'

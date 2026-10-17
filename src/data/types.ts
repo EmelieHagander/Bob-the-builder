@@ -223,6 +223,8 @@ export interface TodayTask {
 }
 
 export interface ChatMessage {
+  /** Server transcript position; absent on unsent and device-local messages. */
+  seq?: number
   turnId?: string
   imageIds?: string[]
   deliveryState?: 'pending' | 'failed' | 'completed'

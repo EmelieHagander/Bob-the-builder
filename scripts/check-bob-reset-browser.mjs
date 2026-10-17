@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import { bobHistoryRows } from './bob-history-fixture.mjs'
 
 const base = 'http://127.0.0.1:4181/Bob-the-builder/'
 const api = 'https://pwa-proof.invalid'
@@ -32,6 +33,7 @@ try {
     let cancelMode = 'success', renewMode = 'success', cancelCalls = 0
     const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
+    let historyReads = 0, statusReads = 0
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
@@ -83,6 +85,7 @@ try {
         return respond({json:(h?.messages??[]).filter(m=>m.background).map(m=>({turn_id:m.turn_id,text:'Jag har skickat ritningen till designern. Jag återkommer här när resultatet är granskat.'}))})
       }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
+        statusReads++
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
         return respond({ json: row?.background ? { jobId:row.jobId, status: row.jobStatus ?? (row.delivery_state === 'pending' ? 'running' : row.delivery_state), error: row.error, screen: row.screen??null, writes:row.writes, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
@@ -106,8 +109,10 @@ try {
         return respond({ json: (req.headers().accept ?? '').includes('application/vnd.pgrst.object+json') ? row : row ? [row] : [] })
       }
       if (url.pathname === '/rest/v1/bob_messages') {
+        historyReads++
         const h = [...histories.values()].find(h => h.id === url.searchParams.get('thread_id')?.replace('eq.', ''))
-        const snapshot = structuredClone(h?.messages ?? [])
+        assert(url.searchParams.get('limit'), 'Transcript queries are bounded')
+        const snapshot = structuredClone(bobHistoryRows(h?.messages ?? [], url))
         if (pauseHistory) { pauseHistory = false; historyPaused(); await new Promise(resolve => { releaseHistory = resolve }) }
         return respond({ json: snapshot })
       }
@@ -579,6 +584,45 @@ try {
     assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     sendMode = 'normal'
     // Shared guest must clear only this device; an auth failure is never guest mode.
+    // A cold open fetches five messages; older pages keep the draft and scroll.
+    const pagedHistory = histories.get('A')
+    const backup = structuredClone(pagedHistory)
+    pagedHistory.id = crypto.randomUUID()
+    pagedHistory.messages = Array.from({length:20},(_,i)=>({role:i%2?'assistant':'user',text:`PAGED MESSAGE ${i+1}`,delivery_state:'completed',seq:i+1,turn_id:`page-${Math.floor(i/2)}`}))
+    pagedHistory.next_seq=21
+    await page.reload();drawer=await open()
+    await drawer.getByText('PAGED MESSAGE 20',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('PAGED MESSAGE 1',{exact:true}).count(),0)
+    assert.equal(await drawer.getByText('PAGED MESSAGE 15',{exact:true}).count(),0)
+    await drawer.getByRole('textbox').fill('Keep this draft while reading older messages')
+    for(let i=0;i<3;i++)await drawer.getByRole('button',{name:'Show older messages',exact:true}).click()
+    await drawer.getByText('PAGED MESSAGE 1',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('PAGED MESSAGE 20',{exact:true}).count(),1)
+    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep this draft while reading older messages')
+    assert.equal(await drawer.getByRole('button',{name:'Show older messages',exact:true}).count(),0)
+    await page.screenshot({path:`test-results/bob-history-pages-${viewport.width}.png`})
+    // Remounting shows only the recent in-memory preview while the server read
+    // is delayed. Sending remains disabled until fresh state has been checked.
+    const cachedRead = new Promise(resolve=>{historyPaused=resolve})
+    pauseHistory=true
+    await page.evaluate(()=>window.dispatchEvent(new Event('bob:project-changed')))
+    drawer=await open();await cachedRead
+    await drawer.getByText('PAGED MESSAGE 20',{exact:true}).waitFor()
+    assert.equal(await drawer.getByText('PAGED MESSAGE 1',{exact:true}).count(),0)
+    assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
+    releaseHistory()
+    await drawer.locator('button:enabled',{hasText:'New conversation'}).waitFor()
+    // An active durable job reads progress without retransferring the transcript.
+    const active={role:'user',text:'PAGED ACTIVE WORK',seq:21,turn_id:crypto.randomUUID(),jobId:crypto.randomUUID(),background:true,jobStatus:'running',delivery_state:'pending',updated_at:new Date().toISOString()}
+    pagedHistory.messages.push(active);pagedHistory.next_seq=22
+    await page.reload();drawer=await open()
+    await drawer.getByRole('button',{name:'Stop',exact:true}).waitFor()
+    const beforeHistory=historyReads,beforeStatus=statusReads
+    await page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/bob_job_status')
+    await page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/bob_job_status')
+    assert(statusReads>=beforeStatus+2)
+    assert.equal(historyReads,beforeHistory,'progress polls never reload transcript rows')
+    Object.assign(pagedHistory,backup)
     const beforeGuest = resetCalls
     authMode = 'guest'
     await page.evaluate(key => localStorage.setItem(key, JSON.stringify([{ from: 'user', text: 'LOCAL GUEST CHAT' }])), cache('A'))
