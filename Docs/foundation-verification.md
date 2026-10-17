@@ -2924,3 +2924,94 @@ media readback is zero; image cleanup had already passed through caller APIs.
 No additional paid owner-conversation probe was launched. The next acceptance
 is the owner's ordinary new task-edit turn, including saved text/status readback
 and whether Bob finishes without an extra prompt; see [State](bob-delivery-flow.md#state).
+
+<a id="bob-continuation-release-2026-10-17"></a>
+## Continued delegated work without application quotas — hosted release 2026-10-17
+
+[PR #261](https://github.com/EmelieHagander/Bob-the-builder/pull/261) is merged
+as `8935191f74fe49428d098e1ffc67bf0a266776d6`. Its source tree
+`16dbc1187dea983f3aab8c7c84a0950d9f16fe29` exactly matches tested head
+`b753a827c1163642231a18f713c868a7d4191a72`. The
+[conversation owner](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
+defines continued work, genuine blockers, pinned policy, session renewal and Stop.
+This supersedes the preceding release's preserved application budgets for newly
+enqueued durable policy-1 jobs; historical jobs retain their original policy.
+
+The three additive migrations were already installed and were **not rerun**.
+Read-back ledger statements are byte-identical to the tested source files,
+despite different filename and hosted timestamps:
+
+| Migration name | Source filename timestamp | Hosted ledger version |
+|---|---|---|
+| `bob_unlimited_work_lifecycle` | `20261017100000` | `20261017100558` |
+| `bob_unlimited_write_receipts` | `20261017100500` | `20261017100614` |
+| `bob_unlimited_model_work` | `20261017101000` | `20261017101532` |
+
+Both matching closures were published and read back before merge/web publication
+and the final catalog activation:
+
+| Installed function | Authentication | Published/read-back files | Bundle SHA-256 |
+|---|---|---|---|
+| `ask-bob 126`, ACTIVE | `verify_jwt=true` | 96 | `3c5f990ee885ab73a041cb69db64781b83283b28aa36c6110bfee772e3640225` |
+| `bob-worker 94`, ACTIVE | Existing internal authentication, `verify_jwt=false` | 94 | `1fc16f5a9474fc6bdcf0d2bd31aa7d3c6a41d4938f8a0cd26bc124812cc22073` |
+
+Every returned file matches the immutable tested source byte for byte. Packages
+include all transitive local dependencies, including source modules outside the
+function directory. Only type-only `src/data/provenance.ts` is omitted from both
+returned bundles; the worker also omits its type-only `bob-request.ts` import.
+Unauthenticated POSTs to both updated endpoints returned 401.
+
+[CI 39020870979](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39020870979)
+passed every recorded step, including tests, vocabulary, Edge checks,
+production/live-config builds, PWA and required browser fixtures. The mobile and
+desktop Stop, lost-response, reconnect and unlimited drawing-usage fixtures passed.
+[CAD adapter 39020871014](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39020871014)
+and [PostgreSQL concurrency 39020871013](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39020871013)
+also passed on that exact head. These are CI results, not a new local browser run.
+
+[Pages 39024797530](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39024797530)
+successfully published the merge before activation. The public
+[Bob app](https://emeliehagander.github.io/Bob-the-builder/) serves
+`assets/index-BAgCVTIM.js`, SHA-256
+`7151f9d114b43492aa905a73f01ce25877a839b827abef5126c6fdf7123e9872`.
+The downloaded asset contains the Stop/cancellation and Reconnect flows and the
+correct Supabase project URL. This is asset/publication readback; ordinary member
+use of the controls remains part of owner acceptance.
+
+Only then was `20261017102000_bob_continuation_catalog.sql` applied, registered as
+**`20261017102621 / bob_continuation_catalog`**. Its read-back ledger SQL exactly
+matches the source. Exactly five active definitions changed:
+
+| Definition | New version |
+|---|---|
+| `agent-contract.ask-bob` | 3 |
+| `bob.contract` | 4 |
+| `bob.method` | 3 |
+| `bob.note.commentary` | 2 |
+| `bob.note.review-work` | 2 |
+
+Each text/variable/metadata patch matches the publication exactly. No catalog head
+was added or removed: 291 Bob definitions and 11 other-app definitions remain.
+Every unrelated active version, all model rows and all AI settings are unchanged.
+Resolved live manifest `63efc114-9458-4a29-8776-abd41aeec423` confirms
+`work_completion_version=2`, `work_allowance_version=1` and unchanged
+**GPT-5.4/high**. Its profile/tier are unchanged. All 29 existing durable jobs
+remain completed under policy 0; activation did not restart or convert them.
+
+The merge-triggered
+[Live Bob release check 39024797531](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39024797531)
+passed guest Auth/RLS, actual OpenAI lookup, pixels and versioned knowledge.
+Its disposable project `p_92b579eab693466599f27fcbe7aabf04` was removed after
+exact identity/type/description, guest ownership, expected fixture contents and
+absence-of-output checks; independent project/people/Task/material/media/job
+readback is zero. Image bytes/metadata had already been removed by caller APIs.
+This guest compatibility smoke does not prove policy-1 owner completion.
+
+**Next acceptance:** reload Bob and use the owner's ordinary new Task/todo-edit
+request. Check saved text/status, continued authorized successor work without
+another “continue”, and honest final completion/blocker reporting. A technical
+release does not establish real-model quality. No additional paid owner probe was
+launched. Roll back catalog activation first if needed, retaining compatible
+workers until pinned policy-1 jobs drain; never put workers that cannot understand
+paused/paged jobs back in service while such jobs exist. [State](bob-delivery-flow.md#state)
+owns the remaining action.

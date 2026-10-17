@@ -292,17 +292,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg (2026-10-17):** färdigställ och verifiera fortsättning från
-befintligt aktivt minne samt borttagna applikationsbudgetar för nya hållbara
-Bob-körningar. [Konversationsägaren](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
-äger beteendet. Kontrollera samma jobb över arbetspass, sessionsförnyelse och Stop,
-bevarade kvitton och historisk återspelning; därefter CI, samordnad release och
-användarens verkliga prov. Nuvarande modell/reasoning behålls. Detta användarbeslut
-ersätter tidigare krav att behålla kostnads-, anrops- och outputramar för nya jobb.
-
-
-**Efter installation:** beställaren provar samma uppgifts-/todoändring och
-fortsättning i en ny körning med GPT-5.4/high. Modellbyte förblir uppskjutet tills
+**Aktivt nästa steg (2026-10-17):** ladda om Bob och låt beställaren prova samma
+uppgifts-/todoändring och fortsatt delegerat arbete i en ny körning med
+GPT-5.4/high. Den samordnade releasen är installerad och återläst enligt
+[releasebeviset](foundation-verification.md#bob-continuation-release-2026-10-17).
+[Konversationsägaren](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
+äger beteendet och policygränsen för nya respektive historiska jobb. Modellbyte
+förblir uppskjutet tills
 resultatet kan bedömas. Teknisk release ersätter inte verklig medlemsacceptans av
 textkvalitet, status och mindre behov av extra ”fortsätt”. Den tidigare
 [uppgiftsreleasen](foundation-verification.md#bob-task-workflow-release-2026-10-17)

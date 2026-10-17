@@ -41,7 +41,8 @@ This section supersedes the older application-budget and four-fold preparation
 rules below for policy-1 durable work. It does not implement arbitrary same-turn
 provider-context rollover; a provider context-limit error remains a technical
 failure with saved receipts preserved. No model or reasoning tier changes in this
-release. Hosted activation and owner acceptance are tracked separately from code.
+release. [Hosted release evidence](foundation-verification.md#bob-continuation-release-2026-10-17)
+records the installed runtime/catalog and the remaining ordinary owner acceptance.
 
 ## Ownership and authority
 
