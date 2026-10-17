@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createToolSession, checkedToolSnapshot, serverRequestQuote, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate } from '../supabase/functions/_shared/project-tools/session.ts'
+import { createToolSession, checkedToolSnapshot, serverRequestQuote, WORK_VALUE_TOOL_NAMES, type ToolDefinition, type ToolPolicy, type ToolSnapshot, type ToolGate } from '../supabase/functions/_shared/project-tools/session.ts'
 
 /** The whole available toolbox is offered on every step with its guide. Offering
  * is never authority: policy, version and gate are re-checked on each execution. */
@@ -200,4 +200,41 @@ test('the provenance quote is an exact prefix of at most 500 units and never spl
   const quote = serverRequestQuote(long)
   assert(quote.length <= 500); assert(long.startsWith(quote)); assert.equal(quote, '🌲'.repeat(250))
   assert.equal(serverRequestQuote('Kort.'), 'Kort.')
+})
+
+test('only the three native work-value policies support pinned v1 and v2 handlers', async () => {
+  for (const name of WORK_VALUE_TOOL_NAMES) {
+    for (const liveVersion of [1, 2, 3]) for (const pinnedVersion of [1, 2, 3]) {
+      const f = fixture([policy(name)])
+      f.rows[0].schema_version = liveVersion; f.definitions[0].version = pinnedVersion
+      const session = createToolSession({ definitions: f.definitions, readPolicy: async () => ({ phase: null, tools: f.rows }), catalogToolVersion: () => pinnedVersion })
+      const permitted = liveVersion === 1 && pinnedVersion === 1 || liveVersion === 2 && [1, 2].includes(pinnedVersion)
+      assert.equal(names(await session.prepare()).includes(name), permitted, `${name}: live ${liveVersion}, pinned ${pinnedVersion}`)
+      assert.equal((await session.execute(name, { value: 1 })).status, permitted ? 'saved' : 'unavailable')
+      f.rows[0].active = false
+      assert.equal((await session.execute(name, { value: 1 })).status, 'unavailable')
+      f.rows[0].active = true; f.setGate(name, 'not_allowed')
+      assert.equal((await session.execute(name, { value: 1 })).status, permitted ? 'not_allowed' : 'unavailable')
+    }
+  }
+  const strict = fixture([policy('change_work_state')]); strict.rows[0].schema_version = 2
+  assert.deepEqual(await strict.session.prepare(), []); assert.equal((await strict.session.execute('change_work_state', {})).status, 'unavailable')
+})
+
+test('native-value compatibility fences the pinned contract, not a compatible live policy upgrade', async () => {
+  const name = 'edit_work_record', f = fixture([policy(name)])
+  let pinned = 1
+  const session = createToolSession({ definitions: f.definitions, readPolicy: async () => ({ phase: null, tools: f.rows }), catalogToolVersion: () => pinned, toolInstructions: 'on_demand' })
+  await session.prepare(); f.rows[0].schema_version = 2
+  assert.equal((await session.execute(name, { value: 1 })).status, 'saved', 'live upgrade retains the original offered contract')
+  assert.equal((await session.execute('describe_tool', { name })).schema_version, 1)
+  pinned = 2
+  assert.equal((await session.execute(name, { value: 1 })).status, 'unavailable', 'manifest and handler must match exactly')
+  f.definitions[0].version = 2
+  assert.equal((await session.execute(name, { value: 1 })).status, 'contract_changed', 'a new handler cannot execute old offered arguments')
+  assert.equal((await session.execute('describe_tool', { name })).status, 'contract_changed')
+  await session.prepare()
+  assert.equal((await session.execute(name, { value: 1 })).status, 'saved')
+  f.rows[0].schema_version = 1
+  assert.equal((await session.execute(name, { value: 1 })).status, 'unavailable', 'v1 policy cannot authorize a v2 job')
 })

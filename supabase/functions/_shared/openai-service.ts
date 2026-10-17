@@ -179,9 +179,13 @@ export interface OpenAIServiceOptions {
   }>;
   fileName?: string;
   previousResponseId?: string;
+  /** Trusted caller opt-in, pinned with that caller's execution contract.
+   * Legacy callers retain their exact output selection and input wire shape. */
+  responsePhaseMode?: 'aware';
   messages?: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: OpenAIMessageContent;
+    phase?: 'commentary' | 'final_answer';
     tool_calls?: Array<{
       id: string;
       type: 'function';
@@ -225,6 +229,7 @@ export interface OpenAIServiceResponse<T = unknown> {
   reasoningEffort?: string | null;
   error?: string;
   responseId?: string;
+  outputPhase?: 'commentary' | 'final_answer' | 'legacy' | 'tool_calls' | 'refusal' | 'incomplete';
   toolCalls?: Array<{
     id: string;
     type: 'function';
@@ -496,10 +501,12 @@ export async function callOpenAIResponses<T = unknown>(
         }
         
         const content = responseMessageContent(msg.role, msg.content);
+        const phase = options.responsePhaseMode === 'aware' && msg.role === 'assistant' &&
+          (msg.phase === 'commentary' || msg.phase === 'final_answer') ? { phase: msg.phase } : {};
         
         if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
           if (msg.content) {
-            inputMessages.push({ role: 'assistant', content });
+            inputMessages.push({ role: 'assistant', content, ...phase });
           }
           for (const tc of msg.tool_calls) {
             inputMessages.push({
@@ -512,7 +519,7 @@ export async function callOpenAIResponses<T = unknown>(
           continue;
         }
         
-        inputMessages.push({ role: msg.role === 'user' ? 'user' : msg.role, content });
+        inputMessages.push({ role: msg.role === 'user' ? 'user' : msg.role, content, ...phase });
       }
     } else {
       // Build from prompt
@@ -764,7 +771,22 @@ export async function callOpenAIResponses<T = unknown>(
       const error = responseData.status === 'incomplete' && responseData.incomplete_details?.reason === 'max_output_tokens'
         ? 'model_output_limit' : 'model_response_' + responseData.status;
       await logAIUsage(aiClient, { ...usageBase, success: false });
-      return { success: false, data: null, usage, model: currentModel, reasoningEffort: appliedEffort, estimatedCostUsd, error };
+      return { success: false, data: null, usage, model: currentModel, reasoningEffort: appliedEffort, estimatedCostUsd, error,
+        ...(options.responsePhaseMode === 'aware' && responseData.status === 'incomplete' ? { outputPhase: 'incomplete' as const } : {}) };
+    }
+
+    const phaseAware = options.responsePhaseMode === 'aware';
+    const assistantItems = phaseAware && Array.isArray(responseData.output)
+      ? responseData.output.filter((item: any) => item.type === 'message' && (!item.role || item.role === 'assistant')) : [];
+    const refusal = assistantItems.flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
+      .filter((part: any) => part.type === 'refusal' && typeof part.refusal === 'string').map((part: any) => part.refusal).join('\n\n');
+    if (refusal) {
+      // A refusal cannot be turned into a specialist verdict or a partial tool call.
+      const strict = !!(options.schema && options.schemaName);
+      await logAIUsage(aiClient, { ...usageBase, success: !strict });
+      return { success: !strict, data: strict ? null : refusal as T, usage, model: currentModel,
+        reasoningEffort: appliedEffort, estimatedCostUsd, responseId: responseData.id, outputPhase: 'refusal',
+        ...(strict ? { error: 'model_refusal' } : {}) };
     }
 
     // Check for tool calls
@@ -789,6 +811,7 @@ export async function callOpenAIResponses<T = unknown>(
         usage,
         model: currentModel, reasoningEffort: appliedEffort,
         estimatedCostUsd,
+        ...(phaseAware ? { outputPhase: 'tool_calls' as const } : {}),
       };
     }
     
@@ -808,9 +831,28 @@ export async function callOpenAIResponses<T = unknown>(
     
     // Try various content extraction paths
     let content: string = '';
+    let outputPhase: OpenAIServiceResponse['outputPhase'];
+    if (phaseAware && assistantItems.length) {
+      const finals = assistantItems.filter((item: any) => item.phase === 'final_answer');
+      const unphased = assistantItems.filter((item: any) => item.phase == null);
+      const selected = finals.length ? finals : unphased;
+      outputPhase = finals.length ? 'final_answer' : unphased.length ? 'legacy' : 'commentary';
+      content = selected.flatMap((item: any) => Array.isArray(item.content)
+        ? item.content.filter((part: any) => ['output_text', 'text'].includes(part.type) && typeof part.text === 'string').map((part: any) => part.text)
+        : typeof item.text === 'string' ? [item.text] : []).join('\n\n');
+      if (outputPhase === 'commentary') {
+        const strict = !!(options.schema && options.schemaName);
+        await logAIUsage(aiClient, { ...usageBase, success: !strict });
+        return { success: !strict, data: null, usage, model: currentModel, reasoningEffort: appliedEffort,
+          responseId: responseData.id, estimatedCostUsd, outputPhase,
+          ...(strict ? { error: 'model_commentary_only' } : {}) };
+      }
+    }
     
     // Path 1: output_text (direct text response from Responses API)
-    if (responseData?.output_text) {
+    if (phaseAware && assistantItems.length) {
+      // Selected all final text above; never fall back to a progress preamble.
+    } else if (responseData?.output_text) {
       content = responseData.output_text;
     }
     // Path 2: Structured output - extract from message content array
@@ -877,7 +919,8 @@ export async function callOpenAIResponses<T = unknown>(
         usage,
         model: currentModel, reasoningEffort: appliedEffort,
         responseId: responseData.id,
-        estimatedCostUsd
+        estimatedCostUsd,
+        ...(phaseAware ? { outputPhase: outputPhase ?? 'legacy' as const } : {})
       };
     }
 
@@ -891,7 +934,8 @@ export async function callOpenAIResponses<T = unknown>(
       await logAIUsage(aiClient, { ...usageBase, success: valid });
       return { success: valid, data: valid ? parsedData : null, usage,
         model: currentModel, reasoningEffort: appliedEffort, responseId: responseData.id,
-        estimatedCostUsd, ...(valid ? {} : { error: 'invalid_structured_output' }) };
+        estimatedCostUsd, ...(phaseAware ? { outputPhase: outputPhase ?? 'legacy' as const } : {}),
+        ...(valid ? {} : { error: 'invalid_structured_output' }) };
     }
     try {
       parsedData = JSON.parse(content);

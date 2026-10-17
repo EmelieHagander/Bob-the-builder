@@ -14,6 +14,7 @@
 | what is actually built vs missing today | `Docs/function-inventory.md` |
 | current user goals / next-phase product stories | `Docs/user-stories.md` |
 | shared vocabulary, Area/Step/Task hierarchy and four project examples | `Docs/domain-dictionary.md` — shared meanings, generated runtime vocabulary and unified ownership model |
+| planned PR for smoother task edits, status, completion and model upgrade | [Task-work PR plan](bob-delivery-flow.md#bob-task-pr-plan) — specified 2026-10-17; [investigation and status proof](foundation-verification.md#bob-task-investigation-2026-10-17) distinguish observed behavior from remaining acceptance |
 | next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; [six data-driven outcomes in five releases](bob-delivery-flow.md#six-outcomes-in-five-releases); the active stage lives there, not in this index |
 | end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — cross-domain target, remaining P3 named-member acceptance and P4 cases; actual implemented/released scope lives with domain owners |
 | data-driven handoff gaps and server-owned changes/status | [Data boundary review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) — reviewed gaps, existing guards and domain routing; remaining implementation is in State |
@@ -185,6 +186,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 - [K2 live acceptance report, 2026-10-04](archive/k2-live-acceptance-2026-10-04.json) — synthetic saved revisions from the successful three-turn concept test; [verification](foundation-verification.md#k2-live-construction-acceptance--2026-10-04) owns release evidence and limits, and [State](bob-delivery-flow.md#state) owns remaining work.
 - [Delivery-flow review, 2026-09-29](archive/bob-delivery-flow-review-2026-09-29.md) — dated code/data findings, verification limits and the superseded handoff snapshot. Open actions remain in [State](bob-delivery-flow.md#state); archiving this record does not close them.
 - [Archie's resolved findings](../.claude/agents/archive/archie-findings-2026-09-29.md) — historical FINDING-A01–A03 closure records, removed from the open-findings reading path.
+
+Task-workflow release scope (2026-10-17): [parts 1–3 decision](bob-delivery-flow.md#bob-task-pr-plan), [write compatibility](ask-bob-writes.md#native-work-values-and-task-feedback--2026-10-17), [bounded completion](ask-bob-conversations.md#delegated-task-completion--2026-10-17) and [release evidence](foundation-verification.md#bob-task-workflow-release-2026-10-17). Model and UI changes are deferred.
 
 ## Precedence
 

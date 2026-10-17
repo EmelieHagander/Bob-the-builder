@@ -531,3 +531,31 @@ turn is preserved; no synthetic user turn or new mandate is created.
 The reviewed migration and both Bob runtimes are deployed through PR #180.
 [Verification](foundation-verification.md#p4-replay-and-event-delivery--2026-10-02)
 owns release evidence and the outstanding real-member complement/save/link proof.
+
+
+## Delegated Task completion — 2026-10-17
+
+New Bob manifests opt in through
+`agent-contract.ask-bob.metadata.work_completion_version = 1`. Only these main
+Bob calls select phase-aware provider parsing. Final-answer messages take
+precedence over progress messages; commentary continues using the same provider
+cursor and durable turn. A second consecutive commentary closes the tool bench
+and requests a final answer; a third stops with an honest bounded outcome. Tool
+progress resets this small commentary streak. Legacy phase-absent responses,
+older pinned jobs and strict specialist schemas retain their contracts. Refusal
+and incomplete responses are distinct from successful completion.
+
+The existing single completion review now includes attempted or saved work. It
+compares the delegated request with current work snapshots, receipts reached at
+that replay position and rejected outcomes. The review may finish remaining work
+within the existing authority, time and write budgets, or report a genuine
+blocker. It creates no follow-up job, budget reset or universal stop control.
+Ordinary information answers do not acquire an extra classifier/review call.
+
+Versioned method guidance integrates changes into complete Task instructions,
+preserves relevant sources and unknowns, and distinguishes planning progress
+from physical completion. Closing messages report saved and remaining work
+without promising another run. Content-free metrics retain allowlisted phase,
+validation and ending categories; they do not store raw SQL errors or prompt
+content. The model stays GPT-5.4/high. The owner will test the real conversation
+after [technical release](foundation-verification.md#bob-task-workflow-release-2026-10-17).

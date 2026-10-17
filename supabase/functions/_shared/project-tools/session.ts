@@ -75,6 +75,15 @@ export function serverRequestQuote(message: string): string {
 
 const WRITE_UNCERTAIN = 'A previous write has an unverified outcome. Further writes are paused for recovery; this is not an exhausted write budget. Do not repeat it or claim it failed.'
 
+/** Only these work-value contracts have an explicit v1-to-v2 transition.
+ * Live policy v2 may serve a durable v1 manifest until its job finishes. */
+export const WORK_VALUE_TOOL_NAMES = ['edit_work_record', 'create_work_record', 'change_task_readiness'] as const
+function policySupportsHandler(name: string, policyVersion: number, handlerVersion: number) {
+  return (WORK_VALUE_TOOL_NAMES as readonly string[]).includes(name)
+    ? policyVersion === 1 && handlerVersion === 1 || policyVersion === 2 && (handlerVersion === 1 || handlerVersion === 2)
+    : policyVersion === handlerVersion
+}
+
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
 
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; feedback?: (key: string, variables?: Record<string, string>) => string }) {
@@ -99,7 +108,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   }
   function resolve(row: ToolPolicy) {
     const def = handlers.get(row.name)
-    if (!row.active || !def || def.version !== row.schema_version || (opts.catalogToolVersion && opts.catalogToolVersion(row.name) !== def.version)) return { state: 'unavailable' as const, def }
+    if (!row.active || !def || !policySupportsHandler(row.name, row.schema_version, def.version) || (opts.catalogToolVersion && opts.catalogToolVersion(row.name) !== def.version)) return { state: 'unavailable' as const, def }
     return { state: def.gate(), def }
   }
   const description = (row: ToolPolicy, def: ToolDefinition, includeManual: boolean) => opts.catalogTool
@@ -128,9 +137,9 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
         if (!def || state === 'unavailable' || state === 'not_allowed') continue
-        visible.set(row.name, row.schema_version)
+        visible.set(row.name, def.version)
         const group = def.group ?? 'Other tools'
-        if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, row.schema_version); shelf.push({ name: row.name, group, state: 'offered' }) }
+        if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version); shelf.push({ name: row.name, group, state: 'offered' }) }
         else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'write_uncertain' ? { waitingFor: WRITE_UNCERTAIN } : state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       if (onDemand && visible.size) {
@@ -153,8 +162,8 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         const resolved = row ? resolve(row) : null
         if (!row || !resolved?.def || resolved.state === 'unavailable' || resolved.state === 'not_allowed') return finish(safeStatus('unavailable'))
         if (!visible.has(row.name)) return finish(safeStatus('not_offered'))
-        if (visible.get(row.name) !== row.schema_version) return finish(safeStatus('contract_changed'))
-        return finish({ status: 'ok', name: row.name, schema_version: row.schema_version, state: resolved.state,
+        if (visible.get(row.name) !== resolved.def.version) return finish(safeStatus('contract_changed'))
+        return finish({ status: 'ok', name: row.name, schema_version: resolved.def.version, state: resolved.state,
           manual: description(row, resolved.def, true),
           ...(resolved.state === 'missing_context' && resolved.def.waitingFor ? { waiting_for: resolved.def.waitingFor } : {}) })
       }
@@ -168,7 +177,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       // The set offered to one model step is a fence: a tool that became available
       // later in the same batch is callable from the next step, not retroactively.
       if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', opts.feedback?.('not-offered') ?? 'This tool became available after this step began. Call it again in your next step.') }
-      if (offered.get(name) !== row.schema_version) return safeStatus('contract_changed', opts.feedback?.('contract-changed') ?? 'This tool changed during the turn. Use the version offered on your next step.')
+      if (offered.get(name) !== def.version) return safeStatus('contract_changed', opts.feedback?.('contract-changed') ?? 'This tool changed during the turn. Use the version offered on your next step.')
       const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
       try {
         const result = await def.execute(input)
