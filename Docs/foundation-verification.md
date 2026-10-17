@@ -2854,7 +2854,7 @@ question; it does not close these model and product acceptance gates.
 
 
 <a id="bob-task-workflow-release-2026-10-17"></a>
-## Bob task workflow parts 1–3 — implementation 2026-10-17
+## Bob task workflow parts 1–3 — hosted release 2026-10-17
 
 The owner limited this release to native work values, status diagnostics and
 completion/text-workflow improvements. GPT-5.4/high, all model profiles, spending
@@ -2866,16 +2866,61 @@ from `scripts/build-bob-task-workflow-catalog.ts`. The previously observed nativ
 Supabase CLI crash requires the documented actual-UTC filename fallback. It
 creates immutable versions of only three work-value tools, their toolbox and
 focused Bob instructions/behavior flag; no domain table, canonical writer,
-permission or user Task content changes. Deploy both runtime closures before
-activating this publication.
+permission or user Task content changes. Both compatible runtime closures were
+deployed and read back before activating the publication. The hosted migration
+ledger records `20261017063533 / ai_task_workflow_catalog`.
 
-**Verification in progress; not yet a hosted release claim.** Focused regression
-suites pass: native work/tool sessions (41), Task status feedback (5), catalog
-publication (6), phase/continuation/replay (16), metrics (10), plus the actual
-pre-publication manifest replay proof. The latter compares complete tool/manual
-and rejected-result bytes across live-policy activation, with no repeated
-transports or extra snapshot reads. Vocabulary and production build pass. Local
-Edge checking was blocked by the unavailable `esm.sh` dependency endpoint; the
-exact PR CI must supply that gate. Full regression/CI and final content-free
-validation telemetry checks are pending. Exact merged source, runtime versions
-and activation readback will be recorded after release.
+[PR #260](https://github.com/EmelieHagander/Bob-the-builder/pull/260) merged as
+`b2f31dc2ca093178a971a0d52771915a60d1a9ce`. Its source tree
+`cb7e22cfe88e5ca524154abfaec43bccf6f39a02` exactly matches tested head
+`f930f5da7eb076f2d042dda83f3e8f382e4e2017` and the deployment packages.
+[CI 39006469549](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39006469549)
+passed **1,309/1,309 tests**, vocabulary, Edge types, production/live-config
+builds, PWA and every required browser gate. All 51 recorded steps succeeded.
+[PostgreSQL concurrency 39006469557](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39006469557)
+also passed. Local Edge dependency retrieval was unavailable; the successful CI
+Edge check supplies that gate, not a claimed local pass.
+
+The regressions cover exact native multiline values, status roundtrips and
+required-check blockers, phase-aware final selection, bounded progress-message
+continuation, one completion review without a duplicate save, safe telemetry,
+and byte-identical replay of an actual pre-publication manifest. Historical
+schemas/manuals and rejected-result bytes remain unchanged across live-policy
+activation, with no repeated transports or extra snapshot reads. Complete
+historical seed parity and exactly three current policy upgrades are checked.
+
+| Installed function | Version / authentication | Read-back bundle SHA-256 |
+|---|---|---|
+| `ask-bob` | 125, ACTIVE, gateway JWT unchanged (`true`) | `c10968f278467f10c0d37ae3ec0a4c8823a47d46fb230621e1ae8d1c6c563a2e` |
+| `bob-worker` | 93, ACTIVE, existing internal authentication (`verify_jwt=false`) | `054d8590f07750f86f40297bd38e1ca680ad2786545283e65674615a75b21e69` |
+
+Every shipped file matches the merged source. The bundler omits the type-only
+`src/data/provenance.ts` from both closures and the worker's type-only import of
+`bob-request.ts`; all executable imports are present. Unauthenticated POSTs to
+both deployed endpoints returned 401 after installation.
+
+Read-only catalog snapshot hash is
+`fe775ee730f748382db27572a9ddbef84ffd7c8904df3135f47c2f70707a5a89`.
+All **290 definitions** match the expected publication content (excluding
+generated identities/version hashes). Exactly eight existing definitions
+changed and three commentary/review fragments were added; none were removed.
+The three work-value contracts and live/pinned policies are active v2 with
+native `value`; `bob.tools` is v11 and the agent contract is v2 with
+`work_completion_version=1`. Every model, setting, profile and tier remains
+unchanged, including GPT-5.4/high and its 16,000-output-token/120-second profile.
+Old manifest `627f30a8-de42-4706-8dd0-861166510503` remains present with a valid
+payload hash. Rollback reactivates the previous catalog while retaining the
+compatible runtime and live policy v2 until pinned v2 jobs drain.
+
+[Pages 39007776911](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39007776911)
+published the merge successfully. The merge-triggered
+[Live Bob check 39007776964](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39007776964)
+passed guest Auth/RLS, actual OpenAI lookup, pixels and knowledge before this
+runtime/catalog activation; it is continuity smoke evidence, not acceptance of
+the new task-writing behavior. Its disposable project
+`p_bb04072398074c70bbdd0e1f46b10928` was removed after exact name/type, guest
+ownership and absence-of-output checks. Independent Project/people/Task/material/
+media readback is zero; image cleanup had already passed through caller APIs.
+No additional paid owner-conversation probe was launched. The next acceptance
+is the owner's ordinary new task-edit turn, including saved text/status readback
+and whether Bob finishes without an extra prompt; see [State](bob-delivery-flow.md#state).
