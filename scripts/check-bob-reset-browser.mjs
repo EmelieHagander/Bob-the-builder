@@ -668,9 +668,17 @@ try {
     await workStatus.getByText('Thinking through the next step… · 3 changes saved',{exact:true}).waitFor()
     assert.equal(await workStatus.locator('time').getAttribute('datetime'),activityAt)
     await drawer.getByRole('textbox').fill('Keep my next instruction while Bob works')
-    await drawer.getByRole('button',{name:'Show older messages',exact:true}).click()
-    await drawer.getByText('PAGED MESSAGE 12',{exact:true}).waitFor()
+    // Ten short rows can still fit within the tall phone's follow-at-end
+    // threshold. Open the full older history so this is really an older read,
+    // and let the pagination's scroll anchoring finish before scrolling back.
+    for (const first of [12,7,2,1]) {
+      await drawer.getByRole('button',{name:'Show older messages',exact:true}).click()
+      await drawer.getByText(`PAGED MESSAGE ${first}`,{exact:true}).waitFor()
+    }
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+    assert(await drawer.locator('.bob-history').evaluate(el=>el.scrollHeight-el.clientHeight>128),'Older-reading fixture must overflow beyond the follow-at-end threshold')
     await drawer.locator('.bob-history').evaluate(el=>{el.scrollTop=0})
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
     const workBounds = await workStatus.boundingBox(), composerBounds = await drawer.locator('.bob-composer').boundingBox()
     assert(workBounds && composerBounds && workBounds.y >= 0 && workBounds.y+workBounds.height <= composerBounds.y+1, 'Progress stays above the composer when reading older messages')
     await page.screenshot({path:`test-results/bob-live-status-${viewport.width}.png`})
