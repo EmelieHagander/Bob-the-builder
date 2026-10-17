@@ -3,10 +3,15 @@ import assert from 'node:assert/strict'
 import {drawingRuntimeVersion,drawingCatalogConfiguration} from '../supabase/functions/_shared/drawing-runtime.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {fingerprint} from '../supabase/functions/_shared/bob-job-journal.ts'
+import {CAD_RESEARCH_CONTRACT} from '../supabase/functions/_shared/cad-research.ts'
+import {CAD_REVIEW_CONTRACT} from '../supabase/functions/_shared/cad-review.ts'
+import {CAD_TRANSPORT_CONTRACT} from '../supabase/functions/_shared/cad-transport.ts'
+import {BOB_MODEL_BUDGET_POLICY_REVISION} from '../supabase/functions/_shared/bob-model-budget.ts'
 
 const configured={model:true,cad:true}
 const snapshot=()=>structuredClone(catalogFixture().manifest())
-function runtime(snapshot:AiCatalogManifest){
+function runtime(snapshot:AiCatalogManifest,unlimitedWork=false){
  const calls:{table:string;fields:string}[]=[],live={
   settings:['cad-research','cad-designer','cad-reviewer'].map(function_name=>({function_name,module_id:'cad',is_enabled:true,model:'ignored-legacy',max_output_tokens:1,updated_at:'first'})),
   models:snapshot.models.map(model=>({model_name:model.model_name,is_active:true,updated_at:'first'})),
@@ -22,7 +27,7 @@ function runtime(snapshot:AiCatalogManifest){
    return query
   }}
  }}
- const catalog=createAiCatalogSession({rpc:async()=>{throw new Error('must use pinned manifest')}},{app:'bob',manifest:snapshot})
+ const catalog=createAiCatalogSession({rpc:async()=>{throw new Error('must use pinned manifest')}},{app:'bob',manifest:snapshot,unlimitedWork})
  return {client,catalog,calls,live,get resolves(){return resolves}}
 }
 test('retry runtime follows only CAD catalog dependencies and ignores unrelated revisions, defaults and timestamps',async()=>{
@@ -59,4 +64,31 @@ test('queue eligibility resolves the current catalog instead of retired direct-m
  const value=snapshot(),current=runtime(value),pinned=await drawingRuntimeVersion(current.client,configured,current.catalog)
  assert.equal(await drawingRuntimeVersion(current.client,configured),pinned)
  assert.equal(current.resolves,1)
+})
+
+test('only an effective unlimited policy changes the retry fingerprint; legacy bytes and pins remain exact',async()=>{
+ const value=snapshot(),contract=value.definitions.find(row=>row.prompt_key==='agent-contract.ask-bob')!
+ delete contract.metadata.work_allowance_version
+ const old=runtime(value),configuration=drawingCatalogConfiguration(value)
+ // The pre-policy fingerprint envelope, without an absent/false extra field.
+ const legacy=await fingerprint({engine_contract:2,transport_contract:CAD_TRANSPORT_CONTRACT,research_contract:CAD_RESEARCH_CONTRACT,review_contract:CAD_REVIEW_CONTRACT,
+  budget_policy_revision:BOB_MODEL_BUDGET_POLICY_REVISION,configured,catalog:configuration,
+  settings:old.live.settings.map(({function_name,module_id,is_enabled})=>({function_name,module_id,is_enabled})),
+  live_models:configuration.models.map(model=>({model_name:model.model_name,is_active:true}))})
+ assert.equal(await drawingRuntimeVersion(old.client,configured,old.catalog),legacy)
+ for(const version of [undefined,0,2,'1']){
+  const unrecognized=structuredClone(value)
+  unrecognized.definitions.find(row=>row.prompt_key==='agent-contract.ask-bob')!.metadata.work_allowance_version=version
+  const candidate=runtime(unrecognized,true)
+  assert.equal(await drawingRuntimeVersion(candidate.client,configured,candidate.catalog),legacy)
+  assert.equal(await drawingRuntimeVersion(candidate.client,configured),legacy)
+ }
+ contract.metadata.work_allowance_version=1
+ contract.id+=':policy1';contract.payload_hash+=':policy1'
+ const existing=runtime(value),enabled=runtime(value,true)
+ assert.equal(await drawingRuntimeVersion(existing.client,configured,existing.catalog),legacy,'publishing a policy cannot rewrite an existing legacy job pin')
+ const next=await drawingRuntimeVersion(enabled.client,configured,enabled.catalog)
+ assert.notEqual(next,legacy,'new authorized work must not reuse a failure fingerprint from the old quotas')
+ assert.equal(await drawingRuntimeVersion(enabled.client,configured),legacy,'publishing policy 1 alone must not emit a project runtime-change event and wake legacy drawings')
+ assert.equal(await drawingRuntimeVersion(existing.client,configured,existing.catalog),legacy,'a fresh eligibility read cannot mutate an older supplied pin')
 })

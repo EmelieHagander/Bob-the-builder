@@ -18,7 +18,17 @@ part of the rollout so the previous live gateway cannot keep accepting requests.
 
 For current working context, five full recent messages, incremental summaries, history search and research-page limits, see [Ask bob conversations](../Docs/ask-bob-conversations.md). This September 2026 extension supersedes the Slice 0 budgets below; [write tools](../Docs/ask-bob-writes.md) own mutation authority. Launchpad remains retired as a runtime dependency; its memory-tier design informs Bob-owned context.
 
-The current [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. The next message starts a fresh full period; request/worker retries retain their period and every historical charge. [Database periods](../db/README.md#owner-task-budget-periods--2026-10-12) own reservation/reconciliation, and [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) records release status.
+For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. The next message starts a fresh full period; request/worker retries retain their period and every historical charge. [Database periods](../db/README.md#owner-task-budget-periods--2026-10-12) own reservation/reconciliation, and [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) records release status.
+
+New durable Bob jobs using `work_allowance_version: 1` have no application spend,
+call, output-token or work quotas. [Continued work](../Docs/ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
+owns memory/completion semantics. Apply the additive lifecycle, receipt and drawing
+accounting migrations, deploy matching `ask-bob` and `bob-worker`, then activate
+`20261017102000_bob_continuation_catalog.sql`. Old jobs keep their manifest and
+policy. Usage accounting and provider idempotency continue; other applications'
+profiles and all model/reasoning choices are unchanged. Roll back new activation
+first and retain compatible workers until pinned policy-1 jobs drain. Never roll
+back to workers that cannot understand paused/paged jobs while those jobs exist.
 
 ## Code ownership
 
@@ -437,6 +447,9 @@ The following remain the acceptance contract. Local evidence and outstanding liv
 The strict send request accepts optional `screen` ids/revisions only; no browser labels, viewer identity or fact blobs. Current View is hydrated under the same caller JWT and explicit project as other reads. Durable original capture crosses normal/background/retry paths through service-only turn commands, while domain hydration remains caller-authorized. Replay keeps the original model input; fresh authority/context checks are never memoized. See [the context owner](../Docs/ask-bob-context.md#implemented-scope-and-remaining-target) for supported surfaces, freshness stops and the remaining wider target.
 
 The additive P3 migration is applied; its initial `ask-bob` v68 / `bob-worker` v36 release bundled immutable reviewed `58ee8c6185858f33018a9400393ebe08d770b536`, followed by matching Pages. The historical P4 runtime was `ask-bob` v71 / `bob-worker` v39; [its release evidence](../Docs/foundation-verification.md#p4-replay-and-event-delivery--2026-10-02) records the reviewed source, migration and acceptance limits. [Verification](../Docs/foundation-verification.md#p3-hosted-technical-release--2026-09-30) records actual caller/model/pixel/knowledge consumption and hosted role/RPC permissions. The shared guest has local-only history; ordinary named-member background/private readback remains open. Database migration ownership and release details are in [db/README.md](../db/README.md#p3-screen-context-and-source-changes--applied). Existing AI models/settings and shared background transport are reused; no new cheap-router settings or shared-app configuration are introduced. Current K2 runtime: `ask-bob` v76 / `bob-worker` v44, pinned to `72be4a2a4bb6a2232fe02585f5fdc20620e12ea5`; [telemetry release evidence](../Docs/foundation-verification.md#cad-research-execution-attribution--2026-10-03) records the applied role migration, source/authentication readback and open model acceptance. [K2 construction evidence](../Docs/foundation-verification.md#k2-construction-checks) retains its registration and earlier release proof. The earlier [K1 release evidence](../Docs/foundation-verification.md#k1-construction-checkpoints--2026-10-02) owns construction-checkpoint technical acceptance. [K0 evidence](../Docs/foundation-verification.md#k0-construction-boundaries--2026-10-02) retains budget diagnostics and the candidate-stage contract. Full live-model acceptance remains open.
+
+
+
 
 ## Actions
 

@@ -24,7 +24,7 @@ export const CALCULATOR_TOOL={type:'function' as const,function:{name:'calculate
 
 export function hasCalculatorContract(catalog:AiCatalogSession){return catalog.manifest().definitions.some(row=>row.prompt_key==='tools.calculate_project')}
 export type CalculationSourceKind='plan'|'stair'|'material'
-export type CalculatorOptions={projectId:string;hasAccess:()=>Promise<boolean>;
+export type CalculatorOptions={projectId:string;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  isEnabled?:()=>Promise<boolean>;
  readConstruction:(id:string,revision:number|null)=>Promise<Record<string,any>>;
  readSource:(kind:CalculationSourceKind,id:string,revision:number)=>Promise<Record<string,any>>;
@@ -61,10 +61,10 @@ function stairResult(plan:ReturnType<typeof checkedBuildingPlan>,recipe:StairSpe
 export function createProjectCalculator(opts:CalculatorOptions){
  let used=0
  const enabled=async()=>{try{return await opts.isEnabled?.()??true}catch(error){rethrowContinuation(error);return false}}
- return {tools:[CALCULATOR_TOOL],get remaining(){return Math.max(0,12-used)},
- async offered(){return used<12&&await opts.hasAccess()&&await enabled()?[CALCULATOR_TOOL]:[]},
+ return {tools:[CALCULATOR_TOOL],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ async offered(){return (opts.unlimitedWork||used<12)&&await opts.hasAccess()&&await enabled()?[CALCULATOR_TOOL]:[]},
  async execute(raw:unknown):Promise<Record<string,any>>{
-  if(++used>12)return {status:'budget_exhausted',saved:false}
+  if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted',saved:false}
   const issues=schemaIssues(CALCULATOR_TOOL.function.parameters,raw)
   if(issues.length)return {status:'invalid',saved:false,issues}
   if(!await opts.hasAccess())return {status:'denied',saved:false}

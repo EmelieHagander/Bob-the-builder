@@ -5,7 +5,7 @@ import type { ProjectEdits } from './project-edits.ts'
 import type { ConstructionTools } from './construction-draft.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import type { OperationalReader } from './project-operations.ts'
-import { rethrowContinuation } from './bob-job-journal.ts'
+import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import type { RecordDetailReader } from './project-record-detail.ts'
 import type { ProjectImageTools } from './project-image-tools.ts'
 import { type CadAssistant } from './cad-assistant.ts'
@@ -31,10 +31,10 @@ export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAI
   return [aiCatalog.role('ask-bob').systemMessage, buildBobHands(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[]))].join('\n\n')
 }
 
-/** Per-turn execution ceilings. Writes are enforced again by every SQL writer. */
+/** Legacy pinned contracts retain their original per-turn work ceilings. */
 export const BOB_TURN_LIMITS = { steps: 24, callsPerStep: 8, writes: BOB_WRITE_LIMIT } as const
 
-function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing: unknown, context?: WorkingContext, currentView?: CurrentView): string {
+function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing: unknown, context?: WorkingContext, currentView?: CurrentView, unlimitedWork = false): string {
   const text = (key: string) => aiCatalog.text('bob.frame.' + key)
   return [text('current'), aiCatalog.text('bob.frame.binding', { project_id: projectId }),
     text('briefing-trust'), text('prior-conversation'),
@@ -43,7 +43,7 @@ function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing
       text('recent'), JSON.stringify({ messageStates: context.recent.map(m => ({ seq: m.seq, state: m.state })) })] : []),
     ...(context?.recentWrites?.length ? [text('saved'), JSON.stringify({ recentWrites: context.recentWrites })] : []),
     ...(context?.recentSources?.length ? [text('sources'), JSON.stringify({ recentSources: context.recentSources })] : []),
-    aiCatalog.text('bob.frame.limits', { steps: BOB_TURN_LIMITS.steps, writes: BOB_TURN_LIMITS.writes }),
+    ...(!unlimitedWork ? [aiCatalog.text('bob.frame.limits', { steps: BOB_TURN_LIMITS.steps, writes: BOB_TURN_LIMITS.writes })] : []),
     text('briefing-label'), JSON.stringify(briefing),
   ].join('\n\n')
 }
@@ -81,7 +81,7 @@ export async function runProjectAnswer(opts: {
   projectId: string; userId: string; message: string;
   lookup: ReturnType<typeof createProjectLookup>; callModel: ModelCall;
   hasAccess: () => Promise<boolean>; previousResponseId?: string;
-  writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number;
+  writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
@@ -108,8 +108,11 @@ export async function runProjectAnswer(opts: {
   }) })
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
-  const completionV1 = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata.work_completion_version === 1
-  const writeTools = new Set(completionV1 ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
+  const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const unlimitedWork = opts.unlimitedWork === true && contract.work_allowance_version === 1
+  const completionV2 = contract.work_completion_version === 2
+  const completionAware = contract.work_completion_version === 1 || completionV2
+  const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
   const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = []
   let previousResponseId = opts.context ? undefined : opts.previousResponseId
@@ -117,7 +120,7 @@ export async function runProjectAnswer(opts: {
   // Pending domain work is background context. Keep the owner's current request
   // after it so a paused drawing cannot become the turn's newest instruction.
   let messages: OpenAIServiceOptions['messages'] = [
-    { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
+    { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView, unlimitedWork) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
@@ -127,19 +130,20 @@ export async function runProjectAnswer(opts: {
   const progress = (value: Omit<TurnProgress, 'saved'>) => { try { opts.onProgress?.({ ...value, saved: opts.writer?.receipts.length ?? 0 }) } catch { /* progress is advisory */ } }
   const saved = (name: string) => toolbox.events.some(e => e.operation === 'execute' && e.name === name && e.status === 'saved')
   let completionChecked = false, protocolNudges = 0, emptyNudges = 0, closedNoteSent = false, commentaryStreak = 0
-  for (let step = 0; step < steps; step++) {
+  let rejectionSignature: string | undefined, rejectionStreak = 0
+  for (let step = 0; unlimitedWork || step < steps; step++) {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
     if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     let tools: NonNullable<OpenAIServiceOptions['tools']> = []
-    const lastStep = step >= steps - 1, lateInTurn = Date.now() + 40000 >= deadline
+    const lastStep = !unlimitedWork && step >= steps - 1, lateInTurn = !unlimitedWork && Date.now() + 40000 >= deadline
     try {
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
     const closedByLimit = lastStep || lateInTurn
-    const closedByCommentary = completionV1 && commentaryStreak >= 2
+    const closedByCommentary = completionAware && commentaryStreak >= 2
     const shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -158,10 +162,10 @@ export async function runProjectAnswer(opts: {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), catalogRoleKey: 'ask-bob', catalogSchemaParameters: { server_quote: !!opts.message.trim(), include_manual: opts.toolInstructions !== 'on_demand', categories: (tools.find(t => t.function.name === 'list_project_category')?.function.parameters.properties as Record<string, any> | undefined)?.category?.enum ?? [] },
       messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
-      ...(completionV1 ? { responsePhaseMode: 'aware' as const } : {}),
+      ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
-    if (completionV1 && response.outputPhase) observation.output_phase = response.outputPhase
+    if (completionAware && response.outputPhase) observation.output_phase = response.outputPhase
     if (!response.success) { observe('failed'); return { ok: false, error: response.error === 'turn_budget_exhausted' ? response.error : 'ai_unavailable' } }
     if(!cadFailure?.user_message)opts.projectContext?.confirmDelivery()
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
@@ -174,7 +178,7 @@ export async function runProjectAnswer(opts: {
       previousResponseId = response.responseId; messages = []
       for (const [index, call] of response.toolCalls.entries()) {
         if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
-        if (index >= BOB_TURN_LIMITS.callsPerStep) {
+        if (!unlimitedWork && index >= BOB_TURN_LIMITS.callsPerStep) {
           observation.deferred_calls++
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred', message: opts.aiCatalog.text('bob.note.deferred', { calls: BOB_TURN_LIMITS.callsPerStep }) }) })
           continue
@@ -192,27 +196,36 @@ export async function runProjectAnswer(opts: {
         catch (error) { rethrowContinuation(error); observe('failed'); return { ok: false, error: toolFailureCode(error) } }
         observation.tool_calls++
         try { opts.onTool?.({ name: call.function.name, status: String(result?.status ?? 'returned'), step: step + 1, index, ms: Date.now() - began,
-          ...(completionV1 && typeof result?.validation?.code === 'string' ? { validation_code: result.validation.code } : {}) }) } catch { /* diagnostics only */ }
+          ...(completionAware && typeof result?.validation?.code === 'string' ? { validation_code: result.validation.code } : {}) }) } catch { /* diagnostics only */ }
         if (result?.status === 'denied') {
           // A refused record is not a lost project: only real loss of access ends the turn.
           if (result?.reason !== 'access' || !await opts.hasAccess()) { observe('failed'); return { ok: false, error: 'project_denied' } }
           result = { status: 'not_found', saved: false, message: opts.aiCatalog.text('bob.fact.record-missing') }
         }
         console.log('[Bob tool]', /^[a-z][a-z0-9_]{0,63}$/.test(call.function.name) ? call.function.name : 'invalid_name', result?.status ?? 'returned')
-        if (completionV1 && writeTools.has(call.function.name)) workResults.push({ tool: call.function.name, status: String(result?.status ?? 'returned'),
+        if (completionAware && writeTools.has(call.function.name)) workResults.push({ tool: call.function.name, status: String(result?.status ?? 'returned'),
           ...(typeof result?.message === 'string' ? { message: result.message } : {}),
           ...(typeof result?.refresh_status === 'string' ? { refresh_status: result.refresh_status } : {}),
           ...(result?.validation ? { validation: result.validation } : {}) })
-        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ...result, execution_budget: { model_steps: steps - step - 1, project_reads: opts.lookup.remaining, writes: opts.writer?.remaining ?? 0, corrections: opts.writer?.correctionsRemaining ?? 0, cad_consultations: opts.cadAssistant?.remaining ?? 0, catalog_reads: opts.catalogReader?.remaining ?? 0, image_operations: opts.projectContext?.remaining ?? 0, history_reads: opts.context?.history.remaining ?? 0 } }) })
+        if (unlimitedWork && (result?.status === 'invalid' || result?.status === 'conflict')) {
+          // Identical rejected work is stalled, even when its repeated calls
+          // keep producing journal entries. Changed inputs or other tool work
+          // reset the streak; this is not a total correction allowance.
+          const signature = await fingerprint({ tool: call.function.name, arguments: args ?? call.function.arguments, result })
+          rejectionStreak = signature === rejectionSignature ? rejectionStreak + 1 : 1
+          rejectionSignature = signature
+          if (rejectionStreak >= 3) { observe('failed'); return { ok: false, error: 'tool_no_progress' } }
+        } else { rejectionSignature = undefined; rejectionStreak = 0 }
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ...result, ...(!unlimitedWork ? { execution_budget: { model_steps: steps - step - 1, project_reads: opts.lookup.remaining, writes: opts.writer?.remaining ?? 0, corrections: opts.writer?.correctionsRemaining ?? 0, cad_consultations: opts.cadAssistant?.remaining ?? 0, catalog_reads: opts.catalogReader?.remaining ?? 0, image_operations: opts.projectContext?.remaining ?? 0, history_reads: opts.context?.history.remaining ?? 0 } } : {}) }) })
       }
       continue
     }
     const answerText = typeof response.data === 'string' ? response.data.trim() : ''
-    const canContinue = !!response.responseId && tools.length > 0 && step < steps - 2 && Date.now() + 40000 < deadline
-    if (completionV1 && response.outputPhase === 'commentary') {
-      // Two progress-only replies may ask for one bounded final reply. A tool
-      // result resets the streak; all calls still share the turn's limits.
-      if (commentaryStreak < 2 && response.responseId && step < steps - 1 && Date.now() + 20000 < deadline) {
+    const canContinue = !!response.responseId && tools.length > 0 && (unlimitedWork ? Date.now() < deadline : step < steps - 2 && Date.now() + 40000 < deadline)
+    if (completionAware && response.outputPhase === 'commentary') {
+      // Repeated progress without tool activity is a no-progress condition,
+      // not a work quota. A tool result resets the streak.
+      if (commentaryStreak < 2 && response.responseId && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)) {
         commentaryStreak++; observation.nudges++; previousResponseId = response.responseId
         messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text(commentaryStreak === 2 ? 'bob.note.commentary-limit' : 'bob.note.commentary') }]
         continue
@@ -229,21 +242,23 @@ export async function runProjectAnswer(opts: {
       observe('failed'); return { ok: false, error: 'unsupported_tool_response' }
     }
     if (!answerText) {
-      if (emptyNudges < 1 && response.responseId && step < steps - 1 && Date.now() + 20000 < deadline) {
+      if (emptyNudges < 1 && response.responseId && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)) {
         emptyNudges++; observation.nudges++; previousResponseId = response.responseId
         messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.empty') }]
         continue
       }
       observe('failed'); return { ok: false, error: 'empty_response' }
     }
-    // One factual look at results the server knows are prepared but unsaved. Bob
-    // decides; his words are never replaced by a server notice.
+    // The v2 review also covers a read-only promise to perform delegated work.
+    // Existing conversation context remains in the same Responses chain; the
+    // latest instruction refines that mandate rather than replacing its memory.
+    // Bob decides; his words are never replaced by a server notice.
     const facts = unfinishedFacts(opts.aiCatalog, opts, saved)
-    const reviewWork = completionV1 && (workResults.length > 0 || !!opts.writer?.executedReceipts.length)
-    if ((facts.length || reviewWork) && !completionChecked && opts.writer && opts.writer.remaining > 0 && (!completionV1 || !opts.writer.uncertain)
-      && canContinue && (!completionV1 || response.outputPhase !== 'refusal')) {
+    const reviewWork = completionAware && (completionV2 || workResults.length > 0 || !!opts.writer?.executedReceipts.length)
+    if ((facts.length || reviewWork) && !completionChecked && opts.writer && opts.writer.remaining > 0 && (!completionAware || !opts.writer.uncertain)
+      && canContinue && (!completionAware || response.outputPhase !== 'refusal')) {
       completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId
-      messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + (completionV1
+      messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + (completionAware
         ? opts.aiCatalog.text('bob.note.review-work', { request: opts.message, facts: facts.join(' '), results: JSON.stringify({
           // Recovery can already contain a later save from this same journal.
           // Only commits reached in replay belong to this model-call input.
@@ -258,10 +273,10 @@ export async function runProjectAnswer(opts: {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     progress({ stage: 'finishing', step: step + 1 })
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
-    observe(completionV1 && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
+    observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: completionV1 && response.outputPhase === 'refusal' || facts.length > 0 || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        partial: completionAware && response.outputPhase === 'refusal' || facts.length > 0 || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

@@ -149,13 +149,13 @@ export function catalogRejection(message = ''): { fields: string[]; message: str
   return null
 }
 export type CatalogTransport = ((input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>) & { checkpointed?: boolean }
-export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000) {
+export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean } = {}) {
   let used = 0, partial = false
   return {
     tools: [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL],
-    get remaining() { return Math.max(0, 12 - used) }, get partial() { return partial },
+    get remaining() { return options.unlimitedWork ? Infinity : Math.max(0, 12 - used) }, get partial() { return partial },
     async read(name: string, value: unknown): Promise<Record<string, unknown>> {
-      if (++used > 12) { partial = true; return { status: 'budget_exhausted' } }
+      if (++used > 12 && !options.unlimitedWork) { partial = true; return { status: 'budget_exhausted' } }
       const input = parseCatalogRead(name, value)
       if (!input) { partial = true; return catalogReadIssue(name, value) }
       if (!await hasAccess()) return { status: 'denied' }

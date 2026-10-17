@@ -27,7 +27,7 @@ export async function enqueueBobTurn(input: Input) {
   if (access.error || !access.data) return { ok: false as const, error: 'project_denied' }
   const token = input.authHeader.replace(/^Bearer\s+/i, '')
   const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
-  const expires = Math.min(Number(payload.exp) * 1000, Date.now() + 20 * 60_000)
+  const expires = Number(payload.exp) * 1000 // SQL applies the pinned legacy/new policy.
   if (!Number.isFinite(expires) || expires < Date.now() + 30000) return { ok: false as const, error: 'unauthorized' }
   const result = await s.rpc('bob_enqueue_job_v3', {
     p_project: input.projectId, p_user: input.userId, p_turn: input.clientTurnId, p_message: input.message,
@@ -56,8 +56,14 @@ export async function renewDrawingRequests(input:{authHeader:string;userId:strin
  if(error||!Array.isArray(data))return {ok:false,error:'project_denied'}
  const token=input.authHeader.replace(/^Bearer\s+/i,'')
  const payload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))
- const expires=Math.min(Number(payload.exp)*1000,Date.now()+20*60000)
+ const expires=Number(payload.exp)*1000
  if(!Number.isFinite(expires)||expires<Date.now()+30000)return {ok:false,error:'unauthorized'}
+ const jobs=await s.rpc('bob_jobs_to_renew',{p_project:input.projectId,p_user:input.userId})
+ let renewed=0
+ for(const job of jobs){
+  if(await s.rpc('bob_renew_job',{p_project:input.projectId,p_user:input.userId,p_job:job.id,
+   p_credential:await sealCredential(token,binding({...input,clientTurnId:job.turn_id}),s.secret),p_expires:new Date(expires).toISOString()}))renewed++
+ }
  for(const request of data){
   await s.rpc('bob_renew_drawing_authority',{p_project:input.projectId,p_user:input.userId,p_id:request.id,p_turn:request.turn_id,
    p_credential:await sealCredential(token,binding({...input,clientTurnId:request.turn_id}),s.secret),p_expires:new Date(expires).toISOString(),p_worker_url:s.url.replace(/\/$/,'')+'/functions/v1/bob-worker'})
@@ -67,7 +73,17 @@ export async function renewDrawingRequests(input:{authHeader:string;userId:strin
   await s.rpc('bob_observe_drawing_runtime',{p_project:input.projectId,p_user:input.userId,p_fingerprint:version})
  }
  await s.rpc('bob_dispatch_jobs')
- return {ok:true,renewed:data.length}
+ return {ok:true,renewed:renewed+data.length}
+}
+
+/** Cancel only an owned turn through the ordinary authenticated RPC. Receipt
+ * history remains available; the server fences every still-running worker. */
+export async function cancelBobTurn(input:{authHeader:string;userId:string;projectId:string;jobId:string}){
+ const s=services()
+ const caller=createClient(s.url,s.key,{db:{schema:'bob'},global:{headers:{Authorization:input.authHeader}},auth:{persistSession:false,autoRefreshToken:false}})
+ const {data,error}=await caller.rpc('bob_cancel_job',{p_project:input.projectId,p_job:input.jobId}).abortSignal(AbortSignal.timeout(12000))
+ if(error)return {ok:false as const,error:'project_denied' as const}
+ return data as {ok:true;status:'cancelled';projectId:string;jobId:string}|{ok:false;error:'turn_not_in_flight'}
 }
 
 /** Per-job capability, checked inside the service-only claim command. Neither
@@ -85,6 +101,8 @@ export async function serveBobWorker(req: Request): Promise<Response> {
   catch { return new Response(null, { status: 403 }) }
   if (job.status !== 'claimed') return new Response(null, { status: 204 })
   const args = { p_job: job.id, p_claim: job.claimToken }
+  const unlimitedWork=job.workAllowanceVersion===1
+  const authorityExpired=()=>Date.now()>=Date.parse(job.expiresAt)
   const work = async () => {
     let phase = 'credential'
     console.log('[Bob job]', JSON.stringify({ jobId: job.id, turnId: job.clientTurnId, status: 'running', generation: job.generation }))
@@ -103,9 +121,18 @@ export async function serveBobWorker(req: Request): Promise<Response> {
           if (Array.isArray(rows)) reusable = new Map(rows.filter((r: any) => typeof r?.fingerprint === 'string').map((r: any) => [r.fingerprint, r.value]))
         } catch { /* reuse is an optimisation */ }
       }
+      if(job.pagedJournal===true){
+        job.entries=[]
+        let after:string|null=null
+        do{
+          const page=await s.rpc('bob_job_steps_page',{...args,p_after:after})
+          job.entries.push(...page.entries)
+          after=page.next
+        }while(after!==null)
+      }
       const journal = createBobJournal({ entries: job.entries, save: async entry => {
         await s.rpc('bob_save_job_step', { ...args, p_key: entry.key, p_fingerprint: entry.fingerprint, p_value: entry.value })
-      } }, started + 140000, Date.now, reusable)
+      } }, started + 140000, Date.now, reusable, {unlimitedWork,authorityExpiresAt:Date.parse(job.expiresAt)})
       phase = 'answer'
       // Content-free progress for the owner's chat, at most every 1.5 s. Advisory:
       // a lost update never affects the turn.
@@ -119,17 +146,20 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId, screen: parseBobScreen(job.screen),
         background: { drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
-          deadline: Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
+          workAllowanceVersion:job.workAllowanceVersion,catalogManifestId:job.catalogManifestId,authorityExpiresAt:job.expiresAt,
+          deadline: unlimitedWork ? Infinity : Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()
+      if(unlimitedWork&&!result.ok&&authorityExpired())throw new Error('authentication_expired')
       const finished = job.drawingRequestId && result.ok
         ? await s.rpc('bob_finish_drawing_job', { ...args, p_answer: result.answer })
         : await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: finished.status, error: result.ok ? undefined : result.error }))
     } catch (error) {
-      const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
+      const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' || unlimitedWork&&authorityExpired() ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase, operation: error instanceof BobContinuation ? error.operationKey : undefined }))
       try {
-        if (error instanceof BobContinuation && error.aiWait) await s.rpc('bob_wait_for_ai', { ...args, p_ai_job: error.aiWait.id })
+        if (unlimitedWork && reason==='authentication_expired') await s.rpc('bob_pause_job',{...args,p_expires:job.expiresAt})
+        else if (error instanceof BobContinuation && error.aiWait) await s.rpc('bob_wait_for_ai', { ...args, p_ai_job: error.aiWait.id })
         else if (error instanceof BobContinuation && error.kind === 'yield') await s.rpc('bob_yield_job', args)
         else await s.rpc('bob_finish_job', { ...args, p_error: reason })
       } catch { /* A stale worker cannot settle another lease. The driver recovers. */ }

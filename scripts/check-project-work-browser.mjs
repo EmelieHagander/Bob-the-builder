@@ -174,6 +174,12 @@ try{
   await requests.getByText('24 / 48 calls · $0.35 / $2.00',{exact:true}).waitFor()
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Requests fit mobile viewport')
   await page.screenshot({path:`test-results/drawing-requests-${width}.png`,fullPage:true})
+  requestWork.budget={...requestWork.budget,unlimited_work:true,calls:64,spent_usd:14.50}
+  await page.reload()
+  await requests.getByText('64 calls · $14.50',{exact:true}).waitFor()
+  assert.equal(await requests.getByRole('button',{name:'Add request budget',exact:true}).count(),0,'Unlimited work offers no budget top-up')
+  assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Historical totals do not imply a current work limit')
+  await page.screenshot({path:`test-results/drawing-requests-unlimited-${width}.png`,fullPage:true})
   const drawer=page.getByRole('complementary',{name:'Ask bob for Build together'})
   await requests.getByRole('button',{name:'Ask Bob from this Step',exact:true}).click()
   await drawer.getByLabel('Bob page context').getByText('Plan Step · Drawers',{exact:true}).waitFor()

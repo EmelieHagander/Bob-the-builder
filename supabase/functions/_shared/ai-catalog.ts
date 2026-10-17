@@ -36,6 +36,8 @@ export interface ResolvedAiRole {
   profileVersionId: string; tierVersionId: string; tier: AiTier;
   model: AiCatalogModel; providerAdapter: 'openai-responses-v1' | 'openai-images-v1';
   reasoningEffort: string | null; maxOutputTokens: number; timeoutMs?: number;
+  /** Server-derived from this Bob turn's immutable contract, absent on legacy roles. */
+  unlimitedWork?: true;
   providerParameters: JsonObject; systemMessage: string;
   definition: AiCatalogDefinition; profile: AiCatalogDefinition;
 }
@@ -179,7 +181,7 @@ function boundSchema(row: AiCatalogDefinition, source: JsonObject, parameters: J
   }
   return result
 }
-export function createAiCatalogSession(client: AiCatalogClient, options: { app: string; manifest?: unknown; manifestId?: string }): AiCatalogSession {
+export function createAiCatalogSession(client: AiCatalogClient, options: { app: string; manifest?: unknown; manifestId?: string; unlimitedWork?: boolean }): AiCatalogSession {
   let snapshot = options.manifest === undefined ? undefined : validateAiManifest(options.manifest, options.app)
   let pending: Promise<AiCatalogManifest> | undefined
   const manifest = () => snapshot ?? fail('ai_catalog_not_loaded')
@@ -241,6 +243,7 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       if (config.timeout_ms !== undefined && (!finite(config.timeout_ms) || config.timeout_ms <= 0)) fail('ai_profile_incompatible','timeout')
       return freeze({ app: options.app, manifestId: manifest().manifest_id, roleKey: row.prompt_key, roleVersionId: row.id, profileVersionId: profile.id, tierVersionId: binding.id,
         tier: tier as AiTier, model, providerAdapter: adapter, reasoningEffort: effort as string | null, maxOutputTokens: limit, timeoutMs: config.timeout_ms as number | undefined,
+        ...(options.app === 'bob' && options.unlimitedWork === true && manifest().definitions.some(d => d.prompt_key === 'agent-contract.ask-bob' && d.definition_kind === 'agent_contract' && d.metadata.work_allowance_version === 1) ? { unlimitedWork: true as const } : {}),
         providerParameters: params, systemMessage, definition: row, profile })
     },
     tool(key, parameters = {}) {

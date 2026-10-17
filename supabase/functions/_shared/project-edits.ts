@@ -107,7 +107,7 @@ export function displayEditSnapshot(snapshot: EditSnapshot) {
   }
 }
 
-export function createProjectEdits(opts: { projectId: string; read: ReadTransport; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[] }) {
+export function createProjectEdits(opts: { projectId: string; read: ReadTransport; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; sources?: ProjectSource[]; unlimitedWork?: boolean }) {
   const contexts = new Map<string, EditSnapshot>()
   const pages = new Map<string, { resource: Resource; query: string | null; after: string }>()
   let reads = 0
@@ -116,13 +116,13 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
   return {
     tools: PROJECT_EDIT_TOOLS,
     get partial() { return partial },
-    get remaining() { return Math.max(0, 16 - reads) },
+    get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 16 - reads) },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_project_edit_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !['project_description', 'selected_solutions', 'solutions'].includes(value.resource)
           || !(value.query === null || safeText(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return fail('Invalid read selection.')
-        if (reads >= 16) return { status: 'budget_exhausted' }
+        if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as Resource, query: value.query, after: null } : pages.get(value.next_ref)
         if (!input || input.resource !== value.resource || input.query !== value.query) return fail('Use the exact next_ref and filter returned by this read.')
         reads++

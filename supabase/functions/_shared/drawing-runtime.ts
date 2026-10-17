@@ -58,8 +58,12 @@ export function drawingCatalogConfiguration(manifest:AiCatalogManifest){
  * eligibility check resolves the current service-owned manifest. Credentials,
  * provider results and retrieval timestamps never enter the fingerprint. */
 export async function drawingRuntimeVersion(client:any,configured:{model:boolean;cad:boolean},pinnedCatalog?:AiCatalogSession){
+ // The project observer detects CAD configuration changes only. Publishing a
+ // new allowance must not wake legacy drawing origins. An authorized execution
+ // supplies its own policy pin so its retry can distinguish the new allowance.
  const catalog=pinnedCatalog??createAiCatalogSession(client.schema('shared'),{app:'bob'})
  const manifest=await catalog.load(),configuration=drawingCatalogConfiguration(manifest)
+ const unlimitedWork=!!pinnedCatalog&&catalog.role('ask-bob').unlimitedWork===true
  const [settings,models]=await Promise.all([
   client.schema('shared').from('ai_settings').select('function_name,module_id,is_enabled')
    .eq('app','bob').eq('coworker_id','bob').in('function_name',['cad-research','cad-designer','cad-reviewer']).in('module_id',['cad','global']).order('function_name').order('module_id').abortSignal(AbortSignal.timeout(10000)),
@@ -69,6 +73,7 @@ export async function drawingRuntimeVersion(client:any,configured:{model:boolean
  const effective=cadRoles.map(role=>settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='cad')??settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='global')??null)
  return fingerprint({engine_contract:2,transport_contract:CAD_TRANSPORT_CONTRACT,research_contract:CAD_RESEARCH_CONTRACT,review_contract:CAD_REVIEW_CONTRACT,
   budget_policy_revision:BOB_MODEL_BUDGET_POLICY_REVISION,configured,catalog:configuration,
+  ...(unlimitedWork?{work_allowance_version:1}:{}),
   settings:effective.map((row:any)=>row?{function_name:row.function_name,module_id:row.module_id,is_enabled:row.is_enabled}:null),
   live_models:configuration.models.map(model=>({model_name:model.model_name,is_active:models.data?.find((row:any)=>row.model_name===model.model_name)?.is_active===true}))})
 }

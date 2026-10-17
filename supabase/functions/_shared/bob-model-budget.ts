@@ -32,7 +32,7 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
  * reserved ordinary roles may use the whole limit. A server-bound CAD operation
  * is accounted exactly once by its persisted owner-task period instead: this
  * transient guard cannot override its allocation or starve Bob's final save. */
-export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE) {
+export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean } = {}) {
  let spent = 0, calls = 0, unpriced = false
  return {
   get usage() { return { spent, calls, unpriced, limitUsd } },
@@ -47,7 +47,9 @@ export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd
    if(unpriced)reasons.push('unpriced_usage')
    // Name the reserve only when it, not the whole turn limit, caused the stop.
    if((spent>=usdLimit||calls>=callLimit)&&spent<limitUsd&&calls<maxCalls)reasons.push('review_reserve')
-   if(reasons.length)return budgetFailure<T>({scope:'turn',reasons,calls,call_limit:callLimit,spent_usd:spent,usd_limit:usdLimit,unpriced})
+   // New pinned Bob turns keep their usage record without spending or call
+   // allotments. Unknown price stays unknown, but is not a work prohibition.
+   if(!policy.unlimitedWork&&reasons.length)return budgetFailure<T>({scope:'turn',reasons,calls,call_limit:callLimit,spent_usd:spent,usd_limit:usdLimit,unpriced})
    const result = await work()
    calls++
    const cost = result.estimatedCostUsd

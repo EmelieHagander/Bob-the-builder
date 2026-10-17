@@ -22,6 +22,7 @@ export const CONTEXT_LIMITS = { calls: 12, batch: 4, images: 8, bytes: 16 * 1024
 export function createProjectContext(opts: {
   adapters: ContextAdapter[]; hasAccess: () => Promise<boolean>; sources: ProjectSource[];
   timeoutMs?: number;
+  unlimitedWork?: boolean;
   reviewInstruction?:string;
   imageEvidenceInstruction?:string;
   reviewLabel?:string;
@@ -72,7 +73,7 @@ export function createProjectContext(opts: {
     openedImageRefs(): string[] {
       return [...new Set([...delivered.keys(), ...pending.map(r => r.item.ref)])]
     },
-    get remaining() { return Math.max(0, CONTEXT_LIMITS.calls - used) },
+    get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, CONTEXT_LIMITS.calls - used) },
     get partial() { return partial },
     async catalog() {
       if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -85,7 +86,7 @@ export function createProjectContext(opts: {
       })), note: 'Metadata availability only. No image has been viewed. Legacy project datasets remain available through search_project_data.' }
     },
     async execute(name: string, value: unknown) {
-      if (++used > CONTEXT_LIMITS.calls) { partial = true; return { status: 'budget_exhausted', saved: false } }
+      if (++used > CONTEXT_LIMITS.calls && !opts.unlimitedWork) { partial = true; return { status: 'budget_exhausted', saved: false } }
       if (!await opts.hasAccess()) return { status: 'denied', saved: false }
       if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid()
       const v = value as Record<string, unknown>
@@ -113,7 +114,7 @@ export function createProjectContext(opts: {
       if (name !== 'open_project_item' || Object.keys(v).some(k => k !== 'refs') || !Array.isArray(v.refs) || !v.refs.length || v.refs.length > CONTEXT_LIMITS.batch || new Set(v.refs).size !== v.refs.length) return invalid()
       if (v.refs.some(r => typeof r !== 'string' || r.length > 220 || !byRef(r))) return invalid()
       const refs = v.refs as string[]
-      if (imageCount + refs.length > CONTEXT_LIMITS.images) { partial = true; return { status: 'budget_exhausted', saved: false, message: 'Image limit reached for this turn.' } }
+      if (!opts.unlimitedWork && imageCount + refs.length > CONTEXT_LIMITS.images) { partial = true; return { status: 'budget_exhausted', saved: false, message: 'Image limit reached for this turn.' } }
       imageCount += refs.length
       // Each member fails independently; a partial batch never claims all images opened.
       const results = await Promise.all(refs.map(async ref => {
@@ -158,6 +159,7 @@ export function createProjectContext(opts: {
         if (!opts.sources.some(s => s.dataset === 'image_pixels' && s.recordId === r.source.recordId && s.updatedAt === r.source.updatedAt)) opts.sources.push(r.source)
       }
       pending = [] // pixels are transient; the provider cursor handles this turn's continuation.
+      if (opts.unlimitedWork) byteCount = 0 // Limit the pending provider packet, not previously delivered pixels.
     },
   }
 }

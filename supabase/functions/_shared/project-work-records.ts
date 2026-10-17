@@ -78,7 +78,7 @@ function display(s: WorkSnapshot): Record<string, unknown> {
   return { ...pick(s.record, fields), ...(s.record.archived !== undefined ? { archived: s.record.archived } : {}), ...(s.record.archived_at !== undefined ? { archived: s.record.archived_at !== null } : {}), ...(s.record.phase ? { phase: s.record.phase } : {}), ...(s.record.status ? { status: s.record.status } : {}), ...(s.resource === 'measurements' ? { has_source_image: !!s.record.source_media_id } : {}), ...Object.fromEntries(Object.entries(s.relations).map(([k, rows]) => [k === 'instructions' ? 'instruction_steps' : k, Array.isArray(rows) ? rows.map((r: any) => k === 'needs' ? pick(r, ['kind', 'label', 'notes', 'ready']) : k === 'dependencies' ? pick(r, ['prerequisite_task_name', 'prerequisite_step_title', 'note', 'satisfied']) : k === 'instructions' ? { ...pick(r, ['title', 'instructions', 'is_checkpoint', 'required']), completed: r.completed_at !== null } : ({ name: r.name ?? r.title })) : k === 'readiness' && rows ? { ...pick(rows, ['readiness_state', 'blocker_count', 'review_note']), blockers: (rows.blockers ?? []).map((b: any) => pick(b, ['kind', 'label'])) } : rows])) }
 }
 export function createWorkRecords(opts: {
-  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>;
+  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; unlimitedWork?: boolean;
   readSnapshot?: (input: { resource: WorkResource; key: string }) => PromiseLike<{ data: unknown; error: unknown }>;
   read: (input: { resource: WorkResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
@@ -116,14 +116,14 @@ export function createWorkRecords(opts: {
     return null
   }
   return {
-    tools: WORK_RECORD_TOOLS, get remaining() { return Math.max(0, 24 - reads) }, get partial() { return partial },
+    tools: WORK_RECORD_TOOLS, get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 24 - reads) }, get partial() { return partial },
     /** Latest authorized snapshots, without server identities or stale versions. */
     get currentRecords() { return structuredClone([...latest.values()]) },
     async execute(name: string, value: unknown, schemaVersion: 1 | 2 = 1, refreshValidation = false): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_work_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !WORK_RESOURCES.includes(value.resource) || !(value.query === null || nonempty(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return { status: 'invalid' }
-        if (reads >= 24) return { status: 'budget_exhausted' }
+        if (!opts.unlimitedWork && reads >= 24) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as WorkResource, query: value.query, after: null } : pages.get(value.next_ref)
         if (!input || input.resource !== value.resource || input.query !== value.query) return { status: 'invalid' }
         reads++

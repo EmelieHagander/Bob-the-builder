@@ -29,6 +29,7 @@ try {
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
     let sendMode = 'normal', answerCalls = 0, releaseAnswer
+    let cancelMode = 'success', renewMode = 'success', cancelCalls = 0
     const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
     let releaseReset
@@ -39,7 +40,26 @@ try {
       const who = { ...user, id: authMode === 'other' ? '00000000-0000-0000-0000-000000000099' : user.id, email: authMode === 'guest' ? 'guest@bob.local' : user.email }
       if (req.method() === 'OPTIONS') return respond({ status: 204 })
       if (url.pathname === '/rest/v1/rpc/drawing_work_list') return respond({ json: { items: [], next_cursor: null } })
-      if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'renew_requests') return respond({ json: { ok: true, renewed: 0 } })
+      if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'renew_requests') {
+        if (renewMode === 'unavailable') return respond({status:503,json:{ok:false,error:'service_unavailable'}})
+        let renewed = 0
+        for (const history of histories.values()) for (const row of history.messages) if (row.jobStatus === 'paused') { row.jobStatus = 'running'; renewed++ }
+        return respond({ json: { ok: true, renewed } })
+      }
+      if (url.pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.action === 'cancel') {
+        cancelCalls++
+        const body = req.postDataJSON()
+        assert.deepEqual(Object.keys(body).sort(), ['action','jobId','projectId'])
+        assert.equal(req.headers().authorization, `Bearer ${token}`)
+        const history = histories.get(body.projectId)
+        const row = history?.messages.find(row => row.jobId === body.jobId)
+        assert(row, 'Stop uses the exact owned durable job')
+        if (cancelMode === 'unavailable') return respond({status:503,json:{ok:false,error:'service_unavailable'}})
+        if (row.jobStatus !== 'cancelled') history.messages.push({role:'assistant',text:'Stopped at your request. Changes already saved remain in the project. The request was not completed.',turn_id:row.turn_id,delivery_state:'completed',seq:history.next_seq++,evidence:{kind:'ai_assessment',sources:[],partial:true,writes:row.writes??[]}})
+        row.delivery_state = 'completed'; row.jobStatus = 'cancelled'; row.error = 'user_cancelled'
+        if (cancelMode === 'lost') return route.abort('failed')
+        return respond({json:{ok:true,status:'cancelled',projectId:body.projectId,jobId:body.jobId}})
+      }
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:[],unorganised_tasks:[]}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
@@ -65,7 +85,7 @@ try {
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
-        return respond({ json: row?.background ? { status: row.delivery_state === 'pending' ? 'running' : row.delivery_state, error: row.error, screen: row.screen??null, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
+        return respond({ json: row?.background ? { jobId:row.jobId, status: row.jobStatus ?? (row.delivery_state === 'pending' ? 'running' : row.delivery_state), error: row.error, screen: row.screen??null, writes:row.writes, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -130,7 +150,7 @@ try {
         }
         if (sendMode !== 'normal') {
           const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, screen:body.screen, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
-          if (sendMode === 'background') { pending.background = true; pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
+          if (sendMode === 'background') { pending.background = true; pending.jobId = crypto.randomUUID(); pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
           h.messages.push(pending)
           const finish = () => {
             pending.delivery_state = 'completed'
@@ -138,7 +158,7 @@ try {
           }
           if (sendMode === 'background') {
             releaseAnswer = finish
-            return respond({ status: 202, json: { ok: true, status: 'accepted', projectId: body.projectId, jobId: crypto.randomUUID(), expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } })
+            return respond({ status: 202, json: { ok: true, status: 'accepted', projectId: body.projectId, jobId: pending.jobId, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } })
           }
           if (sendMode === 'lost' || sendMode === 'busy') {
             releaseAnswer = finish
@@ -298,7 +318,54 @@ try {
       assert.equal(answerCalls, before + 1)
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     }
+    // Stop is reachable during a durable job, survives a lost reply, and keeps saved receipts.
+    sendMode = 'background'
+    await drawer.getByRole('textbox').fill('Continue until the planning brief is saved')
+    await drawer.getByRole('button', {name:'Send',exact:true}).click()
+    await drawer.getByRole('button', {name:'Stop',exact:true}).waitFor()
+    const activeHistory = histories.get('A')
+    const activeJob = activeHistory.messages.at(-1)
+    activeJob.writes = [{projectId:'A',dataset:'tasks',recordId:'saved-task',label:'Saved planning brief',operation:'updated',savedAt:new Date().toISOString()}]
+    await drawer.getByRole('textbox').fill('Keep my next instruction')
+    const stopBounds = await drawer.getByRole('button',{name:'Stop',exact:true}).boundingBox()
+    assert(stopBounds && stopBounds.height >= 44 && stopBounds.x >= 0 && stopBounds.x + stopBounds.width <= viewport.width && stopBounds.y + stopBounds.height <= viewport.height)
+    await page.screenshot({path:`test-results/bob-stop-${viewport.width}.png`})
+    cancelMode = 'unavailable'
+    await drawer.getByRole('button',{name:'Stop',exact:true}).click()
+    await drawer.getByRole('alert').filter({hasText:'Could not confirm the stop'}).waitFor()
+    assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
+    cancelMode = 'lost'
+    await drawer.getByRole('button',{name:'Stop',exact:true}).click()
+    await drawer.getByText('Stopped at your request. Changes already saved remain in the project. The request was not completed.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByRole('button',{name:'Stop',exact:true}).count(),0)
+    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep my next instruction')
+    await drawer.getByText('Saved planning brief',{exact:false}).waitFor()
+    await page.reload(); drawer = await open()
+    await drawer.getByText('Stopped at your request. Changes already saved remain in the project. The request was not completed.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByRole('button',{name:'Retry request',exact:true}).count(),0)
+
+    // Expired authority resumes the same job, with no new owner message or model turn.
+    renewMode = 'unavailable'; cancelMode = 'success'
+    const pausedJob = {role:'user',text:'Resume this exact planning request',turn_id:crypto.randomUUID(),jobId:crypto.randomUUID(),jobStatus:'paused',background:true,error:'authentication_expired',delivery_state:'pending',updated_at:new Date().toISOString(),seq:activeHistory.next_seq++}
+    activeHistory.messages.push(pausedJob)
+    const beforeRenew = answerCalls
+    await page.reload(); drawer = await open()
+    await drawer.getByText('Paused: session expired',{exact:true}).waitFor()
+    assert.equal(await drawer.locator('.bob-hammer').count(),0)
+    await drawer.getByRole('button',{name:'Reconnect',exact:true}).click()
+    await drawer.getByRole('alert').filter({hasText:'Bob could not reconnect'}).waitFor()
+    renewMode = 'success'
+    await drawer.getByRole('button',{name:'Reconnect',exact:true}).click()
+    await drawer.getByRole('button',{name:'Reconnect',exact:true}).waitFor({state:'hidden'})
+    assert.equal(answerCalls,beforeRenew)
+    await drawer.getByRole('button',{name:'Stop',exact:true}).click()
+    await drawer.getByRole('button',{name:'Stop',exact:true}).waitFor({state:'hidden'})
+    assert.equal(cancelCalls,3)
     sendMode = 'normal'
+    // Stop queues a project refresh on close. Start with a fully loaded drawer
+    // so the following race pauses a reopening read, not its initial history load.
+    await page.reload(); drawer = await open()
+    await drawer.locator('button:enabled', {hasText:'New conversation'}).waitFor()
     // A slow read started by reopening must not overwrite a newly sent answer.
     const freshBefore = await drawer.getByText('FRESH ANSWER', {exact:true}).count()
     await drawer.getByRole('button', {name:'Close Ask bob',exact:true}).click()
@@ -313,6 +380,7 @@ try {
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     assert.equal(await drawer.getByText('FRESH ANSWER', {exact:true}).count(), freshBefore + 1)
     assert.equal(await drawer.getByText('New question during history refresh', {exact:true}).count(), 1)
+    assert.equal(await drawer.getByText('Stopped at your request. Changes already saved remain in the project. The request was not completed.',{exact:true}).count(),2,'owner stops stay in history after a new instruction')
     // Full page reload while another device's turn is pending.
     const h = histories.get('A'), recoveringTurn = crypto.randomUUID()
     const pending = { role: 'user', text: 'Resume after reload', turn_id: recoveringTurn, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }

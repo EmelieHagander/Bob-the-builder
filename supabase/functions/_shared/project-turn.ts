@@ -37,7 +37,7 @@ export async function runClaimedProjectTurn(opts: {
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
-  deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number;
+  deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
 }): Promise<ProjectAnswer> {

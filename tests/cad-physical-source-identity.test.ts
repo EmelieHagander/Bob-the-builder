@@ -64,3 +64,19 @@ test('P1b: typed dimension validation retains the runtime allowlist', () => {
     assert.throws(() => splitDimensionBindings([{ ...binding, dimension }]), /invalid_dimension_bindings/)
   }
 })
+
+test('unlimited physical source reads retain exact version and identity checks beyond twenty pins', async () => {
+  const snapshots = Array.from({ length: 24 }, (_, i) => ({ ...snapshot, id: `30000000-0000-4000-8000-${String(i + 100).padStart(12, '0')}` }))
+  const pins = snapshots.map(s => ({ space_measurement_id: s.id, space_revision: 3 }))
+  const legacy = fixture(snapshots)
+  await assert.rejects(readPhysicalCadSources(legacy.makeLookup, pins, legacy.receipts), /physical_source_budget/)
+  assert.equal(legacy.reads.length, 0)
+  const open = fixture(snapshots)
+  const records = await readPhysicalCadSources(open.makeLookup, pins, open.receipts, { unlimitedWork: true })
+  assert.equal(records.size, 24)
+  assert.equal(open.reads.length, 26, 'shared space and building retain their exact-read caches')
+  assert.equal(open.receipts.length, 26)
+  const stale = fixture(snapshots.map((s, i) => i === 23 ? { ...s, space_revision: 2 } : s))
+  await assert.rejects(readPhysicalCadSources(stale.makeLookup, pins, stale.receipts, { unlimitedWork: true }),
+    (error: unknown) => error instanceof PhysicalCadSourceError && error.issues.some(issue => issue.id === pins[23].space_measurement_id && issue.reason === 'accepted_physical_source_changed'))
+})

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { projectSchema } from './support/project-schema.ts'
-import { catalogFixture, preTaskWorkflowCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { preContinuationCatalogFixture as catalogFixture, preTaskWorkflowCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { WORK_RECORD_TOOLS, WORK_RECORD_TOOLS_V2, WORK_VALUE_TOOL_NAMES } from '../supabase/functions/_shared/project-work-records.ts'
 import type { AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 

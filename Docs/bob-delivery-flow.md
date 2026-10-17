@@ -292,7 +292,21 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa handling enligt beställarens prioritering, 2026-10-17:** beställaren provar samma uppgifts-/todoändring i en ny körning med GPT-5.4/high. Del 1–3 i [PR-planen för Bobs uppgiftsarbete](#bob-task-pr-plan) är mergade och installerade genom PR #260; [releasebeviset](foundation-verification.md#bob-task-workflow-release-2026-10-17) äger CI, runtimeversioner och aktiveringens återläsning. Undersökningen skiljer ett äldre statusfel, ett nyare textformatfel och för tidiga avslut; [daterat bevis](foundation-verification.md#bob-task-investigation-2026-10-17) äger observationerna och statusproven. Modellbyte och chattens UI-del är uppskjutna till efter beställarens prov. Teknisk release ersätter inte verklig medlemsacceptans av textkvalitet, status och mindre behov av extra ”fortsätt”.
+**Aktivt nästa steg (2026-10-17):** färdigställ och verifiera fortsättning från
+befintligt aktivt minne samt borttagna applikationsbudgetar för nya hållbara
+Bob-körningar. [Konversationsägaren](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
+äger beteendet. Kontrollera samma jobb över arbetspass, sessionsförnyelse och Stop,
+bevarade kvitton och historisk återspelning; därefter CI, samordnad release och
+användarens verkliga prov. Nuvarande modell/reasoning behålls. Detta användarbeslut
+ersätter tidigare krav att behålla kostnads-, anrops- och outputramar för nya jobb.
+
+
+**Efter installation:** beställaren provar samma uppgifts-/todoändring och
+fortsättning i en ny körning med GPT-5.4/high. Modellbyte förblir uppskjutet tills
+resultatet kan bedömas. Teknisk release ersätter inte verklig medlemsacceptans av
+textkvalitet, status och mindre behov av extra ”fortsätt”. Den tidigare
+[uppgiftsreleasen](foundation-verification.md#bob-task-workflow-release-2026-10-17)
+ägs av sitt separata releasebevis.
 
 Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu installerade enligt [releasebeviset](foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17); det tidigare anslutnings-/kataloghindret är inte nästa handling. Kvarvarande serverbindning av planbeslut, evidenslänkar, nästlade förslagsidentiteter, material/inköp, katalog, bild-/ritningskopplingar och geometri ligger kvar hos [skrivägaren](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14). Denna PR gör inte alla verktyg ID-fria och stänger inte konstruktionsacceptansen.
 

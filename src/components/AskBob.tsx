@@ -310,9 +310,13 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [historyReady, setHistoryReady] = useState(false)
   const [historyNotice, setHistoryNotice] = useState('')
   const [working, setWorking] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
+  const [workError, setWorkError] = useState('')
+  const stopPending = useRef(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<RetryTurn | null>(null)
-  const [recovering, setRecovering] = useState<(RetryTurn & { expiresAt: number }) | null>(null)
+  const [recovering, setRecovering] = useState<NonNullable<Awaited<ReturnType<typeof db.getAskBobConversation>>['pending']> | null>(null)
   // A new message rejected because Bob is finishing earlier work (often a
   // background drawing) is resent in this tab with the same turn id until he is free.
   const [waitingFree, setWaitingFree] = useState<(RetryTurn & { until: number; attempt: number }) | null>(null)
@@ -412,7 +416,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent()
     outgoing.current = null; outgoingKey.current = null; serverThread.current = null
-    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice(''); setWaitingFree(null)
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice(''); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
     void (async () => {
       const me = await db.getCurrentUser()
       if (!current()) return
@@ -454,6 +458,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setWorkingLabel(db.describeBobProgress(history.pending?.progress))
     setWorking(!!history.pending)
     setHistoryNotice(held ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
+      : history.pending?.paused ? 'Bob is paused because the session expired. Reconnect to continue the same request; saved work is retained.'
       : history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
   }
 
@@ -519,11 +524,11 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   // commits the answer or reports failure. Durable jobs own their expiry; legacy
   // synchronous requests retain the existing five-minute lease.
   useEffect(() => {
-    if (!recovering) return
+    if (!recovering || stopping) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
     const isCurrent = scope.current.capture()
-    const current = () => !cancelled && isCurrent()
+    const current = () => !cancelled && isCurrent() && !stopPending.current
     const poll = async () => {
       try {
         const history = await db.getAskBobConversation(project.id)
@@ -536,7 +541,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         }
       } catch {
         if (!current()) return
-        if (Date.now() >= recovering.expiresAt) {
+        if (!recovering.jobId && Date.now() >= recovering.expiresAt) {
           setRecovering(null); setWorking(false); setRetry(outgoing.current ?? recovering)
           setHistoryNotice('Could not check the answer. Reconnect and retry to recover it without repeating saved changes.')
           return
@@ -547,7 +552,52 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     }
     timer = setTimeout(poll, 1500)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [recovering?.turnId, recovering?.expiresAt, project.id])
+  }, [recovering?.turnId, recovering?.expiresAt, recovering?.jobId, stopping, project.id])
+
+  async function stopWork() {
+    if (!recovering?.jobId || stopPending.current) return
+    const isCurrent = scope.current.capture()
+    stopPending.current = true; sendVersion.current++; setStopping(true); setWorkError('')
+    try {
+      const status = await db.cancelAskBobTurn(project.id, recovering.jobId)
+      if (!isCurrent()) return
+      if (status === 'cancelled') {
+        setRecovering(null); setWorking(false); setWaitingFree(null); setRetry(null); keepOutgoing(null); setNeedsRefresh(true)
+        setHistoryNotice('Stopped at your request. Changes already saved remain in the project. The request was not completed.')
+      }
+      try {
+        const history = await db.getAskBobConversation(project.id)
+        if (isCurrent() && history.mode === 'server') applyServerHistory(history)
+      } catch {
+        if (isCurrent()) setWorkError(status === 'cancelled' ? 'The stop is confirmed. Reconnect to see the latest saved changes.' : 'The request has already ended. Reconnect to check its result.')
+      }
+    } catch (error) {
+      try {
+        const history = await db.getAskBobConversation(project.id)
+        if (isCurrent() && history.mode === 'server') {
+          applyServerHistory(history)
+          if (!history.pending) { setNeedsRefresh(true); return }
+        }
+      } catch { /* Keep the same job and an honest unconfirmed stop. */ }
+      if (isCurrent()) setWorkError(error instanceof Error ? error.message : 'Could not confirm the stop. Bob may still be working.')
+    } finally {
+      if (isCurrent()) { stopPending.current = false; setStopping(false) }
+    }
+  }
+
+  async function reconnectWork() {
+    if (reconnecting || stopping) return
+    const isCurrent = scope.current.capture()
+    const version = sendVersion.current
+    setReconnecting(true); setWorkError('')
+    try {
+      await db.renewDrawingRequests(project.id)
+      const history = await db.getAskBobConversation(project.id)
+      if (isCurrent() && version === sendVersion.current && history.mode === 'server') applyServerHistory(history)
+    } catch (error) {
+      if (isCurrent()) setWorkError(error instanceof Error ? error.message : 'Could not reconnect. Saved work is retained.')
+    } finally { if (isCurrent()) setReconnecting(false) }
+  }
 
   useEffect(() => {
     if (!historyReady || !historyKey || !localHistory) return
@@ -620,7 +670,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const send = async (retryRequest?: RetryTurn, appendUser = !retryRequest) => {
     const imageIds = retryRequest?.imageIds ?? (appendUser && !retryRequest && images.length ? images.map(image => image.id) : undefined)
     const text = (retryRequest?.text ?? draft).trim() || (imageIds?.length ? 'Please look at the attached images.' : '')
-    if (!text || (appendUser && !retryRequest && images.some(image => image.status !== 'ready')) || working || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
+    if (!text || (appendUser && !retryRequest && images.some(image => image.status !== 'ready')) || working || stopping || stopPending.current || resetting || resetPending.current || !historyReady || confirmReset || (outgoing.current && appendUser)) return
     if (waitingFree && retryRequest?.turnId !== waitingFree.turnId) setWaitingFree(null)
     sendVersion.current++
     const isCurrent = scope.current.capture()
@@ -629,13 +679,13 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const screen = appendUser ? getBobSurface(project.id) : retryRequest?.screen
     if (!localHistory) keepOutgoing({ text, turnId: clientTurnId, screen, imageIds, threadId: serverThread.current })
     if (appendUser) { setDraft(''); if (!retryRequest) setImages([]); setImageError('') }
-    setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice('')
+    setExpanded(false); setShowJump(false); stickToEnd.current = true; setRetry(null); setHistoryNotice(''); setWorkError('')
     if (appendUser) push({ from: 'user', text, turnId: clientTurnId, imageIds })
     setWorking(true); setWorkingLabel(db.describeBobProgress(undefined))
     const result = await db.askBob(project.id, text, clientTurnId, screen, imageIds)
     if (!isCurrent()) return
     if ('pending' in result) {
-      setRecovering({ text, turnId: clientTurnId, screen, imageIds, expiresAt: result.expiresAt })
+      setRecovering({ text, turnId: clientTurnId, screen, imageIds, jobId: result.jobId, expiresAt: result.expiresAt })
       return
     }
     // A disconnected HTTP response does not mean the server stopped working.
@@ -753,7 +803,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           {!extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
           {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
           {historyNotice && <div role="status" className="bob-history-notice">{historyNotice}</div>}
-          {working && <WorkingBubble label={workingLabel} />}
+          {working && !recovering?.paused && <WorkingBubble label={workingLabel} />}
         {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
         {retry && <details className="bob-retry-details">
           <summary>About this retry</summary>
@@ -776,6 +826,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <span>{outgoing.current ? 'Receipt not confirmed' : 'Answer interrupted'}</span>
           <button className="btn btn-primary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)}>Retry request</button>
         </div>}
+        {working && recovering?.jobId && <div className="bob-recovery" role="status">
+          <span>{recovering.paused ? 'Paused: session expired' : 'Saved changes will remain.'}</span>
+          {recovering.paused && <button type="button" className="btn" disabled={reconnecting || stopping} onClick={() => void reconnectWork()}>{reconnecting ? 'Reconnecting…' : 'Reconnect'}</button>}
+          <button type="button" className="btn" disabled={stopping} onClick={() => void stopWork()}>{stopping ? 'Stopping…' : 'Stop'}</button>
+        </div>}
+        {workError && <p className="bob-image-error" role="alert">{workError}</p>}
         {!!images.length && <div className="bob-attachments" aria-label="Images for your next message">
           {images.map(image => <div className="bob-attachment" key={image.id}>
             {image.status === 'ready' ? <StoredImage projectId={project.id} image={{ id: image.id, title: image.file.name }} original allowRetry={false} /> : <Icon name="image" size={24} />}
@@ -796,7 +852,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           }} />
           <div className="bob-composer-actions">
             <button type="button" className="btn" aria-label={expanded ? 'Collapse message editor' : 'Expand message editor'} aria-expanded={expanded} onClick={() => { setExpanded(value => !value); composer.current?.focus() }}><Icon name={expanded ? 'arrows-in-simple' : 'arrows-out-simple'} size={18} /></button>
-            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || resetting || !historyReady || (!draft.trim() && !images.length) || images.some(image => image.status !== 'ready') || !!outgoing.current}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
+            <button type="submit" className="btn btn-primary" aria-label="Send" disabled={working || stopping || resetting || !historyReady || (!draft.trim() && !images.length) || images.some(image => image.status !== 'ready') || !!outgoing.current}><Icon name="paper-plane-right" weight="fill" size={18} /></button>
           </div>
         </form>
       </aside>

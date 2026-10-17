@@ -20,19 +20,19 @@ function display(s: PlanLinkSnapshot) {
     links: s.links.map(l => pick(l, ['step_title', 'task_name', 'primary'])) }
 }
 export function createPlanLinks(opts: {
-  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>;
+  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; unlimitedWork?: boolean;
   read: (input: { resource: PlanLinkResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
   const snapshots = new Map<string, PlanLinkSnapshot>(), pages = new Map<string, { resource: PlanLinkResource; query: string | null; after: string }>()
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   return {
-    tools: PLAN_LINK_TOOLS, get remaining() { return Math.max(0, 24 - reads) }, get partial() { return partial },
+    tools: PLAN_LINK_TOOLS, get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 24 - reads) }, get partial() { return partial },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_plan_link_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !['plan', 'steps', 'tasks'].includes(value.resource) || !(value.query === null || nonempty(value.query, 200)) || !(value.next_ref === null || nonempty(value.next_ref, 200))) return { status: 'invalid' }
-        if (reads >= 24) return { status: 'budget_exhausted' }
+        if (!opts.unlimitedWork && reads >= 24) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as PlanLinkResource, query: value.query, after: null } : pages.get(value.next_ref)
         if (!input || input.resource !== value.resource || input.query !== value.query) return { status: 'invalid' }
         reads++

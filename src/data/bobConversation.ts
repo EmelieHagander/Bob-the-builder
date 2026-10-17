@@ -7,6 +7,7 @@ import { readBobTranscript, readDrawingTurnRecovery, reconcileDrawingTurnRecover
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 
 const GUEST_EMAIL = 'guest@bob.local'
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type AskBobResponse = {
   ok: boolean
@@ -56,7 +57,7 @@ export interface BobConversationHistory {
   mode: 'server' | 'local'
   messages: ChatMessage[]
   retry?: { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[] }
-  pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[]; expiresAt: number; progress?: BobProgress; notice?: string }
+  pending?: { text: string; turnId: string; screen?: BobScreenPointer | null; imageIds?: string[]; jobId?: string; paused?: boolean; expiresAt: number; progress?: BobProgress; notice?: string }
   lastCompletedTurnId?: string
   threadId?: string
   ownerId?: string
@@ -96,19 +97,25 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
     if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
+    const jobId = typeof job.data?.jobId === 'string' && UUID.test(job.data.jobId) ? job.data.jobId : undefined
     const drawingRecovery = readDrawingTurnRecovery(job.data?.drawingRecovery)
     const recoveredBudgetStop = drawingRecovery?.status === 'completed' && job.data?.status === 'failed' && job.data?.error === 'turn_budget_exhausted'
     transcript = reconcileDrawingTurnRecovery(transcript, unfinished.turnId, drawingRecovery, recoveredBudgetStop)
     // Older jobs have no pointer. Never replace a recovered turn with this page.
     try { unfinished.screen = parseBobScreen(job.data?.screen) } catch { unfinished.screen = null }
-    if (recoveredBudgetStop) {
+    if (job.data?.status === 'cancelled') {
+      pending = undefined; retry = undefined
+      const evidence = { kind: 'ai_assessment', sources: [], partial: true, writes: job.data.writes }
+      transcript.messages.push({ from: 'bob', turnId: unfinished.turnId, text: 'Stopped at your request. Changes already saved remain in the project. The request was not completed.',
+        ...(Array.isArray(job.data.writes) && isBobAnswerEvidence(evidence, projectId) ? { evidence } : {}) })
+    } else if (recoveredBudgetStop) {
       pending = undefined; retry = undefined
     } else if (drawingRecovery && drawingRecovery.status !== 'completed') {
       pending = { ...unfinished, expiresAt: drawingRecovery.expiresAt, progress: parseProgress(drawingRecovery.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
-    } else if (job.data && ['queued', 'running'].includes(job.data.status)) {
+    } else if (job.data && ['queued', 'running', 'paused'].includes(job.data.status)) {
       const expiresAt = Date.parse(job.data.expiresAt)
       if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
-      pending = { ...unfinished, expiresAt, progress: parseProgress(job.data.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
+      pending = { ...unfinished, jobId, paused: job.data.status === 'paused', expiresAt, progress: parseProgress(job.data.progress), notice: byTurn.get(unfinished.turnId) }; retry = undefined
     } else if (job.data?.status === 'failed') {
       pending = undefined
       if (job.data.error === 'turn_budget_exhausted') {
@@ -146,8 +153,8 @@ export async function markBobChatRead(projectId: string, threadId: string, seq: 
   window.dispatchEvent(new Event(BOB_INBOX_EVENT))
 }
 
-/** A background turn runs for up to twenty minutes on the sender's access token.
- * Refresh a token that would expire first, so long work is not cut short. */
+/** Refresh a session nearing expiry before lending its current authority to Bob.
+ * Long-running jobs can renew this same authority without creating new work. */
 async function ensureFreshSession(): Promise<void> {
   if (!bobDb) return
   try {
@@ -160,14 +167,17 @@ async function ensureFreshSession(): Promise<void> {
 async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse> {
   if (!bobDb) return { ok: false, error: 'not_configured' }
   try {
-    if (body.background === true) await ensureFreshSession()
+    if (body.background === true || body.action === 'renew_requests') await ensureFreshSession()
     const { data, error } = await bobDb.functions.invoke('ask-bob', { body })
     if (error) {
       const response = (error as { context?: Response }).context
       if (response instanceof Response) {
         if (response.status === 401) return { ok: false, error: 'unauthorized' }
         if (response.status === 403) return { ok: false, error: 'project_denied' }
-        if (response.status === 409) return { ok: false, error: 'turn_in_flight' }
+        if (response.status === 409) {
+          const detail = await response.clone().json().catch(() => null)
+          return { ok: false, error: body.action === 'cancel' && detail?.error === 'turn_not_in_flight' ? 'turn_not_in_flight' : 'turn_in_flight' }
+        }
         if (response.status === 503) {
           const detail = await response.clone().json().catch(() => null)
           if (['context_preparing', 'context_unavailable', 'turn_budget_exhausted'].includes(detail?.error)) return { ok: false, error: detail.error }
@@ -185,17 +195,29 @@ export async function askBob(
   clientTurnId: string = crypto.randomUUID(),
   screen?: BobScreenPointer | null,
   imageIds?: string[],
-): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string } | { pending: true; expiresAt: number }> {
+): Promise<{ answer: string; evidence: AnswerEvidence } | { unavailable: string } | { pending: true; jobId: string; expiresAt: number }> {
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   const res = await callAskBob({ action: 'send', projectId, message, clientTurnId, background: true, ...(screen !== undefined ? { screen } : {}), ...(imageIds !== undefined ? { imageIds } : {}) })
   if (projectId !== getActiveProjectId()) return { unavailable: 'project_changed' }
   if (res.ok && res.projectId !== projectId) return { unavailable: 'project_mismatch' }
-  if (res.ok && res.status === 'accepted' && res.jobId && Number.isFinite(Date.parse(res.expiresAt ?? ''))) return { pending: true, expiresAt: Date.parse(res.expiresAt!) }
+  if (res.ok && res.status === 'accepted' && res.jobId && UUID.test(res.jobId) && Number.isFinite(Date.parse(res.expiresAt ?? ''))) return { pending: true, jobId: res.jobId, expiresAt: Date.parse(res.expiresAt!) }
   if (res.ok && res.status === 'completed' && res.summary && isBobAnswerEvidence(res.evidence, projectId)
     && res.evidence.sources.every(source => source.projectId === projectId)) {
     return { answer: res.summary, evidence: res.evidence }
   }
   return { unavailable: res.error ?? 'unsupported_response' }
+}
+
+/** Stop the exact owned background job; a lost response is not proof of a stop. */
+export async function cancelAskBobTurn(projectId: string, jobId: string): Promise<'cancelled' | 'not_in_flight'> {
+  if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Reopen Bob before stopping this request.')
+  const result = await callAskBob({ action: 'cancel', projectId, jobId })
+  if (projectId !== getActiveProjectId()) throw new Error('The active project changed. Check the request in its project.')
+  if (result.ok && result.status === 'cancelled' && result.projectId === projectId && result.jobId === jobId) return 'cancelled'
+  if (result.error === 'turn_not_in_flight') return 'not_in_flight'
+  if (result.error === 'unauthorized') throw new Error('Sign in again to stop this request. Its stop has not been confirmed.')
+  if (result.error === 'project_denied') throw new Error('Your access to this request could not be confirmed. Check your project access.')
+  throw new Error('Could not confirm the stop. Bob may still be working; reconnect and try Stop again.')
 }
 
 /** Clear only the caller's active conversation; never fall back to a fake local
@@ -239,12 +261,12 @@ export function refreshAskBobProject(projectId: string): void {
 }
 
 /** Refresh existing delegated authority from the normal current Auth session.
- * This endpoint cannot create work, change its instruction or increase budget. */
+ * This endpoint cannot create work or change its instruction. */
 export async function renewDrawingRequests(projectId:string):Promise<void>{
  if(!bobDb||getActiveProjectId()!==projectId)return
  const {data}=await bobDb.auth.getSession()
  if(!data.session||data.session.user.email?.toLowerCase()===GUEST_EMAIL)return
- const result=await bobDb.functions.invoke('ask-bob',{body:{action:'renew_requests',projectId}})
+ const result=await callAskBob({action:'renew_requests',projectId})
  if(getActiveProjectId()!==projectId)return
- if(result.error||!result.data?.ok)throw new Error('Drawing requests could not reconnect. Sign in again if your session expired.')
+ if(!result.ok)throw new Error('Bob could not reconnect. Sign in again if your session expired; saved work is retained.')
 }

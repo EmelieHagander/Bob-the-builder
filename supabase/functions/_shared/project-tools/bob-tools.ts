@@ -59,7 +59,8 @@ export function createBobToolSession(opts: {
   const workVersion = (name: string): 1 | 2 => (WORK_VALUE_TOOL_NAMES as readonly string[]).includes(name)
     && opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'tools.' + name
       && (row.definition.envelope as { schema_version?: unknown })?.schema_version === 2) ? 2 : 1
-  const refreshWorkValidation = opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'agent-contract.ask-bob' && row.metadata.work_completion_version === 1) ?? false
+  const refreshWorkValidation = opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'agent-contract.ask-bob'
+    && (row.metadata.work_completion_version === 1 || row.metadata.work_completion_version === 2)) ?? false
   const shelves = opts.aiCatalog?.definition('bob.tools', 'tool_contract').definition.shelves as typeof TOOLBOX_SHELVES | undefined
   const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? (shelves ? shelves.find(s => s.tools.includes(def.spec.function.name))?.label ?? 'Other tools' : shelfOf(def.spec.function.name)) })
   const registered: ToolDefinition[] = [

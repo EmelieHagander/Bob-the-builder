@@ -503,3 +503,16 @@ runtime and live policy 2 until all pinned schema-2 jobs finish. This supersedes
 the generic Edge-first rollback guidance for this publication. No stored user
 instructions are rewritten on deployment. [Release evidence](foundation-verification.md#bob-task-workflow-release-2026-10-17)
 separates technical checks from the owner's real-model acceptance.
+
+## Unlimited durable work — 2026-10-17
+
+New jobs pin the work-allowance policy and AI manifest at enqueue. Policy 1 removes
+application write/correction quotas and the cumulative receipt ceiling in every
+retained writer delegate. The SQL exception requires the exact owned Project,
+thread, turn and generation, a live running job/lease and unexpired caller authority.
+No model or client input can grant it. Historical/no-job writes retain prior limits.
+
+Read-before-write, canonical domain commands, Task completion checks, revisions,
+exact replay, uncertain-write fences and settlement all remain. Recovered and
+rendered receipt sets are not cut to 32. Stop invalidates the active generation;
+confirmed writes remain saved. No deployment rewrites existing Task instructions.

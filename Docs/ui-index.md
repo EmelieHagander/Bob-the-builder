@@ -92,6 +92,12 @@ actions. User photos and saved illustrations open their originals from the chat.
 The [media contract](media-and-steps.md#chat-photos-and-reference-mockups) owns limits,
 private persistence and reference-based mockup delivery.
 
+Active owned background turns expose **Stop** in the existing conversation action
+row. It cancels that exact job, preserves confirmed changes and leaves an honest
+partial cancellation notice. Expired authorization remains paused work; reconnect
+renews the same job with the user's ordinary session, without another send. Lost
+send/cancel responses reconcile through the exact-turn status and transcript.
+
 The owning browser flows are `check-project-work-browser.mjs`,
 `check-project-browser.mjs`, `check-bob-reset-browser.mjs` and
 `check-bob-images-browser.mjs`; fixture screenshots

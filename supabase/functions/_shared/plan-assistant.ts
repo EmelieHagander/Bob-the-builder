@@ -167,7 +167,7 @@ function referencedSources(compiled:any,review:any,sources:ProjectSource[]){
 
 export function createPlanAssistant(opts:{
   aiCatalog:AiCatalogSession;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;
-  calculator?:ProjectCalculator;
+  calculator?:ProjectCalculator;unlimitedWork?:boolean;
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
@@ -181,17 +181,17 @@ export function createPlanAssistant(opts:{
     get canSave(){return savableProposal!==null},
     get compilationAttempted(){return compilationAttempted},
     get compiledProposal(){return savableProposal?structuredClone(savableProposal):null},
-    get remaining(){return Math.max(0,MAX_CALLS-used)},
-    get editRemaining(){return Math.max(0,4-editUsed)},
+    get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,MAX_CALLS-used)},
+    get editRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,4-editUsed)},
     get partial(){return partial},
     get sources(){return sources.slice()},
     async consult(name:string,value:unknown){
       if(name===EDIT_PLAN_TOOL.function.name){
-        if(editUsed++>=4)return {status:'budget_exhausted',saved:false}
+        if(editUsed++>=4&&!opts.unlimitedWork)return {status:'budget_exhausted',saved:false}
         savableProposal=null;compilationAttempted=true
         if(!await opts.hasAccess())return {status:'denied',saved:false}
         let snapshot:Awaited<ReturnType<typeof buildSnapshot>>
-        try{snapshot=await buildSnapshot(opts.makeLookup(),opts.deadline??Date.now()+90000)}
+        try{snapshot=await buildSnapshot(opts.makeLookup(),opts.deadline??(opts.unlimitedWork?Infinity:Date.now()+90000))}
         catch(error){rethrowContinuation(error);partial=true;return {status:'unavailable',stage:'snapshot',saved:false,reason:'The complete current plan context could not be read.'}}
         let compiled:ReturnType<typeof editPlanSnapshot>
         try{compiled=editPlanSnapshot(snapshot.data,value)}
@@ -219,12 +219,12 @@ export function createPlanAssistant(opts:{
           ? null
           : undefined
       if(planIntent===undefined) return {status:'invalid',saved:false}
-      if(used>=MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
+      if(!opts.unlimitedWork&&used>=MAX_CALLS) {partial=true;return {status:'budget_exhausted',saved:false}}
       used++
       savableProposal=null
       if(mode==='compile_plan') compilationAttempted=true
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const deadline=opts.deadline??Date.now()+90000
+      const deadline=opts.deadline??(opts.unlimitedWork?Infinity:Date.now()+90000)
       const lookup=opts.makeLookup()
       let snapshot:{data:Record<string,unknown>;partial:boolean;sources:ProjectSource[]}
       try{snapshot=await buildSnapshot(lookup,deadline)}catch(e){
@@ -241,7 +241,7 @@ export function createPlanAssistant(opts:{
       if(mode==='audit_plan'&&!currentPlan) return {status:'not_initialized',saved:false}
       // One compiler/reviewer pair per Bob tool call. Return to Bob before any repair.
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const calculatorCall=(o:OpenAIServiceOptions)=>callWithCalculator(o,{catalog:opts.aiCatalog,calculator:opts.calculator,hasAccess:opts.hasAccess,deadline,callModel:opts.callModel})
+      const calculatorCall=(o:OpenAIServiceOptions)=>callWithCalculator(o,{catalog:opts.aiCatalog,calculator:opts.calculator,unlimitedWork:opts.unlimitedWork,hasAccess:opts.hasAccess,deadline,callModel:opts.callModel})
       const compiler=await calculatorCall({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
         userId:opts.userId,catalogRoleKey:'plan-compiler',catalogSchemaKey:'bob_plan_compilation',
@@ -298,7 +298,7 @@ export function createPlanAssistant(opts:{
       if(mode==='compile_plan') repairFeedback={compiled_plan:structuredClone(compiled),review:structuredClone(review),server_validation:structuredClone(serverValidation)}
       for(const s of referencedSources(compiled,review,snapshot.sources)) if(!sources.some(x=>x.dataset===s.dataset&&x.recordId===s.recordId)) sources.push(s)
       return {
-        status:'ok',saved:false,mode,attempts:used,remaining_attempts:Math.max(0,MAX_CALLS-used),current_revision:expectedRevision,compiled_plan:{
+        status:'ok',saved:false,mode,attempts:used,remaining_attempts:opts.unlimitedWork?null:Math.max(0,MAX_CALLS-used),current_revision:expectedRevision,compiled_plan:{
           expected_revision:compiled.expected_revision,summary:compiled.summary,reason:compiled.reason,steps:compiled.steps,
         },proposal_ready:savableProposal!==null,task_candidates:compiled.task_candidates??[],task_links_saved:false,observations:compiled.observations??[],
         review,server_validation:serverValidation,context:{partial:snapshot.partial,records:Object.fromEntries(Object.entries(snapshot.data).map(([k,v])=>[k,Array.isArray(v)?v.length:0]))},
@@ -307,7 +307,7 @@ export function createPlanAssistant(opts:{
           (savableProposal
             ? catalogText("feedback.plan-assistant.note.5c04f4599184")
             : catalogText("feedback.plan-assistant.note.38e56a34f20e"))+
-          (used>=MAX_CALLS?catalogText("feedback.plan-assistant.note.92132e480769"):catalogText("feedback.plan-assistant.note.e6f48179b693"))+
+          (!opts.unlimitedWork&&used>=MAX_CALLS?catalogText("feedback.plan-assistant.note.92132e480769"):catalogText("feedback.plan-assistant.note.e6f48179b693"))+
           catalogText("feedback.plan-assistant.note.3f00f5401851"),
       }
     },

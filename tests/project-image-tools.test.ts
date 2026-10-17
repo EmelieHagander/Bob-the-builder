@@ -28,3 +28,47 @@ test('a photo mockup keeps exact reference identities and never falls back after
  await createProjectImageTools({...noRefs.opts,defaultImageIds:[photo]}).execute('generate_project_image',{...args,reference_image_ids:[]})
  assert.deepEqual(received[1],[args.prompt,[]],'explicit no-reference illustration is preserved')
 })
+
+test('unlimited image work allows distinct completed images while exact retries keep the saved identity',async()=>{
+ const f=fixture(),tools=createProjectImageTools({...f.opts,unlimitedWork:true})
+ const first=await tools.execute('generate_project_image',args)
+ assert.equal(first.saved,true)
+ const repeat=await tools.execute('generate_project_image',{...args,request_quote:'Gör bilden vid steget'})
+ assert.equal(repeat.status,'already_generated');assert.equal(repeat.media_id,first.media_id);assert.equal(f.generations,1)
+ const next=await tools.execute('generate_project_image',{...args,prompt:'A second useful instruction view'})
+ assert.equal(next.saved,true);assert.notEqual(next.media_id,first.media_id);assert.equal(f.generations,2)
+})
+
+test('unlimited image work recovers pending identity before permitting another generation',async()=>{
+ const f=fixture();let uploadFails=true;f.opts.upload=async()=>{if(uploadFails)throw new Error('offline')}
+ const tools=createProjectImageTools({...f.opts,unlimitedWork:true})
+ const first=await tools.execute('generate_project_image',args)
+ const next={...args,prompt:'A second useful instruction view'}
+ const blocked=await tools.execute('generate_project_image',next)
+ assert.equal(blocked.status,'recovery_required');assert.equal(blocked.media_id,first.media_id);assert.equal(f.generations,1)
+ const finalized=await tools.execute('finalize_project_image',{media_id:first.media_id,request_quote:'Gör bilden'})
+ assert.equal(finalized.status,'saved')
+ assert.equal((await tools.execute('generate_project_image',args)).status,'already_generated')
+ uploadFails=false
+ assert.equal((await tools.execute('generate_project_image',next)).status,'saved');assert.equal(f.generations,2)
+})
+
+test('unlimited image work does not repeat a failed identical generation but allows a corrected request',async()=>{
+ const f=fixture();let generations=0
+ const tools=createProjectImageTools({...f.opts,unlimitedWork:true,generate:async()=>++generations===1?{ok:false as const,error:'unavailable'}:{ok:true as const,image:png()}})
+ assert.equal((await tools.execute('generate_project_image',args)).status,'unavailable')
+ assert.equal((await tools.execute('generate_project_image',args)).status,'no_progress');assert.equal(generations,1)
+ assert.equal((await tools.execute('generate_project_image',{...args,prompt:'Corrected reference-free diagram'})).saved,true)
+ assert.equal(generations,2)
+})
+
+test('unlimited image work respects the root deadline without the legacy fifteen-second reserve',async t=>{
+ const start=Date.now();let clock=start;t.mock.method(Date,'now',()=>clock)
+ const f=fixture(),legacy=createProjectImageTools({...f.opts,deadline:start+10000})
+ assert.equal((await legacy.execute('generate_project_image',args)).status,'budget_exhausted')
+ const tools=createProjectImageTools({...f.opts,unlimitedWork:true,deadline:start+10000})
+ assert.equal((await tools.execute('generate_project_image',args)).saved,true)
+ clock=start+10001
+ assert.equal((await tools.execute('generate_project_image',{...args,prompt:'Another instruction'})).status,'budget_exhausted')
+ assert.equal(f.generations,1)
+})

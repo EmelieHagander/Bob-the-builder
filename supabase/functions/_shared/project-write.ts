@@ -217,7 +217,7 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)
 }
-export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean } = {}) {
+export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean } = {}) {
   let used = 0, invalidAttempts = 0
   let uncertain = false
   let settled = false
@@ -243,16 +243,16 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
     /** Only results reached at this execution/replay position. Recovery may know
      * later writes, which must not change an earlier journaled review input. */
     get executedReceipts() { return [...executedReceipts] },
-    get remaining() { return uncertain || settled ? 0 : invalidAttempts >= 12 ? 0 : Math.max(0, BOB_WRITE_LIMIT - used) },
-    get correctionsRemaining() { return Math.max(0, 12 - invalidAttempts) },
+    get remaining() { return uncertain || settled ? 0 : options.unlimitedWork ? Infinity : invalidAttempts >= 12 ? 0 : Math.max(0, BOB_WRITE_LIMIT - used) },
+    get correctionsRemaining() { return options.unlimitedWork ? Infinity : Math.max(0, 12 - invalidAttempts) },
     get uncertain() { return uncertain },
     get hasUnresolvedWrites() { return corrections.size > 0 },
     /** Tool names with a rejected change that no later save corrected. */
     get unresolvedTools() { return [...corrections].map(k => { try { return String(JSON.parse(k)[0]) } catch { return 'unknown' } }) },
-    get needsRepair() { return !uncertain && !settled && used < BOB_WRITE_LIMIT && invalidAttempts < 12 && corrections.size > 0 },
+    get needsRepair() { return !uncertain && !settled && (options.unlimitedWork || used < BOB_WRITE_LIMIT && invalidAttempts < 12) && corrections.size > 0 },
     async recover(): Promise<WriteReadback[]> {
       const { data, error } = await read()
-      if (error || !Array.isArray(data) || data.length > BOB_WRITE_LIMIT) throw new Error('Write recovery unavailable')
+      if (error || !Array.isArray(data) || (!options.unlimitedWork && data.length > BOB_WRITE_LIMIT)) throw new Error('Write recovery unavailable')
       data.map(r => checkedReceipt(r, projectId)).forEach(remember)
       return receipts
     },
@@ -260,7 +260,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
       const { data, error } = await settle()
       const result = data as { generation: number; receipts: unknown[] }
       if (error || !result || !Number.isSafeInteger(result.generation) || result.generation < 1
-        || !Array.isArray(result.receipts) || result.receipts.length > BOB_WRITE_LIMIT) throw new Error('Write settlement unavailable')
+        || !Array.isArray(result.receipts) || (!options.unlimitedWork && result.receipts.length > BOB_WRITE_LIMIT)) throw new Error('Write settlement unavailable')
       const confirmed = result.receipts.map(r => checkedReceipt(r, projectId))
       receipts.splice(0, receipts.length, ...confirmed)
       settled = true
@@ -296,7 +296,7 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
     async commit(payload: WritePayload | null): Promise<WriteResult> {
       if (settled) return { status: 'denied' }
       if (uncertain) return { status: 'unknown', message: 'A prior write has an uncertain outcome. Stop; do not retry or claim it failed.' }
-      if (used >= BOB_WRITE_LIMIT || invalidAttempts >= 12) return { status: 'budget_exhausted' }
+      if (!options.unlimitedWork && (used >= BOB_WRITE_LIMIT || invalidAttempts >= 12)) return { status: 'budget_exhausted' }
       if (!payload || !payload.request_quote || !userMessage.includes(payload.request_quote)) { invalidAttempts++; return { status: 'invalid', message: 'No change made: the call does not match the tool schema. Check the fields against the tool description and retry.' } }
       try {
         const { data, error } = await transport(payload)
