@@ -254,15 +254,32 @@ Otherwise, load T1 and the unsummarized older prefix under the service-only clai
 
 The separate summarizer has no tools, receives no provider cursor, treats transcript text as untrusted data and preserves units, assumptions, explicit corrections and open dependencies. Structured output indexes each newly folded message using a supplied sequence number; invalid/future/duplicate pointers are rejected before saving. Older pointer topics compress into the gist while originals remain retrievable. Claimed saves in prose are not receipts. `context-summary/global` has its own governed mini/low settings and usage category through the same shared AI service. `ask-bob/global` is reserved for the main standard/high model. Neither changes another app's settings.
 
-Newly generated gists are constrained to 6,000
-characters and pointer topics to 200 in the output schema and runtime validation.
-The complete JSON still must fit 12,000 characters. Older valid stored briefs may
-exceed the new gist target; they remain readable and are recompressed on the next
-fold. An invalid size, shape or sequence index gets one repair attempt from the
-same original sources within the preparation deadline. Only a valid fold advances
-the compare-and-swap watermark. Neither failed candidate is truncated or saved;
-two failures preserve the prior brief and exact transcript and return the existing
-retryable failure. Journal replay reuses the first response across worker yields.
+### Managed memory navigation — 2026-10-17
+
+New executions pin `memoryManagementVersion: 1` in their durable execution identity.
+The model maintains the gist; code manages its bounded navigation index. Every
+newly folded source gets a pointer before optional older hints are selected. A
+missing model pointer uses only the source's sequence, role and delivery state,
+never an invented topic. Valid model topics replace these neutral descriptors
+when they fit. Optional model-selected older hints yield first, newest hints
+preferred. This prevents a full index from blocking the next two messages.
+
+New gists are constrained to 6,000 characters, pointer topics to 200 and the index
+to 40 entries. The complete serialized JSON, including escapes, must fit 12,000
+characters. These are compact-memory limits, not a limit on saved conversation
+length: all original messages remain available to same-thread exact search even
+after their hints leave the index. T1 remains the latest five individual messages.
+No complete older transcript or previous-turn provider chain is sent to main Bob.
+
+Older valid stored briefs may exceed the new gist target; they remain readable
+and are recompressed on the next fold. Invalid gist size, shape, duplicate/future
+or unsupplied references get one repair attempt from the same original sources
+within the preparation deadline. The gist is never character-sliced. Only a valid
+managed fold advances the compare-and-swap watermark; two rejected candidates
+preserve the prior brief and exact transcript and return the existing retryable
+failure. Executions whose stored identity lacks the new version keep the previous
+validation and model/save inputs. Journal replay reuses the first response across
+worker yields. No schema, catalog or model-setting migration is needed.
 Diagnostics record validation reason and size, never conversation text. This
 repairs the failure before main Bob, image inspection or CAD can start; a guest
 read-only release check does not exercise private-thread summarization.

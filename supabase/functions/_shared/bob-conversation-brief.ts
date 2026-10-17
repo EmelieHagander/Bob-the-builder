@@ -16,7 +16,7 @@ export const CONVERSATION_BRIEF_SCHEMA = {
     } },
   }, required: ['gist', 'index'],
 }
-export function checkedBrief(value: unknown, through: number, maxGistCharacters: number = BRIEF_LIMITS.characters): ConversationBrief {
+function briefParts(value: unknown, through: number, maxGistCharacters: number): ConversationBrief {
   const v = value as ConversationBrief
   if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !['gist','index'].includes(k))
     || typeof v.gist !== 'string' || !v.gist.trim() || !Array.isArray(v.index)) throw new InvalidConversationBrief('shape')
@@ -24,8 +24,46 @@ export function checkedBrief(value: unknown, through: number, maxGistCharacters:
       || !Number.isSafeInteger(e.seq) || e.seq < 1 || e.seq > through
       || typeof e.descriptor !== 'string' || !e.descriptor.trim() || [...e.descriptor].length > BRIEF_LIMITS.descriptor)
     || new Set(v.index.map(e => e.seq)).size !== v.index.length) throw new InvalidConversationBrief('pointers')
-  if ([...v.gist].length > maxGistCharacters || [...JSON.stringify(v)].length > BRIEF_LIMITS.characters) throw new InvalidConversationBrief('size')
+  if ([...v.gist].length > maxGistCharacters) throw new InvalidConversationBrief('size')
   return { gist: v.gist, index: v.index.slice().sort((a,b) => a.seq-b.seq) }
+}
+const briefCharacters = (brief: ConversationBrief) => [...JSON.stringify(brief)].length
+export function checkedBrief(value: unknown, through: number, maxGistCharacters: number = BRIEF_LIMITS.characters): ConversationBrief {
+  const brief = briefParts(value, through, maxGistCharacters)
+  if (briefCharacters(brief) > BRIEF_LIMITS.characters) throw new InvalidConversationBrief('size')
+  return brief
+}
+
+/** The model maintains meaning; the manager owns bounded navigation. Original
+ * messages remain in the private transcript even when an old hint leaves T2.
+ * Never invent a topic for a missing model pointer: use only source metadata. */
+export function manageConversationBrief(value: unknown, previous: ConversationBrief,
+  older: readonly { seq: number; role: 'user' | 'assistant'; state: 'pending' | 'completed' | 'failed' }[], through: number): ConversationBrief {
+  const candidate = briefParts(value, through, BRIEF_LIMITS.gist)
+  const known = new Set([...previous.index.map(e => e.seq), ...older.map(m => m.seq)])
+  if (candidate.index.some(e => !known.has(e.seq))) throw new InvalidConversationBrief('coverage')
+  const required = new Map(older.map(m => [m.seq, {
+    seq: m.seq, descriptor: `Message ${m.seq}: ${m.role}, ${m.state}`,
+  }]))
+  if (required.size !== older.length || required.size > 16) throw new InvalidConversationBrief('coverage')
+  const brief: ConversationBrief = { gist: candidate.gist, index: [...required.values()] }
+  // Reserve every newly folded source before selecting optional older hints.
+  // Even escaped JSON must fit the stored character budget. The gist is never
+  // sliced, and an invalid gist still follows the ordinary semantic repair.
+  checkedBrief(brief, through, BRIEF_LIMITS.gist)
+  for (const entry of candidate.index.filter(e => required.has(e.seq))) {
+    const at = brief.index.findIndex(e => e.seq === entry.seq), fallback = brief.index[at]
+    brief.index[at] = entry
+    if (briefCharacters(brief) > BRIEF_LIMITS.characters) brief.index[at] = fallback
+  }
+  // The model selects useful historical topics. If its selection is too large,
+  // keep newer selected hints first; omitted originals remain exactly searchable.
+  for (const entry of candidate.index.filter(e => !required.has(e.seq)).reverse()) {
+    if (brief.index.length >= BRIEF_LIMITS.entries) break
+    brief.index.push(entry)
+    if (briefCharacters(brief) > BRIEF_LIMITS.characters) brief.index.pop()
+  }
+  return checkedBrief(brief, through, BRIEF_LIMITS.gist)
 }
 export function readStoredBrief(summary: string, through: number): ConversationBrief {
   // Existing plain-text summaries remain readable until the next incremental fold.

@@ -292,6 +292,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Nästa minnesgrind (2026-10-17):** publicera och läs tillbaka den verifierade
+[minneshanteringen](ask-bob-conversations.md#managed-memory-navigation--2026-10-17)
+i båda Bob-tjänsterna. Bekräfta därefter med ett nytt ordinärt meddelande i samma
+privata tråd att det fulla indexet inte stoppar nästa tur, att exakt fem aktuella
+meddelanden når Bob och att äldre original kan återfinnas vid behov.
+
 **Nästa CAD-grind (2026-10-17):** kör beställarens vanliga Bob-test på samma
 väntande begäran för våningssängen. Bob ska läsa och kontrollera samma konstruktions
 aktuella version (senast observerad 5), uttryckligen förnya begärans källversion
@@ -299,8 +305,11 @@ och bevara alla krav. Verifiera oberoende granskning, sparad ritning och återl�
 efter omladdning utan dubbla uppdrag eller förlorade resultat. Tekniska fixturer
 ersätter inte detta modell-/CAD-prov. [CAD-kontraktet](cad-adapter.md#explicit-source-renewal--2026-10-17)
 äger beteendet och [releasebeviset](foundation-verification.md#cad-source-renewal--2026-10-17)
-äger den avslutade publiceringen/aktiveringen. Om det äldre automatiska felet
-återkommer behövs innehållsfri diagnostik för dess tidigare obevarade undantag.
+äger den avslutade publiceringen/aktiveringen. Rätta separat den reproducerade
+period-/ursprungsövergången när en ny ägartur laddar en ritningsbegäran men
+misslyckas före save: automatisk fortsättning måste behålla sammanhängande
+instruktion, period, katalogpin och behörighet utan `drawing_budget_period_closed`.
+Minnesrättningen stänger inte den SQL-grinden.
 
 **Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
 det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,

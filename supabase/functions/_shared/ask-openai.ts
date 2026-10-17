@@ -222,7 +222,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:2}))
+  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:2,memoryManagementVersion:1 as const}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
     const {error}=await internal.from('execution_events').upsert(event,{onConflict:'run_id,event_key'}).abortSignal(AbortSignal.timeout(3000))
     if(error)throw new Error('metrics_unavailable')
@@ -586,6 +586,7 @@ export async function answerWithOpenAi(opts: {
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
+      memoryManagementVersion: execution.memoryManagementVersion,
       store: (() => {
         const store = conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation })
         return {
