@@ -859,6 +859,13 @@ select {
 .bob-history-notice { flex-shrink: 0; font-size: 12px; color: var(--ink-soft); background: var(--surface-2); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
 .bob-recovery { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 8px; padding: 4px 12px; border-top: 1px solid var(--line); background: var(--surface-2); font-size: 12px; color: var(--ink-soft); }
 .bob-recovery .btn { flex-shrink: 0; min-height: 44px; padding: 6px 10px; }
+.bob-history-sync { flex-shrink: 0; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--surface-2); color: var(--ink-soft); font-size: 12px; }
+.bob-work-status { flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--line); background: var(--honey-bg); }
+.bob-work-status .bob-working { flex: 1; min-width: 0; padding: 0; overflow-wrap: anywhere; }
+.bob-work-status .bob-working > div { min-width: 0; }
+.bob-work-status small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.4; }
+.bob-work-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: 0 0 auto; max-width: 45%; }
+.bob-work-actions .btn { min-height: 44px; padding: 6px 10px; }
 .bob-retry-details { font-size: 12.5px; color: var(--ink-soft); }
 .bob-retry-details summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 700; }
 .bob-retry-details p { margin: 8px 0; line-height: 1.5; }

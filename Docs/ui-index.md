@@ -81,7 +81,7 @@ explanations and Project images expand on demand; their saved content remains
 verbatim. The description is not a substitute for sourced Measurements.
 
 Ask bob gives the conversation the remaining viewport height. Page context,
-suggestions, progress and retry explanations scroll with the messages; a retry
+suggestions and retry explanations scroll with the messages; a retry
 keeps one compact action row above the composer. The composer grows within a
 viewport-dependent limit and leaves room to read. Opening Bob on a touch device
 focuses Close without opening the keyboard. The page behind the drawer cannot
@@ -91,6 +91,12 @@ The paperclip attaches project photos with upload status, a preview and retry/re
 actions. User photos and saved illustrations open their originals from the chat.
 The [media contract](media-and-steps.md#chat-photos-and-reference-mockups) owns limits,
 private persistence and reference-based mockup delivery.
+
+Automatic work status stays above the composer even while reading older messages.
+It shows server activity, confirmed saved changes and the last activity time;
+connection loss and paused authorization remain explicit. Conversation loading
+and cache checking also stay visible there. A stalled initial read offers Retry
+conversation after 20 seconds, preserves the draft and ignores late results.
 
 Active owned background turns expose **Stop** in the existing conversation action
 row. It cancels that exact job, preserves confirmed changes and leaves an honest

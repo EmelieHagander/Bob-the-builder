@@ -22,17 +22,20 @@ type AskBobResponse = {
 }
 
 /** Content-free progress of a background turn: stage, tool name, step, saved count. */
-export interface BobProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
+export interface BobProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number; at?: string }
 function parseProgress(value: unknown): BobProgress | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const v = value as Record<string, unknown>
   if (!['thinking', 'tool', 'finishing'].includes(String(v.stage)) || !Number.isSafeInteger(v.step) || !Number.isSafeInteger(v.saved)) return undefined
   return { stage: v.stage as BobProgress['stage'], step: v.step as number, saved: v.saved as number,
+    ...(typeof v.at === 'string' && Number.isFinite(Date.parse(v.at)) ? { at: v.at } : {}),
     ...(typeof v.tool === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(v.tool) ? { tool: v.tool } : {}) }
 }
 const TOOL_ACTIVITY: [RegExp, string][] = [
   [/^design_project_cad$/, 'Designing the drawing — this can take a few minutes'],
   [/^save_cad_design$|drawing|room_layout|building_plan|stair|projection/, 'Working on the drawings'],
+  [/construction/, 'Working on the construction'],
+  [/^calculate_project$/, 'Calculating project dimensions'],
   [/plan/, 'Working on the project plan'],
   [/task|build_day|readiness/, 'Updating tasks and build days'],
   [/material|catalog|shopping/, 'Working on materials'],
@@ -151,6 +154,7 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   const unfinished = pending ?? retry
   if (unfinished) {
     const job = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: unfinished.turnId })
+      .abortSignal(AbortSignal.timeout(12000))
     if (job.error) throw new Error('Could not check Bob’s background job. Reconnecting…')
     const jobId = typeof job.data?.jobId === 'string' && UUID.test(job.data.jobId) ? job.data.jobId : undefined
     const drawingRecovery = readDrawingTurnRecovery(job.data?.drawingRecovery)
