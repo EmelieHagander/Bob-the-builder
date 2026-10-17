@@ -633,6 +633,15 @@ try {
     Object.assign(pagedHistory,backup)
     const beforeGuest = resetCalls
     authMode = 'guest'
+    // Reflect the account switch in the persisted Auth session as well as the
+    // mocked Auth endpoint; RLS requests and cache partition use that session.
+    await page.evaluate(()=>{
+      const key=Object.keys(localStorage).find(key=>key.startsWith('sb-')&&key.endsWith('-auth-token'))
+      if(!key)throw new Error('Missing fixture Auth session')
+      const session=JSON.parse(localStorage.getItem(key))
+      session.user.email='guest@bob.local'
+      localStorage.setItem(key,JSON.stringify(session))
+    })
     await page.evaluate(key => localStorage.setItem(key, JSON.stringify([{ from: 'user', text: 'LOCAL GUEST CHAT' }])), cache('A'))
     await page.reload(); drawer = await open()
     await drawer.getByText('LOCAL GUEST CHAT', { exact: true }).waitFor()
