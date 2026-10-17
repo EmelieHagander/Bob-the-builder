@@ -10,6 +10,7 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
@@ -185,10 +186,32 @@ for(const migration of migrations){
    const row=seed.find(row=>row.key==='role.'+name);row.definition.tool_keys.push('tools.calculate_project');versions.set(row.key,versions.get(row.key)!+1)
   }
  }
+ const taskWorkflowContracts=source.match(/\$task_workflow_contracts\$([\s\S]+?)\$task_workflow_contracts\$/)
+ if(taskWorkflowContracts){
+  preTaskWorkflowRows=structuredClone(seed);preTaskWorkflowVersions=new Map(versions)
+  const contracts=JSON.parse(taskWorkflowContracts[1]),manuals=JSON.parse(source.match(/\$task_workflow_manuals\$([\s\S]+?)\$task_workflow_manuals\$/)![1])
+  const publishedMetadata=(metadata:Record<string,unknown>)=>{const{seed_version,source_revision,...rest}=metadata;return{...rest,publication:'bob-task-workflow-v1'}}
+  for(const patch of contracts){
+   const row=seed.find(row=>row.key==='tools.'+patch.name),manual=manuals.find((m:any)=>m.name===patch.name)
+   row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],
+    additional_description:(row.definition.additional_description??'')+manual.text,envelope:{...row.definition.envelope,schema_version:2}}
+   row.metadata=publishedMetadata(row.metadata);versions.set(row.key,versions.get(row.key)!+1)
+  }
+  for(const patch of JSON.parse(source.match(/\$task_workflow_texts\$([\s\S]+?)\$task_workflow_texts\$/)![1])){
+   let row=seed.find(row=>row.key===patch.key)
+   if(!row){row={key:patch.key,kind:'instruction_fragment',content:patch.content,definition:{},metadata:{publication:'bob-task-workflow-v1'},variables:patch.variables};seed.push(row);versions.set(row.key,1)}
+   else{row.content=patch.mode==='append'?row.content+'\n\n'+patch.content:patch.content;if(patch.mode!=='append')row.variables=patch.variables;row.metadata=publishedMetadata(row.metadata);versions.set(row.key,versions.get(row.key)!+1)}
+  }
+  const box=seed.find(row=>row.key==='bob.tools')
+  for(const policy of box.definition.catalog){const manual=manuals.find((m:any)=>m.name===policy.name);if(manual){policy.schema_version=2;policy.how_to+=manual.text}}
+  box.metadata=publishedMetadata(box.metadata);versions.set(box.key,versions.get(box.key)!+1)
+  const agent=seed.find(row=>row.key==='agent-contract.ask-bob')
+  agent.metadata={...publishedMetadata(agent.metadata),work_completion_version:1};versions.set(agent.key,versions.get(agent.key)!+1)
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const modelTiers=new Map(seed.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
  definitions:rows.map(row=>({id:'fixture-version:'+row.key+':v'+revisionMap.get(row.key),prompt_id:'fixture-prompt:'+row.key,prompt_key:row.key,version:revisionMap.get(row.key)!,
@@ -199,7 +222,9 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 }}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
 const legacyManifest=fixtureManifest(originalSeed,new Map(originalSeed.map(row=>[row.key,1])),'fixture-legacy-seed-manifest')
+const preTaskWorkflowManifest=fixtureManifest(preTaskWorkflowRows??seed,preTaskWorkflowVersions??versions,'fixture-pre-task-workflow-manifest')
 export function legacyCatalogFixture():AiCatalogSession{return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:legacyManifest})}
+export function preTaskWorkflowCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preTaskWorkflowManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 export function catalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(manifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 export function catalogCall<T>(call:(options:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<T>>,session=catalogFixture()){
  return (options:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>call(applyCatalogModelOptions(session,options),beforeDispatch)

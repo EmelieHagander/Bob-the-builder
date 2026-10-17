@@ -85,9 +85,46 @@ export interface WriteResult {
   validation?: Pick<WriteValidationIssue, 'code' | 'fields'>
 }
 export interface WriteValidationIssue {
-  code: 'tool_shape' | 'request_quote' | 'field_value' | 'task_location' | 'domain_fields'
+  code: 'tool_shape' | 'request_quote' | 'field_value' | 'task_location' | 'domain_fields' | TaskWorkValidationCode
   fields: string[]
   message: string
+}
+/** Fixed domain failures that can be followed by an authorized Task refresh.
+ * These are recovery hints, never permission to complete checks or bypass them. */
+export const TASK_WORK_VALIDATION_CODES = [
+  'task_required_checks', 'task_readiness_blocked', 'task_readiness_inactive',
+  'task_dependency_cycle', 'task_dependency_checkpoint',
+] as const
+export type TaskWorkValidationCode = typeof TASK_WORK_VALIDATION_CODES[number]
+
+/** Match only the canonical, fixed exception and the command that can raise it.
+ * Never echo arbitrary database details or turn a readiness rule into a status rule. */
+function taskWorkRejection(payload: WritePayload, error: { code?: string; message?: string }): WriteValidationIssue | null {
+  if (error.code !== 'P0001') return null
+  const domain = payload.kind === 'bound_work' ? payload.data.domain as WritePayload | undefined : payload
+  if (domain?.kind === 'task_work' && domain.data?.status === 'done'
+    && error.message === 'Complete required checks before marking this task done.') {
+    return { code: 'task_required_checks', fields: ['status', 'instruction_steps'],
+      message: 'No change made. This Task still has incomplete required checks. Read its current instruction steps and identify the checks that remain. Keep the Task open until there is evidence that those checks were completed; do not remove or complete them merely to make the status change succeed.' }
+  }
+  if (domain?.kind !== 'operational' || domain.data?.resource !== 'task_work') return null
+  if (domain.data.action === 'confirm_readiness') {
+    if (error.message === 'Resolve named blockers before confirming readiness.') return {
+      code: 'task_readiness_blocked', fields: ['readiness'],
+      message: 'No change made. This Task has unresolved readiness blockers. Read its current readiness, dependencies, material needs and other needs; resolve only what the available evidence supports, then reconsider readiness. Readiness is separate from Task status; it does not by itself prevent a supported change to todo, doing or blocked.' }
+    if (error.message === 'Only active tasks can be confirmed ready.') return {
+      code: 'task_readiness_inactive', fields: ['status', 'readiness'],
+      message: 'No change made. Readiness can be confirmed only for an active Task. Read the current Task status. A completed Task needs no readiness confirmation; reopen it only when the requested work actually requires reopening.' }
+  }
+  if (domain.data.action === 'add_dependency') {
+    if (error.message === 'Task dependencies cannot form a cycle.') return {
+      code: 'task_dependency_cycle', fields: ['dependencies'],
+      message: 'No change made. This prerequisite would create a dependency cycle. Read the current Task and prerequisite dependencies, then correct the intended dependency without removing unrelated prerequisites.' }
+    if (error.message === 'Dependency checkpoint must be a checkpoint on the prerequisite task.') return {
+      code: 'task_dependency_checkpoint', fields: ['dependencies', 'instruction_steps'],
+      message: 'No change made. The selected checkpoint is not a current checkpoint on the prerequisite Task. Read that Task and choose an actual checkpoint from its instruction steps, or a whole-Task prerequisite if that matches the request.' }
+  }
+  return null
 }
 export type WriteTransport = (payload: WritePayload) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
 export type ReceiptTransport = () => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>
@@ -180,25 +217,32 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)
 }
-export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport) {
+export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean } = {}) {
   let used = 0, invalidAttempts = 0
   let uncertain = false
   let settled = false
   const receipts: WriteReadback[] = []
   const seenReceipts = new Set<string>()
+  const executedReceipts: WriteReadback[] = []
+  const seenExecutedReceipts = new Set<string>()
   const corrections = new Set<string>()
-  const remember = (r: WriteReadback) => {
+  const rememberIn = (projection: WriteReadback[], seen: Set<string>, r: WriteReadback) => {
     // Recovery returns committed receipts in database order. Replaying an older
     // operation must return its original result without rolling this projection
     // back from a later write that recovery has already verified.
     const key = JSON.stringify([r.dataset, r.recordId, r.operation, r.revision ?? null, r.savedAt])
-    if (seenReceipts.has(key)) return
-    seenReceipts.add(key)
-    const i=receipts.findIndex(old=>old.dataset===r.dataset&&old.recordId===r.recordId)
-    if(i<0)receipts.push(r);else receipts[i]=r
+    if (seen.has(key)) return
+    seen.add(key)
+    const i=projection.findIndex(old=>old.dataset===r.dataset&&old.recordId===r.recordId)
+    if(i<0)projection.push(r);else projection[i]=r
   }
+  const remember = (r: WriteReadback) => rememberIn(receipts, seenReceipts, r)
+  const rememberExecuted = (r: WriteReadback) => rememberIn(executedReceipts, seenExecutedReceipts, r)
   return {
     receipts,
+    /** Only results reached at this execution/replay position. Recovery may know
+     * later writes, which must not change an earlier journaled review input. */
+    get executedReceipts() { return [...executedReceipts] },
     get remaining() { return uncertain || settled ? 0 : invalidAttempts >= 12 ? 0 : Math.max(0, BOB_WRITE_LIMIT - used) },
     get correctionsRemaining() { return Math.max(0, 12 - invalidAttempts) },
     get uncertain() { return uncertain },
@@ -288,6 +332,8 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (payload.kind === 'cad_shell' && error.code === '22023') return { status: 'invalid', message: 'No shell change made. ' + (/cad_shell_[a-z_]+|use_cad_shell_command/.exec(error.message ?? '')?.[0] === 'cad_shell_piece_archived' ? 'An archived piece cannot be placed; restore it first.' : /cad_shell_(unknown_component|duplicate_key)/.test(error.message ?? '') ? 'Use component keys exactly as read_cad_shell returns them; a new piece needs a new key.' : 'Pieces must be saved CAD drawings in this project (read_drawing_requests lists them), 1-64 per shell, placed in whole mm with rz 0, 90, 180 or 270.') }
           if (error.code === '40001' || error.code === 'PT409' || (payload.kind === 'catalog' && error.code === '23505') || error.message?.includes('Record changed')) return { status: 'conflict', message: 'Record changed or an equivalent catalog definition exists. Read the current record and do not overwrite unrelated changes.' }
           if (['22023', '22P02', '22007', '22008', '23502', '23503', '23514', 'P0001'].includes(error.code ?? '')) {
+            const taskIssue = options.taskWorkDiagnostics ? taskWorkRejection(payload, error) : null
+            if (taskIssue) return { status: 'invalid', message: taskIssue.message, validation: { code: taskIssue.code, fields: taskIssue.fields } }
             if (payload.kind === 'catalog' && /\bcatalog_source_quote_required\b/.test(error.message ?? '')) return { status: 'invalid', message: 'No change made: source_quote must be an exact, unmodified substring of its source message, including punctuation. Use source_seq=null for this current owner message; an older source_seq must identify the exact message you quoted. Do not paraphrase, add a final period, or change source_kind to bypass the quote check. Correct the quote and retry.' }
             if (payload.kind === 'catalog') {
               const issue = catalogRejection(error.message)
@@ -306,10 +352,10 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
           if (!Array.isArray(related) || related.length !== (payload.data.target === null ? 0 : 1)) throw new Error('Missing bound edit receipts')
           const confirmed = related.map(r => checkedReceipt(r, projectId))
           if (confirmed.some(r => r.dataset !== 'target' || r.record.solution_id !== receipt.recordId || r.record.solution_revision !== receipt.revision)) throw new Error('Mismatched bound selection receipt')
-          confirmed.forEach(remember)
+          confirmed.forEach(r => { remember(r); rememberExecuted(r) })
           used += related.length
         }
-        used++; remember(receipt)
+        used++; remember(receipt); rememberExecuted(receipt)
         return { status: 'saved', receipt }
       } catch (error) {
         rethrowContinuation(error)

@@ -2748,3 +2748,134 @@ This release did not change the catalog or model settings. No real user project
 content or historical chat was edited. Fresh ordinary-member/model continuation
 with these new runtime versions remains an acceptance check; deterministic,
 SQL-role and source-readback proof do not substitute for it.
+
+
+<a id="bob-task-investigation-2026-10-17"></a>
+## Task edits, status and early completion — investigation 2026-10-17
+
+**Status: investigation and targeted verification complete; proposed improvements
+are not implemented.** The [implementation plan](bob-delivery-flow.md#bob-task-pr-plan)
+owns the next PR. Baseline is main `8f5a373def3ba0414290b354d777519907270da8`,
+with the runtime installation recorded above. This investigation changed no real
+project Tasks, historical conversation messages, active catalog or model choice.
+
+### Observed attempts
+
+Read-only queries examined the requested project's conversation, write receipts,
+content-free execution events and scoped retained provider function-call output.
+Times below use Europe/Stockholm (UTC+02:00).
+
+| Observation | Evidence | Interpretation |
+|---|---|---|
+| October 16, 22:46: an instruction edit saved, then status failed. | Turn `f31bd331-10f1-4054-915e-378cfbf7da0d`, events `tool:9:0` = `edit_work_record/saved`, `tool:9:1` = `change_work_state/unknown`, next edit = `budget_exhausted`; delivery = uncertain. | This is a real status-write failure before PR #259, not evidence that the current status path is still broken. |
+| Conflict-loop indicators in that old incident window. | Postgres log window 2026-10-16 20:40–20:48 UTC: 1,771 `record_changed`, 5,153 `turn_not_claimed` and one `deadlock detected`. All five live public writer adapters now translate aborted conflicts to PT409. | The shared-project log window is corroboration, not a per-turn attribution of every log row. Prior release evidence establishes the transport defect and correction. |
+| Four later user runs completed with 5 + 2 + 4 + 3 = 14 content receipts. | Turns `721dd10f-c818-46c4-b85e-06afb7f7d24e`, `b7697339-bc17-4a1e-8c50-d0369e62e167`, `c709cb0d-bacd-4ae1-89cc-66613fb59722`, `b8c859bf-a13b-4452-a68f-30bf91cc99ca`. Every receipt's nested domain kind is `task`; no requested status; resulting status `todo`. | Real multi-task text saves and successive edits work. The retained tool-event lists contain no `change_work_state` attempt in these four runs. They do not establish real-model status acceptance. |
+| October 17, approximately 04:20: two newer text-edit attempts were invalid, then corrected. | In turn `c709cb0d-bacd-4ae1-89cc-66613fb59722`, retained `model:ask-bob:2` has two `append_text` calls whose `value_json` contains literal newline control characters inside the encoded JSON string. Local `JSON.parse` fails at position 1. `model:ask-bob:3` correctly escapes those newlines and both edits save; a further pair also saves. | Confirmed tool-input ergonomics defect: JSON-in-JSON causes avoidable repair calls. This is separate from the older status conflict and was recovered in the run. |
+| The newest visible run finished at 04:26:04 after three saves. | Latest turn above: five model-loop steps, six tool calls, zero completion checks, `end_reason=answered`, three saved targets. Its final text introduces another planning step. | No automatic continuation is scheduled after that answer. The code accepts ordinary terminal prose; successful partial work does not trigger the current narrow completion review. This explains the risk of needing another user nudge. |
+
+The two newly invalid edit calls are reproduced by an encoded value that starts
+with a quote followed by a literal LF; the corrected value contains the JSON
+escape for LF. Normal outer tool JSON remains valid. No production mutation or
+model call was performed to reproduce this parser behavior. Instruction text
+also grew through overlapping dated append blocks, so successful saves alone do
+not establish concise or complete planning.
+
+Completed Bob journals have been cleaned up. The retained execution events and
+shared background function-call outputs above provide the attempt evidence;
+there is no claim to have reconstructed every private runtime intermediate.
+A job marked `completed` describes job settlement, not fulfilled user scope.
+
+### Current status path: local and hosted proofs
+
+The existing `tests/project-work-records.test.ts` passed **20/20** locally using
+the full-schema isolated database and normal authenticated write role. A separate
+TypeScript probe exercised `change_work_state` through the bound v19 write path,
+with fresh reads between operations:
+
+`todo → doing → done → todo → blocked → todo`.
+
+Every transition saved and read back correctly; exact retries recovered the
+existing receipt; instructions and assigned person were preserved. An incomplete
+required checkpoint correctly rejected `done` and left the Task at `todo`.
+
+The same deployed public writer was then tested in a disposable hosted project.
+The database operator supplied the authorized actor, the normal service-only
+command claimed the turn, and every domain write ran as `authenticated`.
+This is an SQL-role fixture, **not an HTTP/provider run or a real user's Task
+status change**. All changes were deliberately rolled back inside a subtransaction.
+The probe asserted that its Project, Tasks, person, thread, messages and receipts
+were absent afterwards.
+
+| Hosted assertion | Result |
+|---|---|
+| Content + five status transitions + second Task | Seven saved actions, all read back |
+| Identical retries | Six recovered receipts |
+| Stale snapshot / stale claim across v16–v20 | Eleven PT409 rejections |
+| Assigned person and instructions | Preserved |
+| Required checkpoint blocks `done` | P0001; status remains `todo`; snapshot unchanged |
+| Fixture cleanup | All changes rolled back; absence asserted |
+
+The executed probe source SHA-256 was
+`4867e66ebe765a7e36c8b4a39ff21bf285973651316794ac3341761c0df2ac44`.
+A reusable [rollback-only fixture](../scripts/fixtures/bob-task-state-rollback.sql)
+contains the same assertions, with actor input parameterized rather than looking
+up the investigation's thread. It is not a production migration. Because a SQL
+DO block shares one `now()` timestamp, an optional checkpoint is added after
+reopening and a required one before the final rejection, producing distinct
+snapshots without altering triggers or timestamps. The separate TypeScript
+probe tested the uninterrupted round-trip across separate transactions.
+
+**Remaining confirmed diagnostic defect:** SQL returns a specific missing-required-
+checkpoint reason, but `project-write.ts` maps nested `bound_work → task_work`
+P0001 to the generic database-rejected message. Bob cannot see the actionable
+reason. The PR must improve that mapping without removing the completion guard,
+auto-checking physical work, or turning general readiness into a new status rule.
+
+### Model/runtime findings and open acceptance
+
+Active catalog readback gives `profile.ask-bob` version 1: standard tier, high
+reasoning, 16,000 output ceiling and 120,000 ms profile timeout. The actual turn
+adapter may apply a stricter timeout. `tier.standard` version 1 maps to GPT-5.4;
+mini/nano remain GPT-5.4 mini/nano. Neither GPT-6.1 Sol nor GPT-6 Astra was present
+in the inspected model rows, so API availability was not established.
+
+The shared adapter already uses Responses and provider response chaining.
+Inspection identified first-message text extraction without assistant phase and
+missing cache-write accounting. These are compatibility gates for the proposed
+upgrade, not proof that phase caused the observed GPT-5.4 answers. The planned
+model comparison has not been run, and no paid candidate call or activation took
+place during this investigation.
+
+Still required for release: native typed-value regressions, v1/v2 replay,
+meaningful status blocker feedback, broader one-time completion review, text
+consolidation, phase/cost compatibility, four-role model evaluation and real
+member readback in the UI. Hosted status proof closes the database-function
+question; it does not close these model and product acceptance gates.
+
+
+<a id="bob-task-workflow-release-2026-10-17"></a>
+## Bob task workflow parts 1–3 — implementation 2026-10-17
+
+The owner limited this release to native work values, status diagnostics and
+completion/text-workflow improvements. GPT-5.4/high, all model profiles, spending
+and call budgets remain unchanged; model evaluation and UI work are deferred.
+The owner will perform the ordinary real-model acceptance after installation.
+
+Source publication is `20261017050720_ai_task_workflow_catalog.sql`, generated
+from `scripts/build-bob-task-workflow-catalog.ts`. The previously observed native
+Supabase CLI crash requires the documented actual-UTC filename fallback. It
+creates immutable versions of only three work-value tools, their toolbox and
+focused Bob instructions/behavior flag; no domain table, canonical writer,
+permission or user Task content changes. Deploy both runtime closures before
+activating this publication.
+
+**Verification in progress; not yet a hosted release claim.** Focused regression
+suites pass: native work/tool sessions (41), Task status feedback (5), catalog
+publication (6), phase/continuation/replay (16), metrics (10), plus the actual
+pre-publication manifest replay proof. The latter compares complete tool/manual
+and rejected-result bytes across live-policy activation, with no repeated
+transports or extra snapshot reads. Vocabulary and production build pass. Local
+Edge checking was blocked by the unavailable `esm.sh` dependency endpoint; the
+exact PR CI must supply that gate. Full regression/CI and final content-free
+validation telemetry checks are pending. Exact merged source, runtime versions
+and activation readback will be recorded after release.

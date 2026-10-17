@@ -3,17 +3,19 @@ import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preTaskWorkflowCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { randomUUID } from 'node:crypto'
 import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { projectSchema, asProjectUser } from './support/project-schema.ts'
-import { createWorkRecords, WORK_RECORD_TOOLS, type WorkResource } from '../supabase/functions/_shared/project-work-records.ts'
+import { createWorkRecords, applyWorkDeltaV2, WORK_RECORD_TOOLS, WORK_RECORD_TOOLS_V2, WORK_VALUE_TOOL_NAMES, type WorkResource } from '../supabase/functions/_shared/project-work-records.ts'
 import { createProjectWriter, type WritePayload } from '../supabase/functions/_shared/project-write.ts'
 import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 const uid='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002',measurement=randomUUID(),image=randomUUID()
 const quote='Update the existing work and its links. Create the requested new work only.'
 const set=(path:string,value:unknown)=>({op:'set',path,value_json:JSON.stringify(value)})
+const nativeSet=(path:string,value:unknown)=>({op:'set',path,value})
+const currentWorkPolicy=async()=>{const policy=await seedToolPolicy();return{...policy,tools:policy.tools.map(row=>(WORK_VALUE_TOOL_NAMES as readonly string[]).includes(row.name)?{...row,schema_version:2}:row)}}
 let pg:Awaited<ReturnType<typeof projectSchema>>,thread:string,turn:string,generation:number,beforeCatalog:any
 before(async()=>{
  pg=await projectSchema(async(db,name)=>{if(name.endsWith('_ai_work_records_catalog.sql'))beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m})
@@ -153,11 +155,11 @@ test('new contracts activate together without rewriting older manifests or model
  const live:any=(await pg.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
  assert.deepEqual((await pg.query("select shared.resolve_ai_catalog('bob',$1) m",[beforeCatalog.manifest_id])).rows[0].m,beforeCatalog)
  assert.deepEqual(live.models,beforeCatalog.models)
- for(const spec of WORK_RECORD_TOOLS){const row=live.definitions.find((r:any)=>r.prompt_key==='tools.'+spec.function.name);assert.deepEqual(row.definition.parameters,spec.function.parameters);assert.ok(!catalogFixture().tool(spec.function.name,{server_quote:true}).function.parameters.required.includes('request_quote'))}
+ for(const spec of WORK_RECORD_TOOLS){const row=live.definitions.find((r:any)=>r.prompt_key==='tools.'+spec.function.name),expected=row.definition.envelope.schema_version===2?WORK_RECORD_TOOLS_V2.find(t=>t.function.name===spec.function.name)!:spec;assert.deepEqual(row.definition.parameters,expected.function.parameters);assert.ok(!catalogFixture().tool(spec.function.name,{server_quote:true}).function.parameters.required.includes('request_quote'))}
  const{tools,writer}=setup(),lookup=createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null}))
- const fresh=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup,writer,workRecords:tools,readPolicy:seedToolPolicy})
+ const fresh=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup,writer,workRecords:tools,readPolicy:currentWorkPolicy})
  const names=(await fresh.prepare()).map(t=>t.function.name);assert.ok(names.includes('edit_work_record'));assert.ok(!names.includes('save_project_task'));assert.ok(!names.includes('save_project_build_day'))
- const old=createBobToolSession({aiCatalog:createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest:beforeCatalog}),message:quote,lookup,writer,workRecords:tools,readPolicy:seedToolPolicy})
+ const old=createBobToolSession({aiCatalog:createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest:beforeCatalog}),message:quote,lookup,writer,workRecords:tools,readPolicy:currentWorkPolicy})
  const oldNames=(await old.prepare()).map(t=>t.function.name);assert.ok(oldNames.includes('save_project_task'));assert.ok(!oldNames.includes('edit_work_record'))
 })
 test('durable restart rebuilds exact refs and transport inputs while access is checked live',async()=>{
@@ -261,6 +263,7 @@ test('created records return usable fresh refs; deletes do not attempt a missing
  const current=await choose(tools,'tasks','Fresh created')
  const deleted=await tools.execute('change_work_state',state(current.ref,'delete'))
  assert.equal(deleted.status,'saved');assert.equal(deleted.current,undefined);assert.equal(deleted.refresh_status,undefined);assert.equal(writer.uncertain,false)
+ assert.ok(!tools.currentRecords.some(row=>row.content.name==='Fresh created'))
 })
 test('failed, foreign and revoked refreshes never change a verified save into an unknown write or leak refs',async()=>{
  await claim()
@@ -277,15 +280,17 @@ test('failed, foreign and revoked refreshes never change a verified save into an
   const target=await choose(tools,'tasks','Smooth second')
   const result=await tools.execute('edit_work_record',edit(target.ref,[set('/instructions','Verified '+mode)]))
   assert.equal(result.status,'saved');assert.equal(result.current,undefined);assert.equal(result.refresh_status,'unavailable');assert.equal(writer.uncertain,false)
+  assert.ok(!tools.currentRecords.some(row=>row.content.name==='Smooth second'),'failed readback cannot retain a stale target for completion review')
  }
 })
 test('uncertain writes pause subsequent tool calls honestly without disabling reads',async()=>{
  const writer=createProjectWriter('A',quote,async()=>{throw Error('Lost response')},async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}))
  const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>true,read,readSnapshot})
- const session=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup:createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null})),writer,workRecords:tools,readPolicy:seedToolPolicy})
+ const session=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup:createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null})),writer,workRecords:tools,readPolicy:currentWorkPolicy})
  await session.prepare()
  const target=(await session.execute('read_work_context',{resource:'tasks',query:'Smooth second',next_ref:null})).entries[0]
- assert.equal((await session.execute('edit_work_record',edit(target.ref,[set('/instructions','Unverified')]))).status,'unknown')
+ const native=(catalogFixture().definition('tools.edit_work_record','tool_contract').definition.envelope as any).schema_version===2
+ assert.equal((await session.execute('edit_work_record',edit(target.ref,[(native?nativeSet:set)('/instructions','Unverified')]))).status,'unknown')
  const paused=await session.execute('change_work_state',state(target.ref,'status','doing'))
  assert.equal(paused.status,'write_uncertain');assert.match(paused.message,/unverified outcome/)
  const offered=await session.prepare()
@@ -312,4 +317,123 @@ test('every active writer returns one transport conflict, preserves authorizatio
   }
   await assert.rejects(asProjectUser(pg,other,`select bob.bob_project_write_v${version}('A',null,null,1,'{}')`),(e:any)=>e.code==='42501')
  }
+})
+
+test('native work values reject wrong types and paths while preserving text exactly',()=>{
+ const content='First line\n"Quoted" and C:\\plans\\part\nLiteral \\n is not a newline.'
+ assert.equal(applyWorkDeltaV2('tasks',{name:'Task',instructions:'Previous'},[nativeSet('/instructions',content)]).instructions,content)
+ assert.deepEqual(applyWorkDeltaV2('project',{start_date:'2026-10-17',end_date:'2026-10-20'},[nativeSet('/start_date',null),nativeSet('/end_date',null)]),{start_date:null,end_date:null})
+ assert.deepEqual(applyWorkDeltaV2('measurements',{value:'4',required:false},[nativeSet('/value',null),nativeSet('/required',true)]),{value:null,required:true})
+ for(const delta of [nativeSet('/instructions',null),nativeSet('/instructions',true),nativeSet('/instructions',{}),nativeSet('/required','true'),nativeSet('/value',42),nativeSet('/area_id','other'),{op:'append_text',path:'/name',value:' extra'},{...nativeSet('/instructions','text'),extra:true},set('/instructions','legacy encoding')]){
+  assert.throws(()=>applyWorkDeltaV2('tasks',{instructions:'Original'},[delta]))
+ }
+ for(const name of WORK_VALUE_TOOL_NAMES){
+  const schema=WORK_RECORD_TOOLS_V2.find(t=>t.function.name===name)!.function.parameters
+  assert.doesNotMatch(JSON.stringify(schema),/value_json/)
+  assert.match(JSON.stringify(schema),/anyOf/)
+ }
+ for(const spec of WORK_RECORD_TOOLS.filter(t=>!(WORK_VALUE_TOOL_NAMES as readonly string[]).includes(t.function.name)))assert.deepEqual(WORK_RECORD_TOOLS_V2.find(t=>t.function.name===spec.function.name),spec)
+})
+
+test('native create, edit and readiness values save once and retain immutable retry and conflict protection',async()=>{
+ await claim();const{tools,writer,payloads}=setup(),scope=await choose(tools,'areas','Assembly group')
+ const content='Keep the existing decision.\nUse "left" and C:\\plans; literal \\n stays literal.'
+ const created=await tools.execute('create_work_record',{resource:'tasks',scope_ref:scope.ref,base_ref:null,changes:[nativeSet('/name','Native work test'),nativeSet('/instructions',content)],reason:'Requested new work',request_quote:quote},2)
+ assert.equal(created.status,'saved',JSON.stringify(created));assert.equal(created.current.content.instructions,content)
+ const id=writer.receipts.at(-1)!.recordId
+ const addition='\nA genuinely new detail.',args=edit(created.current.ref,[{op:'append_text',path:'/instructions',value:addition}])
+ const edited=await tools.execute('edit_work_record',args,2)
+ assert.equal(edited.status,'saved');assert.equal(edited.current.content.instructions,content+addition)
+ const repeat=await tools.execute('edit_work_record',args,2)
+ assert.equal(repeat.status,'saved');assert.deepEqual(payloads.at(-1),payloads.at(-2))
+ assert.equal((await pg.query('select instructions from bob.tasks where id=$1',[id])).rows[0].instructions,content+addition)
+ const need={task_ref:edited.current.ref,action:'add_need',item_index:null,source_ref:null,checkpoint_index:null,changes:[nativeSet('/kind','information'),nativeSet('/label','Owner observation'),nativeSet('/notes','Confirm "width"\nPreserve uncertainty.')],ready:null,note:null,reason:'Requested need',request_quote:quote}
+ const readiness=await tools.execute('change_task_readiness',need,2)
+ assert.equal(readiness.status,'saved',JSON.stringify(readiness));assert.equal(readiness.current.content.needs[0].notes,'Confirm "width"\nPreserve uncertainty.')
+ const latest=tools.currentRecords.find(r=>r.content.name==='Native work test')!
+ assert.equal(latest.ref,readiness.current.ref);assert.doesNotMatch(JSON.stringify(latest),new RegExp(id))
+ latest.content.instructions='Cannot mutate registered snapshot'
+ assert.equal(tools.currentRecords.find(r=>r.content.name==='Native work test')!.content.instructions,content+addition)
+ await pg.query('update bob.tasks set instructions=$2 where id=$1',[id,content+'\nConcurrent human correction.'])
+ const conflict=await tools.execute('edit_work_record',edit(readiness.current.ref,[nativeSet('/name','Native renamed')]),2)
+ assert.equal(conflict.status,'conflict');assert.equal(conflict.current.content.instructions,content+'\nConcurrent human correction.')
+ const repaired=await tools.execute('edit_work_record',edit(conflict.current.ref,[nativeSet('/name','Native renamed')]),2)
+ assert.equal(repaired.status,'saved');assert.equal(repaired.current.content.instructions,content+'\nConcurrent human correction.')
+ const before=payloads.length
+ for(const delta of [set('/instructions','Old format'),nativeSet('/instructions',null),nativeSet('/instructions',{text:'nested'}),{...nativeSet('/instructions','new'),unexpected:true}]){
+  assert.equal((await tools.execute('edit_work_record',edit(repaired.current.ref,[delta]),2)).status,'invalid')
+ }
+ assert.equal(payloads.length,before,'invalid values never reach the database')
+})
+
+test('Bob selects all three work-value handlers from the pinned manifest under live v2 policy',async()=>{
+ for(const version of [1,2] as const){
+  await claim();const{tools,writer,payloads}=setup()
+  const aiCatalog=catalogFixture(manifest=>{
+   for(const name of WORK_VALUE_TOOL_NAMES){
+    const row=manifest.definitions.find(r=>r.prompt_key==='tools.'+name)!,spec=(version===2?WORK_RECORD_TOOLS_V2:WORK_RECORD_TOOLS).find(t=>t.function.name===name)!
+    row.definition={...row.definition,parameters:spec.function.parameters,required_parameters:spec.function.parameters.required,envelope:{...(row.definition.envelope as object),schema_version:version}}
+   }
+  })
+  const session=createBobToolSession({aiCatalog,message:quote,lookup:createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null})),writer,workRecords:tools,readPolicy:currentWorkPolicy})
+  const offered=await session.prepare()
+  for(const name of WORK_VALUE_TOOL_NAMES){
+   const spec=offered.find(t=>t.function.name===name)!
+   assert.ok(spec);assert.equal(JSON.stringify(spec.function.parameters).includes('value_json'),version===1)
+  }
+  const scope=(await session.execute('read_work_context',{resource:'areas',query:'Assembly group',next_ref:null})).entries[0]
+  const change=version===2?nativeSet:set
+  const created=await session.execute('create_work_record',{resource:'tasks',scope_ref:scope.ref,base_ref:null,changes:[change('/name',`Pinned v${version}`),change('/instructions','First\n"Second"')],reason:'Requested new work'})
+  assert.equal(created.status,'saved',JSON.stringify(created));assert.equal(created.current.content.instructions,'First\n"Second"')
+  const edited=await session.execute('edit_work_record',{ref:created.current.ref,changes:[change('/instructions','Integrated\n"Update"')],reason:'Requested update'})
+  assert.equal(edited.status,'saved');assert.equal(edited.current.content.instructions,'Integrated\n"Update"')
+  const need=await session.execute('change_task_readiness',{task_ref:edited.current.ref,action:'add_need',item_index:null,source_ref:null,checkpoint_index:null,changes:[change('/label','Pinned need'),change('/notes','Line one\nLine two')],ready:null,note:null,reason:'Requested need'})
+  assert.equal(need.status,'saved');assert.equal(need.current.content.needs[0].notes,'Line one\nLine two')
+  const before=payloads.length,wrong=version===1?nativeSet:set
+  assert.equal((await session.execute('edit_work_record',{ref:need.current.ref,changes:[wrong('/instructions','Wrong contract')],reason:'Cannot cross contracts'})).status,'invalid')
+  assert.equal(payloads.length,before)
+ }
+})
+
+test('pre-publication v1 manifest replays byte-identical tools and rejections after live policy v2 activation',async()=>{
+ const entries:JournalEntry[]=[],calls={reads:0,writes:0,snapshots:0,models:0}
+ const run=async(upgraded:boolean)=>{
+  const aiCatalog=preTaskWorkflowCatalogFixture()
+  assert.equal(aiCatalog.definition('agent-contract.ask-bob','agent_contract').metadata.work_completion_version,undefined)
+  const journal=createBobJournal({entries,save:async entry=>{entries.push(structuredClone(entry))}},Infinity)
+  const writer=createProjectWriter('A',quote,payload=>journal.run('write',payload,async()=>{
+   calls.writes++
+   const domain=payload.data.domain as WritePayload
+   return{data:null,error:domain.kind==='task_work'?{code:'P0001',message:'Complete required checks before marking this task done.'}:domain.kind==='operational'?{code:'P0001',message:'Resolve named blockers before confirming readiness.'}:{code:'22023',message:'private fixture detail'}}
+  }),async()=>({data:[],error:null}),async()=>({data:{generation:2,receipts:[]},error:null}),
+  {taskWorkDiagnostics:aiCatalog.definition('agent-contract.ask-bob','agent_contract').metadata.work_completion_version===1})
+  const tools=createWorkRecords({projectId:'A',writer,hasAccess:async()=>true,
+   read:input=>journal.run('read',input,async()=>{calls.reads++;return read(input)}),
+   readSnapshot:async()=>{calls.snapshots++;throw Error('Legacy invalid results never request a new snapshot')},
+  })
+  const session=createBobToolSession({aiCatalog,message:quote,lookup:createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null})),writer,workRecords:tools,readPolicy:upgraded?currentWorkPolicy:seedToolPolicy})
+  const offered=await session.prepare()
+  for(const name of WORK_VALUE_TOOL_NAMES){
+   const contract=offered.find(tool=>tool.function.name===name)!
+   assert.ok(contract);assert.match(JSON.stringify(contract.function.parameters),/value_json/)
+  }
+  const area=(await session.execute('read_work_context',{resource:'areas',query:'Assembly',next_ref:null})).entries[0]
+  const task=(await session.execute('read_work_context',{resource:'tasks',query:'Assemble panel',next_ref:null})).entries[0]
+  const results=[
+   await session.execute('create_work_record',{resource:'tasks',scope_ref:area.ref,base_ref:null,changes:[set('/name','Legacy rejected create')],reason:'Requested new work'}),
+   await session.execute('edit_work_record',{ref:task.ref,changes:[set('/instructions','Legacy text\n"Quoted" and \\path')],reason:'Requested edit'}),
+   await session.execute('change_task_readiness',{task_ref:task.ref,action:'confirm_readiness',item_index:null,source_ref:null,checkpoint_index:null,changes:[],ready:null,note:'Requested check',reason:'Requested readiness'}),
+   await session.execute('change_work_state',{ref:task.ref,action:'status',value:'done',reason:'Requested completion'}),
+  ]
+  for(const result of results)assert.deepEqual(result,{status:'invalid',message:'The database rejected this command. No change made; check fields, source, current revision and record state.'})
+  // The next provider input includes every offered schema/manual and tool result.
+  // Replaying it must reuse the journal entry rather than change its fingerprint.
+  const packet={offered,results}
+  await journal.run('model:legacy-parity',packet,async()=>{calls.models++;return{answer:'Blocked'}})
+  return JSON.stringify(packet)
+ }
+ const original=await run(false),recorded=structuredClone(entries)
+ assert.equal(await run(true),original)
+ assert.deepEqual(entries,recorded)
+ assert.deepEqual(calls,{reads:2,writes:4,snapshots:0,models:1})
 })

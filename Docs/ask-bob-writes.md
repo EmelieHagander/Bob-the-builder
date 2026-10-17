@@ -471,3 +471,35 @@ measurements come from the parent plan, not model-chosen authority. The geometry
 unknowns, refresh semantics and limited headroom contract belong in
 [Plans and drawings](artifacts.md#stair-geometry-study--implementation-branch-2026-09-19).
 Neither an inspection nor a saved study is a physical floor modification.
+
+
+## Native work values and Task feedback — 2026-10-17
+
+The task-workflow publication versions exactly `edit_work_record`,
+`create_work_record` and `change_task_readiness` to schema 2. Their closed change
+variants use native `value` strings, nullable strings or booleans, with explicit
+allowed paths. Text is no longer JSON encoded inside a JSON string. Server refs,
+request provenance, canonical writers, budgets and authority remain unchanged.
+`change_work_state` keeps its typed schema 1.
+
+Known Task completion/readiness rejections have allowlisted validation codes and
+safe explanations. With the pinned task-workflow behavior enabled, work records
+return a fresh authorized snapshot after these rejections so Bob can name the
+remaining required checks or readiness blockers. Unknown database errors remain
+generic. Required completion checks are enforced as before; readiness is not a
+new prerequisite for `doing`, and no check is completed automatically.
+
+Schema 1 and its parser remain available to historical pinned jobs. Live policy
+2 explicitly accepts pinned handlers 1 or 2 for only those three tools; policy 1
+accepts handler 1 only. Disabled, unknown-version or unauthorized tools remain
+denied. New rejection feedback and its extra readback are selected by the pinned
+behavior contract, preserving historical journal inputs. The execution-only
+receipt projection reconstructs results at the replay position; recovery's later
+receipts cannot alter an earlier completion-review input.
+
+Deploy both compatible runtimes before activating the new immutable catalog.
+For rollback, reactivate the prior catalog for new jobs while keeping compatible
+runtime and live policy 2 until all pinned schema-2 jobs finish. This supersedes
+the generic Edge-first rollback guidance for this publication. No stored user
+instructions are rewritten on deployment. [Release evidence](foundation-verification.md#bob-task-workflow-release-2026-10-17)
+separates technical checks from the owner's real-model acceptance.

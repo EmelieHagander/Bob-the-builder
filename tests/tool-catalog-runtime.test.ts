@@ -28,17 +28,18 @@ function fixture() {
     get writes(){return writes},breakPolicy(){broken=true}}
 }
 
-test('real claimed loop offers the task tool with its guide from the first step, executes and persists its receipt',async()=>{
-  const f=fixture();let calls=0,committed:any
+test('real claimed loop offers the task tool immediately, reviews its saved result once and persists its receipt',async()=>{
+  const f=fixture();let calls=0,committed:any;const observations:any[]=[]
   const manifest=structuredClone(catalogFixture().manifest())
   manifest.manifest_id='task-guide-revision'
   const taskDefinition=manifest.definitions.find(row=>row.prompt_key==='tools.save_project_task')!
   taskDefinition.definition.description='Save or revise the project Task.'
   taskDefinition.definition.additional_description='HOSTED_TASK_GUIDE_MARKER: read current ownership, then save the requested Task.'
   const aiCatalog=createAiCatalogSession({rpc:async()=>{throw new Error('Pinned guide must not reload')}},{app:'bob',manifest})
-  const result=await runClaimedProjectTurn({...f.opts,aiCatalog,commit:async r=>{committed=r},callModel:async o=>{
+  const result=await runClaimedProjectTurn({...f.opts,aiCatalog,observe:value=>observations.push(value),commit:async r=>{committed=r},callModel:async o=>{
     calls++
     assert.equal(o.tool_choice,undefined)
+    assert.equal(o.responsePhaseMode,'aware')
     const task=o.tools?.find(t=>t.function.name==='save_project_task')
     if(calls===1){
       assert(task,'no discovery round: the tool is on the bench')
@@ -49,11 +50,26 @@ test('real claimed loop offers the task tool with its guide from the first step,
       const {request_quote:_quote,...modelArgs}=args
       return response('save_project_task',modelArgs,calls)
     }
-    const output=JSON.parse(String(o.messages![0].content))
-    assert.equal(output.status,'saved');assert.equal(output.receipt.recordId,'taskNew');return final()
+    if(calls===2){
+      const output=JSON.parse(String(o.messages![0].content))
+      assert.equal(output.status,'saved');assert.equal(output.receipt.recordId,'taskNew');return final()
+    }
+    assert.equal(calls,3,'the new contract performs exactly one completion review')
+    assert.equal(o.previousResponseId,'resp_done','review continues the same provider response chain')
+    const review=String(o.messages![0].content)
+    assert(review.includes(message),'review checks the actual owner request')
+    assert.match(review,/"recordId":"taskNew"/)
+    assert.match(review,/"operation":"created"/)
+    assert.match(review,/"tool":"save_project_task","status":"saved"/)
+    assert.equal(f.writes,1,'review reads the verified save without writing it again')
+    return {...final(),data:'Uppgiften är sparad och kontrollerad.',responseId:'resp_verified'}
   }})
-  assert(result.ok);assert.equal(calls,2);assert.equal(f.writes,1)
+  assert(result.ok);assert.equal(calls,3);assert.equal(f.writes,1)
+  assert.equal(observations.at(-1).completion_checks,1)
+  assert.equal(result.answer,'Uppgiften är sparad och kontrollerad.');assert.equal(result.providerResponseId,'resp_verified')
   assert.equal(result.evidence.writes?.[0].recordId,'taskNew');assert(isBobAnswerEvidence(result.evidence,'A'))
+  assert.equal(result.evidence.writes?.length,1)
+  assert.equal(committed.answer,result.answer);assert.equal(committed.providerResponseId,'resp_verified')
   assert.deepEqual(committed.evidence,result.evidence)
   assert(!result.evidence.sources.some(s=>/tool_catalog/.test(s.dataset)),'Tool guidance is not a project observation')
 })

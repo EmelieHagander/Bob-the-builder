@@ -136,3 +136,68 @@ test('model diagnostics identify pinned catalog configuration without recording 
  assert.equal(events[0].counts.ai_tier,'standard')
  assert(!JSON.stringify(events).includes('PRIVATE'))
 })
+
+test('phase-aware model diagnostics survive journal replay once and reject arbitrary phase content',async()=>{
+ const events:ExecutionEvent[]=[],entries:JournalEntry[]=[]
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.push(e)}})
+ const run=async()=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(e)}},10000,()=>0)
+  return journal.run('model:ask-bob',{same:true},async()=>{
+   const result={...reply,outputPhase:'commentary' as const}
+   await metrics.model({aiFunction:'ask-bob'} as any,result,10)
+   return result
+  })
+ }
+ await run();await run()
+ assert.equal(events.length,1);assert.equal(events[0].counts.output_phase,'commentary')
+ for(const outputPhase of ['final_answer','legacy','tool_calls','refusal','incomplete'] as const){
+  await metrics.model({aiFunction:'ask-bob'} as any,{...reply,outputPhase},1)
+  assert.equal(events.at(-1)!.counts.output_phase,outputPhase)
+ }
+ await metrics.model({aiFunction:'ask-bob'} as any,reply,1)
+ assert.equal(Object.hasOwn(events.at(-1)!.counts,'output_phase'),false,'older responses do not acquire an inferred phase')
+ await metrics.model({aiFunction:'ask-bob'} as any,{...reply,outputPhase:'PRIVATE_phase'} as any,1)
+ assert.equal(Object.hasOwn(events.at(-1)!.counts,'output_phase'),false,'a valid-looking code outside the allowlist is omitted')
+ assert(!JSON.stringify(events).includes('PRIVATE'))
+})
+
+test('terminal phase diagnostics distinguish refusal, commentary exhaustion and recovered saves',async()=>{
+ const events=new Map<string,ExecutionEvent>()
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.set(e.event_key,e)}})
+ const observed={steps:3,tool_calls:0,deferred_calls:0,completion_checks:0,nudges:2,end:'refused' as const,output_phase:'refusal' as const}
+ metrics.observe(observed)
+ await metrics.finish({ok:true,writes:0})
+ assert.equal(events.get('delivery')!.status,'refused')
+ assert.equal(events.get('delivery')!.counts.end_reason,'refused')
+ assert.equal(events.get('delivery')!.counts.output_phase,'refusal')
+ metrics.observe({...observed,end:'commentary_limit',output_phase:'commentary'})
+ await metrics.finish({ok:false,error:'commentary_limit',writes:0})
+ assert.equal(events.get('delivery')!.status,'failed')
+ assert.equal(events.get('delivery')!.counts.end_reason,'commentary_limit')
+ assert.equal(events.get('delivery')!.counts.output_phase,'commentary')
+ await metrics.finish({ok:true,partial:true,recovered:true,writes:1})
+ assert.equal(events.get('delivery')!.status,'recovered','verified partial saves remain distinct from the stopping cause')
+ assert.equal(events.get('delivery')!.counts.end_reason,'commentary_limit')
+ assert.equal(events.get('delivery')!.counts.saved_records,1)
+ metrics.observe({...observed,output_phase:'PRIVATE_phase'} as any)
+ await metrics.finish({ok:true,writes:0})
+ assert.equal(Object.hasOwn(events.get('delivery')!.counts,'output_phase'),false)
+ assert(!JSON.stringify([...events.values()]).includes('PRIVATE'))
+})
+
+test('tool diagnostics keep known task validation codes and omit arbitrary values and absent legacy fields',async()=>{
+ const events=new Map<string,ExecutionEvent>()
+ const metrics=createExecutionMetrics({runId:'run',turnId:'turn',startedAt:0,write:async e=>{events.set(e.event_key,e)}})
+ const input={name:'change_work_state',status:'invalid',step:1,index:0,ms:5}
+ metrics.tool({...input,validation_code:'task_required_checks'})
+ metrics.tool({...input,validation_code:'task_required_checks'})
+ assert.equal(events.size,1,'the same tool call still upserts one event')
+ assert.equal(events.get('tool:1:0')!.counts.validation_code,'task_required_checks')
+ metrics.tool({...input,index:1,validation_code:'field_value'})
+ assert.equal(events.get('tool:1:1')!.counts.validation_code,'field_value')
+ metrics.tool({...input,index:2,validation_code:'private_record_name'})
+ assert.equal(Object.hasOwn(events.get('tool:1:2')!.counts,'validation_code'),false,'an arbitrary code-shaped string is not telemetry')
+ metrics.tool({...input,index:3})
+ assert.equal(Object.hasOwn(events.get('tool:1:3')!.counts,'validation_code'),false,'old callers remain unchanged')
+ assert(!JSON.stringify([...events.values()]).includes('private_record_name'))
+})

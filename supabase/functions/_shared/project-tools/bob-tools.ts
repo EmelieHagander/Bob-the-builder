@@ -1,5 +1,5 @@
 import { SUPERSEDED_PLAN_LINK_TOOLS, type PlanLinks } from '../project-plan-links.ts'
-import { SUPERSEDED_WORK_TOOLS, type WorkRecords } from '../project-work-records.ts'
+import { SUPERSEDED_WORK_TOOLS, WORK_RECORD_TOOLS_V2, WORK_VALUE_TOOL_NAMES, type WorkRecords } from '../project-work-records.ts'
 import type { SolutionActions } from '../project-solution-actions.ts'
 import type { ProjectEdits } from '../project-edits.ts'
 import type { ConstructionTools } from '../construction-draft.ts'
@@ -56,6 +56,10 @@ export function createBobToolSession(opts: {
   const boundPlanLinks = !!opts.planLinks && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.change_plan_task_link'))
   const boundWork = !!opts.workRecords && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.edit_work_record'))
   const boundSolutions = !!opts.solutionActions && (!opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.create_solution_alternative'))
+  const workVersion = (name: string): 1 | 2 => (WORK_VALUE_TOOL_NAMES as readonly string[]).includes(name)
+    && opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'tools.' + name
+      && (row.definition.envelope as { schema_version?: unknown })?.schema_version === 2) ? 2 : 1
+  const refreshWorkValidation = opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'agent-contract.ask-bob' && row.metadata.work_completion_version === 1) ?? false
   const shelves = opts.aiCatalog?.definition('bob.tools', 'tool_contract').definition.shelves as typeof TOOLBOX_SHELVES | undefined
   const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? (shelves ? shelves.find(s => s.tools.includes(def.spec.function.name))?.label ?? 'Other tools' : shelfOf(def.spec.function.name)) })
   const registered: ToolDefinition[] = [
@@ -74,9 +78,11 @@ export function createBobToolSession(opts: {
       gate: (): ToolGate => spec.function.name === 'read_solution_context' ? opts.solutionActions!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
       execute: (v: unknown) => opts.solutionActions!.execute(spec.function.name, v),
     })),
-    ...(opts.workRecords?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
+    ...(opts.workRecords?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({
+      spec: workVersion(spec.function.name) === 2 ? WORK_RECORD_TOOLS_V2.find(tool => tool.function.name === spec.function.name)! : spec,
+      version: workVersion(spec.function.name),
       gate: (): ToolGate => spec.function.name === 'read_work_context' ? opts.workRecords!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),
-      execute: (v: unknown) => opts.workRecords!.execute(spec.function.name, v),
+      execute: (v: unknown) => opts.workRecords!.execute(spec.function.name, v, workVersion(spec.function.name), refreshWorkValidation),
     })),
     ...(opts.planLinks?.tools ?? []).filter(spec => !opts.aiCatalog || opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.' + spec.function.name)).map(spec => ({ spec, version: 1,
       gate: (): ToolGate => spec.function.name === 'read_plan_link_context' ? opts.planLinks!.remaining > 0 ? 'available' : 'budget_exhausted' : writeGate(),

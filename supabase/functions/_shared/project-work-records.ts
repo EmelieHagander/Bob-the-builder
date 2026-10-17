@@ -1,5 +1,8 @@
 import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
-import { parseProjectWrite, type ProjectWriter, type WritePayload } from './project-write.ts'
+import { parseProjectWrite, TASK_WORK_VALIDATION_CODES, type ProjectWriter, type WritePayload } from './project-write.ts'
+import { schemaIssues } from './schema-issues.ts'
+import { WORK_VALUE_TOOL_NAMES } from './project-tools/session.ts'
+export { WORK_VALUE_TOOL_NAMES } from './project-tools/session.ts'
 
 const text = { type: 'string' }, nullable = { type: ['string', 'null'] }
 const tool = (name: string, description: string, properties: Record<string, unknown>) => ({ type: 'function' as const, function: { name, description, parameters: { type: 'object', additionalProperties: false, properties, required: Object.keys(properties) } } })
@@ -14,6 +17,30 @@ export const WORK_RECORD_TOOLS = [
   tool('change_task_readiness', 'Change a Task need or dependency using a task_ref from read_work_context. Existing needs/dependencies use their zero-based item_index; additions and confirmation use null. add_dependency chooses another Task source_ref and optional checkpoint_index from its instruction_steps; all other actions use source_ref/checkpoint_index=null. add_need authors only /kind(tool|information), /label and /notes; edit_need changes only /label or /notes and preserves readiness. set_need_ready uses ready=true/false from actual evidence; other actions ready=null. Dependency addition and readiness confirmation use note; other actions note=null. Unused changes is []. Confirmation still requires no blockers and never invents inspection evidence.', { task_ref: text, action: { type: 'string', enum: ['add_dependency', 'remove_dependency', 'add_need', 'edit_need', 'set_need_ready', 'remove_need', 'confirm_readiness'] }, item_index: { type: ['integer', 'null'] }, source_ref: nullable, checkpoint_index: { type: ['integer', 'null'] }, changes: { ...changes, minItems: 0, maxItems: 10 }, ready: { type: ['boolean', 'null'] }, note: nullable, reason: text, request_quote: text }),
   tool('change_work_state', 'Explicit work state change on a ref from read_work_context. action archive/restore applies to Areas or measurements (value=null); delete to unfinished Tasks, build days or Shopping rows (value=null); status to Tasks (value=todo|doing|done|blocked); phase to project/Area (value=concept|design|planning|build|complete). Preserve all other data. Completed Tasks are retained; canonical readiness/phase rules still apply. A requested state is not invented physical evidence.', { ref: text, action: { type: 'string', enum: ['archive', 'restore', 'delete', 'status', 'phase'] }, value: nullable, reason: text, request_quote: text }),
 ]
+// Keep WORK_RECORD_TOOLS and its v1 parser intact for pinned historical jobs.
+// The native variants are closed by operation, path and primitive value type.
+const nativeChange = (op: 'set' | 'append_text', paths: string[], value: Record<string, unknown>) => ({
+  type: 'object', additionalProperties: false,
+  properties: { op: { type: 'string', enum: [op] }, path: { type: 'string', enum: paths }, value },
+  required: ['op', 'path', 'value'],
+})
+const nativeText = { type: 'string', maxLength: 16000 }
+const nativeChanges = { type: 'array', minItems: 1, maxItems: 40, items: { anyOf: [
+  nativeChange('set', ['/name', '/description', '/instructions', '/subject', '/unit', '/truth', '/source', '/notes', '/title', '/day', '/time', '/place', '/food'], nativeText),
+  nativeChange('set', ['/value', '/start_date', '/end_date'], { type: ['string', 'null'], maxLength: 16000 }),
+  nativeChange('set', ['/required'], { type: 'boolean' }),
+  nativeChange('append_text', ['/description', '/instructions', '/notes', '/food'], nativeText),
+] } }
+const nativeNeedChanges = { type: 'array', minItems: 0, maxItems: 10, items: { anyOf: [
+  nativeChange('set', ['/kind', '/label', '/notes'], { type: 'string', maxLength: 4000 }),
+  nativeChange('append_text', ['/notes'], { type: 'string', maxLength: 4000 }),
+] } }
+export const WORK_RECORD_TOOLS_V2 = WORK_RECORD_TOOLS.map(spec => !(WORK_VALUE_TOOL_NAMES as readonly string[]).includes(spec.function.name) ? spec : ({
+  ...spec, function: { ...spec.function, parameters: { ...spec.function.parameters, properties: {
+    ...spec.function.parameters.properties,
+    changes: spec.function.name === 'change_task_readiness' ? nativeNeedChanges : nativeChanges,
+  } } },
+}))
 export const SUPERSEDED_WORK_TOOLS = ['save_project_area', 'save_project_task', 'save_project_measurement', 'archive_project_measurement', 'update_project_task_work', 'save_project_build_day', 'delete_project_task', 'delete_project_build_day', 'archive_project_area', 'set_project_phase', 'update_project_schedule', 'delete_shopping_item', 'manage_task_readiness']
 export type WorkSnapshot = { project_id: string; resource: WorkResource; key: string; scope_label: string; record: Record<string, any>; relations: Record<string, any> }
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
@@ -33,7 +60,20 @@ export function applyWorkDelta(resource: WorkResource, record: Record<string, an
   }
   return result
 }
-function display(s: WorkSnapshot) {
+export function applyWorkDeltaV2(resource: WorkResource, record: Record<string, any>, changes: unknown) {
+  if (schemaIssues(nativeChanges, changes).length) throw Error('Use the advertised content path, operation and native value type. Text is a normal string; do not JSON-encode it.')
+  const result = structuredClone(record), allowed = contentFields[resource] ?? []
+  for (const c of changes as { op: string; path: string; value: string | boolean | null }[]) {
+    const key = c.path.slice(1)
+    if (!allowed.includes(key)) throw Error('Use a supported content path for this record; relationships use change_work_relation.')
+    if (c.op === 'append_text') {
+      if (typeof result[key] !== 'string' || typeof c.value !== 'string') throw Error('Append only existing text content.')
+      result[key] += c.value
+    } else result[key] = c.value
+  }
+  return result
+}
+function display(s: WorkSnapshot): Record<string, unknown> {
   const fields = contentFields[s.resource] ?? (s.resource === 'people' ? ['name', 'initials', 'role'] : s.resource === 'plan_steps' ? ['title', 'goal', 'state', 'notes'] : s.resource === 'components' ? ['name', 'description', 'condition', 'truth'] : ['name', 'quantity', 'unit', 'status'])
   return { ...pick(s.record, fields), ...(s.record.archived !== undefined ? { archived: s.record.archived } : {}), ...(s.record.archived_at !== undefined ? { archived: s.record.archived_at !== null } : {}), ...(s.record.phase ? { phase: s.record.phase } : {}), ...(s.record.status ? { status: s.record.status } : {}), ...(s.resource === 'measurements' ? { has_source_image: !!s.record.source_media_id } : {}), ...Object.fromEntries(Object.entries(s.relations).map(([k, rows]) => [k === 'instructions' ? 'instruction_steps' : k, Array.isArray(rows) ? rows.map((r: any) => k === 'needs' ? pick(r, ['kind', 'label', 'notes', 'ready']) : k === 'dependencies' ? pick(r, ['prerequisite_task_name', 'prerequisite_step_title', 'note', 'satisfied']) : k === 'instructions' ? { ...pick(r, ['title', 'instructions', 'is_checkpoint', 'required']), completed: r.completed_at !== null } : ({ name: r.name ?? r.title })) : k === 'readiness' && rows ? { ...pick(rows, ['readiness_state', 'blocker_count', 'review_note']), blockers: (rows.blockers ?? []).map((b: any) => pick(b, ['kind', 'label'])) } : rows])) }
 }
@@ -43,12 +83,15 @@ export function createWorkRecords(opts: {
   read: (input: { resource: WorkResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
   const snapshots = new Map<string, WorkSnapshot>(), pages = new Map<string, { resource: WorkResource; query: string | null; after: string }>()
+  const latest = new Map<string, { resource: WorkResource; ref: string; scope: string; content: ReturnType<typeof display> }>()
   let reads = 0, partial = false
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   const register = async (s: WorkSnapshot) => {
     const ref = 'work_' + await fingerprint(s)
     snapshots.set(ref, structuredClone(s))
-    return { ref, scope: s.scope_label, content: display(s) }
+    const current = { ref, scope: s.scope_label, content: display(s) }
+    latest.set(s.resource + ':' + s.key, { resource: s.resource, ...structuredClone(current) })
+    return current
   }
   const refresh = async (resource: WorkResource, key: string) => {
     if (!opts.readSnapshot) return null
@@ -74,7 +117,9 @@ export function createWorkRecords(opts: {
   }
   return {
     tools: WORK_RECORD_TOOLS, get remaining() { return Math.max(0, 24 - reads) }, get partial() { return partial },
-    async execute(name: string, value: unknown): Promise<any> {
+    /** Latest authorized snapshots, without server identities or stale versions. */
+    get currentRecords() { return structuredClone([...latest.values()]) },
+    async execute(name: string, value: unknown, schemaVersion: 1 | 2 = 1, refreshValidation = false): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_work_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !WORK_RESOURCES.includes(value.resource) || !(value.query === null || nonempty(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return { status: 'invalid' }
@@ -106,7 +151,7 @@ export function createWorkRecords(opts: {
           if (!exact(v, ['resource', 'scope_ref', 'base_ref', 'changes', 'reason', 'request_quote']) || !scope || !scopes[v.resource]?.includes(scope.resource) || !(v.base_ref === null || base?.resource === v.resource)) throw Error('Read the destination scope and optional base of the same resource.')
           if (scope.record.archived_at || scope.record.archived || base?.record.archived_at || base?.record.archived) throw Error('Restore an archived record before using it.')
           const defaults: Record<string, Record<string, unknown>> = { areas: { name: '', description: '' }, tasks: { name: '', instructions: '' }, measurements: { subject: '', value: null, unit: 'mm', truth: 'unknown', source: '', notes: '', required: false }, build_days: { title: '', day: '', time: '', place: '', food: '' } }
-          const r = applyWorkDelta(v.resource, base?.record ?? defaults[v.resource], v.changes)
+          const r = (schemaVersion === 2 ? applyWorkDeltaV2 : applyWorkDelta)(v.resource, base?.record ?? defaults[v.resource], v.changes)
           domain = canonical(v.resource, r, null, v.reason, v.request_quote, scope)
           if (domain && v.resource === 'build_days' && base) (domain.data.fields as any).task_ids = base.relations.tasks.map((t: any) => t.id)
           // A new measurement is a new observation: source image copying requires an explicit evidence action.
@@ -118,7 +163,7 @@ export function createWorkRecords(opts: {
           pins = [s]
           if (name === 'edit_work_record') {
             if (!exact(v, ['ref', 'changes', 'reason', 'request_quote'])) throw Error('Provide only the target and requested content changes.')
-            domain = canonical(s.resource, applyWorkDelta(s.resource, s.record, v.changes), s, v.reason, v.request_quote)
+            domain = canonical(s.resource, (schemaVersion === 2 ? applyWorkDeltaV2 : applyWorkDelta)(s.resource, s.record, v.changes), s, v.reason, v.request_quote)
           } else if (name === 'change_work_relation') {
             if (!exact(v, ['target_ref', 'source_ref', 'action', 'reason', 'request_quote']) || !source || !['add', 'remove'].includes(v.action)) throw Error('Read both records and choose add or remove.')
             if (!(s.resource === 'tasks' && source.resource === 'people' || s.resource === 'build_days' && source.resource === 'tasks')) throw Error('Choose a Task and person, or a build day and Task.')
@@ -142,9 +187,11 @@ export function createWorkRecords(opts: {
               fields = v.action === 'add_need' ? { kind: 'tool', label: '', notes: '' } : pick(item, ['label', 'notes', 'ready'])
               const allowed = v.action === 'add_need' ? ['kind', 'label', 'notes'] : ['label', 'notes']
               if (!Array.isArray(v.changes) || !v.changes.length || v.changes.length > 10) throw Error('Give the requested need changes.')
+              if (schemaVersion === 2 && schemaIssues(nativeNeedChanges, v.changes).length) throw Error('Use the advertised need content fields with native text values; do not JSON-encode them.')
               for (const c of v.changes) {
-                if (!exact(c, ['op', 'path', 'value_json']) || !allowed.some(k => c.path === '/' + k) || typeof c.value_json !== 'string' || c.value_json.length > 4000) throw Error('Use only the advertised need content fields.')
-                const key = c.path.slice(1), val = JSON.parse(c.value_json)
+                if (schemaVersion === 1 && (!exact(c, ['op', 'path', 'value_json']) || !allowed.some(k => c.path === '/' + k) || typeof c.value_json !== 'string' || c.value_json.length > 4000)
+                  || schemaVersion === 2 && !allowed.some(k => c.path === '/' + k)) throw Error('Use only the advertised need content fields.')
+                const key = c.path.slice(1), val = schemaVersion === 2 ? c.value : JSON.parse(c.value_json)
                 if (typeof val !== 'string') throw Error('Need content must be text.')
                 if (c.op === 'set') fields[key] = val
                 else if (c.op === 'append_text' && key === 'notes') fields[key] += val
@@ -181,9 +228,18 @@ export function createWorkRecords(opts: {
         payload = { kind: 'bound_work', record_id: domain.record_id, expected_revision: domain.expected_revision, expected_updated_at: domain.expected_updated_at, request_quote: v.request_quote, data: { pins, domain } }
       } catch (error) { rethrowContinuation(error); issue = error instanceof Error ? error.message : 'Invalid action.' }
       const result = await opts.writer.commitBound(name, key, payload)
+      if (result.status === 'unknown' && s) latest.delete(s.resource + ':' + s.key)
+      if (refreshValidation && result.status === 'invalid' && (TASK_WORK_VALIDATION_CODES as readonly string[]).includes(result.validation?.code ?? '') && s) {
+        const current = await refresh(s.resource, s.key)
+        return current ? { ...result, current, message: result.message + ' current is the fresh target. Resolve the reported blocker; do not repeat the unchanged request or invent evidence.' }
+          : { ...result, refresh_status: 'unavailable' }
+      }
       if (result.status === 'saved' || result.status === 'conflict') {
         const deleted = name === 'change_work_state' && v.action === 'delete' && result.status === 'saved'
+        if (deleted && s) latest.delete(s.resource + ':' + s.key)
         const target = s ?? (result.status === 'saved' && result.receipt ? { resource: v.resource as WorkResource, key: result.receipt.recordId } : null)
+        // A failed readback cannot advertise the pre-write/conflicted snapshot as current.
+        if (target) latest.delete(target.resource + ':' + target.key)
         const current = !deleted && target ? await refresh(target.resource, target.key) : null
         const feedback = result.status === 'saved' ? { status: 'saved', message: deleted ? 'Deleted.' : 'Saved. Read the work record again before further changes.' } : result
         return current ? { ...feedback, current, message: result.status === 'saved'
