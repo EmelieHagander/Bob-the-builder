@@ -3188,3 +3188,26 @@ Only after both Edge readbacks, source `20261017152959_cad_annotation_pages_cata
 The two matching CAD manuals in `bob.tool_catalog` changed; executable schemas stayed unchanged. Models, settings, reasoning, execution profiles and every other definition retained their prior identity/hash. The agent contract remains the same version/identity, with `work_completion_version=2` and `work_allowance_version=1`; GPT-5.4/high is retained. Prior manifest `63efc114-9458-4a29-8776-abd41aeec423` returned all 290 original version identities/hashes unchanged. New manifest: `1eb0889f-6eb3-4983-8a13-a1e13d1e56ba`. No earlier migration was reapplied.
 
 **Open acceptance.** These technical/synthetic checks do not prove the owner's actual drawing delivery. Request `4d7de67b-ed9b-4249-9873-a5c776207824` remains `needs_data`, pinned to construction revision **3**, while the current checkpoint is **4**. A safe source-amendment/recovery path for the existing request still needs investigation/correction before that request can continue: the adapter rejects substituting a different explicit revision, and same-scope pending-request reuse can return the older pin. Increasing annotation capacity does not waive that boundary. No owner model turn was submitted and no project construction was edited for this release. The ordinary owner Bob test must verify current-source use, actual saved receipt/readback, original requirements/reference comparison and understandable delivery status. [State](bob-delivery-flow.md#state) owns the next action.
+
+
+<a id="cad-source-renewal--2026-10-17"></a>
+## CAD source renewal — 2026-10-17
+
+**Status: implementation and preflight; publication and owner acceptance pending.**
+The exact owner turn `d94d90b6-6675-40b4-b754-e2fc8e043608` attempted the existing
+request `4d7de67b-ed9b-4249-9873-a5c776207824` with construction revision 4,
+while the saved request pinned revision 3. Its later role write saved revision 5.
+The uncheckpointed `read_construction_changes` for revision 4 then returned
+`superseded` during replay, changing the input of `model:ask-bob:4` and stopping
+job `e844d4e0-a017-4480-9689-474f8f1be160` with `continuation_changed` at
+17:21:08 UTC. No CAD render or review was dispatched. The following automatic
+attempt failed as `background_failed`; its generic log does not establish the
+underlying exception. No owner construction/request was edited during diagnosis.
+
+The [CAD owner](cad-adapter.md#explicit-source-renewal--2026-10-17) describes the
+versioned repair and activation order. Focused tests cover explicit same-request
+renewal, preserved requirements, discarded old candidates/retries, stale/missing
+source and authority rejection, historical replay, actual SQL role revision and
+idempotent reconstruction. Catalog publication advances exactly two definitions;
+models, reasoning, work policy and historical manifests stay unchanged.
+The ordinary owner/model/CAD drawing test remains required after publication.

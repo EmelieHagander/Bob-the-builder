@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
-import {createConstructionTools,constructionCurrentReader,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
+import {createConstructionTools,constructionCurrentReader,constructionChangeReaders,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {designIntent,designIntentPin} from './support/design-intent-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
@@ -18,6 +18,32 @@ function fixture(){
  return {draft,catalog}
 }
 const check=(draft:any,catalog:any)=>checkConstruction(draft,catalog,'2026-10-03')
+test('saved role/consequence work cannot rewrite an earlier change read or preparation on resume',async()=>{
+ const entries:JournalEntry[]=[],reads={changes:0,roles:0,consequence:0};let revision=4,paid=0
+ const run=async(version=2)=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity)
+  const readers=constructionChangeReaders({
+   readChanges:async()=>{reads.changes++;return {projectId:project,artifact_id:artifact,revision:4,status:revision===4?'ok':'superseded',pending:revision===4?1:0}},
+   prepareRoleChange:async()=>{reads.roles++;return {status:revision===4?'ready':'saved'}},
+   prepareConsequence:async()=>{reads.consequence++;return {status:revision===4?'ready':'saved'}},
+  },journal,version)
+  const earlier=await readers.readChanges(artifact,4,null)
+  const role=await readers.prepareRoleChange({} as any),consequence=await readers.prepareConsequence({} as any)
+  await journal.run('model:ask-bob',{earlier,role,consequence},async()=>{paid++;return 'continue'})
+  revision=5
+  return {earlier,latest:await readers.readChanges(artifact,4,null)}
+ }
+ const first=await run();assert.equal(first.earlier.status,'ok');assert.equal(first.latest.status,'superseded')
+ assert.deepEqual(await run(),first);assert.equal(paid,1)
+ assert.deepEqual(reads,{changes:2,roles:1,consequence:1})
+ for(const version of [undefined,1]){
+  const oldEntries:JournalEntry[]=[],journal=createBobJournal({entries:oldEntries,save:async e=>{oldEntries.push(e)}},Infinity)
+  let calls=0
+  const legacy=constructionChangeReaders({readChanges:async()=>({revision:++calls})},journal,version)
+  assert.equal((await legacy.readChanges(artifact,4,null)).revision,1)
+  assert.equal((await legacy.readChanges(artifact,4,null)).revision,2);assert.equal(oldEntries.length,0)
+ }
+})
 test('own source revision after a check does not change an earlier paid model input on resume',async()=>{
  const {draft,catalog}=fixture(),entries:JournalEntry[]=[]
  const store={entries,save:async(entry:JournalEntry)=>{entries.push(structuredClone(entry))}}

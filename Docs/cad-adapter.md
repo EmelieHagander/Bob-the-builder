@@ -14,6 +14,27 @@ Research checks use the exact IDs of the persisted handoff, bound into the tool 
 
 Install the matching handlers in both Bob endpoints before applying `20261009222402_cad_server_owned_values.sql`. It clones and activates only the three affected immutable tool contracts, preserving other active edits and all saved manifests. [Background execution](ask-bob-conversations.md) owns durable continuation; read timeouts must be sealed in its journal before a later model dispatch.
 
+## Explicit source renewal — 2026-10-17
+
+A pending drawing request may explicitly adopt a newer **current, checked revision
+of the same construction** through `design_project_cad`: keep its `request_id`,
+source identity and scope; pass the exact receipt `construction_revision`,
+`handoff:null` and any explicit requirement changes. The server retains the
+canonical requirements and original references, verifies readiness and current
+construction data, and discards the earlier draft, approval and retry state.
+Missing revisions never follow a newer head. Failed validation leaves the old
+request intact; fresh dispatch and publication checks still fence later changes.
+
+This behavior is enabled only for new execution identities with
+`constructionReplayVersion:2`. Those jobs also checkpoint construction-change
+reads and role/consequence preparations so their own later writes cannot rewrite
+an earlier model input. Version 1 and older jobs retain their operation sequence;
+write authority and source checks still run inside the actual SQL command.
+Deploy both Bob endpoints before publishing
+`20261017180143_cad_source_renewal_catalog.sql`, which advances only the CAD tool
+instruction and its toolbox manual. Deployment and owner acceptance are recorded
+in [verification](foundation-verification.md#cad-source-renewal--2026-10-17).
+
 ## First contract
 
 Contract v1 uses canonical millimetres. The September 25 extension adds cylinder blanks, local subtractive cuts and explicit geometry checks while retaining old box/tube recipes:

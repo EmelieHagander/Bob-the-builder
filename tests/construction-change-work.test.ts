@@ -5,7 +5,8 @@ import {cutPlanFixture} from './support/cut-plan-fixture.ts'
 import {listFixture} from './construction-lists.test.ts'
 import {constructionLists} from '../supabase/functions/_shared/construction-lists.ts'
 import {constructionInstancePolicy} from '../supabase/functions/_shared/construction-instance-policy.ts'
-import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
+import {createConstructionTools,constructionChangeReaders} from '../supabase/functions/_shared/construction-draft.ts'
+import {createBobJournal,type BobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
 import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
@@ -33,7 +34,7 @@ test('explicit canonical archive settles a linked model gap without inventing qu
  assert.equal(Number(current.required_quantity),99);assert.equal(current.archived,true);assert.equal(current.method_key,'manual')
 })
 
-function runtime(f:any){
+function runtime(f:any,journal?:BobJournal){
  const binding=[f.project,f.claim.thread_id,f.turn,f.claim.generation]
  const write=(p:any)=>f.rpc('bob.bob_project_write_v16',[...binding,JSON.stringify(p)])
  const read=(revision:number|null=null)=>f.rpc('bob.read_construction_draft',[f.project,f.construction.recordId,revision,null])
@@ -49,10 +50,11 @@ function runtime(f:any){
    catch(e:any){sqlErrors.push([e.message,e.detail,e.where].filter(Boolean).join(' / '));return {data:null,error:{code:e.code,message:e.message}}}
   },async()=>({data:[],error:null}),async()=>({data:[],error:null}))
   const construction=createConstructionTools({projectId:f.project,message:f.message,writer,hasAccess:async()=>true,
-   read:(_id,revision)=>read(revision),readCurrent:()=>read(),readChanges:(_id,revision,after)=>changes(revision,after),
+   read:(_id,revision)=>read(revision),readCurrent:()=>read(),
    readCatalog:async(id,revision)=>{catalogReads++;return f.rpc('bob.catalog_read',[f.project,JSON.stringify({action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}})])},
-   readSources:async()=>({project:new Map(),physical:new Map()}),prepareRoleChange:prepare('bob.prepare_construction_role_change'),
-   prepareParameterChange:prepare('bob.prepare_construction_parameter_change'),prepareConsequence:prepare('bob.prepare_construction_consequence')})
+   readSources:async()=>({project:new Map(),physical:new Map()}),
+   ...constructionChangeReaders({readChanges:(_id:string,revision:number,after:string|null)=>changes(revision,after),prepareRoleChange:prepare('bob.prepare_construction_role_change'),prepareConsequence:prepare('bob.prepare_construction_consequence')},journal,2),
+   prepareParameterChange:prepare('bob.prepare_construction_parameter_change')})
   const session=createBobToolSession({projectId:f.project,message:f.message,writer,constructionTools:construction,
    lookup:createProjectLookup(f.project,async()=>({data:{records:[],related:[],truncated:false},error:null})),readPolicy:seedToolPolicy})
   return {construction,session}
@@ -65,6 +67,24 @@ function runtime(f:any){
  }
  return{binding,write,read,changes,tools,continueInput,advance,sqlErrors,catalogReads:()=>catalogReads}
 }
+
+test('a saved role revision resumes earlier canonical change work without replay drift or another construction write',async t=>{
+ const f=await cutPlanFixture(t),entries:JournalEntry[]=[];let paid=0
+ const input={key:'retain-replay',record_id:f.construction.recordId,expected_revision:2,changes:[{instance_id:'back',role:'prefabricated_part',quantity_policy:'complete_item',reason:'Explicit synthetic complete item'}],change_note:'Use the complete upright',request_quote:f.message}
+ assert.equal((await runtime(f).tools().construction.execute('change_construction_roles',{...input,key:'seed-replay',expected_revision:1,changes:[{instance_id:'back',role:'existing_part',quantity_policy:'retain',reason:'Explicit synthetic retained member'}]})).status,'saved')
+ const run=async()=>{
+  const journal=createBobJournal({entries,save:async e=>{entries.push(structuredClone(e))}},Infinity),r=runtime(f,journal),tools=r.tools().construction
+  const before=await tools.execute('read_construction_changes',{artifact_id:f.construction.recordId,revision:2,after:null})
+  await journal.run('model:ask-bob',{before},async()=>{paid++;return 'Retain the existing upright'})
+  const saved=await tools.execute('change_construction_roles',input)
+  assert.equal(saved.status,'saved',JSON.stringify(r.sqlErrors))
+  return {before,saved,after:await tools.execute('read_construction_changes',{artifact_id:f.construction.recordId,revision:2,after:null})}
+ }
+ const first=await run();assert.equal(first.after.status,'superseded')
+ assert.deepEqual(await run(),first);assert.equal(paid,1)
+ assert.equal((await f.rpc('bob.read_construction_draft',[f.project,f.construction.recordId,null,null])).revision,3)
+ assert.equal((await f.pg.query('select count(*)::integer n from bob.artifact_construction_revisions where artifact_id=$1',[f.construction.recordId])).rows[0].n,3)
+})
 
 test('per-instance roles filter a shared definition without guessing labels or turning ownership into a quantity',()=>{
  const {draft,catalog}=listFixture()

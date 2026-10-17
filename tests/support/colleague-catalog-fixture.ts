@@ -33,7 +33,7 @@ export function createCadAssistant(opts:Omit<Parameters<typeof cad>[0],'aiCatalo
    return {...result,records:result.records.map(row=>({...row,solution_id:typeof row.solution_id==='string'&&!/^[0-9a-f-]{36}$/i.test(row.solution_id)?'44444444-4444-4444-8444-444444444444':row.solution_id}))}
   }}
  }
- return cad({...opts,makeLookup,aiCatalog:session,readDesignReadiness:opts.readDesignReadiness??(async(targetRevision,purpose,areaId)=>{
+ return cad({allowSourceRenewal:true,...opts,makeLookup,aiCatalog:session,readDesignReadiness:opts.readDesignReadiness??(async(targetRevision,purpose,areaId)=>{
   const lookup=makeLookup(),input={dataset:'target' as const,query:null,status:null,area_id:areaId??null,record_id:areaId==null?'project':null,after_id:null}
   let target=await lookup.search(input)
   if(target.status==='empty'&&areaId!=null)target=await lookup.search({...input,area_id:null,record_id:'project'})

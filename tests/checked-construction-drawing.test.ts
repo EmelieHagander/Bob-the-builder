@@ -59,6 +59,53 @@ function runtime(){
  return {draft,catalog,assistant,check,setAllowed:(v:boolean)=>{allowed=v},afterRender:(f:()=>void)=>{afterRender=f},afterReview:(f:()=>void)=>{afterReview=f},reject:()=>{verdict='revise'},counts:()=>({reads,renders,reviews})}
 }
 const request={request_id:null,brief:'Draw this exact bracket',handoff,artifact_id:artifact,area_id:null,component_id:null,step_id:null}
+test('same drawing request can explicitly renew its checked source while retaining requirements and dropping obsolete approvals/retries',async()=>{
+ const f=runtime();let saved:any=null;const writes:any[]=[]
+ const store={load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{
+  assert.equal(revision,saved?.revision??0)
+  saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)}
+  writes.push(structuredClone(saved));return structuredClone(saved)
+ }}
+ const first=await f.assistant({requestStore:store,render:async()=>{throw Error('renderer unavailable')}}).consult({...request,construction_revision:1})
+ assert.equal(first.reason,'render_failed');assert(saved.payload.retry);assert(saved.payload.draft)
+ const id=saved.id,requirements=structuredClone(saved.payload.brief.handoff),oldWrites=writes.length
+ f.draft.revision=2;f.draft.current_revision=2;f.draft.instance_policy=manufacturePolicy(f.draft.recipe)
+ const checkConstruction=(id:string,revision:number)=>checkedConstructionForDrawing({projectId:f.draft.projectId,message:request.brief,hasAccess:async()=>true,read:async()=>structuredClone(f.draft),
+  readCatalog:async()=>({status:'ok',projectId:f.draft.projectId,record:f.catalog.get(material+'@1')}),readSources:async()=>({project:new Map(),physical:new Map()})},id,revision)
+ const a=f.assistant({requestStore:store,checkConstruction})
+ const result=await a.consult({...request,request_id:id,handoff:null,requirement_changes:[],construction_revision:2})
+ assert.equal(result.status,'ready',JSON.stringify(result));assert.equal(result.request_id,id)
+ const rebound=writes[oldWrites]
+ assert.equal(rebound.id,id);assert.equal(rebound.payload.brief.construction_revision,2)
+ assert.equal(rebound.payload.draft,undefined);assert.equal(rebound.payload.retry,undefined);assert.equal(rebound.payload.reviewed_candidate,undefined)
+ assert.deepEqual(saved.payload.brief.handoff,requirements)
+ assert.equal(saved.payload.draft.construction.revision,2);assert.equal(a.candidate!.packet.manifest.bob_construction.revision,2)
+ assert.deepEqual(a.candidate!.packet.recipe,f.draft.recipe)
+ assert.equal(f.counts().renders,1);assert.equal(f.counts().reviews,1)
+})
+test('source renewal never follows a new head implicitly or changes the old request before the new exact revision passes',async()=>{
+ for(const mode of ['omitted','missing_revision','stale','unchecked','target_changed','other_source','old_execution','cancelled','denied']){
+  const f=runtime();let saved:any=null,writes=0
+  const store={load:async()=>structuredClone(saved),assertActive:async()=>{if(mode==='cancelled')throw Error('drawing_request_cancelled')},save:async(id:any,revision:any,status:any,payload:any)=>{
+   writes++;saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)};return structuredClone(saved)
+  }}
+  await f.assistant({requestStore:store,render:async()=>{throw Error('offline')}}).consult({...request,construction_revision:1})
+  const before=structuredClone(saved),beforeWrites=writes
+  f.draft.revision=2;f.draft.current_revision=mode==='stale'?3:2
+  if(mode==='unchecked')f.draft.joints=[]
+  if(mode==='target_changed')f.draft.target_revision=2
+  const checkConstruction=(id:string,revision:number)=>checkedConstructionForDrawing({projectId:f.draft.projectId,message:request.brief,hasAccess:async()=>true,read:async()=>structuredClone(f.draft),
+   readCatalog:async()=>({status:'ok',projectId:f.draft.projectId,record:f.catalog.get(material+'@1')}),readSources:async()=>({project:new Map(),physical:new Map()})},id,revision)
+  const a=f.assistant({requestStore:store,checkConstruction,allowSourceRenewal:mode!=='old_execution',...(mode==='denied'?{hasAccess:async()=>false}:{})})
+  const input:any={...request,request_id:saved.id,handoff:null,requirement_changes:[],construction_revision:mode==='missing_revision'?null:2}
+  if(mode==='omitted')delete input.construction_revision
+  if(mode==='other_source')input.artifact_id=material
+  if(mode==='denied')await assert.rejects(a.consult(input),/project_denied/)
+  else {const result=await a.consult(input);assert.notEqual(result.status,'ready',mode)}
+  assert.deepEqual(saved,before,mode);assert.equal(writes,beforeWrites,mode)
+  assert.equal(f.counts().renders,0,mode);assert.equal(f.counts().reviews,0,mode);assert.equal(a.candidate,null,mode)
+ }
+})
 test('K3 explicit construction revision rejects missing, malformed or substituted versions before render or paid review',async()=>{
  for(const [revision,status] of [[null,'needs_data'],[0,'invalid'],['1','invalid'],[2,'conflict']] as const){
   const f=runtime(),result=await f.assistant().consult({...request,construction_revision:revision})

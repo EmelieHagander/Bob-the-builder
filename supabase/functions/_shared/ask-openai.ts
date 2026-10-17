@@ -5,7 +5,7 @@ import { createProjectEdits } from './project-edits.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
-import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader } from './construction-draft.ts'
+import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
@@ -222,7 +222,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:1}))
+  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:2}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
     const {error}=await internal.from('execution_events').upsert(event,{onConflict:'run_id,event_key'}).abortSignal(AbortSignal.timeout(3000))
     if(error)throw new Error('metrics_unavailable')
@@ -325,6 +325,7 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
     readDesignReadiness,
+    ...constructionChangeReaders({
     prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await client.rpc('prepare_construction_role_change',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_role_preparation_failed'}
@@ -340,6 +341,7 @@ export async function answerWithOpenAi(opts: {
       const {data,error}=await client.rpc('read_construction_changes',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after}).abortSignal(AbortSignal.timeout(12000))
       if(error)throw new Error('construction_changes_unavailable');return data
     },
+    },journal,execution.constructionReplayVersion),
     prepareLegacyTransition:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_legacy_construction_transition',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}
@@ -422,6 +424,7 @@ export async function answerWithOpenAi(opts: {
   }})
 
   const cadAssistant = createCadAssistant({ unlimitedWork,
+    allowSourceRenewal:execution.constructionReplayVersion===2,
     aiCatalog,calculator,
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
