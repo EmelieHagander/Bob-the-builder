@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import * as db from '../data/database'
+import { prependHistoryPage, refreshHistoryPage, type BobHistoryPage } from '../data/bobHistory'
 import { Icon, useAsync } from './ui'
 import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
@@ -308,6 +309,12 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [resetError, setResetError] = useState('')
   const resetPending = useRef(false)
   const [historyReady, setHistoryReady] = useState(false)
+  const [historyAttempt, setHistoryAttempt] = useState(0)
+  const [historyLoadError, setHistoryLoadError] = useState(false)
+  const historyPage = useRef<BobHistoryPage>({ messages: [] })
+  const [hasOlder, setHasOlder] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [olderError, setOlderError] = useState('')
   const [historyNotice, setHistoryNotice] = useState('')
   const [working, setWorking] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -416,41 +423,48 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent()
     outgoing.current = null; outgoingKey.current = null; serverThread.current = null
-    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice(''); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
+    historyPage.current = { messages: [] }
+    setHasOlder(false); setLoadingOlder(false); setOlderError(''); setHistoryLoadError(false)
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('Loading conversation…'); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
     void (async () => {
-      const me = await db.getCurrentUser()
+      const [me, history] = await Promise.all([
+        db.getCurrentUser(),
+        db.getAskBobConversation(project.id, { onCached: cached => {
+          if (current()) { setExtra(cached.messages); setHistoryNotice('Checking the latest conversation…') }
+        } }),
+      ])
       if (!current()) return
       const key = `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
       setHistoryKey(key)
-      try {
-        const history = await db.getAskBobConversation(project.id)
-        if (!current()) return
-        if (history.mode === 'server') {
-          outgoingKey.current = history.ownerId ? `bob:outgoing:v1:${project.id}:${history.ownerId}` : null
-          try { outgoing.current = outgoingKey.current ? readOutgoing(sessionStorage.getItem(outgoingKey.current)) : null } catch { /* unavailable storage */ }
-          applyServerHistory(history); setHistoryReady(true)
-          return
-        }
-      } catch {
-        if (!current()) return
-        setHistoryNotice('Conversation sync is unavailable right now. This device will keep a temporary copy.')
+      if (history.mode === 'server') {
+        outgoingKey.current = history.ownerId ? `bob:outgoing:v1:${project.id}:${history.ownerId}` : null
+        try { outgoing.current = outgoingKey.current ? readOutgoing(sessionStorage.getItem(outgoingKey.current)) : null } catch { /* unavailable storage */ }
+        applyServerHistory(history); setHistoryReady(true)
+        return
       }
       if (!current()) return
       let saved: ChatMessage[] = []
       try { saved = parseSavedChat(localStorage.getItem(key)) } catch { /* storage can be unavailable */ }
-      setLocalHistory(true); setExtra(saved); setHistoryReady(true)
+      setLocalHistory(true); setExtra(saved); setHistoryNotice(''); setHistoryReady(true)
     })().catch(() => {
-      if (current()) setHistoryNotice('Could not load your conversation. Close Bob and try again.')
+      if (current()) {
+        setHistoryLoadError(true)
+        setHistoryNotice('Could not sync your conversation. Retry to check the latest messages and work status.')
+      }
     })
     return () => { cancelled = true }
-  }, [project.id])
+  }, [project.id, historyAttempt])
 
   function applyServerHistory(history: Awaited<ReturnType<typeof db.getAskBobConversation>>) {
+    historyPage.current = refreshHistoryPage(historyPage.current, history)
+    setHasOlder(!!historyPage.current.hasMore)
+    setOlderError('')
     serverThread.current = history.threadId ?? null
-    keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages))
+    keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages, history.acknowledgedTurnIds))
     const held = outgoing.current
     setLocalHistory(false)
-    setExtra(held ? [...history.messages, { from: 'user', text: held.text, turnId: held.turnId, imageIds: held.imageIds }] : history.messages)
+    const messages = historyPage.current.messages
+    setExtra(held ? [...messages, { from: 'user', text: held.text, turnId: held.turnId, imageIds: held.imageIds }] : messages)
     setReadTarget(history.threadId && history.latestSeq ? { threadId: history.threadId, seq: history.latestSeq } : null)
     window.dispatchEvent(new Event(db.BOB_INBOX_EVENT))
     setRetry(held ?? history.retry ?? null)
@@ -460,6 +474,28 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setHistoryNotice(held ? 'Your new message is kept in this tab, but receipt is not confirmed. Use Retry request when Bob is free.'
       : history.pending?.paused ? 'Bob is paused because the session expired. Reconnect to continue the same request; saved work is retained.'
       : history.retry ? 'The previous answer was interrupted. Retry to continue without repeating saved changes.' : '')
+  }
+
+  async function loadOlder() {
+    const page = historyPage.current
+    if (loadingOlder || !page.threadId || !page.oldestSeq) return
+    const isCurrent = scope.current.capture(), version = sendVersion.current
+    const current = () => isCurrent() && version === sendVersion.current && historyPage.current.threadId === page.threadId
+    const height = historyScroll.current?.scrollHeight ?? 0, top = historyScroll.current?.scrollTop ?? 0
+    setLoadingOlder(true); setOlderError(''); stickToEnd.current = false
+    try {
+      const older = await db.getAskBobConversation(project.id, { beforeSeq: page.oldestSeq, threadId: page.threadId })
+      if (!current()) return
+      historyPage.current = prependHistoryPage(historyPage.current, older)
+      setHasOlder(!!historyPage.current.hasMore)
+      const held = outgoing.current, messages = historyPage.current.messages
+      setExtra(held ? [...messages, { from: 'user', text: held.text, turnId: held.turnId, imageIds: held.imageIds }] : messages)
+      setShowJump(true)
+      requestAnimationFrame(() => {
+        if (current() && historyScroll.current) historyScroll.current.scrollTop = top + historyScroll.current.scrollHeight - height
+      })
+    } catch { if (current()) setOlderError('Could not load older messages. Try again.') }
+    finally { if (isCurrent()) setLoadingOlder(false) }
   }
 
   // Opening an already-mounted drawer must see replies delivered while elsewhere.
@@ -531,13 +567,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const current = () => !cancelled && isCurrent() && !stopPending.current
     const poll = async () => {
       try {
-        const history = await db.getAskBobConversation(project.id)
+        const progress = recovering.jobId ? await db.getAskBobTurnProgress(project.id, recovering.turnId) : null
         if (!current()) return
-        if (history.mode !== 'server') throw new Error('Conversation unavailable')
-        applyServerHistory(history)
-        if (!history.pending) {
-          if (history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
-          return
+        if (progress) {
+          setRecovering(value => value?.turnId === recovering.turnId ? { ...value, ...progress } : value)
+          setWorkingLabel(db.describeBobProgress(progress.progress))
+          setHistoryNotice(progress.paused ? 'Bob is paused because the session expired. Reconnect to continue the same request; saved work is retained.' : '')
+        } else {
+          const history = await db.getAskBobConversation(project.id)
+          if (!current()) return
+          if (history.mode !== 'server') throw new Error('Conversation unavailable')
+          applyServerHistory(history)
+          if (!history.pending) {
+            if (history.messages.some(message => message.evidence?.writes?.length)) setNeedsRefresh(true)
+            return
+          }
         }
       } catch {
         if (!current()) return
@@ -612,6 +656,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
+      db.clearAskBobHistoryCache()
+      historyPage.current = { messages: [] }
+      setHasOlder(false); setOlderError(''); setLoadingOlder(false)
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
@@ -636,6 +683,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
+      historyPage.current = { messages: [] }
+      setHasOlder(false); setOlderError(''); setLoadingOlder(false)
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
@@ -796,15 +845,17 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           setShowJump(!stickToEnd.current)
         }}>
           <div ref={historyContent} className="bob-history-content">
+          {hasOlder && <div><button type="button" className="btn" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? 'Loading older messages…' : 'Show older messages'}</button></div>}
+          {olderError && <p role="alert">{olderError}</p>}
           <details className="bob-context" aria-label="Bob page context">
             <summary>{recovering || retry ? 'Continuing the original request' : surface?.label ?? 'Project context'}</summary>
             <p>{recovering || retry ? 'Its saved page context stays with this request.' : 'Page focus only. Bob checks the saved project records when you send.'}</p>
           </details>
-          {!extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
+          {historyReady && !extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
           {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
           {historyNotice && <div role="status" className="bob-history-notice">{historyNotice}</div>}
           {working && !recovering?.paused && <WorkingBubble label={workingLabel} />}
-        {!extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
+        {historyReady && !extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
         {retry && <details className="bob-retry-details">
           <summary>About this retry</summary>
           <p>{outgoing.current ? 'Your new message has not been confirmed. Retry this message when Bob is free.' : 'Retry the same request to check its result without duplicating saved changes.'}</p>
@@ -826,6 +877,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <span>{outgoing.current ? 'Receipt not confirmed' : 'Answer interrupted'}</span>
           <button className="btn btn-primary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)}>Retry request</button>
         </div>}
+        {historyLoadError && <div className="bob-recovery" role="status"><span>Conversation unavailable</span><button type="button" className="btn" onClick={() => setHistoryAttempt(value => value + 1)}>Retry conversation</button></div>}
         {working && recovering?.jobId && <div className="bob-recovery" role="status">
           <span>{recovering.paused ? 'Paused: session expired' : 'Saved changes will remain.'}</span>
           {recovering.paused && <button type="button" className="btn" disabled={reconnecting || stopping} onClick={() => void reconnectWork()}>{reconnecting ? 'Reconnecting…' : 'Reconnect'}</button>}

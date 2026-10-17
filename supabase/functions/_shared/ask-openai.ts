@@ -5,7 +5,7 @@ import { createProjectEdits } from './project-edits.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
-import { createConstructionTools, checkedConstructionForDrawing } from './construction-draft.ts'
+import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
 import {drawingResumeReply,confirmedDrawingReceipt} from './drawing-resume-reply.ts'
@@ -222,7 +222,7 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now()}))
+  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:1}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
     const {error}=await internal.from('execution_events').upsert(event,{onConflict:'run_id,event_key'}).abortSignal(AbortSignal.timeout(3000))
     if(error)throw new Error('metrics_unavailable')
@@ -350,12 +350,14 @@ export async function answerWithOpenAi(opts: {
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}
       return data
     },
-    // Earlier RPC results reconstruct a resumed turn. A current-source gate
-    // must bypass that journal before it calls a list/check result current.
-    readCurrent:async(id:string)=>{
+    // Each new check observes current sources once. Resuming reconstructs that
+    // historical check, even after this job revised one of its catalog sources.
+    // Older execution identities retain their original journal call sequence.
+    // CAD dispatch independently uses fresh reads below, before paid work.
+    readCurrent:constructionCurrentReader(async(id:string)=>{
       const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:null,p_after:null}).abortSignal(AbortSignal.timeout(12000))
       if(error)throw new Error('construction_read_unavailable');return data
-    },
+    },journal,execution.constructionReplayVersion),
     read:async(id:string|null,revision:number|null,after:string|null)=>{
       const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
       if(error)throw new Error('construction_read_unavailable');return data
@@ -455,6 +457,8 @@ export async function answerWithOpenAi(opts: {
     },
     checkConstruction:async(id,revision,fresh)=>{
      const check=()=>checkedConstructionForDrawing({...constructionOptions,
+      // New CAD dispatch must not consume an interactive historical check.
+      readCurrent:undefined,
       // The actual operation reads fresh caller data. Recorded gate outcomes
       // reconstruct earlier replies; render/review dispatch guards bypass them.
       read:async(artifact,rev,after)=>{

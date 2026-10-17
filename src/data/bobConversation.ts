@@ -5,6 +5,7 @@ import { getActiveProjectId, PROJECT_CHANGED_EVENT } from './databaseCore'
 import { isBobAnswerEvidence } from './bobEvidence'
 import { readBobTranscript, readDrawingTurnRecovery, reconcileDrawingTurnRecovery } from './bobTranscript'
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
+import { BOB_HISTORY_PAGE_SIZE, readHistoryWindow } from './bobHistory'
 
 const GUEST_EMAIL = 'guest@bob.local'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -62,6 +63,28 @@ export interface BobConversationHistory {
   threadId?: string
   ownerId?: string
   latestSeq?: number
+  oldestSeq?: number
+  hasMore?: boolean
+  acknowledgedTurnIds?: string[]
+}
+
+// A small preview for this account/session only. No private transcript goes into
+// persistent browser storage. Cached previews never establish job/write authority.
+const recentHistory = new Map<string, BobConversationHistory>()
+let historyEpoch = 0, historyOwner: string | undefined
+export function clearAskBobHistoryCache() { recentHistory.clear(); historyEpoch++ }
+bobDb?.auth.onAuthStateChange((event, session) => {
+  const owner = session?.user.id
+  if (event === 'SIGNED_OUT' || historyOwner !== undefined && owner !== historyOwner) {
+    clearAskBobHistoryCache()
+  }
+  historyOwner = owner
+})
+
+interface HistoryOptions {
+  beforeSeq?: number
+  threadId?: string
+  onCached?: (history: BobConversationHistory) => void
 }
 
 /**
@@ -69,28 +92,60 @@ export interface BobConversationHistory {
  * shared guest Auth identity remains device-local so one guest cannot read
  * another person's private conversation.
  */
-export async function getAskBobConversation(projectId: string): Promise<BobConversationHistory> {
+export async function getAskBobConversation(projectId: string, options: HistoryOptions = {}): Promise<BobConversationHistory> {
   if (!bobDb) return { mode: 'local', messages: [] }
-  const { data: auth, error: authError } = await bobDb.auth.getUser()
-  if (authError || !auth.user) return { mode: 'local', messages: [] }
-  if (auth.user.email?.toLowerCase() === GUEST_EMAIL) return { mode: 'local', messages: [] }
+  const { data: auth, error: authError } = await bobDb.auth.getSession()
+  if (authError) throw new Error('Could not check the signed-in account.')
+  const user = auth.session?.user
+  if (!user || user.email?.toLowerCase() === GUEST_EMAIL) return { mode: 'local', messages: [] }
+  const epoch = historyEpoch, cacheKey = `${user.id}/${projectId}`
+  const cached = recentHistory.get(cacheKey)
+  if (options.beforeSeq === undefined && cached) options.onCached?.(structuredClone(cached))
+  const current = () => {
+    if (epoch !== historyEpoch || projectId !== getActiveProjectId()) throw new Error('Conversation scope changed.')
+  }
 
   const threadResult = await bobDb.from('bob_threads').select('id')
-    .eq('project_id', projectId).eq('owner_user_id', auth.user.id).eq('status', 'active').maybeSingle()
+    .eq('project_id', projectId).eq('owner_user_id', user.id).eq('status', 'active').abortSignal(AbortSignal.timeout(12000)).maybeSingle()
+  current()
   if (threadResult.error) throw new Error(`database: ${threadResult.error.message}`)
-  if (!threadResult.data) return { mode: 'server', messages: [], ownerId: auth.user.id }
+  if (!threadResult.data) { recentHistory.delete(cacheKey); return { mode: 'server', messages: [], ownerId: user.id } }
+  if (options.threadId && options.threadId !== threadResult.data.id) throw new Error('The conversation changed. Reopen Bob.')
 
-  const rows = await bobDb.from('bob_messages')
+  let request = bobDb.from('bob_messages')
     .select('role,text,evidence,delivery_state,seq,turn_id,updated_at,image_ids')
     .eq('thread_id', threadResult.data.id)
-    .order('seq')
+    .order('seq', { ascending: false }).limit(BOB_HISTORY_PAGE_SIZE + 1)
+  if (options.beforeSeq !== undefined) {
+    if (!Number.isSafeInteger(options.beforeSeq) || options.beforeSeq < 1) throw new Error('Invalid history cursor.')
+    request = request.lt('seq', options.beforeSeq)
+  }
+  const rows = await request.abortSignal(AbortSignal.timeout(12000))
+  current()
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
+  const page = readHistoryWindow(rows.data ?? [])
 
-  const notices = await bobDb.from('bob_delegation_notices').select('turn_id,text').eq('thread_id', threadResult.data.id)
+  const turnIds = [...new Set(page.rows.map(row => row.turn_id).filter((id): id is string => !!id))]
+  const [notices, latestUser] = await Promise.all([
+    turnIds.length ? bobDb.from('bob_delegation_notices').select('turn_id,text').eq('thread_id', threadResult.data.id)
+      .in('turn_id', turnIds).abortSignal(AbortSignal.timeout(12000)) : Promise.resolve({ data: [], error: null }),
+    // Event replies can outnumber the window. The latest owner turn still owns
+    // pending/retry state even when its text is on an older page.
+    options.beforeSeq === undefined && !page.rows.some(row => row.role === 'user')
+      ? bobDb.from('bob_messages').select('role,text,delivery_state,seq,turn_id,updated_at,image_ids')
+        .eq('thread_id', threadResult.data.id).eq('role', 'user').order('seq', { ascending: false }).limit(1)
+        .abortSignal(AbortSignal.timeout(12000)) : Promise.resolve({ data: [], error: null }),
+  ])
+  current()
+  if (notices.error || latestUser.error) throw new Error('Could not read the conversation state.')
   const byTurn = new Map<string, string>((notices.data ?? []).map(row => [row.turn_id, row.text]))
-  let transcript = readBobTranscript(rows.data ?? [], projectId, byTurn)
+  let transcript = readBobTranscript(page.rows, projectId, byTurn)
+  if (options.beforeSeq !== undefined) return { mode: 'server', messages: transcript.messages,
+    threadId: threadResult.data.id, ownerId: user.id, oldestSeq: page.oldestSeq, hasMore: page.hasMore }
   const { latestSeq, lastCompletedTurnId } = transcript
-  const turn = transcript.unfinished
+  const turn = latestUser.data?.length
+    ? readBobTranscript([...latestUser.data, ...page.rows].sort((a, b) => a.seq - b.seq), projectId, byTurn).unfinished
+    : transcript.unfinished
   let pending: BobConversationHistory['pending'] = turn?.pending ? { text: turn.text, turnId: turn.turnId, imageIds: turn.imageIds, expiresAt: turn.expiresAt } : undefined
   let retry: BobConversationHistory['retry'] = turn && !turn.pending ? { text: turn.text, turnId: turn.turnId, imageIds: turn.imageIds } : undefined
   const unfinished = pending ?? retry
@@ -124,7 +179,26 @@ export async function getAskBobConversation(projectId: string): Promise<BobConve
       } else retry = unfinished
     }
   }
-  return { mode: 'server', messages: transcript.messages, retry, pending, lastCompletedTurnId, threadId: threadResult.data.id, ownerId: auth.user.id, latestSeq }
+  current()
+  const history: BobConversationHistory = { mode: 'server', messages: transcript.messages, retry, pending, lastCompletedTurnId,
+    threadId: threadResult.data.id, ownerId: user.id, latestSeq, oldestSeq: page.oldestSeq, hasMore: page.hasMore,
+    acknowledgedTurnIds: [...page.rows, ...(latestUser.data ?? [])].filter(row => row.role === 'user').map(row => row.turn_id).filter((id): id is string => !!id) }
+  recentHistory.delete(cacheKey)
+  recentHistory.set(cacheKey, structuredClone(history))
+  if (recentHistory.size > 8) recentHistory.delete(recentHistory.keys().next().value!)
+  return history
+}
+
+/** Active work polling needs only status/progress; fetch the transcript at settlement. */
+export async function getAskBobTurnProgress(projectId: string, turnId: string) {
+  if (!bobDb || projectId !== getActiveProjectId()) return null
+  const { data, error } = await bobDb.rpc('bob_job_status', { p_project: projectId, p_turn: turnId })
+    .abortSignal(AbortSignal.timeout(12000))
+  if (error) throw new Error('Could not check Bob’s background job.')
+  if (projectId !== getActiveProjectId() || !data || !['queued', 'running', 'paused'].includes(data.status)) return null
+  const expiresAt = Date.parse(data.expiresAt)
+  if (!Number.isFinite(expiresAt)) throw new Error('Invalid background job status')
+  return { paused: data.status === 'paused', expiresAt, progress: parseProgress(data.progress) }
 }
 
 /** Content-free exact-turn recovery check for a stopped, already-open drawer. */
@@ -251,6 +325,7 @@ export async function resetAskBobConversation(projectId: string): Promise<'serve
   if (data?.status !== 'cleared' || data.projectId !== projectId || data.mode !== 'server') {
     throw new Error('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
   }
+  clearAskBobHistoryCache()
   return 'server'
 }
 

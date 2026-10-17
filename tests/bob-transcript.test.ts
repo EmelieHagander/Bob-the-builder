@@ -9,6 +9,12 @@ const next = '11111111-1111-4111-8111-111111111111'
 const thread = '6b91f79d-ed33-4eb7-bd1f-f2738cc24c0a'
 const row = (role: string, turn: string, state: string, seq: number): TranscriptRow => ({ role, turn_id: turn, delivery_state: state, seq, text: `${role} ${seq}`, updated_at: new Date().toISOString() })
 
+test('exact server acknowledgement settles tab delivery when event replies pushed its user row outside the visible page',()=>{
+ const outgoing={text:'Continue',turnId:original,threadId:thread}
+ assert.equal(reconcileOutgoing(outgoing,thread,[{from:'bob',turnId:event,text:'Independent event'}],[original]),null)
+ assert.equal(reconcileOutgoing(outgoing,thread,[{from:'bob',turnId:event,text:'Independent event'}],[next]),outgoing)
+})
+
 test('failed shelf instruction stays visible before independently completed drawing events', () => {
   const rows = [row('user', original, 'failed', 1), row('assistant', event, 'completed', 2)]
   const result = readBobTranscript(rows, 'test', new Map())

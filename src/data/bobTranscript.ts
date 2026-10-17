@@ -46,7 +46,7 @@ export function readBobTranscript(rows: TranscriptRow[], projectId: string, noti
   for (const row of rows) {
     if (row.role === 'user') {
       const imageIds = parseBobImageIds(row.image_ids)
-      messages.push({ from: 'user', text: row.text, turnId: row.turn_id, ...(imageIds?.length ? { imageIds } : {}),
+      messages.push({ from: 'user', seq: row.seq, text: row.text, turnId: row.turn_id, ...(imageIds?.length ? { imageIds } : {}),
         deliveryState: row.delivery_state as ChatMessage['deliveryState'] })
       if (row.delivery_state === 'failed') latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
       // A later owner message supersedes the older retry action, not its text.
@@ -57,12 +57,12 @@ export function readBobTranscript(rows: TranscriptRow[], projectId: string, noti
           pending: row.delivery_state === 'pending' && expiresAt > now }
       }
       const notice = row.turn_id && notices.get(row.turn_id)
-      if (notice) messages.push({ from: 'bob', text: notice })
+      if (notice) messages.push({ from: 'bob', seq: row.seq, text: notice })
     } else if (row.role === 'assistant' && row.delivery_state === 'completed') {
       latestSeq = Math.max(latestSeq, Number(row.seq) || 0)
       lastCompletedTurnId = row.turn_id
       if (row.turn_id && unfinished?.turnId === row.turn_id) unfinished = undefined
-      messages.push({ from: 'bob', text: row.text, turnId: row.turn_id,
+      messages.push({ from: 'bob', seq: row.seq, text: row.text, turnId: row.turn_id,
         ...(isBobAnswerEvidence(row.evidence, projectId) ? { evidence: row.evidence } : {}) })
     }
   }

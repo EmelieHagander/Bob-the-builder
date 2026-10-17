@@ -8,9 +8,16 @@ import {CONSTRUCTION_PARAMETER_CHANGES_SCHEMA,compileConstructionParameterChange
 import { INSTANCE_POLICY_SCHEMA,constructionInstancePolicy } from './construction-instance-policy.ts'
 import { CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL } from './construction-consequences.ts'
 import { schemaIssues } from './schema-issues.ts'
-import { rethrowContinuation } from './bob-job-journal.ts'
+import { rethrowContinuation, type BobJournal } from './bob-job-journal.ts'
 import type { ProjectWriter,WritePayload } from './project-write.ts'
 import { parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
+
+/** Reconstruct a historical tool check; a new check position still reads live.
+ * CAD render/review gates use their independent fresh readers. Old executions
+ * have no version flag and retain their existing journal sequence. */
+export function constructionCurrentReader(read: (id: string) => Promise<Record<string, any>>, journal?: BobJournal, version?: number) {
+ return (id: string) => journal && version === 1 ? journal.run('construction:current', { id }, () => read(id)) : read(id)
+}
 
 const obj=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})
 const id={type:'string',pattern:'^[A-Za-z][A-Za-z0-9_.:-]{0,79}$'}
