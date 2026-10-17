@@ -1,8 +1,6 @@
 /** Require one exact checked construction before project drawing delegation. */
 import {readFileSync,writeFileSync} from 'node:fs'
-import {DESIGN_CAD_TOOL,SAVE_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
-import {PLAN_CAD_PIECES_TOOL} from '../supabase/functions/_shared/cad-pieces.ts'
-const contracts=[DESIGN_CAD_TOOL,SAVE_CAD_TOOL,PLAN_CAD_PIECES_TOOL].map(t=>({key:'tools.'+t.function.name,description:t.function.description,parameters:t.function.parameters}))
+import {checkedConstructionContracts as contracts} from './checked-construction-publication.ts'
 const append=[
  {key:'tools.design_project_cad',content:'Every project CAD drawing requires a saved construction and its exact revision. This policy supersedes older free-design intake guidance. Prepare the parts, dimensions, placements, pinned catalog materials and declared joints through the construction tools; compare with the current owner requirements and selected reference images, check and correct that same construction, then render it verbatim. Existing legacy drawings use transition_legacy_drawing; never invent missing material or joint evidence. A failed check returns to construction correction; CAD cannot replace or repair the construction. Text-only work still finishes through its own writer without CAD.'},
  {key:'tools.save_construction_draft',content:'This shared construction is the required source for every project drawing. Preserve stable part IDs, explicit dimensions and placements, exact catalog material revisions and declared joint endpoints/methods. Compare the saved geometry with the owner requirements, reference image and stated coordinates before requesting CAD. Run check_construction_draft on the receipt revision and correct the same construction if needed. A single physical part may legitimately need no joint; do not invent one. Unknown material/joint evidence stays unknown and may prevent a drawing.'},

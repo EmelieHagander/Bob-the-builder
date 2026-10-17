@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preSourceRenewalCatalogFixture} from './support/ai-catalog-fixture.ts'
 import type {AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 const publication='20261017152959_cad_annotation_pages_catalog.sql'
 const source=readFileSync(new URL('../supabase/migrations/'+publication,import.meta.url),'utf8')
@@ -16,7 +16,7 @@ before(async()=>{
   prior=(await db.query<{m:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
   policies=(await db.query('select * from bob.tool_catalog order by name')).rows
   settings=(await db.query('select * from shared.ai_settings order by app,function_name,module_id')).rows
- })
+ },publication)
  current=(await pg.query<{m:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
 })
 after(()=>pg?.close())
@@ -30,7 +30,7 @@ test('page publication changes exactly four instructions and keeps models, work 
   if(!changed.has(old.prompt_key))assert.deepEqual(next,old,old.prompt_key)
   else {assert.equal(next.version,old.version+1);assert.equal(next.metadata.publication,'cad-annotation-pages-v1');assert.deepEqual(next.available_variables,old.available_variables)}
  }
- const fixture=catalogFixture()
+ const fixture=preSourceRenewalCatalogFixture()
  for(const key of changed){
   const next=current.definitions.find(d=>d.prompt_key===key)!,offline=fixture.definition(key,next.definition_kind)
   // The live prefix may carry preserved prior/custom wording. Verify the new

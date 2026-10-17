@@ -34,7 +34,7 @@ const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Render a requested drawing of one exact saved, checked construction revision. Every project drawing needs its own construction source with stable part IDs, dimensions, placements, pinned catalog materials and declared joints before CAD. Read or save the construction, compare it with the owner requirements and original reference images, run check_construction_draft and correct that same construction before calling this tool. For an older drawing, use transition_legacy_drawing to retain its geometry and identities and establish the missing material/joint evidence. Pass the saved construction Artifact ID, or its already linked drawing ID, and the exact receipt revision. CAD reuses the saved geometry; it cannot design a replacement assembly. Reference pixels and the original requirements accompany independent candidate review. Reuse the same request_id on retry. Returns a checked candidate that still needs save_cad_design.',
-  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. Required for every project drawing. The server checks this version and preserves it on resume; it cannot substitute a newer design.'}})
+  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact independently reviewed rendering of its saved, checked construction revision from this turn, including the construction source pin and plan Step link. Source, material and target revisions are checked again at publication. This concept drawing is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 export const READ_CAD_TOOL=tool('read_cad_artifact','Read an exact saved CAD artifact revision, including its reusable assembly and pinned inputs. Null revision reads current. Use part_ids to select an existing subassembly when rendering; do not redesign it merely to obtain a detail view.',
@@ -56,7 +56,7 @@ export const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your p
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
@@ -109,6 +109,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
   if(!object(raw))return {status:"invalid",saved:false}
   if(!await opts.hasAccess())throw new Error('project_denied')
   let request:DrawingRequest|null=null
+  let renewingConstruction=false,renewalAccepted=false
   if(raw.request_id){
    if(!opts.requestStore)return {status:'unavailable',stage:'intake_store',saved:false}
    try{request=await opts.requestStore.load(raw.request_id)}catch(error){rethrowContinuation(error);return {status:'unavailable',stage:'intake_store',saved:false}}
@@ -119,8 +120,9 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    if(request.status==='cancelled'||request.status==='paused')return {status:request.status==='cancelled'?'cancelled':'recovery_required',saved:false,request_id:request.id,revision:request.revision,reason:request.reason,
     next_action:request.status==='cancelled'?catalogText("feedback.cad-assistant.next-action.bb0c45185974"):catalogText("feedback.cad-assistant.next-action.2d11b91ea601")}
    const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(key=>[key,request!.payload.brief[key]??null]))
-   // An older unbound request may establish its first mandatory source. Once
-   // pinned, retries keep that source and revision; other scope stays fixed.
+   // An older unbound request may establish its first mandatory source. The
+   // source identity stays fixed; an explicit newer revision must pass the
+   // current construction/readiness checks before replacing its old pin.
    if(scope.artifact_id===null&&uuid(raw.artifact_id)&&request.payload.brief.construction_revision==null
     &&(!object(request.payload.draft)||!request.payload.draft.construction))scope.artifact_id=raw.artifact_id
    for(const key of Object.keys(scope))raw[key]??=scope[key]
@@ -130,7 +132,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    const savedDraft=request.payload.draft
    if(request.payload.brief.construction_revision!=null){
     raw.construction_revision??=request.payload.brief.construction_revision
-    if(raw.construction_revision!==request.payload.brief.construction_revision)return {status:'recovery_required',stage:'construction',reason:'construction_revision_changed',saved:false,request_id:request.id}
+    if(raw.construction_revision!==request.payload.brief.construction_revision){
+     if(!opts.allowSourceRenewal||!Number.isSafeInteger(raw.construction_revision)||raw.construction_revision<=request.payload.brief.construction_revision)return {status:'recovery_required',stage:'construction',reason:'construction_revision_changed',saved:false,request_id:request.id}
+     renewingConstruction=true
+    }
    }else if(raw.construction_revision===undefined&&object(savedDraft)&&object(savedDraft.construction)&&savedDraft.construction.revision!=null){
     raw.construction_revision=savedDraft.construction.revision
    }
@@ -149,7 +154,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
   let handoff=prepared.handoff
   raw.handoff=structuredClone(handoff)
   delete raw.requirement_changes
-  const dependencies=createDrawingDependencies(request?.payload.dependencies)
+  const dependencies=createDrawingDependencies(renewingConstruction?undefined:request?.payload.dependencies)
   const makeLookup=()=>{
    const source=opts.makeLookup()
    return {...source,get remaining(){return source.remaining},get partial(){return source.partial},search:async(args:unknown)=>{
@@ -159,7 +164,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
   const readArtifact=async(id:string,revision:number|null)=>{const result=await opts.readArtifact(id,revision);await dependencies.record('read_cad_artifact',{artifact_id:id,revision},result);return result}
   const lookup=makeLookup(),groundingLookup=makeLookup(),until=opts.unlimitedWork?opts.deadline:opts.durable?opts.deadline-20000:Math.min(opts.deadline-20000,Date.now()+300000)
   const ownerRequest=[request?.payload.owner_request,opts.ownerRequest].filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join('\n')||null
-  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:request?.payload.draft,restoration:request?.payload.restoration,dependencies:request?.payload.dependencies,reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
+  let payload:DrawingRequest['payload']={brief:structuredClone(raw),owner_request:ownerRequest,draft:renewingConstruction?undefined:request?.payload.draft,restoration:request?.payload.restoration,dependencies:renewingConstruction?undefined:request?.payload.dependencies,reference_refs:[...new Set([...(request?.payload.reference_refs??[]),...opts.referenceImageRefs?.()??[]])] }
   const persist=async(status:string,patch:Partial<DrawingRequest['payload']>={})=>{payload={...payload,...patch};if(opts.requestStore)request=await opts.requestStore.save(request?.id??null,request?.revision??0,status,payload)}
   const checkAuthority=async()=>{
    if(!await opts.hasAccess())return false
@@ -251,7 +256,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    const failure={status:checked?.status==='unavailable'?'unavailable':'needs_data',stage:'construction',saved:false,reason:'construction_not_ready',request_id:request?.id??null,
     artifact_id:construction?.artifact_id,revision:construction?.revision,check:checked?.checked??null,
     next_action:catalogText("feedback.cad-assistant.next-action.facd61c3e829")}
-   await persist(failure.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
+   if(!renewingConstruction||renewalAccepted)await persist(failure.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
    return failure
   }
   const attempt=async()=>{try{
@@ -293,8 +298,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    }
    constructionDispatchGuard=()=>refreshDesignReadiness(true)
    payload.reference_refs=[...new Set([...payload.reference_refs,...readiness.design_intent.references.map(r=>'image:'+r.image_id)])]
-   if(!request?.payload.retry)await persist('collecting')
-   if(!opts.available){await persist('retrieval_failed');return {status:'unavailable',stage:'cad_engine',saved:false,request_id:request?.id??null,reason:'CAD service is not configured. This is an infrastructure issue, not a missing user approval.'}}
+   if(!request?.payload.retry&&!renewingConstruction)await persist('collecting')
+   if(!opts.available){if(!renewingConstruction)await persist('retrieval_failed');return {status:'unavailable',stage:'cad_engine',saved:false,request_id:request?.id??null,reason:'CAD service is not configured. This is an infrastructure issue, not a missing user approval.'}}
    const referenceRefs=payload.reference_refs
    const imageFailures:string[]=[]
    if(referenceRefs.length&&!opts.context)imageFailures.push(...referenceRefs)
@@ -310,7 +315,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    })
    if(imageFailures.length){
     partial=true
-    await persist('retrieval_failed',{reviewed_candidate:undefined,incomplete:[...new Set(imageFailures)].map(ref=>'image:'+ref.replace(/^image:/,''))})
+    if(!renewingConstruction)await persist('retrieval_failed',{reviewed_candidate:undefined,incomplete:[...new Set(imageFailures)].map(ref=>'image:'+ref.replace(/^image:/,''))})
     return {status:'unavailable',stage:'reference_images',saved:false,request_id:request?.id??null,reason:'design_reference_unavailable',reference_refs:[...new Set(imageFailures)]}
    }
    referencePixels.push(...opts.context?.carrier()??[])
@@ -330,7 +335,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
     const current=await opts.checkConstruction(construction.artifact_id,construction.revision,fresh)
     if(current.status==='denied')throw new Error('project_denied')
     if(current.status!=='ready')return current
-    for(const key of ['recipe','parameters','materials','joints','target_revision'])
+    for(const key of ['recipe','parameters','materials','joints','target_revision',...(opts.allowSourceRenewal?['instance_policy','open_questions']:[])])
      if(JSON.stringify(stableJsonValue(current.draft[key]))!==JSON.stringify(stableJsonValue(construction[key])))return {status:'conflict'}
     return current
    }
@@ -442,6 +447,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    if(!construction)return constructionFailure({status:'unavailable'})
    const ready=await refreshConstruction()
    if(ready?.status!=='ready')return constructionFailure(ready)
+   if(renewingConstruction){
+    if(construction.target_revision!==selected.revision||raw.area_id!==(construction.area_id??null))return constructionFailure({status:'conflict'})
+    renewalAccepted=true
+   }
    runtimeVersion=await opts.runtimeVersion?.()
    await dependencies.refresh(executeRead)
    retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,design_intent:readiness.pin,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
@@ -491,7 +500,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    if(error instanceof Error&&error.message==='project_denied')throw error
    if(error instanceof Error&&['design_readiness_unavailable','design_readiness_changed'].includes(error.message)){
     const outcome={status:error.message==='design_readiness_unavailable'?'unavailable':'needs_data',stage:'design_readiness',saved:false,reason:error.message,request_id:request?.id??null}
-    if(request)await persist(outcome.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
+    if(request&&(!renewingConstruction||renewalAccepted))await persist(outcome.status==='unavailable'?'retrieval_failed':'needs_data',{reviewed_candidate:undefined})
     return outcome
    }
    if(error instanceof Error&&['checked_construction_unavailable','checked_construction_changed'].includes(error.message))return constructionFailure({status:error.message==='checked_construction_unavailable'?'unavailable':'conflict'})
@@ -501,7 +510,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    }
    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
    const reason=error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
-   if(request&&!retryInputs)await persist('retrieval_failed')
+   if(request&&!retryInputs&&(!renewingConstruction||renewalAccepted))await persist('retrieval_failed')
    const failure={status:'unavailable',stage:error instanceof BobBudgetError?error.stage:'design',saved:false,reason,renders:metrics.renders,...(reason==='turn_budget_exhausted'?{budget_stop:readBudgetStop(error),next_action:budgetResumeAction(readBudgetStop(error),opts.aiCatalog)}:{})}
    if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){
     const message=reason==='turn_budget_exhausted'

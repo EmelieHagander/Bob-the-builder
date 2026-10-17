@@ -16,7 +16,21 @@ import { parseDesignReadiness, type DesignReadiness } from './project-design-int
  * CAD render/review gates use their independent fresh readers. Old executions
  * have no version flag and retain their existing journal sequence. */
 export function constructionCurrentReader(read: (id: string) => Promise<Record<string, any>>, journal?: BobJournal, version?: number) {
- return (id: string) => journal && version === 1 ? journal.run('construction:current', { id }, () => read(id)) : read(id)
+ return (id: string) => journal && (version === 1 || version === 2) ? journal.run('construction:current', { id }, () => read(id)) : read(id)
+}
+
+/** These reads describe one logical tool position. Our later write can change
+ * pending work or turn a preparation into an existing receipt. Reconstruct the
+ * earlier answer; SQL still checks current authority/sources inside each write.
+ * Version 1 and older jobs retain their original operation sequence. */
+export function constructionChangeReaders<T extends Pick<Parameters<typeof createConstructionTools>[0], 'readChanges' | 'prepareRoleChange' | 'prepareConsequence'>>(reads:T,journal?:BobJournal,version?:number):T {
+ if(!journal||version!==2)return reads
+ const result={...reads}
+ for(const key of ['readChanges','prepareRoleChange','prepareConsequence'] as const){
+  const read=reads[key]
+  if(read)(result as any)[key]=(...args:unknown[])=>journal.run('construction:'+key,args,()=> (read as (...args:any[])=>Promise<any>)(...args))
+ }
+ return result
 }
 
 const obj=(properties:Record<string,unknown>)=>({type:'object',additionalProperties:false,properties,required:Object.keys(properties)})

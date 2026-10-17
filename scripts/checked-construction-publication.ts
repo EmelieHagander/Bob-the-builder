@@ -1,0 +1,11 @@
+/** Historical 20261014062144 publication. Current CAD descriptions are
+ * versioned by later publications; rebuilding this one must retain its bytes. */
+import {DESIGN_CAD_TOOL,SAVE_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
+import {PLAN_CAD_PIECES_TOOL} from '../supabase/functions/_shared/cad-pieces.ts'
+
+export const checkedConstructionContracts:{key:string;description:string;parameters:Record<string,any>}[]=[DESIGN_CAD_TOOL,SAVE_CAD_TOOL,PLAN_CAD_PIECES_TOOL].map(t=>({key:'tools.'+t.function.name,description:t.function.description,parameters:structuredClone(t.function.parameters)}))
+const original=checkedConstructionContracts.find(t=>t.key==='tools.design_project_cad')!
+original.parameters.properties.construction_revision={
+ ...(original.parameters.properties.construction_revision as Record<string,unknown>),
+ description:'Copy the exact saved/read construction revision. Required for every project drawing. The server checks this version and preserves it on resume; it cannot substitute a newer design.',
+}

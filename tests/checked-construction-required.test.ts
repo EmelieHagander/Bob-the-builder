@@ -7,8 +7,9 @@ import {execFileSync} from 'node:child_process'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {parameterPacket} from './support/cad-parameter-fixture.ts'
 import {designIntent,designManifest} from './support/design-intent-fixture.ts'
-import {DESIGN_CAD_TOOL,SAVE_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
+import {DESIGN_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 import {PLAN_CAD_PIECES_TOOL} from '../supabase/functions/_shared/cad-pieces.ts'
+import {checkedConstructionContracts} from '../scripts/checked-construction-publication.ts'
 
 const guard='20261014062043_checked_construction_required.sql',publication='20261014062144_ai_checked_construction_catalog.sql'
 test('every new SQL CAD publication requires a source; genuine historical packets still read, archive and restore without backfill',async t=>{
@@ -84,7 +85,7 @@ test('mandatory source publication activates seven versions atomically, preservi
  for(const old of prior.definitions){const next=current.definitions.find((r:any)=>r.prompt_key===old.prompt_key);if(!changed.has(old.prompt_key)){assert.deepEqual(next,old);continue}
   assert.equal(next.version,old.version+1);assert.equal(next.metadata.publication,'checked-construction-required');assert.deepEqual(next.flow,old.flow);assert.deepEqual(next.available_variables,old.available_variables)
  }
- for(const tool of [DESIGN_CAD_TOOL,SAVE_CAD_TOOL,PLAN_CAD_PIECES_TOOL]){const d=current.definitions.find((r:any)=>r.prompt_key==='tools.'+tool.function.name).definition;assert.deepEqual(d.parameters,tool.function.parameters);assert.equal(d.description,tool.function.description)}
+ for(const tool of checkedConstructionContracts){const d=current.definitions.find((r:any)=>r.prompt_key===tool.key).definition;assert.deepEqual(d.parameters,tool.parameters);assert.equal(d.description,tool.description)}
  const schema=DESIGN_CAD_TOOL.function.parameters;assert.equal(schema.properties.artifact_id.type,'string');assert.equal(schema.properties.construction_revision.type,'integer')
  const pin:any=PLAN_CAD_PIECES_TOOL.function.parameters.properties.pieces.items;assert(pin.required.includes('artifact_id')&&pin.required.includes('construction_revision'))
  assert.match(current.definitions.find((r:any)=>r.prompt_key==='bob.frame.outstanding').content,/text-only request still leaves the drawing parked/)
