@@ -38,6 +38,7 @@ test('explicit source renewal publishes exactly two definitions and preserves hi
   assert.deepEqual(next.definition,expected)
  }
  assert.equal(patch.revision_description,DESIGN_CAD_TOOL.function.parameters.properties.construction_revision.description)
+ assert.deepEqual(current.definitions.find(d=>d.prompt_key==='tools.design_project_cad')!.definition.parameters,DESIGN_CAD_TOOL.function.parameters)
  assert.match(patch.manual,/same drawing request_id/);assert.match(patch.manual,/Omitted revisions never select a new head/)
 })
 test('current runtime/toolbox and offline contracts carry the same explicit recovery instruction',async()=>{
