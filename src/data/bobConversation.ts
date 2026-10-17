@@ -65,16 +65,18 @@ export interface BobConversationHistory {
   latestSeq?: number
   oldestSeq?: number
   hasMore?: boolean
+  acknowledgedTurnIds?: string[]
 }
 
 // A small preview for this account/session only. No private transcript goes into
 // persistent browser storage. Cached previews never establish job/write authority.
 const recentHistory = new Map<string, BobConversationHistory>()
 let historyEpoch = 0, historyOwner: string | undefined
+export function clearAskBobHistoryCache() { recentHistory.clear(); historyEpoch++ }
 bobDb?.auth.onAuthStateChange((event, session) => {
   const owner = session?.user.id
   if (event === 'SIGNED_OUT' || historyOwner !== undefined && owner !== historyOwner) {
-    recentHistory.clear(); historyEpoch++
+    clearAskBobHistoryCache()
   }
   historyOwner = owner
 })
@@ -179,7 +181,8 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   }
   current()
   const history: BobConversationHistory = { mode: 'server', messages: transcript.messages, retry, pending, lastCompletedTurnId,
-    threadId: threadResult.data.id, ownerId: user.id, latestSeq, oldestSeq: page.oldestSeq, hasMore: page.hasMore }
+    threadId: threadResult.data.id, ownerId: user.id, latestSeq, oldestSeq: page.oldestSeq, hasMore: page.hasMore,
+    acknowledgedTurnIds: [...page.rows, ...(latestUser.data ?? [])].filter(row => row.role === 'user').map(row => row.turn_id).filter((id): id is string => !!id) }
   recentHistory.delete(cacheKey)
   recentHistory.set(cacheKey, structuredClone(history))
   if (recentHistory.size > 8) recentHistory.delete(recentHistory.keys().next().value!)
@@ -322,7 +325,7 @@ export async function resetAskBobConversation(projectId: string): Promise<'serve
   if (data?.status !== 'cleared' || data.projectId !== projectId || data.mode !== 'server') {
     throw new Error('Could not confirm that the conversation was cleared. Reopen Bob before trying again.')
   }
-  recentHistory.clear(); historyEpoch++
+  clearAskBobHistoryCache()
   return 'server'
 }
 

@@ -460,7 +460,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setHasOlder(!!historyPage.current.hasMore)
     setOlderError('')
     serverThread.current = history.threadId ?? null
-    keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages))
+    keepOutgoing(reconcileOutgoing(outgoing.current, history.threadId, history.messages, history.acknowledgedTurnIds))
     const held = outgoing.current
     setLocalHistory(false)
     const messages = historyPage.current.messages
@@ -656,6 +656,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const onReset = (event: StorageEvent) => {
       if (!historyKey || event.key !== `${historyKey}:reset` || !event.newValue) return
       scope.current.invalidate()
+      db.clearAskBobHistoryCache()
+      historyPage.current = { messages: [] }
+      setHasOlder(false); setOlderError(''); setLoadingOlder(false)
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''
@@ -680,6 +683,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()
+      historyPage.current = { messages: [] }
+      setHasOlder(false); setOlderError(''); setLoadingOlder(false)
       keepOutgoing(null)
       serverThread.current = null
       setReadTarget(null); readAck.current = ''

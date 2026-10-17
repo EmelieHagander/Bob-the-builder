@@ -622,6 +622,14 @@ try {
     await page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/bob_job_status')
     assert(statusReads>=beforeStatus+2)
     assert.equal(historyReads,beforeHistory,'progress polls never reload transcript rows')
+    active.delivery_state='completed';active.jobStatus='completed'
+    pagedHistory.messages.push({role:'assistant',text:'PAGED WORK FINISHED',delivery_state:'completed',seq:22,turn_id:active.turn_id});pagedHistory.next_seq=23
+    await drawer.getByText('PAGED WORK FINISHED',{exact:true}).waitFor()
+    dialog=await confirm()
+    await dialog.getByRole('button',{name:'Clear chat and context',exact:true}).click()
+    await drawer.getByText('New conversation started. Saved project data is unchanged.',{exact:true}).waitFor()
+    assert.equal(await drawer.getByRole('button',{name:'Show older messages',exact:true}).count(),0)
+    assert.equal(await drawer.getByText('PAGED MESSAGE 20',{exact:true}).count(),0)
     Object.assign(pagedHistory,backup)
     const beforeGuest = resetCalls
     authMode = 'guest'

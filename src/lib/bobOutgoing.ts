@@ -16,9 +16,9 @@ export function readOutgoing(raw: string | null): OutgoingTurn | null {
   } catch { return null }
 }
 
-export function reconcileOutgoing(outgoing: OutgoingTurn | null, threadId: string | undefined, messages: ChatMessage[]) {
+export function reconcileOutgoing(outgoing: OutgoingTurn | null, threadId: string | undefined, messages: ChatMessage[], acknowledgedTurnIds: string[] = []) {
   if (!outgoing) return null
   // A reset/replacement thread must not resurrect the prior thread's message.
   if (outgoing.threadId && outgoing.threadId !== (threadId ?? null)) return null
-  return messages.some(m => m.from === 'user' && m.turnId === outgoing.turnId) ? null : outgoing
+  return acknowledgedTurnIds.includes(outgoing.turnId) || messages.some(m => m.from === 'user' && m.turnId === outgoing.turnId) ? null : outgoing
 }
