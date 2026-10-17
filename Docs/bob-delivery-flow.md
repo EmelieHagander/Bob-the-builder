@@ -292,13 +292,15 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Pågående CAD-publicering (2026-10-17):** verifiera och publicera
-[sidindelad märkning](foundation-verification.md#paged-cad-annotations--2026-10-17)
-i ordningen testad PR → Modal med verkligt flerbladsprov → båda Bob-funktionerna
-→ enbart katalogmigrationen för sidindelning. Den separata 24-delsspärren ska
-ersättas av automatisk presentation av den oförändrade konstruktionen.
-Beställarens nästa vanliga ritningsprov måste fortfarande använda aktuell exakt
-konstruktionsrevision och återläsa ett faktiskt sparat ritningskvitto.
+**Nästa CAD-grind (2026-10-17):** utred och rätta säker förnyelse av den
+exakta källversionen för en redan pågående ritningsbegäran. Våningssängens gamla
+begäran är låst till konstruktion 3 medan aktuell version är 4; adaptern avvisar
+versionsbyte och återanvändning av samma scope kan återge den gamla begäran.
+Den separata 24-delsspärren är borttagen och sidindelningen publicerad enligt
+[releasebeviset](foundation-verification.md#paged-cad-annotations--2026-10-17).
+Den återstående versionskontrollen ska lösas genom kontrollerad återhämtning,
+utan att tyst byta källa, tappa krav eller kringgå konstruktionens kontroller.
+Beställarens vanliga Bob-test ska därefter verifiera sparad ritning och återläsning.
 
 **Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
 det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,
