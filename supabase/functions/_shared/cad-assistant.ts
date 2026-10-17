@@ -18,7 +18,7 @@ import { fingerprint, rethrowContinuation, stableJsonValue } from './bob-job-jou
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { AiCatalogSession, AiVariables } from './ai-catalog.ts'
 import { type createProjectLookup } from './project-lookup.ts'
-import { parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
+import { cadPreviewKeys, parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
@@ -349,7 +349,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
      if(!reviewPending){partial=true;candidate=null;return {status:'incomplete',stage:'review',reason:'no_progress',saved:false}}
      // Review uses a fresh conversation with the same pinned geometry and sources.
      const missingViews=handoff.views.filter(view=>!candidate!.packet.recipe.views.includes(view))
-     if(!candidate.packet.previews||candidate.packet.recipe.views.some(view=>!candidate!.packet.previews?.[view])){
+     if(!candidate.packet.previews||cadPreviewKeys(candidate.packet.recipe).some(view=>!candidate!.packet.previews?.[view])){
       candidate=null;partial=true;metrics.review_unavailable++
       return {status:'unavailable',stage:'review',reason:'preview_missing',saved:false}
      }
@@ -453,8 +453,6 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;calculator?:
    if(construction.target_revision!==selected.revision||raw.area_id!==(construction.area_id??null))return constructionFailure({status:'conflict'})
    const recipe=parseCadAssemblyRequest({...structuredClone(construction.recipe),views:[...handoff.views]})
    if(!recipe)return constructionFailure({status:'unavailable'})
-   if(recipe.instances.length>24)return {status:'unsupported',stage:'annotations',saved:false,reason:'annotation_instance_limit',request_id:request?.id??null,
-    next_action:catalogText("feedback.cad-assistant.next-action.c0e108a49e51")}
    const parameters=inheritCadParameters(opts.projectId,construction.recipe,construction.parameters,recipe)
    const measurements=parameterSourcePins(parameters).project
    const lineage=buildCadLineage(opts.projectId,recipe,[],new Map(),handoff.coordinates)

@@ -9,6 +9,7 @@ import {compileCadParameters} from '../supabase/functions/_shared/cad-parameters
 import {compileConstructionParameterChange} from '../supabase/functions/_shared/construction-parameters.ts'
 import {buildCadLineage} from '../supabase/functions/_shared/cad-lineage.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
+import {cadPreviewKeys} from '../supabase/functions/_shared/cad-adapter.ts'
 import { shapeId,handoff,reviewReply} from './support/cad-review-fixture.ts'
 import {parameterPlan} from './support/cad-parameter-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
@@ -17,6 +18,21 @@ import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111',material='22222222-2222-4222-8222-222222222222'
+test('larger checked constructions render verbatim and every numbered sheet reaches independent review',async()=>{
+ const f=runtime(),recipe=f.draft.recipe
+ while(recipe.instances.length<128)recipe.instances.push({...structuredClone(recipe.instances[0]),id:'reference'+recipe.instances.length})
+ f.draft.parameters=compileCadParameters(f.draft.projectId,recipe,parameterPlan(recipe),new Map(),new Map())
+ f.draft.instance_policy=manufacturePolicy(recipe)
+ for(const item of f.draft.instance_policy.instances)if(item.instance_id.startsWith('reference'))Object.assign(item,{role:'reference',quantity_policy:'exclude',reason:'Explicit synthetic contextual reference'})
+ let reviewed=0
+ const a=f.assistant({render:async(r:any)=>({recipe:r,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'}},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(cadPreviewKeys(r).map(v=>[v,'Zml4dHVyZQ==']))}),
+  callModel:async(o:any)=>{reviewed++;const pixels=o.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content:[]).filter((c:any)=>c.type==='image_url');assert.equal(pixels.length,cadPreviewKeys(recipe).length);return reviewReply(handoff)}})
+ const result=await a.consult(request)
+ assert.equal(result.status,'ready',JSON.stringify(result));assert.equal(reviewed,1)
+ assert.deepEqual(a.candidate!.packet.recipe,recipe)
+ const b=f.assistant({render:async(r:any)=>({...structuredClone(a.candidate!.packet),recipe:r,previews:Object.fromEntries(r.views.map((v:string)=>[v,'Zml4dHVyZQ==']))})})
+ assert.equal((await b.consult(request)).reason,'preview_missing')
+})
 function fixture(projectId='p_fixture'){
  const recipe:any={contract_version:1,units:'mm',assembly_id:'bracket',definitions:[
   {id:'upright',primitive:'box',material_ref:null,x_mm:18,y_mm:80,z_mm:200},

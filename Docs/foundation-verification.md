@@ -3160,3 +3160,14 @@ notice also exposes internal recovery instructions; language and receipt-bound
 status quality remain acceptance concerns. Creating a future Task does not by
 itself complete the delegated CAD work. Keep those open actions in
 [State](bob-delivery-flow.md#state); this UI release does not close them.
+
+
+## Paged CAD annotations — 2026-10-17
+
+Source change: replace the 24-instance annotation stop with automatic numbered sheets over the unchanged 512-instance recipe envelope. One saved construction/revision remains the exact geometry source. SVGs share the kernel paths, mark at most 32 parts per sheet and preserve every instance/blank dimension; all separately rasterized sheet images are hash-bound to that SVG and required by the transport and independent review. No source, material, joint, collision, parameter-node or receipt gate is waived.
+
+Local boundary checks cover 24/25, 32/33, 128 and 512 annotations, including coincident projections, unique part numbers, bounded separated labels, source revision on every sheet and no geometry path duplication. Adapter checks reject a missing final part; transport checks reject missing/extra sheets, invalid images and a foreign SVG hash. The checked-construction regression carries 128 instances unchanged into CAD and all eight requested-view sheets into review. Kernel rendering and live Modal verification exercise synthetic 25-/128-part models; these are technical fixtures, not the owner's construction acceptance.
+
+Deployment is pending: merge the tested PR, wait for the matching Modal deployment and live paged-geometry proof, deploy both tested Bob Edge bundles with their existing JWT settings, then activate only `20261017152959_cad_annotation_pages_catalog.sql`. The catalog publication changes four definitions (the two CAD tool manuals, toolbox policy and old annotation feedback), with two matching `bob.tool_catalog` manual updates. Models, reasoning, execution profiles and completion/allowance policy remain unchanged. Historical catalog snapshots remain replayable. No earlier migration is rerun.
+
+The owner's most recent bunk-bed request still pins construction revision 3 while the current checkpoint is revision 4. Raising annotation capacity does not authorize silently substituting that source; a subsequent ordinary Bob request must use and check the current exact construction revision and verify a saved drawing receipt/readback.

@@ -7,7 +7,7 @@ from PIL import Image
 from pathlib import Path
 from typing import Any
 from build123d import Align, Box, Compound, Cylinder, ExportSVG, LineType, Location, Unit, export_step
-from .annotations import annotate
+from .annotations import annotate, PARTS_PER_PAGE
 
 ID=re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,79}$")
 class CadContractError(ValueError): pass
@@ -104,14 +104,15 @@ def validate_request(raw:Any)->dict[str,Any]:
 def _vec(v): return [float(v.X),float(v.Y),float(v.Z)]
 def _hash(p:Path)->str: return hashlib.sha256(p.read_bytes()).hexdigest()
 
-def _render_preview(path:Path,preview:Path):
+def _render_preview(path:Path,preview:Path,page=1):
     # Coordinates remain exact mm. Presentation strokes must survive fitting a
     # whole room (or a tiny detail) into 1024 pixels. The old 0.09 mm stroke
     # rasterized to entirely white images at room scale.
     tree=ET.parse(path); root=tree.getroot()
     width,height=[float(n) for n in root.attrib['viewBox'].replace(',',' ').split()][2:]
+    height=float(root.attrib.get('data-page-height',height))
     factor=1024/max(width,height)
-    geometry=root.find('{http://www.w3.org/2000/svg}g[@id="Geometry"]')
+    geometry=root.find('.//{http://www.w3.org/2000/svg}g[@id="Geometry"]')
     model_scale=float(geometry.attrib['data-model-scale']) if geometry is not None else 1
     for layer in root.iter():
         if layer.attrib.get('id') in ('Visible','Hidden'):
@@ -120,7 +121,17 @@ def _render_preview(path:Path,preview:Path):
             if hidden: layer.set('stroke-dasharray',f'{4/(factor*model_scale)} {3/(factor*model_scale)}')
     ET.register_namespace('', 'http://www.w3.org/2000/svg')
     tree.write(path,encoding='utf-8',xml_declaration=True)
-    svg2png(bytestring=path.read_bytes(),write_to=str(preview),background_color='white',
+    # Crop one numbered sheet from the final SVG. Retain the shared geometry
+    # definitions; never shrink an entire multi-sheet document into one image.
+    sheets=[el for el in root if el.attrib.get('id','').startswith('DrawingPage')]
+    if sheets:
+        if not 1<=page<=len(sheets): raise CadContractError('preview_page')
+        for el in sheets:
+            if el is not sheets[page-1]: root.remove(el)
+        sheets[page-1].set('transform','translate(0,0)')
+        root.set('viewBox',f'0 0 {width} {height}')
+        root.set('height',f'{height}px')
+    svg2png(bytestring=ET.tostring(root),write_to=str(preview),background_color='white',
             output_width=max(1,round(width*factor)),output_height=max(1,round(height*factor)))
     with Image.open(preview) as image:
         # Deliberately only a visibility gate, not semantic drawing approval.
@@ -179,11 +190,15 @@ def render_assembly(raw:Any,output_dir:str|Path,drawing_source=None)->dict[str,A
         path=out/f"{view}.svg"; svg=ExportSVG(unit=Unit.MM,scale=1,margin=10,precision=6); svg.add_layer("Visible"); svg.add_layer("Hidden",line_type=LineType.ISO_DOT); svg.add_shape(visible,layer="Visible"); svg.add_shape(hidden,layer="Hidden"); svg.write(str(path))
         annotations[view]=annotate(path,req,rows,{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},view,origin,up,center,drawing_source)
         # Rasterize the exact exported SVG, never an independently generated image.
-        preview=out/f"{view}.png"
-        _render_preview(path,preview)
+        for page in range(1,math.ceil(len(rows)/PARTS_PER_PAGE)+1):
+            key=view if page==1 else f'{view}.sheet{page}'
+            preview=out/f'{key}.png'
+            _render_preview(path,preview,page)
+            previews[key]={"file":preview.name,"sha256":_hash(preview)}
         exports[view]={"file":path.name,"sha256":_hash(path)}
-        previews[view]={"file":preview.name,"sha256":_hash(preview),"source_sha256":exports[view]["sha256"]}
-    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows),"annotations":{"version":1,"coverage":"complete" if len(rows)<=24 else "partial","views":annotations}}
+        for key in previews:
+            if key==view or key.startswith(view+'.sheet'): previews[key]['source_sha256']=exports[view]['sha256']
+    manifest={"contract_version":1,"engine":{"name":"build123d","version":"0.13.0","units":"mm"},"assembly_id":req["assembly_id"],"bounding_box_mm":{"min":_vec(bb.min),"max":_vec(bb.max),"size":size},"definitions":req["definitions"],"instances":rows,"exports":exports,"previews":previews,"checks":_checks(req,children,rows),"annotations":{"version":1,"coverage":"complete","views":annotations}}
     if drawing_source is not None: manifest['drawing_source']=drawing_source
     (out/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     return manifest

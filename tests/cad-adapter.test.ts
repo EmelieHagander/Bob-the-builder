@@ -24,6 +24,17 @@ test('annotation metadata must name exact parts and dimensions, never fabricated
  }
 })
 test('transport errors are unavailable, never empty geometry',async()=>{assert.equal((await createCadAdapter(async()=>{throw new Error('offline')}).render(req())).status,'unavailable')})
+test('large annotated models preserve every instance through the 512-part recipe boundary',async()=>{
+ for(const count of [25,128,512]){
+  const r=req();r.instances=Array.from({length:count},(_,i)=>({...structuredClone(r.instances[0]),id:'part'+i.toString().padStart(3,'0')}))
+  const p:any=result(r),parts=r.instances.map((i,index)=>({number:'P'+(index+1),instance_id:i.id,definition_id:i.definition_id,blank_mm:{x_mm:45,y_mm:70,z_mm:1600}}))
+  p.annotations={version:1,coverage:'complete',views:{front:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'z',mm:1600}],parts},top:{coverage:'complete',dimensions:[{axis:'x',mm:1000},{axis:'y',mm:70}],parts}}}
+  assert.equal((await createCadAdapter(async()=>p).render(r)).status,'ok')
+  p.annotations.views.front.parts=parts.slice(0,-1)
+  assert.equal((await createCadAdapter(async()=>p).render(r)).status,'unavailable','dropping a late part never passes as complete')
+  if(count===512)assert.equal(parseCadAssemblyRequest({...r,instances:[...r.instances,{...r.instances[0],id:'oneTooMany'}]}),null)
+ }
+})
 test('saved JSON property order does not invalidate a matching CAD manifest',async()=>{
  const sorted=(v:any):any=>Array.isArray(v)?v.map(sorted):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,sorted(v[k])])):v
  assert.equal((await createCadAdapter(async r=>sorted(result(r))).render(req())).status,'ok')
