@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
-import {createConstructionTools,constructionCurrentReader} from '../supabase/functions/_shared/construction-draft.ts'
+import {createConstructionTools,constructionCurrentReader,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
 import {designIntent,designIntentPin} from './support/design-intent-fixture.ts'
 import {manufacturePolicy} from './support/construction-instance-policy-fixture.ts'
@@ -55,6 +55,20 @@ test('old execution identities keep live construction checks without inserting a
  assert.equal((await read(artifact)).revision,1)
  assert.equal((await read(artifact)).revision,2)
  assert.equal(entries.length,0)
+})
+
+test('fresh CAD dispatch rejects changed sources despite an earlier checkpointed tool check',async()=>{
+ const {draft,catalog}=fixture(),entries:JournalEntry[]=[]
+ const journal=createBobJournal({entries,save:async entry=>{entries.push(structuredClone(entry))}},Infinity)
+ let state='current'
+ const fresh=async()=>({...structuredClone(draft),source_state:state})
+ const opts={projectId:project,message:'Draw this construction',hasAccess:async()=>true,read:fresh,
+  readCurrent:constructionCurrentReader(fresh,journal,1),readCatalog:async()=>({projectId:project,status:'ok',record:catalog.get(material+'@1')}),
+  readSources:async()=>({project:new Map(),physical:new Map()}),now:()=>new Date('2026-10-17')}
+ assert.equal((await createConstructionTools(opts).execute('check_construction_draft',{artifact_id:artifact,revision:1})).status,'checked')
+ state='changed'
+ const actual=await checkedConstructionForDrawing({...opts,readCurrent:undefined},artifact,1)
+ assert.equal(actual.status,'conflict')
 })
 test('construction save identifies missing binding paths so the same request can correct them without a lookup retry',async()=>{
  const {parameterPlan}=await import('./support/cad-parameter-fixture.ts')

@@ -457,6 +457,8 @@ export async function answerWithOpenAi(opts: {
     },
     checkConstruction:async(id,revision,fresh)=>{
      const check=()=>checkedConstructionForDrawing({...constructionOptions,
+      // New CAD dispatch must not consume an interactive historical check.
+      readCurrent:undefined,
       // The actual operation reads fresh caller data. Recorded gate outcomes
       // reconstruct earlier replies; render/review dispatch guards bypass them.
       read:async(artifact,rev,after)=>{
