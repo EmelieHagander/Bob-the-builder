@@ -425,7 +425,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     outgoing.current = null; outgoingKey.current = null; serverThread.current = null
     historyPage.current = { messages: [] }
     setHasOlder(false); setLoadingOlder(false); setOlderError(''); setHistoryLoadError(false)
-    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice(''); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('Loading conversation…'); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
     void (async () => {
       const [me, history] = await Promise.all([
         db.getCurrentUser(),

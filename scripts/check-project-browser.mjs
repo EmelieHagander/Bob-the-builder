@@ -166,6 +166,9 @@ try {
       const drawer = page.getByRole('complementary', { name: `Ask bob for Porch ${id}` })
       await drawer.waitFor()
       await drawer.getByRole('button', { name: 'Send', exact: true }).waitFor({ state: 'visible' })
+      // A memory preview may already contain the expected text. These flows
+      // assert current server state, so wait for initial revalidation as well.
+      await drawer.locator('button:enabled', { hasText: 'New conversation' }).waitFor()
       return drawer
     }
     const send = async text => {
