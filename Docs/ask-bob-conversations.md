@@ -79,6 +79,9 @@ still needs to demonstrate that he creates ordinary missing prerequisites instea
 of ending with a statement that they are missing. A replay fix or a faster drawer
 does not prove construction correctness, CAD readiness or complete delegation.
 
+[Hosted release evidence](foundation-verification.md#bob-history-replay-release-2026-10-17)
+records the installed runtime/web pins and the remaining ordinary owner test.
+
 ## Ownership and authority
 
 Drawing-request recovery is owned by [CAD adapter — P2a](cad-adapter.md#p2a--request-recovery). It is deployed through [PR #165](https://github.com/EmelieHagander/Bob-the-builder/pull/165). It adds an intake retry condition across turns and binds completion to the CAD receipt without creating a second transcript or broadening private-thread access.

@@ -3015,3 +3015,98 @@ launched. Roll back catalog activation first if needed, retaining compatible
 workers until pinned policy-1 jobs drain; never put workers that cannot understand
 paused/paged jobs back in service while such jobs exist. [State](bob-delivery-flow.md#state)
 owns the remaining action.
+
+<a id="bob-history-replay-release-2026-10-17"></a>
+## Recent chat history and construction replay — hosted release 2026-10-17
+
+[PR #262](https://github.com/EmelieHagander/Bob-the-builder/pull/262)
+corrects slow drawer loading and the owner's later construction-run failure.
+The [conversation owner](ask-bob-conversations.md#recent-transcript-window-and-construction-check-replay--2026-10-17)
+owns the browser cache, cursor and replay contracts.
+
+The observed failed policy-1 run stopped at `model:ask-bob:22` with
+`continuation_changed` after revising one of its own material sources.
+Eight changes had already been saved, including the construction; those records
+remain. A historical construction check had combined journalled records with
+an unrecorded current-source observation. New execution identities checkpoint
+that observation per logical check, while existing identities preserve their
+original journal sequence. Fresh caller authorization and independent CAD
+render/review source checks remain live. The mismatch guard is retained.
+
+The browser requests the newest five transcript rows, with one look-ahead row
+and explicit older-page loading. Its account/project memory preview renders
+during fresh revalidation; only the fresh response enables actions. Durable
+work polls content-free status rather than the whole transcript every two
+seconds. Reset/account boundaries, exact-turn recovery, delivery acknowledgement,
+draft and reader position remain part of the browser contract. This is browser
+loading; Bob's existing working context and recall are unchanged.
+
+The PR merged as `69f58dbf57c95c496c80784aee0970aaed88360c`. Merge tree `e9634fa89756ff919fc08d8ee05776ac804763e8` is
+identical to tested head `7d3f56ef5b453d6aae97b882deeb574c662c20b6`.
+Both closures were published and read back before merge:
+
+| Function | Authentication | Exact returned files | Bundle SHA-256 |
+|---|---|---|---|
+| ask-bob 127, ACTIVE | verify_jwt=true | 96 | `9fc1a419846e0cb0c5cf0894d46d7032bfd64993406a94e6d40f61f8f5980914` |
+| bob-worker 95, ACTIVE | Existing internal authentication; verify_jwt=false | 94 | `72a10895373b0ebe727eb133441888126cac304e752be7b6979bba0055ad6c73` |
+
+Every returned file matches the immutable tested source. Uploaded closures have
+97 and 96 files respectively. The bundler omits only type-only
+`src/data/provenance.ts` in both and `bob-request.ts` in the worker.
+Unauthenticated POSTs return 401 for both endpoints.
+
+[Pages 39033864487](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39033864487)
+published the merge successfully. The public
+[Bob app](https://emeliehagander.github.io/Bob-the-builder/) serves `assets/index-BdRL6RnU.js`,
+SHA-256 `d047122fc15e1c030fb843bb7f27dd631eccb7a5bff7e87edc247e51655ec675`.
+Downloaded code contains the new paging, loading and retry labels and the
+correct Supabase project URL. This is publication/asset readback, not a new
+signed-in live browser run.
+
+No database migration or catalog publication was applied in this correction.
+The activated completion/allowance policy and GPT-5.4/high remain in place.
+No actual owner model/CAD retry was submitted by this release session.
+
+[CI 39032132533](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39032132533)
+passed every recorded step on that exact source: full tests, vocabulary, Edge
+type checks, production/live-config builds, PWA and connected browser fixtures.
+The 320/390/1280 px chat flow passed bounded initial loading, older pages,
+preserved drafts/reader position, cached preview with disabled actions during
+revalidation, status-only durable polling, settlement and reset. The matching
+paging screenshots were directly inspected; their artifact SHA-256 is
+`270ddf8fbbaa4e522c0a913698382984411df0063eeac8d650cb45719a6a2381`.
+There was no local browser installation or local browser pass.
+
+Focused tests reproduce the historical source-change failure and cover legacy
+journal identities, fresh revoked access and fresh CAD rejection. The extended
+background/CAD fixture set also passed locally. CI supplies the successful Edge
+check; local dependency retrieval was blocked by the environment.
+
+[Live Bob release check 39033864522](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39033864522)
+passed actual guest Auth/RLS, OpenAI lookup, image pixels and versioned knowledge.
+The ordinary caller removed its fixture image bytes and metadata. The disposable
+project `p_132c138531954bec955cfb31b2ddfd9d` remains: its guarded administrative cleanup failed in
+the connector approval flow with `Invalid or expired requestState`. Subsequent
+readback confirms the same one guest creator, one expected Task and one expected
+material; media, jobs, private threads and output records are absent. Identity,
+description, type, nonce and expected contents were verified before the cleanup
+request. No ordinary caller DELETE grant exists for projects, so no alternate
+client deletion was attempted. This cleanup remains open; it does not require
+another model probe or another runtime/catalog publication.
+
+Keep version-aware replay code available until flagged in-flight executions
+drain; reverting to the older sequence during one of those executions changes
+its journal positions. This release does not require a catalog rollback.
+
+Direct code and documentation review followed Vera's rendered-state and
+Archie's owner/State guidance; this was a manual review, not an independent
+agent review.
+
+**Next acceptance:** reload the app, reopen the existing bed conversation,
+and continue from the saved construction with the ordinary owner account.
+Check initial load, older-message access and continued authorized work through
+the next construction/CAD boundary. The earlier unnecessary prerequisite stop
+remains a semantic acceptance concern: this technical fix does not establish
+that Bob will finish without another “continue”. Task/todo text/status quality,
+the drawing against the original mockup and full-chain cost also remain in
+[State](bob-delivery-flow.md#state).

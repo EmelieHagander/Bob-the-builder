@@ -292,17 +292,23 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg (2026-10-17):** ladda om Bob och låt beställaren prova samma
-uppgifts-/todoändring och fortsatt delegerat arbete i en ny körning med
-GPT-5.4/high. Den samordnade releasen är installerad och återläst enligt
-[releasebeviset](foundation-verification.md#bob-continuation-release-2026-10-17).
+**Aktivt nästa steg (2026-10-17):** ladda om appen, öppna det befintliga
+våningssängssamtalet och låt beställaren fortsätta från den sparade konstruktionen.
+Pröva snabb inläsning, äldre meddelanden och fortsatt behörigt arbete genom
+nästa konstruktions-/CAD-gräns enligt
+[återspelnings- och historikreleasen](foundation-verification.md#bob-history-replay-release-2026-10-17).
+Behovet av en extra ”fortsätt” ska fortfarande bedömas som modellbeteende;
+kraschfixen ersätter inte verklig medlemsacceptans. Uppgifts-/todoändringens
+textkvalitet och status ingår fortfarande i acceptansen. GPT-5.4/high behålls;
+modellbyte förblir uppskjutet tills resultatet kan bedömas.
 [Konversationsägaren](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
-äger beteendet och policygränsen för nya respektive historiska jobb. Modellbyte
-förblir uppskjutet tills
-resultatet kan bedömas. Teknisk release ersätter inte verklig medlemsacceptans av
-textkvalitet, status och mindre behov av extra ”fortsätt”. Den tidigare
-[uppgiftsreleasen](foundation-verification.md#bob-task-workflow-release-2026-10-17)
-ägs av sitt separata releasebevis.
+äger fortsatt arbete och den redan aktiverade policygränsen enligt
+[den samordnade releasen](foundation-verification.md#bob-continuation-release-2026-10-17).
+
+Städning av det senaste disponibla verifieringsprojektet återstår på grund av
+anslutningens godkännandefel. Exakt identitet och kontrollerat innehåll finns i
+[releasebeviset](foundation-verification.md#bob-history-replay-release-2026-10-17);
+det kräver ingen ny modellkörning eller publicering.
 
 Serverbundna work-record- och planlänkverktyg samt konflikttransporten är nu installerade enligt [releasebeviset](foundation-verification.md#write-conflicts-and-sequential-work--hosted-release-2026-10-17); det tidigare anslutnings-/kataloghindret är inte nästa handling. Kvarvarande serverbindning av planbeslut, evidenslänkar, nästlade förslagsidentiteter, material/inköp, katalog, bild-/ritningskopplingar och geometri ligger kvar hos [skrivägaren](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14). Denna PR gör inte alla verktyg ID-fria och stänger inte konstruktionsacceptansen.
 

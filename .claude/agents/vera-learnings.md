@@ -56,3 +56,11 @@ A startup spinner needs a bounded connection failure and a retry path. Test a
 near-expiry persisted session and a stalled read; a fresh one-hour fixture token
 does not exercise the same path. Account, phase and chat data must share one
 Auth owner, while volunteer credentials retain their independent session.
+
+## 2026-10-17 — Preview text is not fresh server state
+
+An in-memory transcript preview can satisfy a text selector before revalidation
+finishes. Browser tests that assert current server delivery must also wait for
+the initial sync to enable actions. Test the preview separately with a delayed
+server read and disabled actions. After a deliberate reload, load older pages
+explicitly before making assertions about the entire transcript.
