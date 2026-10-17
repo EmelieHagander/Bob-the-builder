@@ -64,3 +64,9 @@ finishes. Browser tests that assert current server delivery must also wait for
 the initial sync to enable actions. Test the preview separately with a delayed
 server read and disabled actions. After a deliberate reload, load older pages
 explicitly before making assertions about the entire transcript.
+
+Work status needed during long background jobs must remain visible while the
+transcript scrolls. Use actual progress timestamps rather than poll times, and
+show connection loss without implying new activity. Bound the whole initial
+read, including member lookup; per-query timeouts alone cannot cover a stalled
+dependency. Fence late results after the deadline and preserve the unsent draft.

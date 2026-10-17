@@ -82,6 +82,24 @@ does not prove construction correctness, CAD readiness or complete delegation.
 [Hosted release evidence](foundation-verification.md#bob-history-replay-release-2026-10-17)
 records the installed runtime/web pins and the remaining ordinary owner test.
 
+### Visible work status and bounded loading
+
+The drawer keeps automatic work status above the composer, outside the scrolling
+transcript. It reports the server's current activity and confirmed saved-change
+count, plus the last activity timestamp when available. Reading older messages
+does not hide it or move the reader. A connection failure shows that status could
+not be refreshed; it does not claim a new worker heartbeat. Paused authorization
+offers Reconnect beside the existing exact-job Stop command. Completion removes
+the work status after the saved reply is read back.
+
+Initial conversation loading, including the member projection, has a 20-second
+deadline and a visible Retry conversation action. Loading/checking a cached
+preview stays visible above the composer. A late result from a timed-out attempt
+cannot enable actions or replace the recovery state. The draft survives retry.
+Older-page reads also have a whole-read deadline, and the initial exact-turn
+status request has the same per-request abort as progress polling. These are
+browser read limits; they do not stop or restart Bob's background work.
+
 ## Ownership and authority
 
 Drawing-request recovery is owned by [CAD adapter — P2a](cad-adapter.md#p2a--request-recovery). It is deployed through [PR #165](https://github.com/EmelieHagander/Bob-the-builder/pull/165). It adds an intake retry condition across turns and binds completion to the CAD receipt without creating a second transcript or broadening private-thread access.

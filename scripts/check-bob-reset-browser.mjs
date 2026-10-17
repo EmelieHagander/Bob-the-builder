@@ -33,6 +33,8 @@ try {
     let cancelMode = 'success', renewMode = 'success', cancelCalls = 0
     const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
+    let pauseMembership = false, statusMode = 'normal'
+    const heldMembership = []
     let historyReads = 0, statusReads = 0
     let releaseReset
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
@@ -86,9 +88,10 @@ try {
       }
       if (url.pathname === '/rest/v1/rpc/bob_job_status') {
         statusReads++
+        if (statusMode === 'offline') return respond({ status: 503, json: { message: 'Status unavailable fixture' } })
         const body = req.postDataJSON()
         const row = histories.get(body.p_project)?.messages.find(m => m.turn_id === body.p_turn && m.role === 'user')
-        return respond({ json: row?.background ? { jobId:row.jobId, status: row.jobStatus ?? (row.delivery_state === 'pending' ? 'running' : row.delivery_state), error: row.error, screen: row.screen??null, writes:row.writes, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
+        return respond({ json: row?.background ? { jobId:row.jobId, status: row.jobStatus ?? (row.delivery_state === 'pending' ? 'running' : row.delivery_state), error: row.error, progress:row.progress, screen: row.screen??null, writes:row.writes, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), drawingRecovery: row.drawingRecovery } : null })
       }
       if (url.pathname === '/rest/v1/rpc/claim_project_invites') return respond({ json: 0 })
       if (url.pathname === '/rest/v1/rpc/project_invitations') return respond({ json: [] })
@@ -100,6 +103,7 @@ try {
       if (url.pathname === '/rest/v1/projects') return respond({ json: projects })
       if (url.pathname === '/rest/v1/account') return respond({ json: { id: 'account', name: 'Reset fixture', owner_name: '', email: '' } })
       if (url.pathname === '/rest/v1/people') {
+        if (pauseMembership && url.searchParams.has('auth_user_id')) await new Promise(resolve => { heldMembership.push(resolve) })
         const id = url.searchParams.get('project_id')?.replace('eq.', '') ?? 'A'
         return respond({ json: [{ id: `member${id}`, name: 'Fixture member', initials: 'FM', color: '#41513f', role: 'Organiser', diet: '', person_skills: [] }] })
       }
@@ -632,19 +636,61 @@ try {
     assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
     releaseHistory()
     await drawer.locator('button:enabled',{hasText:'New conversation'}).waitFor()
+    // A stalled membership read must not leave a cached chat loading forever.
+    // A late success from that attempt cannot dismiss the recovery screen.
+    pauseMembership = true
+    await page.evaluate(()=>window.dispatchEvent(new Event('bob:project-changed')))
+    drawer = await open()
+    await drawer.locator('.bob-history-sync').filter({hasText:'conversation'}).waitFor()
+    const syncBounds = await drawer.locator('.bob-history-sync').boundingBox()
+    assert(syncBounds && syncBounds.y >= 0 && syncBounds.y + syncBounds.height <= viewport.height, 'Loading status stays in view with cached history')
+    await drawer.getByRole('textbox').fill('Keep my draft through a connection retry')
+    await drawer.getByRole('button',{name:'Retry conversation',exact:true}).waitFor({timeout:25_000})
+    assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
+    pauseMembership = false
+    const lateMember = page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/people' && new URL(r.url()).searchParams.has('auth_user_id'))
+    assert(heldMembership.length > 0)
+    heldMembership.splice(0).forEach(resolve=>resolve())
+    await (await lateMember).finished()
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+    assert(await drawer.getByRole('button',{name:'Retry conversation',exact:true}).isVisible(), 'Timed-out success stays fenced')
+    await page.screenshot({path:`test-results/bob-history-timeout-${viewport.width}.png`})
+    await drawer.getByRole('button',{name:'Retry conversation',exact:true}).click()
+    await drawer.locator('button:enabled',{hasText:'New conversation'}).waitFor()
+    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep my draft through a connection retry')
     // An active durable job reads progress without retransferring the transcript.
-    const active={role:'user',text:'PAGED ACTIVE WORK',seq:21,turn_id:crypto.randomUUID(),jobId:crypto.randomUUID(),background:true,jobStatus:'running',delivery_state:'pending',updated_at:new Date().toISOString()}
+    const activityAt = new Date().toISOString()
+    const active={role:'user',text:'PAGED ACTIVE WORK',seq:21,turn_id:crypto.randomUUID(),jobId:crypto.randomUUID(),background:true,jobStatus:'running',delivery_state:'pending',updated_at:new Date(Date.now()-26*60_000).toISOString(),progress:{stage:'thinking',step:28,saved:3,at:activityAt}}
     pagedHistory.messages.push(active);pagedHistory.next_seq=22
     await page.reload();drawer=await open()
     await drawer.getByRole('button',{name:'Stop',exact:true}).waitFor()
+    const workStatus = drawer.getByRole('status',{name:'Bob work status',exact:true})
+    await workStatus.getByText('Thinking through the next step… · 3 changes saved',{exact:true}).waitFor()
+    assert.equal(await workStatus.locator('time').getAttribute('datetime'),activityAt)
+    await drawer.getByRole('textbox').fill('Keep my next instruction while Bob works')
+    await drawer.getByRole('button',{name:'Show older messages',exact:true}).click()
+    await drawer.getByText('PAGED MESSAGE 12',{exact:true}).waitFor()
+    await drawer.locator('.bob-history').evaluate(el=>{el.scrollTop=0})
+    const workBounds = await workStatus.boundingBox(), composerBounds = await drawer.locator('.bob-composer').boundingBox()
+    assert(workBounds && composerBounds && workBounds.y >= 0 && workBounds.y+workBounds.height <= composerBounds.y+1, 'Progress stays above the composer when reading older messages')
+    await page.screenshot({path:`test-results/bob-live-status-${viewport.width}.png`})
     const beforeHistory=historyReads,beforeStatus=statusReads
     await page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/bob_job_status')
     await page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/bob_job_status')
     assert(statusReads>=beforeStatus+2)
     assert.equal(historyReads,beforeHistory,'progress polls never reload transcript rows')
+    active.progress={stage:'tool',tool:'check_construction',step:29,saved:4,at:new Date().toISOString()}
+    await workStatus.getByText('Working on the construction… · 4 changes saved',{exact:true}).waitFor()
+    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep my next instruction while Bob works')
+    assert(await drawer.locator('.bob-history').evaluate(el=>el.scrollTop<2),'Progress updates preserve older reading position')
+    statusMode='offline'
+    await workStatus.getByText('Connection interrupted. Checking for Bob’s answer…',{exact:true}).waitFor()
+    statusMode='normal'
+    await workStatus.getByText('Working on the construction… · 4 changes saved',{exact:true}).waitFor()
     active.delivery_state='completed';active.jobStatus='completed'
     pagedHistory.messages.push({role:'assistant',text:'PAGED WORK FINISHED',delivery_state:'completed',seq:22,turn_id:active.turn_id});pagedHistory.next_seq=23
     await drawer.getByText('PAGED WORK FINISHED',{exact:true}).waitFor()
+    assert.equal(await workStatus.count(),0,'Completion replaces working status with the saved answer')
     dialog=await confirm()
     await dialog.getByRole('button',{name:'Clear chat and context',exact:true}).click()
     await drawer.getByText('New conversation started. Saved project data is unchanged.',{exact:true}).waitFor()

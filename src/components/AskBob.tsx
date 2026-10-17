@@ -13,6 +13,7 @@ import { Modal } from './Modal'
 import type { ChatMessage } from '../data/types'
 import { BobWriteReceipts } from './BobWriteReceipts'
 import { createRequestScope } from '../lib/projectRequest'
+import { withLoadDeadline } from '../lib/loadDeadline'
 import { BOB_DRAFT_EVENT, getBobSurface, takePendingBobDraft, useBobSurfaceSnapshot } from '../lib/bobSurface'
 import type { BobScreenPointer, CurrentView } from '../domain/bobScreen'
 import { readOutgoing, reconcileOutgoing, type OutgoingTurn } from '../lib/bobOutgoing'
@@ -251,10 +252,10 @@ function Bubble({ msg, projectId, onAction, onOpenDrawing }: { msg: ChatMessage;
   )
 }
 
-function WorkingBubble({ label }: { label: string }) {
-  return <div className="bob-working" role="status" aria-live="polite">
-    <span className="bob-hammer"><Icon name="hammer" weight="fill" size={20} color="var(--honey)" /></span>
-    <span>{label}</span>
+function WorkingBubble({ label, at, paused }: { label: string; at?: string; paused?: boolean }) {
+  return <div className="bob-working">
+    {paused ? <Icon name="pause" size={20} /> : <span className="bob-hammer"><Icon name="hammer" weight="fill" size={20} color="var(--honey)" /></span>}
+    <div><div>{label}</div><small>{at && <>Last activity <time dateTime={at}>{formatDateTime(at)}</time>. </>}{paused ? 'Reconnect to continue.' : 'Updates automatically.'}</small></div>
   </div>
 }
 
@@ -419,20 +420,23 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   useEffect(() => () => scope.current.invalidate(), [project.id])
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false, expired = false
     const isCurrent = scope.current.capture()
-    const current = () => !cancelled && isCurrent()
+    const current = () => !cancelled && !expired && isCurrent()
     outgoing.current = null; outgoingKey.current = null; serverThread.current = null
     historyPage.current = { messages: [] }
     setHasOlder(false); setLoadingOlder(false); setOlderError(''); setHistoryLoadError(false)
-    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('Loading conversation…'); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
-    void (async () => {
+    setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('Loading conversation…'); setWorking(false); setRecovering(null); setRetry(null); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
+    const read = async () => {
       const [me, history] = await Promise.all([
         db.getCurrentUser(),
         db.getAskBobConversation(project.id, { onCached: cached => {
           if (current()) { setExtra(cached.messages); setHistoryNotice('Checking the latest conversation…') }
         } }),
       ])
+      return { me, history }
+    }
+    void withLoadDeadline(read(), 20_000).then(({ me, history }) => {
       if (!current()) return
       const key = `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
       setHistoryKey(key)
@@ -446,8 +450,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       let saved: ChatMessage[] = []
       try { saved = parseSavedChat(localStorage.getItem(key)) } catch { /* storage can be unavailable */ }
       setLocalHistory(true); setExtra(saved); setHistoryNotice(''); setHistoryReady(true)
-    })().catch(() => {
+    }).catch(() => {
       if (current()) {
+        expired = true
         setHistoryLoadError(true)
         setHistoryNotice('Could not sync your conversation. Retry to check the latest messages and work status.')
       }
@@ -484,7 +489,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const height = historyScroll.current?.scrollHeight ?? 0, top = historyScroll.current?.scrollTop ?? 0
     setLoadingOlder(true); setOlderError(''); stickToEnd.current = false
     try {
-      const older = await db.getAskBobConversation(project.id, { beforeSeq: page.oldestSeq, threadId: page.threadId })
+      const older = await withLoadDeadline(db.getAskBobConversation(project.id, { beforeSeq: page.oldestSeq, threadId: page.threadId }), 20_000)
       if (!current()) return
       historyPage.current = prependHistoryPage(historyPage.current, older)
       setHasOlder(!!historyPage.current.hasMore)
@@ -853,8 +858,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           </details>
           {historyReady && !extra.length && !working && <Bubble projectId={project.id} msg={{ from: 'bob', text: `Ask me about ${project.name}, send a photo for a mockup, work out a build detail or request a saved update.` }} />}
           {extra.map((m, i) => <Bubble key={`x${i}`} projectId={project.id} msg={m} onAction={handleAction} onOpenDrawing={close} />)}
-          {historyNotice && <div role="status" className="bob-history-notice">{historyNotice}</div>}
-          {working && !recovering?.paused && <WorkingBubble label={workingLabel} />}
+          {historyNotice && (historyReady || historyLoadError) && <div role="status" className="bob-history-notice">{historyNotice}</div>}
         {historyReady && !extra.length && !working && <div className="bob-chips">{chips?.map(c => <button key={c} disabled={resetting} onClick={() => setDraft(c)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 999, padding: '7px 12px', fontSize: 12.5, color: 'var(--ink-soft)', fontWeight: 600 }}>{c}</button>)}</div>}
         {retry && <details className="bob-retry-details">
           <summary>About this retry</summary>
@@ -878,10 +882,13 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
           <button className="btn btn-primary" disabled={working || resetting || confirmReset} onClick={() => void send(retry)}>Retry request</button>
         </div>}
         {historyLoadError && <div className="bob-recovery" role="status"><span>Conversation unavailable</span><button type="button" className="btn" onClick={() => setHistoryAttempt(value => value + 1)}>Retry conversation</button></div>}
-        {working && recovering?.jobId && <div className="bob-recovery" role="status">
-          <span>{recovering.paused ? 'Paused: session expired' : 'Saved changes will remain.'}</span>
-          {recovering.paused && <button type="button" className="btn" disabled={reconnecting || stopping} onClick={() => void reconnectWork()}>{reconnecting ? 'Reconnecting…' : 'Reconnect'}</button>}
-          <button type="button" className="btn" disabled={stopping} onClick={() => void stopWork()}>{stopping ? 'Stopping…' : 'Stop'}</button>
+        {!historyReady && !historyLoadError && <div className="bob-history-sync" role="status">{historyNotice}</div>}
+        {working && <div className="bob-work-status" role="status" aria-live="polite" aria-label="Bob work status">
+          <WorkingBubble label={recovering?.paused ? 'Paused: session expired' : historyNotice.startsWith('Connection interrupted.') ? historyNotice : workingLabel} at={recovering?.progress?.at} paused={recovering?.paused} />
+          {recovering?.jobId && <div className="bob-work-actions">
+            {recovering.paused && <button type="button" className="btn" disabled={reconnecting || stopping} onClick={() => void reconnectWork()}>{reconnecting ? 'Reconnecting…' : 'Reconnect'}</button>}
+            <button type="button" className="btn" disabled={stopping} onClick={() => void stopWork()}>{stopping ? 'Stopping…' : 'Stop'}</button>
+          </div>}
         </div>}
         {workError && <p className="bob-image-error" role="alert">{workError}</p>}
         {!!images.length && <div className="bob-attachments" aria-label="Images for your next message">
