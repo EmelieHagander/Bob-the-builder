@@ -319,6 +319,12 @@ try {
         await page.getByText('New from Bob',{exact:true}).waitFor({state:'hidden'})
       } else releaseAnswer()
       await drawer.getByText('Bob is working on the project…', { exact: true }).waitFor({ state: 'hidden' })
+      // This reload intentionally opens only the recent window. Read the older
+      // page before checking that all earlier recovered replies remain intact.
+      if (mode === 'background') {
+        await drawer.getByRole('button', { name: 'Show older messages', exact: true }).click()
+        await drawer.getByText('Pending delayed', { exact: true }).waitFor()
+      }
       assert.equal(await drawer.getByText('RECOVERED ANSWER', { exact: true }).count(), ['delayed','lost','busy','background'].indexOf(mode) + 1)
       assert.equal(answerCalls, before + 1)
       assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
@@ -523,9 +529,23 @@ try {
         assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
         await page.evaluate(() => localStorage.setItem('bob:active-project', 'A'))
         authMode = 'other'
+        await page.evaluate(() => {
+          const key = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'))
+          if (!key) throw new Error('Missing fixture Auth session')
+          const session = JSON.parse(localStorage.getItem(key))
+          session.user.id = '00000000-0000-0000-0000-000000000099'
+          localStorage.setItem(key, JSON.stringify(session))
+        })
         await page.reload(); drawer = await open()
         assert.equal(await drawer.getByText(complement, { exact: true }).count(), 0)
         authMode = 'member'
+        await page.evaluate(id => {
+          const key = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'))
+          if (!key) throw new Error('Missing fixture Auth session')
+          const session = JSON.parse(localStorage.getItem(key))
+          session.user.id = id
+          localStorage.setItem(key, JSON.stringify(session))
+        }, user.id)
         await page.reload(); drawer = await open()
         await drawer.getByText(complement, { exact: true }).waitFor()
         assert.equal(answerCalls, before + 1)
