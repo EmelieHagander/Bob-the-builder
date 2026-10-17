@@ -483,7 +483,12 @@ export async function callOpenAIResponses<T = unknown>(
     if (hasImageContent(options.messages) && modelRow.supports_images !== true) {
       throw new Error('Configured model does not support image input');
     }
-    const modelParams = getModelParams(currentModel, configuredMaxTokens);
+    // Bob's new pinned policy delegates generation length to the provider.
+    // Do not substitute a larger fixed allotment: omit the optional parameter,
+    // including local role-specific outputTokenLimit overrides. Provider model
+    // and context limits still apply; legacy and other apps retain exact wire.
+    const modelParams = catalogRole?.app === 'bob' && catalogRole.unlimitedWork === true
+      ? {} : getModelParams(currentModel, configuredMaxTokens);
     const inputMessages: Array<Record<string, unknown>> = [];
     
     // Build input messages

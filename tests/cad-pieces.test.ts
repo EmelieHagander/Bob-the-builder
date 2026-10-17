@@ -103,3 +103,13 @@ test('SQL: released pieces are designed one at a time after the turn; unreleased
  await service('bob_dispatch_jobs',[])
  assert.deepEqual(await jobs(),[a,b],'a failed piece does not stop the next one')
 })
+
+test('unlimited piece planning allows another checked batch while keeping scope, batch and existing-request guards',async()=>{
+ const {store,saved}=fakeStore({reuse:'piece_0'})
+ const pieces=createCadPieces({unlimitedWork:true,requestStore:store,ownerRequest:null,hasAccess:async()=>true})
+ const first:any=await pieces.execute(input(2));assert.equal(first.pieces[0].status,'existing_request')
+ const next=input(2);next.pieces.forEach((p,i)=>p.piece_key='next_'+i)
+ assert.equal((await pieces.execute(next) as any).status,'queued')
+ assert.equal(pieces.remaining,Infinity);assert.equal(saved.length,3)
+ assert.equal((await pieces.execute(input(13)) as any).status,'invalid');assert.equal(saved.length,3)
+})

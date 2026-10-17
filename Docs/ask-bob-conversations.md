@@ -2,6 +2,47 @@
 
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
+## Active memory and continued work — 2026-10-17
+
+The continuation publication uses existing T1 recent messages, T2 older gist/index
+and T3 exact recall to resolve the still-active delegated outcome. It adds no
+parallel goal store or memory worker. Latest instructions may refine, cancel or
+supersede earlier work; completed work must not be resurrected. Fresh records
+remain the authority for saved state. Before the first candidate final answer on
+an authorized writing turn, one review checks the active outcome against current
+records, Step goals and Completion Requirements, even if no write was attempted.
+The same provider chain retains the earlier intent and this turn's tool results.
+This review advises Bob; it is not proof that a model completed the whole request.
+
+Bob continues ordinary authorized successor work after an intermediate save and
+finishes independent parts before asking for an actual human action. Planning
+Tasks use their own delivery requirements; they need not await physical building.
+Project/Area phase is orientation, not authority to advance the whole project or
+an instruction to work until physical completion. Existing explicit plan approval,
+physical evidence and write authority remain required.
+
+For newly enqueued durable jobs with pinned `work_allowance_version: 1`, application
+spending, call, output-token, step, read, write, correction, colleague, image-operation,
+fold and total job-time allowances are removed. Accounting remains. Per-operation
+payload/schema limits, provider constraints, authority, revision guards and uncertain
+outcome handling remain. A worker slice yields and resumes the same job; journal
+pages have no aggregate entry quota. Replayed operations reuse their exact results.
+The saved manifest and policy are pinned at enqueue, before the first model call.
+Historical jobs and the legacy synchronous compatibility path retain their original
+policy; deployment does not reset or re-execute them.
+
+Actual session expiry pauses and preserves the job. Reconnecting with a fresh
+ordinary user session renews that same job, subject to current project access.
+The active chat offers Stop for its owned background job; cancellation fences
+further writes and preserves already confirmed changes. Neither renewal nor a
+technical worker continuation is another owner message or a fresh budget.
+
+This section supersedes the older application-budget and four-fold preparation
+rules below for policy-1 durable work. It does not implement arbitrary same-turn
+provider-context rollover; a provider context-limit error remains a technical
+failure with saved receipts preserved. No model or reasoning tier changes in this
+release. Hosted activation and owner acceptance are tracked separately from code.
+
 ## Ownership and authority
 
 Drawing-request recovery is owned by [CAD adapter — P2a](cad-adapter.md#p2a--request-recovery). It is deployed through [PR #165](https://github.com/EmelieHagander/Bob-the-builder/pull/165). It adds an intake retry condition across turns and binds completion to the CAD receipt without creating a second transcript or broadening private-thread access.
@@ -14,7 +55,7 @@ The project database remains the authority for **saved** project state. Conversa
 
 ## Current requested deliverable
 
-The owner's current message defines the deliverable. Pending drawing requests
+The owner's current instruction and still-active earlier delegation define the deliverable. Pending drawing requests
 are background working state and precede the recent conversation in the model
 input. A request to describe an image, discuss the furniture, correct its
 description or save project text does not commission CAD. Bob reads the relevant

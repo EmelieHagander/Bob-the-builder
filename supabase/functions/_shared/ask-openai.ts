@@ -53,7 +53,7 @@ export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
   imageIds?: string[];
-  background?: { drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
+  background?: { workAllowanceVersion?: number; catalogManifestId?: string; authorityExpiresAt?: string; drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -105,7 +105,7 @@ export async function answerWithOpenAi(opts: {
   const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
-  const modelBudget = createBobModelBudget()
+  let modelBudget: ReturnType<typeof createBobModelBudget>
   const callModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
@@ -129,7 +129,7 @@ export async function answerWithOpenAi(opts: {
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
-          expiresAt: new Date(opts.background!.deadline).toISOString(),
+          expiresAt: opts.background!.workAllowanceVersion === 1 ? opts.background!.authorityExpiresAt! : new Date(opts.background!.deadline).toISOString(),
           ...recovery,
         } } : {}),
       })
@@ -177,14 +177,6 @@ export async function answerWithOpenAi(opts: {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }, signal))
-  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32)
-  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48)
-  const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
-  const imageGrounding = { async search(input: LookupInput) {
-    const result = await groundingLookup.search(input)
-    for (const source of groundingLookup.sources) if (!lookup.sources.some(s => s.dataset===source.dataset && s.recordId===source.recordId)) lookup.sources.push(source)
-    return result
-  } }
   const hasAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
@@ -208,8 +200,8 @@ export async function answerWithOpenAi(opts: {
   try {
     // The private job journal pins configuration, not project authority. Fresh
     // caller reads and live enabled checks still guard each execution boundary.
-    const manifest = await memo('ai-catalog', { app: 'bob' }, () => createAiCatalogSession(shared, { app: 'bob' }).load())
-    aiCatalog = createAiCatalogSession(shared, { app: 'bob', manifest })
+    const manifest = await memo('ai-catalog', { app: 'bob' }, () => createAiCatalogSession(shared, { app: 'bob', ...(opts.background?.catalogManifestId ? { manifestId: opts.background.catalogManifestId } : {}) }).load())
+    aiCatalog = createAiCatalogSession(shared, { app: 'bob', manifest, unlimitedWork: opts.background?.workAllowanceVersion === 1 })
     await aiCatalog.load()
   } catch (error) {
     rethrowContinuation(error)
@@ -218,6 +210,17 @@ export async function answerWithOpenAi(opts: {
     }
     return { ok: false, error: 'ai_catalog_unavailable' }
   }
+  const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
+  modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
+  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32, undefined, { unlimitedWork })
+  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48, undefined, { unlimitedWork })
+  const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
+  const imageGrounding = { async search(input: LookupInput) {
+    const result = await groundingLookup.search(input)
+    for (const source of groundingLookup.sources) if (!lookup.sources.some(s => s.dataset===source.dataset && s.recordId===source.recordId)) lookup.sources.push(source)
+    return result
+  } }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
   const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now()}))
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
@@ -262,22 +265,22 @@ export async function answerWithOpenAi(opts: {
     payload => rpc(payload.kind === 'bound_plan_link' ? 'bob_project_write_v20' : payload.kind === 'bound_work' ? 'bob_project_write_v19' : ['bound_solution_create', 'bound_solution_target', 'bound_solution_evidence'].includes(payload.kind) ? 'bob_project_write_v18' : ['bound_project', 'bound_solution'].includes(payload.kind) ? 'bob_project_write_v17' : 'bob_project_write_v16', { ...binding, p_payload: payload }, AbortSignal.timeout(12_000)),
     () => client.rpc('bob_read_write_receipts', binding).abortSignal(AbortSignal.timeout(12_000)),
     () => client.rpc('bob_settle_project_writes', binding).abortSignal(AbortSignal.timeout(12_000)),
-    { taskWorkDiagnostics: aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata.work_completion_version === 1 },
+    { unlimitedWork, taskWorkDiagnostics: contract.work_completion_version === 1 || contract.work_completion_version === 2 },
   ) : undefined
-  const planLinks = createPlanLinks({ projectId: opts.projectId, writer, hasAccess,
+  const planLinks = createPlanLinks({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_plan_link_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const workRecords = createWorkRecords({ projectId: opts.projectId, writer, hasAccess,
+  const workRecords = createWorkRecords({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     readSnapshot: input => rpc('read_bob_work_snapshot', { p_project: opts.projectId, p_resource: input.resource, p_id: input.key }, AbortSignal.timeout(12000)),
     read: input => rpc('read_bob_work_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const solutionActions = createSolutionActions({ projectId: opts.projectId, writer, hasAccess,
+  const solutionActions = createSolutionActions({ unlimitedWork, projectId: opts.projectId, writer, hasAccess,
     read: input => rpc('read_bob_solution_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const projectEdits = createProjectEdits({ projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
+  const projectEdits = createProjectEdits({ unlimitedWork, projectId: opts.projectId, writer, hasAccess, sources: lookup.sources,
     read: input => rpc('read_bob_edit_context', { p_project: opts.projectId, p_resource: input.resource, p_query: input.query, p_after: input.after }, AbortSignal.timeout(12000)),
   })
-  const projectContext = createProjectContext({
+  const projectContext = createProjectContext({ unlimitedWork,
     reviewInstruction: aiCatalog.text('drawing-review.instruction'),
     imageEvidenceInstruction: aiCatalog.text('images.evidence-intro'), reviewLabel: aiCatalog.text('images.review-label'),
     adapters: [mediaAdapter()],
@@ -303,11 +306,11 @@ export async function answerWithOpenAi(opts: {
       return {ok:false,error:'context_unavailable'}
     }
   }
-  const knowledgeReader = createKnowledgeReader(hasAccess)
-  const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources)
+  const knowledgeReader = createKnowledgeReader(hasAccess, undefined, { unlimitedWork })
+  const operationalReader = createOperationalReader(opts.projectId, input=>rpc('read_project_work', {p_project:opts.projectId,p_input:input}, AbortSignal.timeout(12000)),hasAccess,lookup.sources,{unlimitedWork})
   const catalogReader = createMaterialCatalogReader(opts.projectId,
     checkpointed((input:Record<string,unknown>, signal:AbortSignal) => rpc('catalog_read', { p_project: opts.projectId, p_input: input }, signal)),
-    hasAccess, lookup.sources)
+    hasAccess, lookup.sources, undefined, { unlimitedWork })
   const readDesignReadiness=async(targetRevision:number,purpose:DesignPurpose|null,areaId:string|null=null,fresh=false):Promise<DesignReadiness>=>{
     const args={p_project:opts.projectId,p_area:areaId,p_target_revision:targetRevision,p_purpose:purpose}
     // Replaying a recorded gate reconstructs an earlier completed operation.
@@ -320,7 +323,7 @@ export async function answerWithOpenAi(opts: {
     if(!result||result.project_id!==opts.projectId||result.area_id!==areaId)throw new Error('design_readiness_unavailable')
     return result
   }
-  const constructionOptions = {projectId:opts.projectId,message:opts.message,writer,hasAccess,
+  const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
     readDesignReadiness,
     prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await client.rpc('prepare_construction_role_change',{...binding,p_payload:payload}).abortSignal(AbortSignal.timeout(12000))
@@ -367,12 +370,12 @@ export async function answerWithOpenAi(opts: {
         const {data,error}=await client.from('current_measurements').select('*').eq('project_id',opts.projectId).in('id',pins.project.map(p=>p.id)).abortSignal(AbortSignal.timeout(10000))
         if(error)throw new Error('construction_source_unavailable');for(const row of data??[])project.set(row.id,row)
       }
-      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64),pins.physical,lookup.sources)
+      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64,undefined,{unlimitedWork}),pins.physical,lookup.sources,{unlimitedWork})
       return {project,physical}
     },
   }
   const constructionTools = createConstructionTools(constructionOptions)
-  const calculator=hasCalculatorContract(aiCatalog)?createProjectCalculator({projectId:opts.projectId,hasAccess,
+  const calculator=hasCalculatorContract(aiCatalog)?createProjectCalculator({ unlimitedWork,projectId:opts.projectId,hasAccess,
     isEnabled:async()=>{const policy=await createToolPolicyReader(client,opts.projectId)();return policy.tools.some(t=>t.name==='calculate_project'&&t.active&&t.schema_version===1)},
     readSources:constructionOptions.readSources,
     readConstruction:async(id,revision)=>{
@@ -391,14 +394,14 @@ export async function answerWithOpenAi(opts: {
       return {...data,source_state:article.data.source_state==='current'&&!article.data.catalog_changed?'current':'changed'}
     },
   }):undefined
-  const planAssistant = createPlanAssistant({
+  const planAssistant = createPlanAssistant({ unlimitedWork,
     aiCatalog,calculator,
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, checkpointed(async(projectId:string,input:LookupInput,signal:AbortSignal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
       const {data,error}=await rpc('project_plan_read',{p_project:projectId,p_revision:null},signal)
       return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
-    }), 10_000, 128, 512*1024),
+    }), 10_000, 128, 512*1024, { unlimitedWork }),
     callModel,
   })
   const drawingRequestCall=async(raw:Record<string,unknown>)=>{
@@ -416,7 +419,7 @@ export async function answerWithOpenAi(opts: {
       return data
   }})
 
-  const cadAssistant = createCadAssistant({
+  const cadAssistant = createCadAssistant({ unlimitedWork,
     aiCatalog,calculator,
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
@@ -441,7 +444,7 @@ export async function answerWithOpenAi(opts: {
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
-    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40),
+    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,{unlimitedWork}),
     callModel,
     render:(recipe,source,beforeDispatch)=>{
      if(!source)throw new Error('checked_construction_source_required')
@@ -484,8 +487,8 @@ export async function answerWithOpenAi(opts: {
       })
       return {...data,current_step_ids:links}
     },
-    catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources),
-    context:createProjectContext({adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
+    catalog:createMaterialCatalogReader(opts.projectId,checkpointed((input:Record<string,unknown>,signal:AbortSignal)=>rpc('catalog_read',{p_project:opts.projectId,p_input:input},signal)),hasAccess,lookup.sources,undefined,{unlimitedWork}),
+    context:createProjectContext({ unlimitedWork,adapters:[mediaAdapter()],hasAccess,sources:lookup.sources,reviewInstruction:aiCatalog.text('drawing-review.instruction'),imageEvidenceInstruction:aiCatalog.text('images.evidence-intro'),reviewLabel:aiCatalog.text('images.review-label')}),
     referenceImageRefs:()=>projectContext.openedImageRefs(),
   })
   if(opts.background?.drawingRequestId){
@@ -514,7 +517,7 @@ export async function answerWithOpenAi(opts: {
     await metrics.finish({ok:true,partial:!saved,writes:writer?.receipts.length??0,cad:cadAssistant.metrics})
     return {ok:true,projectId:opts.projectId,answer,evidence:{kind:'ai_assessment',references:[],sources:cadAssistant.sources,partial:!saved,writes:writer?.receipts??[]}}
   }
-  const imageTools=writer?createProjectImageTools({projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
+  const imageTools=writer?createProjectImageTools({ unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,deadline,defaultImageIds:attachedImageIds,
     newId: () => memo('image:id', {}, async () => crypto.randomUUID()),
     generate: async (prompt,referenceIds) => {
       const role = aiCatalog.role('project-image')
@@ -564,7 +567,7 @@ export async function answerWithOpenAi(opts: {
       ?await rpc('project_plan_read',{p_project:opts.projectId,p_revision:Number(id)},AbortSignal.timeout(10000))
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
-  },hasAccess)
+  },hasAccess,{unlimitedWork})
   try {
   const result=await runClaimedProjectTurn({
     aiCatalog,
@@ -572,7 +575,7 @@ export async function answerWithOpenAi(opts: {
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
-    ...opts, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
+    ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
     ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
@@ -593,7 +596,7 @@ export async function answerWithOpenAi(opts: {
           search: (query: string, before: number | null) => memo('context:search', { query, before }, () => store.search(query, before)),
         }
       })(),
-      callModel, hasAccess, deadline: Math.min(deadline - 60000, Date.now() + 105000),
+      callModel, hasAccess, unlimitedWork, deadline: unlimitedWork ? deadline : Math.min(deadline - 60000, Date.now() + 105000),
     }) } : {}),
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.

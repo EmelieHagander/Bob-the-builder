@@ -207,3 +207,29 @@ test('descriptions require delivered current pixels and remain unverified, revis
   assert.equal((await describe()).status, 'context_changed')
   assert.equal(saved.length, 1)
 })
+
+test('unlimited image context removes lifetime counters but bounds undelivered pixels and retains authority',async()=>{
+ const f=fixture(),adapter=createMediaAdapter('A',f.transport)
+ let allowed=true
+ // The deferred adapter reports byte sizes without allocating a large test image.
+ const open=adapter.open.bind(adapter)
+ adapter.open=async(...args)=>({...await open(...args),bytes:6*1024*1024})
+ const ctx=createProjectContext({unlimitedWork:true,adapters:[adapter],hasAccess:async()=>allowed,sources:f.sources})
+ for(let i=0;i<15;i++){
+  assert.equal((await ctx.execute('list_project_category',list)).status,'ok')
+  assert.equal((await ctx.execute('open_project_item',{refs:[ref()]})).status,'ok')
+  ctx.confirmDelivery()
+ }
+ assert.equal(ctx.remaining,Infinity);assert.equal(f.downloads,15);assert.equal(f.sources.length,1)
+ assert.equal((await ctx.execute('open_project_item',{refs:[ref()]})).status,'ok')
+ assert.equal((await ctx.execute('open_project_item',{refs:[ref()]})).status,'ok')
+ const full=await ctx.execute('open_project_item',{refs:[ref()]})
+ assert.equal(full.status,'unavailable');assert('items' in full&&full.items[0].status==='budget_exhausted')
+ assert.equal(ctx.carrier()[0].content.filter(p=>p.type==='image_url').length,2)
+ ctx.confirmDelivery()
+ assert.equal((await ctx.execute('open_project_item',{refs:[ref()]})).status,'ok')
+ assert.equal((await ctx.execute('open_project_item',{refs:[ref(),ref(2),ref(3),ref(4),ref(5)]})).status,'invalid')
+ allowed=false
+ assert.equal(await ctx.validate(),false)
+ assert.equal((await ctx.execute('open_project_item',{refs:[ref()]})).status,'denied')
+})

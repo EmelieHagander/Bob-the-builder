@@ -2163,7 +2163,7 @@ export interface DrawingRequestWork {
  gaps:{id:string;action:string;blocking:boolean;observed_revision:number;task_id:string|null;task_name:string|null;step_id:string|null;label?:string|null;owner_label?:string|null;step_title?:string|null;area_id?:string|null}[]
  artifact_source_state?:'current'|'changed'|'unavailable'|null
  can_manage:boolean;resume_state:string
- budget:{legacy_untracked?:boolean;revision:number;calls:number;call_limit:number;spent_usd:number;usd_limit:number;outcome_unknown:boolean}|null
+ budget:{unpriced?:boolean;unlimited_work?:boolean;legacy_untracked?:boolean;revision:number;calls:number;call_limit:number;spent_usd:number;usd_limit:number;outcome_unknown:boolean}|null
 }
 export async function getDrawingRequests(projectId:string,after:string|null=null,task:string|null=null):Promise<{items:DrawingRequestWork[];next_cursor:string|null}>{
  const guard=captureFileContext(projectId);guard()

@@ -14,10 +14,10 @@ export function searchKnowledge(query:string,jurisdiction:string,today:string,ca
   .map(card=>{const words=tokens([card.title,...card.keywords,card.summary].join(' '));return{card,score:terms.reduce((n,t)=>n+words.filter(w=>w===t||t.length>=4&&w.startsWith(t)).length,0)}})
   .filter(c=>c.score>0).sort((a,b)=>b.score-a.score||a.card.id.localeCompare(b.card.id)).slice(0,4).map(c=>c.card)
 }
-export function createKnowledgeReader(hasAccess:()=>Promise<boolean>,now=()=>new Date()){
+export function createKnowledgeReader(hasAccess:()=>Promise<boolean>,now=()=>new Date(),options:{unlimitedWork?:boolean}={}){
  let used=0;const references:ReferenceEvidence[]=[]
- return{tools:[KNOWLEDGE_TOOL],references,get remaining(){return Math.max(0,8-used)},async execute(v:unknown){
-  if(++used>8)return{status:'budget_exhausted'}
+ return{tools:[KNOWLEDGE_TOOL],references,get remaining(){return options.unlimitedWork?Infinity:Math.max(0,8-used)},async execute(v:unknown){
+  if(++used>8&&!options.unlimitedWork)return{status:'budget_exhausted'}
   if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).sort().join(',')!=='jurisdiction,query')return{status:'invalid'}
   const input=v as {query:unknown;jurisdiction:unknown}
   if(typeof input.query!=='string'||!input.query.trim()||input.query.length>500||!['SE','general'].includes(String(input.jurisdiction)))return{status:'invalid'}

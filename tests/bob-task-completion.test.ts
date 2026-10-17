@@ -6,7 +6,7 @@ import { createProjectLookup } from '../supabase/functions/_shared/project-looku
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { createWorkRecords, type WorkSnapshot } from '../supabase/functions/_shared/project-work-records.ts'
 import { createBobJournal, BobContinuation, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
-import { catalogFixture, preTaskWorkflowCatalogFixture } from './support/ai-catalog-fixture.ts'
+import { preContinuationCatalogFixture as catalogFixture, preTaskWorkflowCatalogFixture } from './support/ai-catalog-fixture.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const reply = (data: string | null, phase: 'commentary'|'final_answer'|'refusal'|'legacy' = 'final_answer', toolCalls?: any[]) => ({ success: true, data, model: 'fixture', responseId: 'resp-' + phase, usage, outputPhase: phase, toolCalls })
@@ -61,7 +61,7 @@ test('last commentary request can deliver a final blocker without reopening tool
 })
 
 test('older pinned contracts retain their exact call options and completion behavior', async () => {
-  for (const version of [undefined, 2, '1']) {
+  for (const version of [undefined, 3, '1']) {
     let calls = 0
     const aiCatalog = preTaskWorkflowCatalogFixture(snapshot => { snapshot.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!.metadata.work_completion_version = version })
     const result = await runProjectAnswer({ ...base(), aiCatalog, callModel: async options => {

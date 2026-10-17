@@ -1114,3 +1114,19 @@ No data or private canonical writer is changed. The pinned Supabase CLI crashed
 on both help and migration creation; this UTC filename uses the documented manual
 fallback. Apply before deploying both runtimes; hosted ledger/runtime proof belongs
 in [foundation verification](../Docs/foundation-verification.md).
+
+## Durable Bob work without application quotas — 2026-10-17
+
+The additive lifecycle migration pins `work_allowance_version` and the AI manifest
+on new durable jobs, pages journal reads, removes policy-1 job duration/claim/entry
+allowances, and adds authenticated cancellation and session renewal. Old jobs
+retain their original policy. The write-receipt migration conditionally removes
+all retained per-turn receipt guards only for the exact authorized live job.
+Drawing accounting keeps reservation, reconciliation and exact retries while
+bypassing price/call enforcement for that same trusted policy. Unknown provider
+outcomes remain guarded. Paid usage is still recorded even when its price is not
+yet known. Per-entry payload limits remain technical constraints.
+
+Apply those additive migrations before deploying both Bob Edge closures; activate
+the continuation catalog only after matching runtime is installed. Schema/SQL
+fixture tests are isolated; hosted migration and runtime evidence are separate.

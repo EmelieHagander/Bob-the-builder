@@ -75,8 +75,9 @@ export const SEARCH_TOOL = {
   },
 }
 
-/** One instance per question; the model cannot change its project or budget. */
-export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups, byteLimit: number = LIMITS.bytes) {
+/** One instance per question; project and work policy are server-owned. */
+export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups, byteLimit: number = LIMITS.bytes, options: { unlimitedWork?: boolean } = {}) {
+  if (options.unlimitedWork) budget = Infinity
   if(!Number.isSafeInteger(byteLimit)||byteLimit<1024||byteLimit>512*1024)throw new Error('invalid_lookup_budget')
   let used = 0
   const sources: ProjectSource[] = []
@@ -124,7 +125,8 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
     get partial() { return incomplete },
     async search(value: unknown): Promise<LookupResult> {
       const base: LookupResult = { status: 'invalid', projectId, retrievedAt: new Date().toISOString(), records: [], related: [], truncated: false, partial: true, truth: 'unknown' }
-      // Invalid attempts count too, so malformed/hostile calls cannot loop forever.
+      // Historical allowances counted invalid attempts too. New work policy
+      // leaves loop recovery to the runner while retaining argument validation.
       if (++used > budget) { incomplete = true; return { ...base, status: 'budget_exhausted' } }
       const input = parseLookup(value)
       if (!input) { incomplete = true; return base }

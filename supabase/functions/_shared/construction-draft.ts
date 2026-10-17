@@ -69,7 +69,7 @@ export const CONSTRUCTION_CUT_SAVE_TOOL=tool('save_construction_cut_plan','Save 
  candidate_sources:{type:'array',minItems:1,maxItems:8,items:obj({candidate_id:id,kind:{type:'string',enum:['hypothetical','stock','catalog_part']},record_id:nullableUuid,revision:nullableRev})},
  change_note:{type:'string',minLength:1,maxLength:1000},request_quote:{type:'string',minLength:1,maxLength:500},
 })
-export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;
+export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
  prepareParameterChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -81,9 +81,9 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readCatalog?:(id:string,revision:number)=>Promise<Record<string,any>>;now?:()=>Date;
  readSources:(pins:ReturnType<typeof parameterSourcePins>)=>Promise<{project:Map<string,Record<string,any>>;physical:Map<string,Record<string,any>>}>}){
  let used=0
- return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return Math.max(0,12-used)},
+ return {tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
-  if(++used>12)return {status:'budget_exhausted'}
+  if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
   const spec=[CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_READ_TOOL,CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // An older pinned catalog may omit this new field. Preserve its uncertainty;

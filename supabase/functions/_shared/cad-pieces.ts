@@ -23,14 +23,14 @@ export const PLAN_CAD_PIECES_TOOL={type:'function' as const,function:{name:'plan
    artifact_id:{type:'string',description:'Exact saved construction Artifact ID for this piece.'},
    construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Exact saved/read construction revision; every piece requires a source.'}}}}}}}}
 
-export function createCadPieces(opts:{requestStore?:DrawingRequestStore;projectId:string;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>}){
+export function createCadPieces(opts:{unlimitedWork?:boolean;requestStore?:DrawingRequestStore;projectId:string;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>}){
  let used=0
- return {tools:opts.requestStore?.releasePieces?[PLAN_CAD_PIECES_TOOL]:[],get remaining(){return Math.max(0,1-used)},
+ return {tools:opts.requestStore?.releasePieces?[PLAN_CAD_PIECES_TOOL]:[],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,1-used)},
  async execute(raw:unknown){
   const store=opts.requestStore
   if(!store?.releasePieces)return {status:'unavailable',saved:false}
   if(!await opts.hasAccess())throw new Error('project_denied')
-  if(used>=1)return {status:'budget_exhausted',saved:false,next_action:opts.aiCatalog.text('feedback.cad-pieces.next-action.6318eb66b0fd')}
+  if(!opts.unlimitedWork&&used>=1)return {status:'budget_exhausted',saved:false,next_action:opts.aiCatalog.text('feedback.cad-pieces.next-action.6318eb66b0fd')}
   const v=raw as any
   if(!exact(v,['assembly_title','assembly_brief','area_id','pieces'])||!text(v.assembly_title,200)||!text(v.assembly_brief,3000)||(v.area_id!==null&&!text(v.area_id,200))
    ||!Array.isArray(v.pieces)||v.pieces.length<2||v.pieces.length>12)return {status:'invalid',saved:false}

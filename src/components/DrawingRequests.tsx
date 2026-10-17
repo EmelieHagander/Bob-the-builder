@@ -23,7 +23,7 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
   <div className="grid" style={{gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,280px),1fr))',gap:'var(--layout-gap)'}}>
    {data?.items.map(work=>{
     const r=work.request,b=work.budget,terminal=['saved','cancelled'].includes(r.status)
-    const stopped=!!b&&(b.calls>=b.call_limit||b.spent_usd>=b.usd_limit)
+    const stopped=!!b&&!b.unlimited_work&&(b.calls>=b.call_limit||b.spent_usd>=b.usd_limit)
     const gaps=work.gaps.filter(g=>g.blocking)
     const scopeStep=work.gaps.find(g=>g.step_id===r.scope.step_id&&g.step_title)?.step_title
     const stateText=b?.outcome_unknown?'Waiting for a model charge to be reconciled. No new paid attempt will start.':stopped?'The request has reached its cost or call limit.':r.status==='paused'?'Ask Bob to restore the requirements from the current Plan.':work.resume_state==='running'?'Bob is checking the changed information.':work.resume_state==='authorization_needed'?'Waiting to reconnect the initiating member’s signed-in session.':r.status==='retrieval_failed'?'A source or service could not be read. This does not mean measurements are missing. Ask Bob to check the source before collecting new data.':r.status==='draft'?'A candidate exists. It has not passed review or been saved as a drawing.':r.status==='reviewed'?'The candidate has passed review but has not yet been saved. Current sources must still be checked at save.':r.status==='ready_to_design'?'The last assessment found enough information for design. No drawing has been saved yet.':'Complete the saved information below. Bob resumes the same request when relevant information changes. Marking a task done does not supply its missing measurements.'
@@ -32,8 +32,8 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
      <p className="foundation-hint">Request {r.id.slice(0,8)}</p>
      {r.scope.step_id&&<p><Link to={'/project?step='+encodeURIComponent(r.scope.step_id)}>{scopeStep??'Open destination Step'}</Link></p>}
      {!terminal&&<p>{stateText}</p>}
-     {b?.legacy_untracked&&<p>Earlier charges were not tracked against this request. A new allocation covers only further work.</p>}
-     {b&&<p className="foundation-hint">{b.calls} / {b.call_limit} calls · ${Number(b.spent_usd).toFixed(2)} / ${Number(b.usd_limit).toFixed(2)}</p>}
+     {b?.legacy_untracked&&!b.unlimited_work&&<p>Earlier charges were not tracked against this request. A new allocation covers only further work.</p>}
+     {b&&<p className="foundation-hint">{b.unlimited_work ? `${b.calls} calls · ${b.unpriced ? 'known cost ' : ''}$${Number(b.spent_usd).toFixed(2)}` : `${b.calls} / ${b.call_limit} calls · $${Number(b.spent_usd).toFixed(2)} / $${Number(b.usd_limit).toFixed(2)}`}</p>}
      {gaps.length>0&&!terminal&&<ul className="drawing-request-gaps">{gaps.map((g,i)=><li key={g.id}>
       <strong>{g.label??g.task_name??(g.action==='measurement'?`Measurement complement ${i+1}`:g.action==='owner_decision'?`Decision complement ${i+1}`:`Project prerequisite ${i+1}`)}</strong>
       <p className="foundation-hint">{g.owner_label?`Responsible: ${g.owner_label}`:g.action==='bob_decision'?'Bob resolves this work choice.':'Responsible person not assigned in the shared Plan.'}{g.observed_revision<r.revision&&' — awaiting current assessment'}</p>

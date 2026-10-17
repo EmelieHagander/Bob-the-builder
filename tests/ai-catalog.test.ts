@@ -14,7 +14,7 @@ function manifest(): AiCatalogManifest {
     definition('tier.mini','tier_binding',{ tier: 'mini', model_name: 'first-mini' }),
   ] }
 }
-const session = (snapshot = manifest()) => createAiCatalogSession({rpc: async () => { throw new Error('must not query') }},{app:'bob',manifest:snapshot})
+const session = (snapshot = manifest(), unlimitedWork = false) => createAiCatalogSession({rpc: async () => { throw new Error('must not query') }},{app:'bob',manifest:snapshot,unlimitedWork})
 
 test('one request pins tier model, prompt, reasoning and prices while later requests pick the central upgrade',async()=>{
   const first = manifest(), requests: Record<string,unknown>[] = []
@@ -160,5 +160,23 @@ test('actual shared provider adapter uses pinned tier/prices, rejects override, 
     modelActive=true
     assert((await service.callOpenAIResponses({...options,app:'hearth',aiDefinition:undefined})).success)
     assert.equal(requests[1].model,'legacy-default');assert.equal(requests[1].instructions,'Legacy override');assert.equal(ledger.length,2)
+    const unlimited=structuredClone(snapshot)
+    const contract=definition('agent-contract.ask-bob','agent_contract',{})
+    contract.metadata.work_allowance_version=1;unlimited.definitions.push(contract)
+    assert.equal(session(unlimited).role('ask-bob').unlimitedWork,undefined,'the published contract alone does not opt a synchronous caller in')
+    assert.equal(session(snapshot,true).role('ask-bob').unlimitedWork,undefined,'trusted opt-in alone does not rewrite an older contract')
+    const unlimitedOptions={...options,aiDefinition:session(unlimited,true).role('ask-bob'),maxOutputTokens:16,outputTokenLimit:16}
+    assert.equal(unlimitedOptions.aiDefinition.unlimitedWork,true)
+    assert((await service.callOpenAIResponses(unlimitedOptions)).success)
+    assert.equal(Object.hasOwn(requests[2],'max_output_tokens'),false,'new Bob mode sends no application token allotment')
+    assert.equal(requests[2].model,requests[0].model);assert.deepEqual(requests[2].reasoning,requests[0].reasoning)
+    assert.equal(ledger.length,3,'unlimited output still writes usage and price accounting')
+    assert((await service.callOpenAIResponses({...options,outputTokenLimit:2000})).success)
+    assert.equal(requests[3].max_output_tokens,2000,'older pinned roles keep their exact provider ceiling')
+    unlimited.app='hearth'
+    const other=createAiCatalogSession({rpc:async()=>{throw new Error('must use pin')}},{app:'hearth',manifest:unlimited,unlimitedWork:true}).role('ask-bob')
+    assert.equal(other.unlimitedWork,undefined,'Bob metadata never removes another app\'s allocation')
+    assert((await service.callOpenAIResponses({...options,app:'hearth',aiDefinition:other,outputTokenLimit:1000})).success)
+    assert.equal(requests[4].max_output_tokens,1000)
   } finally { g.fetch=oldFetch;g.Deno=oldDeno;g.setTimeout=oldTimeout;delete g.__catalogWireClient;console.log=oldLog }
 })

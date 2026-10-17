@@ -473,3 +473,41 @@ test('a failed second compilation clears an older candidate and hard errors cann
   assert.equal((await session.execute('save_compiled_project_plan',{request_quote:'continue'})).status,'missing_context')
   assert.equal((await session.execute('propose_project_plan',compiled)).status,'missing_context')
 })
+
+test('unlimited work preserves proposal validation beyond legacy compilation and edit quotas',async()=>{
+  let allowed=true,models=0
+  const planStep='98100000-0000-4000-8000-000000000001'
+  const current={...compiled.steps[0],id:planStep,step_id:undefined,requirements:[]}
+  const assistant=createPlanAssistant({unlimitedWork:true,projectId:'A',userId:'user-a',hasAccess:async()=>allowed,
+    makeLookup:makeLookupFor({...projectData,plan:[{revision:1,steps:[current]}]}),
+    callModel:async o=>{models++;return o.functionName==='plan-compiler'?response({...compiled,expected_revision:1},'compiler'):response(cleanReview,'reviewer')}})
+  for(let i=0;i<4;i++){
+    const result:any=await assistant.consult('compile_project_plan',{plan_intent:'Refine the opening '+i})
+    assert.equal(result.status,'ok');assert.equal(result.proposal_ready,true)
+    assert.equal(result.remaining_attempts,null);assert.equal(result.attempts,i+1)
+    assert.doesNotMatch(result.note,/no.*attempt|budget.*exhaust/i)
+  }
+  assert.equal(models,8);assert.equal(assistant.remaining,Infinity)
+  for(let i=0;i<6;i++){
+    const result:any=await assistant.consult('edit_project_plan',{summary:'Refine',reason:'Owner request',changes:[{
+      action:'update_step',step_id:planStep,requirement_id:null,after_step_id:null,task_id:null,values:{goal:'Known opening '+i},
+    }]})
+    assert.equal(result.status,'ok');assert.equal(result.proposal_ready,true)
+  }
+  assert.equal(assistant.editRemaining,Infinity);assert.equal(models,8)
+  allowed=false
+  assert.equal((await assistant.consult('edit_project_plan',{})).status,'denied')
+  assert.equal(assistant.canSave,false)
+})
+
+test('unlimited planner has no implicit ninety-second lifetime while explicit root deadlines still apply',async t=>{
+ const start=Date.now();let clock=start;t.mock.method(Date,'now',()=>clock)
+ for(const [unlimitedWork,deadline,expected] of [[false,undefined,'unavailable'],[true,undefined,'ok'],[true,start+50000,'unavailable']] as const){
+  clock=start;let models=0
+  const assistant=createPlanAssistant({unlimitedWork,deadline,projectId:'A',userId:'u',hasAccess:async()=>true,
+   makeLookup:()=>createProjectLookup('A',async(_p,input)=>{clock+=11000;return {data:{records:projectData[input.dataset]??[],related:[],truncated:false,next_cursor:null},error:null}},1000,128),
+   callModel:async o=>{models++;assert(Number.isFinite(o.timeoutMs));return o.functionName==='plan-compiler'?response(compiled,'compiler'):response(cleanReview,'reviewer')}})
+  assert.equal((await assistant.consult('compile_project_plan',{plan_intent:'Complete the requested compilation'})).status,expected)
+  assert.equal(models,expected==='ok'?2:0)
+ }
+})

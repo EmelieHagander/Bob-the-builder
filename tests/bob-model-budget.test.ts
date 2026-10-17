@@ -13,6 +13,19 @@ test('all roles share a spending threshold and the crossing call is the final di
  assert.equal(stopped.error,'turn_budget_exhausted');assert.equal(calls,3)
  assert.equal(budget.usage.spent,1.1)
 })
+test('unlimited pinned work crosses former spend, call and unknown-price stops while replay preserves accounting',async()=>{
+ const entries:JournalEntry[]=[];let dispatches=0
+ for(let segment=0;segment<2;segment++){
+  const budget=createBobModelBudget(1,24,undefined,{unlimitedWork:true})
+  const journal=createBobJournal({entries,save:async entry=>{entries.push(entry)}},Date.now()+10000)
+  for(let index=0;index<30;index++){
+   const result=await budget.run(()=>journal.run('model:ask-bob',{index},async()=>{dispatches++;return reply(index===0?null:2)}),'ask-bob')
+   assert(result.success)
+  }
+  assert.deepEqual(budget.usage,{spent:58,calls:30,unpriced:true,limitUsd:1})
+ }
+ assert.equal(dispatches,30,'resuming reconstructs usage without sending paid calls again')
+})
 test('unknown prices and maximum call count fail closed rather than inventing zero spend',async()=>{
  const unknown=createBobModelBudget();await unknown.run(async()=>reply(null))
  assert.equal((await unknown.run(async()=>{throw new Error('must not dispatch')})).error,'turn_budget_exhausted')

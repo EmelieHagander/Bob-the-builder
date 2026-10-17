@@ -63,3 +63,33 @@ test('an older unbound request can bind its first checked source once, retaining
  const changed=await f.assistant.consult({...request,request_id:id,handoff:null,artifact_id:'22222222-2222-4222-8222-222222222222'})
  assert.equal(changed.reason,'drawing_scope_changed');assert.equal(f.counts().renders,1)
 })
+
+test('unlimited CAD work permits more consultations and lifecycle reads while retaining access and terminal stops',async()=>{
+ const f=fixture({unlimitedWork:true})
+ for(let i=0;i<4;i++)assert.equal((await f.assistant.consult({...request,brief:'Draw exact checked panel '+i})).status,'ready')
+ assert.equal(f.counts().renders,4);assert.equal(f.counts().models,4);assert.equal(f.assistant.remaining,Infinity)
+ let allowed=true,reads=0
+ const lifecycle=fixture({unlimitedWork:true,hasAccess:async()=>allowed,requestStore:{read:async()=>{reads++;return {status:'ok',requests:[]}},cancel:async()=>({status:'cancelled'})}}).assistant
+ for(let i=0;i<15;i++)assert.equal((await lifecycle.lifecycle('read_drawing_requests',{request_id:null,after_id:null})).status,'ok')
+ assert.equal(reads,15);assert.equal(lifecycle.lifecycleRemaining,Infinity)
+ allowed=false
+ await assert.rejects(lifecycle.lifecycle('read_drawing_requests',{request_id:null,after_id:null}),/project_denied/)
+ assert.equal(reads,15)
+ const terminal=fixture({unlimitedWork:true,callModel:async()=>({success:false,data:null,error:'model_output_limit',model:'fixture',usage:{input_tokens:1,output_tokens:1,total_tokens:2}})})
+ assert.equal((await terminal.assistant.consult(request)).reason,'model_output_limit')
+ assert.equal(terminal.assistant.remaining,0)
+ assert.equal((await terminal.assistant.consult(request)).reason,'model_output_limit')
+ assert.equal(terminal.counts().renders,1,'a terminal failure still prevents repeated CAD dispatch')
+})
+
+test('unlimited CAD inherits the root deadline without five-minute or reserved-time cutoffs',async t=>{
+ const start=Date.now();let clock=start;t.mock.method(Date,'now',()=>clock)
+ for(const [unlimitedWork,deadline,expected] of [[false,Infinity,'incomplete'],[true,Infinity,'ready'],[true,start+302000,'ready'],[true,start+300000,'incomplete']] as const){
+  clock=start
+  const source=checkedCadFixture('A',recipe)
+  const f=fixture({unlimitedWork,deadline,render:async(r:any)=>{clock+=301000;return source.packet(r)}})
+  const result=await f.assistant.consult(request)
+  assert.equal(result.status,expected)
+  assert.equal(f.counts().models,expected==='ready'?1:0)
+ }
+})

@@ -29,7 +29,7 @@ const solution = (s: SolutionContext | undefined): s is EditSnapshot & SolutionC
 const fields = (r: Record<string, any>) => Object.fromEntries(['title', 'description', 'assumptions', 'tradeoffs', 'source_media_id', 'design_intent'].map(k => [k, r[k]]))
 
 export function createSolutionActions(opts: {
-  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>;
+  projectId: string; writer?: ProjectWriter; hasAccess: () => Promise<boolean>; unlimitedWork?: boolean;
   read: (input: { resource: SolutionResource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>;
 }) {
   const contexts = new Map<string, SolutionContext>(), pages = new Map<string, { resource: SolutionResource; query: string | null; after: string }>()
@@ -37,14 +37,14 @@ export function createSolutionActions(opts: {
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   return {
     tools: SOLUTION_ACTION_TOOLS,
-    get remaining() { return Math.max(0, 16 - reads) },
+    get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 16 - reads) },
     get partial() { return partial },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_solution_context') {
         if (!exact(value, ['resource', 'query', 'next_ref']) || !['solutions', 'selected_solutions', 'scopes', 'measurements', 'images'].includes(value.resource)
           || !(value.query === null || nonempty(value.query, 200)) || !(value.next_ref === null || typeof value.next_ref === 'string')) return { status: 'invalid' }
-        if (reads >= 16) return { status: 'budget_exhausted' }
+        if (!opts.unlimitedWork && reads >= 16) return { status: 'budget_exhausted' }
         const input = value.next_ref === null ? { resource: value.resource as SolutionResource, query: value.query, after: null } : pages.get(value.next_ref)
         if (!input || input.resource !== value.resource || input.query !== value.query) return { status: 'invalid' }
         reads++

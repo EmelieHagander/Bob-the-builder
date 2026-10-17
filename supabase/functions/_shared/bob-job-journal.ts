@@ -73,7 +73,7 @@ async function abortable<T>(work:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
 /** reusable: successful model results from an earlier failed attempt of the
  * same turn, keyed by exact input fingerprint. A match is recorded as this
  * job's own step without dispatching; anything else runs normally. */
-export function createBobJournal(store: JournalStore, segmentDeadline: number, now = Date.now, reusable: ReadonlyMap<string, unknown> = new Map()): BobJournal {
+export function createBobJournal(store: JournalStore, segmentDeadline: number, now = Date.now, reusable: ReadonlyMap<string, unknown> = new Map(), options: { unlimitedWork?: boolean; authorityExpiresAt?: number } = {}): BobJournal {
   const entries = new Map(store.entries.map(e => [e.key, e]))
   const positions = new Map<string, number>()
   let stopped: BobContinuation | undefined
@@ -119,10 +119,15 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       if (replayScopes.some(scope => scope.recordedOnly)) {
         stopped = new BobContinuation('stop', 'continuation_incomplete', undefined, key); throw stopped
       }
-      if (reserveMs && now() + reserveMs + 8000 > segmentDeadline) {
+      // Expiring ordinary Auth is a resumable blocker. Replayed paid work is
+      // reconstructed above; no fresh operation starts on a nearly stale JWT.
+      if (options.unlimitedWork && options.authorityExpiresAt !== undefined && now() + reserveMs + 8000 > options.authorityExpiresAt) {
+        stopped = new BobContinuation('yield', 'authentication_expired'); throw stopped
+      }
+      if ((options.unlimitedWork || reserveMs > 0) && now() + reserveMs + 8000 > segmentDeadline) {
         stopped = new BobContinuation('yield'); throw stopped
       }
-      if (entries.size >= 512) { stopped = new BobContinuation('stop', 'continuation_limit'); throw stopped }
+      if (!options.unlimitedWork && entries.size >= 512) { stopped = new BobContinuation('stop', 'continuation_limit'); throw stopped }
       if (stream === 'image:generate') {
         const marker = { key: key + ':started', fingerprint: hash, value: true }
         if (entries.has(marker.key)) { stopped = new BobContinuation('stop', 'image_outcome_unknown'); throw stopped }

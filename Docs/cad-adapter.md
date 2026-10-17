@@ -756,9 +756,25 @@ attempt; an unrelated catalog edit or new worker/turn ID cannot. Already pinned
 jobs keep their catalog snapshot, and unchanged failed work does not become an
 automatic paid retry.
 
+### Drawing work without application quotas — 2026-10-17
+
+The owner's new instruction removes application spending, call, output-token,
+consultation, repair, render and review allowances for newly pinned durable work.
+The same model/reasoning choices remain. Role output allotments are omitted from
+provider requests, including local overrides. Usage, unknown prices and exact
+reservation/reconciliation are still recorded. Unknown paid-operation outcomes
+remain fenced; they are not inferred from missing price information.
+
+The request view shows actual calls and known cost for unlimited work without an
+"Add request budget" action. Payload/schema and provider limits, evidence,
+independent review and canonical save requirements remain. Existing task-period
+records are retained for accounting and historical replay. The following older
+budget mandate is superseded only for new policy-1 jobs. [Conversation ownership](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)
+owns continuation and stop/session behavior.
+
 ### One budget per owner task — 2026-10-12
 
-**Current owner mandate; implemented in this change.** The budget prevents one
+**Historical policy, retained for previously pinned jobs.** The budget prevents one
 instruction's review/repair loop from running away. Here “task” means the work
 started by one real owner message, not a project or a domain Task record.
 

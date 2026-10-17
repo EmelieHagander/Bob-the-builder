@@ -182,3 +182,45 @@ test('a retried turn reuses an earlier successful model result with identical in
   assert.deepEqual(await createBobJournal(store, Infinity).run('model:ask-bob', same, async () => { sent++; return null }), { success: true, text: 'paid once' })
   assert.equal(sent, 2)
 })
+
+
+test('unlimited journal yields before fresh zero-reserve writes but reconstructs recorded work after the slice',async()=>{
+ const entries:JournalEntry[]=[];let now=0,calls=0
+ const store={entries,save:async(e:JournalEntry)=>{entries.push(structuredClone(e))}}
+ const first=createBobJournal(store,20000,()=>now,new Map(),{unlimitedWork:true})
+ assert.equal(await first.run('write',{id:1},async()=>{calls++;return 'saved'}),'saved')
+ now=15000
+ await assert.rejects(first.run('write',{id:2},async()=>{calls++;return 'late'}),e=>e instanceof BobContinuation&&e.kind==='yield')
+ const replay=createBobJournal(store,1000,()=>now,new Map(),{unlimitedWork:true})
+ assert.equal(await replay.run('write',{id:1},async()=>{throw new Error('duplicate')}),'saved')
+ await assert.rejects(replay.run('write',{id:2},async()=>{calls++;return 'late'}),e=>e instanceof BobContinuation&&e.kind==='yield')
+ assert.equal(calls,1)
+ now=0
+ const continued=createBobJournal(store,20000,()=>now,new Map(),{unlimitedWork:true})
+ await continued.run('write',{id:1},async()=>{throw new Error('duplicate')})
+ assert.equal(await continued.run('write',{id:2},async()=>{calls++;return 'second'}),'second')
+ assert.equal(calls,2)
+})
+
+test('unlimited journal exceeds the historical entry count without changing legacy replay rules',async()=>{
+ const entries:JournalEntry[]=[]
+ const store={entries,save:async(e:JournalEntry)=>{entries.push(e)}}
+ const journal=createBobJournal(store,Infinity,Date.now,new Map(),{unlimitedWork:true})
+ for(let i=0;i<514;i++)assert.equal(await journal.run('write',i,async()=>i),i)
+ const legacy=createBobJournal(store,Infinity)
+ assert.equal(await legacy.run('write',0,async()=>{throw new Error('duplicate')}),0)
+ await assert.rejects(legacy.run('new',{},async()=>1),/continuation_limit/)
+})
+
+
+test('renewable Auth pauses before fresh work without spending or destroying a recorded result',async()=>{
+ const entries:JournalEntry[]=[];const store={entries,save:async(e:JournalEntry)=>{entries.push(e)}}
+ const first=createBobJournal(store,Infinity,()=>0,new Map(),{unlimitedWork:true,authorityExpiresAt:60000})
+ await first.run('model',{},async()=> 'paid output',25000)
+ const expired=createBobJournal(store,Infinity,()=>65000,new Map(),{unlimitedWork:true,authorityExpiresAt:60000})
+ assert.equal(await expired.run('model',{},async()=>{throw new Error('duplicate')}),'paid output')
+ await assert.rejects(expired.run('rpc',{},async()=>{throw new Error('expired JWT dispatch')}),e=>e instanceof BobContinuation&&e.kind==='yield'&&e.message==='authentication_expired')
+ const renewed=createBobJournal(store,Infinity,()=>65000,new Map(),{unlimitedWork:true,authorityExpiresAt:120000})
+ assert.equal(await renewed.run('model',{},async()=>{throw new Error('duplicate')}),'paid output')
+ assert.equal(await renewed.run('rpc',{},async()=>'fresh'),'fresh')
+})

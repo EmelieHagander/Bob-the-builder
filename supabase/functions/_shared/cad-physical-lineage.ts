@@ -27,13 +27,13 @@ export class PhysicalCadSourceError extends Error{
 }
 /** Exact project-scoped readers: the physical snapshot is the authority, not
  * access to its donor project's measurement table. Each reader is bounded. */
-export async function readPhysicalCadSources(makeLookup:()=>ReturnType<typeof createProjectLookup>,pins:{space_measurement_id:string;space_revision:number}[],sourceReceipts:ReturnType<typeof createProjectLookup>['sources']){
+export async function readPhysicalCadSources(makeLookup:()=>ReturnType<typeof createProjectLookup>,pins:{space_measurement_id:string;space_revision:number}[],sourceReceipts:ReturnType<typeof createProjectLookup>['sources'],options:{unlimitedWork?:boolean}={}){
  const ids=new Map<string,number>()
  for(const p of pins){
   if(ids.has(p.space_measurement_id)&&ids.get(p.space_measurement_id)!==p.space_revision)throw new Error('conflicting_physical_pins')
   ids.set(p.space_measurement_id,p.space_revision)
  }
- if(ids.size>20)throw new Error('physical_source_budget')
+ if(!options.unlimitedWork&&ids.size>20)throw new Error('physical_source_budget')
  const records=new Map<string,RecordValue>(),issues:{id:string;reason:string}[]=[]
  const lookup=makeLookup(),spaces=makeLookup(),buildings=makeLookup()
  const spaceCache=new Map<string,RecordValue|null>(),buildingCache=new Map<string,RecordValue|null>()

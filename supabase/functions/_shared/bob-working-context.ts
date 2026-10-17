@@ -69,14 +69,14 @@ function frame(value: unknown, binding: { projectId: string; threadId: string; g
  */
 export async function prepareWorkingContext(opts: {
   projectId: string; userId: string; threadId: string; generation: number; message: string;
-  store: ContextStore; callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number;
+  store: ContextStore; callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number; unlimitedWork?: boolean;
 }): Promise<WorkingContext> {
   const load = async () => {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     return frame(await opts.store.load(), opts)
   }
   let state = await load()
-  for (let fold = 0; state.older.length && fold < 4; fold++) {
+  for (let fold = 0; state.older.length && (opts.unlimitedWork || fold < 4); fold++) {
     const previousBrief = readStoredBrief(state.summary, state.lastFoldedSeq)
     const known = new Set([...previousBrief.index.map(e => e.seq), ...state.older.map(m => m.seq)])
     let brief: ConversationBrief | undefined
@@ -114,9 +114,9 @@ export async function prepareWorkingContext(opts: {
   const brief = readStoredBrief(state.summary, state.lastFoldedSeq)
   return { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent, recentWrites: state.recentWrites ?? [], recentSources: state.recentSources ?? [],
     history: {
-      get remaining() { return Math.max(0, 4 - searches) },
+      get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 4 - searches) },
       async search(value: unknown) {
-        if (++searches > 4) return { status: 'budget_exhausted' }
+        if (++searches > 4 && !opts.unlimitedWork) return { status: 'budget_exhausted' }
         const v = value as { query?: unknown; before_seq?: unknown }
         if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !['query', 'before_seq'].includes(k))
           || typeof v.query !== 'string' || v.query.length > 200

@@ -20,6 +20,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 /** Same injectable HTTP boundary in deployment and integration tests. */
 export function createBobHandler(deps: {
   renew?: (opts:{authHeader:string;userId:string;projectId:string})=>Promise<{ok:boolean;error?:string;renewed?:number}>
+  cancel?: (opts:{authHeader:string;userId:string;projectId:string;jobId:string})=>Promise<{ok:boolean;error?:string;status?:string;projectId?:string;jobId?:string}>
   authenticate: (header: string) => Promise<string | null>
   enqueue?: (opts: BobTurnInput) => Promise<ProjectAnswer | { ok: true; status: 'accepted'; projectId: string; jobId: string; expiresAt: string }>
   answer: (opts: BobTurnInput) => Promise<ProjectAnswer>
@@ -41,6 +42,12 @@ export function createBobHandler(deps: {
         if(Object.keys(body).sort().join(',')!=='action,projectId'||typeof body.projectId!=='string'||!body.projectId.trim()||body.projectId.length>200)return fail('bad_request',400)
         const result=await deps.renew({authHeader,userId,projectId:body.projectId})
         return json(result,result.ok?200:result.error==='project_denied'?403:401)
+      }
+      if (body.action === 'cancel' && deps.cancel) {
+        if (Object.keys(body).sort().join(',') !== 'action,jobId,projectId' || typeof body.projectId !== 'string' || !body.projectId.trim() || body.projectId.length > 200
+          || typeof body.jobId !== 'string' || !UUID.test(body.jobId)) return fail('bad_request', 400)
+        const result = await deps.cancel({ authHeader, userId, projectId: body.projectId, jobId: body.jobId })
+        return json(result, result.ok ? 200 : result.error === 'project_denied' ? 403 : result.error === 'turn_not_in_flight' ? 409 : 503)
       }
       if (body.action !== 'send') return fail('unsupported_action', 409)
       // clientTurnId is an idempotency key only. Provider ids, transcripts and

@@ -10,6 +10,7 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
 let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
 // Materialise the explicit immutable publication patches in migration order.
 // The historical seed stays available for pinned-manifest compatibility tests.
@@ -208,10 +209,26 @@ for(const migration of migrations){
   const agent=seed.find(row=>row.key==='agent-contract.ask-bob')
   agent.metadata={...publishedMetadata(agent.metadata),work_completion_version:1};versions.set(agent.key,versions.get(agent.key)!+1)
  }
+ const continuationTexts=source.match(/\$bob_continuation_texts\$([\s\S]+?)\$bob_continuation_texts\$/)
+ if(continuationTexts){
+  preContinuationRows=structuredClone(seed);preContinuationVersions=new Map(versions)
+  const published=(metadata:Record<string,unknown>)=>{const{seed_version,source_revision,...rest}=metadata;return {...rest,publication:'bob-continuation-unmetered-v1'}}
+  for(const patch of JSON.parse(continuationTexts[1])){
+   const row=seed.find(row=>row.key===patch.key)
+   if(patch.content!==undefined)row.content=patch.content
+   if(patch.remove)row.content=row.content.replaceAll(patch.remove,'')
+   if(patch.append)row.content+='\n\n'+patch.append
+   if(patch.variables)row.variables=patch.variables
+   row.metadata=published(row.metadata);versions.set(row.key,versions.get(row.key)!+1)
+  }
+  const agent=seed.find(row=>row.key==='agent-contract.ask-bob')
+  agent.metadata={...published(agent.metadata),work_completion_version:2,work_allowance_version:1};versions.set(agent.key,versions.get(agent.key)!+1)
+ }
+
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 const modelTiers=new Map(seed.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
  definitions:rows.map(row=>({id:'fixture-version:'+row.key+':v'+revisionMap.get(row.key),prompt_id:'fixture-prompt:'+row.key,prompt_key:row.key,version:revisionMap.get(row.key)!,
@@ -223,9 +240,11 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
 const legacyManifest=fixtureManifest(originalSeed,new Map(originalSeed.map(row=>[row.key,1])),'fixture-legacy-seed-manifest')
 const preTaskWorkflowManifest=fixtureManifest(preTaskWorkflowRows??seed,preTaskWorkflowVersions??versions,'fixture-pre-task-workflow-manifest')
+const preContinuationManifest=fixtureManifest(preContinuationRows??seed,preContinuationVersions??versions,'fixture-pre-continuation-manifest')
+export function preContinuationCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContinuationManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 export function legacyCatalogFixture():AiCatalogSession{return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:legacyManifest})}
 export function preTaskWorkflowCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preTaskWorkflowManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
-export function catalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(manifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
+export function catalogFixture(update?:(snapshot:AiCatalogManifest)=>void, options:{unlimitedWork?:boolean}={}):AiCatalogSession{const snapshot=structuredClone(manifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot,...options})}
 export function catalogCall<T>(call:(options:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<T>>,session=catalogFixture()){
  return (options:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>call(applyCatalogModelOptions(session,options),beforeDispatch)
 }

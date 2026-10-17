@@ -41,6 +41,9 @@ before(async () => {
   await setupSharedSocial(pg)
   const dir = new URL('../supabase/migrations/', import.meta.url)
   for (const f of (await readdir(dir)).filter(f => f.endsWith('.sql')).sort()) await pg.exec(await readFile(new URL(f, dir), 'utf8'))
+  // These cases verify the historical job policy after all schema migrations.
+  // The opt-in policy and publication boundary have their own lifecycle suite.
+  await pg.exec("update shared.ai_prompts p set active_version_id=(select v.id from shared.ai_prompt_versions v where v.prompt_id=p.id and not (v.metadata ? 'work_allowance_version') order by version desc limit 1) where p.app='bob' and p.prompt_key='agent-contract.ask-bob'")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('bothA','A','Both','BA',$1),('bothB','B','Both','BB',$1),('guestA','A','Guest','G',$2)", [both,guest])
   await pg.exec("insert into bob.areas(id,project_id,slug,name) values('areaA','A','entry','Entry'),('areaB','B','private','Private'); insert into bob.tasks(id,area_id,name,hours) values('taskA','areaA','Original','2h'),('taskB','areaB','Private work','')")
 })

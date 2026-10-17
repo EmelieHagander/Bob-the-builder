@@ -41,3 +41,21 @@ test('independent evidence flags truncated or failed reads and stops on denied a
  assert(evidence.incomplete_datasets.includes('physical_elements'))
  await assert.rejects(collectDrawingReviewEvidence(lookup('42501'),false),/project_denied/)
 })
+
+test('unlimited independent review reads later pages but still rejects stalled or oversized evidence',async()=>{
+ const scan=async(unlimitedWork:boolean,mode='normal')=>{
+  const reads:string[]=[]
+  const source=createProjectLookup('A',async(_p,q)=>{
+   const page=q.after_id?Number(q.after_id)+1:1
+   if(q.dataset!=='measurements')return {data:{records:[],related:[],truncated:false,next_cursor:null},error:null}
+   reads.push(String(page))
+   return {data:{records:[{id:String(page),subject:mode==='large'?'x'.repeat(60000):'measurement',revision:1}],related:[],truncated:page<6,next_cursor:page<6?(mode==='stalled'?'1':String(page)):null},error:null}
+  },1000,100)
+  const result=await collectDrawingReviewEvidence(source,false,false,{unlimitedWork})
+  return {reads,result}
+ }
+ const old=await scan(false);assert.equal(old.reads.length,4);assert(old.result.incomplete_datasets.includes('measurements'))
+ const complete=await scan(true);assert.equal(complete.reads.length,6);assert.deepEqual(complete.result.incomplete_datasets,[])
+ const stalled=await scan(true,'stalled');assert.equal(stalled.reads.length,2);assert(stalled.result.incomplete_datasets.includes('measurements'))
+ const oversized=await scan(true,'large');assert(oversized.result.incomplete_datasets.includes('measurements'))
+})
