@@ -292,7 +292,17 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — ordinär minnes-/modellacceptans (2026-10-18):** prova ett nytt
+**Aktivt nästa steg — rätta luckorna i kontext-/verktygsauditen (2026-10-18):**
+följ [F1–F5 och deras rättningspunkter](bob-context-coverage-audit-2026-10-18.md).
+Börja med den saknade driftutökningen för koppling mellan CAD-skalets delar och
+plansteg: kontrollera dagens skrivkedja och gör en kompatibel tilläggsmigration;
+kör inte den äldre omslutande migrationen blint i efterhand. Rätta därefter
+kollegornas faktiska anropskort, inför motsvarande instruktioner på begäran hos
+specialisterna, bevara två kompletta verktygsutbyten vid kontextförnyelse och
+begränsa projektöversikten med exakt sidindelad åtkomst. Dessa fynd är öppna;
+den tekniska minnesreleasen ensam bevisar inte fullständigt införande.
+
+**Kvarvarande ordinär minnes-/modellacceptans:** prova ett nytt
 meddelande i samma privata tråd med den aktiverade
 [kontextstrategin](ask-bob-conversations.md#context-strategy--2026-10-18).
 Bekräfta att Bob fortsätter uppdraget, behåller exakt fem senaste meddelanden och
