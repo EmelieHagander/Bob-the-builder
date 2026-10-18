@@ -50,6 +50,16 @@ useful pointers rather than indexing every folded message; the persisted fold
 cursor tracks coverage. Unknown, duplicate or future references still fail
 validation. An oversized brief is rewritten from its sources, never silently cut.
 
+The scoped-pointer contract supplies the exact eligible sequences in the response
+schema: previous indexed originals plus this fold's older messages. The current
+request is relevance context without a source sequence; it stays in the five
+original recent messages. Missing sequence authority fails before dispatch, and
+an empty eligible set requires an empty index. The same allowlist reaches initial
+and repair calls. Immutable older manifests retain their original input for paid
+operation replay; new work uses the scoped contract. See the
+[incident verification](foundation-verification.md#memory-pointer-and-repeated-notice-correction--2026-10-18)
+for deployment status.
+
 The versioned target limits are content tokens measured with `o200k_base`, including
 serialized metadata/references where applicable. They are context-size controls,
 not spending limits or permission to abandon unfinished work.
@@ -716,6 +726,13 @@ Deploy `20260924120448_bob_background_jobs.sql` and `20260924120747_bob_backgrou
 The existing claimed-job completion command now closes failed drawing children atomically with their operational result. `record_failed_drawing_job` marks the private packet and project header `retrieval_failed`, records `background_failed` or `background_expired`, and preserves the exact draft, source evidence, paid results, cost period, saved Artifact versions and original owner turn. A content-free execution event ties the failure to its drawing and AI job. The current initiating member receives one private assistant notice under the child-job ID; it advances the normal unread sequence without an explanatory model call. A missing acceptance receipt is reported as uncertain, never as a confirmed free/rejected operation or a reason to resubmit blindly.
 
 The helper is private and idempotent. The existing lease/claim completion boundary remains; an older event cannot overwrite a newer mandate/attempt, saved drawing, cancellation or reset. Revoked membership receives no new private answer. Migration repair uses the same guards for still-current retained failures, without creating owner messages, jobs, grants or provider calls. Once existing authority/budget guards permit continuation, a source-current retained draft is rendered and independently reviewed before any new research/designer pass. A guarded preparation that never reached submission is distinguished from a legacy or started operation with a missing receipt. Only the latter retains the uncertain-cost failure wording. A new real owner message may authorize a distinct terminal attempt with the old accounting preserved; automatic continuations cannot. [Shared diagnostics](shared-ai-background.md#content-free-failure-diagnostics--2026-10-12) owns the failure ledger; [verification](foundation-verification.md#background-failure-diagnostics--2026-10-12) owns installation and acceptance limits.
+
+Consecutive automatic failures for the same drawing and original mandate share
+one visible notice when the exact error and missing-receipt status are unchanged.
+Each attempt still records its own failure and updates the retained packet. A new
+owner message, another reply, a different error or changed uncertainty permits a
+fresh notice. This is checked under the existing thread lock using job/event
+identity, never arbitrary text equality. Previously delivered history is retained.
 
 ## Lifecycle and UI
 

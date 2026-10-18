@@ -96,6 +96,8 @@ export async function prepareWorkingContext(opts: {
   store: ContextStore; callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number; unlimitedWork?: boolean;
   /** Pinned in the durable execution identity; old journals retain their folds. */
   memoryManagementVersion?: 1 | 2;
+  /** Pinned schema contract; older in-flight journals retain their exact input. */
+  memoryPointerScopeVersion?: 1;
   retrieval?: MemoryRetrieval;
 }): Promise<WorkingContext> {
   const managed = opts.memoryManagementVersion === 2
@@ -112,6 +114,9 @@ export async function prepareWorkingContext(opts: {
     const refreshOnly = state.older.length === 0
     if (refreshOnly && !opts.store.refresh) throw new Error('context_unavailable')
     const known = new Set([...previousBrief.index.map(e => e.seq), ...state.older.map(m => m.seq)])
+    const scopedPointers = managed && opts.memoryPointerScopeVersion === 1
+    if (scopedPointers) known.delete(state.recent.at(-1)!.seq)
+    const availableSequences = [...known].sort((a, b) => a - b)
     let brief: ConversationBrief | undefined
     let validationFeedback: Record<string, unknown> | undefined
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -119,9 +124,12 @@ export async function prepareWorkingContext(opts: {
       const response = await opts.callModel({
         app: 'bob', coworkerId: 'bob', functionName: 'context-summary', aiFunction: 'context-summary', module: 'global', userId: opts.userId,
         catalogRoleKey:'context-summary',catalogSchemaKey:managed ? 'bob_conversation_brief_v2' : 'bob_conversation_brief',schemaName:managed ? 'bob_conversation_brief_v2' : 'bob_conversation_brief',
+        ...(scopedPointers ? { catalogSchemaParameters: { memory_sequences: availableSequences } } : {}),
 
         messages: [{ role: 'user', content: JSON.stringify({ previousBrief, throughSeq: state.lastFoldedSeq, olderMessages: state.older,
-          ...(managed ? { foldThroughSeq: state.foldThroughSeq, currentRequest: state.recent.at(-1), memoryPolicy: BRIEF_TOKEN_POLICY } : {}),
+          ...(managed ? { foldThroughSeq: state.foldThroughSeq,
+            currentRequest: scopedPointers ? { text: state.recent.at(-1)!.text } : state.recent.at(-1),
+            ...(scopedPointers ? { availableSequences } : {}), memoryPolicy: BRIEF_TOKEN_POLICY } : {}),
           ...(validationFeedback ? { validationFeedback } : {}) }) }],
         maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()),
       })
@@ -133,6 +141,7 @@ export async function prepareWorkingContext(opts: {
           ? manageConversationBrief(response.data, previousBrief, state.older, state.foldThroughSeq)
           : checkedBrief(response.data, state.foldThroughSeq, BRIEF_LIMITS.gist)
         if (!managed && (candidate.index.some(e => !known.has(e.seq)) || state.older.some(m => !candidate.index.some(e => e.seq === m.seq)))) throw new InvalidConversationBrief('coverage')
+        if (scopedPointers && candidate.index.some(entry => !known.has(entry.seq))) throw new InvalidConversationBrief('coverage')
         brief = candidate
         break
       } catch (error) {
