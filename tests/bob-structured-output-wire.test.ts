@@ -48,9 +48,7 @@ test('CAD review and recovery language send strict response schemas and no tools
     const recipe = { contract_version: 1 as const, units: 'mm' as const, assembly_id: 'panel',
       definitions: [{ id: 'panel', primitive: 'box' as const, x_mm: 600, y_mm: 250, z_mm: 18, material_ref: null }],
       instances: [{ id: 'panel-1', definition_id: 'panel', placement: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 } }], views: ['front' as const, 'top' as const] }
-    const reply = { success: true, data: 'Inspect the rendered panel', responseId: 'designer-response', model: 'fixture', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }
-    let designerCalls = 0
-    const cad = createCadAssistant({ aiCatalog:catalog,research:false, projectId: 'A', userId: 'u', ownerRequest: 'Draw the panel', available: true,
+    const cad = createCadAssistant({ aiCatalog:catalog, projectId: 'A', userId: 'u', ownerRequest: 'Draw the panel', available: true,
       deadline: Date.now() + 300000, hasAccess: async () => true, ...checkedCadFixture('A',recipe),
       makeLookup: () => createProjectLookup('A', async (_p, q) => ({ data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }), 1000, 40),
       render:async r=>checkedCadFixture('A',recipe).packet(r),

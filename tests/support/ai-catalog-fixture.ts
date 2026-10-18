@@ -10,6 +10,7 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preContextCoverageRows:any[]|undefined,preContextCoverageVersions:Map<string,number>|undefined
 let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string,number>|undefined
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
 let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
@@ -18,6 +19,31 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const coverageAdditions=source.match(/\$context_coverage_additions\$([\s\S]+?)\$context_coverage_additions\$/)
+ if(coverageAdditions){
+  preContextCoverageRows=structuredClone(seed);preContextCoverageVersions=new Map(versions)
+  const read=(tag:string)=>JSON.parse(source.match(new RegExp('\\$'+tag+'\\$([\\s\\S]+?)\\$'+tag+'\\$'))![1])
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'bob-context-coverage-v1'};versions.set(row.key,(versions.get(row.key)??0)+1)}
+  for(const addition of JSON.parse(coverageAdditions[1])){const row={content:'',definition:{},variables:[],...addition};seed.push(row);publish(row)}
+  for(const patch of read('context_coverage_edits')){
+   const row=seed.find(row=>row.key===patch.key);publish(row)
+   row.definition={...row.definition,...patch.definition};row.metadata={...row.metadata,...patch.metadata}
+   if(patch.append_prompt_keys)row.definition.prompt_keys.push(...patch.append_prompt_keys.filter((k:string)=>!row.definition.prompt_keys.includes(k)))
+   if(patch.append_tool_keys)row.definition.tool_keys.push(...patch.append_tool_keys.filter((k:string)=>!row.definition.tool_keys.includes(k)))
+   if(patch.append_manual&&!row.definition.additional_description.includes(patch.append_manual))row.definition.additional_description+=patch.append_manual
+   if(patch.remove_roles)row.definition.colleagues=row.definition.colleagues.filter((c:any)=>!patch.remove_roles.includes(c.role_key)).map((c:any)=>({...c,...patch.colleague_edits.find((e:any)=>e.role_key===c.role_key)}))
+  }
+  const retired=read('context_coverage_retired'),box=seed.find(row=>row.key==='bob.tools');publish(box)
+  box.definition.contract_keys=box.definition.contract_keys.filter((k:string)=>!retired.includes(k))
+  for(const policy of read('context_coverage_policies')){
+   box.definition.catalog=box.definition.catalog.filter((p:any)=>p.name!==policy.name).concat(policy)
+   if(!box.definition.contract_keys.includes('tools.'+policy.name))box.definition.contract_keys.push('tools.'+policy.name)
+  }
+  const shellManual=source.match(/\$context_coverage_shell_manual\$([\s\S]+?)\$context_coverage_shell_manual\$/)![1]
+  const shellPolicy=box.definition.catalog.find((p:any)=>p.name==='read_cad_shell');if(!shellPolicy.how_to.includes(shellManual))shellPolicy.how_to+=shellManual
+  const shelf=box.definition.shelves.find((s:any)=>s.label==='Project records and memory');if(!shelf.tools.includes('read_project_orientation'))shelf.tools.push('read_project_orientation')
+  for(let i=seed.length-1;i>=0;i--)if(retired.includes(seed[i].key))seed.splice(i,1)
+ }
  const contextAdditions=source.match(/\$context_strategy_additions\$([\s\S]+?)\$context_strategy_additions\$/)
  if(contextAdditions){
   preContextStrategyRows=structuredClone(seed);preContextStrategyVersions=new Map(versions)
@@ -272,7 +298,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -283,6 +309,8 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
   capabilities:{provider_adapter:tier==='embedding'?'openai-embeddings-v1':tier==='image'?'openai-images-v1':'openai-responses-v1',supports_functions:true,supports_json_schema:true,reasoning_efforts:['none','minimal','low','medium','high','xhigh'],...(tier==='embedding'?{supports_embedding_dimensions:true,max_embedding_dimensions:1536,max_batch_inputs:2048}:{})}})),
 }}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+const preContextCoverageManifest=fixtureManifest(preContextCoverageRows??seed,preContextCoverageVersions??versions,'fixture-pre-context-coverage-manifest')
+export function preContextCoverageCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextCoverageManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 const preContextStrategyManifest=fixtureManifest(preContextStrategyRows??seed,preContextStrategyVersions??versions,'fixture-pre-context-strategy-manifest')
 export function preContextStrategyCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextStrategyManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 const legacyManifest=fixtureManifest(originalSeed,new Map(originalSeed.map(row=>[row.key,1])),'fixture-legacy-seed-manifest')

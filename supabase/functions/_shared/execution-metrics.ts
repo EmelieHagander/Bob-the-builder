@@ -7,6 +7,7 @@ export type ExecutionEvent = {
   duration_ms: number; input_tokens: number | null; output_tokens: number | null; cost_usd: number | null;
   counts: Record<string, number | boolean | string | string[] | null>
 }
+// Event attribution preserves historic role names; this is not a dispatch registry.
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
 const phaseCounts=(phase:unknown):Record<string,string>=>typeof phase==='string'&&outputPhases.has(phase)?{output_phase:phase}:{}

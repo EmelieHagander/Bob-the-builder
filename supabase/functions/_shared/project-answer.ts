@@ -19,6 +19,7 @@ import type { AiCatalogSession } from './ai-catalog.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
+import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
 import { countContextTokens } from './bob-token-budget.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
@@ -130,10 +131,17 @@ export async function runProjectAnswer(opts: {
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const contextStrategy = contract.context_strategy_version === 1
+  const boundedOrientation = contextStrategy && contract.orientation_directory_version === 1
+  if (boundedOrientation && !opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'tools.read_project_orientation')) throw new Error('tool_catalog_unavailable')
+  let orientationReader: OrientationDirectoryReader | undefined
   if (contextStrategy && countContextTokens(opts.aiCatalog.role('ask-bob').systemMessage) > 700) throw new Error('context_input_too_large')
   const toolInstructions = opts.toolInstructions ?? (contextStrategy ? 'lazy' : undefined)
   const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
-  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), readPolicy: opts.readToolPolicy ?? (async () => {
+  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+    ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
+      if (!orientationReader) throw new Error('context_unavailable')
+      return orientationReader.execute(raw)
+    } } } : {}), readPolicy: opts.readToolPolicy ?? (async () => {
     const policy = await seedToolPolicy()
     // Offline/injected callers use the pinned catalog's advertised versions.
     // Production always supplies the live caller-authorized policy reader.
@@ -155,7 +163,10 @@ export async function runProjectAnswer(opts: {
   let previousResponseId = opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=await opts.cadAssistant?.pending()
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
-  const orientation = contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline }) : undefined
+  const orientation = contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
+    ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: Number(contract.orientation_page_max_tokens),
+      ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
+  }) : undefined
   const initialFooter = orientation ? { role: 'user' as const,
     content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer }) } : undefined
   // Legacy pins retain their original message order. New context explicitly

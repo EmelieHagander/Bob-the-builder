@@ -32,7 +32,7 @@ function fixture(failure: Failure) {
     return { data: { records, related: [], truncated: paging,
       next_cursor: !paging || failure === 'truncated' ? null : failure === 'repeated_cursor' ? 'same' : (q.after_id ?? '') + 'x' }, error: null }
   }, 1000, 40)
-  const assistant = createCadAssistant({ research: false, projectId: 'A', userId: 'u',
+  const assistant = createCadAssistant({ projectId: 'A', userId: 'u',
     ownerRequest: request.brief, hasAccess: async () => true, makeLookup, available: true,
     deadline: Date.now() + 300000, ...checkedCadFixture('A',recipe),
     render: async (r): Promise<CadPacket> => { renders++; return checkedCadFixture('A',recipe).packet(r) },

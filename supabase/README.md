@@ -18,7 +18,7 @@ part of the rollout so the previous live gateway cannot keep accepting requests.
 
 For current working context, five full recent messages, incremental summaries, history search and research-page limits, see [Ask bob conversations](../Docs/ask-bob-conversations.md). This September 2026 extension supersedes the Slice 0 budgets below; [write tools](../Docs/ask-bob-writes.md) own mutation authority. Launchpad remains retired as a runtime dependency; its memory-tier design informs Bob-owned context.
 
-The accepted [2026-10-18 context strategy](../Docs/ask-bob-conversations.md#context-strategy--2026-10-18)
+The foundation of the accepted [2026-10-18 context strategy](../Docs/ask-bob-conversations.md#context-strategy--2026-10-18)
 is published and activated: editable token-bounded memory, exact/private
 hybrid recall, concise [tool and colleague cards](../Docs/ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
 and same-job context checkpoints. It preserves canonical project records, current
@@ -27,6 +27,12 @@ authorization and old pinned execution contracts.
 records both installed dependency closures, Deno configuration and exact catalog
 activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary owner
 and long-memory model acceptance.
+
+The [coverage audit](../Docs/bob-context-coverage-audit-2026-10-18.md) identified five
+remaining implementation gaps. Their source corrections remove dormant CAD roles,
+scope specialist lazy instructions, preserve actual tool exchanges and bound the
+complete project orientation, alongside the missing shell-plan installation.
+Their review and release gates remain in State until hosted readback is recorded.
 
 For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. A successful save from the next message starts its fresh period atomically; reads do not move ownership. Request/worker retries retain their period and every historical charge. [Atomic continuation](../db/README.md#atomic-drawing-continuation--2026-10-18) owns the current transition and reservation contract; [verification](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18) records its release status.
 
@@ -118,11 +124,13 @@ access to a project.
 
 ### Roles and baseline profiles
 
+This table describes the coverage-corrected source. The new role retirement and
+specialist loading require the publication gates in [State](../Docs/bob-delivery-flow.md#state);
+the earlier release evidence does not establish their deployment.
+
 | Role key | Name / title | Purpose | Initial tier / effort |
 | --- | --- | --- | --- |
 | `role.ask-bob` | Bob — byggexpert och projektkollega | Drives the owner's delegated project work. | standard / high |
-| `role.cad-designer` | Daisy — designer | Creates, renders and repairs an exact candidate. | standard / medium |
-| `role.cad-research` | Kjell — researcher | Investigates source evidence and construction readiness. | mini / low |
 | `role.cad-reviewer` | Rita — ritningsgranskare | Independently reviews the exact candidate and current evidence. | mini / high |
 | `role.plan-compiler` | Plantus — planskrivare | Represents Bob's intent as a validated project plan. | mini / low |
 | `role.plan-reviewer` | Vera — plangranskare | Gives advisory plan feedback; no save veto. | nano / low |
@@ -131,11 +139,20 @@ access to a project.
 | `role.drawing-resume-reply` | Ritningsbesked — återupptagningsbesked | Explains the actual resumed drawing outcome from its receipt. | standard / low |
 | `role.project-image` | Illustratören — bildgenerator | Produces an illustration from a bounded image brief. | image / none |
 
+Daisy (`cad-designer`) and Kjell (`cad-research`) are removed by the coverage
+correction: no dispatch, active role/profile/tool definitions or role settings.
+Immutable versions/manifests and historical accounting remain. CAD is compiled
+from checked construction and reviewed by Rita. Catalog retirement excludes an
+explicitly retired head from new snapshots while retaining its immutable versions
+for historical manifests; active references to a retired definition are rejected.
+
 The seed preserves the existing model family: nano → `gpt-5.4-nano`, mini →
 `gpt-5.4-mini`, standard → `gpt-5.4`, image → the existing image model setting.
-Profiles preserve effective output capacity, including the plan compiler's
+Historical bounded profiles preserve output capacity, including the plan compiler's
 24,000-token request and Rita's approved 50,000-token frame. The provider applies
-the profile/model limit and any stricter server call limit. Usage pricing comes
+the profile/model limit and any stricter server call limit for those jobs. New
+`work_allowance_version: 1` jobs omit application output allotments while retaining
+provider capacity limits. Usage pricing comes
 from the pinned model row; a warm legacy model cache cannot choose another price.
 
 Model selection is `role → routing/default profile → tier → model`.
@@ -601,12 +618,15 @@ The existing `manage_project_material` reserve/release and publish/withdraw inpu
 ### Calculator and structured specialists — 2026-10-12
 
 [Common calculator v1](../Docs/ask-bob-tools.md#common-calculator-v1--implementation-2026-10-12)
-uses the existing handler/policy/catalog boundary. CAD research/designer use it
-in their existing tool loops. CAD reviewer and Plan compiler/reviewer use a
-bounded calculation phase before the original tool-free pinned JSON-schema
-response; the shared OpenAI adapter is unchanged. All model calls use existing
-accounting/call/cost guards. Role tool keys and instructions receive new immutable
-versions; models, tiers, profiles and earlier manifests remain unchanged.
+uses the existing handler/policy/catalog boundary. **The following installation
+record is historical:** CAD research/designer then received it in their tool
+loops, and CAD reviewer and Plan compiler/reviewer received an eager calculation
+phase before their pinned structured response. The coverage correction removes
+the research/designer paths and gives the three active specialists lazy calculator
+instructions; [the tool owner](../Docs/ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
+defines current discovery and renewal. Usage accounting and authorization remain;
+old jobs retain their pinned limits and policy-1 work has no application quotas.
+Models, tiers and earlier immutable manifests remain unchanged.
 The SQL reader/math helper, compatible **ask-bob 105 / bob-worker 73**, and
 catalog manifest `6482763a-214b-4022-9e32-92b42e9dac71` are installed in that
 order. [Verification](../Docs/foundation-verification.md#common-calculator--2026-10-12)

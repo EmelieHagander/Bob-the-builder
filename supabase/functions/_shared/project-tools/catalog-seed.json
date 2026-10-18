@@ -930,5 +930,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_project_orientation",
+    "description": "Read exact deferred Steps, completion requirements and shared facts from this project overview, with source revisions.",
+    "how_to": "Read exact deferred project-orientation records and source revisions. Copy snapshot_id and next_cursor from the orientation or previous page; null starts that section. These are retained read results, not evidence of current write authority. Partial_record contains exact JSON fragments: concatenate in json_start order before interpreting the record. Read all deferred completion requirements before assessing completion.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

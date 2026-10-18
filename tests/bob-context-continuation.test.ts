@@ -1,14 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createBobContextContinuation } from '../supabase/functions/_shared/bob-context-continuation.ts'
-import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { createBobJournal, fingerprint, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import type { AiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 
 const tool = (name: string) => ({ type: 'function' as const, function: { name, description: name, parameters: { type: 'object' } } })
 const catalog = {
-  definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600, retained_tool_exchanges: 1 } }),
+  definition: () => ({ metadata: { continuation_input_tokens: 1000, context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600, retained_tool_exchanges: 1,
+    continuation_retention_version: 2 } }),
   role: () => ({ systemMessage: 'Catalog-owned role instructions.' }),
   schema: (name: string) => ({ name, schema: { type: 'object', properties: { result: { type: 'string' } } } }),
   tool,
@@ -27,6 +28,128 @@ const handoff = (options: OpenAIServiceOptions) => {
     open_questions: ['Owner must measure the width.'], next_steps: ['Continue the delegated drawing from the saved revision.'],
     source_refs: source.allowed_source_refs.slice(0, 1) }, usage }
 }
+
+const retentionCatalog = (version: unknown, keep = 2) => ({ ...catalog,
+  definition: () => ({ metadata: { continuation_input_tokens: 10000, context_input_ceiling_tokens: 96000,
+    continuation_summary_tokens: 1600, retained_tool_exchanges: keep,
+    ...(version === undefined ? {} : { continuation_retention_version: version }) } }),
+}) as unknown as AiCatalogSession
+
+async function commentaryRollover(version: number | undefined, entries: JournalEntry[] = []) {
+  const sent: OpenAIServiceOptions[] = []
+  let main = 0, dispatched = 0
+  const journal = createBobJournal({ entries, save: async entry => { entries.push(structuredClone(entry)) } }, Date.now() + 100000)
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: retentionCatalog(version), callModel: async options => {
+    sent.push(structuredClone(options))
+    return journal.run('model:' + options.functionName, options, async () => {
+      dispatched++
+      if (options.catalogRoleKey === 'context-compactor') return handoff(options)
+      const fixtures = [response('r1', [call('old')]), response('r2', [call('a1'), call('a2')]),
+        { ...response('r3', []), data: 'Checking the first saved results.', outputPhase: 'commentary' as const },
+        response('r4', [call('b')]),
+        { ...response('r5', []), data: 'Checking whether the assignment is complete.', outputPhase: 'commentary' as const },
+        { ...response('r6', []), data: 'Finished.', outputPhase: 'final_answer' as const }]
+      const result = fixtures[main++]
+      return { ...result, usage: { input_tokens: main === 5 ? 11000 : 1, output_tokens: 1, total_tokens: main === 5 ? 11001 : 2 } }
+    })
+  } })
+  const firstReview = { role: 'user' as const, content: 'Completion review: the delegated drawing is still incomplete; continue.' }
+  const finalReview = { role: 'user' as const, content: 'Completion review: verify the saved drawing before finishing.' }
+  await adapter.call(seed)
+  await adapter.call({ ...seed, previousResponseId: 'r1', messages: [output('old')] })
+  await adapter.call({ ...seed, previousResponseId: 'r2', messages: [output('a2'), output('a1')] })
+  await adapter.call({ ...seed, previousResponseId: 'r3', messages: [firstReview] })
+  await adapter.call({ ...seed, previousResponseId: 'r4', messages: [output('b')] })
+  const result = await adapter.call({ ...seed, previousResponseId: 'r5', messages: [finalReview] })
+  return { sent, result, dispatched, firstReview, finalReview, adapter }
+}
+
+test('two completed exchanges survive intervening commentary, completion review and parallel outputs', async () => {
+  const entries: JournalEntry[] = []
+  const first = await commentaryRollover(2, entries)
+  const fresh = first.sent.at(-1)!
+  assert.equal(fresh.previousResponseId, undefined)
+  assert.deepEqual(fresh.messages!.slice(2), [
+    { role: 'assistant', content: '', tool_calls: [call('a1'), call('a2')] }, output('a2'), output('a1'),
+    { role: 'assistant', content: 'Checking the first saved results.', phase: 'commentary' }, first.firstReview,
+    { role: 'assistant', content: '', tool_calls: [call('b')] }, output('b'),
+    { role: 'assistant', content: 'Checking whether the assignment is complete.', phase: 'commentary' }, first.finalReview,
+  ])
+  const summary = first.sent.find(value => value.catalogRoleKey === 'context-compactor')!
+  const archived = JSON.parse(JSON.parse(String(summary.messages![0].content)).source_segment.text)
+  assert.deepEqual(archived.flatMap((group: any[]) => group.flatMap(message => message.tool_calls ?? [])).map((value: any) => value.id), ['old'])
+  assert.equal(first.adapter.readOperation({ call_id: 'old', after: null }, first.result.responseId).status, 'ok')
+  const replay = await commentaryRollover(2, entries)
+  assert.equal(replay.dispatched, 0, 'renewal replays paid responses instead of rerunning operations')
+  assert.deepEqual(replay.result, first.result)
+  assert.deepEqual(replay.sent, first.sent)
+})
+
+test('pre-fix pinned manifests preserve their exact journal inputs while new manifests opt into exchange counting', async () => {
+  const entries: JournalEntry[] = []
+  const prior = await commentaryRollover(undefined, entries)
+  const fresh = prior.sent.at(-1)!
+  assert.deepEqual(fresh.messages!.flatMap(message => message.tool_calls ?? []).map(value => value.id), ['b'])
+  const summary = prior.sent.find(value => value.catalogRoleKey === 'context-compactor')!
+  // Recorded with the pre-fix implementation, not derived by the new code.
+  assert.equal(await fingerprint(summary), 'cc091ff556183139636b9dee92806c4907016e320f91b2910534c584f70bef71')
+  assert.equal(await fingerprint(fresh), '4449d2209cf4401782a13b351bc53eecf55956a400090bf84dca1a0566084615')
+  const replay = await commentaryRollover(undefined, entries)
+  assert.equal(replay.dispatched, 0)
+  assert.deepEqual(replay.result, prior.result)
+  assert.deepEqual(replay.sent, prior.sent)
+  await assert.rejects(commentaryRollover(2, entries), /continuation_changed/)
+})
+
+test('unknown retention policies fail before a provider request instead of selecting an implicit algorithm', () => {
+  for (const version of [0, 3, null, '2']) assert.throws(() => createBobContextContinuation({ version: 1, aiCatalog: retentionCatalog(version),
+    callModel: async () => { throw new Error('Invalid policy reached provider') } }), /context_strategy_invalid/)
+})
+
+test('late parallel outputs retain the complete owning exchange across the selected suffix boundary', async () => {
+  const sent: OpenAIServiceOptions[] = []
+  let main = 0
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: retentionCatalog(2), callModel: async options => {
+    sent.push(structuredClone(options))
+    if (options.catalogRoleKey === 'context-compactor') return handoff(options)
+    const calls = [[call('old')], [call('a1'), call('a2')], [call('b')], [call('c')], []][main++]
+    return { ...response('r' + main, calls), usage: { input_tokens: main >= 3 ? 11000 : 1, output_tokens: 1, total_tokens: main >= 3 ? 11001 : 2 } }
+  } })
+  await adapter.call(seed)
+  await adapter.call({ ...seed, previousResponseId: 'r1', messages: [output('old')] })
+  await adapter.call({ ...seed, previousResponseId: 'r2', messages: [output('a1')] })
+  await adapter.call({ ...seed, previousResponseId: 'r3', messages: [output('b')] })
+  assert.equal(sent.at(-1)!.previousResponseId, 'r3', 'the incomplete a2 batch keeps its original provider chain')
+  assert(!sent.some(value => value.catalogRoleKey === 'context-compactor'))
+  await adapter.call({ ...seed, previousResponseId: 'r4', messages: [output('c'), output('a2')] })
+  const fresh = sent.at(-1)!
+  assert.equal(fresh.previousResponseId, undefined)
+  const calls = fresh.messages!.flatMap(message => message.tool_calls ?? []).map(value => value.id)
+  const outputs = fresh.messages!.filter(message => message.role === 'tool').map(value => value.tool_call_id)
+  assert.deepEqual(calls, ['a1', 'a2', 'b', 'c'])
+  assert.deepEqual(outputs, ['a1', 'b', 'c', 'a2'])
+  assert.deepEqual([...outputs].sort(), [...calls].sort(), 'fresh native calls have exactly one paired result each')
+})
+
+test('commentary cannot evict the only completed exchange while the retention count is not yet filled', async () => {
+  const sent: OpenAIServiceOptions[] = []
+  let main = 0
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: retentionCatalog(2), callModel: async options => {
+    sent.push(structuredClone(options))
+    assert.notEqual(options.catalogRoleKey, 'context-compactor')
+    main++
+    return { ...response('r' + main, main === 1 ? [call('only')] : []),
+      data: main === 1 ? null : 'Reviewing the unfinished assignment.', outputPhase: main === 1 ? 'tool_calls' : 'commentary',
+      usage: { input_tokens: main >= 3 ? 11000 : 1, output_tokens: 1, total_tokens: main >= 3 ? 11001 : 2 } }
+  } })
+  await adapter.call(seed)
+  await adapter.call({ ...seed, previousResponseId: 'r1', messages: [output('only')] })
+  const review = { role: 'user' as const, content: 'Completion review: continue the remaining delegated work.' }
+  await adapter.call({ ...seed, previousResponseId: 'r2', messages: [review] })
+  await adapter.call({ ...seed, previousResponseId: 'r3', messages: [review] })
+  assert.equal(sent.at(-1)!.previousResponseId, 'r3')
+  assert.deepEqual(sent.at(-1)!.messages, [review])
+})
 
 test('rollover keeps exact assignment, latest instructions, native call/output pairs and accessible originals', async () => {
   const sent: OpenAIServiceOptions[] = [], rollovers: string[] = []
@@ -116,7 +239,7 @@ test('specialists can read history internally and mixed batches retain every nat
     if (main === 4) return response('r4', [read('read2'), call('external')])
     return response('r' + main)
   } })
-  const specialist = { ...seed, functionName: 'cad-designer', catalogRoleKey: 'cad-designer', catalogSchemaKey: 'drawing_recipe' }
+  const specialist = { ...seed, functionName: 'plan-reviewer', catalogRoleKey: 'plan-reviewer', catalogSchemaKey: 'bob_plan_review' }
   await adapter.call(specialist)
   await adapter.call({ ...specialist, previousResponseId: 'r1', messages: [output('r1')] })
   const mixed = await adapter.call({ ...specialist, previousResponseId: 'r2', messages: [output('r2')] })
@@ -235,7 +358,7 @@ test('oversized indispensable input returns an explicit error without truncation
 
 test('several interleaved colleague chains compact, finish and replay without extra paid or saved work', async () => {
   const entries: JournalEntry[] = []
-  const roles = ['ask-bob', 'cad-designer', 'cad-reviewer', 'plan-compiler']
+  const roles = ['ask-bob', 'plan-reviewer', 'cad-reviewer', 'plan-compiler']
   const rounds = new Map<string, number>()
   let paid = 0, saves = 0, summaries = 0
   const run = async () => {

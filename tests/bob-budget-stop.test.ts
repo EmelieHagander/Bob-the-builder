@@ -36,7 +36,7 @@ test('request diagnostics survive the wrapper; old-server ambiguity stays unknow
   {status:'budget_exhausted'}, {status:'outcome_unknown'}, {status:'context_cleared'},
  ]){
   const b=createDrawingBudget({executionId:'execution',command:async()=>response})
-  const result=await b('request',{functionName:'cad-designer'} as any,async()=>{throw new Error('must not dispatch')})
+  const result=await b('request',{functionName:'cad-reviewer'} as any,async()=>{throw new Error('must not dispatch')})
   const stop=readBudgetStop(result)!
   assert.equal(stop.scope,'drawing_request')
   assert.deepEqual(stop.reasons,response.budget_stop?.reasons??[response.status==='outcome_unknown'?'pending_outcome':response.status==='context_cleared'?'context_cleared':'unknown'])

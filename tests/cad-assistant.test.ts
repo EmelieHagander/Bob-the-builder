@@ -33,14 +33,12 @@ test('an already saved historical request is a receipt, never a new CAD attempt'
  const out=await f.assistant.consult({...request,request_id:'33333333-3333-4333-8333-333333333333',artifact_id:null,construction_revision:null})
  assert.equal(out.status,'already_saved');assert.deepEqual(out.receipt,receipt);assert.deepEqual(f.counts(),{reads:0,models:0,renders:0})
 })
-test('a valid exact source renders once and uses only independent review, regardless of the old research setting',async()=>{
- for(const research of [undefined,true,false]){
-  const f=fixture({research});assert.equal((await f.assistant.consult(request)).status,'ready')
-  assert.equal(f.counts().renders,1);assert.equal(f.counts().models,1)
-  assert.equal(f.assistant.metrics.research_calls,0);assert.equal(f.assistant.metrics.reviews,1)
-  assert.deepEqual(f.assistant.candidate?.packet.recipe,recipe)
-  assert.equal(f.assistant.candidate?.packet.manifest.bob_construction.artifact_id,fixtureConstructionId)
- }
+test('a valid exact source renders once and calls only the independent reviewer',async()=>{
+ const f=fixture();assert.equal((await f.assistant.consult(request)).status,'ready')
+ assert.equal(f.counts().renders,1);assert.equal(f.counts().models,1)
+ assert.equal(f.assistant.metrics.reviews,1)
+ assert.deepEqual(f.assistant.candidate?.packet.recipe,recipe)
+ assert.equal(f.assistant.candidate?.packet.manifest.bob_construction.artifact_id,fixtureConstructionId)
 })
 test('missing source material/joint checks cannot fall back to free design or consume CAD consultations',async()=>{
  for(const status of ['needs_data','unavailable','conflict']){

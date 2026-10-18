@@ -27,7 +27,7 @@ test('stalled request renews the same source identity through caller reads, chec
  const store=createDrawingRequestStore({aiCatalog,projectId:f.project,binding,privateCall,newId:async()=>{throw Error('must reuse the existing request')},
   caller:(name,args)=>f.rpc('bob.'+name,Object.values(args))})
  let renders=0,reviews=0
- const assistant=createCadAssistant({aiCatalog,allowSourceRenewal:true,research:false,projectId:f.project,userId:f.user,ownerRequest:f.message,requestStore:store,available:true,deadline:Date.now()+120000,hasAccess:async()=>true,
+ const assistant=createCadAssistant({aiCatalog,allowSourceRenewal:true,projectId:f.project,userId:f.user,ownerRequest:f.message,requestStore:store,available:true,deadline:Date.now()+120000,hasAccess:async()=>true,
   readArtifact:async(id,revision)=>({...await read(id,revision),source_kind:'construction'}),checkConstruction:(id,revision)=>checkedConstructionForDrawing(sourceOptions,id,revision),
   readDesignReadiness:(target,purpose,area)=>f.rpc('bob.read_design_readiness',[f.project,area??null,target,purpose]),
   makeLookup:()=>createProjectLookup(f.project,async(_p,i)=>({data:await f.rpc('bob.search_bob_project_data_v8',[f.project,i.dataset,i.query,i.status,i.area_id,i.record_id,i.after_id??null]),error:null}),1000,100),

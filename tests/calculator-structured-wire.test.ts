@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises'
 import ts from 'typescript'
 import {callWithCalculator} from '../supabase/functions/_shared/calculator-model-call.ts'
 import {createProjectCalculator} from '../supabase/functions/_shared/project-calculator.ts'
-import {catalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
+import {preContextCoverageCatalogFixture as catalogFixture,catalogFixture as currentCatalogFixture,catalogCall} from './support/ai-catalog-fixture.ts'
 
 const verdict={ready_to_save:false,summary:'Concept only',issues:[]}
 const graph={calculation:{method:'parameter_graph_v1',nodes:[
@@ -104,4 +104,26 @@ test('shared legacy tool callers retain their text contract unless the server op
   const strict=await catalogCall(service.callOpenAIResponses,catalog)({...o,structuredToolOutput:true})
   assert.deepEqual(strict.data,verdict);assert.equal(requests[1].text.format.strict,true)
  },[textResponse(),textResponse()])
+})
+
+test('lazy specialist provider wire loads calculator instructions before its native schema while retaining strict output',async()=>{
+ await wire(async(service,requests,ledger)=>{
+  const catalog=currentCatalogFixture(snapshot=>{
+   snapshot.definitions.find(row=>row.prompt_key==='agent-contract.ask-bob')!.metadata.specialist_tool_instructions_version=1
+   const role=snapshot.definitions.find(row=>row.prompt_key==='role.plan-reviewer')!
+   role.definition.tool_keys=[...new Set([...(role.definition.tool_keys as string[]),'tools.describe_tool'])]
+  })
+  const result=await callWithCalculator(base,{catalog,calculator:calculator(),hasAccess:async()=>true,deadline:Date.now()+10000,
+   callModel:catalogCall(service.callOpenAIResponses,catalog)})
+  assert.deepEqual(result.data,verdict);assert.equal(result.success,true)
+  assert.equal(requests.length,3);assert.equal(ledger.length,3)
+  for(const request of requests){assert.equal(request.text.format.name,'bob_plan_review');assert.equal(request.text.format.strict,true)}
+  assert.deepEqual(requests[0].tools.map((tool:any)=>tool.name),['describe_tool'])
+  assert.deepEqual(requests[1].tools.map((tool:any)=>tool.name),['calculate_project','describe_tool'])
+  const manual=JSON.parse(requests[1].input[0].output)
+  assert.equal(manual.name,'calculate_project');assert.equal(manual.status,'ok')
+  assert.deepEqual(manual.parameters,requests[1].tools[0].parameters)
+  assert.equal(requests[2].previous_response_id,'r1')
+  assert.equal(JSON.parse(requests[2].input[0].output).outputs[0].value,7)
+ },[{id:'manual',status:'completed',output:[{type:'function_call',call_id:'describe',name:'describe_tool',arguments:JSON.stringify({name:'calculate_project'})}],usage},toolResponse,textResponse()])
 })

@@ -69,7 +69,7 @@ test('P2: request-wide reservations, replay, allocation and private results surv
 test('P2 budget wrapper reserves before dispatch and recovers response without another paid call',async()=>{
  const events:string[]=[]
  const response:any={success:true,data:'ok',model:'fixture',usage:{total_tokens:2},estimatedCostUsd:0.1}
- const options:any={functionName:'cad-designer',messages:[{role:'user',content:'source'}]}
+ const options:any={functionName:'cad-reviewer',messages:[{role:'user',content:'source'}]}
  let saved:any=null
  const budget=createDrawingBudget({executionId:randomUUID(),command:async input=>{
   events.push(input.p_operation as string)
@@ -152,8 +152,8 @@ test('P2: a late provider receipt reconciles once and recovers its original tran
  const budget=(op:string,run=execution,result:any=null)=>call(null,'bob.bob_drawing_budget',[project,owner,c.thread_id,turn,c.generation,id,run,key,op,result],'service_role')
  await budget('reserve')
  await pg.exec("update shared_private.ai_runtime set worker_url='https://fixtureproject.supabase.co/functions/v1/ai-background-worker'; update shared_private.ai_receivers set enabled=true where app='bob'")
- const context={jobId:execution,role:'cad-designer'},operation=execution+'/model:cad:0'
- const ai=await call(null,'shared.ai_job_reserve',['bob',operation,key,'bob',context,new Date(Date.now()+600000).toISOString(),{user_id:owner,module:'cad',ai_function:'cad-designer',model:'fixture',input_price_per_1m:2,cached_price_per_1m:.5,output_price_per_1m:10}],'service_role')
+ const context={jobId:execution,role:'cad-reviewer'},operation=execution+'/model:cad:0'
+ const ai=await call(null,'shared.ai_job_reserve',['bob',operation,key,'bob',context,new Date(Date.now()+600000).toISOString(),{user_id:owner,module:'cad',ai_function:'cad-reviewer',model:'fixture',input_price_per_1m:2,cached_price_per_1m:.5,output_price_per_1m:10}],'service_role')
  const response={id:'resp_'+ai.id.replaceAll('-',''),status:'completed',metadata:{ai_job_id:ai.id},model:'fixture',output_text:'Exact late output',usage:{input_tokens:1000,output_tokens:200}}
  await call(null,'shared.ai_job_accept',[ai.id,response],'service_role')
  for(let n=0;n<2;n++)await pg.exec('select bob_private.reconcile_drawing_costs()')
@@ -200,7 +200,7 @@ test('P2: an unpriced transport failure cannot release its uncertain reservation
  const operations:string[]=[]
  const budget=createDrawingBudget({executionId:randomUUID(),command:async input=>{operations.push(String(input.p_operation));return {status:'reserved'}}})
  const failure:any={success:false,data:null,model:'fixture',error:'Network error: timeout',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
- assert.deepEqual(await budget('request',{functionName:'cad-designer'} as any,async()=>failure),failure)
+ assert.deepEqual(await budget('request',{functionName:'cad-reviewer'} as any,async()=>failure),failure)
  assert.deepEqual(operations,['reserve'])
 })
 for(const failure of [{stage:'intake',lateWrites:false},{stage:'cad_engine',lateWrites:true}])test(`P2 events: ${failure.stage} failure does not resume on the same chat turn's writes`,async t=>{

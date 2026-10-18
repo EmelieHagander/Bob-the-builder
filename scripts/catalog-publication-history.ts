@@ -16,3 +16,9 @@ export const historicalBudgetStopContracts=JSON.parse(budgetStopPublication.matc
 export const historicalConstructionParameterContracts=JSON.parse(parameterPublication.match(/\$parameter_contracts\$([\s\S]+?)\$parameter_contracts\$/)![1])
 const handoffPublication=readFileSync(new URL('../supabase/migrations/20261010063726_cad_handoff_server_ids.sql',import.meta.url),'utf8')
 export const historicalCadHandoffContracts=JSON.parse(handoffPublication.match(/\$cad_handoff_contracts\$([\s\S]+?)\$cad_handoff_contracts\$/)![1])
+
+// Retired CAD model paths retain only immutable publication evidence.
+const intakePublication=readFileSync(new URL('../supabase/migrations/20261010120401_cad_intake_execution_recovery.sql',import.meta.url),'utf8')
+export const historicalIntakeRecoveryContracts=JSON.parse(intakePublication.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)![1])
+const revisionPublication=readFileSync(new URL('../supabase/migrations/20261010173130_cad_revision_dimension_bindings.sql',import.meta.url),'utf8')
+export const historicalCadRevisionContracts=JSON.parse(revisionPublication.match(/\$cad_revision_contracts\$([\s\S]+?)\$cad_revision_contracts\$/)![1])

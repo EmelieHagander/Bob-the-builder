@@ -92,7 +92,7 @@ test('legacy transition uses canonical geometry, exact receipts and guarded same
   const request={request_id:null,brief:f.message,handoff,artifact_id:f.legacy.recordId,construction_revision:2,area_id:null,component_id:null,step_id:null}
   let state:any=null,broken=true,renders=0,reviews=0,changedBeforeDispatch=true
   const store={load:async()=>structuredClone(state),save:async(requestId:any,revision:any,status:any,payload:any)=>{state={id:requestId??randomUUID(),revision:revision+1,status,payload:structuredClone(payload)};return structuredClone(state)}}
-  const assistant=()=>createCadAssistant({projectId:f.project,userId:owner,ownerRequest:f.message,hasAccess:async()=>true,available:true,deadline:Date.now()+200000,requestStore:store,runtimeVersion:async()=>broken?'broken-fixture':'fixed-fixture',research:true,
+  const assistant=()=>createCadAssistant({projectId:f.project,userId:owner,ownerRequest:f.message,hasAccess:async()=>true,available:true,deadline:Date.now()+200000,requestStore:store,runtimeVersion:async()=>broken?'broken-fixture':'fixed-fixture',
    makeLookup:()=>createProjectLookup(f.project,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:f.solution}]:[],related:[],truncated:false},error:null}),1000,40),
    readArtifact:async(artifact,revision,fresh)=>artifact===id?{...await f.readConstruction(id,revision),source_kind:'construction'}:({...await f.readDrawing(artifact,revision),...(fresh&&changedBeforeDispatch?{revision:99}:{})}),
    checkConstruction:()=>checkedConstructionForDrawing(f.options,id,2),

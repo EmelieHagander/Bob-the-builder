@@ -24,7 +24,7 @@ function fixture(){
   if(o.functionName==='cad-reviewer')return reply(JSON.stringify({verdict:'pass',summary:'Reviewed exact concept',requirements:Object.fromEntries(o.catalogSchemaParameters.requirement_ids.map((id:string)=>[id,{status:'met',evidence:'Exact recipe and generated views'}])),issues:[]}))
   return renderReply()
  }
- const opts={aiCatalog:catalog,projectId:'A',userId:'owner',ownerRequest:'Draw the discussed object',research:false,available:true,deadline:Date.now()+300000,hasAccess:async()=>true,
+ const opts={aiCatalog:catalog,projectId:'A',userId:'owner',ownerRequest:'Draw the discussed object',available:true,deadline:Date.now()+300000,hasAccess:async()=>true,
   makeLookup:()=>createProjectLookup('A',async(_project,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:solution,solution_revision:1}]:[],related:[],truncated:false},error:null}),1000,40),
   readDesignReadiness:async()=>structuredClone(readiness),...checkedCadFixture('A',recipe),
   callModel:async(o:any,guard?:()=>Promise<void>)=>{await guard?.();return catalogCall(model,catalog)(o)},
@@ -119,7 +119,7 @@ test('an actual new render dispatch rechecks intent and stops before rendering a
 test('an unavailable selected original reference stops before collector, designer or reviewer work',async()=>{
  const f=fixture();f.readiness.design_intent!.features.push({id:'shape',description:'Selected silhouette',basis:'user_request',source_ref:null})
  f.readiness.design_intent!.references.push({image_id:image,role:'appearance',note:'Selected original'})
- const a=createCadAssistant({...f.opts,research:true,callModel:async()=>{throw Error('missing pixels precede paid work')}})
+ const a=createCadAssistant({...f.opts,callModel:async()=>{throw Error('missing pixels precede paid work')}})
  const result=await a.consult(request)
  assert.equal(result.status,'unavailable');assert.equal(result.stage,'reference_images');assert.equal(f.renders,0)
 })

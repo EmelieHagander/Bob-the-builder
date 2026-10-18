@@ -108,7 +108,7 @@ export async function answerWithOpenAi(opts: {
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-designer': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -166,6 +166,14 @@ export async function answerWithOpenAi(opts: {
   }
   let contextContinuation: ReturnType<typeof createBobContextContinuation> | undefined
   let refreshMainContextSurface: (() => Promise<ContextSurface>) | undefined
+  const specialistContextSurfaces = new Map<string, () => Promise<ContextSurface>>()
+  const registerSpecialistContextSurface = (role: string, refresh: () => Promise<ContextSurface>) => {
+    if (specialistContextSurfaces.has(role)) throw new Error('specialist_context_already_registered')
+    specialistContextSurfaces.set(role, refresh)
+    return () => {
+      if (specialistContextSurfaces.get(role) === refresh) specialistContextSurfaces.delete(role)
+    }
+  }
   let mainContextEpoch = 0
   const callModel = (requested: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) =>
     contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
@@ -241,7 +249,9 @@ export async function answerWithOpenAi(opts: {
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
     onRollover: ({ role }) => { if (role === 'ask-bob') mainContextEpoch++ },
-    refreshSurface: async ({ role }) => role === 'ask-bob' ? refreshMainContextSurface?.() : undefined,
+    refreshSurface: async ({ role }) => role === 'ask-bob'
+      ? refreshMainContextSurface?.()
+      : specialistContextSurfaces.get(role)?.(),
     snapshot: ({ role }) => role === 'ask-bob' ? {
       // Only receipts reached at this replay position, never writes restored
       // from a later checkpoint or another colleague's private conversation.
@@ -429,6 +439,7 @@ export async function answerWithOpenAi(opts: {
   }):undefined
   const planAssistant = createPlanAssistant({ unlimitedWork,
     aiCatalog,calculator,
+    ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
     projectId: opts.projectId, userId: opts.userId, hasAccess, deadline,
     makeLookup: () => createProjectLookup(opts.projectId, checkpointed(async(projectId:string,input:LookupInput,signal:AbortSignal)=>{
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
@@ -455,6 +466,7 @@ export async function answerWithOpenAi(opts: {
   const cadAssistant = createCadAssistant({ unlimitedWork,
     allowSourceRenewal:execution.constructionReplayVersion===2,
     aiCatalog,calculator,
+    ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
     runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
     requestModel:async(id,_options,work)=>{
       const previous=drawingRequestId;drawingRequestId=id

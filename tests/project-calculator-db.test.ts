@@ -43,7 +43,7 @@ before(async()=>{
 })
 after(async()=>pg?.close())
 
-test('calculator catalog is append-only, preserves existing model settings and exactly matches the offered code schema',async()=>{
+test('historical calculator publication is append-only, preserves model settings and matches the offered code schema',async()=>{
  assert.notEqual(previous.manifest_id,current.manifest_id);assert.deepEqual(previous.models,current.models)
  const replay=(await pg.query<any>('select shared.resolve_ai_catalog($1,$2) result',['bob',previous.manifest_id])).rows[0].result
  assert.deepEqual(replay,previous)

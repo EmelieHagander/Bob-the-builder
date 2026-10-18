@@ -1,11 +1,14 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync,readdirSync} from 'node:fs'
-import {INTAKE_SCHEMA} from '../supabase/functions/_shared/cad-intake.ts'
-import {CAD_RESEARCH_OUTPUT_CEILING,cadResearchOutputLimit} from '../supabase/functions/_shared/cad-research.ts'
-import {catalogFixture,legacyCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {legacyCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {projectSchema} from './support/project-schema.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
+
+const historicalSql=readFileSync(new URL('../supabase/migrations/20261010120401_cad_intake_execution_recovery.sql',import.meta.url),'utf8')
+const historicalPatches=JSON.parse(historicalSql.match(/\$cad_intake_recovery\$([\s\S]+?)\$cad_intake_recovery\$/)![1])
+const INTAKE_SCHEMA=historicalPatches.find((patch:any)=>patch.key==='schema.intake').schema
+const CAD_RESEARCH_OUTPUT_CEILING=16000
 
 test('intake recovery publishes compatible schemas and answer limits without replacing unrelated active catalog fields',()=>{
  const root=new URL('../supabase/migrations/',import.meta.url)
@@ -20,11 +23,10 @@ test('intake recovery publishes compatible schemas and answer limits without rep
  assert.match(source,/pg_advisory_xact_lock/);assert.match(source,/shared\.activate_ai_catalog/)
  assert.match(source,/current_version\.metadata,next_content,definition,current_version\.flow,current_version\.available_variables/)
  assert(!/update shared\.ai_prompt_versions/i.test(source),'pinned versions remain immutable')
- const current=catalogFixture(),legacy=legacyCatalogFixture()
- assert(current.tool('finish_cad_research').function.parameters.required.includes('execution_issues'))
+ const legacy=legacyCatalogFixture()
+ assert(INTAKE_SCHEMA.required.includes('execution_issues'))
  assert(!legacy.tool('finish_cad_research').function.parameters.required.includes('execution_issues'))
  assert.equal(legacy.role('cad-research').maxOutputTokens,3000)
- assert(current.role('cad-research').maxOutputTokens>=cadResearchOutputLimit(24))
 })
 test('intake publication changes only six active definitions, preserves pinned history and rolls back a missing contract',async t=>{
  const root=new URL('../supabase/migrations/',import.meta.url)
@@ -35,7 +37,7 @@ test('intake publication changes only six active definitions, preserves pinned h
  const pg=await projectSchema(async(db,migration)=>{
   if(migration===name)previous=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
   if(previous&&migration>name&&!published)published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
- })
+ },name)
  t.after(()=>pg.close())
  const resolve=async(id:string|null=null)=>(await pg.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',$1) result",[id])).rows[0].result
  const latest=await resolve(),current=published??latest
@@ -53,7 +55,7 @@ test('intake publication changes only six active definitions, preserves pinned h
  }
  const session=createAiCatalogSession({rpc:async()=>{throw Error('pinned only')}},{app:'bob',manifest:current})
  assert.deepEqual(session.tool('finish_cad_research').function.parameters,INTAKE_SCHEMA)
- assert(session.role('cad-research').maxOutputTokens>=cadResearchOutputLimit(24))
+ assert(session.role('cad-research').maxOutputTokens>=13600)
  const snapshot=async()=>(await pg.query("select prompt_key,active_version_id from shared.ai_prompts where app='bob' order by prompt_key")).rows
  const before=await snapshot()
  await assert.rejects(pg.transaction(tx=>tx.exec(sql.replace('"schema.intake"','"schema.missing_intake"').replace(/^begin;$/m,'').replace(/^commit;$/m,''))),/cad_intake_contract_missing/)

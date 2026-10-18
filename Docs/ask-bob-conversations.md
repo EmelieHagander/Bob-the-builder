@@ -4,8 +4,12 @@
 
 ## Context strategy — 2026-10-18
 
-**Published and activated through PR #267; ordinary owner and long-memory model
-acceptance remain.** [Release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
+**The foundation was published through PR #267.** The subsequent
+[coverage audit](bob-context-coverage-audit-2026-10-18.md) found incomplete specialist
+tool loading, exchange retention and orientation bounds. The corrections below
+are implemented in source; their review/publication and ordinary owner/long-memory
+acceptance remain in [State](bob-delivery-flow.md#state).
+[Foundation release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
 records CI, hosted source readback, migrations, catalog activation and web deployment.
 This section owns the memory/context behavior.
 The [active State](bob-delivery-flow.md#state) owns remaining acceptance
@@ -57,6 +61,8 @@ not spending limits or permission to abandon unfinished work.
 | Current work description | 250 tokens |
 | Each tool or colleague card | 80 tokens |
 | Short ending orientation | 150 tokens |
+| Complete initial project-orientation packet | 12,000 tokens, including serialized records, source references and paging metadata |
+| Exact deferred orientation page | 6,000 tokens, including metadata and source references |
 
 The existing 12,000-character storage guard and 40-pointer maximum remain secondary
 guards. The five original messages are not silently shortened to meet these small
@@ -83,6 +89,20 @@ is marked unavailable with a source pointer, rather than clipped or presented as
 original. Other governing facts still require their existing domain readers; this
 packet does not claim to select every applicable constraint automatically.
 
+The complete packet has its own total allocation. Exact focused requirements are
+packed before peer/child directories. Deferred records have explicit included,
+omitted and source-completeness counts, an immutable snapshot identity and a
+`read_project_orientation` cursor. Each page rechecks current project access;
+the retained snapshot describes the observed revision, not current write authority.
+An individually oversized original is returned as lossless JSON fragments with
+explicit offsets. All fragments must be joined before interpreting that record.
+Deferred governing requirements must be read before assessing completion. This
+does not shorten the five original conversation messages or raise the global ceiling.
+`sourceComplete:false` and a null total mean the source scan itself was incomplete;
+reading every retained page cannot turn missing source coverage into completeness.
+The fixed, non-deferred packet must still fit its allocation or return
+`context_input_too_large` before model dispatch.
+
 ### Retrieval and colleague handoffs
 
 The first retrieval slice combines text and semantic search over the same private
@@ -102,7 +122,7 @@ constraints still come through their existing authorized domain readers. Do not
 mix another member's private conversation into a project-wide memory.
 
 Bob and colleagues share context-management mechanics but receive the task and
-relevant source packet appropriate to their role. A designer and an independent
+relevant source packet appropriate to their role. A plan compiler and an independent
 reviewer do not receive interchangeable assignments or competing project memories.
 The [tool owner](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18) owns concise
 capability cards and loading the complete instructions/schema when needed.
@@ -119,7 +139,13 @@ from that summary. Compaction neither reruns completed operations nor turns an
 uncertain write into permission to repeat it. It is a checkpoint for continuation,
 not a new owner message, mandate, budget period or completion claim.
 
-Main-role rollover atomically refreshes the tool directory and prepared-call fence
+With `continuation_retention_version: 2`, an exchange is one native tool-call batch
+and all its results. Commentary and completion-review nudges do not consume an
+exchange slot; intervening context remains exact and late outputs retain their
+matching calls. Earlier immutable manifests keep their recorded grouping solely
+to replay already journaled model inputs. Unknown explicit policy versions fail.
+
+Bob and active specialist rollover atomically refresh the tool directory and prepared-call fence
 before the first fresh provider request. Detailed manuals must be loaded again;
 a removed native schema cannot still execute through the earlier fence. The new
 manual remains available on the following step. Work handlers and their receipts

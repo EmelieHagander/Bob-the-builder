@@ -122,9 +122,14 @@ export function createBobContextContinuation(opts: {
   const ceiling = Number(policy.context_input_ceiling_tokens)
   const summaryLimit = Number(policy.continuation_summary_tokens)
   const keep = Number(policy.retained_tool_exchanges)
+  // Existing pinned manifests must reconstruct their recorded summarizer and
+  // model inputs byte-for-byte. Only newly activated manifests use the fixed
+  // exchange counter; an unknown explicit version is never guessed.
+  const retentionVersion = policy.continuation_retention_version === undefined ? 1 : policy.continuation_retention_version
   if (enabled && (!Number.isInteger(limit) || limit < 1000 || !Number.isInteger(ceiling) || ceiling < limit
     || !Number.isInteger(summaryLimit) || summaryLimit < 100
-    || !Number.isInteger(keep) || keep < 1 || keep > 10)) throw new Error('context_strategy_invalid')
+    || !Number.isInteger(keep) || keep < 1 || keep > 10
+    || (retentionVersion !== 1 && retentionVersion !== 2))) throw new Error('context_strategy_invalid')
 
   const readArchivedOperation = (input: unknown, chain?: Chain): Record<string, unknown> => {
     if (!enabled || !object(input) || Object.keys(input).some(key => !['call_id', 'after'].includes(key))
@@ -236,6 +241,20 @@ export function createBobContextContinuation(opts: {
         // submit parallel outputs separately; preserve that provider chain.
         const complete = calls.every(tool => all.some(message => message.role === 'tool' && message.tool_call_id === tool.id))
         let split = chain.groups.length - keep
+        if (retentionVersion === 2) {
+          // An exchange is a native assistant tool-call batch plus all of its
+          // outputs, not any assistant response. Commentary and completion
+          // review nudges cannot consume a retained exchange slot. Keep the
+          // contiguous suffix so those intervening messages stay exact too.
+          // With no calls, retain the latest response and incoming context.
+          split = chain.groups.length - 1
+          let exchanges = 0
+          for (let i = chain.groups.length - 1; i >= 0; i--) {
+            if (!chain.groups[i].some(message => message.tool_calls?.length)) continue
+            split = i
+            if (++exchanges === keep) break
+          }
+        }
         // A late output can belong to an earlier parallel call. Retain that
         // call's entire group too, so a fresh native input never starts with an
         // orphaned function_call_output.
