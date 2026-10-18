@@ -14,9 +14,12 @@ import { seedToolPolicy } from '../supabase/functions/_shared/project-answer.ts'
 const uid = '00000000-0000-4000-8000-000000000001', outsider = '00000000-0000-4000-8000-000000000002'
 const stepA = randomUUID(), stepB = randomUUID(), stepDone = randomUUID()
 const quote = 'Organise existing Tasks and choose the current focus.'
-let pg: Awaited<ReturnType<typeof projectSchema>>, thread: string, turn: string, generation: number, priorManifest: any
+let pg: Awaited<ReturnType<typeof projectSchema>>, thread: string, turn: string, generation: number, priorManifest: any, publishedManifest: any
 before(async () => {
-  pg = await projectSchema(async (db, name) => { if (name.endsWith('_ai_plan_links_catalog.sql')) priorManifest = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m })
+  pg = await projectSchema(async (db, name) => {
+    if (name.endsWith('_ai_plan_links_catalog.sql')) priorManifest = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
+    else if (priorManifest && !publishedManifest) publishedManifest = (await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
+  })
   await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())', [uid, 'member@example.test', outsider, 'outsider@example.test'])
   await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Shared build'),('B','b','Other build'); insert into bob.areas(id,project_id,slug,name) values('areaA','A','a','Assembly'); insert into bob.tasks(id,project_id,area_id,name,instructions) values('taskA','A','areaA','Cut panel','Preserve these instructions'),('taskB','B',null,'Private task','Private'); insert into bob.project_plans(project_id,current_revision,next_revision) values('A',null,2)")
   await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('memberA','A','Member','M',$1),('outsiderB','B','Outsider','O',$2)", [uid, outsider])
@@ -120,7 +123,10 @@ test('published contracts replace only fresh plan link tools and preserve old ma
   execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-plan-links-catalog.ts', 'supabase/migrations/20261015102328_ai_plan_links_catalog.sql', '--check'])
   const manifest: any = (await pg.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
   assert.deepEqual((await pg.query("select shared.resolve_ai_catalog('bob',$1) m", [priorManifest.manifest_id])).rows[0].m, priorManifest)
-  assert.deepEqual(manifest.models, priorManifest.models)
+  // This publication preserves model settings; later independent releases can add a tier.
+  assert.ok(publishedManifest)
+  assert.deepEqual(publishedManifest.models, priorManifest.models)
+  assert.deepEqual((await pg.query("select shared.resolve_ai_catalog('bob',$1) m", [publishedManifest.manifest_id])).rows[0].m, publishedManifest)
   const catalog = (m: any) => createAiCatalogSession({ rpc: async () => { throw Error('Pinned') } }, { app: 'bob', manifest: m })
   const current = catalog(manifest)
   for (const spec of PLAN_LINK_TOOLS) {
