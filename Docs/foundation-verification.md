@@ -16,7 +16,36 @@ owns exact five-message input, searchable original history and legacy replay.
 Independent subagent review found no blocking defect. Focused regressions cover
 repeated rollover, exact original-history SQL search and private-thread isolation,
 invalid references, serialized-size pressure and replay without another paid call.
-Hosted release/readback and the ordinary owner acceptance remain pending.
+**Published 2026-10-18 through [PR #266](https://github.com/EmelieHagander/Bob-the-builder/pull/266).**
+Tested head `26d0dd2d00333bdcde1458320a8c1d402bcaa18b`, tree
+`bb4b19ac361ce3b4ed467569071123ba0cfe508d`; merge
+`adbbdccbc2f901d5134252aec95e4fb997c7c355` has that same tree.
+[CI 39074031207](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39074031207)
+passed all 1,411 tests, vocabulary, Edge checks, production build and browser gates.
+The 17 new memory regressions and eight existing brief/recovery tests also passed
+locally. Local build passed; local Edge dependency download was refused by the
+environment, so the successful CI Edge check is the verification evidence.
+
+Both complete dependency closures were published from the tested head to
+`yuobtgoidmmmwfqenkau` via fox and mouse, before merge. Exact source readback passed
+for all returned files. Type-only omissions match the preceding installed bundles.
+
+| Function | Version / JWT verification | Uploaded / exact returned files | Bundle SHA-256 |
+| --- | --- | --- | --- |
+| `ask-bob` | 130 / true | 97 / 96; type-only `src/data/provenance.ts` omitted | `5ac4177116cda0aafef0621e0f594bf39c803d401c2c4185788fcdb2970cb3f2` |
+| `bob-worker` | 98 / false, own authentication | 96 / 94; type-only `src/data/provenance.ts` and `bob-request.ts` omitted | `05fc9585746228604e33e8cabce60b9ccfb0fb7cdcd8a32ddf2b3edfaecfc10e` |
+
+Both endpoints rejected unauthenticated POSTs with 401. No migration or catalog
+activation was performed. All 290 active definitions, settings and bound model
+snapshots match the pre-release snapshot; GPT-5.4/high, completion version 2 and
+allowance version 1 remain active.
+[Pages 39094855524](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39094855524)
+published the merge successfully. The live page and script returned 200 with the
+correct project configured. [Live Bob 39094855589](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39094855589)
+passed its read-only release check. These checks do not prove semantic summary
+fidelity, arbitrarily long same-turn provider context or real owner/CAD acceptance.
+The next ordinary owner message in the same private thread remains the acceptance
+gate; no owner message was sent and no failed owner job was manually restarted.
 
 A separate full-schema SQL reproduction found an automatic drawing failure:
 loading a request from a later owner turn opens a new budget period, but a failure

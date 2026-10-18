@@ -292,11 +292,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa minnesgrind (2026-10-17):** publicera och läs tillbaka den verifierade
-[minneshanteringen](ask-bob-conversations.md#managed-memory-navigation--2026-10-17)
-i båda Bob-tjänsterna. Bekräfta därefter med ett nytt ordinärt meddelande i samma
-privata tråd att det fulla indexet inte stoppar nästa tur, att exakt fem aktuella
-meddelanden når Bob och att äldre original kan återfinnas vid behov.
+**Nästa minnesgrind (2026-10-18):** prova ett nytt ordinärt meddelande i samma
+privata tråd med den publicerade
+[minneshanteringen](ask-bob-conversations.md#managed-memory-navigation--2026-10-17).
+Bekräfta att det fulla indexet inte stoppar nästa tur och att Bob kan återfinna
+en äldre exakt uppgift vid behov. Återställ inte tråden; originalhistoriken ska
+bevaras. [Releasebeviset](foundation-verification.md#managed-conversation-memory--2026-10-17)
+äger kodåterläsning, tekniska femmeddelandeprov och avslutad publicering.
 
 **Nästa CAD-grind (2026-10-17):** kör beställarens vanliga Bob-test på samma
 väntande begäran för våningssängen. Bob ska läsa och kontrollera samma konstruktions

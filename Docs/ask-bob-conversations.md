@@ -280,6 +280,8 @@ preserve the prior brief and exact transcript and return the existing retryable
 failure. Executions whose stored identity lacks the new version keep the previous
 validation and model/save inputs. Journal replay reuses the first response across
 worker yields. No schema, catalog or model-setting migration is needed.
+[Hosted release evidence](foundation-verification.md#managed-conversation-memory--2026-10-17)
+records the installed runtimes and the remaining ordinary owner test.
 Diagnostics record validation reason and size, never conversation text. This
 repairs the failure before main Bob, image inspection or CAD can start; a guest
 read-only release check does not exercise private-thread summarization.
