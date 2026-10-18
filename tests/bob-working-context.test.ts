@@ -80,12 +80,11 @@ test('main Bob has standard/high settings while memory folding has its own mini/
   ])
 })
 
-test('CAD source collection stays mini/low while construction uses standard/medium',async()=>{
- const rows=(await pg.query("select function_name,model,reasoning_effort,max_output_tokens from shared.ai_settings where app='bob' and function_name in ('cad-research','cad-designer') order by function_name")).rows
- assert.deepEqual(rows,[
-  {function_name:'cad-designer',model:'gpt-5.4',reasoning_effort:'medium',max_output_tokens:32000},
-  {function_name:'cad-research',model:'gpt-5.4-mini',reasoning_effort:'low',max_output_tokens:3000},
- ])
+test('current CAD settings and catalog retain only the independent reviewer',async()=>{
+ const rows=(await pg.query("select function_name,is_enabled from shared.ai_settings where app='bob' and coworker_id='bob' and module_id='cad' and function_name in ('cad-research','cad-designer','cad-reviewer') order by function_name")).rows
+ assert.deepEqual(rows,[{function_name:'cad-reviewer',is_enabled:true}])
+ const manifest=(await pg.query<{catalog:{definitions:{prompt_key:string}[]}}>("select shared.resolve_ai_catalog('bob',null) catalog")).rows[0].catalog
+ assert.deepEqual(manifest.definitions.filter(row=>['role.cad-designer','role.cad-research','role.cad-reviewer'].includes(row.prompt_key)).map(row=>row.prompt_key),['role.cad-reviewer'])
 })
 
 test('next turn receives real saved action IDs separately from prose and excludes another private thread',async()=>{

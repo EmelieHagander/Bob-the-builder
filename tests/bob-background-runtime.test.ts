@@ -112,7 +112,7 @@ test('waiting for an accepted AI job and yielding before dispatch do not spend r
   for (let i = 0; i < 5; i++) {
     await assert.rejects(createBobJournal(store, 1000, () => 0).run('model:cad', {}, async () => { dispatches++; return 'unexpected' }, 1000), BobContinuation)
     await assert.rejects(createBobJournal(store, Infinity).run('model:cad', {}, async () => {
-      throw new BobContinuation('yield', 'ai_wait', { id: 'existing-job', accepted: true, role: 'cad-designer' })
+      throw new BobContinuation('yield', 'ai_wait', { id: 'existing-job', accepted: true, role: 'cad-reviewer' })
     }), BobContinuation)
   }
   assert.equal(dispatches, 0)

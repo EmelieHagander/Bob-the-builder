@@ -166,3 +166,39 @@ test('oversized new base role is refused before model dispatch and survives the 
     callModel: async () => { paid++; return response() }, fail: async () => { failed++ } })
   assert.deepEqual(result, { ok: false, error: 'context_input_too_large' }); assert.equal(paid, 0); assert.equal(failed, 1)
 })
+
+test('the first actual model input for a 1000-Area project is bounded and deferred orientation remains lazily callable', async () => {
+  const session = catalogFixture(), f = fixture()
+  const areas = Array.from({ length: 1000 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, project_id: 'A',
+    name: `Arbetsområde ${i} för byggprojektet`, archived_at: null, updated_at: '2026-10-18T08:00:00Z' }))
+  const lookup = createProjectLookup('A', async (_project, input) => {
+    if (input.dataset === 'project') return { data: { records: [{ id: 'A', name: 'Stort projekt', description: 'Samordna arbetet.' }], related: [], truncated: false }, error: null }
+    if (input.dataset === 'plan') return { data: { records: [], related: [], truncated: false }, error: null }
+    const start = input.after_id ? areas.findIndex(area => area.id === input.after_id) + 1 : 0
+    const records = areas.slice(start, start + 25), truncated = start + records.length < areas.length
+    return { data: { records, related: [], truncated, next_cursor: truncated ? records.at(-1)!.id : null }, error: null }
+  }, undefined, undefined, undefined, { unlimitedWork: true })
+  let calls = 0, continuation: Record<string, unknown> | undefined
+  const result = await runProjectAnswer({ ...f.opts, lookup, aiCatalog: session, callModel: catalogCall(async options => {
+    if (++calls === 1) {
+      const tokens = countContextTokens(JSON.stringify({ systemMessage: options.systemMessage, messages: options.messages, tools: options.tools }))
+      assert(tokens < 32_000, `initial source/tool seed must leave ample room below 96k; actual ${tokens}`)
+      assert(options.systemMessage!.includes('read_project_orientation'))
+      const project = JSON.parse(String(options.messages![6].content).split(session.text('bob.frame.briefing-label') + '\n\n')[1])
+      assert.equal(project.directory.sections.children.total, 1000)
+      assert(project.directory.sections.children.omitted > 0)
+      continuation = project.directory.sections.children.next.arguments
+      return toolResponse('describe_tool', { name: 'read_project_orientation' }, 'orientation-described')
+    }
+    if (calls === 2) {
+      assert(names(options).includes('read_project_orientation'))
+      return toolResponse('read_project_orientation', continuation, 'orientation-read')
+    }
+    assert.equal(calls, 3)
+    const page = JSON.parse(String(options.messages![0].content))
+    assert.equal(page.status, 'ok'); assert.equal(page.total, 1000); assert(page.records.length > 0)
+    assert(page.tokenBudget.tokens <= 6000)
+    return response()
+  }, session) })
+  assert(result.ok); assert.equal(calls, 3)
+})

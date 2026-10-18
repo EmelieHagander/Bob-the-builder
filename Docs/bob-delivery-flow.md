@@ -292,7 +292,17 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — ordinär minnes-/modellacceptans (2026-10-18):** prova ett nytt
+**Aktivt nästa steg — slutför kontextauditens fem rättningar (2026-10-18):**
+[F1–F5](bob-context-coverage-audit-2026-10-18.md) återupptas på
+`fix/bob-context-coverage` från `e0ee015`, inklusive de mergade CAD- och
+prestandarättningarna #270/#269. Ta bort Daisy/Kjells oanvända runtime och aktiva
+katalogdefinitioner; inför specialistinstruktioner på begäran, korrekt bevarande
+av två verktygsutbyten, en total projektöversiktsgräns med exakt sidläsning samt
+en kompatibel installation av skalets planlänkar. Historiska manifest och
+revisionsbevis bevaras. Gemensam granskning, tester, publicering och driftåterläsning
+återstår; inget fynd är ännu stängt av denna återupptagna session.
+
+**Kvarvarande ordinär minnes-/modellacceptans:** prova ett nytt
 meddelande i samma privata tråd med den aktiverade
 [kontextstrategin](ask-bob-conversations.md#context-strategy--2026-10-18).
 Bekräfta att Bob fortsätter uppdraget, behåller exakt fem senaste meddelanden och

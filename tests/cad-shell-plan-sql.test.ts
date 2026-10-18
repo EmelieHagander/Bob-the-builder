@@ -1,10 +1,27 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
+import {readFile} from 'node:fs/promises'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
-test('a shell shows each piece\'s plan Steps, sums piece materials once and lets Bob link pieces in one write',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+const restoration='20261018144828_restore_cad_shell_plan_link.sql'
+for(const omitted of [false,true]) test(`shell plan installation (${omitted?'hosted omission':'complete migration history'}) preserves the writer chain and links pieces`,async t=>{
+ const delegatesSql=`select n.nspname,p.proname,pg_get_functiondef(p.oid) definition,p.proacl::text acl
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where (n.nspname in ('bob','bob_private') and p.proname in ('bob_project_write_v16','bob_project_write_v17','bob_project_write_v18','bob_project_write_v19','bob_project_write_v20'))
+   or (n.nspname='bob' and p.proname='bob_drawing_request') order by n.nspname,p.proname`
+ let originalDelegates:unknown[],originalShell:unknown[]
+ const pg=await projectSchema(async(db,name)=>{if(name===restoration){
+  originalDelegates=(await db.query(delegatesSql)).rows
+  originalShell=(await db.query(`select to_regprocedure('bob_private.read_cad_shell_pieces(text,uuid,integer)') is not null installed,
+   exists(select 1 from pg_proc where pronamespace='bob_private'::regnamespace and position('cad_shell_steps' in prosrc)>0) writer`)).rows
+ }},undefined,omitted?['20261008150000_cad_shell_plan_link.sql']:[]);t.after(()=>pg.close())
+ assert.deepEqual(originalShell!,[{installed:!omitted,writer:!omitted}],'fixture reproduces the real missing installation')
+ assert.deepEqual((await pg.query(delegatesSql)).rows,originalDelegates!,'v16–v20, conflict transport and atomic drawing continuation remain byte-identical')
+ for(const role of ['anon','authenticated','service_role']) {
+  assert.equal((await pg.query(`select has_function_privilege($1,'bob_private.bob_project_write_before_consequences(text,uuid,uuid,bigint,jsonb)','execute') allowed`,[role])).rows[0].allowed,false,'no direct internal writer access')
+ }
+ assert.equal((await pg.query(`select prosecdef from pg_proc where oid='bob.read_cad_shell(text,uuid,integer)'::regprocedure`)).rows[0].prosecdef,false,'shell reader retains caller RLS')
  const owner=randomUUID(),outsider=randomUUID()
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
@@ -49,15 +66,16 @@ test('a shell shows each piece\'s plan Steps, sums piece materials once and lets
   [['plasterboard','m2',12.5,1,['room'],0],['studs 45x95','pcs',14,2,['bed','room'],0]])
  assert.equal(before.components.find((c:any)=>c.component_key==='shelf').materials.length,0)
 
- await t.test('Bob links several pieces to plan Steps in one claimed-turn write',async()=>{
+ await t.test('Bob links several pieces to plan Steps in one claimed-turn write',async sub=>{
   const message='Put each piece of the cabin into the build plan.',turn=randomUUID()
   const claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
-  const write=(p:unknown,uid=owner)=>call(uid,'bob.bob_project_write_v16',[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
+  const write=(p:unknown,uid=owner,version=20)=>call(uid,`bob.bob_project_write_v${version}`,[project,claim.thread_id,turn,claim.generation,JSON.stringify(p)])
   const payload={kind:'cad_shell_steps',record_id:shell,expected_updated_at:null,expected_revision:1,request_quote:'into the build plan',
    data:{links:[{component_key:'room',step_id:wallsStep,action:'link'},{component_key:'bed',step_id:bedStep,action:'link'},{component_key:'room',step_id:finishStep,action:'link'}]}}
   const receipt=await write(payload)
   assert.deepEqual([receipt.dataset,receipt.operation,receipt.revision,receipt.recordId],['artifacts','updated',1,shell],'the shell revision does not change')
   assert.deepEqual(await write(payload),receipt,'replay returns the same receipt')
+  assert.deepEqual(await write(payload,owner,16),receipt,'retained v16 and current v20 reach the same receipt')
   const byKey=Object.fromEntries(receipt.record.components.map((c:any)=>[c.component_key,c.steps.map((s:any)=>[s.position,s.title])]))
   assert.deepEqual(byKey,{bed:[[2,'Build the bunk bed']],bed_2:[[2,'Build the bunk bed']],room:[[1,'Frame the walls'],[3,'Finish']],shelf:[]})
   assert.deepEqual(receipt.record.plan_summary.not_in_plan,['shelf'])
@@ -75,6 +93,26 @@ test('a shell shows each piece\'s plan Steps, sums piece materials once and lets
   const unlinked=await write({...payload,data:{links:[{component_key:'room',step_id:finishStep,action:'unlink'},{component_key:'shelf',step_id:finishStep,action:'link'}]}})
   assert.deepEqual(unlinked.record.components.find((c:any)=>c.component_key==='room').steps.map((s:any)=>s.title),['Frame the walls'])
   assert.deepEqual(unlinked.record.plan_summary.not_in_plan,[])
+
+  await sub.test('restored writes retain quota policy, live claims, receipt replay and shell composition',async()=>{
+   // Fill the old receipt allowance without performing unrelated fixture work.
+   await pg.query(`insert into bob_private.bob_write_receipts(project_id,actor_id,turn_id,operation_key,payload,before_record,receipt)
+    select $1,$2,$3,'fixture:'||i,'{}','{}','{}' from generate_series(1,32) i`,[project,owner,turn])
+   const next={...payload,data:{links:[{component_key:'shelf',step_id:wallsStep,action:'link'}]}}
+   await assert.rejects(write(next),/write_budget_exhausted/,'unpinned legacy calls retain their policy')
+   const manifest:any=(await pg.query(`select shared.resolve_ai_catalog('bob',null) m`)).rows[0].m
+   await pg.query(`insert into bob_private.bob_jobs(id,project_id,actor_id,thread_id,turn_id,generation,status,
+    claim_token,lease_until,credential,worker_url,expires_at,work_allowance_version,ai_catalog_manifest_id)
+    values($1,$2,$3,$4,$5,$6,'running',$7,clock_timestamp()+interval '4 minutes','{"fixture":true}',
+     'https://fixture.supabase.co/functions/v1/bob-worker',clock_timestamp()+interval '30 minutes',1,$8)`,
+    [randomUUID(),project,owner,claim.thread_id,turn,claim.generation,randomUUID(),manifest.manifest_id])
+   assert.equal((await write(next)).recordId,shell,'authorized policy-1 jobs have no write count quota')
+   await assert.rejects(call(owner,'bob.bob_project_write_v20',[project,claim.thread_id,turn,claim.generation+1,JSON.stringify(next)]),/turn_not_claimed/)
+   const composed=await write({...payload,kind:'cad_shell',data:{action:'place',fields:{component_key:'shelf',x_mm:100,y_mm:0,z_mm:0,rz:0,placement_basis:'bob_decision',reason:'Move shelf within the cabin.'}}})
+   assert.equal(composed.revision,2,'ordinary shell writes still reach their preserved delegate')
+   assert.deepEqual(await write(payload),receipt,'exact receipt retry precedes shell freshness')
+   await assert.rejects(write({...payload,data:{links:[{component_key:'bed',step_id:wallsStep,action:'link'}]}}),(error:any)=>error.code==='PT409'&&/cad_shell_changed/.test(error.message),'current conflict adapter prevents database retries')
+  })
  })
 
  await t.test('a requirement from another version of the piece is flagged, not hidden',async()=>{
@@ -85,5 +123,19 @@ test('a shell shows each piece\'s plan Steps, sums piece materials once and lets
   assert.deepEqual([Number(studs.required_quantity),studs.needs_review],[14,1])
   assert.equal(now.components.find((c:any)=>c.component_key==='bed').materials[0].needs_review,true)
   await assert.rejects(call(outsider,'bob.read_cad_shell',[project,shell,null]),/project_denied/)
+ })
+
+ await t.test('reapplying preserves data and refuses unknown writer drift',async()=>{
+  const sql=await readFile(new URL('../supabase/migrations/'+restoration,import.meta.url),'utf8')
+  const before=await read()
+  await pg.exec(sql)
+  assert.deepEqual(await read(),before,'existing drawings, placements, links and materials are untouched')
+  const signature='bob_private.bob_project_write_before_consequences(text,uuid,uuid,bigint,jsonb)'
+  const definition=(await pg.query('select pg_get_functiondef($1::regprocedure) definition',[signature])).rows[0].definition as string
+  await pg.exec(definition.replace("raise exception 'cad_shell_invalid'","raise exception 'changed_contract'"))
+  await assert.rejects(pg.exec(sql),/cad_shell_plan_unexpected_existing_installation/)
+  await pg.exec('rollback')
+  await pg.exec(definition)
+  assert.deepEqual(await read(),before,'failed guard cannot alter project data')
  })
 })

@@ -6,13 +6,38 @@ Every project CAD drawing requires one saved, checked construction revision with
 
 Bob never sends Python, SQL, URLs or arbitrary CAD code to the geometry engine. Bob produces a bounded, versioned construction request. The adapter validates it and a separate stateless worker translates it to build123d/Open Cascade.
 
+## Current colleague route — coverage correction 2026-10-18
+
+**Implemented in source; publication and owner acceptance remain in
+[State](bob-delivery-flow.md#state).** Bob designs and corrects the saved
+construction through its canonical tools. `design_project_cad` compiles the exact
+checked revision into deterministic geometry; Rita (`cad-reviewer`) independently
+reviews the rendered candidate and original requirements. A revision request
+returns to the same construction before a new checked rendering. Bob then saves
+the exact approved candidate through `save_cad_design`.
+
+Daisy (`cad-designer`) and Kjell (`cad-research`) have no remaining executable
+model path. Their free-design, intake-model and candidate-patch implementations
+are removed; the publication retires their active catalog dependencies and role
+settings. Saved drawings, request payload shapes, immutable catalog manifests and
+accounting remain readable history. They cannot reactivate those model paths.
+The dated collector/designer loops below record earlier contracts; the
+[K3 route](#k3-checked-construction-drawings--2026-10-04), canonical construction
+commands and current authority checks govern new drawing work.
+
+Rita's optional calculator uses the same instruction discovery and context
+renewal as Plantus and Vera; [tool ownership](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
+defines that scoped surface. [The database owner](../db/README.md#shell-plan-installation-repair--2026-10-18)
+defines the separately restored shell-to-Step link, its installation guard and
+rollout order.
+
 ## Server-owned target and intake identities
 
-CAD render tools obtain the target revision from the caller-scoped selected-target read. The designer cannot supply that version. The candidate retains the exact pin, and readiness, source freshness, independent review and save-time revision guards still apply. A changed target cannot silently accept an older candidate.
+CAD obtains the target revision from the caller-scoped selected-target read. A model cannot supply that version. The candidate retains the exact pin, and readiness, source freshness, independent review and save-time revision guards still apply. A changed target cannot silently accept an older candidate.
 
-Research checks use the exact IDs of the persisted handoff, bound into the tool schema. Newly discovered needs omit IDs; the server creates bounded deterministic IDs and reuses matching identities from the saved assessment. An owner-decision need citing exactly one canonical choice uses that database choice ID, so only its own saved deferral can resolve it. Historical pinned contracts remain readable, but their model-supplied target versions and new-need IDs are not authoritative. Invalid citations, missing physical inputs and consequential owner choices retain their existing guards.
+**Historical research identity contract:** research checks used the exact IDs of the persisted handoff, bound into the tool schema. Newly discovered needs omitted IDs; the server created bounded deterministic IDs and reused matching identities from the saved assessment. An owner-decision need citing exactly one canonical choice used that database choice ID. Stored assessments and pinned contracts remain readable, but their model-supplied target versions and new-need IDs are not authoritative. Current handoff identity and checked-construction readiness retain their own guards; no research-model call remains.
 
-Install the matching handlers in both Bob endpoints before applying `20261009222402_cad_server_owned_values.sql`. It clones and activates only the three affected immutable tool contracts, preserving other active edits and all saved manifests. [Background execution](ask-bob-conversations.md) owns durable continuation; read timeouts must be sealed in its journal before a later model dispatch.
+The original publication was `20261009222402_cad_server_owned_values.sql`; it cloned the three affected immutable tool contracts. It is historical migration evidence, not a publication to rerun after role retirement. [Background execution](ask-bob-conversations.md) owns durable continuation; read timeouts must be sealed in its journal before a later model dispatch.
 
 ## Explicit source renewal — 2026-10-17
 
@@ -225,15 +250,15 @@ approval. A checked numeric construction is not advisory readiness.
 
 `save_construction_draft` checks canonical readiness for purpose `construction`
 before a new save, with the same check at the database writer under source locks.
-CAD checks the exact selected Solution before paid research, design or review,
-including the checked-construction path. Missing/open intent returns `needs_data`;
+CAD checks the exact selected Solution before rendering and independent review
+of the checked construction. Missing/open intent returns `needs_data`;
 unreadable source evidence returns `unavailable`. The exact ready pin is refreshed
 through rendering, review and save, so changed target/intent cannot silently
 replace the chosen revision.
 
 Saved Solution features are merged into the handoff as stable `intent_<id>`
 requirements. Original referenced images are opened through caller-scoped access,
-and their source versions accompany the same pin to Daisy and Rita. Reference
+and their source versions accompany the same pin through rendering and Rita's review. Reference
 roles guide interpretation; image content remains design intent, not measured
 truth. CAD saves require the exact `bob_design_intent` and `bob_design_images`
 manifest entries, with canonical target and fresh image-version validation.
@@ -258,9 +283,9 @@ owns the original gap; [State](bob-delivery-flow.md#state) owns remaining
 named-member advice/mockup acceptance. Controlled code/SQL/browser fixtures
 do not establish the quality of actual expert advice or reference fidelity.
 
-The current technical handoff and original-image path already exist, and the
-first-layout instruction includes required functions; only optional joinery and
-decoration are deferred. The newly supplied screenshots confirm design intent:
+**October 9 incident evidence:** the then-current technical handoff and original-image
+path existed, and the first-layout instruction included required functions;
+only optional joinery and decoration were deferred. The supplied screenshots confirmed design intent:
 three pull-out drawers, a gable ladder and foot-end opening, with book display
 left and ladder right when facing the visible foot gable, plus horizontal timber
 panels at that end and the upper long guard. Saved CAD revision 1 instead has a
@@ -619,7 +644,7 @@ Each parameter is an exact project/accepted-Space source, a documented design de
 
 **Split builds (pieces).** Bob's `plan_cad_pieces` tool (`cad-pieces.ts`) splits a large build into 2–12 pieces. Each piece is stored as an ordinary drawing request in `collecting` with its own budget, a stable per-piece id (`piece:<key>`) and a complete standalone brief and handoff. `bob.release_drawing_pieces` (migration `20261008100000_cad_pieces.sql`) marks one unseen drawing event for exactly those fresh pieces of the claimed turn. The existing `queue_drawing_events` then designs and auto-saves them one at a time per thread after the turn, while drawing authority lasts (renewed while the owner has Bob open). A failed piece keeps its `request_id` and does not block the others; failed and older requests still wait for real new data. Pieces retain separate drawing requests. A shell can place their saved revisions by reference; there is no combined house CAD render.
 
-**Change-only repairs.** After a new-geometry render, the designer is offered `revise_cad_candidate` (`cad-revise.ts`): `upsert`/`remove` by id for definitions, instances, arrays, clearances, motions, parameter nodes and bindings (by path), plus nullable views/title/description/assumptions and `dimension_bindings`. A null dimension list keeps the source pins; an array replaces the complete bounded list. Axis swaps must change the dimension pins and their parameter source nodes/bindings together. Fresh project measurements and physical snapshots still supply the values and must agree in both provenance maps. Legacy pinned tools may omit the new field. Removing a definition also removes its dimension pins when that definition is absent from the merged recipe.
+**Historical change-only repairs — removed by the coverage correction.** The former designer was offered `revise_cad_candidate` (`cad-revise.ts`): `upsert`/`remove` by id for definitions, instances, arrays, clearances, motions, parameter nodes and bindings (by path), plus nullable views/title/description/assumptions and `dimension_bindings`. This candidate-patch handler and its module are removed. Current repairs revise the canonical construction and render its checked revision through K3. The following patch behavior and publication describe the earlier implementation only.
 
 The server applies a patch to the exact input of the last **successfully rendered** new geometry in that consult and re-runs the same render, provenance, lineage and review path. A rejected patch never becomes the next patch base. Removing an item removes the parameter bindings under its path. Parameter nodes no longer reachable from a binding or frame are dropped and listed as `dropped_nodes`. Unknown ids are an input correction, not a silent no-op. The immutable repair-tool publication is generated by `scripts/build-ai-cad-revision-catalog.ts`; compatible handlers must precede activation.
 
@@ -629,7 +654,7 @@ The server applies a patch to the exact input of the last **successfully rendere
 
 **Shell drawings.** A shell (`20261008120000_cad_shells.sql`, `cad-shell.ts`, `src/lib/cadShell.ts`) is a plan-kind Artifact that places saved CAD pieces by reference: each revision pins exact piece revisions plus whole-mm x/y/z, a quarter-turn `rz` and a `placement_basis` (`shared_origin`, `owner_placed`, `bob_decision`). Bob (`compose_cad_shell` through writer kind `cad_shell`) and the app (`bob.cad_shell_command`) use the same command: create, place, add, remove, adopt. Pieces are never copied, so cut lists and materials stay on the pieces. `bob.read_cad_shell` marks a piece `newer_revision` when it has a newer saved CAD revision; adopting it is an explicit command. Generic Artifact revise is refused for shells; archive and restore carry the pieces. Shells do not nest, and the shell is not rendered as one CAD assembly: the app shows plan-view footprints from each piece's saved bounding box. On the newest, non-archived shell revision the owner can drag a piece (mouse or touch), nudge it with arrow buttons or arrow keys, or turn it a quarter about its footprint centre; positions snap to a 50 mm grid and each save is one `place` command with `placement_basis: owner_placed`, the opened revision as expected and the owner's reason (default "Moved in the drawing"). A stale revision (`cad_shell_changed`) keeps the unsaved move and offers a reload of the newest revision. Footprints that cross (not a piece wholly inside a larger one) are shown as a "footprints overlap" warning: bounding boxes only, never a measured clash check and never a block. Beside the plan, the app offers the [mobile CAD viewer](#mobile-cad-viewer--2026-10-10); the former solid-primitive preview is superseded by that line-view contract.
 
-**Shell → plan and materials** (`20261008150000_cad_shell_plan_link.sql`). `bob.read_cad_shell` also returns, per piece, its current plan Steps (the same `artifact_step_links` that `link_project_drawing` writes, so links are held by the pieces) and its current material requirements, plus a `plan_summary`: totals of the pieces' requirements grouped by name and unit, `not_counted` (pieces with no requirement — never shown as zero), `counted_once` (a piece placed twice is counted once and named) and `not_in_plan`. Lines from another piece version or a changed target are counted but flagged `needs_review`. The shell owns no links or materials. Bob links many pieces in one claimed-turn write with `link_cad_shell_steps` (writer kind `cad_shell_steps`; does not change the shell revision); a missing Step is added with the plan tools first. The app lists pieces in build order (earliest linked Step position) with "Not in the plan yet" / "Not counted yet", and a shell-level "Materials so far" total. This is a planning read-out, not a purchase or Shopping handoff.
+**Shell → plan and materials** (original source `20261008150000_cad_shell_plan_link.sql`). The coverage audit found this slice missing in the hosted installation; the [guarded repair](../db/README.md#shell-plan-installation-repair--2026-10-18) restores it at the correct writer-chain position. Publication remains in State. The contract is: `bob.read_cad_shell` also returns, per piece, its current plan Steps (the same `artifact_step_links` that `link_project_drawing` writes, so links are held by the pieces) and its current material requirements, plus a `plan_summary`: totals of the pieces' requirements grouped by name and unit, `not_counted` (pieces with no requirement — never shown as zero), `counted_once` (a piece placed twice is counted once and named) and `not_in_plan`. Lines from another piece version or a changed target are counted but flagged `needs_review`. The shell owns no links or materials. Bob links many pieces in one claimed-turn write with `link_cad_shell_steps` (writer kind `cad_shell_steps`; does not change the shell revision); a missing Step is added with the plan tools first. The app lists pieces in build order (earliest linked Step position) with "Not in the plan yet" / "Not counted yet", and a shell-level "Materials so far" total. This is a planning read-out, not a purchase or Shopping handoff.
 
 The existing candidate/review/fingerprint/draft/save path carries the graph. Renderer-supplied provenance is replaced. Detail reuse first recomputes the complete saved graph, then retains only selected geometry's transitive parameter dependencies plus shared external frame context. Current exact sources are checked before rendering, independently before review, and under database locks at save. A change to an unselected explicit parameter dependency does not invalidate an unrelated detail; ancestor source pins with unknown dependency scope remain conservative. Historical geometry and source snapshots are never rewritten. This does not alter purchases or performed work.
 
@@ -1006,6 +1031,11 @@ phone FPS or acceptance of a particular real house. Release evidence belongs in
 the PR; physical-phone acceptance remains in [State](bob-delivery-flow.md#state).
 
 ## Input readiness and CAD execution — 2026-10-10
+
+**Historical intake-model contract.** The coverage correction removes this
+researcher and its answer-budget loop. Stored assessment/error shapes remain
+readable; current execution uses checked-construction readiness and independent
+review through K3. The following records the October 10 publication.
 
 The intake researcher reports historical candidate, renderer and model failures
 in cited `execution_issues`. These pass to the constructor as work to investigate

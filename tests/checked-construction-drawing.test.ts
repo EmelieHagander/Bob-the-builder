@@ -50,7 +50,7 @@ function runtime(){
  const {draft,catalog}=fixture();let allowed=true,reads=0,renders=0,reviews=0,afterRender=()=>{},afterReview=()=>{},verdict='pass'
  const check=()=>checkedConstructionForDrawing({projectId:draft.projectId,message:'Draw this construction',hasAccess:async()=>allowed,read:async()=>{reads++;return structuredClone(draft)},
   readCatalog:async(id,revision)=>({status:'ok',projectId:draft.projectId,record:catalog.get(id+'@'+revision)}),readSources:async()=>({project:new Map(),physical:new Map()})},artifact,1)
- const assistant=(extra:any={})=>createCadAssistant({research:false,projectId:draft.projectId,userId:'owner',ownerRequest:'Draw this exact bracket',hasAccess:async()=>allowed,available:true,deadline:Date.now()+200000,
+ const assistant=(extra:any={})=>createCadAssistant({projectId:draft.projectId,userId:'owner',ownerRequest:'Draw this exact bracket',hasAccess:async()=>allowed,available:true,deadline:Date.now()+200000,
   makeLookup:()=>createProjectLookup(draft.projectId,async(_p,i)=>({data:{records:i.dataset==='target'?[{id:'project',revision:1,solution_id:material}]:[],related:[],truncated:false},error:null}),1000,40),
   readArtifact:async()=>structuredClone(draft),checkConstruction:check,
   render:async recipe=>{renders++;afterRender();return {recipe,manifest:{bounding_box_mm:checkConstruction(draft,catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:recipe.assembly_id},files:{front:'Zml4dHVyZQ=='},previews:Object.fromEntries(recipe.views.map(v=>[v,'Zml4dHVyZQ==']))}},

@@ -4,6 +4,7 @@ import type { SolutionActions } from '../project-solution-actions.ts'
 import type { ProjectEdits } from '../project-edits.ts'
 import type { ConstructionTools } from '../construction-draft.ts'
 import type { AiCatalogSession } from '../ai-catalog.ts'
+import type { OrientationDirectoryReader } from '../bob-orientation-directory.ts'
 import { bobColleagues } from '../bob-prompt.ts'
 import { hasCalculatorContract, type ProjectCalculator } from '../project-calculator.ts'
 import type { OperationalReader } from '../project-operations.ts'
@@ -25,7 +26,7 @@ import { createToolSession, type ToolDefinition, type ToolGate, type ToolPolicyR
 /** Toolbox shelves, in presentation order. A shelf is orientation for Bob, not
  * authority; unknown tools land on the last shelf. */
 export const TOOLBOX_SHELVES: { label: string; tools: string[] }[] = [
-  { label: 'Project records and memory', tools: ['change_task_readiness', 'read_work_context', 'edit_work_record', 'create_work_record', 'change_work_relation', 'change_work_state', 'read_solution_context', 'create_solution_alternative', 'select_solution_alternative', 'change_solution_evidence', 'read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_record_section', 'read_project_work', 'search_conversation_history', 'read_conversation_message'] },
+  { label: 'Project records and memory', tools: ['change_task_readiness', 'read_work_context', 'edit_work_record', 'create_work_record', 'change_work_relation', 'change_work_state', 'read_solution_context', 'create_solution_alternative', 'select_solution_alternative', 'change_solution_evidence', 'read_project_edit_context', 'edit_project_record', 'search_project_data', 'read_project_orientation', 'read_project_record_section', 'read_project_work', 'search_conversation_history', 'read_conversation_message'] },
   { label: 'Project, phases and Areas', tools: ['save_project_description', 'set_project_phase', 'update_project_schedule', 'save_project_area', 'archive_project_area'] },
   { label: 'Living plan', tools: ['read_plan_link_context', 'change_plan_focus', 'change_plan_task_link', 'compile_project_plan', 'edit_project_plan', 'audit_project_plan', 'save_compiled_project_plan', 'propose_project_plan', 'decide_project_plan', 'set_project_plan_focus', 'link_project_plan_task', 'link_project_plan_evidence'] },
   { label: 'Tasks and build days', tools: ['save_project_task', 'update_project_task_work', 'manage_task_readiness', 'delete_project_task', 'save_project_build_day', 'delete_project_build_day'] },
@@ -44,6 +45,7 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
   calculator?: ProjectCalculator;
+  orientationReader?: OrientationDirectoryReader;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
   /** The owner's current message; when present, change provenance is server-filled. */
   message?: string;
@@ -67,6 +69,8 @@ export function createBobToolSession(opts: {
   const shelved = (def: ToolDefinition): ToolDefinition => ({ ...def, group: def.group ?? (shelves ? shelves.find(s => s.tools.includes(def.spec.function.name))?.label ?? 'Other tools' : shelfOf(def.spec.function.name)) })
   const registered: ToolDefinition[] = [
     { spec: SEARCH_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.search(v) },
+    ...(opts.orientationReader ? opts.orientationReader.tools.map(spec => ({ spec, version: 1,
+      gate: (): ToolGate => 'available', execute: (v: unknown) => opts.orientationReader!.execute(v) })) : []),
     { spec: PROJECTION_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectProjection(v) },
     { spec: STAIR_INSPECT_TOOL, version: 1, gate: readGate, execute: v => opts.lookup.inspectStairs(v) },
     ...(opts.calculator&&(!opts.aiCatalog||hasCalculatorContract(opts.aiCatalog))?opts.calculator.tools.map(spec=>({spec,version:1,

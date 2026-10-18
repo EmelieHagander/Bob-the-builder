@@ -6,7 +6,7 @@ import { EDIT_PLAN_TOOL, editPlanSnapshot } from './plan-edit.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
-import { callWithCalculator } from './calculator-model-call.ts'
+import { callWithCalculator, type SpecialistContextSurfaceRegistrar } from './calculator-model-call.ts'
 
 type Lookup = ReturnType<typeof createProjectLookup>
 export type PlanAssistantModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>
@@ -168,6 +168,7 @@ function referencedSources(compiled:any,review:any,sources:ProjectSource[]){
 export function createPlanAssistant(opts:{
   aiCatalog:AiCatalogSession;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;
   calculator?:ProjectCalculator;unlimitedWork?:boolean;
+  registerContextSurface?:SpecialistContextSurfaceRegistrar;
   makeLookup:()=>Lookup;callModel:PlanAssistantModelCall;deadline?:number;
 }){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
@@ -241,7 +242,7 @@ export function createPlanAssistant(opts:{
       if(mode==='audit_plan'&&!currentPlan) return {status:'not_initialized',saved:false}
       // One compiler/reviewer pair per Bob tool call. Return to Bob before any repair.
       if(!await opts.hasAccess()) return {status:'denied',saved:false}
-      const calculatorCall=(o:OpenAIServiceOptions)=>callWithCalculator(o,{catalog:opts.aiCatalog,calculator:opts.calculator,unlimitedWork:opts.unlimitedWork,hasAccess:opts.hasAccess,deadline,callModel:opts.callModel})
+      const calculatorCall=(o:OpenAIServiceOptions)=>callWithCalculator(o,{catalog:opts.aiCatalog,calculator:opts.calculator,unlimitedWork:opts.unlimitedWork,hasAccess:opts.hasAccess,deadline,callModel:opts.callModel,registerContextSurface:opts.registerContextSurface})
       const compiler=await calculatorCall({
         app:'bob',coworkerId:'bob',functionName:'plan-compiler',aiFunction:'plan-compiler',module:'living-plan',
         userId:opts.userId,catalogRoleKey:'plan-compiler',catalogSchemaKey:'bob_plan_compilation',

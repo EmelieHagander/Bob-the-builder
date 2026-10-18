@@ -1,16 +1,13 @@
 import {type ProjectCalculator} from './project-calculator.ts'
-import {callWithCalculator} from './calculator-model-call.ts'
+import {callWithCalculator,type SpecialistContextSurfaceRegistrar} from './calculator-model-call.ts'
 import { BobBudgetError, budgetStopMessage, budgetResumeAction, readBudgetStop, withoutBudgetDetails } from './bob-budget-stop.ts'
 import {createDrawingDependencies} from './drawing-dependencies.ts'
-import {CAD_PARAMETERS_SCHEMA,parameterSourcePins,inheritCadParameters,cadParameterSources} from './cad-parameters.ts'
+import {parameterSourcePins,inheritCadParameters,cadParameterSources} from './cad-parameters.ts'
 import { drawingInputFingerprint, drawingCandidateCommitment } from './drawing-request-recovery.ts'
 import {physicalLineageSources} from './cad-physical-lineage.ts'
 import { buildCadLineage } from './cad-lineage.ts'
-import { DIMENSION_BINDINGS_SCHEMA, type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
-import { CAD_RESEARCH_CONTRACT } from './cad-research.ts'
+import { type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
-import { CAD_RECIPE_SCHEMA } from './cad-schema.ts'
-import { CAD_ARRAYS_SCHEMA } from './cad-arrays.ts'
 import { createCadPieces } from './cad-pieces.ts'
 import { READ_CAD_SHELL_TOOL, parseCadShellRead } from './cad-shell.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
@@ -37,15 +34,6 @@ export const DESIGN_CAD_TOOL=tool('design_project_cad',
   {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'}})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact independently reviewed rendering of its saved, checked construction revision from this turn, including the construction source pin and plan Step link. Source, material and target revisions are checked again at publication. This concept drawing is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
-export const READ_CAD_TOOL=tool('read_cad_artifact','Read an exact saved CAD artifact revision, including its reusable assembly and pinned inputs. Null revision reads current. Use part_ids to select an existing subassembly when rendering; do not redesign it merely to obtain a detail view.',
-  {artifact_id:{type:'string'},revision:{type:['integer','null']}})
-// A JSON object is deliberately validated by the same bounded engine contract.
-// The model gets the complete vocabulary here, not executable expressions.
-export const RENDER_CAD_TOOL=tool('render_cad_candidate',
-  'Render a bounded mm assembly. recipe: {contract_version:1,units:"mm",assembly_id,definitions,instances,views,clearances?,motions?}. Definition: {id,material_ref:null|string,primitive:"box",x_mm,y_mm,z_mm} or primitive:"tube",outside_diameter_mm,wall_thickness_mm,length_mm or primitive:"cylinder",diameter_mm,length_mm. Any definition may have cuts:[{primitive:"box",x_mm,y_mm,z_mm,placement} or {primitive:"cylinder",diameter_mm,length_mm,placement}]; max16 cuts/part,256 total. Box origin is minimum corner; cylinders/tubes are centred in XY and start at z=0. Cut placements are local to the part. Instances: {id,definition_id,placement:{x,y,z,rx,ry,rz}}; angles in degrees. Optional clearances:[{id,first_id,second_id,min_mm}] max16 checks. Optional motions:[{id,moving_ids:[instance IDs] max8,obstacle_ids:[instance IDs] max32,delta:{x,y,z}}] max16; reports a conservative swept bounding envelope for linear travel, not hinge/rotation simulation. Optional arrays:[{id,definition_id,axis:"x"|"y"|"z",count}] repeat one part at equal spacing instead of listing each copy; prefer them for studs, slats, joists and rungs. Views: front,right,top,isometric. Max128 definitions,512 instances after arrays expand. Output includes exact overlap volumes (bounded; partial if incomplete), requested distances and motion envelopes. Inspect every warning, correct unintended overlaps, and explain intentional joints or unresolved checks. For saved details use render_saved_cad_candidate. This tool creates new geometry; instance IDs belong in recipe.instances. Geometry does not certify strength or real site fit.',
-  {purpose:{type:'string',enum:['project','diagnostic'],description:'Project deliverable or diagnostic test. Diagnostic attempts stop the design workflow for renderer investigation; they cannot replace a project candidate.'},recipe:{...CAD_RECIPE_SCHEMA,properties:{...CAD_RECIPE_SCHEMA.properties,instances:{...CAD_RECIPE_SCHEMA.properties.instances as object,minItems:0},arrays:CAD_ARRAYS_SCHEMA}},parameter_plan:{...CAD_PARAMETERS_SCHEMA,description:'Required provenance for EVERY recipe number: definitions/<id>/<dimension>, definitions/<id>/cuts/<index>/<dimension>, definitions/<id>/cuts/<index>/placement/<axis>, instances/<id>/placement/<axis>, clearances/<id>/min_mm, motions/<id>/delta/<axis>. Bind each path to one node. Source nodes name exact project or accepted room measurement pins; server supplies values. Decision/estimate nodes need explicit basis and mm/deg/scalar unit. Derived nodes use versioned operations and operand IDs; do not perform arithmetic in prose. Source/formula values overwrite recipe placeholders. Unknown required parameters stop the request; ordinary reversible design choices are decisions, not owner approval requests. Decimal precision is six places; exact forbids rounding; half_away_6 rounds ties away from zero.'},dimension_bindings:DIMENSION_BINDINGS_SCHEMA,title:{type:'string'},description:{type:'string'},assumptions:{type:'string'},measurements:{type:'array',maxItems:20,items:{type:'object',additionalProperties:false,properties:{id:{type:'string'},revision:{type:'integer'}},required:['id','revision']}}})
-const {recipe:_newRecipe,parameter_plan:_parameters,dimension_bindings:_bindings,...renderMetadata}=RENDER_CAD_TOOL.function.parameters.properties
-export const RENDER_SAVED_CAD_TOOL=tool('render_saved_cad_candidate','Render an exact saved assembly or selection of its existing instance IDs. No new geometry. Empty part_ids selects the whole assembly.',{...renderMetadata,source_artifact_id:{type:'string'},source_revision:{type:'integer',minimum:1},part_ids:{type:'array',items:{type:'string'}}})
 const READ_REQUESTS_TOOL=tool('read_drawing_requests','Read minimal project drawing status and exact saved Artifact references. No private chat or drafts. Use after_id for the next page.',{request_id:{type:['string','null']},after_id:{type:['string','null']}})
 const CANCEL_REQUEST_TOOL=tool('cancel_drawing_request','Cancel your drawing request only when the owner asks to stop it. Read its current revision first. This fences late saves; it does not delete an already saved Artifact.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0}})
 const ENSURE_GAP_TOOL=tool('ensure_drawing_gap_task','Atomically reuse/create the Task for a gap bound to an already shared current Plan requirement. Read stable gap and requirement IDs first. Private-only needs stay in chat or link existing work; never copy private assessment prose.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},gap_id:{type:'string'},requirement_id:{type:'string'},plan_revision:{type:'integer',minimum:1}})
@@ -56,14 +44,14 @@ export const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your p
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;research?:boolean;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
  let savedRequest:(()=>Promise<void>)|null=null
  let terminalFailure:Record<string,unknown>|null=null
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
- const metrics={research_calls:0,consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
+ const metrics={consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
  const pieces=createCadPieces({unlimitedWork:opts.unlimitedWork,aiCatalog:opts.aiCatalog,projectId:opts.projectId,requestStore:opts.requestStore,ownerRequest:opts.ownerRequest??null,hasAccess:opts.hasAccess,checkConstruction:opts.checkConstruction})
  return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,...(opts.readShell?[READ_CAD_SHELL_TOOL]:[]),READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-lifecycleUsed)},
@@ -183,8 +171,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
    const o=runtimeVersion?{...original,messages:[...(original.messages??[]),{role:'user' as const,content:JSON.stringify({runtime_configuration_revision:runtimeVersion})}]}:original
    const work=()=>opts.callModel(o,constructionDispatchGuard)
    const response=await(request&&opts.requestModel?opts.requestModel(request.id,o,work):work())
-   if(!response.success&&response.error==='turn_budget_exhausted')throw new BobBudgetError(response,
-    original.functionName==='cad-reviewer'?'review':original.functionName==='cad-research'?'intake':'design')
+   if(!response.success&&response.error==='turn_budget_exhausted')throw new BobBudgetError(response,'review')
    return response
   }
   const executeRead=async(name:string,args:unknown):Promise<any>=>{
@@ -200,7 +187,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
   }
   let retryInputs:{evidence:Record<string,unknown>;images:unknown}|undefined
   const sourceFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,dependencies:await dependencies.digest()},retryInputs.images):''
-  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,intake_contract:CAD_RESEARCH_CONTRACT,dependencies:await dependencies.digest()},retryInputs.images):''
+  const retryFingerprint=async()=>retryInputs?drawingInputFingerprint(raw,{...retryInputs.evidence,runtimeVersion,dependencies:await dependencies.digest()},retryInputs.images):''
   let expected=0
   let construction:Record<string,any>|null=null
   let legacyTransition:Record<string,any>|null=null
@@ -247,7 +234,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
   let renders=0,reviews=0,reviewPending=false
   const referencePixels:NonNullable<OpenAIServiceOptions['messages']>=[]
   let designImages:{image_id:string;source_version:string}[]=[]
-  const researchEvidence:{tool:string;result:unknown}[]=[]
+  const constructionEvidence:{tool:string;result:unknown}[]=[]
   const constructionFailure=async(checked:any)=>{
    partial=true
    const failure={status:checked?.status==='unavailable'?'unavailable':'needs_data',stage:'construction',saved:false,reason:'construction_not_ready',request_id:request?.id??null,
@@ -411,12 +398,12 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
       catalogRoleKey:'cad-reviewer',catalogSchemaKey:'bob_cad_review',catalogSchemaParameters:{requirement_ids:handoff.requirements.map(r=>r.id)},schemaName:'bob_cad_review',
       messages:[{role:'user',content:JSON.stringify({project_id:opts.projectId,step_id:raw.step_id,area_id:raw.area_id,artifact_id:raw.artifact_id,review_scope:CAD_REVIEW_SCOPE,independent_evidence:independentEvidence,owner_request:ownerRequest,handoff,current_target:selected,reference_refs:opts.context?.openedImageRefs()??[],
        candidate:{title:candidate.title,description:candidate.description,assumptions:candidate.assumptions,recipe:candidate.packet.recipe,manifest:candidate.packet.manifest,measurements:candidate.measurements},
-       design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:researchEvidence,evidence_truncated:false,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
+       design_readiness:readiness,required_feature_ids:[...requiredFeatureIds],source_evidence:constructionEvidence,evidence_truncated:false,deterministic_issues:missingViews.map(view=>({code:'missing_view',view}))})},
        ...referencePixels,{role:'user',content:Object.entries(candidate.packet.previews).flatMap(([view,png])=>[{type:'text' as const,text:catalogText('cad.preview.candidate-view',{view})},{type:'image_url' as const,image_url:{url:'data:image/png;base64,'+png,detail:'high' as const}}])}],
       // The calculator wrapper retains this schema while offering optional tools.
       // The governed setting includes reasoning tokens as well as the verdict.
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
-      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,unlimitedWork:opts.unlimitedWork,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
+      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,registerContextSurface:opts.registerContextSurface,unlimitedWork:opts.unlimitedWork,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
      opts.context?.confirmDelivery()
      if(!await checkAuthority()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
      if(!checked.success&&checked.error==='turn_budget_exhausted')throw new Error(checked.error)
@@ -471,7 +458,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
    const metadata={title:construction.title,description:construction.description,assumptions:('Concept drawing. '+(construction.open_questions??[]).join(' ')).slice(0,3500),target_revision:Number(selected.revision),measurements,
     source_artifact_id:null,source_revision:null,part_ids:[],area_id:raw.area_id,component_id:raw.component_id,step_id:raw.step_id,artifact_id:drawingArtifactId,expected_revision:expected}
    const pin={version:1,project_id:opts.projectId,artifact_id:construction.artifact_id,revision:construction.revision,check:ready.checked}
-   researchEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
+   constructionEvidence.push({tool:'checked_construction',result:{...construction,check:ready.checked}})
    await persist('draft',{draft:{...metadata,recipe,lineage,parameters,construction:pin}})
    renders++;metrics.renders++
    let packet:CadPacket
@@ -519,8 +506,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
     const message=reason==='turn_budget_exhausted'
      ?budgetStopMessage(readBudgetStop(error))
      :['model_output_limit','model_reasoning_only'].includes(reason)
-      ?'Designern nådde sin svarsgräns utan att lämna ett användbart resultat.'
-      :'Designerns modellanrop misslyckades.'
+      ?'Granskaren nådde sin svarsgräns utan att lämna ett användbart resultat.'
+      :'Granskarens modellanrop misslyckades.'
     return terminalFailure={...failure,user_message:message+' Ingen ny ritning sparades från det försöket. '+(metrics.renders===0?'CAD-motorn anropades aldrig. ':'')+'Jag stoppade försöket utan att starta om samma arbete.'}
    }
    return failure

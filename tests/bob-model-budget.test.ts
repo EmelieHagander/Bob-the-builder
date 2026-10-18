@@ -4,7 +4,7 @@ import { createBobModelBudget, type DrawingBudgetAuthority } from '../supabase/f
 import { createBobJournal, BobContinuation, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { createDrawingBudget } from '../supabase/functions/_shared/drawing-budget.ts'
 const reply=(cost:number|null)=>({success:true,data:'ok',model:'fixture',estimatedCostUsd:cost,usage:{input_tokens:1,output_tokens:1,total_tokens:2}})
-const drawingAuthority=(role='cad-designer'):DrawingBudgetAuthority=>({requestId:'11111111-1111-4111-8111-111111111111',
+const drawingAuthority=(role='cad-reviewer'):DrawingBudgetAuthority=>({requestId:'11111111-1111-4111-8111-111111111111',
  options:{app:'bob',coworkerId:'bob',module:'cad',functionName:role,aiFunction:role,aiDefinition:{app:'bob',roleKey:'role.'+role} as any}})
 test('all roles share a spending threshold and the crossing call is the final dispatch',async()=>{
  const budget=createBobModelBudget(1);let calls=0
@@ -56,10 +56,10 @@ test('failed charged results rebuild the spending threshold across durable repla
  await run();await run();assert.equal(calls,1)
 })
 
-test('design work stops at the limit minus the review reserve; review and delivery can still run from it',async()=>{
+test('ordinary Bob work stops at the limit minus the review reserve; review and delivery can still run from it',async()=>{
  const budget=createBobModelBudget(1,24)
- assert((await budget.run(async()=>reply(.86),'cad-designer')).success)
- const held=await budget.run(async()=>{throw new Error('must not dispatch design')},'cad-designer')
+ assert((await budget.run(async()=>reply(.86),'ask-bob')).success)
+ const held=await budget.run(async()=>{throw new Error('must not dispatch Bob')},'ask-bob')
  assert.equal(held.error,'turn_budget_exhausted')
  const stop=(held as any).budget_stop
  assert.deepEqual(stop.reasons,['usd_limit','review_reserve']);assert.equal(stop.usd_limit,.85)
@@ -76,7 +76,7 @@ test('design work stops at the limit minus the review reserve; review and delive
 
 test('a governed CAD attempt can finish review after $1 without consuming ordinary Bob save/delivery budget',async()=>{
  const budget=createBobModelBudget(1,24)
- for(const role of ['cad-research','cad-designer','cad-designer','cad-reviewer']){
+ for(const role of ['cad-reviewer','cad-reviewer','cad-reviewer','cad-reviewer']){
   const result=await budget.run(async()=>reply(.4),role,drawingAuthority(role))
   assert(result.success)
  }
@@ -89,8 +89,8 @@ test('a governed CAD attempt can finish review after $1 without consuming ordina
 test('durable CAD technical limits are not counted twice and its ledger stop remains authoritative',async()=>{
  const budget=createBobModelBudget(1,2,{usd:0,calls:0,roles:[]}),authority=drawingAuthority();let requestCalls=0
  const dispatch=async()=>++requestCalls<=3?reply(.4):{...reply(0),success:false,data:null,error:'turn_budget_exhausted'}
- for(let index=0;index<3;index++)assert((await budget.run(dispatch,'cad-designer',authority)).success)
- assert.equal((await budget.run(dispatch,'cad-designer',authority)).error,'turn_budget_exhausted')
+ for(let index=0;index<3;index++)assert((await budget.run(dispatch,'cad-reviewer',authority)).success)
+ assert.equal((await budget.run(dispatch,'cad-reviewer',authority)).error,'turn_budget_exhausted')
  assert.equal(requestCalls,4);assert.equal(budget.usage.calls,0)
  assert((await budget.run(async()=>reply(0),'ask-bob')).success)
  assert((await budget.run(async()=>reply(0),'ask-bob')).success)
@@ -103,7 +103,7 @@ test('a request binding cannot exempt ordinary roles, another app or an unpinned
   {...drawingAuthority(),options:{...drawingAuthority().options,aiDefinition:undefined}},
   {...drawingAuthority(),options:{...drawingAuthority().options,module:'global'}},
   {...drawingAuthority(),options:{...drawingAuthority().options,app:'other'}},
-  drawingAuthority('ask-bob'),
+  drawingAuthority('ask-bob'),drawingAuthority('cad-designer'),drawingAuthority('cad-research'),
  ]
  for(const authority of invalid){
   const budget=createBobModelBudget(1)
@@ -133,7 +133,7 @@ test('worker replay reuses governed CAD results and charges the persisted reques
   const budget=createBobModelBudget(),journal=createBobJournal({entries,save:async entry=>{entries.push(entry)}},Date.now()+10000)
   for(let step=0;step<2;step++){
    const authority=drawingAuthority(),options={...authority.options,prompt:'geometry-'+step} as any
-   const result=await budget.run(()=>journal.run('model:cad-designer',options,()=>request(authority.requestId,options,async()=>{dispatches++;return reply(.7)})),'cad-designer',authority)
+   const result=await budget.run(()=>journal.run('model:cad-reviewer',options,()=>request(authority.requestId,options,async()=>{dispatches++;return reply(.7)})),'cad-reviewer',authority)
    assert(result.success)
   }
   assert.equal(budget.usage.calls,0);assert.equal(budget.usage.spent,0)

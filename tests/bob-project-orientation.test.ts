@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { prepareProjectOrientation } from '../supabase/functions/_shared/bob-project-orientation.ts'
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
+import { ORIENTATION_DIRECTORY_LIMITS, type OrientationDirectoryReader } from '../supabase/functions/_shared/bob-orientation-directory.ts'
 import type { LookupInput, LookupResult } from '../supabase/functions/_shared/project-lookup.ts'
 import type { CurrentView } from '../src/domain/bobScreen.ts'
 
@@ -144,4 +145,142 @@ test('cross-project sources and revoked access cannot enter orientation', async 
   await assert.rejects(prepareProjectOrientation({ ...f.opts, hasAccess: async () => false }), /project_denied/)
   f.plan.steps[0].tasks[0].project_id = 'B'
   await assert.rejects(prepareProjectOrientation(f.opts), /context_unavailable/)
+})
+
+async function bounded(f: ReturnType<typeof fixture>, overrides: Partial<Parameters<typeof prepareProjectOrientation>[0]> = {}) {
+  let reader: OrientationDirectoryReader | undefined
+  const packet = await prepareProjectOrientation({ ...f.opts, ...overrides, directory: {
+    maxTokens: ORIENTATION_DIRECTORY_LIMITS.initial, pageMaxTokens: ORIENTATION_DIRECTORY_LIMITS.page,
+    ready: value => { reader = value },
+  } })
+  assert(reader)
+  assert.equal(packet.tokenBudget?.tokens, countContextTokens(JSON.stringify(packet)))
+  assert(packet.tokenBudget!.tokens <= ORIENTATION_DIRECTORY_LIMITS.initial)
+  return { packet, reader }
+}
+
+test('1000 Areas fit the complete initial token bound and every deferred child is exactly discoverable', async () => {
+  const f = fixture(); f.plan.focus_step_id = null
+  f.areas.splice(0, f.areas.length, ...Array.from({ length: 1000 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    name: `Arbetsområde ${i}: förberedelse, material, arbetsledning, byggarbete och kontroll av projektets krav och underlag`,
+    description: `Beskrivning ${i}`, archived_at: i % 20 === 0 ? 'yesterday' : null })))
+  const lookup = { search: async (input: LookupInput) => {
+    if (input.dataset !== 'areas') return f.opts.lookup.search(input)
+    const start = input.after_id === null ? 0 : f.areas.findIndex(area => area.id === input.after_id) + 1
+    const records = f.areas.slice(start, start + 25), more = start + records.length < f.areas.length
+    return page('areas', records, more, more ? records.at(-1)!.id : null)
+  } }
+  const historical = await prepareProjectOrientation({ ...f.opts, lookup })
+  const historicalTokens = countContextTokens(JSON.stringify(historical))
+  assert(historicalTokens > 96_000, `reproduce the pre-fix input-ceiling failure before checking bounded delivery (${historicalTokens})`)
+  const { packet, reader } = await bounded(f, { lookup })
+  assert.equal(packet.focus.card.id, 'A')
+  assert.equal(packet.directory!.sections.children.total, 1001)
+  assert(packet.directory!.sections.children.omitted > 0, 'the initial prompt cannot include the entire directory')
+  assert.equal(packet.directory!.sections.children.included, packet.children.length)
+  assert.equal(packet.directory!.sections.children.omitted, 1001 - packet.children.length)
+  assert(!packet.completeness.hierarchy)
+  assert(packet.directory!.sections.children.sourceComplete, 'source completeness and included-prompt completeness are distinct')
+  const cards = [...packet.children], sources = [...packet.sources]
+  let next = packet.directory!.sections.children.next!.arguments.after_cursor
+  let pages = 0
+  while (next !== null) {
+    const result = await reader.execute({ section: 'children', snapshot_id: packet.directory!.snapshotId, after_cursor: next }) as any
+    assert.equal(result.status, 'ok'); assert.equal(result.total, 1001)
+    assert.equal(result.tokenBudget.tokens, countContextTokens(JSON.stringify(result)))
+    assert(result.tokenBudget.tokens <= ORIENTATION_DIRECTORY_LIMITS.page)
+    cards.push(...result.records); sources.push(...result.sources); next = result.next_cursor
+    assert(++pages < 100, 'pagination must make progress')
+  }
+  assert.deepEqual(cards.map(card => card.id), [...f.areas.map(area => area.id), 's3'])
+  assert.equal(new Set(cards.map(card => card.id)).size, cards.length)
+  assert(cards.every(card => sources.some(source => source.id === card.sourceId && source.projectId === 'A')))
+  assert.equal(cards.find(card => card.id === f.areas[980].id)!.status, 'archived')
+  assert.equal(sources.find(source => source.id === cards.at(-1)!.sourceId)!.revision, 7)
+  const lastArea = f.areas.at(-1)!
+  const focused = await bounded(f, { lookup, currentView: view({ area: { id: lastArea.id, name: lastArea.name } }) })
+  assert.equal(focused.packet.focus.card.id, lastArea.id, 'a focus beyond the first directory page remains exact')
+  assert.equal(focused.packet.focus.description.text, lastArea.description)
+  assert.deepEqual(focused.packet.ancestors.map(card => card.id), ['A'])
+  assert.equal(focused.packet.directory!.sections.siblings.total, 999)
+  assert(!focused.packet.siblings.some(card => card.id === lastArea.id))
+})
+
+test('large peer directories preserve exact screen focus and governing requirements before optional cards', async () => {
+  const f = fixture()
+  f.steps.push(...Array.from({ length: 1000 }, (_, i) => ({ id: `s-extra-${i}`, title: `Extra steg ${i}`, goal: 'Spara samma mål', notes: '',
+    area_id: 'a0', state: 'planned', phase: 'planning', tasks: [], requirements: [] })))
+  const { packet, reader } = await bounded(f, { currentView: view({ planStep: { id: 's2', name: 'Ritning', state: 'blocked', goal: '', notes: '', planRevision: 7 } }) })
+  assert.equal(packet.focus.card.id, 's2'); assert.equal(packet.focus.origin, 'screen')
+  assert.deepEqual(packet.ancestors.map(card => card.id), ['A', 'a0'])
+  assert.deepEqual(packet.completionRequirements[0].record, f.steps[1].requirements[0])
+  assert(packet.completeness.requirements)
+  assert.equal(packet.sources.find(source => source.id === packet.completionRequirements[0].sourceId)!.revision, 7)
+  assert.equal(packet.directory!.sections.siblings.total, 1001)
+  const first = packet.directory!.sections.siblings.next!
+  const result = await reader.execute(first.arguments) as any
+  assert.equal(result.records[0].id, f.steps.filter(step => step.id !== 's2' && step.area_id === 'a0')[packet.siblings.length].id)
+})
+
+test('oversized exact requirements and shared facts are explicit and their JSON fragments round-trip unchanged', async () => {
+  const f = fixture()
+  f.steps[1].requirements[0].description = 'UNVERIFIED 🪵 exact instruction. '.repeat(4000)
+  f.project.working_plan.recent_shared_facts = [{ truth: 'unknown', note: 'Preserve the owner correction. '.repeat(4000) }]
+  const expected = structuredClone(f.steps[1].requirements[0])
+  const { packet, reader } = await bounded(f)
+  assert.equal(packet.completionRequirements.length, 0); assert(!packet.completeness.requirements)
+  assert.equal(packet.directory!.sections.completionRequirements.omitted, 1)
+  assert.equal(packet.directory!.sections.recentSharedFacts.omitted, 1)
+  for (const section of ['completionRequirements', 'recentSharedFacts'] as const) {
+    let next: string | null = packet.directory!.sections[section].next!.arguments.after_cursor, json = '', pages = 0
+    while (next !== null) {
+      const result = await reader.execute({ section, snapshot_id: packet.directory!.snapshotId, after_cursor: next }) as any
+      assert.equal(result.status, 'partial_record')
+      assert.equal(result.fragment.json_start, json.length)
+      assert.equal(result.tokenBudget.tokens, countContextTokens(JSON.stringify(result)))
+      assert(result.tokenBudget.tokens <= ORIENTATION_DIRECTORY_LIMITS.page)
+      json += result.fragment.content; next = result.next_cursor
+      assert(++pages < 100)
+    }
+    const restored = JSON.parse(json)
+    if (section === 'completionRequirements') assert.deepEqual(restored.record, expected)
+    else assert.deepEqual(restored, f.project.working_plan.recent_shared_facts[0])
+  }
+})
+
+test('directory retries are deterministic, immutable, revision-bound and recheck current access', async () => {
+  const f = fixture(); let allowed = true
+  const { packet, reader } = await bounded(f, { hasAccess: async () => allowed })
+  const input = { section: 'completionRequirements', snapshot_id: packet.directory!.snapshotId, after_cursor: null }
+  const before = await reader.execute(input)
+  f.steps[1].requirements[0].description = 'Changed after preparation'
+  assert.deepEqual(await reader.execute(input), before)
+  const other = await bounded(f)
+  assert.notEqual(other.packet.directory!.snapshotId, packet.directory!.snapshotId)
+  assert.deepEqual(await other.reader.execute(input), { status: 'stale_snapshot' })
+  allowed = false
+  await assert.rejects(reader.execute(input), /project_denied/)
+})
+
+test('rebuilding orientation with changed transport retrieval times retains exact snapshot and continuation output', async () => {
+  const f = fixture(), first = await bounded(f), search = f.opts.lookup.search
+  f.steps[1].requirements[0] = Object.fromEntries(Object.entries(f.steps[1].requirements[0]).reverse())
+  const rebuilt = await bounded(f, { lookup: { search: async input => ({ ...await search(input), retrievedAt: '2026-10-18T15:30:01Z' }) },
+    briefing: { ...f.opts.briefing, retrievedAt: '2026-10-18T15:30:00Z' }, deadline: Date.now() + 200000 })
+  assert.deepEqual(rebuilt.packet, first.packet)
+  const input = { section: 'completionRequirements', snapshot_id: first.packet.directory!.snapshotId, after_cursor: null }
+  assert.deepEqual(await rebuilt.reader.execute(input), await first.reader.execute(input))
+})
+
+test('snapshot identity preserves exact record keys and literal text that resemble transport metadata', async () => {
+  const f = fixture()
+  f.project.working_plan.recent_shared_facts = [{ retrievedAt: 'original fact timestamp', note: 'Source says: "retrievedAt":"first"' }]
+  const first = await bounded(f)
+  f.project.working_plan.recent_shared_facts[0].retrievedAt = 'changed fact timestamp'
+  const changedKey = await bounded(f)
+  assert.notEqual(changedKey.packet.directory!.snapshotId, first.packet.directory!.snapshotId)
+  f.project.working_plan.recent_shared_facts[0].note = 'Source says: "retrievedAt":"second"'
+  const changedText = await bounded(f)
+  assert.notEqual(changedText.packet.directory!.snapshotId, changedKey.packet.directory!.snapshotId)
+  assert.deepEqual(await changedText.reader.execute({ section: 'recentSharedFacts', snapshot_id: first.packet.directory!.snapshotId, after_cursor: null }), { status: 'stale_snapshot' })
 })

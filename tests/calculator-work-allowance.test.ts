@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {callWithCalculator} from '../supabase/functions/_shared/calculator-model-call.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preContextCoverageCatalogFixture as catalogFixture} from './support/ai-catalog-fixture.ts'
 
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}
 const options={app:'bob',module:'living-plan',coworkerId:'bob',aiFunction:'plan-reviewer',functionName:'plan-reviewer',catalogRoleKey:'plan-reviewer',catalogSchemaKey:'bob_plan_review',prompt:'Review the requested work.'}

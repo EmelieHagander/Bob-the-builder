@@ -34,7 +34,7 @@ function fixture() {
   }
   const assistant = (options: { savedPart?: boolean; finalRound?: boolean } = {}) => {
     let designerCalls = 0
-    return createCadAssistant({ requestStore: store, research: !options.finalRound, projectId: 'A', userId: 'u',
+    return createCadAssistant({ requestStore: store, projectId: 'A', userId: 'u',
       ownerRequest: request.brief, hasAccess: async () => true, available: true, deadline: Date.now() + 300000,
       makeLookup: () => createProjectLookup('A', async (_p, q) => {
         reads.push(q.dataset)

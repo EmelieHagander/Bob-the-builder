@@ -1142,3 +1142,38 @@ yet known. Per-entry payload limits remain technical constraints.
 Apply those additive migrations before deploying both Bob Edge closures; activate
 the continuation catalog only after matching runtime is installed. Schema/SQL
 fixture tests are isolated; hosted migration and runtime evidence are separate.
+
+## Shell-plan installation repair — 2026-10-18
+
+**Implemented and fixture-verified; hosted installation/publication remains in
+[State](../Docs/bob-delivery-flow.md#state).**
+`20261018144828_restore_cad_shell_plan_link.sql` restores the omitted
+`20261008150000_cad_shell_plan_link.sql` slice without replaying that older
+migration after newer writer wrappers. It recognizes only the audited complete
+and missing installations, checks exact reader/delegate bodies and required
+dependencies, and rejects partial or unknown installations before changing them.
+
+On the missing installation, the existing shell writer becomes
+`bob_project_write_before_shell_steps`; the shell-to-Step handler occupies
+`bob_project_write_before_consequences`, its original position in the delegation
+chain. The v16 construction-consequence wrapper, v17–v20 adapters, public conflict
+transport and drawing continuation remain unchanged. A complete installation
+keeps the same effective function bodies. One transaction covers validation,
+renames, replacement and grants; existing drawings, links and receipts are untouched.
+
+The public shell reader remains a caller-authorized invoker. Internal writers
+cannot be called directly by ordinary roles. Shell-to-Step writes retain live
+claim/project checks, exact receipt replay, shell-revision checks and canonical
+piece links. Active, authorized policy-1 jobs bypass the old receipt-count quota;
+historical bounded jobs keep their policy. No new table, user authority or
+parallel link store is introduced.
+
+Apply this core repair and deploy both compatible Bob Edge closures before
+`20261018144957_ai_context_coverage_catalog.sql` activates the missing tool and
+corrected manuals. Do not replay the omitted old migration afterward. The catalog
+publication also owns role retirement and new context-policy pins; its sources
+and activation contract belong to [the AI owner](../supabase/README.md#ai-definition-catalog-and-model-tiers).
+`tests/cad-shell-plan-sql.test.ts` exercises both installation histories, caller
+isolation, v20/PT409 routing, ordinary shell delegation, receipt replay, quota
+policy, drift rejection and data preservation. Hosted readback and real-model
+acceptance are separate evidence.

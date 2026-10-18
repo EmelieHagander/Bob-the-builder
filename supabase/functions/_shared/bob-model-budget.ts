@@ -20,7 +20,7 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
  if(!authority||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(authority.requestId))return false
  const options=authority.options
  return options.app==='bob'&&options.coworkerId==='bob'&&options.module==='cad'
-  &&['cad-research','cad-designer','cad-reviewer'].includes(options.functionName)
+  &&options.functionName==='cad-reviewer'
   &&options.aiFunction===options.functionName&&(role===undefined||role===options.functionName)
   &&options.aiDefinition?.app==='bob'&&options.aiDefinition.roleKey==='role.'+options.functionName
 }

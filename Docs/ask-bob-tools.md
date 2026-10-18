@@ -33,7 +33,10 @@ catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
 
-**Published and activated through PR #267; ordinary owner/model acceptance remains.**
+**Main Bob's foundation was published through PR #267.** The
+[coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same
+instruction-loading mechanics to active specialists and remove dormant CAD roles;
+source implementation awaits the review/publication gates in [State](bob-delivery-flow.md#state).
 [Release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
 records the installed runtimes and catalog. The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
 owns memory, source truth and long-work continuation. This section owns the new
@@ -53,12 +56,26 @@ prerequisite is satisfied. Hidden/disabled capabilities reveal neither a card no
 manual. Loading instructions grants no permission and performs no project mutation.
 
 Live policy, membership, source revisions, prerequisites and the prepared-call fence
-are still checked at execution. Main-role context renewal unloads detailed schemas
+are still checked at execution. Bob and specialist context renewal unloads detailed schemas
 and refreshes the prepared-call fence before its first fresh provider request;
 it preserves work/results and reopens only what the next step needs. Full
 descriptions remain versioned in the one AI catalog, rather than copied into an
 ever-growing permanent base prompt. The inline and earlier on-demand-manual modes
 remain compatibility paths for their pinned executions.
+
+Plantus, Vera and Rita receive only a calculator card for their scoped assignment.
+They request its manual through `describe_tool`, then use its native schema on the
+following step. Their strict output contract, source assignment and independent
+review remain in force; they do not inherit Bob's private transcript or project-wide
+toolbox. `specialist_tool_instructions_version: 1` selects this behavior for new
+manifests; earlier journaled specialist calls retain their exact original input.
+
+Daisy and Kjell have no runtime dispatch or active catalog entry. Drawing geometry
+is compiled from the exact checked construction and rendered deterministically;
+Rita reviews that candidate. Plantus/Vera cards describe compile/audit;
+`edit_project_plan` uses deterministic validation without calling either colleague.
+Immutable historical catalog versions, manifests and execution evidence remain
+retrievable; they do not restore removed capabilities.
 
 ## Current toolbox contract — 2026-09-27
 

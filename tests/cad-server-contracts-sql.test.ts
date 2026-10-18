@@ -3,19 +3,18 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createAiCatalogSession, type AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 import { projectSchema } from './support/project-schema.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
 
 const migrationName = '20261009222402_cad_server_owned_values.sql'
 const changed = new Set(['tools.render_cad_candidate', 'tools.render_saved_cad_candidate', 'tools.finish_cad_research'])
 
-test('server contracts publish atomically, preserve pinned history and agree with runtime fixtures', async t => {
+test('historical server contracts publish atomically and preserve pinned history', async t => {
   let previous!: AiCatalogManifest
   let published: AiCatalogManifest|undefined
   const pg = await projectSchema(async (db, name) => {
     if (name === migrationName) previous = (await db.query<{ result: AiCatalogManifest }>(
       "select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
     if(name>migrationName&&!published)published=(await db.query<{result:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) result")).rows[0].result
-  })
+  },migrationName)
   t.after(() => pg.close())
   const resolve = async (manifestId: string | null = null) => (await pg.query<{ result: AiCatalogManifest }>(
     "select shared.resolve_ai_catalog('bob',$1) result", [manifestId])).rows[0].result
@@ -34,12 +33,6 @@ test('server contracts publish atomically, preserve pinned history and agree wit
   }
   const catalog = createAiCatalogSession({ rpc: async () => { throw new Error('pinned only') } }, { app: 'bob', manifest: current })
   const oldCatalog = createAiCatalogSession({ rpc: async () => { throw new Error('pinned only') } }, { app: 'bob', manifest: previous })
-  const fixture = catalogFixture()
-  const latestCatalog=createAiCatalogSession({rpc:async()=>{throw Error('pinned only')}},{app:'bob',manifest:latest})
-  for (const key of changed) {
-    const parameters = { evidence_refs: ['measurement:a', 'choice:b'], check_ids: ['width', 'height'] }
-    assert.deepEqual(latestCatalog.tool(key, parameters).function.parameters, fixture.tool(key, parameters).function.parameters)
-  }
   for (const key of ['tools.render_cad_candidate', 'tools.render_saved_cad_candidate']) {
     const schema = catalog.tool(key).function.parameters as any
     const old = oldCatalog.tool(key).function.parameters as any

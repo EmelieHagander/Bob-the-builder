@@ -4,8 +4,6 @@ import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { AIBackgroundPending } from '../supabase/functions/_shared/ai-background.ts'
-import {INTAKE_SCHEMA} from '../supabase/functions/_shared/cad-intake.ts'
-
 test('actual shared AI service opts into background, resumes tools and preserves synchronous callers', async () => {
  const g=globalThis as any, oldFetch=g.fetch,oldDeno=g.Deno
  const ledger:any[]=[],requests:any[]=[];let stored:any=null,reserved=false,downloads=0
@@ -31,27 +29,27 @@ test('actual shared AI service opts into background, resumes tools and preserves
     source=source.replace("'./schema-issues.ts'",JSON.stringify(new URL("../supabase/functions/_shared/schema-issues.ts",import.meta.url).href))
     const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
   const service=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))
-  const base={app:'bob',coworkerId:'bob',functionName:'cad-designer',aiFunction:'cad-designer',module:'cad',prompt:'Draw',previousResponseId:'resp_prior',reasoningEffort:'high',tools:[{type:'function',function:{name:'render_cad_candidate',description:'Render',parameters:{type:'object',properties:{},required:[]}}}]}
-  const intake=structuredClone(INTAKE_SCHEMA)
+  const base={app:'bob',coworkerId:'bob',functionName:'cad-reviewer',aiFunction:'cad-reviewer',module:'cad',prompt:'Draw',previousResponseId:'resp_prior',reasoningEffort:'high',tools:[{type:'function',function:{name:'calculate_project',description:'Render',parameters:{type:'object',properties:{},required:[]}}}]}
+  const intake={type:'object',additionalProperties:false,properties:{checks:{type:'array',items:{type:'object',additionalProperties:false,properties:{source_refs:{type:'array',items:{type:'string'}}},required:['source_refs']}}},required:['checks']}
   Object.assign(intake.properties.checks.items.properties.source_refs.items,{enum:['requirement:width','measurement-1']})
-  ;(base.tools as any[]).push({type:'function',function:{name:'finish_cad_research',description:'Assess',parameters:intake,strict:true}})
+  ;(base.tools as any[]).push({type:'function',function:{name:'describe_tool',description:'Assess',parameters:intake,strict:true}})
   const background={key:'job/cad/0',fingerprint:'a'.repeat(64),receiver:'bob',context:{jobId:id},expiresAt:'2030-01-01T00:00:00Z'}
   const vision={...base,messages:[{role:'user',content:[{type:'image_url',image_url:'private-image:fixture/revision'}]}],
     resolveImage:async(ref:string)=>{assert.equal(ref,'private-image:fixture/revision');downloads++;return 'data:image/png;base64,iVBORw0KGgo='}}
   await assert.rejects(()=>service.callOpenAIResponses({...vision,background}),AIBackgroundPending)
   assert.equal(downloads,1);assert.equal(requests[0].input[0].content[0].image_url,'data:image/png;base64,iVBORw0KGgo=')
   assert.equal(ledger.length,0,'pending acceptance is not a zero-cost completion')
-  assert.equal(requests[0].previous_response_id,'resp_prior');assert.equal(requests[0].reasoning.effort,'high');assert.equal(requests[0].tools[0].name,'render_cad_candidate')
+  assert.equal(requests[0].previous_response_id,'resp_prior');assert.equal(requests[0].reasoning.effort,'high');assert.equal(requests[0].tools[0].name,'calculate_project')
   assert.equal(requests[0].tools[0].strict,false,'existing callers keep their wire contract')
-  assert.equal(requests[0].tools[1].strict,true,'collector strict opt-in reaches the actual provider request')
+  assert.equal(requests[0].tools[1].strict,true,'strict opt-in reaches the actual provider request')
   assert.deepEqual(requests[0].tools[1].parameters.properties.checks.items.properties.source_refs.items.enum,['requirement:width','measurement-1'])
   assert.equal(requests[0].tools[1].parameters.properties.checks.items.additionalProperties,false)
   await assert.rejects(()=>service.callOpenAIResponses({...vision,background}),AIBackgroundPending)
   assert.equal(requests.length,1)
   assert.equal(downloads,1,'waiting must not hydrate images')
-  stored={id:'resp_background',status:'completed',output:[{type:'function_call',call_id:'render_1',name:'render_cad_candidate',arguments:'{}'}],usage:{input_tokens:100,output_tokens:10,total_tokens:110}}
+  stored={id:'resp_background',status:'completed',output:[{type:'function_call',call_id:'render_1',name:'calculate_project',arguments:'{}'}],usage:{input_tokens:100,output_tokens:10,total_tokens:110}}
   const result=await service.callOpenAIResponses({...vision,background})
-  assert(result.success);assert.equal(result.toolCalls[0].function.name,'render_cad_candidate');assert.equal(result.responseId,'resp_background')
+  assert(result.success);assert.equal(result.toolCalls[0].function.name,'calculate_project');assert.equal(result.responseId,'resp_background')
   assert.equal(requests.length,1);assert.equal(ledger.length,0,'shared durable result was already accounted for by SQL')
   assert.equal(downloads,1,'completed replay must not hydrate images')
   assert((await service.callOpenAIResponses(vision)).success)
@@ -61,7 +59,7 @@ test('actual shared AI service opts into background, resumes tools and preserves
   // billed with its reservation prices but must never reach an app tool.
   for(const status of ['incomplete','failed','cancelled']){
    stored={id:'resp_failed',status,incomplete_details:{reason:'max_output_tokens'},
-    output:[{type:'function_call',call_id:'partial',name:'render_cad_candidate',arguments:'{"recipe":'}],
+    output:[{type:'function_call',call_id:'partial',name:'calculate_project',arguments:'{"recipe":'}],
     usage:{input_tokens:35258,input_tokens_details:{cached_tokens:10000},output_tokens:16000,total_tokens:51258,output_tokens_details:{reasoning_tokens:16000}}}
    model.output_cost_per_1m_tokens=99 // catalogue changed after reservation
    const budget=createBobModelBudget(.2)

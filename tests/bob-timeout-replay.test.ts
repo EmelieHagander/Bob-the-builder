@@ -66,7 +66,7 @@ test('lookup waits for its checkpoint, so slow persistence cannot invent a timeo
 test('changed pending model input stops before reserving or posting another paid response',async()=>{
  const entries:JournalEntry[]=[];let calls=0
  const run=(revision:number)=>createBobJournal({entries,save:async e=>{entries.push(e)}},Infinity).run('model:cad',{revision},async()=>{
-  calls++;throw new BobContinuation('yield','ai_wait',{id:'same-job',accepted:true,role:'cad-designer'})
+  calls++;throw new BobContinuation('yield','ai_wait',{id:'same-job',accepted:true,role:'cad-reviewer'})
  })
  await assert.rejects(run(1),BobContinuation)
  await assert.rejects(run(2),e=>e instanceof BobContinuation&&e.message==='continuation_changed'&&e.operationKey==='model:cad:0')

@@ -60,13 +60,16 @@ test('new base role and directory cards meet actual token caps and retain old pi
 test('colleague cards and their handoffs are limited to actual visible delegation tools',()=>{
  const current=catalogFixture()
  assert.deepEqual(bobColleagues(current,['search_project_data']),[])
- assert.deepEqual(bobColleagues(current,['design_project_cad']).map(c=>c.name),['Daisy','Kjell','Rita'])
+ assert.deepEqual(bobColleagues(current,['edit_project_plan']),[],'focused plan edits use deterministic validation')
+ for(const tool of ['compile_project_plan','audit_project_plan'])assert.deepEqual(bobColleagues(current,[tool]).map(c=>c.name),['Plantus','Vera'])
+ assert(bobColleagues(current,['compile_project_plan','audit_project_plan','edit_project_plan','design_project_cad','generate_project_image']).every(c=>!['Daisy','Kjell'].includes(c.name)))
+ assert.deepEqual(bobColleagues(current,['design_project_cad']).map(c=>c.name),['Rita'])
  for(const c of bobColleagues(current,['design_project_cad','compile_project_plan','generate_project_image'])){
   assert(countContextTokens(`${c.name} ${c.title} ${c.purpose}`)<=80,c.name)
   assert(c.instructions.length>0)
  }
  const hands=buildBobHands(current,[current.tool('describe_tool')],[{name:'design_project_cad',group:'Drawings',state:'offered',description:current.tool('design_project_cad',{card:true}).function.description,instructionLoaded:false}])
- assert.match(hands,/Daisy/);assert.match(hands,/describe_tool/);assert.doesNotMatch(hands,/Plantus|Statusspråk|Samtalsminnet/)
+ assert.match(hands,/Rita/);assert.match(hands,/describe_tool/);assert.doesNotMatch(hands,/Daisy|Kjell|Plantus|Statusspråk|Samtalsminnet/)
 })
 test('oversized catalog cards fail explicitly without truncating instructions',async()=>{
  const f=fixture();f.rows[0].description='detail '.repeat(90)

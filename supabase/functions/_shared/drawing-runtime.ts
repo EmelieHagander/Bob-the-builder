@@ -1,19 +1,22 @@
 import {fingerprint} from './bob-job-journal.ts'
-import {CAD_RESEARCH_CONTRACT} from './cad-research.ts'
 import {CAD_REVIEW_CONTRACT} from './cad-review.ts'
 import {CAD_TRANSPORT_CONTRACT} from './cad-transport.ts'
 import {createAiCatalogSession,type AiCatalogSession,type AiCatalogManifest} from './ai-catalog.ts'
 import {BOB_MODEL_BUDGET_POLICY_REVISION} from './bob-model-budget.ts'
 
-const cadRoles=['cad-research','cad-designer','cad-reviewer']
+const cadRoles=['cad-reviewer']
 /** Follow catalog references from CAD roles, including server-selected CAD
  * fragments and read-tool contracts. The manifest remains the source, but a
  * new Bob/plan persona or a model-row timestamp cannot restart a paid attempt. */
 export function drawingCatalogConfiguration(manifest:AiCatalogManifest){
  const byKey=new Map(manifest.definitions.map(row=>[row.prompt_key,row]))
  const pending=cadRoles.map(role=>'role.'+role),selected=new Set<string>(),models=new Set<string>()
- const cadSources=['cad-assistant.ts','cad-research.ts','cad-review.ts','cad-intake.ts','drawing-review.ts','project-grounding.ts','project-lookup.ts','material-catalog.ts','building-knowledge.ts','project-context/dispatcher.ts']
+ const cadSources=['cad-assistant.ts','cad-review.ts','drawing-review.ts','project-grounding.ts','project-lookup.ts','material-catalog.ts','building-knowledge.ts','project-context/dispatcher.ts']
  for(const row of manifest.definitions){
+  // Immutable old manifests may still contain removed free-design definitions.
+  // They are not runtime dependencies and must never restart paid review.
+  if(/^(?:(?:role|profile|agent-contract|routing|feedback)\.)?cad-(?:research|designer)(?:\.|$)/.test(row.prompt_key)
+    ||['tools.render_cad_candidate','tools.render_saved_cad_candidate','tools.revise_cad_candidate','tools.report_cad_blocker','tools.finish_cad_research','schema.intake','schema.dimension_bindings'].includes(row.prompt_key))continue
   const source=row.metadata.migrated_from
   if(/^cad[.-]|^feedback\.cad-/.test(row.prompt_key)||row.prompt_key==='bob.grounding'
     ||typeof source==='string'&&cadSources.some(file=>source.endsWith('/'+file)))pending.push(row.prompt_key)
@@ -66,12 +69,12 @@ export async function drawingRuntimeVersion(client:any,configured:{model:boolean
  const unlimitedWork=!!pinnedCatalog&&catalog.role('ask-bob').unlimitedWork===true
  const [settings,models]=await Promise.all([
   client.schema('shared').from('ai_settings').select('function_name,module_id,is_enabled')
-   .eq('app','bob').eq('coworker_id','bob').in('function_name',['cad-research','cad-designer','cad-reviewer']).in('module_id',['cad','global']).order('function_name').order('module_id').abortSignal(AbortSignal.timeout(10000)),
+   .eq('app','bob').eq('coworker_id','bob').in('function_name',cadRoles).in('module_id',['cad','global']).order('function_name').order('module_id').abortSignal(AbortSignal.timeout(10000)),
   client.schema('shared').from('ai_models').select('model_name,is_active').in('model_name',configuration.models.map(row=>row.model_name)).order('model_name').abortSignal(AbortSignal.timeout(10000)),
  ])
  if(settings.error||models.error)throw new Error('drawing_runtime_unavailable')
  const effective=cadRoles.map(role=>settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='cad')??settings.data?.find((r:any)=>r.function_name===role&&r.module_id==='global')??null)
- return fingerprint({engine_contract:2,transport_contract:CAD_TRANSPORT_CONTRACT,research_contract:CAD_RESEARCH_CONTRACT,review_contract:CAD_REVIEW_CONTRACT,
+ return fingerprint({engine_contract:2,transport_contract:CAD_TRANSPORT_CONTRACT,review_contract:CAD_REVIEW_CONTRACT,
   budget_policy_revision:BOB_MODEL_BUDGET_POLICY_REVISION,configured,catalog:configuration,
   ...(unlimitedWork?{work_allowance_version:1}:{}),
   settings:effective.map((row:any)=>row?{function_name:row.function_name,module_id:row.module_id,is_enabled:row.is_enabled}:null),

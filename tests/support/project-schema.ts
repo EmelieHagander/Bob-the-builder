@@ -4,14 +4,14 @@ import { setupSharedSocial } from './shared-social.ts'
 
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.
  * An explicit boundary is only for testing a historical migration policy. */
-export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>, throughMigration?: string) {
+export async function projectSchema(beforeMigration?: (pg: PGlite, name: string) => Promise<void>, throughMigration?: string, omittedMigrations: readonly string[] = []) {
   const pg = new PGlite()
-  await installProjectSchema(pg, beforeMigration ? (_db, name) => beforeMigration(pg, name) : undefined, throughMigration)
+  await installProjectSchema(pg, beforeMigration ? (_db, name) => beforeMigration(pg, name) : undefined, throughMigration, omittedMigrations)
   return pg
 }
 
 /** Same migrations and fake external contracts on PGlite or disposable PostgreSQL. */
-export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigration?: (pg: Pick<PGlite, 'exec'>, name: string) => Promise<void>, throughMigration?: string) {
+export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigration?: (pg: Pick<PGlite, 'exec'>, name: string) => Promise<void>, throughMigration?: string, omittedMigrations: readonly string[] = []) {
   await pg.exec(`
     create role anon; create role authenticated; create role service_role bypassrls; create role authenticator;
     create schema auth;
@@ -32,6 +32,9 @@ export async function installProjectSchema(pg: Pick<PGlite, 'exec'>, beforeMigra
     if (directory.includes('supabase')) await setupSharedSocial(pg)
     const root = new URL(directory, import.meta.url)
     for (const name of (await readdir(root)).filter(f => f.endsWith('.sql')).sort()) {
+      // Explicit omissions reproduce a known hosted installation gap. Ordinary
+      // full-schema tests always apply every migration.
+      if (omittedMigrations.includes(name)) continue
       await beforeMigration?.(pg, name)
       await pg.exec(await readFile(new URL(name, root), 'utf8'))
       if (name === throughMigration) return

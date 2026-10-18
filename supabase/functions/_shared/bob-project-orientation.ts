@@ -4,6 +4,7 @@ import type { LookupInput, LookupResult } from './project-lookup.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { countContextTokens } from './bob-token-budget.ts'
+import { boundProjectOrientation, type OrientationDirectory, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
 
 type Row = Record<string, unknown> & { id: string }
 type Level = 'project' | 'area' | 'step' | 'task'
@@ -30,6 +31,9 @@ export interface ProjectOrientation {
   recentSharedFacts: unknown[];
   completeness: { areas: boolean; plan: boolean; hierarchy: boolean; requirements: boolean };
   sources: OrientationSource[]; warnings: string[]; footer: BoundedPresentation;
+  /** Present on catalog-pinned bounded packets; exact deferred records remain
+   * readable through the immutable turn directory. */
+  directory?: OrientationDirectory; tokenBudget?: { tokens: number; maxTokens: number };
 }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const rows = (value: unknown): Row[] => {
@@ -46,18 +50,21 @@ export async function prepareProjectOrientation(opts: {
   projectId: string; userId: string; briefing: LookupResult; currentView?: CurrentView;
   lookup: { search(value: LookupInput): Promise<LookupResult> }; context?: WorkingContext; message: string;
   callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number;
+  directory?: { maxTokens: number; pageMaxTokens: number; ready(reader: OrientationDirectoryReader): void };
 }): Promise<ProjectOrientation> {
   if (!await opts.hasAccess()) throw new Error('project_denied')
   if (opts.briefing.projectId !== opts.projectId || opts.briefing.status !== 'ok'
     || opts.currentView && opts.currentView.projectId !== opts.projectId) throw new Error('context_unavailable')
   const project = opts.briefing.records.find(row => row.id === opts.projectId)
   if (!project) throw new Error('context_unavailable')
-  const warnings: string[] = [], sources: OrientationSource[] = []
+  const warnings: string[] = [], sources: OrientationSource[] = [], sourceByKey = new Map<string, OrientationSource>()
   const source = (dataset: string, recordId: string | null, rev?: number | null, itemId?: string, updatedAt?: string | null): string => {
-    const found = sources.find(value => value.dataset === dataset && value.recordId === recordId && value.revision === (rev ?? undefined) && value.itemId === itemId)
+    const key = JSON.stringify([dataset, recordId, rev ?? null, itemId ?? null])
+    const found = sourceByKey.get(key)
     if (found) return found.id
     const id = `source-${sources.length + 1}`
     sources.push({ id, projectId: opts.projectId, dataset, recordId, ...(rev ? { revision: rev } : {}), ...(itemId ? { itemId } : {}), ...(updatedAt !== undefined ? { updatedAt } : {}) })
+    sourceByKey.set(key, sources.at(-1)!)
     return id
   }
   const search = async (dataset: LookupInput['dataset'], recordId: string | null = null, after: string | null = null, area: string | null = null) => {
@@ -68,14 +75,14 @@ export async function prepareProjectOrientation(opts: {
     return value
   }
   const collect = async (dataset: 'areas' | 'tasks', area: string | null = null): Promise<{ records: Row[]; complete: boolean }> => {
-    const all: Row[] = [], cursors = new Set<string>()
+    const all: Row[] = [], cursors = new Set<string>(), ids = new Set<string>()
     let cursor: string | null = null
     while (Date.now() + 1000 < opts.deadline) {
       const page = await search(dataset, null, cursor, area)
       if (!['ok', 'empty'].includes(page.status)) { warnings.push(`${dataset}:${page.status}`); return { records: all, complete: false } }
       for (const row of page.records) {
-        if (all.some(old => old.id === row.id)) { warnings.push(`${dataset}:overlapping_pages`); return { records: all, complete: false } }
-        all.push(row)
+        if (ids.has(row.id)) { warnings.push(`${dataset}:overlapping_pages`); return { records: all, complete: false } }
+        all.push(row); ids.add(row.id)
       }
       if (!page.truncated) return { records: all, complete: true }
       if (!page.next_cursor || cursors.has(page.next_cursor)) { warnings.push(`${dataset}:incomplete_page`); return { records: all, complete: false } }
@@ -204,9 +211,13 @@ export async function prepareProjectOrientation(opts: {
     presentations.set(block.key, { text: '', kind: 'unavailable', sourceIds: block.sourceIds, tokens: 0, maxTokens: block.maxTokens })
   }
   if (!await opts.hasAccess()) throw new Error('project_denied')
-  return { projectId: opts.projectId, project: projectCard, overview: presentations.get('overview')!,
+  const orientation: ProjectOrientation = { projectId: opts.projectId, project: projectCard, overview: presentations.get('overview')!,
     focus: { origin, card: focus, description: presentations.get('focus')! }, ancestors, siblings, children, completionRequirements,
     workingPlan, recentSharedFacts: Array.isArray(working.recent_shared_facts) ? working.recent_shared_facts : [],
     completeness: { areas: areas.complete, plan: planComplete, hierarchy: hierarchyComplete, requirements: planComplete && (!taskParent || !!focusStep) },
     sources, warnings, footer: presentations.get('footer')! }
+  if (!opts.directory) return orientation
+  const bounded = await boundProjectOrientation(orientation, { ...opts.directory, hasAccess: opts.hasAccess })
+  opts.directory.ready(bounded.reader)
+  return bounded.orientation
 }
