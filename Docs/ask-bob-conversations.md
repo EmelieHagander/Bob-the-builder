@@ -7,8 +7,9 @@
 **The foundation was published through PR #267.** The subsequent
 [coverage audit](bob-context-coverage-audit-2026-10-18.md) found incomplete specialist
 tool loading, exchange retention and orientation bounds. The corrections below
-are implemented in source; their review/publication and ordinary owner/long-memory
-acceptance remain in [State](bob-delivery-flow.md#state).
+are published; [coverage release evidence](foundation-verification.md#bob-context-coverage-corrections--2026-10-18)
+records their verification and hosted readback. Ordinary owner, long-memory model
+and CAD acceptance remain in [State](bob-delivery-flow.md#state).
 [Foundation release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
 records CI, hosted source readback, migrations, catalog activation and web deployment.
 This section owns the memory/context behavior.

@@ -1,5 +1,127 @@
 # Foundation verification and rollout
 
+## Bob context coverage corrections — 2026-10-18
+
+**All five [coverage-audit findings](bob-context-coverage-audit-2026-10-18.md)
+are corrected and activated through [PR #271](https://github.com/EmelieHagander/Bob-the-builder/pull/271).**
+Tested head `508a13dffeb4193cfffadddf8192996326b0ba0d` and merge
+`6c2167b950e872f9d3728f4c1e25576fc30a107d` have the identical tree
+`aecdc3c1fe71597a37430b5c0dcf843de16557eb`. The merge retains the concurrent
+UI/performance and atomic CAD continuation releases #269/#270. Audit-only #268
+is superseded; its dated evidence remains in the repository.
+
+The domain owners describe the resulting behavior:
+[conversations](ask-bob-conversations.md#context-strategy--2026-10-18),
+[tools](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18), and
+[CAD](cad-adapter.md). The missing shell-to-plan extension is restored at its
+original position in today's write chain. Daisy/Kjell's unused runtime, role
+settings and active catalog entries are removed; immutable historical manifests,
+versions and accepted-job evidence remain. Plantus, Vera and Rita load calculator
+instructions on demand and reload after renewal. Retention v2 counts complete
+native tool exchanges, including parallel outputs, without consuming a slot for
+commentary. Initial orientation is bounded to **12,000 tokens**, with exact
+records in pages bounded to **6,000 tokens**, explicit completeness and stable
+lossless source identity.
+
+[Final CI 39141009502](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39141009502),
+job `117715259312`, passes **1,525/1,525 tests**, canonical Edge checks, vocabulary,
+production build and all browser gates.
+[CAD adapter 39141009484](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39141009484)
+and [CAD concurrency 39141009483](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39141009483)
+pass, including 85 real PostgreSQL race checks. Independent reviews covered all
+five fixes and the final calculator denial boundary. The first CI pass exposed
+stale eager-tool fixtures and a real lazy-tool denial regression; the corrected
+runtime stops after a requested calculation loses authority/policy/allowance,
+while invalid input remains correctable and a no-arithmetic verdict stays valid.
+The current allowance policy introduces no new application call quota.
+
+Nine browser screenshots were inspected at 320, 390 and 1280 px: source disclosure,
+image replies, reset dialogs, drawing recovery and working status. Artifact
+`12141148150` from the first run has SHA-256
+`a757cdfa3d3cc73b159f71f59789bf9048d23b788bdc36092a16c6691e850b60`.
+The final correction changes only backend calculator handling and tests; the
+inspected UI source is unchanged, and final-head browser gates also pass.
+These browser fixtures mock model/HTTP responses and do not establish owner/CAD
+acceptance. The prior floating Latest-control polish remains in State.
+
+Both migrations were installed on `yuobtgoidmmmwfqenkau` through fox and mouse.
+Complete hosted statements exactly match the reviewed source, independent of
+the hosted timestamp assigned by the migration tool.
+
+| Source migration | Hosted version / name | Statement SHA-256 |
+| --- | --- | --- |
+| `20261018144828_restore_cad_shell_plan_link.sql` | `20261018160029 restore_cad_shell_plan_link` | `226877973bc93c487e1f3d770586dc7ffece2a1cba2503752fa2e00a699d72f6` |
+| `20261018144957_ai_context_coverage_catalog.sql` | `20261018160310 ai_context_coverage_catalog` | `7b0da688971e7196c65cdb17eab1dbb7a6728ebf2220c4885e68601ba1f9850e` |
+
+Core readback passed **129/129 checks**, preserving all 20 protected data-table
+fingerprints, their RLS/grants and every prior migration. The four restored/renamed
+shell functions match reviewed source, ACLs and search paths; the later consequence
+wrappers and atomic drawing continuation are preserved. Final readback passes
+128/129 exact-equality checks: one private drawing-request event acknowledgement
+changed during normal runtime activity. On existing request
+`c49d7325-52fb-4341-92cc-52db28f7ceb6` in `p_test`, only `observed_event` changed
+**23 → 25**. Replacing that field with 23 in a read-only JSON calculation reproduces
+the complete original table digest `e2f2f70919c3f270e554163c31453ea0`; all other
+fields, including status, revision and update timestamp, are identical.
+The unchanged #270 `queue_drawing_events()` routine queued events 24/25 at
+16:02:22Z/16:03:18Z and acknowledged them through that field. The jobs completed at
+16:02:43Z/16:03:32Z. This explains the observed delta; the failed equality check is
+retained, not relabelled as an unchanged table. The other 19 protected tables are
+identical. Neither migration performs drawing/project-data DML.
+
+Catalog readback passes **28/28 checks**: exactly **285 active definitions** and
+**93 policies**, 27 retired heads, exactly two removed CAD role settings (42 → 40),
+and all 12 model records unchanged. All 544 old version rows and all 24 old manifests
+are preserved byte-for-byte, with exactly 10 new versions and one new manifest
+`914c2b05-1f0d-454c-ad4e-9dd552ed65b5`. Unrelated definitions, other-app snapshots,
+function OIDs/ACLs and service-only retirement guards match. Main Bob remains
+GPT-5.4/high, completion 2 and allowance 1; specialist instructions 1, retention 2
+and orientation directory 1 are active. Security and performance advisor results
+are identical after excluding observation timestamps: seven/four existing finding
+categories, no new findings.
+
+The complete Edge closures were installed before catalog activation. Every
+executable source byte matches the tested revision; entrypoints, Deno import maps
+and authentication modes are preserved.
+
+| Function | Version / JWT verification | Source readback | Bundle SHA-256 |
+| --- | --- | --- | --- |
+| `ask-bob` | 133 / true | 103 uploaded; 101 verbatim files plus one erased type-only stub | `d9fe156397b78b1d1cdcbe0b6f0da9a143c0ff5ff2be98480cb0261eb265a830` |
+| `bob-worker` | 101 / false, own authentication | 102 uploaded; 99 verbatim files plus one erased type-only stub | `753e6b11c339d6d7089aca38ecdefdee98c72967311e782ccf673c37fe1dad66` |
+
+The empty returned `cad-intake.ts` stub corresponds to an import-type declaration
+and five type aliases, with no executable statements. Both bundles omit type-only
+`src/data/provenance.ts`; the worker also omits type-only `bob-request.ts`.
+These erasures were inspected explicitly. Both endpoints reject unauthenticated
+POSTs with 401.
+
+[Pages 39143668502](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39143668502)
+and the postmerge CAD adapter passed. The deployed page and actual
+`assets/index-C5540KBI.js` returned 200.
+[Live Bob 39143668489](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39143668489),
+job `117723033506`, passed actual Auth/RLS/model checks after catalog activation:
+nonmember 403, retired endpoint 410, material/source disclosure, actual image
+pixels, versioned knowledge and natural-language advice. The advice probe's
+observed project snapshot stayed unchanged, and the shared guest created no
+private server history. Execution-event metadata pins all 13 of this probe's model
+calls to the new manifest `914c2b05-1f0d-454c-ad4e-9dd552ed65b5`, including
+instruction discovery before native project reads. Its three logical requests
+used disposable project
+`p_608f8e8411914b89b23f1b4f1cfe8ca3`, created at 16:09:11Z; this workflow was not
+read-only overall. Ordinary caller commands removed the image bytes/metadata
+at 16:11:30Z. Guarded operator cleanup then removed only that exact fixture after
+checking its nonce/name/time, complete project/member/material/Task hashes,
+expected phase/event rows, all project-scoped tables, indirect references and
+absent media/Storage. Final readback reports zero project, member, Task, material,
+media, private-thread and Storage rows for that ID. Shared Auth, execution/cost
+records and the unrelated older cleanup item in State are preserved.
+
+Ordinary owner acceptance remains in [State](bob-delivery-flow.md#state): a new
+message in the same private thread, long-memory semantic fidelity and the existing
+bed/CAD request. No owner message or manual owner-job restart was submitted for
+this release. Technical fixtures and the general guest integration probe do not
+close those acceptance gates.
+
 ## Bob context strategy release — 2026-10-18
 
 **Published and activated through [PR #267](https://github.com/EmelieHagander/Bob-the-builder/pull/267).**

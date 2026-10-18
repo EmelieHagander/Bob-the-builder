@@ -1,6 +1,8 @@
 # Bob context and tool coverage audit — 2026-10-18
 
-**Verdict: the released foundation is active, but the agreed strategy is not fully implemented across all colleagues and tools.** This audit corrects the earlier blanket completion claim. Five actionable gaps remain. Current contracts stay with [conversations](ask-bob-conversations.md#context-strategy--2026-10-18), [tools](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18), [CAD](cad-adapter.md) and [the active State](bob-delivery-flow.md#state).
+**Release update — 2026-10-18:** all five findings below were corrected and activated through [PR #271](https://github.com/EmelieHagander/Bob-the-builder/pull/271). [Correction evidence](foundation-verification.md#bob-context-coverage-corrections--2026-10-18) records the exact source, tests and hosted readback. The following verdict and reproductions are the original audit snapshot; ordinary owner/long-memory/CAD acceptance remains in [State](bob-delivery-flow.md#state).
+
+**Original verdict: the released foundation is active, but the agreed strategy is not fully implemented across all colleagues and tools.** This audit corrects the earlier blanket completion claim. Five actionable gaps remain. Current contracts stay with [conversations](ask-bob-conversations.md#context-strategy--2026-10-18), [tools](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18), [CAD](cad-adapter.md) and [the active State](bob-delivery-flow.md#state).
 
 ## Scope and evidence
 

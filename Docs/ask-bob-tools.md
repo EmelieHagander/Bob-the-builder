@@ -35,10 +35,12 @@ catalog schemas or change the deployed toolbox.
 
 **Main Bob's foundation was published through PR #267.** The
 [coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same
-instruction-loading mechanics to active specialists and remove dormant CAD roles;
-source implementation awaits the review/publication gates in [State](bob-delivery-flow.md#state).
-[Release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
-records the installed runtimes and catalog. The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
+instruction-loading mechanics to active specialists and remove dormant CAD roles.
+They are published; [coverage release evidence](foundation-verification.md#bob-context-coverage-corrections--2026-10-18)
+records verification and hosted readback. Ordinary owner/model and CAD acceptance
+remain in [State](bob-delivery-flow.md#state).
+[Foundation release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
+records the earlier installed runtimes and catalog. The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
 owns memory, source truth and long-work continuation. This section owns the new
 tool surface; older pinned manifests retain the whole-bench contract below.
 
@@ -220,11 +222,14 @@ project effort or verified price calculation.
 ### Common calculator v1 — implementation 2026-10-12
 
 `calculate_project` is one registered, catalog-versioned read-only capability for
-Bob, CAD research/designer/reviewer and Plan compiler/reviewer. Every specialist
-checks the same live active/schema-version policy before offering and executing
-it; policy failure never enables a fallback. All callers share twelve calculation
-attempts within the turn, including invalid attempts. Provider calls still use
-the existing aggregate call/cost budgets and authority/dispatch guards.
+Bob, Plantus (plan compiler), Vera (plan reviewer) and Rita (CAD reviewer).
+They check the same live active/schema-version policy before offering and
+executing it. New `work_allowance_version: 1` jobs have no application calculation,
+model-call, spend or output-token quotas; usage accounting, provider capacity,
+authority and dispatch guards remain. Historical bounded jobs retain their shared
+twelve calculation attempts per turn, including invalid attempts, and specialist
+limits of two calculation rounds with at most four calls per batch. Models and
+reasoning effort are unchanged.
 
 | Request method | Executed model and persistence boundary |
 |---|---|
@@ -242,31 +247,35 @@ measurements. Source changes are readiness information, not permission to adopt
 new values. Exact database reads enforce project/physical access through the
 caller; the new RPC is invoker-only and has no anon/service grant.
 
-Structured specialists offer the calculator in their normal call while retaining
-the pinned strict JSON response schema. A direct verdict finishes that first
-call. Only an actual calculator request causes a continuation: code executes
-the calculation and returns the complete result as a paired tool output using
-the provider response ID. The server does not restart the original context in a
-separate final conversation. At most two tool rounds, with four calls in each,
-are allowed; a third model call closes tools if both rounds were needed.
-Provider failure, revocation, policy failure or an already exhausted calculator
-stops honestly, without a manual-arithmetic fallback. CAD dependency refresh
-records these reads so a saved retry cannot treat changed inputs as unchanged.
+Structured specialists retain their pinned strict JSON response schema and
+receive only the assigned calculator card. They request its manual with
+`describe_tool`; the native `calculate_project` schema becomes available on the
+following step. Each tool result is paired with its call in the same provider
+conversation. Context renewal refreshes the tool surface and requires the manual
+again. Older immutable manifests retain their exact eager request inputs for
+journal replay; their applicable work policy still determines any quota.
 
-The calculator itself executes deterministic program/SQL operations and makes
-**no AI calls**. In this wrapper, no calculation normally needs one model call;
-one calculation round followed by a verdict needs two. Every model call still
-uses the caller's ordinary or CAD task budget, the pinned specialist's output
-ceiling (including reasoning) and any explicit caller ceiling. The adapter's
-`structuredToolOutput` server opt-in sends the schema alongside the tools and
-strictly parses/validates the final JSON; it never repairs truncated JSON or
-phase prose into a verdict. Existing shared-service callers retain their
-previous output contract. The historical `calculator.schema-phase` fragment
-remains immutable in the catalog but is no longer injected; the roles' existing
-calculator contracts supply the guidance, so no catalog migration is required.
-[Integration evidence](foundation-verification.md#calculator-in-normal-structured-calls--2026-10-12)
-owns validation and release references. Actual cost per accepted drawing and
-real owner/model acceptance remain to be measured.
+An actual calculation request stops if access is revoked, live tool policy becomes
+unavailable or its applicable allowance is exhausted; it cannot become a
+model-only arithmetic verdict. Invalid inputs, missing data and source-specific
+read failures remain explicit paired results that the specialist may correct or
+report within its authority. A task needing no arithmetic may return its normal
+structured answer even when the optional calculator is unavailable. Provider
+failure remains an error. CAD dependency refresh records calculation source reads
+so a saved retry cannot treat changed inputs as unchanged.
+
+The calculator executes deterministic program/SQL operations and makes **no AI
+calls**. Manual discovery and calculation add provider continuations when needed;
+a no-arithmetic answer can finish the first model call. The adapter's
+`structuredToolOutput` opt-in sends the pinned schema alongside available tools
+and strictly validates the final JSON; it never repairs truncated JSON or phase
+prose into a verdict. Existing shared-service callers retain their output contract.
+The retired `calculator.schema-phase` fragment remains only in immutable history;
+the current specialist instructions come from the published catalog.
+[Original integration evidence](foundation-verification.md#calculator-in-normal-structured-calls--2026-10-12)
+records the earlier eager-call release; [coverage release evidence](foundation-verification.md#bob-context-coverage-corrections--2026-10-18)
+records current discovery and policy verification. Actual cost per accepted
+drawing and ordinary owner/model/CAD acceptance remain to be measured.
 
 Remaining boundaries: a standalone graph has no generic saved-model writer;
 use the existing domain revision or report that gap. General area/volume/money

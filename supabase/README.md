@@ -29,10 +29,12 @@ activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary 
 and long-memory model acceptance.
 
 The [coverage audit](../Docs/bob-context-coverage-audit-2026-10-18.md) identified five
-remaining implementation gaps. Their source corrections remove dormant CAD roles,
+implementation gaps. Their published corrections remove dormant CAD roles,
 scope specialist lazy instructions, preserve actual tool exchanges and bound the
-complete project orientation, alongside the missing shell-plan installation.
-Their review and release gates remain in State until hosted readback is recorded.
+complete project orientation, alongside the restored shell-plan installation.
+[Coverage release evidence](../Docs/foundation-verification.md#bob-context-coverage-corrections--2026-10-18)
+records verification and hosted readback. Ordinary owner/model, long-memory and
+CAD acceptance remain in [State](../Docs/bob-delivery-flow.md#state).
 
 For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. A successful save from the next message starts its fresh period atomically; reads do not move ownership. Request/worker retries retain their period and every historical charge. [Atomic continuation](../db/README.md#atomic-drawing-continuation--2026-10-18) owns the current transition and reservation contract; [verification](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18) records its release status.
 
@@ -124,9 +126,9 @@ access to a project.
 
 ### Roles and baseline profiles
 
-This table describes the coverage-corrected source. The new role retirement and
-specialist loading require the publication gates in [State](../Docs/bob-delivery-flow.md#state);
-the earlier release evidence does not establish their deployment.
+This table describes the published coverage correction. Role retirement and
+specialist loading are verified in [coverage release evidence](../Docs/foundation-verification.md#bob-context-coverage-corrections--2026-10-18).
+Ordinary owner/model and CAD acceptance remain in [State](../Docs/bob-delivery-flow.md#state).
 
 | Role key | Name / title | Purpose | Initial tier / effort |
 | --- | --- | --- | --- |
