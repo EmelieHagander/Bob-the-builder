@@ -15,7 +15,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:vocabulary
-      - run: npm test
       - run: node scripts/check-performance-reads.mjs
       - run: node --check scripts/check-live-bob.mjs
       - run: node --check scripts/check-live-project-scenarios.mjs
@@ -88,6 +87,9 @@ jobs:
       - name: Verify persistent building context UI
         if: ${{ !cancelled() && steps.live_build.outcome == 'success' }}
         run: CHROME_PATH="$(command -v google-chrome)" npm run verify:building
+      # Keep route/loading regressions visible before the long full-schema
+      # suite. Successful CI still requires every browser flow and all tests.
+      - run: npm test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

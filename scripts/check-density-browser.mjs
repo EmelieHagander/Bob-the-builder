@@ -28,7 +28,14 @@ try {
     page.setDefaultTimeout(12000)
     page.on('pageerror',error=>errors.push(error.message))
     for (const route of ['account','', 'project', 'areas','people','events','today','shopping','food','food/shopping','announcements','account/calendar','account/settings','facts','solutions','artifacts','material-plan']) {
+      const previousTitle = await page.$('.page-title')
       await page.goto(`${base}#/${route}`)
+      // Hash navigation can finish before React swaps a lazy route. Inspect
+      // the destination, not the still-mounted title/list of the previous page.
+      if (previousTitle) {
+        await page.waitForFunction(title=>!title.isConnected,previousTitle)
+        await previousTitle.dispose()
+      }
       await page.locator('.page-title').waitFor()
       await page.waitForFunction(()=>!document.querySelector('.ui-loading'))
       await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
