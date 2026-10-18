@@ -162,7 +162,9 @@ reads. Worker replay restores that original time in the tool result and source
 receipt; a genuinely new read gets a new observation. This keeps nested compactor
 input exact without dropping timestamps, ignoring record changes or replaying a
 composite operation that would skip nested journal positions. The same clock is
-used by main Bob, image grounding, plan, CAD and physical-source lookups. Existing
+used by main Bob, image grounding, plan and CAD model lookups. Physical-source
+validation returns source records rather than model lookup packets and can run
+inside an already checkpointed CAD gate; it does not add nested clock entries. Existing
 in-flight execution identities without the flag retain their recorded sequence.
 Live access and source-version gates still apply. The
 [lookup replay release record](foundation-verification.md#lookup-observation-replay-correction--2026-10-18)

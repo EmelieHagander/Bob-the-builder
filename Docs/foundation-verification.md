@@ -3720,7 +3720,8 @@ across an accepted AI wait with unchanged records and a moved worker clock.
 
 New execution identities now record a per-read observation time independently
 of the existing RPC checkpoint, preserving native tool bytes, source receipts,+nested operation order and strict replay checks. The production wiring covers
-main, grounding, plan, CAD and physical-source lookups. Failed/invalid reads retain
+main, grounding, plan and CAD model lookups. Physical-source validation keeps its
+existing gate sequence and adds no nested observation checkpoints. Failed/invalid reads retain
 their original observation too. Fresh reads get fresh times; altered read scope
 or unavailable observation checkpoints fail explicitly. In-flight identities
 retain their existing sequence; terminal owner retries create new executions.

@@ -422,7 +422,7 @@ export async function answerWithOpenAi(opts: {
         const {data,error}=await client.from('current_measurements').select('*').eq('project_id',opts.projectId).in('id',pins.project.map(p=>p.id)).abortSignal(AbortSignal.timeout(10000))
         if(error)throw new Error('construction_source_unavailable');for(const row of data??[])project.set(row.id,row)
       }
-      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64,undefined,lookupOptions),pins.physical,lookup.sources,{unlimitedWork})
+      const physical=await readPhysicalCadSources(()=>createProjectLookup(opts.projectId,lookupTransport,10000,64,undefined,{unlimitedWork}),pins.physical,lookup.sources,{unlimitedWork})
       return {project,physical}
     },
   }
