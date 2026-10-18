@@ -60,6 +60,17 @@ operation replay; new work uses the scoped contract. See the
 [incident verification](foundation-verification.md#memory-pointer-and-repeated-notice-correction--2026-10-18)
 for deployment status.
 
+**Gist-only memory — owner decision 2026-10-18 (supersedes the pointer index for
+new work).** Bob only needs a summary and to know where the originals are. The
+memory assistant returns `{gist}` only; it never lists sequence numbers, so there
+is no pointer validation to fail. The server states coverage (`throughSeq`) and
+Bob finds older originals with conversation search. If both summary attempts are
+invalid or the provider call fails, the fold keeps the earlier gist with a
+server-written note naming the uncovered messages, and the turn continues. An
+exhausted turn budget or denied access still stops. Publication
+`20261018193000_bob_memory_gist_only.sql`; pinned older manifests keep the
+scoped-pointer schema for replay. Deployment status is not recorded here yet.
+
 The versioned target limits are content tokens measured with `o200k_base`, including
 serialized metadata/references where applicable. They are context-size controls,
 not spending limits or permission to abandon unfinished work.

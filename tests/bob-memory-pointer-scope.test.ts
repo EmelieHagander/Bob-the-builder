@@ -3,14 +3,15 @@ import assert from 'node:assert/strict'
 import { projectSchema } from './support/project-schema.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 import { prepareWorkingContext, type ContextFrame, type ContextStore } from '../supabase/functions/_shared/bob-working-context.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
 
 let pg: Awaited<ReturnType<typeof projectSchema>>, prior: AiCatalogManifest, current: AiCatalogManifest
 before(async () => {
   pg = await projectSchema(async (db, name) => {
     if (name.endsWith('_bob_memory_pointer_scope.sql')) prior = (await db.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
+    // Later publications (gist-only memory) supersede this one; pin its own result.
+    if (name.endsWith('_bob_memory_gist_only.sql')) current = (await db.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
   })
-  current = (await pg.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
+  current ??= (await pg.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
 })
 after(() => pg?.close())
 const catalog = (manifest = current) => createAiCatalogSession({ rpc: async () => { throw new Error('Pinned') } }, { app: 'bob', manifest })
@@ -29,12 +30,7 @@ test('publication changes only the memory contract/schema and preserves old pinn
   assert.equal(catalog().definition('schema.bob_conversation_brief_v2').metadata.memory_pointer_scope_version, 1)
   assert.equal(catalog(prior).definition('schema.bob_conversation_brief_v2').metadata.memory_pointer_scope_version, undefined)
   assert.match(catalog().text('context-summary.contract'), /currentRequest is relevance context only/)
-  for (const key of ['context-summary.contract', 'schema.bob_conversation_brief_v2']) {
-    const expected = catalog().definition(key), fixture = catalogFixture().definition(key)
-    assert.deepEqual(fixture.definition, expected.definition)
-    assert.deepEqual(fixture.metadata, expected.metadata)
-    assert.equal(fixture.content, expected.content)
-  }
+  // Fixture parity with the latest publication lives in bob-memory-gist-only.test.ts.
 })
 
 test('the actual catalog seam forbids current, future and absent history pointers before model output', async () => {

@@ -2,7 +2,7 @@ import type { ModelCall } from './project-answer.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
-import { checkedBrief, manageConversationBrief, manageConversationBriefV2, readStoredBrief, briefFitsTokenBudget, BRIEF_LIMITS, BRIEF_TOKEN_POLICY, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
+import { checkedBrief, manageConversationBrief, manageConversationBriefV2, gistOnlyBrief, degradedBrief, readStoredBrief, briefFitsTokenBudget, BRIEF_LIMITS, BRIEF_TOKEN_POLICY, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
 import type { MemoryRetrieval, MemoryRetrievalStore } from './bob-memory-retrieval.ts'
 
 export interface ContextMessage { seq: number; role: 'user' | 'assistant'; text: string; state: 'pending' | 'completed' | 'failed' }
@@ -98,9 +98,14 @@ export async function prepareWorkingContext(opts: {
   memoryManagementVersion?: 1 | 2;
   /** Pinned schema contract; older in-flight journals retain their exact input. */
   memoryPointerScopeVersion?: 1;
+  /** Pinned schema contract: the model returns only a gist and an invalid or
+   * failed fold keeps the earlier gist instead of failing the turn. */
+  memoryGistOnlyVersion?: 1;
   retrieval?: MemoryRetrieval;
 }): Promise<WorkingContext> {
   const managed = opts.memoryManagementVersion === 2
+  const gistOnly = managed && opts.memoryGistOnlyVersion === 1
+  let degraded = false
   const load = async () => {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     const loaded = frame(await opts.store.load(), opts)
@@ -108,13 +113,14 @@ export async function prepareWorkingContext(opts: {
     return loaded
   }
   let state = await load()
-  const needsRewrite = () => managed && !briefFitsTokenBudget(readStoredBrief(state.summary, state.lastFoldedSeq))
+  // A degraded fold keeps the stored gist as is; it never loops on a rewrite.
+  const needsRewrite = () => managed && !degraded && !briefFitsTokenBudget(readStoredBrief(state.summary, state.lastFoldedSeq))
   for (let fold = 0; (state.older.length || needsRewrite()) && (opts.unlimitedWork || fold < 4); fold++) {
     const previousBrief = readStoredBrief(state.summary, state.lastFoldedSeq)
     const refreshOnly = state.older.length === 0
     if (refreshOnly && !opts.store.refresh) throw new Error('context_unavailable')
     const known = new Set([...previousBrief.index.map(e => e.seq), ...state.older.map(m => m.seq)])
-    const scopedPointers = managed && opts.memoryPointerScopeVersion === 1
+    const scopedPointers = managed && !gistOnly && opts.memoryPointerScopeVersion === 1
     if (scopedPointers) known.delete(state.recent.at(-1)!.seq)
     const availableSequences = [...known].sort((a, b) => a - b)
     let brief: ConversationBrief | undefined
@@ -128,14 +134,20 @@ export async function prepareWorkingContext(opts: {
 
         messages: [{ role: 'user', content: JSON.stringify({ previousBrief, throughSeq: state.lastFoldedSeq, olderMessages: state.older,
           ...(managed ? { foldThroughSeq: state.foldThroughSeq,
-            currentRequest: scopedPointers ? { text: state.recent.at(-1)!.text } : state.recent.at(-1),
+            currentRequest: scopedPointers || gistOnly ? { text: state.recent.at(-1)!.text } : state.recent.at(-1),
             ...(scopedPointers ? { availableSequences } : {}), memoryPolicy: BRIEF_TOKEN_POLICY } : {}),
           ...(validationFeedback ? { validationFeedback } : {}) }) }],
         maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()),
       })
-      if (!response.success || response.toolCalls?.length) throw new Error(response.error==='turn_budget_exhausted'?'turn_budget_exhausted':'context_unavailable')
+      if (!response.success || response.toolCalls?.length) {
+        if (gistOnly && response.error !== 'turn_budget_exhausted') {
+          console.warn('[Bob memory]', JSON.stringify({ attempt: attempt + 1, reason: 'model_failed' }))
+          continue
+        }
+        throw new Error(response.error==='turn_budget_exhausted'?'turn_budget_exhausted':'context_unavailable')
+      }
       try {
-        const candidate = managed
+        const candidate = gistOnly ? gistOnlyBrief(response.data) : managed
           ? manageConversationBriefV2(response.data, previousBrief, state.older, state.foldThroughSeq)
           : opts.memoryManagementVersion === 1
           ? manageConversationBrief(response.data, previousBrief, state.older, state.foldThroughSeq)
@@ -147,11 +159,18 @@ export async function prepareWorkingContext(opts: {
       } catch (error) {
         if (!(error instanceof InvalidConversationBrief)) throw error
         console.warn('[Bob memory]', JSON.stringify({ attempt: attempt + 1, reason: error.reason, characters: [...JSON.stringify(response.data ?? null)].length }))
-        if (attempt === 1) throw error
-        validationFeedback = managed
+        if (attempt === 1 && !gistOnly) throw error
+        validationFeedback = gistOnly ? { reason: error.reason, memoryPolicy: BRIEF_TOKEN_POLICY } : managed
           ? { reason: error.reason, memoryPolicy: BRIEF_TOKEN_POLICY, availableSequences: [...known] }
           : { reason: error.reason, limits: BRIEF_LIMITS, requiredSequences: state.older.map(m => m.seq) }
       }
+    }
+    if (!brief && gistOnly) {
+      // Originals stay searchable; a missing summary must not stop the answer.
+      brief = refreshOnly ? readStoredBrief(state.summary, state.lastFoldedSeq) : degradedBrief(previousBrief, state.lastFoldedSeq + 1, state.foldThroughSeq)
+      degraded = true
+      console.warn('[Bob memory]', JSON.stringify({ degraded: true, through: state.foldThroughSeq }))
+      if (refreshOnly) break
     }
     if (!brief) throw new Error('context_unavailable')
     if (!await opts.hasAccess()) throw new Error('project_denied')
