@@ -1,3 +1,4 @@
+import { drawingErrorCode } from './drawing-errors.ts'
 import { createPlanLinks } from './project-plan-links.ts'
 import { createWorkRecords } from './project-work-records.ts'
 import { createSolutionActions } from './project-solution-actions.ts'
@@ -441,13 +442,13 @@ export async function answerWithOpenAi(opts: {
    const input=JSON.parse(JSON.stringify(raw,(key,value)=>key==='retrievedAt'?undefined:value))
    return memo('cad:request',input,async(identity)=>{
     const {data,error}=await internal.rpc('bob_drawing_request',{...binding,p_user:opts.userId,...input,p_write_key:(opts.background?.drawingRequestId?opts.background.jobId:opts.clientTurnId)+':'+(identity?.key??crypto.randomUUID())}).abortSignal(AbortSignal.timeout(12000))
-    if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','drawing_request_not_paused','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
+    if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
     return data
    })
   }
   drawingBudget=createDrawingBudget({executionId:opts.background?.jobId??opts.clientTurnId,command:async input=>{
       const {data,error}=await internal.rpc('bob_drawing_budget',{...binding,p_user:opts.userId,...input}).abortSignal(AbortSignal.timeout(12000))
-      if(error)throw new Error('drawing_budget_unavailable')
+      if(error)throw new Error(drawingErrorCode(error)??'drawing_budget_unavailable')
       return data
   }})
 
@@ -470,7 +471,7 @@ export async function answerWithOpenAi(opts: {
       },
       caller:async(name,args)=>{
         const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000))
-        if(error)throw new Error(['drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_request_changed','drawing_request_denied','drawing_request_not_paused','drawing_request_inactive','drawing_scope_changed','drawing_requirements_changed','drawing_requirements_unavailable','drawing_restore_conflict','request_quote_required','drawing_request_pixels_forbidden','budget_remaining','budget_outcome_unknown','budget_changed','budget_unavailable','project_denied'].find(code=>error.message?.includes(code))??'drawing_request_unavailable')
+        if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
         return data
       },
     })}:{}),

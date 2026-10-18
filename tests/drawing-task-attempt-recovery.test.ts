@@ -27,6 +27,8 @@ async function fixture(guarded=false){
  const next=async()=>{
   await invoke('bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation])
   turn=randomUUID();execution=randomUUID();claim=await invoke('bob.bob_claim_turn',[project,owner,turn,'Continue same concept'])
+  const saved=await invoke('bob.bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'load',request])
+  await invoke('bob.bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'save',request,saved.revision,'collecting',saved.payload,randomUUID()])
  }
  return {owner,project,request,key,draft,provider,oldExecution,budget,next,get execution(){return execution}}
 }

@@ -27,31 +27,38 @@ function fixture(stopped: Record<string, any> = stoppedOutcome) {
   let row: DrawingRequest = { id, revision: 3, status: 'retrieval_failed',
     payload: { brief, owner_request: 'Draw this concept.', reference_refs: [], retry: { fingerprint: '', outcome: structuredClone(stopped) } } }
   const loads: number[] = []
+  let newOwner=false,adoptions=0
   const store: DrawingRequestStore & {grant:(id:string)=>Promise<never>} = {
     // Older pinned packets can still contain request-scope stops. The removed
     // automatic top-up must not run even if a legacy store offers that seam.
     grant:async()=>{throw new Error('automatic top-up is forbidden')},
     list: async () => [{ id, status: row.status }],
-    load: async key => { loads.push(row.revision); return key === id ? structuredClone(row) : null },
+    load: async key => { loads.push(row.revision); return key === id ? {...structuredClone(row),continuation_required:newOwner} : null },
     save: async (key, expected, status, payload) => {
-      assert.equal(key, id); assert.equal(expected, row.revision, 'saves use the period-opened packet revision')
+      assert.equal(key, id); assert.equal(expected, row.revision, 'saves use the loaded packet revision')
       row = { id, revision: expected + 1, status, payload: structuredClone(payload) }
+      // SQL's public save contract: atomic adoption releases only a cost stop.
+      if(newOwner){
+        newOwner=false;adoptions++
+        if(row.payload.retry?.outcome.reason==='turn_budget_exhausted')row.payload.retry.fingerprint=''
+      }
       return structuredClone(row)
     },
 
   }
-  let designerCalls = 0, reserveExhausted = false
-  const assistant = createCadAssistant({ requestStore: store, projectId: 'A', userId: 'u', ownerRequest: 'Try again please', hasAccess: async () => true, available: true, deadline: Date.now() + 300000,
+  let modelCalls = 0, renderCalls = 0, reserveExhausted = false
+  const makeAssistant = () => createCadAssistant({ requestStore: store, projectId: 'A', userId: 'u', ownerRequest: 'Try again please', hasAccess: async () => true, available: true, deadline: Date.now() + 300000,
     requestModel: async (_id, _o, work) => reserveExhausted ? { success: false, data: null, model: 'unavailable', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'turn_budget_exhausted', budget_stop: stopped.budget_stop } as any : work(),
     makeLookup: () => createProjectLookup('A', async (_p, q) => ({ data: { records: q.dataset === 'target' ? [{ id: 'project', revision: 1, solution_id: 'solution' }] : [], related: [], truncated: false }, error: null }), 1000, 40),
     ...checkedCadFixture('A',recipe),
-    render:async r=>checkedCadFixture('A',recipe).packet(r),
-    callModel:async o=>{assert.equal(o.functionName,'cad-reviewer');return reviewReply()},
+    render:async r=>{renderCalls++;return checkedCadFixture('A',recipe).packet(r)},
+    callModel:async o=>{modelCalls++;assert.equal(o.functionName,'cad-reviewer');return reviewReply()},
   })
-  return { assistant, brief, loads, get row() { return row }, exhaust: () => { reserveExhausted = true } }
+  let assistant=makeAssistant()
+  return { get assistant(){return assistant}, brief, loads, get row() { return row },get adoptions(){return adoptions},counts:()=>({modelCalls,renderCalls}),nextOwner:()=>{newOwner=true;reserveExhausted=false;assistant=makeAssistant()}, exhaust: () => { reserveExhausted = true } }
 }
 
-test('the period-opened packet resumes without an automatic allocation or a second load', async () => {
+test('a saved packet resumes without an automatic allocation or a second load', async () => {
   const f = fixture()
   const result = await f.assistant.consult(f.brief)
   assert.equal(result.budget_grant, undefined)
@@ -80,4 +87,33 @@ test('budget guidance covers new task diagnostics and compatible older request d
     assert.match(budgetResumeAction(stop), /owner.*next message/)
     assert.doesNotMatch(budgetStopMessage(stop), /budget|kostnad|\$/)
   }
+})
+
+
+test('a real unchanged cost-stop fingerprint is adopted through save before retry suppression',async()=>{
+ const f=fixture();f.exhaust()
+ await f.assistant.consult(f.brief)
+ assert.equal(f.row.payload.retry?.outcome.reason,'turn_budget_exhausted')
+ assert(f.row.payload.retry?.fingerprint)
+ f.nextOwner()
+ const result=await f.assistant.consult(f.brief)
+ assert.equal(f.adoptions,1,JSON.stringify(result))
+ assert.equal(result.retry_suppressed,undefined)
+ assert.equal(result.status,'ready')
+ assert.equal(f.row.payload.retry,undefined)
+})
+
+test('adopting an unchanged quality stop preserves evidence and does not buy another attempt',async()=>{
+ const f=fixture();f.exhaust()
+ await f.assistant.consult(f.brief)
+ f.row.payload.retry!.outcome={status:'needs_data',reason:'review_failed',saved:false}
+ f.row.payload.evidence=[{source:'retained quality evidence'}]
+ const previous=structuredClone(f.row.payload),counts=f.counts()
+ f.nextOwner()
+ const result=await f.assistant.consult(f.brief)
+ assert.equal(f.adoptions,1,JSON.stringify(result))
+ assert.equal(result.retry_suppressed,true)
+ assert.equal(result.reason,'review_failed')
+ assert.deepEqual(f.row.payload,{...previous,owner_request:previous.owner_request+'\nTry again please'})
+ assert.deepEqual(f.counts(),counts)
 })

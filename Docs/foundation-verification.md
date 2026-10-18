@@ -3405,3 +3405,21 @@ saved drawing and reload. No owner construction/request was manually changed or
 new owner model turn submitted by this release. The older automatic failure's
 unretained underlying exception remains unknown; capture content-free diagnostic
 detail if it recurs.
+
+## Atomic drawing continuation — 2026-10-18
+
+Implementation prepared; hosted migration and Edge deployment are still pending.
+The reproduced fault is a new message loading the request and changing its
+accounting period, then failing before the origin/authority save. An automatic
+job keeps the older origin and receives `drawing_budget_period_closed` before
+rendering. This is independent of the context/memory work.
+
+The fix and exact retirement boundary live in the
+[database contract](../db/README.md#atomic-drawing-continuation--2026-10-18).
+Regression coverage exercises interruption on both sides of save, failed-save
+rollback, exact replay, old paid receipts, inconsistent-state quarantine and
+explicit legacy rejection. The installed Supabase 2.117.0 CLI aborted with exit
+134 before `migration new`; the migration filename uses actual observed UTC.
+Documentation placement was reviewed using Archie's instructions in this session.
+Ordinary owner/model acceptance of the existing bunk-bed request and its exact
+current construction revision remains in [State](bob-delivery-flow.md#state).

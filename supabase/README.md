@@ -613,3 +613,16 @@ order. [Verification](../Docs/foundation-verification.md#common-calculator--2026
 records exact source/authentication readback, preserved revisions/settings and
 an actual Bob-selected graph preview. Specialist/member/mockup acceptance and
 the remaining method boundaries stay explicit; do not repeat this installation.
+
+### Drawing continuation errors — 2026-10-18
+
+Both Bob closures use `drawing-errors.ts` to preserve exact allowlisted drawing
+faults across the request/budget RPC and background-worker boundary. Unexpected
+database/provider messages stay sanitized. In particular, a contradictory
+continuation is recorded as `drawing_continuation_mismatch`, rather than losing
+its cause as `drawing_request_unavailable` / `background_failed`. The database
+[atomic transition](../db/README.md#atomic-drawing-continuation--2026-10-18) owns
+state, authority and historical accounting. No prompt, catalog or model changes
+are required. Deploy both matching closures after the migration and retain their
+existing authentication modes; [verification](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18)
+tracks actual installation separately from the code contract.

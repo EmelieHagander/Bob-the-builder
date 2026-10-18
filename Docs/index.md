@@ -54,7 +54,7 @@
 | Ask bob runtime project-context selection / screen context / Project Catalog / Librarian | `Docs/ask-bob-context.md` — implemented screen seam and image-only catalog vs remaining broader target; `Docs/ask-bob-context-implementation.md` + `supabase/README.md` |
 | Ask bob bounded project writes, receipts and retry | `Docs/ask-bob-writes.md` |
 | Ask bob conversation continuity, reset, provider context and compaction | `Docs/ask-bob-conversations.md` + `supabase/README.md` |
-| AI loop budget per owner message and preserved cost history | [CAD policy](cad-adapter.md#one-budget-per-owner-task--2026-10-12), [database periods](../db/README.md#owner-task-budget-periods--2026-10-12) and [cost evidence](foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) |
+| Drawing continuation ownership and preserved cost history | [Atomic database transition](../db/README.md#atomic-drawing-continuation--2026-10-18); [current work policy](ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17) |
 | how to verify a change | `.claude/skills/verify/SKILL.md` — automated tests, build and connected-mode browser fixtures |
 | session-wide invariants | `CLAUDE.md` |
 
