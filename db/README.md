@@ -748,36 +748,45 @@ The migration adds request-owned gap identities, deterministic request reuse, ca
 Release order: review the exact tree and pass SQL, Edge, browser and real PostgreSQL concurrency gates; apply the migration; deploy matching `ask-bob` and `bob-worker`; verify authenticated event/receipt recovery and the frontend build. Existing worker signatures remain compatible. Older request charges are not guessed: pre-migration requests require a prospective explicit allocation. The current lifecycle/retention/authority owner is [Ask bob conversations — P2 completion](../Docs/ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Exact deployment and model proof belongs in [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 
+### Atomic drawing continuation — 2026-10-18
+
+`20261018121638_drawing_atomic_continuation.sql` makes a successful
+`bob_drawing_request(save)` the only owner-turn transition. The existing claim
+and request locks cover packet CAS, period archival, origin turn, observed event
+and the exact running job's sealed authority in one transaction. A failed save
+rolls everything back; load/list and model reservations cannot move ownership.
+Exact write receipts are bound to their original turn. Ambiguous executions,
+changed scope, mismatched packets and archived turns fail with explicit codes.
+
+The canonical request function replaces and drops all five `before_*` delegates
+and `begin_drawing_budget_period`. Orphan private packets fail with
+`drawing_request_legacy_unsupported`; old source-less requests cannot implicitly
+adopt a different construction scope. Migration history and historical saved
+Artifacts remain readable. Reset, explicit restoration, cancellation, source
+checks and canonical completion receipts retain their existing boundaries.
+
+The event scheduler checks that origin and accounting turn agree before creating
+a job. Existing contradictions receive `drawing_continuation_mismatch`; the
+migration does not guess a message, credentials or source revision. An ordinary
+claimed owner message can recover the same registered request through a valid
+save. Automatic jobs cannot reopen an archived owner period.
+
+`drawing_budgets` and `drawing_budget_periods` retain current and historical
+accounting; every model reservation belongs to its original numeric period.
+Late receipts settle there exactly once, and usable paid results remain reusable.
+The current unlimited-work policy still comes from the pinned execution; the
+October 12 $3/24 rules are historical, not a new allocation policy. Unknown
+provider outcomes remain fenced. Tables retain RLS and no direct client grants.
+
+The old October 12 load-side period switch is superseded. Installation and
+verification belong to [release evidence](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18).
+
 ### Owner task budget periods — 2026-10-12
 
-Implemented by `20261012090214_drawing_task_budget.sql`; hosted installation
-status belongs to [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12).
-[CAD owns the current policy](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12), superseding the historical request allocation below.
-
-`drawing_budgets` retains the current numeric period and real originating owner
-turn. A new claimed owner message archives the old counters into private
-`drawing_budget_periods` and starts $3/24 at zero; `drawing_model_calls.budget_period`
-keeps every reservation tied to its original charge period. Existing totals are
-backfilled without reallocating or attributing old request-wide charges to a
-single historical message. The `legacy_request_scope` flag explicitly marks those old totals as
-request-wide history. New periods have exact owner-message scope.
-
-The existing actor/project claim lock serializes the total across all request
-IDs in the task. The service-only budget command and authenticated work reader
-sum current and archived counters for that same owner turn. A fresh request ID
-cannot refill the task. Loading/saving uses the existing claimed request wrapper
-and preserves its conflict, thread, membership, cancellation, restore and receipt
-guards. Only a new real instruction opens a period; archived turns cannot reopen.
-
-Direct completion and `reconcile_drawing_costs` charge the reserved period exactly
-once, including after a later message has opened another period. Cached results
-consume no new allocation; unresolved outcomes stay fenced. A deliberate owner
-UI grant remains revision-checked and uses the shared task total; Bob's automatic
-grant path is removed. The next message drops extra prior-period limits.
-
-The new history table has RLS enabled and no direct browser/service-role grants.
-Private helpers have fixed empty search paths and no raw RPC execution grants.
-Its indexes support turn aggregation and original-period receipt updates.
+Historical migration `20261012090214_drawing_task_budget.sql` introduced period
+accounting and the former $3/24 allocation. Its read-side transition is superseded
+by [atomic continuation](#atomic-drawing-continuation--2026-10-18); current work
+policy is [unlimited](../Docs/ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17).
 
 ### Task attempt and submission identity — 2026-10-13
 

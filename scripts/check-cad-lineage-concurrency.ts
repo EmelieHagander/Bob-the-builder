@@ -638,3 +638,41 @@ for(const kind of ['focus-first','focus-save-first','step-first','step-save-firs
  console.log(`PASS bound plan ${kind}: real parent/record lock wait; stale read/replay and concurrent links preserved`);cases++
 }
 console.log(`${cases} total PostgreSQL races passed including server-bound plan links.`)
+
+// Exercise the current drawing transition under real concurrent transactions.
+// The fixture's historical schema already has the same request/claim/ledger
+// tables. Full-schema Node tests cover all intervening runtime publications.
+await query(await readFile(new URL('../supabase/migrations/20261018121638_drawing_atomic_continuation.sql',import.meta.url),'utf8'))
+for(const kind of ['replay','competing-save','cancel-first','save-first']) {
+ await query('drop table if exists public.cad_race_fixture;'+fixture)
+ const f=await json('select data from public.cad_race_fixture'),id=randomUUID(),turn=randomUUID()
+ const owner=(sql:string,tail='')=>`begin;set local statement_timeout='30s';select set_config('request.jwt.claims',${literal(JSON.stringify({sub:f.actor}))},true);set local role authenticated;${sql};${tail}commit;`
+ const service=(sql:string,tail='')=>`begin;set local statement_timeout='30s';set local role service_role;${sql};${tail}commit;`
+ const scope={area_id:null,component_id:null,step_id:null,artifact_id:null},payload={brief:scope,owner_request:f.payload.request_quote,reference_refs:[]}
+ await query(owner(`select bob.create_drawing_request(${literal(f.project)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation},${literal(id)},${literal(JSON.stringify(scope))})`))
+ const save=(t:string,g:number,rev:number,key:string)=>`select bob.bob_drawing_request(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(t)},${g},'save',${literal(id)},${rev},'collecting',${literal(JSON.stringify(payload))},${literal(key)})`
+ await query(service(save(f.turn_id,f.claim.generation,0,'initial')))
+ await query(service(`select bob.bob_fail_turn_v2(${literal(f.project)},${literal(f.actor)},${literal(f.claim.thread_id)},${literal(f.turn_id)},${f.claim.generation})`))
+ const claim=JSON.parse((await query(service(`select bob.bob_claim_turn(${literal(f.project)},${literal(f.actor)},${literal(turn)},'Continue the exact saved request')`))).split('\n').at(-1)!)
+ const change=save(turn,claim.generation,1,'new-turn'),cancel=`select bob.cancel_drawing_request(${literal(f.project)},${literal(id)},1)`
+ const barrier=await gate(810000+cases)
+ const leader=start(kind==='cancel-first'?owner(cancel,`select pg_advisory_xact_lock(${810000+cases});`):service(change,`select pg_advisory_xact_lock(${810000+cases});`))
+ let follower:ReturnType<typeof start>|undefined
+ try {
+  const pid=await waiting(leader.app,barrier.pid)
+  follower=start(kind==='save-first'?owner(cancel):service(kind==='competing-save'?save(turn,claim.generation,1,'competing'):change))
+  await waiting(follower.app,pid)
+ }finally{await barrier.close()}
+ const lead=await leader.done,follow=await follower!.done
+ assert.equal(lead.code,0,lead.stderr)
+ if(kind==='replay')assert.equal(follow.code,0,follow.stderr)
+ else {assert.notEqual(follow.code,0);assert.match(follow.stderr,/revision_conflict|drawing_request_cancelled|drawing_request_changed|turn_not_claimed/)}
+ const state=await json(`select jsonb_build_object('origin',r.origin_turn_id,'turn',b.turn_id,'period',b.period,'status',r.status,'revision',r.revision,'history',(select count(*) from bob_private.drawing_budget_periods where request_id=r.id)) from bob_private.project_drawing_requests r join bob_private.drawing_budgets b on b.request_id=r.id where r.id=${literal(id)}`)
+ assert.equal(state.turn,kind==='cancel-first'?f.turn_id:turn)
+ assert.equal(state.period,kind==='cancel-first'?1:2)
+ assert.equal(state.history,kind==='cancel-first'?0:1)
+ if(kind==='cancel-first')assert.equal(state.status,'cancelled')
+ else {assert.equal(state.origin,turn);assert.equal(state.revision,2)}
+ console.log(`PASS drawing continuation ${kind}: observed lock wait; packet and period transition committed at most once`);cases++
+}
+console.log(`${cases} total PostgreSQL races passed including atomic drawing continuation.`)

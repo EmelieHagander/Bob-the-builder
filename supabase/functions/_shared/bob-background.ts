@@ -1,3 +1,4 @@
+import { drawingErrorCode } from './drawing-errors.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { answerWithOpenAi } from './ask-openai.ts'
@@ -155,7 +156,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         : await s.rpc('bob_finish_job', { ...args, p_error: result.ok ? null : result.error })
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: finished.status, error: result.ok ? undefined : result.error }))
     } catch (error) {
-      const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' || unlimitedWork&&authorityExpired() ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : 'background_failed'
+      const reason = error instanceof BobContinuation ? error.message : phase === 'authentication' || unlimitedWork&&authorityExpired() ? 'authentication_expired' : phase === 'credential' ? 'credential_unavailable' : drawingErrorCode(error) ?? 'background_failed'
       console.log('[Bob job]', JSON.stringify({ jobId: job.id, status: error instanceof BobContinuation && error.kind === 'yield' ? 'continuing' : 'failed', reason, phase, operation: error instanceof BobContinuation ? error.operationKey : undefined }))
       try {
         if (unlimitedWork && reason==='authentication_expired') await s.rpc('bob_pause_job',{...args,p_expires:job.expiresAt})

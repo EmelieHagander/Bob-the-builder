@@ -42,8 +42,8 @@ test('every new SQL CAD publication requires a source; genuine historical packet
  const copies=(await pg.query('select recipe,manifest,files from bob.artifact_cad_revisions where artifact_id=$1 order by artifact_revision',[legacy.recordId])).rows
  assert.equal(copies.length,3);assert(copies.every(row=>JSON.stringify(row)===JSON.stringify(copies[0])))
  assert.equal((await pg.query('select count(*)::int n from bob.artifact_construction_revisions where project_id=$1',[project!])).rows[0].n,0,'no invented construction or materials')
- // A real older paused request adopts its first source in the existing atomic
- // packet transaction, with the same CAS and requirements, never a new ID.
+ // Old source-less requests cannot silently bind a different scope. Their
+ // historical packets remain readable; new work must use a pinned construction.
  const requestId=randomUUID(),scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
  await rpc('bob.create_drawing_request',[project!,claim.thread_id,turn,claim.generation,requestId,JSON.stringify(scope)])
  const privateRpc=async(uid:string,name:string,args:any[],role='service_role'):Promise<any>=>(await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
@@ -59,12 +59,8 @@ test('every new SQL CAD publication requires a source; genuine historical packet
   await assert.rejects(savePacket(bad,parked.revision,randomUUID()),/drawing_scope_changed|recovery_required/)
   assert.deepEqual((await pg.query('select scope,revision from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0],beforeAdoption)
  }
- const bound=await savePacket(adopted,parked.revision,'adopt');assert.equal(bound.id,requestId);assert.deepEqual(bound.payload.brief.handoff,handoff)
- assert.equal((await pg.query<any>('select scope from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0].scope.artifact_id,construction.recordId)
- assert.deepEqual(await savePacket(adopted,parked.revision,'adopt'),bound,'exact retry stays its original receipt after source binding')
- const switched=structuredClone(adopted);switched.brief.artifact_id=legacy.recordId
- await assert.rejects(savePacket(switched,bound.revision,'switch'),/drawing_scope_changed|recovery_required/)
- assert.equal((await pg.query<any>('select scope from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0].scope.artifact_id,construction.recordId)
+ await assert.rejects(savePacket(adopted,parked.revision,'adopt'),/drawing_scope_changed/)
+ assert.deepEqual((await pg.query('select scope,revision from bob_private.project_drawing_requests where id=$1',[requestId])).rows[0],beforeAdoption)
 
 })
 

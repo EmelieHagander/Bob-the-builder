@@ -21,7 +21,7 @@ test('upgrade keeps the existing request-wide ledger; the next real message star
   for(let n=0;n<16;n++)await db.query('insert into bob_private.drawing_model_calls(request_id,key,execution_id,thread_id,completed,cost_usd) values($1,$2,$3,$4,true,.2525)',[id,n.toString(16).padStart(64,'0'),randomUUID(),claim.thread_id])
   before=(await db.query<any>('select to_jsonb(b) result from bob_private.drawing_budgets b where request_id=$1',[id])).rows[0].result
   await rpc(db,null,'bob_fail_turn_v2',[project,owner,claim.thread_id,oldTurn,claim.generation],'service_role')
- })
+ },'20261012090214_drawing_task_budget.sql')
  t.after(()=>pg.close())
  const existing=(await pg.query<any>('select to_jsonb(b) result from bob_private.drawing_budgets b where request_id=$1',[id])).rows[0].result
  assert.deepEqual(existing,{...before,period:1,turn_id:oldTurn,legacy_request_scope:true},'deployment neither grants nor rewrites old charges')
@@ -71,7 +71,8 @@ test('one owner task shares its cap across requests; the next message fully rese
  await assert.rejects(service('bob_drawing_budget',[project,other,claim.thread_id,turn,claim.generation,id,execution,key,'reserve',null]),/project_denied/)
  await service('bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation])
  activeTurn=randomUUID();claim=await service('bob_claim_turn',[project,owner,activeTurn,'Continue from the saved draft'])
- const resumed=await request('load')
+ const read=await request('load')
+ const resumed=await request('save',id,read.revision,read.payload)
  assert.deepEqual(resumed.payload.draft,draft);assert.equal(resumed.payload.retry.fingerprint,'')
  assert.equal(resumed.id,id);assert.equal(resumed.status,'retrieval_failed','reset does not invent readiness')
  const fresh=await state()
@@ -108,6 +109,8 @@ test('a new task does not redispatch an unknown old call; late completion charge
  await budget('reserve')
  await service('bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation])
  turn=randomUUID();claim=await service('bob_claim_turn',[project,owner,turn,'Continue shelf'])
+ const loaded=await service('bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'load',id])
+ await service('bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'save',id,loaded.revision,'collecting',loaded.payload,randomUUID()])
  assert.equal((await budget('reserve')).status,'outcome_unknown')
  const pending=await budget('reserve','f'.repeat(64))
  assert.deepEqual(pending.budget_stop.reasons,['pending_outcome']);assert.equal(pending.budget_stop.calls,0)
@@ -122,7 +125,8 @@ test('a new task does not redispatch an unknown old call; late completion charge
  const secondTurn=turn
  await service('bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation])
  turn=randomUUID();claim=await service('bob_claim_turn',[project,owner,turn,'Continue after provider recovery'])
- await service('bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'load',id,0,null,null,null])
+ const resumed=await service('bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'load',id])
+ await service('bob_drawing_request',[project,owner,claim.thread_id,turn,claim.generation,'save',id,resumed.revision,'collecting',resumed.payload,randomUUID()])
  await pg.exec("update shared_private.ai_runtime set worker_url='https://fixtureproject.supabase.co/functions/v1/ai-background-worker'; update shared_private.ai_receivers set enabled=true where app='bob'")
  const context={jobId:execution,role:'cad-designer'},fingerprint='f'.repeat(64)
  const provider=(await asProjectUser(pg,null,'select shared.ai_job_reserve($1,$2,$3,$4,$5,$6,$7) result',
