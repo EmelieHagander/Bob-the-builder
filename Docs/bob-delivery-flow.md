@@ -292,7 +292,26 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Nästa minnesgrind (2026-10-18):** prova ett nytt ordinärt meddelande i samma
+**Aktivt fokus — workshop om Bobs minne (2026-10-18):** börja med önskat
+produktbeteende: vad Bob ska hålla kvar om mål, krav, beslut, rättelser och öppna
+frågor, hur dessa ska prioriteras samt när de ska ändras eller sluta gälla.
+Detta är workshopfrågor, inte fastställd struktur. När beställaren och vi har
+landat i beteendet jämför vi det med faktisk implementation och beslutar nästa
+ändring. [Konversationsägaren](ask-bob-conversations.md) äger det gällande
+kontraktet; den nya målbilden ska beslutas innan det kontraktet ändras.
+
+**Parkerat minnesarbete från genomgången (punkterna 1, 3 och 4):**
+
+- Kvalitetsprov med långa samtal: tidiga krav, senare rättelser, parallella
+  uppgifter och återhämtning av rätt original efter flera sammanfattningar.
+- Direkt hämtning av originalmeddelande via minneshänvisning, inom samma privata
+  samtal och behörighetsgräns.
+- Hantering av växande modellkontext under ett enda långt arbete, inklusive
+  mätning och fortsatt arbete från bevarade resultat.
+
+Prioritering och lösning för dessa återupptas efter workshopen.
+
+**Kvarstående minnesacceptans (2026-10-18):** prova ett nytt ordinärt meddelande i samma
 privata tråd med den publicerade
 [minneshanteringen](ask-bob-conversations.md#managed-memory-navigation--2026-10-17).
 Bekräfta att det fulla indexet inte stoppar nästa tur och att Bob kan återfinna
