@@ -156,6 +156,18 @@ exchange slot; intervening context remains exact and late outputs retain their
 matching calls. Earlier immutable manifests keep their recorded grouping solely
 to replay already journaled model inputs. Unknown explicit policy versions fail.
 
+New durable executions also pin `lookupObservationVersion: 1`. Each project
+lookup records its observation time before its RPC, including invalid and failed
+reads. Worker replay restores that original time in the tool result and source
+receipt; a genuinely new read gets a new observation. This keeps nested compactor
+input exact without dropping timestamps, ignoring record changes or replaying a
+composite operation that would skip nested journal positions. The same clock is
+used by main Bob, image grounding, plan, CAD and physical-source lookups. Existing
+in-flight execution identities without the flag retain their recorded sequence.
+Live access and source-version gates still apply. The
+[lookup replay release record](foundation-verification.md#lookup-observation-replay-correction--2026-10-18)
+owns deployment and acceptance evidence.
+
 Bob and active specialist rollover atomically refresh the tool directory and prepared-call fence
 before the first fresh provider request. Detailed manuals must be loaded again;
 a removed native schema cannot still execute through the earlier fence. The new
