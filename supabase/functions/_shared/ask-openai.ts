@@ -232,20 +232,29 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
-  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32, undefined, { unlimitedWork })
-  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48, undefined, { unlimitedWork })
+  const deadline = opts.background?.deadline ?? Date.now() + 215000
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1 } =
+    await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
+      lookupObservationVersion: 1 as const,
+      memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
+      ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
+    }))
+  if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
+  const lookupOptions = { unlimitedWork,
+    // Existing in-flight journals retain their recorded clock policy. New
+    // work pins each observation, including invalid/failed reads, before its
+    // RPC. A separate checkpoint preserves nested operation order on replay.
+    ...(execution.lookupObservationVersion === 1 ? { observationTime: (input: unknown) =>
+      memo('lookup:observed_at', { projectId: opts.projectId, input }, async () => new Date().toISOString()) } : {}),
+  }
+  const projectLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 32, undefined, lookupOptions)
+  const groundingLookup = createProjectLookup(opts.projectId, lookupTransport, 10_000, 48, undefined, lookupOptions)
   const lookup = { ...projectLookup, get remaining() { return projectLookup.remaining }, get partial() { return projectLookup.partial || groundingLookup.partial }, sources: projectLookup.sources }
   const imageGrounding = { async search(input: LookupInput) {
     const result = await groundingLookup.search(input)
     for (const source of groundingLookup.sources) if (!lookup.sources.some(s => s.dataset===source.dataset && s.recordId===source.recordId)) lookup.sources.push(source)
     return result
   } }
-  const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1 } =
-    await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
-      memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
-      ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
-    }))
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
     onRollover: ({ role }) => { if (role === 'ask-bob') mainContextEpoch++ },
@@ -445,7 +454,7 @@ export async function answerWithOpenAi(opts: {
       if(input.dataset!=='plan')return lookupTransport(projectId,input,signal)
       const {data,error}=await rpc('project_plan_read',{p_project:projectId,p_revision:null},signal)
       return {data:{records:data?.record?[data.record]:[],related:[],truncated:false},error}
-    }), 10_000, 128, 512*1024, { unlimitedWork }),
+    }), 10_000, 128, 512*1024, lookupOptions),
     callModel,
   })
   const drawingRequestCall=async(raw:Record<string,unknown>)=>{
@@ -490,7 +499,7 @@ export async function answerWithOpenAi(opts: {
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
-    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,{unlimitedWork}),
+    makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,lookupOptions),
     callModel,
     render:(recipe,source,beforeDispatch)=>{
      if(!source)throw new Error('checked_construction_source_required')

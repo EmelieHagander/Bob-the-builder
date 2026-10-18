@@ -76,7 +76,12 @@ export const SEARCH_TOOL = {
 }
 
 /** One instance per question; project and work policy are server-owned. */
-export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups, byteLimit: number = LIMITS.bytes, options: { unlimitedWork?: boolean } = {}) {
+export function createProjectLookup(projectId: string, transport: LookupTransport, timeoutMs: number = LIMITS.timeoutMs, budget: number = LIMITS.lookups, byteLimit: number = LIMITS.bytes, options: {
+  unlimitedWork?: boolean;
+  /** A durable turn records the original observation time separately from its
+   * RPC result. Replaying a read must not manufacture a new observation. */
+  observationTime?: (input: unknown) => Promise<string>;
+} = {}) {
   if (options.unlimitedWork) budget = Infinity
   if(!Number.isSafeInteger(byteLimit)||byteLimit<1024||byteLimit>512*1024)throw new Error('invalid_lookup_budget')
   let used = 0
@@ -124,7 +129,9 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
     get remaining() { return Math.max(0, budget - used) },
     get partial() { return incomplete },
     async search(value: unknown): Promise<LookupResult> {
-      const base: LookupResult = { status: 'invalid', projectId, retrievedAt: new Date().toISOString(), records: [], related: [], truncated: false, partial: true, truth: 'unknown' }
+      const retrievedAt = options.observationTime ? await options.observationTime(value) : new Date().toISOString()
+      if (typeof retrievedAt !== 'string' || !Number.isFinite(Date.parse(retrievedAt))) throw new Error('lookup_observation_unavailable')
+      const base: LookupResult = { status: 'invalid', projectId, retrievedAt, records: [], related: [], truncated: false, partial: true, truth: 'unknown' }
       // Historical allowances counted invalid attempts too. New work policy
       // leaves loop recovery to the runner while retaining argument validation.
       if (++used > budget) { incomplete = true; return { ...base, status: 'budget_exhausted' } }

@@ -3701,3 +3701,30 @@ saved-drawing acceptance. After the ordinary caller removed the test image,
 the exact disposable release project was removed under identity, sole guest
 membership, no-thread and no-media guards. Readback found zero matching project,
 member, task, material or media rows; no real project was selected for cleanup.
+
+## Lookup observation replay correction — 2026-10-18
+
+**Prepared correction; required CI and deployment pending.** At 18:58:42 UTC,
+the owner's mockup inspection stopped with `continuation_changed` at
+`model:context-summary:3`, immediately after opening the selected image and
+waiting for the context compactor. The AI response completed successfully. This
+attempt made no project writes; its original owner request still required
+confirmation before changes to the selected design.
+
+The lookup RPC result was checkpointed, but its surrounding `retrievedAt` was
+recreated on every worker. Ordinary model fingerprints ignore this metadata;
+the compactor nests tool-output JSON inside its source JSON, where the new time
+changed the exact waiting-call fingerprint. A focused regression using the
+actual lookup, journal and continuation adapter reproduced the same failure
+across an accepted AI wait with unchanged records and a moved worker clock.
+
+New execution identities now record a per-read observation time independently
+of the existing RPC checkpoint, preserving native tool bytes, source receipts,+nested operation order and strict replay checks. The production wiring covers
+main, grounding, plan and CAD model lookups. Physical-source validation keeps its
+existing gate sequence and adds no nested observation checkpoints. Failed/invalid reads retain
+their original observation too. Fresh reads get fresh times; altered read scope
+or unavailable observation checkpoints fail explicitly. In-flight identities
+retain their existing sequence; terminal owner retries create new executions.
+No historic transcript, construction, selected design, drawing packet or budget
+was edited to recover the failed attempt. Behavior is owned by
+[conversation context](ask-bob-conversations.md#retrieval-and-colleague-handoffs).
