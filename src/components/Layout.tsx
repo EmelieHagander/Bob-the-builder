@@ -10,6 +10,7 @@ import type { Project } from '../data/types'
 import { phaseLabel } from '../lib/projectPhase'
 import { Avatar, Icon, Loading, useAsync, useProjectVersion } from './ui'
 import { ProjectWorkspaceNav } from './ProjectWorkspaceNav'
+import { useDrawingReturnPosition } from '../lib/drawingNavigation'
 import { AskBob } from './AskBob'
 import { ErrorBoundary } from './ErrorBoundary'
 import { BOB_OPEN_EVENT, useBobSurface } from '../lib/bobSurface'
@@ -219,6 +220,7 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
 
 export function Layout({ children, project, notice }: { children: ReactNode; project: Project | null; notice?: ReactNode }) {
   const location = useLocation()
+  useDrawingReturnPosition(project?.id ?? '')
   const surfaces: Record<string, BobScreenSurface> = { '/project': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
   const showBob = !!project && location.pathname !== '/' && !location.pathname.startsWith('/account')
   const surface = surfaces[location.pathname] ?? 'project'

@@ -688,11 +688,44 @@ A 4B1 CI/browser gate additionally requires:
 Deployed 4A and 4B1 evidence is recorded in [`Docs/foundation-verification.md`](foundation-verification.md), including hosted migrations, browser proof and ordinary Auth/PostgREST live verification. The downstream 4B2b net-wall-area release is recorded there separately and owned behaviorally by [`Docs/material-planning.md`](material-planning.md).
 # Project-home drawings and work links — September 24, 2026
 
-Saved, non-archived drawings appear on Project home below the phase rail. The three most recently updated drawings show their title, saved version, fidelity and related work Steps; **All drawings** opens the complete existing archive. CAD previews use one saved SVG view, storage-box previews reuse the deterministic renderer, and image-backed artifacts reuse authorised media. Other artifact kinds open their existing full viewer. A preview is not a new artifact or evidence of measured fit. Loading or preview failure leaves the saved drawing link available.
+Saved, non-archived drawings appear on Project home below the Plan, with a stable **Drawings** entrance in the Project header. The three most recently updated drawings show their title, saved version, fidelity and related work Steps; **All drawings** opens the complete existing archive. CAD previews use one saved SVG view, storage-box previews reuse the deterministic renderer, and image-backed artifacts reuse authorised media. Other artifact kinds open their existing full viewer. A preview is not a new artifact or evidence of measured fit. Loading or preview failure leaves the saved drawing link available.
 
 `artifact_step_links` is the current work relationship for **all** artifact kinds. A drawing can support several Steps without duplicate geometry. `current_drawing_steps` and `current_drawing_overview` are caller/RLS-bound projections of the same links and current, non-archived revisions. Project-home queries do not download CAD recipes or STEP export bytes; preview bytes are fetched only for visible cards. Links open an exact revision. Existing CAD `step_id` is retained as revision provenance; current CAD links are backfilled and new scoped CAD saves populate the work relationship. Archive/restore copies do not resurrect a deliberately removed work link.
 
 Bob uses `link_project_drawing` to add/remove a work link without re-rendering. It goes through the normal named-member, claimed-turn, current-request quote, revision check and receipt path (`bob_project_write_v11`). Existing links are readable through `read_project_record_section`, dataset `drawing`, Artifact UUID and exact current revision. Steps describe the work; Planning is a phase, so a drawing remains attached when work moves into Build. A project-wide drawing can remain unlinked while still appearing on Project home. Removing a Step from the current plan hides its live link without deleting the drawing/history.
+
+## Drawing access, reader and return
+
+Project and Area headers expose Drawings without opening planning menus. The
+Reference workspace keeps its four reference destinations visible and preserves
+the Area query. Plan Steps show their named drawings before the Task list. Normal
+Tasks consume the same authorized Step workspace projection to show current
+primary-Step drawings near the Task header; they do not depend on a saved Bob
+request. A failed workspace read is a visible retry state, never an empty-link claim.
+The existing volunteer reader and its narrower capabilities remain unchanged.
+
+**Open drawing** consistently opens the exact saved revision. The first reader
+shows geometry or the attached authorized image directly, with status, assumptions
+and relevant source/target/measurement warnings. No second dialog is required for
+the drawing image. **Details** holds description, author/date/reason, target lineage,
+generator inputs and pinned measurements. **History** lives inside this reader;
+choosing a version updates its exact URL and returns to the drawing view. Creation
+tools and record management remain secondary in the library; the expandable drawing
+target follows the list, and opens when no target is selected.
+
+Contextual drawing links retain the originating Project/Step/Task, expanded named
+sections and scroll position. Close and browser Back return to that originating
+entry after its content loads; revision changes within the reader do not add a
+second return journey. Reload keeps the origin in the browser history state.
+External/direct links without that state close to the scoped drawing library.
+The return pointer is validated against the active Project and never grants data
+access. Lazy previews and on-demand 3D remain unchanged; Task drawing access adds
+the existing lightweight drawing-link projection, not full drawing downloads.
+
+Browser verification belongs to `check-foundations-browser.mjs`,
+`artifacts-browser.mjs` and `storage-box-browser.mjs`, including a 10-Step/60-Task
+project, direct Task drawing access, image-first reading, history, stale evidence,
+reload and return. CI/release evidence remains separate from ordinary-user acceptance.
 
 Verification: `tests/project-drawing-workspace.test.ts` checks actual SQL/RLS, Bob tool discovery/writes/readback, retries, multiple Steps, archive/restore, unchanged geometry and cross-project denial. The foundations browser flow covers phone/desktop previews, exact-version opening, Step navigation, reload and preview failure. These controlled tests do not claim that an unconstrained live model has created the owner's bunk-bed drawing. Production release evidence belongs in the implementing PR.
 

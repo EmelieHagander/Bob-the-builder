@@ -115,6 +115,7 @@ export function ProjectHome() {
       <div className="cluster no-print">
         {db.authEnabled() && <button className={`btn ${startSize || building ? '' : 'btn-primary'}`} onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
         {startSize === 'small' && <button className="btn btn-primary" disabled={starting} onClick={() => void startBuild()}><Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}</button>}
+        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} />Drawings</Link>
         <button className="btn" onClick={() => setPhaseOpen(true)}>
           <Icon name="signpost" size={15} /> {project.phase ? 'Review phase' : 'Set project phase'}
         </button>
@@ -137,7 +138,7 @@ export function ProjectHome() {
 
     {!building && areas && tasks && !areas.length && !tasks.length && <ProjectStart />}
 
-    {project.description && <details className="project-description">
+    {project.description && <details id="project-description" className="project-description">
       <summary>Project description</summary>
       <p className="instruction-text">{project.description}</p>
       <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
@@ -154,12 +155,11 @@ export function ProjectHome() {
     <PlanningTools folded={building}>
     <nav className="project-shortcuts" aria-label="Project tools">
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
-      <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} /><span>Drawings</span></Link>
       <Link className="btn" to="/material-plan"><Icon name="package" size={18} /><span>Material plan</span></Link>
       <Link className="btn" to="/solutions"><Icon name="path" size={18} /><span>Solutions &amp; target</span></Link>
     </nav>
 
-    <details className="project-context-details">
+    <details id="project-context" className="project-context-details">
       <summary>Project focus &amp; lifecycle</summary>
       <section aria-label="Project lifecycle"><PhaseRail phase={project.phase} compact /></section>
       <section style={{ marginTop: 'var(--section-gap)' }}>
@@ -275,7 +275,7 @@ export function ProjectHome() {
 
 function PlanningTools({ folded, children }: { folded: boolean; children: ReactNode }) {
   if (!folded) return <>{children}</>
-  return <details className="card planning-tools">
+  return <details id="planning-tools" className="card planning-tools">
     <summary>Planning tools</summary>
     <p className="foundation-hint">Measurements, drawings, materials and the project target. Still here while you build.</p>
     {children}

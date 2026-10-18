@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { chromium } from 'playwright-core'
 import { createFactsFixture, verifyFactsBrowser } from './project-facts-browser.mjs'
 import { createSolutionsFixture, verifySolutionsBrowser } from './solutions-browser.mjs'
-import { createArtifactsFixture, verifyArtifactsBrowser } from './artifacts-browser.mjs'
+import { createArtifactsFixture, verifyArtifactsBrowser, manageDrawing } from './artifacts-browser.mjs'
 import { createRoomLayoutFixture, verifyRoomLayoutBrowser } from './room-layout-browser.mjs'
 import { verifyStorageBoxBrowser } from './storage-box-browser.mjs'
 import { verifyCadShellBrowser } from './cad-shell-browser.mjs'
@@ -70,7 +70,7 @@ try {
       const eq = key => url.searchParams.get(key)?.replace(/^eq\./, '')
       if (method === 'OPTIONS') return respond({ status: 204 })
       if (path === '/rest/v1/rpc/project_plan_read') return respond({json:{record:request.postDataJSON().p_project==='A'?currentPlan:null}})
-      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
+      if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:(currentPlan?.steps??[]).map(s=>({...s,area_id:null,phase:'build',responsible_kind:'bob',responsible_person_id:null,tasks:s.tasks??[],related_tasks:[],requirements:[]})),unorganised_tasks:[]}})
       if (path === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture-refresh', token_type: 'bearer', expires_in: 3600, expires_at: expiry, user } })
       if (path === '/auth/v1/user') return respond({ json: user })
       if (path === '/auth/v1/logout') return respond({ json: {} })
@@ -386,10 +386,35 @@ try {
     artifacts.records.set(cadId,cadRow);artifacts.histories.set(cadId,[cadRow])
     // A saved plan step reopens its exact construction and scoped images.
     const planStepId=randomUUID()
-    currentPlan={steps:[{id:planStepId,position:1,title:'Assemble the shelf',goal:'Join the panel to its supports',state:'active',notes:'Check the saved drawing before assembly.'}]}
+    currentPlan={steps:Array.from({length:10},(_,i)=>({id:i===0?planStepId:randomUUID(),position:i+1,title:i===0?'Assemble the shelf':`Work step ${i+1}`,goal:i===0?'Join the panel to its supports':`Complete work ${i+1}`,state:i===0?'active':'planned',notes:'Check the saved drawing before assembly.',tasks:Array.from({length:6},(_,j)=>({id:`work-${i}-${j}`,name:`Work task ${i+1}.${j+1}`,status:'todo',primary_step_id:i===0?planStepId:null}))}))}
+    task.primary_step_id=planStepId
     artifacts.cad.get(`${cadId}:1`).step_id=planStepId
     artifacts.workLinks.set(cadId,[{id:planStepId,title:'Assemble the shelf'}])
+    await page.goto(base+'#/tasks/taskA')
+    const taskDrawings=page.getByRole('region',{name:'Task drawings',exact:true})
+    const taskDrawing=taskDrawings.getByRole('link',{name:'CAD shelf detail · v1',exact:true})
+    await taskDrawing.scrollIntoViewIfNeeded()
+    const taskPosition=await page.evaluate(()=>window.scrollY)
+    await taskDrawing.click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.screenshot({path:`test-results/task-drawing-reader-${viewport.width}.png`})
+    assert.equal(await page.getByRole('dialog').count(),1)
+    await page.reload()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.waitForURL('**#/tasks/taskA')
+    await taskDrawing.waitFor()
+    await page.waitForFunction(y=>Math.abs(window.scrollY-y)<3,taskPosition)
+    await page.screenshot({path:`test-results/task-drawing-return-${viewport.width}.png`})
+    await taskDrawing.click()
+    await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.goBack();await taskDrawing.waitFor()
     await page.goto(base+'#/project')
+    const headerDrawing=page.getByRole('link',{name:'Drawings',exact:true})
+    await page.getByRole('heading',{name:'Porch A',exact:true}).waitFor()
+    await page.evaluate(()=>window.scrollTo(0,0))
+    const headerBox=await headerDrawing.boundingBox()
+    assert(headerBox&&headerBox.y>=0&&headerBox.y+headerBox.height<viewport.height,'Drawings stays in the opening viewport with 10 Steps and 60 Tasks')
     const drawings=page.getByRole('region',{name:'Project drawings',exact:true})
     await drawings.scrollIntoViewIfNeeded()
     await drawings.getByRole('img',{name:'CAD shelf detail — drawing preview',exact:true}).waitFor()
@@ -404,6 +429,8 @@ try {
     await page.screenshot({path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.waitForURL('**#/project')
     await page.goto(base+'#/project')
     await drawings.getByRole('link',{name:'Assemble the shelf',exact:true}).click()
     const workspace=page.getByRole('region',{name:'Project plan',exact:true})
@@ -412,6 +439,10 @@ try {
     await workspace.getByRole('link',{name:'CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.waitForURL('**#/project?step=*')
+    assert(await workspace.locator('#step-'+planStepId).evaluate(element=>element.open),'Closing returns to the expanded work step')
+    await page.getByRole('link',{name:'Drawings',exact:true}).click()
+    await manageDrawing(page.getByRole('article',{name:'CAD shelf detail',exact:true}))
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByRole('button',{name:'Revise',exact:true}).click()
     await page.getByText('Ask Bob to revise this drawing.',{exact:false}).waitFor()
     assert.equal(await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).count(),0)
@@ -433,6 +464,8 @@ try {
     await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).scrollIntoViewIfNeeded()
     await page.screenshot({path:`test-results/drawing-source-map-${viewport.width}.png`,fullPage:true})
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
+    await page.waitForURL('**#/project')
+    await page.getByRole('link',{name:'Drawings',exact:true}).click()
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByText('Sources changed — review drawing',{exact:true}).waitFor()
     artifacts.sources.set(cadId,{source_state:'unavailable',source_reasons:['source_unavailable'],changes:[{kind:'project_measurement',id:null,saved_revision:2,current_revision:null,parameter_ids:['width','inside'],state:'unavailable'}]})
     await page.goto(base+'#/project')

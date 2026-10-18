@@ -7,8 +7,7 @@ import { useAsync, useProjectVersion } from './ui'
 import { ProjectImages } from './ProjectImages'
 import { PhasePill } from './PhaseUI'
 import { TaskModal } from './editors'
-import { drawingUrl } from './ProjectDrawings'
-import { DrawingSourceNotice } from './DrawingSourceNotice'
+import { StepDrawings } from './StepDrawings'
 
 const taskState={todo:'To do',doing:'In progress',blocked:'Blocked',done:'Done'}
 const stepState={planned:'Planned',active:'In progress',blocked:'Blocked',completed:'Complete'}
@@ -35,18 +34,14 @@ function StepCard({step,work,selected,people,onAdd}:{step:WorkStep;work:Workspac
     {step.id===work.focus_step_id&&<span className="foundation-hint">Bob’s focus</span>}
     <span className="foundation-hint">Responsible: {step.responsible_kind==='bob'?'Bob':step.responsible_kind==='person'?people.get(step.responsible_person_id??'')??'Assigned participant':'Unassigned'}</span>
    </div>
+   {!!drawings.length&&<StepDrawings projectId={work.project_id} drawings={drawings} returnLabel={step.title} returnKey={`step:${step.id}`} />}
    {!!step.tasks.length&&<TaskLinks tasks={step.tasks} people={people}/>}
    {!step.tasks.length&&<p className="foundation-hint">No tasks organised in this step yet.</p>}
    {onAdd&&<button className="btn" onClick={()=>onAdd(step)}>Add task</button>}
-   {!!step.requirements.length&&<details className="work-criteria"><summary>Finish criteria · {step.requirements.length}</summary>
+   {!!step.requirements.length&&<details id={`criteria-${step.id}`} className="work-criteria"><summary>Finish criteria · {step.requirements.length}</summary>
     <ul>{step.requirements.map(r=><li key={r.id}>{r.title} <span className="foundation-hint">· {r.status.state.replace(/_/g,' ')}</span></li>)}</ul>
    </details>}
-   {!!step.related_tasks.length&&<details><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people}/></details>}
-   {!!drawings.length&&<ul className="work-task-list" aria-label="Step drawings">{drawings.map(d=><li key={d.artifact_id}>
-    <Link to={drawingUrl({id:d.artifact_id,revision:d.artifact_revision,area_id:d.area_id})}>{d.title} · v{d.artifact_revision}</Link>
-    <span className="foundation-hint">{d.status==='concept'?'Concept':d.status==='measured'?'Measured':'Build ready'}</span>
-    <DrawingSourceNotice source={d} />
-   </li>)}</ul>}
+   {!!step.related_tasks.length&&<details id={`related-${step.id}`}><summary>Related work</summary><TaskLinks tasks={step.related_tasks} people={people}/></details>}
    {db.authEnabled()&&<ProjectImages projectId={work.project_id} target={{kind:'plan_step',id:step.id}} title="Step images" />}
   </div>}
  </details>

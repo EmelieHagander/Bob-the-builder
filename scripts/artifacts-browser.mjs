@@ -335,6 +335,11 @@ function rememberGeneratedMeasurement(facts, timestamp, subject, value) {
   return id
 }
 
+export async function manageDrawing(card) {
+  const section = card.locator('details.drawing-management')
+  if (!await section.evaluate(element => element.open)) await card.getByText('Manage drawing', { exact: true }).click()
+}
+
 export async function verifyArtifactsBrowser(page, base, fixture, facts, solutions, width) {
   const selected = [...solutions.records.values()].find(item => item.title === 'Extend the porch')
   assert(selected, 'Expected the retained second alternative')
@@ -346,8 +351,10 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
 
   await page.goto(base + '#/artifacts')
   await page.getByRole('heading', { name: 'Drawings', level: 1, exact: true }).waitFor()
+  await page.locator('.drawing-target > summary').click()
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
   await page.getByLabel('Drawing scope', { exact: true }).selectOption('areaA')
+  await page.locator('.drawing-target > summary').click()
   await page.getByRole('heading', { name: `Extend the porch · Version ${selected.revision}`, exact: true }).waitFor()
   await page.getByRole('button', { name: 'Add drawing', exact: true }).click()
   const form = page.getByRole('dialog', { name: 'Add drawing', exact: true })
@@ -373,14 +380,15 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
 
   const card = page.getByRole('article', { name: 'Entrance section', exact: true })
   await card.waitFor(); await card.getByText('Section', { exact: true }).waitFor(); await card.getByText('Measured', { exact: true }).waitFor()
-  await card.getByRole('button', { name: 'View evidence', exact: true }).click()
+  await card.getByRole('button', { name: 'Open drawing', exact: true }).click()
   let details = page.getByRole('dialog', { name: 'Entrance section · Version 1', exact: true })
+  await details.locator('img.project-image-original').waitFor()
+  assert.equal(await page.getByRole('dialog').count(), 1, 'Opening a drawing shows its image without a nested dialog')
+  assert.equal(await details.locator('img').evaluate(element => getComputedStyle(element).objectFit), 'contain')
+  await page.screenshot({ path: `test-results/drawing-image-reader-${width}.png` })
+  await details.getByRole('button', { name: 'Details', exact: true }).click()
   await details.getByText(/Opening width/).waitFor(); await details.getByText(/Based on Extend the porch/).waitFor()
-  await details.getByRole('button', { name: 'View drawing image', exact: true }).click()
-  const image = page.getByRole('dialog', { name: 'Entry before work', exact: true })
-  await image.locator('img.project-image-original').waitFor()
-  assert.equal(await image.locator('img').evaluate(element => getComputedStyle(element).objectFit), 'contain')
-  await image.getByRole('button', { name: 'Close', exact: true }).click(); await details.getByRole('button', { name: 'Close', exact: true }).click()
+  await details.getByRole('button', { name: 'Close', exact: true }).click()
 
   const other = [...solutions.records.values()].find(item => item.title === 'Keep the porch')
   assert(other, 'Expected the retained first alternative')
@@ -391,6 +399,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   })
   await page.reload(); await card.getByText('The selected target for this scope changed after this drawing version. Review before building from it.', { exact: true }).waitFor()
 
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Revise', exact: true }).click()
   let editor = page.getByRole('dialog', { name: 'Revise drawing', exact: true })
   await editor.getByLabel('What this drawing shows', { exact: true }).fill('Keep this unsaved drawing edit visible after the conflict.')
@@ -401,6 +410,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   assert.equal(await editor.getByLabel('What this drawing shows', { exact: true }).inputValue(), 'Keep this unsaved drawing edit visible after the conflict.')
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
 
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Revise', exact: true }).click()
   editor = page.getByRole('dialog', { name: 'Revise drawing', exact: true })
   await editor.getByLabel('What this drawing shows', { exact: true }).fill('Section revised for the newly selected porch target.')
@@ -408,18 +418,22 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await editor.getByLabel('Reason for change', { exact: true }).fill('Adopt the newly selected target')
   await editor.getByRole('button', { name: 'Save new version', exact: true }).click(); await editor.waitFor({ state: 'hidden' })
   await card.getByText('Version 2', { exact: false }).waitFor(); await card.getByText('Build ready', { exact: true }).waitFor()
-  await card.getByRole('button', { name: 'History', exact: true }).click()
-  const history = page.getByRole('dialog', { name: 'Drawing history', exact: true })
+  await card.getByRole('button', { name: 'Open drawing', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'History', exact: true }).click()
+  const history = page.getByRole('region', { name: 'Drawing history', exact: true })
   await history.getByText('Adopt the newly selected target', { exact: false }).waitFor(); assert.equal(await history.locator('li').count(), 2)
   await history.getByRole('button', { name: 'View version', exact: true }).last().click()
   details = page.getByRole('dialog', { name: 'Entrance section · Version 1', exact: true })
+  await details.getByRole('button', { name: 'Details', exact: true }).click()
   await details.getByText(/Based on Extend the porch/).waitFor()
   await details.getByText('The selected target for this scope changed after this drawing version. This version keeps its original target lineage.', { exact: true }).waitFor()
   await details.getByRole('button', { name: 'Close', exact: true }).click()
 
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Archive', exact: true }).click()
   await page.getByRole('dialog', { name: 'Archive drawing', exact: true }).getByRole('button', { name: 'Archive drawing', exact: true }).click()
   await card.waitFor({ state: 'hidden' }); await page.getByLabel('Show drawings', { exact: true }).selectOption('archived'); await card.waitFor()
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Restore', exact: true }).click()
   await page.getByRole('dialog', { name: 'Restore drawing', exact: true }).getByRole('button', { name: 'Restore drawing', exact: true }).click()
   await card.waitFor({ state: 'hidden' }); await page.getByLabel('Show drawings', { exact: true }).selectOption('active'); await card.waitFor(); await page.reload(); await card.waitFor()
@@ -435,6 +449,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   const generatedIds = {}
   for (const [role, spec] of Object.entries(generatedFacts)) generatedIds[role] = rememberGeneratedMeasurement(facts, () => new Date().toISOString(), spec.subject, spec.value)
 
+  await page.getByText('More drawing tools', { exact: true }).click()
   await page.getByRole('button', { name: 'Generate wall elevation', exact: true }).click()
   let generator = page.getByRole('dialog', { name: 'Generate wall elevation', exact: true })
   await generator.getByLabel('Space', { exact: true }).selectOption({ label: 'Main house · Children room' })
@@ -458,14 +473,15 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   const generatedCard = page.getByRole('article', { name: 'Stud wall elevation', exact: true })
   await generatedCard.getByText('Generated', { exact: true }).waitFor(); await generatedCard.getByText('Measured', { exact: true }).waitFor()
   assert.equal(await generatedCard.getByRole('button', { name: 'Revise', exact: true }).count(), 0)
-  await generatedCard.getByRole('button', { name: 'View evidence', exact: true }).click()
+  await generatedCard.getByRole('button', { name: 'Open drawing', exact: true }).click()
   let generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 1', exact: true })
-  await generatedDetails.getByText(/Generator stud_wall_opening_v1 v1/).waitFor()
   await generatedDetails.getByRole('img', { name: 'Deterministic elevation of wall and opening', exact: true }).waitFor()
+  await generatedDetails.getByRole('button', { name: 'Details', exact: true }).click()
+  await generatedDetails.getByText(/Generator stud_wall_opening_v1 v1/).waitFor()
   await generatedDetails.getByText(/Opening width: Generated opening width · 1200 mm/).waitFor()
   await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
   await page.reload(); await generatedCard.waitFor()
-  await generatedCard.getByRole('button', { name: 'View evidence', exact: true }).click()
+  await generatedCard.getByRole('button', { name: 'Open drawing', exact: true }).click()
   generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 1', exact: true })
   await generatedDetails.getByText('Opening 1200 × 1200 mm', { exact: true }).waitFor(); await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
 
@@ -474,6 +490,7 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   facts.remember('measurement', {
     ...oldMeasurement, revision: 2, value: '1210', millimetres: '1210', change_note: 'Remeasured opening width', recorded_at: new Date(Date.now() + 1000).toISOString(),
   })
+  await manageDrawing(generatedCard)
   await generatedCard.getByRole('button', { name: 'Regenerate', exact: true }).click()
   generator = page.getByRole('dialog', { name: 'Regenerate wall elevation', exact: true })
   const openingRole = generator.locator('.card').filter({ hasText: 'Opening width' }).first()
@@ -486,18 +503,22 @@ export async function verifyArtifactsBrowser(page, base, fixture, facts, solutio
   await generator.getByLabel('Reason for regeneration', { exact: true }).fill('Use remeasured opening width')
   await generator.getByRole('button', { name: 'Save regenerated version', exact: true }).click(); await generator.waitFor({ state: 'hidden' })
   await generatedCard.getByText('Version 2', { exact: false }).waitFor()
-  await generatedCard.getByRole('button', { name: 'View evidence', exact: true }).click()
+  await generatedCard.getByRole('button', { name: 'Open drawing', exact: true }).click()
   generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 2', exact: true })
+  await generatedDetails.getByRole('button', { name: 'Details', exact: true }).click()
   await generatedDetails.getByText(/Opening width: Generated opening width · 1210 mm/).waitFor(); await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
-  await generatedCard.getByRole('button', { name: 'History', exact: true }).click()
-  const generatedHistory = page.getByRole('dialog', { name: 'Drawing history', exact: true })
+  await generatedCard.getByRole('button', { name: 'Open drawing', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'History', exact: true }).click()
+  const generatedHistory = page.getByRole('region', { name: 'Drawing history', exact: true })
   await generatedHistory.getByText('Use remeasured opening width', { exact: false }).waitFor()
   await generatedHistory.getByText('Initial generated drawing', { exact: false }).waitFor()
   assert.equal(await generatedHistory.locator('li').count(), 2)
   await generatedHistory.getByRole('button', { name: 'View version', exact: true }).last().click()
   generatedDetails = page.getByRole('dialog', { name: 'Stud wall elevation · Version 1', exact: true })
-  await generatedDetails.getByText(/Opening width: Generated opening width · 1200 mm/).waitFor()
   await generatedDetails.getByText('Opening 1200 × 1200 mm', { exact: true }).waitFor()
+  await generatedDetails.getByText('Linked measurements changed after this drawing version.', { exact: false }).waitFor()
+  await generatedDetails.getByRole('button', { name: 'Details', exact: true }).click()
+  await generatedDetails.getByText(/Opening width: Generated opening width · 1200 mm/).waitFor()
   await generatedDetails.getByRole('button', { name: 'Close', exact: true }).click()
 
   await page.locator('.project-artifacts').evaluate(async element => { await Promise.all(element.getAnimations().map(animation => animation.finished)) })

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { manageDrawing } from './artifacts-browser.mjs'
 import { readFile } from 'node:fs/promises'
 
 /** Production UI/data adapter; shared fixture services only. SQL/RLS have their own tests. */
 export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   await page.goto(base + '#/artifacts?area=areaA')
+  await page.getByText('More drawing tools', { exact: true }).click()
   await page.getByRole('button', { name: 'Draw storage box', exact: true }).click()
   let editor = page.getByRole('dialog', { name: 'Draw a storage box', exact: true })
   await editor.getByLabel('Drawing title', { exact: true }).fill('Test storage box')
@@ -58,6 +60,7 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   await page.locator('.box-print-pack').waitFor({ state: 'detached' })
   await detail.getByRole('button', { name: 'Close', exact: true }).click()
   const card = page.getByRole('article', { name: 'Test storage box', exact: true })
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Revise', exact: true }).click()
   editor = page.getByRole('dialog', { name: 'Edit storage box dimensions', exact: true })
   await editor.getByLabel('Outside height (mm)', { exact: true }).fill('300')
@@ -68,6 +71,7 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   assert.equal(await editor.getByLabel('Outside height (mm)', { exact: true }).inputValue(), '300')
   assert.deepEqual(fixture.parametric.get(`${current.id}:1`), original)
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await manageDrawing(card)
   await card.getByRole('button', { name: 'Revise', exact: true }).click()
   editor = page.getByRole('dialog', { name: 'Edit storage box dimensions', exact: true })
   await editor.getByLabel('Outside height (mm)', { exact: true }).fill('300')
