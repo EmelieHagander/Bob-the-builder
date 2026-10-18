@@ -98,6 +98,13 @@ connection loss and paused authorization remain explicit. Conversation loading
 and cache checking also stay visible there. A stalled initial read offers Retry
 conversation after 20 seconds, preserves the draft and ignores late results.
 
+Fresh authorized transcript rows render before delegation notices and job status
+finish loading. That preview never enables sending: the complete state read must
+succeed first. Server history uses its Auth owner directly; a slow Sidebar crew
+read does not delay the conversation. The shell badge and idle drawer share one
+visible-tab inbox poller. Active work polls status only, pauses while hidden and
+checks again on focus; closed drawers check less frequently.
+
 Active owned background turns expose **Stop** in the existing conversation action
 row. It cancels that exact job, preserves confirmed changes and leaves an honest
 partial cancellation notice. Expired authorization remains paused work; reconnect
@@ -129,6 +136,17 @@ startup read has a 20-second deadline and offers **Try again** and **Reload app*
 when it cannot complete. Late results from a timed-out attempt cannot replace
 its recovery screen or a newer retry. No session or saved project is cleared by
 this recovery path. AI/background jobs do not use this startup deadline.
+
+Same-owner token refresh and focus sign-in revalidate Project access in the
+background without remounting the shell or discarding the conversation draft.
+Account changes and sign-out still discard account-scoped UI. Concurrent reads
+share only in-flight requests; completed Project/Task data is not cached as
+authority. Phase fields travel in the original Project/Area selects.
+
+Route modules load on demand. A page-loading boundary keeps the shell and Bob
+mounted while navigating. Project Images fetches its list only when expanded;
+individual image previews load near the viewport. The private preview memory
+cache and original-read rules belong to [the media contract](media-and-steps.md).
 
 The phase browser fixture checks a stalled read, late completion and retry at
 320px, plus a persisted session close to expiry and one shared refresh at 390px.

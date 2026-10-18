@@ -12,26 +12,33 @@ export const IMAGE_PURPOSES: Record<MediaPurpose, string> = {
 }
 const message = (err: unknown) => err instanceof Error ? err.message : String(err)
 
-/** URLs last only as long as this view; an open original performs a new authorised read. */
+/** Fetch only visible previews; an open original performs a new authorized read. */
 export function StoredImage({ projectId, image, original = false, allowRetry = true }: { projectId: string; image: Pick<MediaAsset, 'id' | 'title'>; original?: boolean; allowRetry?: boolean }) {
+  const container = useRef<HTMLSpanElement>(null)
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true, objectUrl = ''
     setUrl(''); setError('')
-    db.downloadProjectImage(projectId, image.id).then(blob => {
+    const download = () => { void db.downloadProjectImage(projectId, image.id, { preview: !original }).then(blob => {
       if (!active) return
       objectUrl = URL.createObjectURL(blob)
       setUrl(objectUrl)
-    }).catch(err => { if (active) setError(message(err)) })
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [projectId, image.id, attempt])
+    }).catch(err => { if (active) setError(message(err)) }) }
+    const observer = original || typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { observer?.disconnect(); download() }
+    }, { rootMargin: '120px' })
+    if (observer && container.current) observer.observe(container.current)
+    else download()
+    return () => { active = false; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [projectId, image.id, original, attempt])
   if (error) return <span className="image-failure" role="alert">{error}
     {allowRetry && <button type="button" className="btn" onClick={e => { e.stopPropagation(); setAttempt(n => n + 1) }}>Retry image</button>}
   </span>
-  if (!url) return <span className="image-loading" role="status">Loading image…</span>
+  if (!url) return <span ref={container} className="image-loading" role="status">Loading image…</span>
   return <img src={url} alt={image.title} className={original ? 'project-image-original' : 'project-image-thumbnail'}
+    decoding="async"
     onError={() => setError('The stored image could not be displayed. Try loading it again.')} />
 }
 

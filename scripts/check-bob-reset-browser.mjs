@@ -27,7 +27,7 @@ try {
   for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 844 }, { width: 1280, height: 900 }]) {
     const touch = viewport.width < 860
     const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, serviceWorkers: 'block' })
-    const histories = new Map(['A', 'B'].map(id => [id, { id: crypto.randomUUID(), next_seq: 3, messages: [{ role: 'user', text: `OLD CHAT ${id}`, delivery_state: 'completed', seq: 1 }, { role: 'assistant', text: `OLD ANSWER ${id}`, delivery_state: 'completed', seq: 2 }] }]))
+    const histories = new Map(['A', 'B'].map(id => [id, { id: crypto.randomUUID(), next_seq: 3, messages: [{ role: 'user', text: `OLD CHAT ${id}`, turn_id: 'initial-turn', delivery_state: 'completed', seq: 1 }, { role: 'assistant', text: `OLD ANSWER ${id}`, turn_id: 'initial-turn', delivery_state: 'completed', seq: 2 }] }]))
     const errors = []
     let resetMode = 'success', authMode = 'member', resetCalls = 0
     let sendMode = 'normal', answerCalls = 0, releaseAnswer
@@ -35,6 +35,8 @@ try {
     const sentTurns=[]
     let pauseHistory = false, historyPaused, releaseHistory
     let pauseMembership = false, statusMode = 'normal'
+    let pauseNotices = true, noticesPaused, releaseNotices
+    const firstNotices = new Promise(resolve => { noticesPaused = resolve })
     const heldMembership = []
     let historyReads = 0, statusReads = 0
     let releaseReset
@@ -84,6 +86,7 @@ try {
         return respond({json:null})
       }
       if (url.pathname === '/rest/v1/bob_delegation_notices') {
+        if (pauseNotices) { pauseNotices = false; noticesPaused(); await new Promise(resolve => { releaseNotices = resolve }) }
         const h=[...histories.values()].find(h=>h.id===url.searchParams.get('thread_id')?.replace('eq.',''))
         return respond({json:(h?.messages??[]).filter(m=>m.background).map(m=>({turn_id:m.turn_id,text:'Jag har skickat ritningen till designern. Jag återkommer här när resultatet är granskat.'}))})
       }
@@ -218,6 +221,13 @@ try {
     await page.locator('.account-project-row').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open project Reset project A',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
+    await firstNotices
+    await drawer.getByRole('textbox').fill('Visible before work status')
+    assert(await drawer.getByRole('button', {name:'Send',exact:true}).isDisabled(), 'Fresh text is visible before status, but cannot authorize sending')
+    await page.screenshot({path:`test-results/bob-early-history-${viewport.width}.png`})
+    releaseNotices()
+    await drawer.locator('button:enabled', {hasText:'New conversation'}).waitFor()
+    await drawer.getByRole('textbox').fill('')
     if (touch) assert(await drawer.getByRole('button', { name: 'Close Ask bob', exact: true }).evaluate(node => node === document.activeElement), 'Opening a touch conversation does not raise the keyboard')
     const box = await drawer.getByRole('button', { name: 'New conversation', exact: true }).boundingBox()
     assert(box && box.height >= 43.99 && box.width >= 44 && box.x >= 0 && box.x + box.width <= viewport.width, JSON.stringify({ box, viewport }))
@@ -710,28 +720,31 @@ try {
     assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
     releaseHistory()
     await drawer.locator('button:enabled',{hasText:'New conversation'}).waitFor()
-    // A stalled membership read must not leave a cached chat loading forever.
-    // A late success from that attempt cannot dismiss the recovery screen.
+    // A stalled Sidebar membership read no longer blocks server-owned history.
     pauseMembership = true
     await page.evaluate(()=>window.dispatchEvent(new Event('bob:project-changed')))
     drawer = await open()
-    await drawer.locator('.bob-history-sync').filter({hasText:'conversation'}).waitFor()
-    const syncBounds = await drawer.locator('.bob-history-sync').boundingBox()
-    assert(syncBounds && syncBounds.y >= 0 && syncBounds.y + syncBounds.height <= viewport.height, 'Loading status stays in view with cached history')
-    await drawer.getByRole('textbox').fill('Keep my draft through a connection retry')
-    await drawer.getByRole('button',{name:'Retry conversation',exact:true}).waitFor({timeout:25_000})
-    assert(await drawer.getByRole('button',{name:'Send',exact:true}).isDisabled())
-    pauseMembership = false
-    const lateMember = page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/people' && new URL(r.url()).searchParams.has('auth_user_id'))
-    assert(heldMembership.length > 0)
-    heldMembership.splice(0).forEach(resolve=>resolve())
-    await (await lateMember).finished()
-    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
-    assert(await drawer.getByRole('button',{name:'Retry conversation',exact:true}).isVisible(), 'Timed-out success stays fenced')
-    await page.screenshot({path:`test-results/bob-history-timeout-${viewport.width}.png`})
-    await drawer.getByRole('button',{name:'Retry conversation',exact:true}).click()
     await drawer.locator('button:enabled',{hasText:'New conversation'}).waitFor()
-    assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep my draft through a connection retry')
+    await drawer.getByRole('textbox').fill('Keep my draft through session renewal')
+    assert(await drawer.getByRole('button',{name:'Send',exact:true}).isEnabled())
+    assert(heldMembership.length > 0)
+    pauseMembership = false
+    heldMembership.splice(0).forEach(resolve=>resolve())
+    // Real SDK broadcast events for a same-owner token refresh and focus sign-in.
+    // Each event must revalidate project access without unmounting the drawer.
+    for (const event of ['TOKEN_REFRESHED', 'SIGNED_IN']) {
+      const checked = page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/projects')
+      await page.evaluate(event => {
+        const key = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'))
+        const channel = new BroadcastChannel(key)
+        channel.postMessage({event, session:JSON.parse(localStorage.getItem(key))}); channel.close()
+      }, event)
+      await (await checked).finished()
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))
+      assert(await drawer.isVisible(), 'Session renewal keeps the drawer mounted')
+      assert.equal(await drawer.getByRole('textbox').inputValue(),'Keep my draft through session renewal')
+    }
+    await page.screenshot({path:`test-results/bob-session-preserved-${viewport.width}.png`})
     // An active durable job reads progress without retransferring the transcript.
     const activityAt = new Date().toISOString()
     const active={role:'user',text:'PAGED ACTIVE WORK',seq:21,turn_id:crypto.randomUUID(),jobId:crypto.randomUUID(),background:true,jobStatus:'running',delivery_state:'pending',updated_at:new Date(Date.now()-26*60_000).toISOString(),progress:{stage:'thinking',step:28,saved:3,at:activityAt}}

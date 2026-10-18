@@ -20,6 +20,7 @@ export function ProjectHome() {
   const projectVersion = useProjectVersion()
   const [version, setVersion] = useState(0)
   const [phaseOpen, setPhaseOpen] = useState(false)
+  const [imagesOpen, setImagesOpen] = useState(false)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState('')
   const navigate = useNavigate()
@@ -209,9 +210,9 @@ export function ProjectHome() {
     </section>}
     </PlanningTools>
 
-    <details className="card project-photo-details" id="project-images">
+    <details className="card project-photo-details" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
       <summary>Project images</summary>
-      <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />
+      {imagesOpen && <ProjectImages projectId={project.id} target={{ kind: 'project', id: project.id }} title="Project images" allowUpload allowThumbnail />}
     </details>
 
     {!db.authEnabled() && <section style={{ marginTop: 'var(--section-gap)' }}>

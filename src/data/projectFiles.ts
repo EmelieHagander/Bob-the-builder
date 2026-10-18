@@ -1,9 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MediaAsset, MediaPage, MediaPurpose, MediaTarget, TaskDetail, TaskStep, TaskStatus, SkillLevel } from './types'
+import { createImagePreviewCache, imagePreview } from '../lib/imagePreview'
+import { createSharedRead } from '../lib/sharedRead'
 
 export const IMAGE_LIMIT = 6 * 1024 * 1024
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const DEMO_MESSAGE = 'This demo does not save images or instructions. Open a connected project to use this feature.'
+const previews = createImagePreviewCache()
+const imageReads = createSharedRead()
+export function clearImagePreviews() { previews.clear(); imageReads.clear() }
 type AssertCurrent = () => void
 type Row = Record<string, any> // PostgREST's ungenerated schema boundary; mapped before reaching UI.
 
@@ -44,6 +49,9 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     const { db, assertCurrent } = connection(projectId)
     const result = value(await db.rpc('media_command', { p_project: projectId, p_action: action, p_media: mediaId, p_data: data }))
     assertCurrent()
+    // Immutable ready bytes do not change on upload/link/title commands. Avoid
+    // interrupting another attachment's preview while a batch is uploading.
+    if (action === 'begin_delete' || action === 'finish_delete') clearImagePreviews()
     changed()
     return result as Row
   }
@@ -61,8 +69,8 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
   }
   async function getImage(projectId: string, mediaId: string) {
     const { db, assertCurrent } = connection(projectId)
-    const row = value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)')
-      .eq('project_id', projectId).eq('id', mediaId).single()) as Row
+    const row = await imageReads.run(`${projectId}/${mediaId}`, async () => value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)')
+      .eq('project_id', projectId).eq('id', mediaId).single()) as Row)
     assertCurrent()
     if (row.project_id !== projectId) throw new Error('Image project mismatch.')
     return mapImage(row)
@@ -118,11 +126,21 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
       await command(projectId, 'finalize', id)
       return id
     },
-    async downloadImage(projectId: string, mediaId: string): Promise<Blob> {
+    async downloadImage(projectId: string, mediaId: string, options: { preview?: boolean } = {}): Promise<Blob> {
       const { db, assertCurrent } = connection(projectId)
       const image = await getImage(projectId, mediaId)
       if (image.state !== 'ready') throw new Error('This image is not ready to open.')
-      const blob = value(await db.storage.from(image.bucket).download(image.path))
+      // A cache hit is never authority: getImage above must succeed under the
+      // current JWT/RLS even when bytes are already in memory. Originals always
+      // perform a fresh Storage read. No private bytes enter persistent storage.
+      const download = async () => {
+        const original = value(await db.storage.from(image.bucket).download(image.path))
+        assertCurrent()
+        return options.preview ? imagePreview(original) : original
+      }
+      const blob = options.preview
+        ? await previews.read(`${projectId}/${mediaId}/${image.bucket}/${image.path}`, download)
+        : await download()
       assertCurrent()
       return blob
     },
