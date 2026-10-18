@@ -300,10 +300,10 @@ function VersionDialog({ projectId, id, revision, edit, areas, target, returnLab
     {loading ? <Loading /> : error ? <Retry error={error} retry={() => setAttempt(value => value + 1)} /> : data && <>
       <div className="drawing-reader-tabs" role="group" aria-label="Drawing sections">
         {(['drawing', 'details', 'history'] as const).map(value => <button key={value} className="btn" aria-pressed={section === value} onClick={() => setSection(value)}>{value === 'drawing' ? 'Drawing' : value === 'details' ? 'Details' : 'History'}</button>)}
+        <button className="btn" aria-label="Ask Bob about this version" onClick={openBobForCurrentSurface}>Ask Bob</button>
       </div>
       {section === 'history' ? <History projectId={projectId} record={data} target={target} onVersion={(id, revision) => { setSection('drawing'); onVersion(id, revision) }} />
         : <VersionDetails value={data} target={target} details={section === 'details'} onShellChanged={setFresh} onShellReload={reloadShell} />}
-      <div className="foundation-actions"><button className="btn" onClick={openBobForCurrentSurface}>Ask Bob about this version</button></div>
     </>}
   </Modal>
 }
@@ -393,8 +393,9 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
   const origin = drawingOrigin(location.state, projectId)
   const openDrawing = useOpenDrawing(projectId, 'Drawings')
   const area = params.get('area') ?? ''
-  const [archived, setArchived] = useState(false)
-  const [offset, setOffset] = useState(0)
+  const archived = params.get('archived') === '1'
+  const requestedOffset = Number(params.get('offset') ?? 0)
+  const offset = Number.isSafeInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0
   const [attempt, setAttempt] = useState(0)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const focused = dialog?.kind === 'version' ? { id: dialog.id, revision: dialog.revision }
@@ -426,6 +427,9 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
     const next = new URLSearchParams(params); next.set('drawing', id); next.set('revision', String(revision))
     setParams(next, { replace: true, state: location.state })
   }
+  const filterDrawings = (nextArea: string, showArchived: boolean, nextOffset = 0) => {
+    setParams({ ...(nextArea ? { area: nextArea } : {}), ...(showArchived ? { archived: '1' } : {}), ...(nextOffset ? { offset: String(nextOffset) } : {}) })
+  }
   const target = data?.target
   const areas = data?.areas ?? []
   const selectedArea = areas.find(item => item.id === area)
@@ -442,7 +446,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
       <p className="page-sub">Keep the exact plan for {selectedArea ? selectedArea.name : 'the Project'}, with its measurements and target version.</p></div>
       <div className="foundation-actions">
         <button className="btn" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'create' })}>Add drawing</button>
-        <details className="drawing-tools"><summary>More drawing tools</summary><div className="foundation-actions">
+        <details id="drawing-tools" className="drawing-tools"><summary>More drawing tools</summary><div className="foundation-actions">
           <button className="btn" title={!area ? 'Choose an Area first so geometry uses the correct Area target and physical scope.' : undefined}
             disabled={loading || Boolean(error) || !canGenerate} onClick={() => setDialog({ kind: 'generate' })}>Generate wall elevation</button>
           <button className="btn" disabled={loading || Boolean(error) || !canCreate} onClick={() => setDialog({ kind: 'box' })}>Draw storage box</button>
@@ -453,10 +457,10 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
 
 
       <div className="fact-filters"><Field label="Drawing scope"><select style={inputStyle} value={area} onChange={event => {
-        setOffset(0); setParams(event.target.value ? { area: event.target.value } : {})
+        filterDrawings(event.target.value, archived)
       }}><option value="">Project / all Areas</option>{areas.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
       <Field label="Show drawings"><select style={inputStyle} value={archived ? 'archived' : 'active'} onChange={event => {
-        setOffset(0); setArchived(event.target.value === 'archived')
+        filterDrawings(area, event.target.value === 'archived')
       }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
 
       <h2>Drawings</h2>
@@ -486,7 +490,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
           {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}
           <div className="foundation-actions">
             <button className="btn btn-primary" data-drawing-return={`library:${item.id}`} onClick={() => openDrawing(drawingUrl({ id: item.id, revision: item.revision, area_id: item.areaId }), `library:${item.id}`)}>Open drawing</button>
-            <details className="drawing-management"><summary>Manage drawing</summary><div className="foundation-actions">
+            <details id={`drawing-management-${item.id}`} className="drawing-management"><summary>Manage drawing</summary><div className="foundation-actions">
             {!item.archived && !item.hasRoomLayout && !item.hasMultifloorPlan && !item.hasStairStudy && canCreate && editableInScope && (item.generator
               ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
               : <button className="btn" onClick={() => setDialog({ kind: 'edit', record: item })}>Revise</button>)}
@@ -496,8 +500,8 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
           </div>
         </article>
       })}</div>
-      <Pager offset={offset} size={24} more={data.drawings.hasMore} move={setOffset} />
-      <details className="card fact-card drawing-target" open={!target.solution}><summary>Drawing target</summary>
+      <Pager offset={offset} size={24} more={data.drawings.hasMore} move={next => filterDrawings(area, archived, next)} />
+      <details id="drawing-target" className="card fact-card drawing-target" open={!target.solution}><summary>Drawing target</summary>
         <h2>{selectedArea ? `Drawing target · ${selectedArea.name}` : 'Project drawing target'}</h2>
         {target.solution ? <><h3>{target.solution.title} · Version {target.solution.revision}</h3>
           {target.inherited && selectedArea && <p className="solution-attention">This Area currently inherits the Project target. Drawings may use it, but a later Area-specific target will make older Area drawings visibly historical.</p>}

@@ -48,10 +48,12 @@ export function useDrawingReturnPosition(projectId: string) {
     }
     const restore = () => {
       if (done) return
+      let changed = false
       for (const item of saved.disclosures) {
         const element = document.getElementById(item.id)
-        if (element instanceof HTMLDetailsElement && element.open !== item.open) element.open = item.open
+        if (element instanceof HTMLDetailsElement && element.open !== item.open) { element.open = item.open; changed = true }
       }
+      if (changed) return
       const anchor = [...document.querySelectorAll<HTMLElement>('[data-drawing-return]')].find(item => item.dataset.drawingReturn === saved.anchor && item.getClientRects().length)
       if (!anchor) return
       // Wait for the restored disclosures' React content and page height too.

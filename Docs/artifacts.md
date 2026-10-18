@@ -717,7 +717,9 @@ Contextual drawing links retain the originating Project/Step/Task, expanded name
 sections and scroll position. Close and browser Back return to that originating
 entry after its content loads; revision changes within the reader do not add a
 second return journey. Reload keeps the origin in the browser history state.
-External/direct links without that state close to the scoped drawing library.
+Library scope, archive selection and pagination live in its URL so returning after
+a reader reload preserves that selection. External/direct links without origin
+state close to the scoped drawing library.
 The return pointer is validated against the active Project and never grants data
 access. Lazy previews and on-demand 3D remain unchanged; Task drawing access adds
 the existing lightweight drawing-link projection, not full drawing downloads.

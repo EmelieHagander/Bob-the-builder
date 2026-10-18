@@ -64,7 +64,7 @@ export function ProjectPlanContent({work,selected=null,people=new Map(),onAdd}:{
   {work.steps.filter(s=>!s.area_id).map(renderStep)}
   {unorganised(work.unorganised_tasks.filter(t=>!t.area_id))}
   {work.areas.filter(area=>!area.archived_at).map(renderArea)}
-  {!!archived.length&&<details open={!!selected&&work.steps.some(step=>step.id===selected&&archived.some(area=>area.id===step.area_id))}>
+  {!!archived.length&&<details id="archived-work-areas" open={!!selected&&work.steps.some(step=>step.id===selected&&archived.some(area=>area.id===step.area_id))}>
    <summary>Archived Areas · {archived.length}</summary>{archived.map(renderArea)}
   </details>}
  </section>

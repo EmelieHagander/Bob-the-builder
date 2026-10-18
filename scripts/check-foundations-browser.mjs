@@ -303,7 +303,7 @@ try {
       const box = await button.boundingBox()
       assert(!box || (box.width >= 44 && box.height >= 44), 'Task/image actions need 44px targets')
     }
-    await page.screenshot({ path: 'test-results/foundations-' + viewport.width + '.png', fullPage: true })
+    await page.screenshot({animations:'disabled', path: 'test-results/foundations-' + viewport.width + '.png', fullPage: true })
     await verifyFactsBrowser(page, base, facts, viewport.width)
     await verifySolutionsBrowser(page, base, solutions, facts, viewport.width)
     await verifyArtifactsBrowser(page, base, artifacts, facts, solutions, viewport.width)
@@ -321,6 +321,9 @@ try {
     artifacts.cad.set(`${cadId}:1`,{project_id:'A',artifact_id:cadId,artifact_revision:1,recipe:sourceGraph.recipe,manifest:{...sourceGraph.manifest,checks:{collisions:{status:'complete',tested_pairs:0,skipped_pairs:0,overlaps:[]},clearances:[],motions:[]}},files:{front:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="100"><rect x="5" y="5" width="790" height="90" fill="none" stroke="black"/></svg>').toString('base64'),step:Buffer.from('ISO-10303-21;').toString('base64')},step_id:null,source_artifact_id:null,source_revision:null})
     await page.goto(base+`#/artifacts?drawing=${cadId}&revision=1`)
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
+    await page.getByRole('link',{name:'Download 3D model',exact:true}).focus()
+    await page.keyboard.press('Tab')
+    assert(await page.getByText('Parts and dimensions',{exact:true}).evaluate(element=>element===document.activeElement),'Drawing disclosures remain reachable inside the keyboard focus trap')
     await page.getByText('Parts and dimensions',{exact:true}).click()
     await page.getByRole('cell',{name:'980 × 18 × 300',exact:true}).waitFor()
     assert.equal(await page.getByRole('link',{name:'Download cut list',exact:true}).count(),1)
@@ -338,9 +341,9 @@ try {
     await sourceMap.getByText('Saved value: 20 mm',{exact:true}).waitFor()
     await sourceMap.getByText(/Calculation: subtract_v1 · inputs width, allowance/).waitFor()
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Source map must fit mobile without promoting estimates to measurements')
-    await page.screenshot({path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
+    await page.screenshot({animations:'disabled',path:`test-results/cad-drawing-${viewport.width}.png`,fullPage:true})
     await sourceMap.getByText('Original value: 1 m · truth: measured',{exact:true}).scrollIntoViewIfNeeded()
-    await page.screenshot({path:`test-results/cad-parameter-source-${viewport.width}.png`})
+    await page.screenshot({animations:'disabled',path:`test-results/cad-parameter-source-${viewport.width}.png`})
     // An explicitly opened historical revision remains the page focus even
     // when a newer saved proposal exists. Bob opens over the version dialog.
     artifacts.records.set(cadId,{...cadRow,revision:2})
@@ -351,7 +354,7 @@ try {
     await page.reload()
     const versionDialog = page.getByRole('dialog',{name:'CAD shelf detail · Version 1',exact:true})
     await versionDialog.getByText(/The newest saved revision is 2; this view keeps revision 1/).waitFor()
-    await page.screenshot({path:`test-results/drawing-historical-version-${viewport.width}.png`})
+    await page.screenshot({animations:'disabled',path:`test-results/drawing-historical-version-${viewport.width}.png`})
     const askVersion = versionDialog.getByRole('button',{name:'Ask Bob about this version',exact:true})
     await askVersion.click()
     const bobDialog = page.getByRole('dialog',{name:'Bob conversation for Porch A',exact:true})
@@ -397,7 +400,7 @@ try {
     const taskPosition=await page.evaluate(()=>window.scrollY)
     await taskDrawing.click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
-    await page.screenshot({path:`test-results/task-drawing-reader-${viewport.width}.png`})
+    await page.screenshot({animations:'disabled',path:`test-results/task-drawing-reader-${viewport.width}.png`})
     assert.equal(await page.getByRole('dialog').count(),1)
     await page.reload()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
@@ -405,7 +408,7 @@ try {
     await page.waitForURL('**#/tasks/taskA')
     await taskDrawing.waitFor()
     await page.waitForFunction(y=>Math.abs(window.scrollY-y)<3,taskPosition)
-    await page.screenshot({path:`test-results/task-drawing-return-${viewport.width}.png`})
+    await page.screenshot({animations:'disabled',path:`test-results/task-drawing-return-${viewport.width}.png`})
     await taskDrawing.click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.goBack();await taskDrawing.waitFor()
@@ -426,7 +429,7 @@ try {
     // reject decode; retain the assertion that the exact preview has pixels.
     await drawingPreview.evaluate(img=>img.decode())
     assert.equal(await drawingPreview.evaluate(img=>img.complete&&img.naturalWidth>0),true)
-    await page.screenshot({path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
+    await page.screenshot({animations:'disabled',path:`test-results/project-drawings-${viewport.width}.png`,fullPage:true})
     await drawings.getByRole('link',{name:'Open drawing: CAD shelf detail · v1',exact:true}).click()
     await page.getByRole('img',{name:'CAD shelf detail — Front',exact:true}).waitFor()
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
@@ -462,9 +465,9 @@ try {
     await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).waitFor()
     await sourceMap.getByText('Saved value: 980 mm',{exact:true}).waitFor()
     await sourceMap.getByText('Affected parameter IDs: width, inside',{exact:true}).scrollIntoViewIfNeeded()
-    await page.screenshot({path:`test-results/drawing-source-map-${viewport.width}.png`,fullPage:true})
+    await page.screenshot({animations:'disabled',path:`test-results/drawing-source-map-${viewport.width}.png`,fullPage:true})
     await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
-    await page.waitForURL('**#/project')
+    await page.waitForURL('**#/project?step=*')
     await page.getByRole('link',{name:'Drawings',exact:true}).click()
     await page.getByRole('article',{name:'CAD shelf detail',exact:true}).getByText('Sources changed — review drawing',{exact:true}).waitFor()
     artifacts.sources.set(cadId,{source_state:'unavailable',source_reasons:['source_unavailable'],changes:[{kind:'project_measurement',id:null,saved_revision:2,current_revision:null,parameter_ids:['width','inside'],state:'unavailable'}]})
@@ -484,7 +487,7 @@ try {
     await drawings.getByText('Sources unavailable — check before use',{exact:true}).waitFor()
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1))
     await page.locator('.page').evaluate(async el=>{await Promise.all(el.getAnimations().map(animation=>animation.finished))})
-    await page.screenshot({path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
+    await page.screenshot({animations:'disabled',path:`test-results/drawing-source-warning-${viewport.width}.png`,fullPage:true})
     artifacts.sources.delete(cadId)
     artifacts.rejectPreview=true
     // Reload the restored source assessment before testing a separate preview transport failure.
@@ -545,7 +548,7 @@ try {
 } catch (error) {
   if (activePage && !activePage.isClosed()) {
     console.error('Foundation UI at failure:\n' + (await activePage.locator('body').innerText()).slice(0, 9000))
-    await activePage.screenshot({ path: 'test-results/foundations-failure.png', fullPage: true })
+    await activePage.screenshot({animations:'disabled', path: 'test-results/foundations-failure.png', fullPage: true })
   }
   throw error
 } finally { await browser?.close(); server.kill() }

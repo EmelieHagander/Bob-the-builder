@@ -113,11 +113,11 @@ export function ProjectHome() {
         <p className="page-sub project-area-summary">{areasLoading ? 'Loading Areas…' : areasError ? 'Area status unavailable' : areaPhaseSummary(areaItems)}</p>
       </div></div>
       <div className="cluster no-print">
-        {db.authEnabled() && <button className={`btn ${startSize || building ? '' : 'btn-primary'}`} onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Go to Plan</button>}
+        {db.authEnabled() && <button className={`btn ${startSize || building ? '' : 'btn-primary'}`} aria-label="Go to Plan" onClick={() => { const plan = document.getElementById('project-plan'); plan?.focus(); plan?.scrollIntoView({ block: 'start' }) }}>Plan</button>}
         {startSize === 'small' && <button className="btn btn-primary" disabled={starting} onClick={() => void startBuild()}><Icon name="hammer" size={16} /> {starting ? 'Starting…' : 'Start this build'}</button>}
-        <Link className="btn" to="/artifacts"><Icon name="blueprint" size={18} />Drawings</Link>
-        <button className="btn" onClick={() => setPhaseOpen(true)}>
-          <Icon name="signpost" size={15} /> {project.phase ? 'Review phase' : 'Set project phase'}
+        <Link className="btn" to="/artifacts">Drawings</Link>
+        <button className="btn" aria-label={project.phase ? 'Review phase' : 'Set project phase'} onClick={() => setPhaseOpen(true)}>
+          {project.phase ? 'Review phase' : 'Set phase'}
         </button>
       </div>
     </div>

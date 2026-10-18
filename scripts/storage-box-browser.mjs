@@ -91,7 +91,7 @@ export async function verifyStorageBoxBrowser(page, base, fixture, width) {
   await detail.getByRole('button', { name: 'Plan · open top', exact: true }).evaluate(async el => {
     await Promise.all(el.getAnimations({ subtree: true }).map(animation => animation.finished))
   })
-  await page.screenshot({ path: `test-results/storage-box-${width}.png` })
+  await page.screenshot({animations:'disabled', path: `test-results/storage-box-${width}.png` })
   await page.reload()
   await detail.locator('.box-dimensions').getByText('764 × 332 × 564 mm', { exact: true }).waitFor()
   await detail.getByRole('button', { name: 'Close', exact: true }).click()

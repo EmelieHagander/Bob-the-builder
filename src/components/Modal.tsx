@@ -14,13 +14,13 @@ export function Modal({ title, onClose, children, wide = false, layer }: { title
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const element = dialog.current
-    if (!element?.contains(document.activeElement)) element?.querySelector<HTMLElement>('input,textarea,select,button,a[href]')?.focus()
+    if (!element?.contains(document.activeElement)) element?.querySelector<HTMLElement>('input,textarea,select,button,a[href],summary')?.focus()
     const onKey = (event: KeyboardEvent) => {
       const dialogs = document.querySelectorAll('[role="dialog"]')
       if (dialogs[dialogs.length - 1] !== element) return
       if (event.key === 'Escape') { event.stopImmediatePropagation(); close.current() }
       if (event.key === 'Tab') {
-        const targets = Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex="0"]') ?? [])
+        const targets = Array.from(element?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],summary,[tabindex="0"]') ?? [])
           .filter(node => node.getClientRects().length > 0)
         const first = targets[0], last = targets[targets.length - 1]
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
