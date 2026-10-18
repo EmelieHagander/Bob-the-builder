@@ -1,5 +1,6 @@
 import {useEffect,useState} from 'react'
 import {Link,useNavigate} from 'react-router-dom'
+import { DrawingLink } from './DrawingLink'
 import * as db from '../data/database'
 import {Loading,useAsync} from './ui'
 import {Modal} from './Modal'
@@ -44,7 +45,7 @@ export function DrawingRequests({projectId,taskId}:{projectId:string;taskId?:str
        {g.step_id&&<Link className="btn" to={'/project?step='+encodeURIComponent(g.step_id)}>{g.step_title??'Open linked Step'}</Link>}
       </div>
      </li>)}</ul>}
-     {r.status==='saved'&&r.artifact_id&&<Link className="btn" to={'/artifacts?drawing='+encodeURIComponent(r.artifact_id)+'&revision='+r.artifact_revision}>Open saved drawing</Link>}
+     {r.status==='saved'&&r.artifact_id&&<DrawingLink projectId={projectId} returnLabel={taskId?'Task':'Project plan'} returnKey={`request:${r.id}`} className="btn" to={'/artifacts?drawing='+encodeURIComponent(r.artifact_id)+'&revision='+r.artifact_revision}>Open saved drawing</DrawingLink>}
      {r.status==='saved'&&<p className="foundation-hint">Saved revision {r.artifact_revision}. {work.artifact_source_state==='current'?'Its linked sources are current; the saved classification still applies.':work.artifact_source_state==='changed'?'Its sources changed. Review this saved version before use.':'Its source freshness could not be checked. Open the drawing before use.'}</p>}
      {!terminal&&<div className="foundation-actions">
       <button className="btn" onClick={()=>{if(r.scope.step_id)navigate('/project?step='+encodeURIComponent(r.scope.step_id));openBobForCurrentSurface()}}>{r.scope.step_id?'Ask Bob from this Step':'Ask Bob about project work'}</button>

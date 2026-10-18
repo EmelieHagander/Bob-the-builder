@@ -7,6 +7,7 @@ import type { TaskDetail as Detail, TaskStatus, TaskStep } from '../data/types'
 import { Field, FormError, inputStyle } from '../components/form'
 import { Modal } from '../components/Modal'
 import { ProjectImages } from '../components/ProjectImages'
+import { StepDrawings } from '../components/StepDrawings'
 import { PhasePill } from '../components/PhaseUI'
 import { TaskModal } from '../components/editors'
 import { TaskReadinessPanel } from '../components/TaskReadinessPanel'
@@ -68,7 +69,7 @@ function InstructionsEditor({ projectId, detail, onClose, onSaved }: { projectId
 
 function StepImages({ projectId, stepId }: { projectId: string; stepId: string }) {
   const [open, setOpen] = useState(false)
-  return <details className="step-images" onToggle={e => setOpen(e.currentTarget.open)}>
+  return <details id={`instruction-images-${stepId}`} className="step-images" onToggle={e => setOpen(e.currentTarget.open)}>
     <summary>Instruction images</summary>
     {open && <ProjectImages projectId={projectId} target={{ kind: 'step', id: stepId }} title="Instruction images" />}
   </details>
@@ -81,7 +82,7 @@ export function TaskDetail() {
   const [version, setVersion] = useState(0)
   const { data: detail, loading, error: loadError } = useAsync(() => db.getTaskDetail(projectId, taskId), [projectId, taskId, version])
   const { data: areas } = useAsync(() => db.getAreas({ includeArchived: true }), [projectId])
-  const { data: work } = useAsync(() => db.getProjectWork(projectId), [projectId, version])
+  const { data: work, loading: workLoading, error: workError } = useAsync(() => db.getProjectStepWorkspace(projectId), [projectId, version])
   const [dialog, setDialog] = useState<{ kind: 'step' | 'delete'; step?: TaskStep } | { kind: 'instructions' | 'task' } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -116,6 +117,13 @@ export function TaskDetail() {
       onChange={e => void act(() => db.setTaskStatus(task.id, e.target.value as TaskStatus))}>
       <option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
     </select></Field></div>
+    {task.primaryStepId && <section className="card foundation-section" aria-label="Task drawings">
+      <h2>Drawings for this task</h2>
+      {workError ? <div role="alert"><p>Task drawings could not be checked.</p><button className="btn" onClick={() => setVersion(v => v + 1)}>Reload drawings</button></div>
+        : workLoading || !work ? <p role="status">Loading task drawings…</p>
+          : work.drawings.some(d => d.step_id === task.primaryStepId) ? <StepDrawings projectId={projectId} drawings={work.drawings.filter(d => d.step_id === task.primaryStepId)} returnLabel={task.name} returnKey={`task:${task.id}`} />
+            : <p className="foundation-hint">No drawing is linked to this task’s current step yet.</p>}
+    </section>}
     <TaskReadinessPanel projectId={projectId} taskId={task.id} areaId={task.areaId} refreshKey={version} />
     {db.authEnabled()&&<DrawingRequests key={task.id} projectId={projectId} taskId={task.id} />}
     <section className="card foundation-section" aria-label="Task instructions">

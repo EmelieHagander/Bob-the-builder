@@ -5,6 +5,7 @@ import { storageBoxSvg } from '../lib/storageBox'
 import { StoredImage } from './ProjectImages'
 import { useAsync, useProjectVersion } from './ui'
 import { DrawingSourceNotice } from './DrawingSourceNotice'
+import { DrawingLink } from './DrawingLink'
 
 const statusLabel = { concept: 'Concept', measured: 'Measured', build_ready: 'Build ready' }
 export function drawingUrl(drawing: { id: string; revision: number; area_id?: string | null }) {
@@ -42,11 +43,11 @@ function DrawingCard({ drawing }: { drawing: db.ProjectDrawingCard }) {
     return () => observer.disconnect()
   }, [])
   return <article className="project-drawing-card" ref={ref}>
-    <Link to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open drawing: ${drawing.title} · v${drawing.revision}`}>
+    <DrawingLink projectId={drawing.project_id} returnLabel="Project plan" returnKey={`project:${drawing.id}`} to={drawingUrl(drawing)} className="project-drawing-open" aria-label={`Open drawing: ${drawing.title} · v${drawing.revision}`}>
       <div className="project-drawing-preview">{drawing.source_state === 'unavailable' ? <p>Preview unavailable until sources can be checked.</p> : visible && <Preview drawing={drawing} />}</div>
       <h3>{drawing.title}</h3>
       <p className="foundation-hint">{statusLabel[drawing.status]} · v{drawing.revision}</p>
-    </Link>
+    </DrawingLink>
     <DrawingSourceNotice source={drawing} />
     {drawing.steps.length > 0 && <ul className="project-drawing-steps" aria-label="Related steps">
       {drawing.steps.map(step => <li key={step.id}><Link to={`/project?step=${encodeURIComponent(step.id)}`}>{step.title}</Link></li>)}

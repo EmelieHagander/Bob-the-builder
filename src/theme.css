@@ -1052,3 +1052,19 @@ select {
 .build-focus-actions .btn { min-height: 44px; }
 .planning-tools { padding: var(--panel-padding); margin-top: var(--section-gap); }
 .planning-tools > summary { min-height: 44px; line-height: 44px; font-weight: 800; cursor: pointer; }
+
+/* Shared reference entrances and a drawing-first reader. */
+.reference-tools { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); padding: var(--space-2) 0 0; }
+.reference-tools a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 650; text-decoration: underline; text-underline-offset: 4px; }
+.reference-tools a[aria-current='page'] { color: var(--brand); text-decoration-thickness: 3px; }
+.drawing-reader-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--section-gap) 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--line); }
+.drawing-reader-tabs .btn[aria-pressed='true'] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.drawing-image { margin: var(--section-gap) 0; }
+.drawing-image img { width: 100%; object-fit: contain; }
+.drawing-image figcaption { color: var(--ink-soft); font-size: var(--text-small); margin-top: var(--space-1); }
+.drawing-tools > summary, .drawing-management > summary, .drawing-target > summary { min-height: 44px; padding: 10px 0; cursor: pointer; font-weight: 650; }
+.drawing-tools[open], .drawing-management[open] { flex-basis: 100%; }
+.drawing-target { margin-top: var(--section-gap); }
+.step-drawings { padding: var(--space-2); border-left: 3px solid var(--brand); background: var(--surface-2); }
+.step-drawings a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; }
+.drawing-return { max-width: 100%; white-space: normal; }

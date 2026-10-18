@@ -73,12 +73,21 @@ separation remain visible. Presentation changes never delete physical records.
 
 ### Compact Project home and phone conversation
 
-Project home keeps the Project phase and mixed Area summary in the header,
-with compact links to Measurements, Drawings, Material plan and Solutions.
-The shared Plan comes before drawing previews and planning evidence. Long
+Project home keeps the Project phase, mixed Area summary and a stable Drawings
+entrance in the header. Measurements, Material plan and Solutions remain in the
+planning tools. The shared Plan comes before drawing previews and planning evidence. Long
 Project descriptions (including any dimensions recorded in that text), lifecycle
 explanations and Project images expand on demand; their saved content remains
 verbatim. The description is not a substitute for sourced Measurements.
+
+Reference exposes direct, Area-preserving links between Measurements & parts,
+Drawings, Material plan and Solutions & target. Area headers also expose Drawings;
+the primary Step and Task show their linked drawings beside the work. The
+[drawing access contract](artifacts.md#drawing-access-reader-and-return) owns the
+reader, version history and return behavior. Count access from an explicit start:
+choosing a Project/work context can be useful navigation; once that work is open,
+its linked drawing should be one action away. Phase remains orientation, with no
+new mandatory phase selection or phase route.
 
 Ask bob gives the conversation the remaining viewport height. Page context,
 suggestions and retry explanations scroll with the messages; a retry
