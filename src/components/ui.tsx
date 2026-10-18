@@ -32,7 +32,7 @@ export function Icon({
 /* ─────────────────────────── Data loading ─────────────────────────── */
 
 /** Run an async loader and track its result + loading state. */
-export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = [], options: { timeoutMs?: number } = {}): { data: T | null; loading: boolean; error: Error | null } {
+export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = [], options: { timeoutMs?: number; keepDataOnError?: boolean } = {}): { data: T | null; loading: boolean; error: Error | null } {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -49,7 +49,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = [], opti
       }
     }).catch((reason: unknown) => {
       if (alive) {
-        setData(null)
+        if (!options.keepDataOnError) setData(null)
         setError(reason instanceof Error ? reason : new Error('Could not load data.'))
         setLoading(false)
       }

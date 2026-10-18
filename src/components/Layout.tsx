@@ -3,14 +3,15 @@
  * project switcher, and the floating "Ask bob" button + drawer.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import * as db from '../data/database'
 import type { Project } from '../data/types'
 import { phaseLabel } from '../lib/projectPhase'
-import { Avatar, Icon, useAsync, useProjectVersion } from './ui'
+import { Avatar, Icon, Loading, useAsync, useProjectVersion } from './ui'
 import { ProjectWorkspaceNav } from './ProjectWorkspaceNav'
 import { AskBob } from './AskBob'
+import { ErrorBoundary } from './ErrorBoundary'
 import { BOB_OPEN_EVENT, useBobSurface } from '../lib/bobSurface'
 import type { BobScreenSurface } from '../domain/bobScreen'
 
@@ -216,7 +217,7 @@ function MobileNav({ hasProject }: { hasProject: boolean }) {
   )
 }
 
-export function Layout({ children, project }: { children: ReactNode; project: Project | null }) {
+export function Layout({ children, project, notice }: { children: ReactNode; project: Project | null; notice?: ReactNode }) {
   const location = useLocation()
   const surfaces: Record<string, BobScreenSurface> = { '/project': 'project', '/areas': 'areas', '/facts': 'facts', '/solutions': 'solutions', '/artifacts': 'drawings', '/people': 'people', '/events': 'events', '/shopping': 'shopping', '/today': 'today', '/announcements': 'announcements', '/building': 'building', '/material-plan': 'material-plan' }
   const showBob = !!project && location.pathname !== '/' && !location.pathname.startsWith('/account')
@@ -232,22 +233,9 @@ export function Layout({ children, project }: { children: ReactNode; project: Pr
     return () => window.removeEventListener(BOB_OPEN_EVENT, show)
   }, [])
   useEffect(() => {
-    let cancelled = false, checking = false
     setBobUnread(false)
     if (!project) return
-    const check = async () => {
-      if (checking || document.visibilityState === 'hidden') return
-      checking = true
-      try { const inbox = await db.getBobInbox(project.id); if (!cancelled) setBobUnread(!!inbox?.unread) }
-      catch { /* Keep the last known state until reconnected. */ }
-      finally { checking = false }
-    }
-    void check()
-    const timer = setInterval(check, 10000)
-    window.addEventListener(db.BOB_INBOX_EVENT, check)
-    window.addEventListener('focus', check)
-    document.addEventListener('visibilitychange', check)
-    return () => { cancelled = true; clearInterval(timer); window.removeEventListener(db.BOB_INBOX_EVENT, check); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) }
+    return db.subscribeBobInbox(project.id, inbox => setBobUnread(!!inbox?.unread))
   }, [project?.id, authTick])
 
   useEffect(() => {
@@ -268,7 +256,7 @@ export function Layout({ children, project }: { children: ReactNode; project: Pr
   return (
     <div className="app-shell">
       <Sidebar project={project} />
-      <div className="main-col">{showBob && <div className="workspace-nav-frame"><ProjectWorkspaceNav /></div>}{children}</div>
+      <div className="main-col">{showBob && <div className="workspace-nav-frame"><ProjectWorkspaceNav /></div>}{notice}<ErrorBoundary><Suspense fallback={<Loading label="Loading page…" />}>{children}</Suspense></ErrorBoundary></div>
 
       {showBob && <button
         className="no-print bob-launcher"

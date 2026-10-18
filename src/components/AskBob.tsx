@@ -325,6 +325,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<RetryTurn | null>(null)
   const [recovering, setRecovering] = useState<NonNullable<Awaited<ReturnType<typeof db.getAskBobConversation>>['pending']> | null>(null)
+  const recoveryExpiry = useRef(0)
+  recoveryExpiry.current = recovering?.expiresAt ?? 0
   // A new message rejected because Bob is finishing earlier work (often a
   // background drawing) is resent in this tab with the same turn id until he is free.
   const [waitingFree, setWaitingFree] = useState<(RetryTurn & { until: number; attempt: number }) | null>(null)
@@ -428,17 +430,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     setHasOlder(false); setLoadingOlder(false); setOlderError(''); setHistoryLoadError(false)
     setExtra([]); setReadTarget(null); readAck.current = ''; setHistoryKey(null); setHistoryReady(false); setHistoryNotice('Loading conversation…'); setWorking(false); setRecovering(null); setRetry(null); setWaitingFree(null); setWorkError(''); setStopping(false); stopPending.current = false
     const read = async () => {
-      const [me, history] = await Promise.all([
-        db.getCurrentUser(),
-        db.getAskBobConversation(project.id, { onCached: cached => {
+      const history = await db.getAskBobConversation(project.id, { onCached: cached => {
           if (current()) { setExtra(cached.messages); setHistoryNotice('Checking the latest conversation…') }
-        } }),
-      ])
+        }, onTranscript: preview => {
+          if (current()) { setExtra(preview.messages); setHistoryNotice('Checking work status…') }
+        } })
+      // The server history already supplies its owner. Only device-local guest
+      // history needs the crew identity; a slow membership read cannot block Bob.
+      const me = history.mode === 'local' ? await db.getCurrentUser() : null
       return { me, history }
     }
     void withLoadDeadline(read(), 20_000).then(({ me, history }) => {
       if (!current()) return
-      const key = `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
+      const key = history.mode === 'server'
+        ? `${CHAT_HISTORY_PREFIX}:${project.id}:owner:${history.ownerId}`
+        : `${CHAT_HISTORY_PREFIX}:${project.id}:${me?.id ?? 'demo'}`
       setHistoryKey(key)
       if (history.mode === 'server') {
         outgoingKey.current = history.ownerId ? `bob:outgoing:v1:${project.id}:${history.ownerId}` : null
@@ -528,12 +534,10 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     const version = sendVersion.current
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent() && version === sendVersion.current && !resetPending.current
-    const check = async (refreshRecovery = false) => {
+    const check = async (inbox: db.BobInbox | null, refreshRecovery = false) => {
       if (checking || !current() || document.visibilityState === 'hidden') return
       checking = true
       try {
-        const inbox = await db.getBobInbox(project.id)
-        if (!current()) return
         const changed = !!inbox && (inbox.threadId !== readTarget?.threadId || inbox.latestSeq > (readTarget?.seq ?? 0))
         if (!changed) {
           if (!refreshRecovery || !stoppedTurn) return
@@ -547,17 +551,9 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       } catch { /* Keep the current transcript and draft until delivery reconnects. */ }
       finally { checking = false }
     }
-    const changed = () => { void check() }
-    const reconnect = () => { void check(true) }
-    const timer = setInterval(reconnect, 10000)
-    window.addEventListener(db.BOB_INBOX_EVENT, changed)
-    window.addEventListener('focus', reconnect)
-    document.addEventListener('visibilitychange', reconnect)
+    const unsubscribe = db.subscribeBobInbox(project.id, (inbox, reason) => { void check(inbox, reason === 'poll') })
     return () => {
-      cancelled = true; clearInterval(timer)
-      window.removeEventListener(db.BOB_INBOX_EVENT, changed)
-      window.removeEventListener('focus', reconnect)
-      document.removeEventListener('visibilitychange', reconnect)
+      cancelled = true; unsubscribe()
     }
   }, [open, historyReady, localHistory, working, recovering?.turnId, resetting, confirmReset, project.id, readTarget?.threadId, readTarget?.seq, stoppedTurn])
 
@@ -566,11 +562,14 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   // synchronous requests retain the existing five-minute lease.
   useEffect(() => {
     if (!recovering || stopping) return
-    let cancelled = false
+    let cancelled = false, checking = false
     let timer: ReturnType<typeof setTimeout>
     const isCurrent = scope.current.capture()
     const current = () => !cancelled && isCurrent() && !stopPending.current
     const poll = async () => {
+      if (!current() || checking || document.visibilityState === 'hidden') return
+      clearTimeout(timer)
+      checking = true
       try {
         const progress = recovering.jobId ? await db.getAskBobTurnProgress(project.id, recovering.turnId) : null
         if (!current()) return
@@ -590,18 +589,21 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         }
       } catch {
         if (!current()) return
-        if (!recovering.jobId && Date.now() >= recovering.expiresAt) {
+        if (!recovering.jobId && Date.now() >= recoveryExpiry.current) {
           setRecovering(null); setWorking(false); setRetry(outgoing.current ?? recovering)
           setHistoryNotice('Could not check the answer. Reconnect and retry to recover it without repeating saved changes.')
           return
         }
         setHistoryNotice('Connection interrupted. Checking for Bob’s answer…')
-      }
-      if (current()) timer = setTimeout(poll, 2000)
+      } finally { checking = false }
+      if (current()) timer = setTimeout(poll, open ? 2000 : 10000)
     }
+    const reconnect = () => { void poll() }
     timer = setTimeout(poll, 1500)
-    return () => { cancelled = true; clearTimeout(timer) }
-  }, [recovering?.turnId, recovering?.expiresAt, recovering?.jobId, stopping, project.id])
+    window.addEventListener('focus', reconnect)
+    document.addEventListener('visibilitychange', reconnect)
+    return () => { cancelled = true; clearTimeout(timer); window.removeEventListener('focus', reconnect); document.removeEventListener('visibilitychange', reconnect) }
+  }, [recovering?.turnId, recovering?.jobId, stopping, project.id, open])
 
   async function stopWork() {
     if (!recovering?.jobId || stopPending.current) return
@@ -685,6 +687,19 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
       if (!isCurrent()) return
       let cacheCleared = true
       try { localStorage.removeItem(historyKey) } catch { cacheCleared = false }
+      // Pre-server history used the crew ID. Resolve that legacy cleanup only
+      // on explicit reset, never on the critical path to opening a server chat.
+      if (mode === 'server') {
+        try {
+          const me = await withLoadDeadline(db.getCurrentUser(), 5000)
+          if (!isCurrent()) return
+          if (me) {
+            const legacyKey = `${CHAT_HISTORY_PREFIX}:${project.id}:${me.id}`
+            localStorage.removeItem(legacyKey)
+            localStorage.setItem(`${legacyKey}:reset`, crypto.randomUUID())
+          }
+        } catch { cacheCleared = false }
+      }
       if (!cacheCleared && mode === 'local') throw new Error('Could not clear this device’s saved chat. Check browser storage access and try again.')
       try { localStorage.setItem(`${historyKey}:reset`, crypto.randomUUID()) } catch { /* cross-tab notification is best effort */ }
       scope.current.invalidate()

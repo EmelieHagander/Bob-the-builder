@@ -11,7 +11,7 @@ export function ProjectThumbnail({ projectId, mediaId }: { projectId?: string; m
     setLoaded({ key, url: '' })
     const download = () => {
       if (!projectId || !mediaId) return
-      void db.downloadOverviewImage(projectId, mediaId).then(blob => {
+      void db.downloadOverviewImage(projectId, mediaId, { preview: true }).then(blob => {
         if (!active) return
         objectUrl = URL.createObjectURL(blob); setLoaded({ key, url: objectUrl })
       }).catch(() => { /* A missing/revoked image falls back without blocking project access. */ })

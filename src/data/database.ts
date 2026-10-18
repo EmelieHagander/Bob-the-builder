@@ -10,25 +10,13 @@ import type { Area, Project, ProjectPhase } from './types'
 export * from './databaseCore'
 // Explicit exports win over the legacy star export above. Ask Bob now resolves
 // server-owned conversation state while the rest of databaseCore stays stable.
-export { renewDrawingRequests, cancelAskBobTurn, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, BOB_CONTEXT_TOO_LARGE, askBob, getAskBobConversation, getAskBobTurnProgress, getAskBobDrawingRecovery, clearAskBobHistoryCache, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
+export { renewDrawingRequests, cancelAskBobTurn, subscribeBobInbox, getBobInbox, markBobChatRead, BOB_INBOX_EVENT, BOB_CONTEXT_TOO_LARGE, askBob, getAskBobConversation, getAskBobTurnProgress, getAskBobDrawingRecovery, clearAskBobHistoryCache, resetAskBobConversation, refreshAskBobProject, describeBobProgress } from './bobConversation'
 export type { BobProgress, BobInbox } from './bobConversation'
 
 function checked<T>(result: { data: T | null; error: { message: string } | null }): T {
   if (result.error) throw new Error(`database: ${result.error.message}`)
   if (result.data === null || result.data === undefined) throw new Error('database: query returned no data')
   return result.data
-}
-
-async function projectPhase(id: string): Promise<ProjectPhase | null> {
-  if (!phaseDb) return mock.projects.find(project => project.id === id)?.phase ?? null
-  const row = checked(await phaseDb.from('projects').select('phase').eq('id', id).single()) as { phase: ProjectPhase | null }
-  return row.phase ?? null
-}
-
-async function areaPhases(projectId: string): Promise<Map<string, ProjectPhase | null>> {
-  if (!phaseDb) return new Map(mock.areas.map(area => [area.id, area.phase ?? null]))
-  const rows = checked(await phaseDb.from('areas').select('id, phase').eq('project_id', projectId)) as { id: string; phase: ProjectPhase | null }[]
-  return new Map(rows.map(row => [row.id, row.phase ?? null]))
 }
 
 export interface AccountAreaPhase { projectId: string; phase: ProjectPhase | null }
@@ -46,21 +34,6 @@ export async function getAccountAreaPhases(projectIds: string[]): Promise<Accoun
   return rows.map(row => ({ projectId: row.project_id, phase: row.phase ?? null }))
 }
 
-export async function getProjects(): Promise<Project[]> {
-  const projects = await core.getProjects()
-  if (!phaseDb) return projects.map(project => ({ ...project, phase: mock.projects.find(item => item.id === project.id)?.phase ?? null }))
-  if (!projects.length) return projects
-  const rows = checked(await phaseDb.from('projects').select('id, phase').in('id', projects.map(project => project.id))) as { id: string; phase: ProjectPhase | null }[]
-  const phases = new Map(rows.map(row => [row.id, row.phase ?? null]))
-  return projects.map(project => ({ ...project, phase: phases.get(project.id) ?? null }))
-}
-
-export async function getProject(): Promise<Project | null> {
-  const project = await core.getProject()
-  if (!project) return null
-  return { ...project, phase: await projectPhase(project.id) }
-}
-
 export async function createProject(input: core.NewProject): Promise<Project> {
   const project = await core.createProject(input)
   // The guarded database command starts new Projects in Concept. Mock mode is
@@ -70,18 +43,6 @@ export async function createProject(input: core.NewProject): Promise<Project> {
     if (stored) stored.phase = 'concept'
   }
   return { ...project, phase: 'concept' }
-}
-
-export async function getAreas(options: { includeArchived?: boolean } = {}): Promise<Area[]> {
-  const areas = await core.getAreas(options)
-  const projectId = core.getActiveProjectId()
-  if (!projectId) return areas.map(area => ({ ...area, phase: null }))
-  const phases = await areaPhases(projectId)
-  return areas.map(area => ({ ...area, phase: phases.get(area.id) ?? null }))
-}
-
-export async function getArea(slug: string): Promise<Area | undefined> {
-  return (await getAreas({ includeArchived: true })).find(area => area.slug === slug)
 }
 
 export async function createArea(input: core.NewArea): Promise<Area> {

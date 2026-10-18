@@ -28,7 +28,9 @@ import { relativeTime } from '../lib/format'
 import { formatEventDay, pickNextEvent, spotsWithTaken } from '../lib/eventDay'
 import type { AnswerEvidence } from './provenance'
 import { createRequestScope } from '../lib/projectRequest'
-import { createProjectFiles } from './projectFiles'
+import { createSharedRead } from '../lib/sharedRead'
+import { createAuthIdentityTracker } from '../lib/authIdentity'
+import { createProjectFiles, clearImagePreviews } from './projectFiles'
 import { createProjectFacts } from './projectFacts'
 import { createSolutions } from './solutions'
 import { createArtifacts } from './artifacts'
@@ -95,7 +97,7 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 type ProjectRow = {
   id: string; slug: string; name: string; description: string
   location: string; type: string; theme: string; start_label: string
-  start_date: string | null; end_date: string | null
+  start_date: string | null; end_date: string | null; phase: Project['phase']
 }
 type AccountRow = { id: string; name: string; owner_name: string; email: string }
 type NoteRow = { id: string; text: string; pinned: boolean; created_at: string }
@@ -105,7 +107,7 @@ type PersonRow = {
 }
 type AreaRow = {
   id: string; slug: string; name: string; description: string; icon: string
-  archived_at: string | null; updated_at: string
+  archived_at: string | null; updated_at: string; phase: Area['phase']
   lead_id: string | null; assigned_pct: number; materials_pct: number; done_pct: number
   task_summary: string
   area_crew: { person_id: string }[]
@@ -151,6 +153,9 @@ export const PROJECT_CHANGED_EVENT = 'bob:project-changed'
 let activeProjectMemory: string | null | undefined
 let contextVersion = 0
 const askScope = createRequestScope()
+const sharedReads = createSharedRead()
+// Only in-flight work is shared; every later read rechecks server/RLS authority.
+if (typeof window !== 'undefined') window.addEventListener(PROJECT_CHANGED_EVENT, () => sharedReads.clear())
 
 function captureFileContext(projectId: string) {
   const capturedVersion = contextVersion
@@ -254,6 +259,7 @@ export function getActiveProjectId(): string | null {
 }
 
 export function setActiveProject(id: string | null): void {
+  clearImagePreviews()
   activeProjectMemory = id
   contextVersion++
   askScope.invalidate()
@@ -267,7 +273,10 @@ export function setActiveProject(id: string | null): void {
 
 /** The active project's id, or null when there are no projects at all. */
 async function activeProjectId(): Promise<string | null> {
-  return (await getProject())?.id ?? null
+  const selected = activeProjectSelection()
+  // The selection is a filter, never proof of access. Each scoped query still
+  // goes to RLS; resolving it does not need another account-wide project list.
+  return selected === undefined ? (await getProject())?.id ?? null : selected
 }
 
 /**
@@ -300,7 +309,7 @@ function newId(prefix: string): string {
 
 /* ─────────────────────────── PROJECTS ─────────────────────────── */
 
-const PROJECT_COLS = 'id, slug, name, description, location, type, theme, start_label, start_date, end_date'
+const PROJECT_COLS = 'id, slug, name, description, location, type, theme, start_label, start_date, end_date, phase'
 
 function mapProject(row: ProjectRow): Project {
   return {
@@ -314,23 +323,30 @@ function mapProject(row: ProjectRow): Project {
     startLabel: row.start_label,
     startDate: row.start_date,
     endDate: row.end_date,
+    phase: row.phase ?? null,
   }
 }
 
 /** Every project on the account — the account dashboard and calendar feed. */
 export async function getProjects(): Promise<Project[]> {
   if (!db) return read(mock.projects)
+  const version = contextVersion
   const { data, error: sessionError } = await db.auth.getSession()
   if (sessionError) throw new Error('Could not check your session. Check your connection and try again.')
   if (!data.session) return []
   const uid = data.session.user.id
-  if (claimedUser !== uid) {
-    const { error } = await db.rpc('claim_project_invites')
-    if (error) throw new Error('Could not check your project invitations. Please try again.')
-    claimedUser = uid
-  }
-  const rows = unwrap<ProjectRow[]>(await db.from('projects').select(PROJECT_COLS).order('created_at'))
-  return rows.map(mapProject)
+  if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+  return sharedReads.run(`projects:${uid}:${version}`, async () => {
+    if (claimedUser !== uid) {
+      const { error } = await db!.rpc('claim_project_invites')
+      if (error) throw new Error('Could not check your project invitations. Please try again.')
+      if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+      claimedUser = uid
+    }
+    const rows = unwrap<ProjectRow[]>(await db!.from('projects').select(PROJECT_COLS).order('created_at'))
+    if (version !== contextVersion) throw new Error('Sign-in or project changed.')
+    return rows.map(mapProject)
+  })
 }
 
 export interface AccountBuildingOverview {
@@ -422,6 +438,7 @@ export async function createProject(input: NewProject): Promise<Project> {
         end_date: input.endDate ?? null,
       } }),
   )
+  sharedReads.clear()
   return mapProject(row)
 }
 
@@ -478,6 +495,7 @@ export async function updateProjectSchedule(
       .select(PROJECT_COLS)
       .single(),
   )
+  sharedReads.clear()
   return mapProject(row)
 }
 
@@ -805,6 +823,7 @@ export async function signUpWithPassword(email: string, password: string): Promi
 
 export async function signOut(): Promise<void> {
   if (!db) return
+  clearImagePreviews()
   claimedUser = null
   contextVersion++
   askScope.invalidate()
@@ -815,21 +834,35 @@ export async function signOut(): Promise<void> {
 // to each new SDK subscriber: mounting a sidebar must not invalidate an unrelated
 // task/image read that is already in flight for the same signed-in user.
 const authListeners = new Set<() => void>()
+const sessionListeners = new Set<() => void>()
+const identityChanged = createAuthIdentityTracker()
 let observingAuth = false
-/** Subscribe to actual shared auth events; returns an unsubscribe function. */
-export function onAuthChange(callback: () => void): () => void {
-  if (!db) return () => {}
-  authListeners.add(callback)
-  if (!observingAuth) {
-    observingAuth = true
-    db.auth.onAuthStateChange(() => {
+function observeAuth() {
+  if (!db || observingAuth) return
+  observingAuth = true
+  db.auth.onAuthStateChange((event, session) => {
+    sharedReads.clear()
+    clearImagePreviews()
+    if (event !== 'INITIAL_SESSION') claimedUser = null
+    if (identityChanged(event, session?.user.id ?? null)) {
       claimedUser = null
       contextVersion++
       askScope.invalidate()
       for (const listener of authListeners) listener()
-    })
-  }
+    } else if (event !== 'INITIAL_SESSION') {
+      // No SDK calls inside the Auth callback: App revalidates access in an effect.
+      for (const listener of sessionListeners) listener()
+    }
+  })
+}
+/** Identity changes discard account-local UI; same-owner renewal keeps drafts. */
+export function onAuthChange(callback: () => void): () => void {
+  authListeners.add(callback); observeAuth()
   return () => { authListeners.delete(callback) }
+}
+export function onSessionRefresh(callback: () => void): () => void {
+  sessionListeners.add(callback); observeAuth()
+  return () => { sessionListeners.delete(callback) }
 }
 
 /** Resolve a list of person ids to people, preserving order. */
@@ -883,7 +916,7 @@ async function fetchAreas(): Promise<Area[]> {
     await db
       .from('areas')
       .select(
-        'id, slug, name, description, icon, archived_at, updated_at, lead_id, assigned_pct, materials_pct, done_pct, task_summary, area_crew(person_id), area_reference_images(label, sort_order)',
+        'id, slug, name, description, icon, phase, archived_at, updated_at, lead_id, assigned_pct, materials_pct, done_pct, task_summary, area_crew(person_id), area_reference_images(label, sort_order)',
       )
       .eq('project_id', pid)
       .order('sort_order'),
@@ -892,6 +925,7 @@ async function fetchAreas(): Promise<Area[]> {
     id: row.id,
     slug: row.slug,
     archivedAt: row.archived_at ?? null,
+    phase: row.phase ?? null,
     updatedAt: row.updated_at,
     name: row.name,
     description: row.description,
@@ -1098,25 +1132,29 @@ export async function getTasks(): Promise<Task[]> {
   if (!db) return readScoped(mock.tasks)
   const pid = await activeProjectId()
   if (!pid) return []
-  // Project is explicit; an Area is optional and never the authorization root.
-  const rows = unwrap<TaskRow[]>(
-    await db
-      .from('tasks')
-      .select('id, area_id, primary_step_id, name, skill, hours, status, materials, task_assignees(person_id)')
-      .eq('project_id', pid)
-      .order('id'),
-  )
-  return rows.map((row) => ({
-    id: row.id,
-    areaId: row.area_id,
-    primaryStepId: row.primary_step_id,
-    name: row.name,
-    skill: row.skill as SkillLevel,
-    hours: row.hours,
-    status: row.status as TaskStatus,
-    materials: row.materials,
-    assigneeIds: row.task_assignees.map((a) => a.person_id),
-  }))
+  const guard = captureFileContext(pid)
+  return sharedReads.run(`tasks:${pid}:${contextVersion}`, async () => {
+    // Project is explicit; an Area is optional and never the authorization root.
+    const rows = unwrap<TaskRow[]>(
+      await db!
+        .from('tasks')
+        .select('id, area_id, primary_step_id, name, skill, hours, status, materials, task_assignees(person_id)')
+        .eq('project_id', pid)
+        .order('id'),
+    )
+    guard()
+    return rows.map((row) => ({
+      id: row.id,
+      areaId: row.area_id,
+      primaryStepId: row.primary_step_id,
+      name: row.name,
+      skill: row.skill as SkillLevel,
+      hours: row.hours,
+      status: row.status as TaskStatus,
+      materials: row.materials,
+      assigneeIds: row.task_assignees.map((a) => a.person_id),
+    }))
+  })
 }
 
 export async function getTasksByArea(areaId: string): Promise<Task[]> {
@@ -1132,53 +1170,59 @@ export interface NewTask {
 }
 
 export async function createTask(input: NewTask): Promise<Task> {
-  const task: Task = {
-    id: newId('t'),
-    areaId: input.areaId,
-    primaryStepId: input.primaryStepId ?? null,
-    name: input.name,
-    skill: input.skill,
-    hours: input.hours,
-    status: 'todo',
-    assigneeIds: [],
-    materials: '0 / 0',
-  }
-  if (!db) {
-    mock.tasks.push(task)
-    return read(task)
-  }
-  const pid = await activeProjectId()
-  if (!pid) throw new Error('No active project.')
-  const res = await db.rpc('create_work_task',{p_project:pid,p_step:task.primaryStepId,p_area:task.areaId,p_name:task.name,p_skill:task.skill,p_hours:task.hours})
-  if (res.error) throw new Error(`database: ${res.error.message}`)
-  return {...task, id:res.data.id, areaId:res.data.area_id, primaryStepId:res.data.primary_step_id}
+  try {
+    const task: Task = {
+      id: newId('t'),
+      areaId: input.areaId,
+      primaryStepId: input.primaryStepId ?? null,
+      name: input.name,
+      skill: input.skill,
+      hours: input.hours,
+      status: 'todo',
+      assigneeIds: [],
+      materials: '0 / 0',
+    }
+    if (!db) {
+      mock.tasks.push(task)
+      return read(task)
+    }
+    const pid = await activeProjectId()
+    if (!pid) throw new Error('No active project.')
+    const res = await db.rpc('create_work_task',{p_project:pid,p_step:task.primaryStepId,p_area:task.areaId,p_name:task.name,p_skill:task.skill,p_hours:task.hours})
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+    return {...task, id:res.data.id, areaId:res.data.area_id, primaryStepId:res.data.primary_step_id}
+  } finally { sharedReads.clear() }
 }
 
 export async function setTaskStatus(id: string, status: TaskStatus): Promise<void> {
-  if (!db) {
-    const task = mock.tasks.find((t) => t.id === id)
-    if (task) task.status = status
-    await read(null)
-    return
-  }
-  const res = await db.from('tasks').update({ status }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  try {
+    if (!db) {
+      const task = mock.tasks.find((t) => t.id === id)
+      if (task) task.status = status
+      await read(null)
+      return
+    }
+    const res = await db.from('tasks').update({ status }).eq('id', id)
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  } finally { sharedReads.clear() }
 }
 
 /** Replace a task's assignees with exactly this set of people. */
 export async function setTaskAssignees(id: string, personIds: string[]): Promise<void> {
-  if (!db) {
-    const task = mock.tasks.find((t) => t.id === id)
-    if (task) task.assigneeIds = [...personIds]
-    await read(null)
-    return
-  }
-  const cleared = await db.from('task_assignees').delete().eq('task_id', id)
-  if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
-  if (personIds.length > 0) {
-    const res = await db.from('task_assignees').insert(personIds.map((pid) => ({ task_id: id, person_id: pid })))
-    if (res.error) throw new Error(`database: ${res.error.message}`)
-  }
+  try {
+    if (!db) {
+      const task = mock.tasks.find((t) => t.id === id)
+      if (task) task.assigneeIds = [...personIds]
+      await read(null)
+      return
+    }
+    const cleared = await db.from('task_assignees').delete().eq('task_id', id)
+    if (cleared.error) throw new Error(`database: ${cleared.error.message}`)
+    if (personIds.length > 0) {
+      const res = await db.from('task_assignees').insert(personIds.map((pid) => ({ task_id: id, person_id: pid })))
+      if (res.error) throw new Error(`database: ${res.error.message}`)
+    }
+  } finally { sharedReads.clear() }
 }
 
 export interface TaskUpdate {
@@ -1188,26 +1232,30 @@ export interface TaskUpdate {
 }
 
 export async function updateTask(id: string, input: TaskUpdate): Promise<void> {
-  if (!db) {
-    const task = mock.tasks.find((t) => t.id === id)
-    if (!task) throw new Error('database: no such task')
-    Object.assign(task, input)
-    await read(null)
-    return
-  }
-  const res = await db.from('tasks').update({ name: input.name, skill: input.skill, hours: input.hours }).eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  try {
+    if (!db) {
+      const task = mock.tasks.find((t) => t.id === id)
+      if (!task) throw new Error('database: no such task')
+      Object.assign(task, input)
+      await read(null)
+      return
+    }
+    const res = await db.from('tasks').update({ name: input.name, skill: input.skill, hours: input.hours }).eq('id', id)
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  } finally { sharedReads.clear() }
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  if (!db) {
-    const i = mock.tasks.findIndex((t) => t.id === id)
-    if (i >= 0) mock.tasks.splice(i, 1)
-    await read(null)
-    return
-  }
-  const res = await db.from('tasks').delete().eq('id', id)
-  if (res.error) throw new Error(`database: ${res.error.message}`)
+  try {
+    if (!db) {
+      const i = mock.tasks.findIndex((t) => t.id === id)
+      if (i >= 0) mock.tasks.splice(i, 1)
+      await read(null)
+      return
+    }
+    const res = await db.from('tasks').delete().eq('id', id)
+    if (res.error) throw new Error(`database: ${res.error.message}`)
+  } finally { sharedReads.clear() }
 }
 
 /* ─────────────────────────── MATERIALS ─────────────────────────── */

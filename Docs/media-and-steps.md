@@ -55,6 +55,14 @@ Image pixel dimensions describe the file, never measured dimensions of the build
    signed URLs. Browser object URLs are temporary and revoked on unmount/project
    switch. Reopening/refetching checks access again. Previously delivered bytes
    cannot be recalled from a user's device after membership is revoked.
+   Visible thumbnail views downsample the first authenticated download to at
+   most 640 pixels per edge. A shared memory-only cache holds at most 24 previews,
+   8 MiB and two minutes; every reuse first rechecks the ready metadata through
+   RLS. Account/project changes, session refresh and media removal clear it.
+   Originals always use a fresh authenticated Storage download. Closed Project
+   Images sections and offscreen tiles do not fetch image bytes. On the current
+   free Storage plan the first visible preview still transfers the original;
+   this does not claim server-side thumbnail bandwidth savings.
 5. Removing an image first marks it `deleting`, then removes bytes through the
    Storage API, then removes metadata/links only after object absence is checked.
    Interrupted deletion stays visible with a retry action. Never delete an object

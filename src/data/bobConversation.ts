@@ -6,6 +6,8 @@ import { isBobAnswerEvidence } from './bobEvidence'
 import { readBobTranscript, readDrawingTurnRecovery, reconcileDrawingTurnRecovery } from './bobTranscript'
 import { parseBobScreen, type BobScreenPointer } from '../domain/bobScreen'
 import { BOB_HISTORY_PAGE_SIZE, readHistoryWindow } from './bobHistory'
+import { createSharedRead } from '../lib/sharedRead'
+import { createSharedPoller, type PollReason } from '../lib/sharedPoller'
 
 const GUEST_EMAIL = 'guest@bob.local'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -89,6 +91,9 @@ interface HistoryOptions {
   beforeSeq?: number
   threadId?: string
   onCached?: (history: BobConversationHistory) => void
+  /** Fresh RLS-authorized text, before slower notices/job reconciliation.
+   * Read-only preview: callers must await the result before enabling sends. */
+  onTranscript?: (history: BobConversationHistory) => void
 }
 
 /**
@@ -128,6 +133,10 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   current()
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
   const page = readHistoryWindow(rows.data ?? [])
+
+  if (options.beforeSeq === undefined) options.onTranscript?.({ mode: 'server',
+    messages: readBobTranscript(page.rows, projectId, new Map()).messages,
+    threadId: threadResult.data.id, ownerId: user.id })
 
   const turnIds = [...new Set(page.rows.map(row => row.turn_id).filter((id): id is string => !!id))]
   const [notices, latestUser] = await Promise.all([
@@ -220,13 +229,35 @@ export async function getAskBobDrawingRecovery(projectId: string, turnId: string
 
 export interface BobInbox { threadId: string; latestSeq: number; readSeq: number; unread: boolean }
 export const BOB_INBOX_EVENT = 'bob:inbox-changed'
+const inboxReads = createSharedRead()
+const inboxPollers = new Map<string, { subscribe: ReturnType<typeof createSharedPoller<BobInbox | null>>; count: number }>()
+/** Shell badge and open conversation subscribe to the same visible-tab loop. */
+export function subscribeBobInbox(projectId: string, listener: (inbox: BobInbox | null, reason: PollReason) => void) {
+  let entry = inboxPollers.get(projectId)
+  if (!entry) {
+    entry = { subscribe: createSharedPoller(() => getBobInbox(projectId), BOB_INBOX_EVENT), count: 0 }
+    inboxPollers.set(projectId, entry)
+  }
+  entry.count++
+  const unsubscribe = entry.subscribe(listener)
+  return () => { unsubscribe(); if (--entry.count === 0) inboxPollers.delete(projectId) }
+}
 export async function getBobInbox(projectId: string): Promise<BobInbox | null> {
   if (!bobDb) return null
-  const { data: auth } = await bobDb.auth.getUser()
-  if (!auth.user || auth.user.email?.toLowerCase() === GUEST_EMAIL) return null
-  const { data, error } = await bobDb.rpc('bob_chat_inbox', { p_project: projectId })
-  if (error) throw new Error('Could not check new messages')
-  return data && typeof data.threadId === 'string' && Number.isSafeInteger(data.latestSeq) && typeof data.unread === 'boolean' ? data : null
+  const epoch = historyEpoch
+  // Local identity only selects the scope/guest policy; the RPC still verifies
+  // the current JWT and project access. No redundant /auth/user network request.
+  const { data: auth, error: authError } = await bobDb.auth.getSession()
+  if (authError) throw new Error('Could not check the signed-in account.')
+  const user = auth.session?.user
+  if (!user || user.email?.toLowerCase() === GUEST_EMAIL) return null
+  return inboxReads.run(`${epoch}/${user.id}/${projectId}`, async () => {
+    const { data, error } = await bobDb!.rpc('bob_chat_inbox', { p_project: projectId })
+      .abortSignal(AbortSignal.timeout(12000))
+    if (error) throw new Error('Could not check new messages')
+    if (epoch !== historyEpoch || projectId !== getActiveProjectId()) throw new Error('Conversation scope changed.')
+    return data && typeof data.threadId === 'string' && Number.isSafeInteger(data.latestSeq) && typeof data.unread === 'boolean' ? data : null
+  })
 }
 export async function markBobChatRead(projectId: string, threadId: string, seq: number): Promise<void> {
   if (!bobDb) return

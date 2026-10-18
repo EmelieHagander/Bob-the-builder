@@ -9,7 +9,7 @@ export function BobChatImages({ projectId, ids, label = 'Attached image' }: { pr
   return <>
     <div className="bob-chat-images">{ids.map((id, i) => <button type="button" className="bob-chat-image" key={id}
       aria-label={`Open ${label.toLowerCase()} ${i + 1}`} onClick={() => setSelected(id)}>
-      <StoredImage projectId={projectId} image={{ id, title: `${label} ${i + 1}` }} original allowRetry={false} />
+      <StoredImage projectId={projectId} image={{ id, title: `${label} ${i + 1}` }} allowRetry={false} />
     </button>)}</div>
     {selected && <Modal title={label} layer={100} onClose={() => setSelected(null)}>
       <StoredImage projectId={projectId} image={{ id: selected, title: label }} original />

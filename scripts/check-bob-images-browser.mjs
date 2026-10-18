@@ -22,7 +22,7 @@ try{
   for(const viewport of [{width:320,height:568},{width:390,height:844},{width:1280,height:900}]){
     const context=await browser.newContext({viewport,isMobile:viewport.width<860,hasTouch:viewport.width<860,serviceWorkers:'block'})
     const images=new Map(),threads=new Map(['A','B'].map(id=>[id,{id:crypto.randomUUID(),messages:[]}]))
-    const errors=[],sends=[],uploadPaths=[],reservations=[]
+    const errors=[],sends=[],uploadPaths=[],reservations=[],downloads=[]
     let failUpload=true,loseSend=true,png
     await context.route('https://fonts.googleapis.com/**',route=>route.abort())
     await context.route(`${api}/**`,async route=>{
@@ -58,6 +58,7 @@ try{
           if(failUpload){failUpload=false;return respond({status:503,json:{message:'Interrupted upload'}})}
           image.uploaded=true;return respond({json:{Key:image.object_path}})
         }
+        downloads.push(url.pathname)
         return respond({status:200,body:png,contentType:'image/png'})
       }
       if(url.pathname==='/functions/v1/ask-bob'){
@@ -111,13 +112,29 @@ try{
     await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
     await drawer.getByText('Here is the mockup.',{exact:true}).waitFor()
     assert.equal(sends.length,2);assert.equal(sends[0].clientTurnId,sends[1].clientTurnId);assert.deepEqual(sends[0].imageIds,sends[1].imageIds)
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
     const sendBox=await drawer.getByRole('button',{name:'Send',exact:true}).boundingBox()
     assert(sendBox&&sendBox.height>=44&&sendBox.x+sendBox.width<=viewport.width)
     assert(await drawer.evaluate(el=>el.scrollWidth<=el.clientWidth),'no horizontal overflow')
     await page.screenshot({path:`test-results/bob-images-${viewport.width}-reply.png`})
+    const beforeReopen = downloads.length
+    await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
+    drawer=await open()
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
+    await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
+    assert.equal(downloads.length,beforeReopen,'Reopening uses authorized cached preview bytes')
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).click()
+    await page.getByRole('dialog',{name:'Project illustration',exact:true}).locator('img').waitFor()
+    assert.equal(downloads.length,beforeReopen+1,'Opening an original makes a fresh Storage read')
+    await page.getByRole('dialog',{name:'Project illustration',exact:true}).getByRole('button',{name:'Close',exact:true}).click()
+
     await page.reload();drawer=await open()
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).click()
     await page.getByRole('dialog',{name:'Project illustration',exact:true}).locator('img').waitFor()

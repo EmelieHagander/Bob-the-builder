@@ -1,43 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import * as db from './data/database'
 import { Loading, useAsync, useProjectVersion } from './components/ui'
 import { Layout, useAuthTick } from './components/Layout'
-import { StartProject } from './pages/StartProject'
-import { AccountDashboard } from './pages/account/AccountDashboard'
-import { Account } from './pages/account/Account'
-import { AccountCalendar } from './pages/account/AccountCalendar'
-import { AccountSettings } from './pages/account/AccountSettings'
-import { ProjectHome } from './pages/ProjectHome'
-import { Areas } from './pages/Areas'
-import { AreaWorkstream } from './pages/AreaWorkstream'
-import { TaskDetail } from './pages/TaskDetail'
-import { ProjectFacts } from './pages/ProjectFacts'
-import { Solutions } from './pages/Solutions'
-import { Artifacts } from './pages/Artifacts'
-import { MaterialPlan } from './pages/MaterialPlan'
-import { BuildingContext } from './pages/BuildingContext'
-import { People } from './pages/People'
-import { Events } from './pages/Events'
-import { EventDetail } from './pages/EventDetail'
-import { Food } from './pages/Food'
-import { FoodShopping } from './pages/FoodShopping'
-import { Shopping } from './pages/Shopping'
-import { Announcements } from './pages/Announcements'
-import { Today } from './pages/Today'
-import { SignIn } from './pages/SignIn'
-import { NotFound } from './pages/NotFound'
-import { Install } from './pages/Install'
-import { VolunteerProject } from './pages/VolunteerProject'
+const StartProject = lazy(() => import('./pages/StartProject').then(module => ({ default: module.StartProject })))
+const AccountDashboard = lazy(() => import('./pages/account/AccountDashboard').then(module => ({ default: module.AccountDashboard })))
+const Account = lazy(() => import('./pages/account/Account').then(module => ({ default: module.Account })))
+const AccountCalendar = lazy(() => import('./pages/account/AccountCalendar').then(module => ({ default: module.AccountCalendar })))
+const AccountSettings = lazy(() => import('./pages/account/AccountSettings').then(module => ({ default: module.AccountSettings })))
+const ProjectHome = lazy(() => import('./pages/ProjectHome').then(module => ({ default: module.ProjectHome })))
+const Areas = lazy(() => import('./pages/Areas').then(module => ({ default: module.Areas })))
+const AreaWorkstream = lazy(() => import('./pages/AreaWorkstream').then(module => ({ default: module.AreaWorkstream })))
+const TaskDetail = lazy(() => import('./pages/TaskDetail').then(module => ({ default: module.TaskDetail })))
+const ProjectFacts = lazy(() => import('./pages/ProjectFacts').then(module => ({ default: module.ProjectFacts })))
+const Solutions = lazy(() => import('./pages/Solutions').then(module => ({ default: module.Solutions })))
+const Artifacts = lazy(() => import('./pages/Artifacts').then(module => ({ default: module.Artifacts })))
+const MaterialPlan = lazy(() => import('./pages/MaterialPlan').then(module => ({ default: module.MaterialPlan })))
+const BuildingContext = lazy(() => import('./pages/BuildingContext').then(module => ({ default: module.BuildingContext })))
+const People = lazy(() => import('./pages/People').then(module => ({ default: module.People })))
+const Events = lazy(() => import('./pages/Events').then(module => ({ default: module.Events })))
+const EventDetail = lazy(() => import('./pages/EventDetail').then(module => ({ default: module.EventDetail })))
+const Food = lazy(() => import('./pages/Food').then(module => ({ default: module.Food })))
+const FoodShopping = lazy(() => import('./pages/FoodShopping').then(module => ({ default: module.FoodShopping })))
+const Shopping = lazy(() => import('./pages/Shopping').then(module => ({ default: module.Shopping })))
+const Announcements = lazy(() => import('./pages/Announcements').then(module => ({ default: module.Announcements })))
+const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
+const SignIn = lazy(() => import('./pages/SignIn').then(module => ({ default: module.SignIn })))
+const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })))
+const Install = lazy(() => import('./pages/Install').then(module => ({ default: module.Install })))
+const VolunteerProject = lazy(() => import('./pages/VolunteerProject').then(module => ({ default: module.VolunteerProject })))
 
 export function App() {
   return (
-    <Routes>
+    <Suspense fallback={<Loading label="Loading page…" />}><Routes>
       <Route path="/install" element={<Install />} />
       <Route path="/volunteer" element={<VolunteerProject />} />
       <Route path="/volunteer/:token" element={<VolunteerProject />} />
       <Route path="*" element={<ProjectApp />} />
-    </Routes>
+    </Routes></Suspense>
   )
 }
 
@@ -47,11 +47,13 @@ function ProjectApp() {
   const projectVersion = useProjectVersion()
   const authTick = useAuthTick()
   const [bootVersion, setBootVersion] = useState(0)
+  const [sessionVersion, setSessionVersion] = useState(0)
+  useEffect(() => db.onSessionRefresh(() => setSessionVersion(v => v + 1)), [])
   const { data: boot, loading, error } = useAsync(async () => {
     const signedIn = await db.hasSession()
     const project = signedIn ? await db.getProject() : null
-    return { signedIn, project }
-  }, [projectVersion, bootVersion, authTick], { timeoutMs: 20_000 })
+    return { signedIn, project, authTick, projectVersion }
+  }, [projectVersion, bootVersion, authTick, sessionVersion], { timeoutMs: 20_000, keepDataOnError: true })
   const project = boot?.project ?? null
   const signedIn = boot?.signedIn
 
@@ -68,10 +70,17 @@ function ProjectApp() {
     }
   }, [signedIn, navigate])
 
-  if (loading) {
+  // Renewing the same owner's session rechecks project visibility without
+  // replacing the mounted shell/draft. Account/project switches still hide it.
+  const currentBoot = boot && boot.authTick === authTick && boot.projectVersion === projectVersion
+  const notice = error && currentBoot ? <div className="card ui-panel" role="alert">
+    Could not refresh project access. Check your connection.
+    <button className="btn" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
+  </div> : undefined
+  if (!currentBoot && (loading || !error)) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Loading /></div>
   }
-  if (error) return <div className="page"><section className="card ui-panel" role="alert">
+  if (error && !currentBoot) return <div className="page"><section className="card ui-panel" role="alert">
     <h1 className="page-title">Could not load your account</h1>
     <p>{error.message}</p>
     <div className="cluster"><button className="btn btn-primary" onClick={() => setBootVersion(v => v + 1)}>Try again</button>
@@ -81,9 +90,9 @@ function ProjectApp() {
   // Retain previously shared Step links while root becomes the permanent Home.
   if (location.pathname === '/' && new URLSearchParams(location.search).has('step')) return <Navigate to={`/project${location.search}`} replace />
   if (location.pathname === '/account/buildings') {
-    return <Layout key={`account:${authTick}`} project={project}><BuildingContext projectId="" context={db.buildingContext} /></Layout>
+    return <Layout key={`account:${authTick}`} project={project} notice={notice}><BuildingContext projectId="" context={db.buildingContext} /></Layout>
   }
-  if (!project && (location.pathname.startsWith('/account') || location.pathname === '/')) return <Layout key={`account:${authTick}`} project={null}>
+  if (!project && (location.pathname.startsWith('/account') || location.pathname === '/')) return <Layout key={`account:${authTick}`} project={null} notice={notice}>
     <Routes>
       <Route path="/" element={<AccountDashboard />} />
       <Route path="/account" element={<Account />} />
@@ -95,7 +104,7 @@ function ProjectApp() {
   if (!project) return <StartProject onCreated={() => setBootVersion(v => v + 1)} />
 
   return (
-    <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project}>
+    <Layout key={`${project.id}:${projectVersion}:${authTick}`} project={project} notice={notice}>
       <Routes>
         <Route path="/" element={<AccountDashboard />} />
         <Route path="/project" element={<ProjectHome />} />
