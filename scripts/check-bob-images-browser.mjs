@@ -112,7 +112,9 @@ try{
     await drawer.getByRole('button',{name:'Retry request',exact:true}).click()
     await drawer.getByText('Here is the mockup.',{exact:true}).waitFor()
     assert.equal(sends.length,2);assert.equal(sends[0].clientTurnId,sends[1].clientTurnId);assert.deepEqual(sends[0].imageIds,sends[1].imageIds)
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
     const sendBox=await drawer.getByRole('button',{name:'Send',exact:true}).boundingBox()
     assert(sendBox&&sendBox.height>=44&&sendBox.x+sendBox.width<=viewport.width)
@@ -121,7 +123,9 @@ try{
     const beforeReopen = downloads.length
     await drawer.getByRole('button',{name:'Close Ask bob',exact:true}).click()
     drawer=await open()
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
+    await drawer.getByRole('button',{name:'Open project illustration 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).locator('img').waitFor()
     assert.equal(downloads.length,beforeReopen,'Reopening uses authorized cached preview bytes')
     await drawer.getByRole('button',{name:'Open project illustration 1'}).click()
@@ -130,6 +134,7 @@ try{
     await page.getByRole('dialog',{name:'Project illustration',exact:true}).getByRole('button',{name:'Close',exact:true}).click()
 
     await page.reload();drawer=await open()
+    await drawer.getByRole('button',{name:'Open attached image 1'}).scrollIntoViewIfNeeded()
     await drawer.getByRole('button',{name:'Open attached image 1'}).locator('img').waitFor()
     await drawer.getByRole('button',{name:'Open project illustration 1'}).click()
     await page.getByRole('dialog',{name:'Project illustration',exact:true}).locator('img').waitFor()

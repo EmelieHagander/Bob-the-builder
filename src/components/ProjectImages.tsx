@@ -28,7 +28,7 @@ export function StoredImage({ projectId, image, original = false, allowRetry = t
     }).catch(err => { if (active) setError(message(err)) }) }
     const observer = original || typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) { observer?.disconnect(); download() }
-    }, { rootMargin: '120px' })
+    }, { root: container.current?.closest('.bob-history') ?? null, rootMargin: '200px' })
     if (observer && container.current) observer.observe(container.current)
     else download()
     return () => { active = false; observer?.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl) }

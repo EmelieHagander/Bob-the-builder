@@ -325,6 +325,8 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const [retry, setRetry] = useState<RetryTurn | null>(null)
   const [recovering, setRecovering] = useState<NonNullable<Awaited<ReturnType<typeof db.getAskBobConversation>>['pending']> | null>(null)
+  const recoveryExpiry = useRef(0)
+  recoveryExpiry.current = recovering?.expiresAt ?? 0
   // A new message rejected because Bob is finishing earlier work (often a
   // background drawing) is resent in this tab with the same turn id until he is free.
   const [waitingFree, setWaitingFree] = useState<(RetryTurn & { until: number; attempt: number }) | null>(null)
@@ -587,7 +589,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
         }
       } catch {
         if (!current()) return
-        if (!recovering.jobId && Date.now() >= recovering.expiresAt) {
+        if (!recovering.jobId && Date.now() >= recoveryExpiry.current) {
           setRecovering(null); setWorking(false); setRetry(outgoing.current ?? recovering)
           setHistoryNotice('Could not check the answer. Reconnect and retry to recover it without repeating saved changes.')
           return
@@ -601,7 +603,7 @@ export function AskBob({ open, onClose, project }: { open: boolean; onClose: () 
     window.addEventListener('focus', reconnect)
     document.addEventListener('visibilitychange', reconnect)
     return () => { cancelled = true; clearTimeout(timer); window.removeEventListener('focus', reconnect); document.removeEventListener('visibilitychange', reconnect) }
-  }, [recovering?.turnId, recovering?.expiresAt, recovering?.jobId, stopping, project.id, open])
+  }, [recovering?.turnId, recovering?.jobId, stopping, project.id, open])
 
   async function stopWork() {
     if (!recovering?.jobId || stopPending.current) return
