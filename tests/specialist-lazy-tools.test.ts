@@ -77,6 +77,35 @@ test('specialists may finish structured work without opening a calculator manual
  assert.deepEqual(result,done);assert.equal(executions(),0)
 })
 
+test('a current specialist can correct invalid calculator input before giving a code-backed verdict',async()=>{
+ const catalog=lazyCatalog(),{calc,executions}=calculator();let calls=0
+ const result=await callWithCalculator(roleOptions('plan-reviewer'),{catalog,calculator:calc,unlimitedWork:true,hasAccess:async()=>true,deadline:Infinity,
+  callModel:async options=>{
+   if(++calls===1)return call('manual','describe_tool',{name:'calculate_project'})
+   if(calls===2)return call('invalid','calculate_project',{})
+   const calculation=JSON.parse(String(options.messages![0].content))
+   if(calls===3){assert.equal(calculation.status,'invalid');assert(!('outputs' in calculation));return call('corrected','calculate_project',graph)}
+   assert.equal(calls,4);assert.equal(calculation.status,'calculated');assert.equal(calculation.outputs[0].value,7)
+   assert.equal(options.previousResponseId,'r-corrected');return done
+  }})
+ assert.deepEqual(result,done);assert.equal(calls,4);assert.equal(executions(),1)
+})
+
+test('the current work policy permits more than two lazy calculation rounds and four calls per round',async()=>{
+ const catalog=lazyCatalog(),{calc,executions}=calculator();let calls=0
+ const result=await callWithCalculator(roleOptions('plan-reviewer'),{catalog,calculator:calc,unlimitedWork:true,hasAccess:async()=>true,deadline:Infinity,
+  callModel:async options=>{
+   if(++calls===1)return call('manual','describe_tool',{name:'calculate_project'})
+   assert(names(options).includes('calculate_project'))
+   if(calls>2){assert.equal(options.messages!.length,5);for(const message of options.messages!){const result=JSON.parse(String(message.content));assert.equal(result.status,'calculated');assert.equal(result.outputs[0].value,7)}}
+   if(calls===5)return done
+   assert(calls<5)
+   return {...call('round-'+calls,'calculate_project',graph),toolCalls:Array.from({length:5},(_,i)=>call('calc-'+calls+'-'+i,'calculate_project',graph).toolCalls[0])}
+  }})
+ assert.deepEqual(result,done);assert.equal(calls,5);assert.equal(executions(),15)
+ assert.equal(calc.remaining,Infinity,'the current work policy introduces no twelve-calculation allowance')
+})
+
 test('discovery never exposes another role tool and cannot enable execution in its own model step',async()=>{
  const catalog=lazyCatalog(),{calc,executions}=calculator();let calls=0
  const result=await callWithCalculator(roleOptions('plan-reviewer'),{catalog,calculator:calc,hasAccess:async()=>true,deadline:Infinity,
@@ -108,11 +137,11 @@ test('policy and membership are checked again after manual discovery and before 
    callModel:async options=>{
     if(++calls===1)return call('manual','describe_tool',{name:'calculate_project'})
     if(calls===2){if(revoked==='policy')enabled=false;else access=false;return call('calc','calculate_project',graph)}
-    assert.deepEqual(JSON.parse(String(options.messages![0].content)),{status:'unavailable'})
-    assert.deepEqual(names(options),[]);return done
+    throw new Error('Revoked requested arithmetic cannot fall back to another model verdict')
    }})
   if(revoked==='membership')await assert.rejects(run,/project_denied/)
-  else assert.equal((await run).success,true)
+  else assert.equal((await run).error,'calculator_policy_unavailable')
+  assert.equal(calls,2)
   assert.equal(executions(),0)
  }
 })

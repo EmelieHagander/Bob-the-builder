@@ -75,6 +75,14 @@ async function callWithLazyCalculator<T>(options:OpenAIServiceOptions,opts:Calcu
     try{raw=JSON.parse(call.function.arguments)}catch{raw=null}
     const result=await session.execute(call.function.name,raw)
     if(!await opts.hasAccess())throw new Error('project_denied')
+    // A requested calculation cannot turn into a model-only arithmetic verdict
+    // when its live permission or allowance disappears. A task that never
+    // needed arithmetic may still finish without opening this optional tool.
+    if(call.function.name==='calculate_project'){
+     if(result.status==='denied')throw new Error('project_denied')
+     if(result.status==='budget_exhausted'||result.status==='unavailable'&&!result.reason&&calculator.remaining===0)return failed('calculator_budget_exhausted',response.model)
+     if(result.status==='unavailable'&&(!result.reason||result.reason==='calculator_policy_unavailable'))return failed('calculator_policy_unavailable',response.model)
+    }
     conversation.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(result)})
    }
   }

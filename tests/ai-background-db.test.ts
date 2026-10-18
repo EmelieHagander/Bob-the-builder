@@ -68,7 +68,7 @@ test('a completion reconciles an ambiguous POST; expired jobs receive no late re
   assert.equal((await one("select count(*)::int n from shared_private.ai_events where event_id='wh_duplicate'")).n, 1)
 })
 
-test('Bob waits without consuming retries; accepted delegation is durable; wake handles either ordering', async () => {
+test('an accepted historical designer job keeps its notice and wakes Bob without consuming retries', async () => {
   const owner = randomUUID(), turn = randomUUID()
   await pg.query('insert into auth.users values($1,$2,now())', [owner, 'async@example.test'])
   const project = (await invoke('bob.create_project', [JSON.stringify({ name: 'Async fixture' })], 'authenticated', owner)).id
@@ -76,6 +76,8 @@ test('Bob waits without consuming retries; accepted delegation is durable; wake 
   await pg.exec("update shared_private.ai_receivers set enabled=true where app='bob'")
   const job = await one(`insert into bob_private.bob_jobs(project_id,actor_id,thread_id,turn_id,generation,credential,worker_url,expires_at,status,claim_token)
     values($1,$2,$3,$4,$5,'{}','https://fixture.supabase.co/functions/v1/bob-worker',now()+interval '20 minutes','running',gen_random_uuid()) returning *`, [project, owner, claim.thread_id, turn, claim.generation])
+  // Preserve attribution for an already accepted job from the retired designer route.
+  // Current model dispatch/settings do not expose this role.
   const ai = await invoke('shared.ai_job_reserve', ['bob', job.id + '/model:cad:0', 'b'.repeat(64), 'bob', JSON.stringify({ jobId: job.id, role: 'cad-designer' }), expiry(), JSON.stringify(accounting)])
   await invoke('shared.ai_job_accept', [ai.id, JSON.stringify(response(ai.id, 'queued'))])
   await invoke('bob.bob_wait_for_ai', [job.id, job.claim_token, ai.id])
