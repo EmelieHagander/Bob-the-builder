@@ -43,8 +43,9 @@ begin
   end if;
   if r.thread_id is distinct from p_thread then return null; end if;
   if exists(select 1 from bob_private.bob_jobs where project_id=p_project and actor_id=p_user and thread_id=p_thread
-   and turn_id=p_turn and generation=p_generation and status='running' and drawing_request_id is not null)
-   and (r.origin_turn_id is distinct from p_turn or not exists(select 1 from bob_private.drawing_budgets where request_id=p_id and turn_id=p_turn)) then
+   and turn_id=p_turn and generation=p_generation and status='running' and drawing_request_id is not null
+   and (drawing_request_id is distinct from p_id or r.origin_turn_id is distinct from p_turn
+    or not exists(select 1 from bob_private.drawing_budgets where request_id=p_id and turn_id=p_turn))) then
    raise exception 'drawing_continuation_mismatch' using errcode='PT409';
   end if;
   select * into packet from bob_private.drawing_requests where id=p_id and thread_id=p_thread;
@@ -148,7 +149,8 @@ begin
  perform bob_private.assert_drawing_recovery_current(r);
  if p_execution is null or p_key is null or p_key !~ '^[a-f0-9]{64}$' then raise exception 'invalid_budget_call'; end if;
  select * into b from bob_private.drawing_budgets where request_id=p_id for update;
- if p_operation='reserve' and (b.request_id is null or b.turn_id is distinct from p_turn or r.origin_turn_id is distinct from p_turn) then
+ if p_operation='reserve' and (b.request_id is null or b.turn_id is distinct from p_turn or r.origin_turn_id is distinct from p_turn
+  or exists(select 1 from bob_private.bob_jobs where id=p_execution and drawing_request_id is not null and drawing_request_id<>p_id)) then
   raise exception 'drawing_continuation_mismatch' using errcode='PT409';
  end if;
  if p_operation='reserve' then

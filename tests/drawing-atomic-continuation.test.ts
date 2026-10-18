@@ -131,6 +131,14 @@ test('unregistered legacy packets cannot be loaded or saved through a private fa
 
 test('mismatched event jobs and ambiguous execution authority fail explicitly without state changes',async()=>{
  const f=await fixture(),loaded=await f.load(),before=await f.state()
+ const other=randomUUID()
+ await invoke('bob.create_drawing_request',[f.project,f.claim.thread_id,f.turn,f.claim.generation,other,scope],f.owner,'authenticated')
+ await pg.query('update bob_private.bob_jobs set drawing_request_id=$2 where id=$1',[f.execution,other])
+ await assert.rejects(f.load(),/drawing_continuation_mismatch/)
+ await assert.rejects(f.save(loaded.revision,loaded.payload),/drawing_continuation_mismatch/)
+ await assert.rejects(f.budget('reserve','c'.repeat(64)),/drawing_continuation_mismatch/)
+ assert.deepEqual(await f.state(),before,'another request in the same owner turn cannot borrow this event job')
+ await pg.query('update bob_private.bob_jobs set drawing_request_id=null where id=$1',[f.execution])
  // Corrupt execution metadata is an error, never permission to pick a credential.
  await pg.query(`insert into bob_private.bob_jobs(project_id,actor_id,thread_id,turn_id,generation,status,credential,worker_url,expires_at,lease_until,drawing_request_id,drawing_event_revision)
   values($1,$2,$3,$4,$5,'running','{}','https://fixtureproject.supabase.co/functions/v1/bob-worker',now()+interval '10 minutes',now()+interval '2 minutes',$6,1)`,
