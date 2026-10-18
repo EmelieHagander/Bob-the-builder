@@ -1,5 +1,91 @@
 # Foundation verification and rollout
 
+## Bob context strategy release — 2026-10-18
+
+**Published and activated through [PR #267](https://github.com/EmelieHagander/Bob-the-builder/pull/267).**
+Tested head `ef68df41e8baa9ded662d2ea41436cf6741f54fe`, tree
+`61c1d2b76803a15c4d8ec1abc79d6a194b08c072`; merge
+`daf15caeb70e254e3c259d938745348f70956a3f` has the identical tree.
+The [conversation owner](ask-bob-conversations.md#context-strategy--2026-10-18)
+defines bounded editable memory, exact five-message context, private hybrid recall,
+role-specific orientation, lazy instructions and same-job context renewal.
+
+[CI 39112711221](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39112711221),
+job `117632034115`, passed all **1,489 tests** and all required gates, including
+canonical Edge checks, vocabulary, build and browser verification.
+[Security 39112711153](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39112711153)
+and [CAD concurrency 39112711285](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39112711285)
+also passed. Six browser screenshots at 320, 390 and 1280 px were inspected
+(artifact `12132080264`, SHA-256
+`9fd4f1d661e1b969bd7109befebd0fd546961cae288adb42d1c73ed62d6f1f9a`).
+The existing floating **Latest** control overlaps long terminal error text after
+older-history paging; that nonblocking polish remains in [State](bob-delivery-flow.md#state).
+
+The following migrations were applied to `yuobtgoidmmmwfqenkau` through fox and mouse.
+Hosted versions differ from source filenames; identity and complete statement
+content were compared, not timestamp equality.
+
+| Migration name | Hosted version | Statement SHA-256 |
+| --- | --- | --- |
+| `bob_source_linked_memory_retrieval` | `20261018090740` | `6fd4194e1cc159da6b2d9d2e405df52263dd33dbc3a7e0e2ad38eb7028d5a6ce` |
+| `ai_embedding_adapter` | `20261018090744` | `302f1a6ed39c24097d56c65bd5c3b0f7f450dba2d96c272104d3b62f873e380c` |
+| `ai_context_strategy_catalog` | `20261018091120` | `ad1ebaf270cef8a8a0874acbf682473be90b3baf3ce4b6d6e7c1ea41cdded6cb` |
+
+Foundation readback matched all six function bodies: private index pending/save,
+exact-message read, summary refresh, hybrid search and shared catalog validation.
+Owners, fixed search paths, security-definer properties and service-only grants
+matched. The private embedding table has RLS, no anon/authenticated access, checked
+source keys and `vector(256)` in the `extensions` schema; source and full-text indexes
+were present. Advisor delta contained only the expected informational finding that
+this service-only private table has RLS without caller policies.
+
+Both complete Edge dependency closures were installed and read back before catalog
+activation. Every returned source file matched the tested revision; there were no
+mismatches or extra files. Omitted files are type-only dependencies. Both function
+Deno configurations/import maps were present.
+
+| Function | Version / JWT verification | Uploaded / matching returned files | Bundle SHA-256 |
+| --- | --- | --- | --- |
+| `ask-bob` | 131 / true | 103 / 102; type-only `src/data/provenance.ts` omitted | `6ab77130e85acfe95974bb2565fc4f6b13d9875a18f23f63f0434bdbc951a6be` |
+| `bob-worker` | 99 / false, own authentication | 102 / 100; type-only `src/data/provenance.ts` and `bob-request.ts` omitted | `3d6848b9d3219198dd0757ab9811f2ed7f6bc671e519e304d4fd5a935dbef3ea` |
+
+Both endpoints returned 401 for unauthenticated POSTs.
+[Pages 39114240793](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39114240793)
+passed; the deployed page and actual `assets/index-D8qCodAA.js` returned 200 with the
+correct project and new context-error UI.
+
+Activation readback proves exactly **97 changed definitions, 20 additions and 193
+unchanged definitions**, with none removed or unexpectedly published. New definitions
+start at version 1. All 41 existing settings were preserved, with one new
+`memory-embedding/global` setting. The 12 existing model records were preserved except
+the intended embedding capability fields and update timestamp. Main Bob remains
+**GPT-5.4/high**, `work_completion_version=2`, `work_allowance_version=1`;
+`context_strategy_version=1` and memory V2 are active. The embedding binding is
+`text-embedding-3-small` at 256 dimensions. Technical context policy is 64,000 tokens
+for renewal, a 1,600-token handoff, two retained tool exchanges and a 96,000-token
+input ceiling. The exact-message tool is active and loaded on demand.
+
+[Live Bob 39114240795](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39114240795),
+job `117636642220`, passed Auth/RLS and real-model integration checks: nonmember 403,
+retired endpoint 410, material read, actual image pixels, knowledge retrieval and
+natural-language advice. Its three logical Bob requests used a disposable guest
+project, so the workflow was **not read-only overall**. The fixture was created at
+09:10:07Z; the workflow finished at 09:11:32Z, overlapping catalog activation at
+09:11:20Z. Its recorded idea
+turn `769d448a-c147-49fb-b299-a0307c90e487` began around 09:11:10Z and retained
+pre-strategy manifest `9c169b50-54c4-4605-be35-e90a8a3a9332`: ask-bob contract version 3,
+completion 2/allowance 1, with no `context_strategy_version`. The check therefore
+verifies the new Edge runtime's compatibility with the older pinned catalog,
+**not actual use of the new memory strategy**. Image cleanup passed at 09:11:28Z.
+Guarded project cleanup deleted only `p_7f1636b2d42e48ed90cbd4b0a5a7f5a9`; exact
+readback found zero remaining project, membership, Task, material, media, thread,
+job, drawing-request, Artifact and Storage rows. Earlier fixtures were untouched.
+
+Ordinary owner/private-thread and long-memory model quality remain open: faithful
+constraints and corrections after repeated folds, relevant exact retrieval,
+role-specific handoffs and successful delivery after context renewal. No owner
+message was sent and no owner job was manually restarted for this release.
+
 ## Managed conversation memory — 2026-10-17
 
 The owner turn `3982c23a-3dd9-4202-9fef-3ed52c515b0f` failed at
@@ -42,7 +128,7 @@ allowance version 1 remain active.
 [Pages 39094855524](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39094855524)
 published the merge successfully. The live page and script returned 200 with the
 correct project configured. [Live Bob 39094855589](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39094855589)
-passed its read-only release check. These checks do not prove semantic summary
+passed its release check. These checks do not prove semantic summary
 fidelity, arbitrarily long same-turn provider context or real owner/CAD acceptance.
 The next ordinary owner message in the same private thread remains the acceptance
 gate; no owner message was sent and no failed owner job was manually restarted.

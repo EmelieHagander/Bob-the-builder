@@ -33,8 +33,9 @@ catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
 
-**Implemented in source with focused mechanical checks; release verification and
-model acceptance remain. No hosted activation is claimed.** The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
+**Published and activated through PR #267; ordinary owner/model acceptance remains.**
+[Release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
+records the installed runtimes and catalog. The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
 owns memory, source truth and long-work continuation. This section owns the new
 tool surface; older pinned manifests retain the whole-bench contract below.
 

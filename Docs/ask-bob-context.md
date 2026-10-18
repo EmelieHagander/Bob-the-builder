@@ -5,8 +5,9 @@
 > **Current runtime (2026-09-30):** `supabase/README.md` owns the deployed briefing, bounded lookup and P3 Current View seams. `Docs/ask-bob-conversations.md` separately owns transcript/provider continuity. The implemented scope below takes precedence over the wider design sketches.
 
 The accepted [2026-10-18 context strategy](ask-bob-conversations.md#context-strategy--2026-10-18)
-adds bounded managed memory, source-linked retrieval and role-specific task context
-in source; full release verification and model acceptance remain. It keeps current project facts with
+adds bounded managed memory, source-linked retrieval and role-specific task context.
+It is [published and activated](foundation-verification.md#bob-context-strategy-release--2026-10-18);
+ordinary owner and long-memory model acceptance remain. It keeps current project facts with
 their existing readers. The private conversation's semantic index does not implement
 the all-category Project Catalog, Router or Librarian specified below. Applicable
 project constraints must be read from their authoritative records, not inferred

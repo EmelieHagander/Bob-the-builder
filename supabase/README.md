@@ -19,12 +19,14 @@ part of the rollout so the previous live gateway cannot keep accepting requests.
 For current working context, five full recent messages, incremental summaries, history search and research-page limits, see [Ask bob conversations](../Docs/ask-bob-conversations.md). This September 2026 extension supersedes the Slice 0 budgets below; [write tools](../Docs/ask-bob-writes.md) own mutation authority. Launchpad remains retired as a runtime dependency; its memory-tier design informs Bob-owned context.
 
 The accepted [2026-10-18 context strategy](../Docs/ask-bob-conversations.md#context-strategy--2026-10-18)
-is implemented in source, with release verification and model acceptance remaining:
-editable token-bounded memory, exact/private
+is published and activated: editable token-bounded memory, exact/private
 hybrid recall, concise [tool and colleague cards](../Docs/ask-bob-tools.md#tool-and-colleague-cards--2026-10-18)
 and same-job context checkpoints. It preserves canonical project records, current
-authorization and old pinned execution contracts. Source presence is not a hosted
-activation claim; [State](../Docs/bob-delivery-flow.md#state) owns remaining gates.
+authorization and old pinned execution contracts.
+[Release evidence](../Docs/foundation-verification.md#bob-context-strategy-release--2026-10-18)
+records both installed dependency closures, Deno configuration and exact catalog
+activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary owner
+and long-memory model acceptance.
 
 For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. The next message starts a fresh full period; request/worker retries retain their period and every historical charge. [Database periods](../db/README.md#owner-task-budget-periods--2026-10-12) own reservation/reconciliation, and [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) records release status.
 
@@ -231,7 +233,7 @@ save/recall/archive memory manager. Project phase transitions keep their
 existing commands and rules. The whole permitted toolbox and inline manuals
 remain that release's baseline; deferred schema loading/JIT tool discovery was
 not introduced by it. The [2026-10-18 strategy](../Docs/ask-bob-conversations.md#context-strategy--2026-10-18)
-implements the successor in source without enabling the separate proposed role. [Tools](../Docs/ask-bob-tools.md) and
+is the activated successor without enabling the separate proposed role. [Tools](../Docs/ask-bob-tools.md) and
 [conversation state](../Docs/ask-bob-conversations.md) own those behaviors.
 
 ### Catalog release evidence — 2026-10-09

@@ -292,30 +292,25 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — verifiera och publicera kontextstrategin (2026-10-18):**
-slutför samlad verifiering och PR på `feat/bob-context-strategy`, därefter
-publicera samordnad databas-/Edge-/katalogversion med funktionernas nya Deno-konfiguration.
-Den godkända målbilden och aktuell källimplementation finns
-hos [konversationsägaren](ask-bob-conversations.md#context-strategy--2026-10-18);
-ingen ny produktworkshop behövs för samma beslut. Direkt originalhämtning,
-hybridsökning och fortsatt arbete över kontextcheckpoints ingår nu i detta arbete.
+**Aktivt nästa steg — ordinär minnes-/modellacceptans (2026-10-18):** prova ett nytt
+meddelande i samma privata tråd med den aktiverade
+[kontextstrategin](ask-bob-conversations.md#context-strategy--2026-10-18).
+Bekräfta att Bob fortsätter uppdraget, behåller exakt fem senaste meddelanden och
+återfinner en äldre exakt uppgift vid behov. Återställ inte tråden eller starta om
+det gamla jobbet; originalhistoriken ska bevaras.
+[Releasebeviset](foundation-verification.md#bob-context-strategy-release--2026-10-18)
+äger den avslutade tekniska publiceringen och aktiveringen.
 
-Återstående grindar: full CI, Edge-kontroll med ordinarie beroendeupplösning och
-återläsning av installerad kod/katalog måste vara klara före releaseanspråk.
-Den lokala ordinarie Edge-kontrollen blockerades av nätåtkomst till `esm.sh`;
-en separat lokal kontroll med installerade npm-beroenden ersätter inte den grinden.
-Därefter krävs verkliga modellprov med långa
-samtal: tidiga krav, senare rättelser, parallella uppgifter, rätt original efter
-flera sammanfattningar och bibehållen skillnad mellan förslag, beslut och kvitton.
-Tekniska fixturer stänger inte den semantiska acceptansen.
+Fortsätt sedan med verkliga modellprov över långa samtal: tidiga krav, senare
+rättelser, parallella uppgifter, rätt original efter flera sammanfattningar och
+bibehållen skillnad mellan förslag, beslut och kvitton. Verifiera användbar fortsatt
+leverans efter kontextförnyelse och relevanta kollegöverlämningar. Tekniska fixturer
+och det generella gästprovet stänger inte denna semantiska acceptans.
 
-**Kvarstående minnesacceptans (2026-10-18):** prova ett nytt ordinärt meddelande i samma
-privata tråd med den publicerade
-[minneshanteringen](ask-bob-conversations.md#managed-memory-navigation--2026-10-17).
-Bekräfta att det fulla indexet inte stoppar nästa tur och att Bob kan återfinna
-en äldre exakt uppgift vid behov. Återställ inte tråden; originalhistoriken ska
-bevaras. [Releasebeviset](foundation-verification.md#managed-conversation-memory--2026-10-17)
-äger kodåterläsning, tekniska femmeddelandeprov och avslutad publicering.
+**Mindre UI-polish:** flytta eller ge plats åt den flytande **Latest**-kontrollen
+efter inläsning av äldre historik, så att den inte överlappar lång terminal feltext.
+Det syns vid 320, 390 och 1280 px; samtliga sex CI-bilder är granskade. Detta är
+ingen blockerare för kontextreleasen.
 
 **Nästa CAD-grind (2026-10-17):** kör beställarens vanliga Bob-test på samma
 väntande begäran för våningssängen. Bob ska läsa och kontrollera samma konstruktions

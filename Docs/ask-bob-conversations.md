@@ -4,10 +4,11 @@
 
 ## Context strategy — 2026-10-18
 
-**Implemented in source; focused mechanical checks pass, full release verification
-and model acceptance remain.** This section owns the new memory/context behavior.
-It does not claim hosted activation.
-The [active State](bob-delivery-flow.md#state) owns remaining release and acceptance
+**Published and activated through PR #267; ordinary owner and long-memory model
+acceptance remain.** [Release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18)
+records CI, hosted source readback, migrations, catalog activation and web deployment.
+This section owns the memory/context behavior.
+The [active State](bob-delivery-flow.md#state) owns remaining acceptance
 work. Older pinned jobs retain their existing prompt, memory and tool contracts;
 the September/October behavior below remains their compatibility reference.
 
@@ -142,8 +143,8 @@ Source owners are `bob-conversation-brief.ts`, `bob-memory-retrieval.ts`,
 composition, source references, token limits, lazy loading, refreshed authority and
 the pre-strategy main call's unchanged journal fingerprint. The new function-level
 Deno import configuration is part of the Edge deployment; copying only TypeScript
-files is insufficient. Build/fixture success is separate from hosted readback and
-ordinary-model acceptance.
+files is insufficient. Hosted readback confirms both function configurations;
+technical release verification remains separate from ordinary-model acceptance.
 
 ## Active memory and continued work — 2026-10-17
 
@@ -404,7 +405,7 @@ This is the released V1 compatibility contract. The [V2 strategy](#context-strat
 adds token-bounded, semantically selected memory for new activated executions;
 it must not rewrite already-journalled V1 inputs.
 
-New executions pin `memoryManagementVersion: 1` in their durable execution identity.
+Executions created under this V1 contract pin `memoryManagementVersion: 1` in their durable execution identity.
 The model maintains the gist; code manages its bounded navigation index. Every
 newly folded source gets a pointer before optional older hints are selected. A
 missing model pointer uses only the source's sequence, role and delivery state,
@@ -432,7 +433,7 @@ worker yields. No schema, catalog or model-setting migration is needed.
 records the installed runtimes and the remaining ordinary owner test.
 Diagnostics record validation reason and size, never conversation text. This
 repairs the failure before main Bob, image inspection or CAD can start; a guest
-read-only release check does not exercise private-thread summarization.
+release check does not exercise private-thread summarization.
 
 Preparation is synchronous before answering, not Launchpad's separate fold worker. When a long legacy thread needs more batches, return `context_preparing`; retry the same request to continue from saved progress. A failed fold returns an explicit failure rather than answering with silently missing history. Original messages are never rewritten. Exact recent text is not silently truncated on model-limit errors either.
 
@@ -750,7 +751,7 @@ The migrations are additive: `20260918194106_ask_bob_context_memory.sql` and `20
 
 Automated evidence covers exact five-message replay, incremental folding/CAS, failed summaries, private history, stale/revoked access, reset, selected-version provenance, query pagination/size limits and existing write retry guards. Browser evidence must cover 320/390/1280 widths, density, growing/expanded drafts, Enter semantics, scroll position, reset and saved-write receipts. Test fixtures are not live-model quality evidence.
 
-Release checks: full CI/Edge build, hosted ordinary-role and service-guard tests on a rollback-only fixture, Pages success, then a post-deploy Auth→Edge→model smoke. The owner's ordinary-account conversation test remains the usability check for concise expert-like proposals, enough retrieval and faithful memory. Do not claim that a passing code suite proves construction advice is correct or that a guest read-only smoke proves signed-in summarization/writes.
+Release checks: full CI/Edge build, hosted ordinary-role and service-guard tests on a rollback-only fixture, Pages success, then a post-deploy Auth→Edge→model smoke. The owner's ordinary-account conversation test remains the usability check for concise expert-like proposals, enough retrieval and faithful memory. Do not claim that a passing code suite proves construction advice is correct or that a guest smoke using disposable project data proves signed-in summarization/writes.
 
 
 ## Shared provider jobs and unread replies
