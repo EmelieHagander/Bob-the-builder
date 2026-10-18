@@ -319,11 +319,9 @@ och bevara alla krav. Verifiera oberoende granskning, sparad ritning och återl�
 efter omladdning utan dubbla uppdrag eller förlorade resultat. Tekniska fixturer
 ersätter inte detta modell-/CAD-prov. [CAD-kontraktet](cad-adapter.md#explicit-source-renewal--2026-10-17)
 äger beteendet och [releasebeviset](foundation-verification.md#cad-source-renewal--2026-10-17)
-äger den avslutade publiceringen/aktiveringen. Rätta separat den reproducerade
-period-/ursprungsövergången när en ny ägartur laddar en ritningsbegäran men
-misslyckas före save: automatisk fortsättning måste behålla sammanhängande
-instruktion, period, katalogpin och behörighet utan `drawing_budget_period_closed`.
-Minnesrättningen stänger inte den SQL-grinden.
+äger den avslutade publiceringen/aktiveringen. Provet ska också använda den
+publicerade [atomiska fortsättningen](foundation-verification.md#atomic-drawing-continuation--2026-10-18)
+på samma begäran; återställ inte tråden eller skapa ett ersättningsuppdrag.
 
 **Aktivt nästa steg (2026-10-17):** beställaren laddar om appen och återläser
 det befintliga samtalet på sin telefon: snabb inläsning, äldre meddelanden,

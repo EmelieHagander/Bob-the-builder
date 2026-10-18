@@ -819,8 +819,10 @@ operations cannot be redispatched; direct and periodically reconciled late charg
 belong to the period that reserved them, never the new task. New funds do not
 release an unchanged quality failure or grant approval.
 
-Loading the same saved request under the new claimed message releases only its
-cost-stop retry gate. Requirements, dependencies, geometry and source fingerprint
+Loading the same saved request is read-only. A successful checkpoint save under
+the new claimed message releases only its cost-stop retry gate, together with
+the [atomic continuation](../db/README.md#atomic-drawing-continuation--2026-10-18).
+Requirements, dependencies, geometry and source fingerprint
 remain. If sources match, the exact draft can render and receive independent
 review without another researcher/designer call. Changed sources retain normal
 freshness checks. Bob commits the verified budget cause and next-message hint
@@ -844,7 +846,7 @@ wording change and removes the older task-budget paragraph from the tool guide.
 The calculator remains deterministic inside the ordinary structured model call;
 it creates no preliminary AI phase or hidden output ceiling.
 
-[Database implementation](../db/README.md#owner-task-budget-periods--2026-10-12)
+[Database implementation](../db/README.md#atomic-drawing-continuation--2026-10-18)
 and [verification](foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12)
 own installation details and evidence. Real owner/model acceptance and measured
 savings remain in [State](bob-delivery-flow.md#state).

@@ -28,7 +28,7 @@ records both installed dependency closures, Deno configuration and exact catalog
 activation; [State](../Docs/bob-delivery-flow.md#state) owns remaining ordinary owner
 and long-memory model acceptance.
 
-For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. The next message starts a fresh full period; request/worker retries retain their period and every historical charge. [Database periods](../db/README.md#owner-task-budget-periods--2026-10-12) own reservation/reconciliation, and [verification](../Docs/foundation-verification.md#owner-task-budget-and-cost-attribution--2026-10-12) records release status.
+For historical jobs, the [owner task budget](../Docs/cad-adapter.md#one-budget-per-owner-task--2026-10-12) bounds one real owner message and its review loop. A successful save from the next message starts its fresh period atomically; reads do not move ownership. Request/worker retries retain their period and every historical charge. [Atomic continuation](../db/README.md#atomic-drawing-continuation--2026-10-18) owns the current transition and reservation contract; [verification](../Docs/foundation-verification.md#atomic-drawing-continuation--2026-10-18) records its release status.
 
 New durable Bob jobs using `work_allowance_version: 1` have no application spend,
 call, output-token or work quotas. [Continued work](../Docs/ask-bob-conversations.md#active-memory-and-continued-work--2026-10-17)

@@ -3402,24 +3402,101 @@ Its renderer/reviewer are synthetic. The ordinary owner/model/CAD drawing test
 remains required: use the pending bed request and explicitly check/adopt its
 current construction revision (last observed 5), then verify independent review,
 saved drawing and reload. No owner construction/request was manually changed or
-new owner model turn submitted by this release. The older automatic failure's
-unretained underlying exception remains unknown; capture content-free diagnostic
-detail if it recurs.
+new owner model turn submitted by this release. At this checkpoint the older
+automatic failure's underlying exception was unretained; the later continuation
+investigation and SQL evidence are recorded in the release below.
 
 ## Atomic drawing continuation — 2026-10-18
 
-Implementation prepared; hosted migration and Edge deployment are still pending.
+**Status: installed and read back; ordinary owner/model/CAD acceptance pending.**
+
+[PR #270](https://github.com/EmelieHagander/Bob-the-builder/pull/270), tested source
+`9746d602e48ada32666bbb4c01efeb7890fbadc8`, merged as
+`410bee2912aa14b4166e98cfda1393ba808b332b`.
 The reproduced fault is a new message loading the request and changing its
 accounting period, then failing before the origin/authority save. An automatic
 job keeps the older origin and receives `drawing_budget_period_closed` before
-rendering. This is independent of the context/memory work.
+rendering. Hosted PostgreSQL errors correlated with the drawing jobs on October
+17 at 17:21:09.962Z and 21:36:34.965Z and October 18 at 11:49:51.333Z. The
+rollback-only pre-install probe failed with `probe_read_mutated_state`, directly
+reproducing the read-side mutation without retaining fixture data.
 
 The fix and exact retirement boundary live in the
 [database contract](../db/README.md#atomic-drawing-continuation--2026-10-18).
 Regression coverage exercises interruption on both sides of save, failed-save
 rollback, exact replay, old paid receipts, inconsistent-state quarantine and
-explicit legacy rejection. The installed Supabase 2.117.0 CLI aborted with exit
-134 before `migration new`; the migration filename uses actual observed UTC.
-Documentation placement was reviewed using Archie's instructions in this session.
-Ordinary owner/model acceptance of the existing bunk-bed request and its exact
-current construction revision remains in [State](bob-delivery-flow.md#state).
+explicit legacy rejection. Distinct catalog pins and exact sealed authorities
+are checked for each owner message; ambiguous and wrong-request jobs fail.
+The real unchanged cost-stop fingerprint now continues only after a successful
+checkpoint save, while unchanged quality evidence suppresses another paid
+attempt. Temporarily removing that checkpoint made its new regression fail.
+
+**Source verification.** [CI 39128288013](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39128288013)
+passed **1,499 / 1,499 tests**, Edge checks, production builds, PWA and every
+browser check on the tested source. [PostgreSQL concurrency 39128288048](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39128288048)
+passed **85** races, including save/replay/cancel ordering, and
+[CAD adapter 39128287976](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39128287976)
+passed. UI/performance PR #269 landed during CI as
+`641193b6b28ba94f1192bc177fcb6586d307e131`, after its separate
+[CI 39127570522](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39127570522)
+passed. Its 25 changed paths overlap neither this correction nor either Edge
+dependency closure. The conflict-free merged tree is
+`49f48e1f061c620689e2e40639eebb0f7400f081`; its SQL and runtime closures retain
+the tested drawing source exactly.
+
+The merged source also passed [CAD adapter 39135320455](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39135320455)
+and [web publication 39135320490](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39135320490).
+[Live Bob 39135320507](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39135320507)
+passed actual Auth/RLS/provider checks with the shared guest fixture, including
+image pixels and versioned knowledge. Fixture image bytes and metadata were
+removed through ordinary caller commands. This generic guest regression does
+not establish private owner conversation or bunk-bed drawing acceptance.
+
+**Hosted installation.** Supabase `yuobtgoidmmmwfqenkau` / fox and mouse records
+`20261018141538 / drawing_atomic_continuation` for source migration
+`20261018121638_drawing_atomic_continuation.sql` (SHA-256
+`bedc3ecb4d1cc3fc58c87a336267ca0db6f0d62568c22f231678c169c602575a`).
+The first connector attempt returned `invalid_request_state`; ledger and body
+readback proved it had not run before the successful retry. Fresh checks before
+installation confirmed the expected installed SQL, Edge versions and no active
+Bob jobs. The installed Supabase 2.117.0 CLI aborted with exit 134 before
+`migration new`; the source filename uses actual observed UTC.
+
+| Installed function | Exact body MD5 |
+| --- | --- |
+| `bob.bob_drawing_request` | `e8656ba61eff4801ecc78bde5741da70` |
+| `bob.bob_drawing_budget` | `27bf5c7ae2352909be24c9a20d411a8d` |
+| `bob_private.queue_drawing_events` | `dc420cab123bc2fc5df250308ec8c430` |
+
+Readback confirms fixed empty search paths, security-definer status and the
+existing service-only/private grants. All five legacy request delegates and the
+old read-side period helper are absent. The same rollback-only hosted probe now
+passes read purity, rejected premature reservation, rejected wrong scope,
+atomic save, exact replay and a late original-period receipt settled once.
+All fixture writes rolled back; no probe project remains.
+
+The protected request rows excluding `reason`, packets, current accounting and
+Artifacts retain their complete pre-install row-set digests. The existing bed
+request remains revision 9 / `retrieval_failed` with its original instruction,
+period, packet and source pin. Its proven contradiction is explicitly marked
+`drawing_continuation_mismatch`; installation chose no replacement instruction,
+credentials or construction version. No Bob jobs were active after verification.
+
+| Edge function | Installed state | Bundle SHA-256 |
+| --- | --- | --- |
+| `ask-bob` | 132 ACTIVE, JWT verification enabled | `ac20893b8e5df63ed384693d1d0e6ce8eb2a4b99d7d89c3fdd38d121ddb63d92` |
+| `bob-worker` | 100 ACTIVE, existing capability authentication / JWT verification disabled | `43f9cbd87ffb6c59d12284fbd00f12a2bcecd2470e82f8a3f15365c31a46f74c` |
+
+All **103 / 101** returned source files match the verified upload packages byte
+for byte. The bundler omits only the pre-existing type-only modules
+`src/data/provenance.ts` and, in the worker, `bob-request.ts`. Both endpoints
+returned **401** to unauthenticated POSTs. No AI catalog, prompt or model
+configuration was published by this correction.
+
+Documentation placement was reviewed manually using Archie's instructions.
+The hosted probe is privileged SQL evidence, not an ordinary-member drawing
+delivery. Ordinary owner/model/CAD acceptance remains in
+[State](bob-delivery-flow.md#state): continue the same bed request, check and
+explicitly adopt its current construction revision (last observed 5), then
+verify independent review, a saved drawing receipt and reload. Its retained
+source revision 3 was not silently replaced during installation.
