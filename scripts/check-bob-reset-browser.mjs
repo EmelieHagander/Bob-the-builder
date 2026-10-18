@@ -221,6 +221,7 @@ try {
     await page.locator('.account-project-row').filter({hasText:'Reset project A'}).getByRole('button',{name:'Open project Reset project A',exact:true}).click()
     let drawer = await open()
     await drawer.getByText('OLD ANSWER A', { exact: true }).waitFor()
+    if (touch) assert(await drawer.getByRole('button', { name: 'Close Ask bob', exact: true }).evaluate(node => node === document.activeElement), 'Opening a touch conversation does not raise the keyboard')
     await firstNotices
     await drawer.getByRole('textbox').fill('Visible before work status')
     assert(await drawer.getByRole('button', {name:'Send',exact:true}).isDisabled(), 'Fresh text is visible before status, but cannot authorize sending')
@@ -228,7 +229,6 @@ try {
     releaseNotices()
     await drawer.locator('button:enabled', {hasText:'New conversation'}).waitFor()
     await drawer.getByRole('textbox').fill('')
-    if (touch) assert(await drawer.getByRole('button', { name: 'Close Ask bob', exact: true }).evaluate(node => node === document.activeElement), 'Opening a touch conversation does not raise the keyboard')
     const box = await drawer.getByRole('button', { name: 'New conversation', exact: true }).boundingBox()
     assert(box && box.height >= 43.99 && box.width >= 44 && box.x >= 0 && box.x + box.width <= viewport.width, JSON.stringify({ box, viewport }))
     await drawer.getByRole('textbox').fill('KEEP DRAFT')
