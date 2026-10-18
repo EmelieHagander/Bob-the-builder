@@ -3624,7 +3624,7 @@ verify independent review, a saved drawing receipt and reload. Its retained
 source revision 3 was not silently replaced during installation.
 ## Memory pointer and repeated notice correction — 2026-10-18
 
-**Prepared correction; deployment and ordinary owner acceptance pending.**
+**Corrected and activated through [PR #273](https://github.com/EmelieHagander/Bob-the-builder/pull/273). Ordinary owner CAD delivery remains unverified.**
 The 17:37 UTC owner attempt failed before project/CAD work with
 `context_unavailable`. Its two successful `context-summary` provider responses
 both included sequence 49 (the current request) in the older-history pointer
@@ -3645,3 +3645,59 @@ database correction suppresses only consecutive identical terminal drawing
 notices for the same mandate, retaining each operational failure. It does not
 delete old chat or relax construction/source validation. Behavior belongs to
 [conversations](ask-bob-conversations.md#small-context-exact-sources).
+
+
+Source `74fac958828b2b0a8ce4fd7aec0f7bad3efe7fe4` passed
+[CI 39151343872](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39151343872):
+**1,532/1,532 tests**, Edge types, production build, vocabulary, PWA and all
+browser flows. The [concurrency run 39151343864](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39151343864)
+passed **85 PostgreSQL races**. The 37 distinct focused local cases cover the
+incident-shaped fold, exact catalog binding, existing paid replay, immutable
+catalog history and failure delivery boundaries. Merge
+`3be5d6d40e9c029e90e458986f764b3aaa390f6f` has the exact tested tree
+`0de120dce0ea2113f345d1a6a4b69179f02b824a`.
+
+Both complete source closures were deployed before catalog activation, with
+unchanged authentication:
+
+| Function | Active version | Bundle SHA-256 |
+| --- | --- | --- |
+| `ask-bob` | 134; JWT required | `30c3066238d0ae78ae40bfa6cdbce254c4772a5366eefecbf198ce039e088010` |
+| `bob-worker` | 102; existing private capability authentication | `e0dc42884c83bea1c84d17e2daf99498301e7eedf218465c5d7f8b79da1d3a52` |
+
+Readback matched every executable source byte across 102/100 returned files.
+The bundled type-only `cad-intake.ts` is empty after erasure; `provenance.ts`
+and the worker's type-only `bob-request.ts` are omitted as expected. There are
+no unexplained source differences.
+
+| Source migration | Hosted version / name | Statement SHA-256 |
+| --- | --- | --- |
+| `20261018174324_bob_memory_pointer_scope.sql` | `20261018181618 / bob_memory_pointer_scope` | `90b8a6ac982045becfcfb5937064234a7be54def26f427813bfe071f465beb3a` |
+| `20261018174325_bob_drawing_failure_notice.sql` | `20261018181623 / bob_drawing_failure_notice` | `b6fe0e2f6259dfbb1457ea4d76f713f6400276d260ca293f41920836911bad68` |
+
+Hosted readback confirms exactly two changed active catalog definitions among
+285, with all model/settings hashes unchanged. The live schema binds the incident
+allowlist `[38,41,42,43,44]` and excludes current message 49. The installed notice
+function body MD5 is `3c02514c074afa17cbbdb3d7fa4cfc29`; its private grant, security
+definer and empty search path are preserved.
+
+The same rollback-only hosted probe produced two consecutive notices before the
+fix and one afterward. All three synthetic failure events remained, and an
+intervening owner message received a fresh notice. Zero probe projects remained.
+Before/after hashes confirm the actual owner's request headers, private packets,
+budgets and entire transcript are unchanged. No owner message or CAD run was
+submitted by this investigation. Existing terminal failures may be explicitly
+retried as a new job with the active catalog; queued/running/paused jobs retain
+their pinned manifest. A new verified saved drawing and private long-conversation
+acceptance still require the owner's ordinary continuation.
+
+Post-merge [live verification 39153429837](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39153429837)
+passed with real Auth, member-scoped PostgREST, OpenAI calls, source disclosure,
+image bytes and versioned knowledge. It also verified nonmember rejection,
+the retired endpoint, guest history isolation and read-only natural-language
+advice. [Pages deployment 39153429844](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39153429844)
+succeeded. These probes do not establish the actual owner's private-memory or
+saved-drawing acceptance. After the ordinary caller removed the test image,
+the exact disposable release project was removed under identity, sole guest
+membership, no-thread and no-media guards. Readback found zero matching project,
+member, task, material or media rows; no real project was selected for cleanup.
