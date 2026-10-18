@@ -4,9 +4,11 @@ import {randomUUID} from 'node:crypto'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {createDrawingBudget} from '../supabase/functions/_shared/drawing-budget.ts'
 
+// Historical owner budget grants, before 20261018194500_bob_drawing_budget_removed.sql.
+const PRE_BUDGET_REMOVAL='20261018193000_bob_memory_gist_only.sql'
 const scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
 test('P2: request-wide reservations, replay, allocation and private results survive the right boundaries',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,PRE_BUDGET_REMOVAL);t.after(()=>pg.close())
  const owner=randomUUID(),other=randomUUID(),id=randomUUID(),turn=randomUUID()
  const call=async(uid:string|null,name:string,args:any[],role='authenticated'):Promise<any>=>
   (await asProjectUser(pg,uid,`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result

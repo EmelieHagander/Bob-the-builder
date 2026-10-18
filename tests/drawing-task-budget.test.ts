@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 
+// Historical owner budget grants, before 20261018194500_bob_drawing_budget_removed.sql.
+const PRE_BUDGET_REMOVAL='20261018193000_bob_memory_gist_only.sql'
 const scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
 const paid=(cost:number)=>({success:true,data:'Retained result',model:'fixture',usage:{total_tokens:2},estimatedCostUsd:cost})
 
@@ -36,7 +38,7 @@ test('upgrade keeps the existing request-wide ledger; the next real message star
 })
 
 test('one owner task shares its cap across requests; the next message fully resets and retains work/accounting',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,PRE_BUDGET_REMOVAL);t.after(()=>pg.close())
  const owner=randomUUID(),other=randomUUID(),id=randomUUID(),second=randomUUID(),turn=randomUUID(),execution=randomUUID()
  const call=async(uid:string|null,name:string,args:unknown[],role='authenticated'):Promise<any>=>(await asProjectUser(pg,uid,`select bob.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args,role)).rows[0].result
  const service=(name:string,args:unknown[])=>call(null,name,args,'service_role')

@@ -29,7 +29,7 @@ try{
   const grouped=step('30000000-0000-4000-8000-000000000002','Floor','kitchen','design')
   const tasks=[{id:'cut',project_id:'P',primary_step_id:root.id,area_id:null,name:'Cut panels',status:'doing',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'Follow the saved cutting list',updated_at:'2026-09-24T00:00:00Z'},
    {id:'legacy',project_id:'P',primary_step_id:null,area_id:'kitchen',name:'Inspect existing floor',status:'done',skill:'novice',hours:'1h',materials:'0 / 0',task_assignees:[],instructions:'',updated_at:'2026-09-24T00:00:00Z'}]
-  let creates=0,reads=0,requestsVisible=false,grants=0,grantId=null,cancels=0,contextFailures=0
+  let creates=0,reads=0,requestsVisible=false,cancels=0,contextFailures=0
   const sentScreens=[]
   const requestWork={request:{id:'40000000-0000-4000-8000-000000000001',revision:3,status:'needs_data',reason:null,artifact_id:null,artifact_revision:null,scope:{step_id:root.id}},gaps:[
    {id:'50000000-0000-4000-8000-000000000002',action:'prerequisite',blocking:true,observed_revision:3,task_id:null,task_name:null,label:'Inspect floor before placing drawers',owner_label:null,step_title:grouped.title,area_id:'kitchen',step_id:grouped.id},
@@ -72,11 +72,6 @@ try{
     root.tasks=tasks.filter(t=>t.primary_step_id===root.id)
     grouped.related_tasks=[root.tasks[0]]
     return respond({project_id:'P',vocabulary_version:'2026-09-24.1',status:'approved',revision:1,focus_step_id:grouped.id,areas:[area],steps:[root,grouped],unorganised_tasks:tasks.filter(t=>!t.primary_step_id)})
-   }
-   if(path==='/rest/v1/rpc/grant_drawing_budget'){
-    const b=req.postDataJSON();assert.equal(b.p_project,'P');assert.equal(b.p_id,requestWork.request.id);assert.equal(b.p_expected,1)
-    if(!grantId){grantId=b.p_grant;grants++;requestWork.budget={...requestWork.budget,revision:2,call_limit:48,usd_limit:2};return respond({error:'lost_response'},503)}
-    assert.equal(b.p_grant,grantId,'retry keeps the allocation idempotency key');return respond({revision:2})
    }
    if(path==='/rest/v1/rpc/cancel_drawing_request'){
     const b=req.postDataJSON();assert.equal(b.p_expected,3);cancels++;requestWork.request.status='cancelled';requestWork.request.revision++;requestWork.resume_state='cancelled';return respond({status:'cancelled',revision:4})
@@ -164,20 +159,16 @@ try{
   await page.goto(base+'#/?step='+encodeURIComponent(root.id))
   await page.waitForURL('**/#/project?step='+encodeURIComponent(root.id))
   await page.getByRole('region',{name:'Project plan',exact:true}).waitFor()
-  await requests.getByRole('button',{name:'Add request budget',exact:true}).click()
-  const budgetDialog=page.getByRole('dialog',{name:'Add request budget',exact:true})
-  assert.equal(grants,0,'opening the budget decision never spends money')
-  await budgetDialog.getByRole('button',{name:'Add $1 / 24 calls',exact:true}).click()
-  await budgetDialog.getByRole('alert').waitFor()
-  await budgetDialog.getByRole('button',{name:'Add $1 / 24 calls',exact:true}).click()
-  await budgetDialog.waitFor({state:'hidden'});assert.equal(grants,1)
-  await requests.getByText('24 / 48 calls · $0.35 / $2.00',{exact:true}).waitFor()
+  // Drawing work has no budget (owner decision 2026-10-18): even an old exhausted
+  // allocation shows only its cost log, with no top-up and no limit message.
+  await requests.getByText('24 calls · $0.35',{exact:true}).waitFor()
+  assert.equal(await requests.getByRole('button',{name:'Add request budget',exact:true}).count(),0,'No budget top-up exists')
+  assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Old allocations do not imply a work limit')
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'Requests fit mobile viewport')
   await page.screenshot({animations:'disabled',path:`test-results/drawing-requests-${width}.png`,fullPage:true})
   requestWork.budget={...requestWork.budget,unlimited_work:true,calls:64,spent_usd:14.50}
   await page.reload()
   await requests.getByText('64 calls · $14.50',{exact:true}).waitFor()
-  assert.equal(await requests.getByRole('button',{name:'Add request budget',exact:true}).count(),0,'Unlimited work offers no budget top-up')
   assert.equal(await requests.getByText('The request has reached its cost or call limit.',{exact:true}).count(),0,'Historical totals do not imply a current work limit')
   await page.screenshot({animations:'disabled',path:`test-results/drawing-requests-unlimited-${width}.png`,fullPage:true})
   const drawer=page.getByRole('complementary',{name:'Ask bob for Build together'})

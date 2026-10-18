@@ -2226,9 +2226,3 @@ export async function cancelDrawingRequest(projectId:string,id:string,revision:n
  const {error}=await db.rpc('cancel_drawing_request',{p_project:projectId,p_id:id,p_expected:revision})
  guard();if(error)throw new Error('The request changed or cannot be cancelled. Refresh its status.')
 }
-export async function grantDrawingBudget(projectId:string,id:string,revision:number,grantId:string){
- const guard=captureFileContext(projectId);guard()
- if(!db)throw new Error('Open a connected project.')
- const {error}=await db.rpc('grant_drawing_budget',{p_project:projectId,p_id:id,p_expected:revision,p_grant:grantId})
- guard();if(error)throw new Error('The budget could not be extended. Refresh the request; uncertain charges must be reconciled first.')
-}
