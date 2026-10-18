@@ -52,7 +52,9 @@ async function fixture(){
 test('read then interrupted new message leaves packet, period and background authority on the last successful save',async()=>{
  const f=await fixture(),old=await f.state(),originalManifest=f.manifest
  await f.finish();await f.start()
- assert.deepEqual((await f.load()).payload,f.payload)
+ const read=await f.load()
+ assert.equal(read.continuation_required,true)
+ assert.deepEqual(read.payload,f.payload)
  assert.deepEqual(await f.state(),old,'load must have no ownership, revision or accounting side effects')
  await assert.rejects(f.budget('reserve','a'.repeat(64)),/drawing_continuation_mismatch/)
  await f.finish()

@@ -53,15 +53,16 @@ test('unavailable infrastructure and revoked authority spend no model/render ope
  const unavailable=fixture({available:false});assert.equal((await unavailable.assistant.consult(request)).stage,'cad_engine');assert.equal(unavailable.counts().models,0);assert.equal(unavailable.counts().renders,0)
  const denied=fixture({hasAccess:async()=>false});await assert.rejects(denied.assistant.consult(request),/project_denied/);assert.deepEqual(denied.counts(),{reads:0,models:0,renders:0})
 })
-test('an older unbound request can bind its first checked source once, retaining the request and original requirements',async()=>{
+test('an older unbound request cannot silently acquire a construction source',async()=>{
  const id='33333333-3333-4333-8333-333333333333'
  let row:any={id,revision:1,status:'draft',payload:{brief:{...request,artifact_id:null,construction_revision:null},owner_request:request.brief,reference_refs:[]}}
  const f=fixture({requestStore:{load:async()=>structuredClone(row),save:async(key:any,expected:number,status:string,payload:any)=>{assert.equal(key,id);assert.equal(expected,row.revision);row={id,revision:expected+1,status,payload:structuredClone(payload)};return structuredClone(row)}}})
+ const before=structuredClone(row)
  const out=await f.assistant.consult({...request,request_id:id,handoff:null})
- assert.equal(out.status,'ready');assert.equal(out.request_id,id);assert.equal(row.payload.brief.artifact_id,fixtureConstructionId);assert.equal(row.payload.brief.construction_revision,1)
- assert.deepEqual(row.payload.brief.handoff.requirements,handoff.requirements)
+ assert.equal(out.status,'recovery_required');assert.equal(out.reason,'drawing_scope_changed');assert.equal(out.request_id,id)
+ assert.deepEqual(row,before);assert.equal(f.counts().models,0)
  const changed=await f.assistant.consult({...request,request_id:id,handoff:null,artifact_id:'22222222-2222-4222-8222-222222222222'})
- assert.equal(changed.reason,'drawing_scope_changed');assert.equal(f.counts().renders,1)
+ assert.equal(changed.reason,'drawing_scope_changed');assert.equal(f.counts().renders,0)
 })
 
 test('unlimited CAD work permits more consultations and lifecycle reads while retaining access and terminal stops',async()=>{

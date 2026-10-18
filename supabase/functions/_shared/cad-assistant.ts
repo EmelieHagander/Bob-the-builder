@@ -120,11 +120,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
    if(request.status==='cancelled'||request.status==='paused')return {status:request.status==='cancelled'?'cancelled':'recovery_required',saved:false,request_id:request.id,revision:request.revision,reason:request.reason,
     next_action:request.status==='cancelled'?catalogText("feedback.cad-assistant.next-action.bb0c45185974"):catalogText("feedback.cad-assistant.next-action.2d11b91ea601")}
    const scope=Object.fromEntries(['area_id','component_id','step_id','artifact_id'].map(key=>[key,request!.payload.brief[key]??null]))
-   // An older unbound request may establish its first mandatory source. The
-   // source identity stays fixed; an explicit newer revision must pass the
-   // current construction/readiness checks before replacing its old pin.
-   if(scope.artifact_id===null&&uuid(raw.artifact_id)&&request.payload.brief.construction_revision==null
-    &&(!object(request.payload.draft)||!request.payload.draft.construction))scope.artifact_id=raw.artifact_id
+   // Source identity is fixed. A newer revision of that same construction
+   // must pass current checks before replacing the saved pin.
    for(const key of Object.keys(scope))raw[key]??=scope[key]
    if(Object.keys(scope).some(key=>raw[key]!==scope[key]))return {
     status:'recovery_required',reason:'drawing_scope_changed',saved:false,request_id:request.id,scope,
@@ -143,8 +140,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
   if(raw.construction_revision!=null&&(!Number.isSafeInteger(raw.construction_revision)||raw.construction_revision<1||raw.construction_revision>999999999))return {status:'invalid',stage:'construction',saved:false,reason:'invalid_construction_revision'}
   if(raw.construction_revision!=null&&!uuid(raw.artifact_id))return {status:'invalid',stage:'construction',saved:false,reason:'construction_source_required'}
   if(!opts.unlimitedWork&&used>=2)return {status:'budget_exhausted',saved:false}
-  // Loading the claimed owner's new task opens its fresh SQL budget period.
-  // Replays and automatic continuations retain the same period; no top-up.
+  // Reads retain the saved owner binding. Only a successful checkpoint adopts
+  // the claimed instruction and its accounting period; automatic work cannot.
   const earlier=request?parseDesignHandoff(request.payload.brief.handoff):null
   if(request&&!earlier)return {status:'recovery_required',saved:false,request_id:request.id,reason:'saved_handoff_unavailable'}
   const prepared=await prepareDesignHandoff(raw.handoff,earlier,raw.requirement_changes??[],!!request?.payload.restoration)
@@ -455,6 +452,12 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;allowSourceR
    await dependencies.refresh(executeRead)
    retryInputs={evidence:{construction:ready.draft,check:ready.checked,current_target:selected,design_intent:readiness.pin,artifact_revision:expected},images:{refs:payload.reference_refs,versions:[...(opts.context?.imageEvidence?.()??new Map())].sort(([a],[b])=>a.localeCompare(b))}}
    const currentFingerprint=await retryFingerprint()
+   if(request?.continuation_required&&request.payload.retry?.fingerprint===currentFingerprint&&opts.requestStore){
+    // A new owner instruction must commit its binding before reusing a stop.
+    // SQL releases only a prior cost stop. Preserve quality evidence verbatim;
+    // an unchanged rejected candidate still cannot render or buy another review.
+    request=await opts.requestStore.save(request.id,request.revision,request.status,{...request.payload,owner_request:ownerRequest})
+   }
    if(request?.payload.retry?.fingerprint===currentFingerprint)return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
     next_action:catalogText("feedback.cad-assistant.next-action.d7dc5f3db6a2")}
    used++;metrics.consultations++

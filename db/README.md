@@ -755,7 +755,10 @@ Release order: review the exact tree and pass SQL, Edge, browser and real Postgr
 and request locks cover packet CAS, period archival, origin turn, observed event
 and the exact running job's sealed authority in one transaction. A failed save
 rolls everything back; load/list and model reservations cannot move ownership.
-Exact write receipts are bound to their original turn. Ambiguous executions,
+Read-only `continuation_required` metadata lets CAD checkpoint the retained
+packet before reusing an unchanged stop. Only a former cost stop is released;
+quality evidence and its no-new-attempt guard survive. Exact write receipts are
+bound to their original turn. Ambiguous executions,
 changed scope, mismatched packets and archived turns fail with explicit codes.
 
 The canonical request function replaces and drops all five `before_*` delegates

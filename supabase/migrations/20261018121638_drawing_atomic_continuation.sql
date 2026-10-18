@@ -54,7 +54,9 @@ begin
    raise exception 'drawing_packet_mismatch' using errcode='PT409';
   end if;
   if packet.revision<>r.revision then raise exception 'drawing_packet_mismatch' using errcode='PT409'; end if;
-  return jsonb_build_object('id',packet.id,'revision',packet.revision,'status',packet.status,'payload',packet.payload,'receipt',packet.saved_receipt);
+  return jsonb_build_object('id',packet.id,'revision',packet.revision,'status',packet.status,'payload',packet.payload,'receipt',packet.saved_receipt)
+   ||case when r.origin_turn_id is distinct from p_turn or not exists(select 1 from bob_private.drawing_budgets where request_id=p_id and turn_id=p_turn)
+    then jsonb_build_object('continuation_required',true) else '{}'::jsonb end;
  end if;
  if r.status='cancelled' then raise exception 'drawing_request_cancelled' using errcode='40001'; end if;
  if r.status='saved' then raise exception 'drawing_request_complete' using errcode='40001'; end if;
