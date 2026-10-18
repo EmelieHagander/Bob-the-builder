@@ -5,7 +5,7 @@ import type { ProjectEdits } from '../project-edits.ts'
 import type { ConstructionTools } from '../construction-draft.ts'
 import type { AiCatalogSession } from '../ai-catalog.ts'
 import type { OrientationDirectoryReader } from '../bob-orientation-directory.ts'
-import { bobColleagues } from '../bob-prompt.ts'
+import { bobColleagues, bobWorkflows } from '../bob-prompt.ts'
 import { hasCalculatorContract, type ProjectCalculator } from '../project-calculator.ts'
 import type { OperationalReader } from '../project-operations.ts'
 import type { KnowledgeReader } from '../building-knowledge.ts'
@@ -158,7 +158,8 @@ export function createBobToolSession(opts: {
   ]
   return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions,
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => opts.aiCatalog!.tool(name, parameters),
-      ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]) } : {}),
+      ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
+        catalogWorkflows: () => bobWorkflows(opts.aiCatalog!) } : {}),
       feedback: (key, variables) => opts.aiCatalog!.text('tools.feedback.' + key, variables),
       catalogToolVersion: name => {
         const version = (opts.aiCatalog!.definition('tools.' + name, 'tool_contract').definition.envelope as { schema_version?: unknown })?.schema_version

@@ -57,6 +57,20 @@ requested together. A waiting capability can be explained but cannot run until i
 prerequisite is satisfied. Hidden/disabled capabilities reveal neither a card nor a
 manual. Loading instructions grants no permission and performs no project mutation.
 
+**Workflows and judgement (2026-10-18, catalog publication `bob-workflows-judgement-v1`).**
+After the cut to short cards Bob lost the working method that used to sit in the
+base prompt and spent many steps opening manuals one by one. The catalog
+definition `bob.workflows` now lists a few workflow cards (construction drawing,
+living plan, tasks, facts and site, materials, solutions and description, images)
+under the toolbox intro. `describe_tool` with a workflow name returns that
+workflow's method and makes all its available member tools callable on the next
+step; each member keeps its own policy, gate and version checks, and single-tool
+manuals stay available. A workflow lists only tools Bob can already see.
+`bob.context-principles` gained one judgement paragraph (picture the result
+finished and in use; parts join, mirrored parts match; compare with mockups; fix
+causes in the saved source). Methods describe judgement, never magic words.
+Manifests pinned before this publication show no workflows.
+
 Live policy, membership, source revisions, prerequisites and the prepared-call fence
 are still checked at execution. Bob and specialist context renewal unloads detailed schemas
 and refreshes the prepared-call fence before its first fresh provider request;
