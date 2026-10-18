@@ -1,5 +1,35 @@
 # Foundation verification and rollout
 
+## Managed conversation memory — 2026-10-17
+
+The owner turn `3982c23a-3dd9-4202-9fef-3ed52c515b0f` failed at
+21:36:31Z before main Bob or CAD started. The stored brief covered sequences
+1–39; the next older batch was 40–41 and T1 was 42–46. Both completed summary
+calls returned pointers 1–40, omitting 41. Coverage validation preserved the old
+watermark and returned `context_unavailable`; it did not lose the transcript.
+
+The local reproduction uses the same 39+2 boundary. New executions let code
+reserve all new references and fit optional older hints within the existing
+40-entry/12,000-character brief; the model still maintains the semantic gist.
+[The conversation contract](ask-bob-conversations.md#managed-memory-navigation--2026-10-17)
+owns exact five-message input, searchable original history and legacy replay.
+Independent subagent review found no blocking defect. Focused regressions cover
+repeated rollover, exact original-history SQL search and private-thread isolation,
+invalid references, serialized-size pressure and replay without another paid call.
+Hosted release/readback and the ordinary owner acceptance remain pending.
+
+A separate full-schema SQL reproduction found an automatic drawing failure:
+loading a request from a later owner turn opens a new budget period, but a failure
+before save leaves the original turn/credential binding. The dispatcher then
+continues the old turn and `load` throws `drawing_budget_period_closed`, masked as
+`drawing_request_unavailable` and then `background_failed`. Live metadata for
+request `4d7de67b-ed9b-4249-9873-a5c776207824` confirms origin
+`a880362c-43cc-4561-86fc-7e7f108d348d`, current period 2 on
+`d94d90b6-6675-40b4-b754-e2fc8e043608`, and the origin period archived.
+The historical job's exact exception was not retained; matching live state plus
+the local reproduction explains the failure path without claiming a saved trace.
+The memory change does not modify this SQL transition or repair owner data.
+
 ## K0 construction boundaries — 2026-10-02
 
 **K0 correction deployed through [PR #183](https://github.com/EmelieHagander/Bob-the-builder/pull/183).** Baseline `50116033c744f7695830657c56538ac447b1527b`;

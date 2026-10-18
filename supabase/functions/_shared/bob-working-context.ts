@@ -2,7 +2,7 @@ import type { ModelCall } from './project-answer.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
-import { checkedBrief, readStoredBrief, BRIEF_LIMITS, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
+import { checkedBrief, manageConversationBrief, readStoredBrief, BRIEF_LIMITS, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
 
 export interface ContextMessage { seq: number; role: 'user' | 'assistant'; text: string; state: 'pending' | 'completed' | 'failed' }
 export interface ContextFrame {
@@ -70,6 +70,8 @@ function frame(value: unknown, binding: { projectId: string; threadId: string; g
 export async function prepareWorkingContext(opts: {
   projectId: string; userId: string; threadId: string; generation: number; message: string;
   store: ContextStore; callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number; unlimitedWork?: boolean;
+  /** Pinned in the durable execution identity; old journals retain their folds. */
+  memoryManagementVersion?: 1;
 }): Promise<WorkingContext> {
   const load = async () => {
     if (!await opts.hasAccess()) throw new Error('project_denied')
@@ -92,7 +94,9 @@ export async function prepareWorkingContext(opts: {
       })
       if (!response.success || response.toolCalls?.length) throw new Error(response.error==='turn_budget_exhausted'?'turn_budget_exhausted':'context_unavailable')
       try {
-        const candidate = checkedBrief(response.data, state.foldThroughSeq, BRIEF_LIMITS.gist)
+        const candidate = opts.memoryManagementVersion === 1
+          ? manageConversationBrief(response.data, previousBrief, state.older, state.foldThroughSeq)
+          : checkedBrief(response.data, state.foldThroughSeq, BRIEF_LIMITS.gist)
         if (candidate.index.some(e => !known.has(e.seq)) || state.older.some(m => !candidate.index.some(e => e.seq === m.seq))) throw new InvalidConversationBrief('coverage')
         brief = candidate
         break
