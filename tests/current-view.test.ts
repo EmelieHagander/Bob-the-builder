@@ -4,7 +4,7 @@ import { BOB_SCREEN_SURFACES, parseBobScreen, type BobScreenPointer } from '../s
 import { createCurrentViewReader, hydrateCurrentView, contextChanged, type CurrentViewReader, type CurrentViewClient } from '../supabase/functions/_shared/current-view.ts'
 import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { readFile, readdir } from 'node:fs/promises'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 
 function fixture(overrides: Partial<CurrentViewReader> = {}) {

@@ -16,9 +16,12 @@ const quote='Update the existing work and its links. Create the requested new wo
 const set=(path:string,value:unknown)=>({op:'set',path,value_json:JSON.stringify(value)})
 const nativeSet=(path:string,value:unknown)=>({op:'set',path,value})
 const currentWorkPolicy=async()=>{const policy=await seedToolPolicy();return{...policy,tools:policy.tools.map(row=>(WORK_VALUE_TOOL_NAMES as readonly string[]).includes(row.name)?{...row,schema_version:2}:row)}}
-let pg:Awaited<ReturnType<typeof projectSchema>>,thread:string,turn:string,generation:number,beforeCatalog:any
+let pg:Awaited<ReturnType<typeof projectSchema>>,thread:string,turn:string,generation:number,beforeCatalog:any,publishedCatalog:any
 before(async()=>{
- pg=await projectSchema(async(db,name)=>{if(name.endsWith('_ai_work_records_catalog.sql'))beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m})
+ pg=await projectSchema(async(db,name)=>{
+  if(name.endsWith('_ai_work_records_catalog.sql'))beforeCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
+  else if(beforeCatalog&&!publishedCatalog)publishedCatalog=(await db.query<any>("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
+ })
  await pg.query('insert into auth.users values($1,$2,now()),($3,$4,now())',[uid,'owner@example.test',other,'other@example.test'])
  await pg.exec("insert into bob.projects(id,slug,name) values('A','a','Project A'),('B','b','Project B');insert into bob.areas(id,project_id,slug,name,description) values('areaA','A','area-a','Assembly','Existing Area description'),('areaB','B','area-b','Private Area','Do not read');insert into bob.tasks(id,project_id,area_id,name,instructions) values('taskA','A','areaA','Assemble panel','Existing instructions'),('taskA2','A','areaA','Finish panel','Keep these'),('taskB','B','areaB','Private task','Private')")
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('oneA','A','Owner','OA',$1),('twoA','A','Helper','HA',null),('otherB','B','Other','OB',$2)",[uid,other])
@@ -154,7 +157,10 @@ test('Area archive/restore and build day deletion use bound records and preserve
 test('new contracts activate together without rewriting older manifests or model settings',async()=>{
  const live:any=(await pg.query("select shared.resolve_ai_catalog('bob',null) m")).rows[0].m
  assert.deepEqual((await pg.query("select shared.resolve_ai_catalog('bob',$1) m",[beforeCatalog.manifest_id])).rows[0].m,beforeCatalog)
- assert.deepEqual(live.models,beforeCatalog.models)
+ // Keep this release's model invariant at its boundary; runtime checks below use every migration.
+ assert.ok(publishedCatalog)
+ assert.deepEqual(publishedCatalog.models,beforeCatalog.models)
+ assert.deepEqual((await pg.query("select shared.resolve_ai_catalog('bob',$1) m",[publishedCatalog.manifest_id])).rows[0].m,publishedCatalog)
  for(const spec of WORK_RECORD_TOOLS){const row=live.definitions.find((r:any)=>r.prompt_key==='tools.'+spec.function.name),expected=row.definition.envelope.schema_version===2?WORK_RECORD_TOOLS_V2.find(t=>t.function.name===spec.function.name)!:spec;assert.deepEqual(row.definition.parameters,expected.function.parameters);assert.ok(!catalogFixture().tool(spec.function.name,{server_quote:true}).function.parameters.required.includes('request_quote'))}
  const{tools,writer}=setup(),lookup=createProjectLookup('A',async()=>({data:{records:[],related:[],truncated:false},error:null}))
  const fresh=createBobToolSession({aiCatalog:catalogFixture(),message:quote,lookup,writer,workRecords:tools,readPolicy:currentWorkPolicy})

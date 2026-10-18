@@ -30,6 +30,10 @@ export async function setupSharedSocial(pg: Pick<PGlite, 'exec'>) {
       values('gpt-5.4','standard',true),('gpt-5.4-mini','mini',true),('gpt-5.4-nano','nano',true);
     insert into shared.ai_models(model_name,model_type,is_current_for_type,supports_image_output,supports_reasoning,supports_images,supports_json_schema)
       values('gpt-image-2','image',true,true,false,false,false);
+    -- Existing hosted embedding row; activation supplies adapter capabilities,
+    -- while preserving this independently managed model and price inventory.
+    insert into shared.ai_models(model_name,model_type,is_current_for_type,max_output_tokens,supports_image_output,supports_reasoning,supports_images,supports_json_schema,input_cost_per_1m_tokens,output_cost_per_1m_tokens)
+      values('text-embedding-3-small','embedding',true,1,false,false,false,false,.02,0);
     create table shared.ai_prompts(
       id uuid primary key default gen_random_uuid(),
       app text not null,

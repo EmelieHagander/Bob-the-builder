@@ -1,7 +1,7 @@
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 
 // Real SQL, including storage-level guards. These are not model-response fixtures.

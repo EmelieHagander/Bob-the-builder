@@ -1,7 +1,15 @@
+import { CONTEXT_TOKEN_ENCODING, countSerializedTokens } from './bob-token-budget.ts'
+
 /** Conversation memory: a narrative plus pointers to exact private transcript
  * messages. Current project/action state is delivered separately, never folded. */
 export interface ConversationBrief { gist: string; index: { seq: number; descriptor: string }[] }
 export const BRIEF_LIMITS = { characters: 12000, gist: 6000, entries: 40, descriptor: 200 } as const
+/** V1 keeps its character-based replay contract. V2 bounds the entire serialized
+ * memory, including its references, using the active model-family encoding. */
+export const BRIEF_TOKEN_POLICY = {
+  version: 2, encoding: CONTEXT_TOKEN_ENCODING, targetTokens: { min: 800, max: 1200 }, maxTokens: 1600,
+  maxCharacters: BRIEF_LIMITS.characters, maxEntries: BRIEF_LIMITS.entries, maxDescriptorCharacters: BRIEF_LIMITS.descriptor,
+} as const
 export class InvalidConversationBrief extends Error {
   constructor(readonly reason: 'shape' | 'size' | 'pointers' | 'coverage') { super('context_unavailable') }
 }
@@ -64,6 +72,24 @@ export function manageConversationBrief(value: unknown, previous: ConversationBr
     if (briefCharacters(brief) > BRIEF_LIMITS.characters) brief.index.pop()
   }
   return checkedBrief(brief, through, BRIEF_LIMITS.gist)
+}
+
+/** The assistant may rewrite the whole brief and omit any old or new pointer.
+ * Coverage belongs to the persisted fold cursor, not an ever-growing list of
+ * message hints. A rejected candidate is repaired as a whole, never sliced or
+ * silently stripped of references to meet the token limit. */
+export function manageConversationBriefV2(value: unknown, previous: ConversationBrief,
+  older: readonly { seq: number }[], through: number): ConversationBrief {
+  const brief = checkedBrief(value, through)
+  const available = new Set([...previous.index.map(entry => entry.seq), ...older.map(message => message.seq)])
+  if (brief.index.some(entry => !available.has(entry.seq))) throw new InvalidConversationBrief('coverage')
+  if (countSerializedTokens(brief) > BRIEF_TOKEN_POLICY.maxTokens) throw new InvalidConversationBrief('size')
+  return brief
+}
+
+export function briefFitsTokenBudget(brief: ConversationBrief): boolean {
+  return briefCharacters(brief) <= BRIEF_TOKEN_POLICY.maxCharacters
+    && countSerializedTokens(brief) <= BRIEF_TOKEN_POLICY.maxTokens
 }
 export function readStoredBrief(summary: string, through: number): ConversationBrief {
   // Existing plain-text summaries remain readable until the next incremental fold.

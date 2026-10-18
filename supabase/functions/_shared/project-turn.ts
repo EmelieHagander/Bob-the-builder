@@ -12,10 +12,11 @@ import type { RecordDetailReader } from './project-record-detail.ts'
 import type { ProjectImageTools } from './project-image-tools.ts'
 import { type CadAssistant } from './cad-assistant.ts'
 import type { MaterialCatalogReader } from './material-catalog.ts'
-import type { ToolPolicyReader } from './project-tools/session.ts'
+import type { ToolPolicyReader, ToolInstructions } from './project-tools/session.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { createPlanAssistant } from './plan-assistant.ts'
 import type { WorkingContext } from './bob-working-context.ts'
+import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { runProjectAnswer, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
@@ -34,6 +35,8 @@ export async function runClaimedProjectTurn(opts: {
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
+  toolInstructions?: ToolInstructions; contextEpoch?: () => number;
+  registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
@@ -55,7 +58,7 @@ export async function runClaimedProjectTurn(opts: {
   } catch (error) {
     rethrowContinuation(error)
     const code = error instanceof Error ? error.message : ''
-    result = { ok: false, error: ['context_preparing', 'context_unavailable', 'project_denied', 'tool_catalog_unavailable', 'turn_budget_exhausted'].includes(code) ? code : 'ai_unavailable' }
+    result = { ok: false, error: ['context_preparing', 'context_unavailable', 'context_input_too_large', 'project_denied', 'tool_catalog_unavailable', 'turn_budget_exhausted'].includes(code) ? code : 'ai_unavailable' }
   }
   // A verified local failure notice needs no provider cursor. It must survive
   // settlement/commit without replacing prior writes or buying a new reply.

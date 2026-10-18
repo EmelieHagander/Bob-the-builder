@@ -34,7 +34,7 @@ export interface AiFunctionTool {
 export interface ResolvedAiRole {
   app: string; manifestId: string; roleKey: string; roleVersionId: string;
   profileVersionId: string; tierVersionId: string; tier: AiTier;
-  model: AiCatalogModel; providerAdapter: 'openai-responses-v1' | 'openai-images-v1';
+  model: AiCatalogModel; providerAdapter: 'openai-responses-v1' | 'openai-images-v1' | 'openai-embeddings-v1';
   reasoningEffort: string | null; maxOutputTokens: number; timeoutMs?: number;
   /** Server-derived from this Bob turn's immutable contract, absent on legacy roles. */
   unlimitedWork?: true;
@@ -51,9 +51,10 @@ const string = (value: unknown): value is string => typeof value === 'string' &&
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 function fail(code: string, detail?: string): never { throw new AiCatalogError(code, detail) }
 function validateProviderParameters(params: unknown, adapter: string): JsonObject {
-  const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : ['temperature','top_p','parallel_tool_calls','verbosity']
+  const allowed = adapter === 'openai-images-v1' ? ['size','quality'] : adapter === 'openai-embeddings-v1' ? ['dimensions'] : ['temperature','top_p','parallel_tool_calls','verbosity']
   if (!object(params) || Object.keys(params).some(name => !allowed.includes(name))) fail('ai_profile_incompatible','provider parameters')
   if (adapter === 'openai-images-v1' && (params.size === undefined || params.quality === undefined)) fail('ai_profile_incompatible','image profile parameters')
+  if (adapter === 'openai-embeddings-v1' && (!Number.isSafeInteger(params.dimensions) || Number(params.dimensions) < 1)) fail('ai_profile_incompatible','embedding dimensions')
   if (params.temperature !== undefined && (!finite(params.temperature) || params.temperature < 0 || params.temperature > 2)) fail('ai_profile_incompatible','temperature')
   if (params.top_p !== undefined && (!finite(params.top_p) || params.top_p < 0 || params.top_p > 1)) fail('ai_profile_incompatible','top_p')
   if (params.parallel_tool_calls !== undefined && typeof params.parallel_tool_calls !== 'boolean') fail('ai_profile_incompatible','parallel tools')
@@ -224,25 +225,29 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       const binding = bindings[0], model = manifest().models.find(m => m.model_name === binding.definition.model_name)
       if (!model) fail('ai_tier_unavailable',tier)
       const adapter = model.capabilities.provider_adapter
-      if (model.provider !== 'openai' || (adapter !== 'openai-responses-v1' && adapter !== 'openai-images-v1')) fail('ai_profile_incompatible','provider adapter')
-      if ((tier === 'image') !== (adapter === 'openai-images-v1') || (tier === 'image' && !model.supports_image_output)) fail('ai_profile_incompatible','model class')
+      if (model.provider !== 'openai' || (adapter !== 'openai-responses-v1' && adapter !== 'openai-images-v1' && adapter !== 'openai-embeddings-v1')) fail('ai_profile_incompatible','provider adapter')
+      const embedding = adapter === 'openai-embeddings-v1'
+      if ((tier === 'image') !== (adapter === 'openai-images-v1') || (tier === 'image' && !model.supports_image_output) || (tier === 'embedding') !== embedding) fail('ai_profile_incompatible','model class')
       const effort = config.reasoning_effort ?? null
+      if (embedding && effort !== null) fail('ai_profile_incompatible','embedding reasoning')
       if (effort !== null && (!string(effort) || !model.supports_reasoning || !Array.isArray(model.capabilities.reasoning_efforts) || !model.capabilities.reasoning_efforts.includes(effort))) fail('ai_profile_incompatible','reasoning effort')
-      const limit = config.max_output_tokens
-      if (!finite(limit) || !Number.isInteger(limit) || limit < 1 || limit > model.max_output_tokens) fail('ai_profile_incompatible','output limit')
+      const limit = embedding ? 0 : config.max_output_tokens
+      if (embedding ? config.max_output_tokens !== undefined && config.max_output_tokens !== 0 : !finite(limit) || !Number.isInteger(limit) || limit < 1 || limit > model.max_output_tokens) fail('ai_profile_incompatible','output limit')
       const requirements = object(config.requirements) ? config.requirements : {}
       if (requirements.images && !model.supports_images || requirements.functions && model.capabilities.supports_functions !== true || requirements.json_schema && model.capabilities.supports_json_schema !== true) fail('ai_profile_incompatible','capability')
       const promptKeys = refs(body.prompt_keys,'ai_prompt_missing')
-      if (!promptKeys.length) fail('ai_prompt_missing',key)
+      if (!embedding && !promptKeys.length) fail('ai_prompt_missing',key)
+      if (embedding && promptKeys.length) fail('ai_profile_incompatible','embedding prompt')
       const systemMessage = promptKeys.map(promptKey => session.text(promptKey,variables)).filter(Boolean).join('\n\n')
-      if (!systemMessage.trim()) fail('ai_prompt_missing',key)
+      if (!embedding && !systemMessage.trim()) fail('ai_prompt_missing',key)
       if (body.contract_key) definition(String(body.contract_key),'agent_contract')
       for (const method of refs(body.method_keys)) definition(method)
       for (const tool of refs(body.tool_keys)) definition(tool,'tool_contract')
       const params = validateProviderParameters(config.provider_parameters ?? {},adapter)
+      if (embedding && (model.capabilities.supports_embedding_dimensions !== true || !Number.isSafeInteger(model.capabilities.max_embedding_dimensions) || Number(params.dimensions) > Number(model.capabilities.max_embedding_dimensions) || !Number.isSafeInteger(model.capabilities.max_batch_inputs) || Number(model.capabilities.max_batch_inputs) < 1)) fail('ai_profile_incompatible','embedding capability')
       if (config.timeout_ms !== undefined && (!finite(config.timeout_ms) || config.timeout_ms <= 0)) fail('ai_profile_incompatible','timeout')
       return freeze({ app: options.app, manifestId: manifest().manifest_id, roleKey: row.prompt_key, roleVersionId: row.id, profileVersionId: profile.id, tierVersionId: binding.id,
-        tier: tier as AiTier, model, providerAdapter: adapter, reasoningEffort: effort as string | null, maxOutputTokens: limit, timeoutMs: config.timeout_ms as number | undefined,
+        tier: tier as AiTier, model, providerAdapter: adapter as ResolvedAiRole['providerAdapter'], reasoningEffort: effort as string | null, maxOutputTokens: limit as number, timeoutMs: config.timeout_ms as number | undefined,
         ...(options.app === 'bob' && options.unlimitedWork === true && manifest().definitions.some(d => d.prompt_key === 'agent-contract.ask-bob' && d.definition_kind === 'agent_contract' && d.metadata.work_allowance_version === 1) ? { unlimitedWork: true as const } : {}),
         providerParameters: params, systemMessage, definition: row, profile })
     },
@@ -252,7 +257,9 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       const functionBody = object(body.function) ? body.function : body
       if (!string(functionBody.name) || typeof functionBody.description !== 'string' || !object(functionBody.parameters)) fail('ai_contract_missing',fullKey)
       const additional = body.additional_description
-      const description = parameters.include_manual === true && typeof additional === 'string' && additional ? functionBody.description + '\n\n' + additional : functionBody.description
+      if (parameters.card === true && !string(body.card_description)) fail('ai_contract_missing', fullKey + ' card')
+      const description = parameters.card === true ? body.card_description as string
+        : parameters.include_manual === true && typeof additional === 'string' && additional ? functionBody.description + '\n\n' + additional : functionBody.description
       return { type: 'function', function: { name: functionBody.name, description, parameters: boundSchema(row,functionBody.parameters,toolParameters(row,parameters)), strict: functionBody.strict === true } }
     },
     schema(key, parameters = {}) {
@@ -281,8 +288,9 @@ export function applyCatalogModelOptions<T extends { app: string; functionName: 
 }
 /** Validate the actual call, too: capabilities must cover dynamically selected
  * tools/images/output schemas even when a profile forgot to require them. */
-export function validateAiCall(role: ResolvedAiRole, input: { app: string; images?: boolean; tools?: boolean; schema?: boolean; imageOutput?: boolean }) {
+export function validateAiCall(role: ResolvedAiRole, input: { app: string; images?: boolean; tools?: boolean; schema?: boolean; imageOutput?: boolean; embeddings?: boolean }) {
   if (role.app !== input.app) fail('ai_profile_incompatible','app scope')
-  if (input.imageOutput ? role.providerAdapter !== 'openai-images-v1' : role.providerAdapter !== 'openai-responses-v1') fail('ai_profile_incompatible','provider adapter')
+  const adapter = input.embeddings ? 'openai-embeddings-v1' : input.imageOutput ? 'openai-images-v1' : 'openai-responses-v1'
+  if (role.providerAdapter !== adapter || input.embeddings && (input.images || input.tools || input.schema || input.imageOutput)) fail('ai_profile_incompatible','provider adapter')
   if (input.images && !role.model.supports_images || input.tools && role.model.capabilities.supports_functions !== true || input.schema && role.model.capabilities.supports_json_schema !== true || input.imageOutput && !role.model.supports_image_output) fail('ai_profile_incompatible','call capability')
 }

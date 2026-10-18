@@ -2,7 +2,7 @@ import { setupSharedSocial } from './support/shared-social.ts'
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite } from './support/pglite.ts'
 
 const pg = new PGlite()
 const one = '00000000-0000-4000-8000-000000000001'

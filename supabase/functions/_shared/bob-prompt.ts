@@ -1,12 +1,42 @@
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
+import { countContextTokens } from './bob-token-budget.ts'
 
-type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
+type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
+
+/** A directory entry describes an implemented delegation path, never a new tool. */
+export function bobColleagues(aiCatalog: AiCatalogSession, visibleTools: string[]) {
+  const directory = aiCatalog.definition('bob.colleagues', 'agent_contract').definition
+  const entries = directory.colleagues as { role_key: string; invocation_tools: string[]; instructions: string }[]
+  return entries.flatMap(entry => {
+    const tools = entry.invocation_tools.filter(name => visibleTools.includes(name))
+    if (!tools.length) return []
+    const role = aiCatalog.definition(entry.role_key, 'role').definition
+    if (role.enabled === false) return []
+    if (countContextTokens(`${role.name} ${role.title} ${role.purpose}`) > 80) throw new Error('colleague_card_too_large')
+    return [{ name: String(role.name), title: String(role.title), purpose: String(role.purpose), invocation_tools: tools, instructions: entry.instructions }]
+  })
+}
 
 /** Database instructions plus the server-owned toolbox prepared for this call. */
 export function buildBobHands(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
   const offered = tools.map(tool => tool.function.name)
   const text = (key: string) => aiCatalog.text('bob.toolbox.' + key)
+  const lazy = shelf.some(entry => entry.instructionLoaded !== undefined)
+  if (lazy) {
+    const colleagues = bobColleagues(aiCatalog, shelf.map(entry => entry.name))
+    const lines = [text('intro-lazy')]
+    if (colleagues.length) lines.push(aiCatalog.text('bob.colleagues.intro'), ...colleagues.map(c => `- ${c.name} — ${c.title}: ${c.purpose} (${c.invocation_tools.join(', ')})`))
+    for (const group of [...new Set(shelf.map(entry => entry.group))]) {
+      lines.push(group)
+      for (const entry of shelf.filter(entry => entry.group === group)) {
+        const state = entry.state === 'offered' ? (offered.includes(entry.name) ? 'callable' : 'describe_tool')
+          : entry.state === 'budget_exhausted' ? text('used-up') : entry.waitingFor ?? text('waiting')
+        lines.push(`- ${entry.name}: ${entry.description ?? ''} [${state}]`)
+      }
+    }
+    return lines.join('\n')
+  }
   const hands = text(offered.includes('describe_tool') ? 'intro-manual' : 'intro')
   if (!offered.length && !shelf.length) return hands + text('closed')
   const entries: Shelf[] = shelf.length ? shelf : offered.map(name => ({ name, group: 'Tools', state: 'offered' as const }))

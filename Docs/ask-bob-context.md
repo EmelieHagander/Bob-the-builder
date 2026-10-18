@@ -4,6 +4,14 @@
 >
 > **Current runtime (2026-09-30):** `supabase/README.md` owns the deployed briefing, bounded lookup and P3 Current View seams. `Docs/ask-bob-conversations.md` separately owns transcript/provider continuity. The implemented scope below takes precedence over the wider design sketches.
 
+The accepted [2026-10-18 context strategy](ask-bob-conversations.md#context-strategy--2026-10-18)
+adds bounded managed memory, source-linked retrieval and role-specific task context
+in source; full release verification and model acceptance remain. It keeps current project facts with
+their existing readers. The private conversation's semantic index does not implement
+the all-category Project Catalog, Router or Librarian specified below. Applicable
+project constraints must be read from their authoritative records, not inferred
+from a relevance score or an old summary.
+
 ## Implemented scope and remaining target
 
 **P3 deployed; named-member acceptance remains open.** [Release evidence](foundation-verification.md#p3-hosted-technical-release--2026-09-30) distinguishes CI/browser fixtures, hosted SQL roles and ordinary guest Auth/model consumption. `src/domain/bobScreen.ts` owns the actual strict pointer and Current View types; `src/lib/bobSurface.ts` owns route/project-scoped publication. Pages publish navigation ids, Ask bob captures them at send time, and the server hydrates only fixed caller-JWT projections. Surface fields and wire names below illustrate the wider design; use those source types rather than the illustrative schema when implementing current clients.

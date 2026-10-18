@@ -5,14 +5,16 @@ import { prepareWorkingContext, type ContextFrame, type WorkingContext } from '.
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectWriter } from '../supabase/functions/_shared/project-write.ts'
 import { BobContinuation, createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preContextStrategyCatalogFixture } from './support/ai-catalog-fixture.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const response = (data: string | null, toolCalls?: any[], phase: 'final_answer' | 'refusal' = 'final_answer') => ({ success: true, data, model: 'fixture', responseId: 'response', usage, outputPhase: phase, toolCalls })
 const tool = (id: string, name: string, args: unknown) => ({ id, type: 'function' as const, function: { name, arguments: JSON.stringify(args) } })
 const search = (id: string) => tool(id, 'search_project_data', { dataset: 'tasks', query: id, status: null, area_id: null, record_id: null, after_id: null })
 const payload = (dataset: string) => ({ data: { records: dataset === 'project' ? [{ id: 'A', name: 'Fixture' }] : [], related: [], truncated: false }, error: null })
-const catalog = () => catalogFixture(snapshot => {
+// These October 17 scripted scenarios verify the unlimited-work release with
+// its original inline tool surface; lazy loading has independent acceptance.
+const catalog = () => preContextStrategyCatalogFixture(snapshot => {
   const contract = snapshot.definitions.find(row => row.prompt_key === 'agent-contract.ask-bob')!
   contract.metadata.work_allowance_version = 1
   contract.metadata.work_completion_version = 2
@@ -36,6 +38,7 @@ test('productive work continues beyond 24 rounds and executes the whole tool bat
     for (const message of options.messages!) {
       const result = JSON.parse(String(message.content))
       assert.notEqual(result.status, 'deferred')
+      assert.notEqual(result.status, 'not_offered', 'the productive batch executed its prepared native tools')
       assert.equal(Object.hasOwn(result, 'execution_budget'), false)
     }
     return calls <= 26 ? response(null, [search(`round-${calls}`)]) : response('The delegated research is complete.')
@@ -44,6 +47,39 @@ test('productive work continues beyond 24 rounds and executes the whole tool bat
   assert.equal(observations.at(-1).tool_calls, 35)
   assert.equal(observations.at(-1).deferred_calls, 0)
   assert.equal(observations.at(-1).end, 'answered')
+})
+
+test('the new lazy toolbox executes productive unlimited work beyond 24 rounds after fetching its exact manual', async () => {
+  let calls = 0
+  const queries: string[] = [], observations: any[] = []
+  const result = await runProjectAnswer({ ...base(), aiCatalog: catalogFixture(),
+    lookup: createProjectLookup('A', async (_project, input) => {
+      if (input.query) queries.push(input.query)
+      return payload(input.dataset)
+    }, 1000, 1000, undefined, { unlimitedWork: true }),
+    observe: value => observations.push(value), callModel: async options => {
+      calls++
+      if (calls === 1) {
+        assert.deepEqual(options.tools?.map(spec => spec.function.name), ['describe_tool'])
+        return { ...response(null, [tool('manual', 'describe_tool', { name: 'search_project_data' })]), responseId: 'lazy-manual' }
+      }
+      assert(options.tools?.some(spec => spec.function.name === 'search_project_data'))
+      const output = JSON.parse(String(options.messages![0].content))
+      if (calls === 2) {
+        assert.equal(output.status, 'ok'); assert(output.parameters); assert(output.manual)
+        assert.equal(output.callable_from_next_step, true)
+        assert.equal(options.previousResponseId, 'lazy-manual')
+      } else {
+        assert(['ok', 'empty'].includes(output.status), 'the offered read executed, rather than merely avoiding a quota error')
+        assert.equal(Object.hasOwn(output, 'execution_budget'), false)
+        assert.equal(options.previousResponseId, `lazy-${calls - 1}`)
+      }
+      return { ...response(calls <= 28 ? null : 'The delegated research is complete.', calls <= 28 ? [search(`lazy-${calls - 1}`)] : undefined), responseId: `lazy-${calls}` }
+    } })
+  assert(result.ok); assert.equal(calls, 29)
+  assert.deepEqual(queries, Array.from({ length: 27 }, (_, index) => `lazy-${index + 1}`))
+  assert.equal(observations.at(-1).tool_calls, 28)
+  assert.equal(observations.at(-1).deferred_calls, 0)
 })
 
 test('a new catalog alone does not uncap a synchronous or legacy job', async () => {

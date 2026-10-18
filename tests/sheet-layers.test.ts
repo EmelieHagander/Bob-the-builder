@@ -1,7 +1,7 @@
 import { before, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite } from './support/pglite.ts'
 import { setupSharedSocial } from './support/shared-social.ts'
 import { readSheetLayer, sheetLayerForm, sheetLayerInput, sheetPurchaseCount, SHEET_LAYER_METHOD } from '../src/data/sheetLayers.ts'
 

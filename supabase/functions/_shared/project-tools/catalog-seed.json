@@ -921,5 +921,14 @@
     "always_load": true,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "read_conversation_message",
+    "description": "Read an exact original message in this private conversation by its sequence.",
+    "how_to": "Use a sequence from the memory index or history search. Follow nextOffset to read long messages. Original conversation explains intent, not current saved project state; current authorization and private-thread ownership are checked for every page.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

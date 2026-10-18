@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { PGlite } from '@electric-sql/pglite'
+import { PGlite } from './pglite.ts'
 import { setupSharedSocial } from './shared-social.ts'
 
 /** Full Bob schema with isolated fake Auth/Storage/shared-app contracts.

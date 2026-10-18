@@ -10,6 +10,7 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string,number>|undefined
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
 let preTaskWorkflowRows:any[]|undefined,preTaskWorkflowVersions:Map<string,number>|undefined
 let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,number>|undefined
@@ -17,6 +18,24 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const contextAdditions=source.match(/\$context_strategy_additions\$([\s\S]+?)\$context_strategy_additions\$/)
+ if(contextAdditions){
+  preContextStrategyRows=structuredClone(seed);preContextStrategyVersions=new Map(versions)
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'bob-context-strategy-v1'};versions.set(row.key,(versions.get(row.key)??0)+1)}
+  for(const addition of JSON.parse(contextAdditions[1])){const row={content:'',definition:{},variables:[],...addition};seed.push(row);publish(row)}
+  for(const patch of JSON.parse(source.match(/\$context_strategy_edits\$([\s\S]+?)\$context_strategy_edits\$/)![1])){
+   const row=seed.find(row=>row.key===patch.key);publish(row)
+   row.definition={...row.definition,...patch.definition};row.metadata={...row.metadata,...patch.metadata}
+   if(patch.content!==undefined)row.content=patch.content
+   if(patch.prompt_keys)row.definition.prompt_keys=[...row.definition.prompt_keys.filter((k:string)=>!patch.prompt_keys.remove.includes(k)),...patch.prompt_keys.append]
+  }
+  for(const patch of JSON.parse(source.match(/\$context_strategy_cards\$([\s\S]+?)\$context_strategy_cards\$/)![1])){
+   const row=seed.find(row=>row.key===patch.key);publish(row)
+   row.definition={...row.definition,...patch.definition,card_description:patch.description,...(patch.key==='tools.describe_tool'?{description:patch.description}:{})}
+  }
+  const policy=JSON.parse(source.match(/\$context_strategy_history_policy\$([\s\S]+?)\$context_strategy_history_policy\$/)![1]),box=seed.find(row=>row.key==='bob.tools');publish(box)
+  box.definition.catalog.push(policy);box.definition.contract_keys.push('tools.read_conversation_message');box.definition.shelves.find((s:any)=>s.label==='Project records and memory').tools.push(policy.name)
+ }
  const boundEditContracts=source.match(/\$bound_edit_contracts\$([\s\S]+?)\$bound_edit_contracts\$/)
  if(boundEditContracts){
   const policies=JSON.parse(source.match(/\$bound_edit_policies\$([\s\S]+?)\$bound_edit_policies\$/)![1])
@@ -253,16 +272,19 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
-const modelTiers=new Map(seed.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
-function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
+for(const rows of [seed,originalSeed,...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
+ const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
+ return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
  definitions:rows.map(row=>({id:'fixture-version:'+row.key+':v'+revisionMap.get(row.key),prompt_id:'fixture-prompt:'+row.key,prompt_key:row.key,version:revisionMap.get(row.key)!,
   definition_kind:row.kind,definition_format_version:1,content:row.content??'',definition:row.definition??{},metadata:row.metadata??{},available_variables:row.variables??[],payload_hash:'fixture-hash:'+row.key+':v'+revisionMap.get(row.key)})),
  models:[...modelTiers].map(([model_name,tier])=>({model_name,provider:'openai',model_type:tier,is_active:true,is_default:false,max_output_tokens:150000,
   supports_images:true,supports_reasoning:true,supports_image_output:tier==='image',input_cost_per_1m_tokens:1,output_cost_per_1m_tokens:2,cached_input_cost_per_1m_tokens:null,
-  capabilities:{provider_adapter:tier==='image'?'openai-images-v1':'openai-responses-v1',supports_functions:true,supports_json_schema:true,reasoning_efforts:['none','minimal','low','medium','high','xhigh']}})),
+  capabilities:{provider_adapter:tier==='embedding'?'openai-embeddings-v1':tier==='image'?'openai-images-v1':'openai-responses-v1',supports_functions:true,supports_json_schema:true,reasoning_efforts:['none','minimal','low','medium','high','xhigh'],...(tier==='embedding'?{supports_embedding_dimensions:true,max_embedding_dimensions:1536,max_batch_inputs:2048}:{})}})),
 }}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
+const preContextStrategyManifest=fixtureManifest(preContextStrategyRows??seed,preContextStrategyVersions??versions,'fixture-pre-context-strategy-manifest')
+export function preContextStrategyCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextStrategyManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
 const legacyManifest=fixtureManifest(originalSeed,new Map(originalSeed.map(row=>[row.key,1])),'fixture-legacy-seed-manifest')
 const preTaskWorkflowManifest=fixtureManifest(preTaskWorkflowRows??seed,preTaskWorkflowVersions??versions,'fixture-pre-task-workflow-manifest')
 const preContinuationManifest=fixtureManifest(preContinuationRows??seed,preContinuationVersions??versions,'fixture-pre-continuation-manifest')

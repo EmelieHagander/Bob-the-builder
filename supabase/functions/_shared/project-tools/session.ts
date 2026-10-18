@@ -1,11 +1,12 @@
 import { rethrowContinuation } from '../bob-job-journal.ts'
+import { countContextTokens } from '../bob-token-budget.ts'
 /** Bob's toolbox. Every registered, active and currently available tool is offered
  * on every model step; there is no capability discovery round. Offering
  * is not authorization: the catalog policy, schema version and server-owned gate
  * are checked again on every execution. A model never supplies policy. */
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
-/** Internal experiment only. Hosted callers keep the default inline guides. */
-export type ToolInstructions = 'inline' | 'on_demand'
+/** Lazy mode is enabled only by a pinned context-strategy contract. */
+export type ToolInstructions = 'inline' | 'on_demand' | 'lazy'
 export const DESCRIBE_TOOL: ToolSpec = { type: 'function', function: {
   name: 'describe_tool',
   description: 'Read the current usage manual for a tool on your bench by exact name when you need its detailed workflow. Read-only; does not load, enable or execute the tool.',
@@ -84,10 +85,12 @@ function policySupportsHandler(name: string, policyVersion: number, handlerVersi
     : policyVersion === handlerVersion
 }
 
-export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string }
+export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; feedback?: (key: string, variables?: Record<string, string>) => string }) {
-  const onDemand = opts.toolInstructions === 'on_demand'
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+  const lazy = opts.toolInstructions === 'lazy'
+  const onDemand = lazy || opts.toolInstructions === 'on_demand'
+  const loaded = new Map<string, number>()
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
@@ -115,7 +118,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     ? opts.catalogTool(row.name, { include_manual: includeManual }).function.description
     : [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => opts.catalogTool
-    ? opts.catalogTool(row.name, { include_manual: !onDemand, server_quote: quote !== undefined,
+    ? opts.catalogTool(row.name, { include_manual: !onDemand, ...(lazy ? { card: true } : {}), server_quote: quote !== undefined,
         ...(row.name === 'list_project_category' && object(def.spec.function.parameters.properties) && object(def.spec.function.parameters.properties.category)
           ? { categories: def.spec.function.parameters.properties.category.enum } : {}) })
     : ({
@@ -130,17 +133,25 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     get phase() { return snapshot?.phase ?? null },
     /** The whole shelf as last prepared, including tools waiting for a prerequisite. */
     get toolbox() { return shelf.slice() },
+    /** Context rollover releases schemas for the next prepare. Preserve the
+     * fence of an already submitted model request and its in-flight results. */
+    resetInstructions() { loaded.clear() },
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
       const current = await refresh(), specs: ToolSpec[] = []
       offered = new Map(); visible = new Map(); shelf = []
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
-        if (!def || state === 'unavailable' || state === 'not_allowed') continue
+        if (!def || state === 'unavailable' || state === 'not_allowed') { loaded.delete(row.name); continue }
+        if (loaded.get(row.name) !== def.version) loaded.delete(row.name)
         visible.set(row.name, def.version)
         const group = def.group ?? 'Other tools'
-        if (state === 'available') { specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version); shelf.push({ name: row.name, group, state: 'offered' }) }
-        else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...(state === 'write_uncertain' ? { waitingFor: WRITE_UNCERTAIN } : state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
+        const card = lazy ? { description: opts.catalogTool ? opts.catalogTool(row.name, { card: true }).function.description : row.description, instructionLoaded: loaded.has(row.name) } : {}
+        if (card.description && countContextTokens(card.description) > 80) throw new Error('tool_card_too_large')
+        if (state === 'available') {
+          if (!lazy || loaded.has(row.name)) { specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version) }
+          shelf.push({ name: row.name, group, state: 'offered', ...card })
+        } else shelf.push({ name: row.name, group, state: state === 'budget_exhausted' ? 'budget_exhausted' : 'waiting', ...card, ...(state === 'write_uncertain' ? { waitingFor: WRITE_UNCERTAIN } : state === 'missing_context' && def.waitingFor ? { waitingFor: def.waitingFor } : {}) })
       }
       if (onDemand && visible.size) {
         specs.push(opts.catalogTool ? opts.catalogTool(DESCRIBE_TOOL.function.name, {}) : structuredClone(DESCRIBE_TOOL)); offered.set(DESCRIBE_TOOL.function.name, 1)
@@ -163,8 +174,10 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (!row || !resolved?.def || resolved.state === 'unavailable' || resolved.state === 'not_allowed') return finish(safeStatus('unavailable'))
         if (!visible.has(row.name)) return finish(safeStatus('not_offered'))
         if (visible.get(row.name) !== resolved.def.version) return finish(safeStatus('contract_changed'))
+        if (lazy) loaded.set(row.name, resolved.def.version)
         return finish({ status: 'ok', name: row.name, schema_version: resolved.def.version, state: resolved.state,
           manual: description(row, resolved.def, true),
+          ...(lazy ? { parameters: surfaceSpec(row, resolved.def).function.parameters, callable_from_next_step: resolved.state === 'available', colleagues: opts.catalogColleagues?.(row.name) ?? [] } : {}),
           ...(resolved.state === 'missing_context' && resolved.def.waitingFor ? { waiting_for: resolved.def.waitingFor } : {}) })
       }
       const row = current.tools.find(r => r.name === name)
