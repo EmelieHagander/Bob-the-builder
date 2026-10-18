@@ -1,6 +1,7 @@
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { countContextTokens } from './bob-token-budget.ts'
+import type { WorkflowCard } from './project-tools/session.ts'
 
 type Shelf = { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
@@ -18,6 +19,19 @@ export function bobColleagues(aiCatalog: AiCatalogSession, visibleTools: string[
   })
 }
 
+/** Catalog workflows: a method per kind of delegated outcome and the tools it
+ * uses. Absent from older pinned manifests, which keep the plain directory. */
+export function bobWorkflows(aiCatalog: AiCatalogSession): WorkflowCard[] {
+  const defs = aiCatalog.manifest().definitions
+  if (!defs.some(row => row.prompt_key === 'bob.workflows' && row.definition_kind === 'agent_contract')) return []
+  const entries = aiCatalog.definition('bob.workflows', 'agent_contract').definition.workflows as WorkflowCard[]
+  return entries.map(entry => {
+    if (!/^[a-z][a-z0-9_]{0,63}$/.test(entry.name) || defs.some(row => row.prompt_key === 'tools.' + entry.name)) throw new Error('workflow_name_invalid')
+    if (countContextTokens(entry.card) > 80) throw new Error('workflow_card_too_large')
+    return { name: entry.name, card: String(entry.card), method: String(entry.method), tools: entry.tools.map(String) }
+  })
+}
+
 /** Database instructions plus the server-owned toolbox prepared for this call. */
 export function buildBobHands(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], shelf: Shelf[] = []): string {
   const offered = tools.map(tool => tool.function.name)
@@ -26,6 +40,8 @@ export function buildBobHands(aiCatalog: AiCatalogSession, tools: OpenAIServiceO
   if (lazy) {
     const colleagues = bobColleagues(aiCatalog, shelf.map(entry => entry.name))
     const lines = [text('intro-lazy')]
+    const workflows = bobWorkflows(aiCatalog).filter(w => w.tools.some(name => shelf.some(entry => entry.name === name)))
+    if (workflows.length) lines.push(aiCatalog.text('bob.workflows'), ...workflows.map(w => `- ${w.name}: ${w.card}`))
     if (colleagues.length) lines.push(aiCatalog.text('bob.colleagues.intro'), ...colleagues.map(c => `- ${c.name} — ${c.title}: ${c.purpose} (${c.invocation_tools.join(', ')})`))
     for (const group of [...new Set(shelf.map(entry => entry.group))]) {
       lines.push(group)

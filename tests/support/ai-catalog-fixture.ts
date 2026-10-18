@@ -40,6 +40,16 @@ for(const migration of migrations){
    versions.set(key,versions.get(key)!+1)
   }
  }
+ const workflows=source.match(/\$bob_workflows\$([\s\S]+?)\$bob_workflows\$/)
+ if(workflows){
+  seed.push({key:'bob.workflows',kind:'agent_contract',content:source.match(/\$bob_workflows_intro\$([\s\S]+?)\$bob_workflows_intro\$/)![1],definition:JSON.parse(workflows[1]),variables:[],metadata:{publication:'bob-workflows-judgement-v1'}})
+  versions.set('bob.workflows',1)
+  const row=seed.find(row=>row.key==='bob.context-principles')
+  const{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication:'bob-workflows-judgement-v1'}
+  row.content+='\n'+source.match(/\$bob_judgement_principles\$([\s\S]+?)\$bob_judgement_principles\$/)![1]
+  versions.set(row.key,versions.get(row.key)!+1)
+ }
  const coverageAdditions=source.match(/\$context_coverage_additions\$([\s\S]+?)\$context_coverage_additions\$/)
  if(coverageAdditions){
   preContextCoverageRows=structuredClone(seed);preContextCoverageVersions=new Map(versions)

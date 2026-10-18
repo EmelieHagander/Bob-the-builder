@@ -85,9 +85,14 @@ function policySupportsHandler(name: string, policyVersion: number, handlerVersi
     : policyVersion === handlerVersion
 }
 
+/** A catalog workflow: a method for one kind of delegated outcome plus the tools
+ * it uses. Describing it loads every available member tool at once. Orientation
+ * only; each member keeps its own policy, gate and version checks. */
+export interface WorkflowCard { name: string; card: string; method: string; tools: string[] }
+
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
@@ -169,6 +174,19 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         const finish = (result: Record<string, unknown>) => { record('execute', name, String(result.status)); return result }
         if (!offered.has(name)) return finish(safeStatus('not_offered'))
         if (!object(args) || Object.keys(args).length !== 1 || typeof args.name !== 'string' || !NAME.test(args.name)) return finish(safeStatus('invalid'))
+        const workflow = lazy ? opts.catalogWorkflows?.().find(w => w.name === args.name) : undefined
+        if (workflow) {
+          const members: { name: string; state: string }[] = [], loadedNow: string[] = []
+          for (const name of workflow.tools) {
+            const member = current.tools.find(r => r.name === name)
+            const found = member ? resolve(member) : null
+            if (!member || !found?.def || found.state === 'unavailable' || found.state === 'not_allowed' || visible.get(name) !== found.def.version) continue
+            if (found.state === 'available') { loaded.set(name, found.def.version); loadedNow.push(name) }
+            members.push({ name, state: found.state })
+          }
+          if (!members.length) return finish(safeStatus('unavailable'))
+          return finish({ status: 'ok', workflow: workflow.name, method: workflow.method, tools: members, callable_from_next_step: loadedNow })
+        }
         const row = current.tools.find(r => r.name === args.name)
         const resolved = row ? resolve(row) : null
         if (!row || !resolved?.def || resolved.state === 'unavailable' || resolved.state === 'not_allowed') return finish(safeStatus('unavailable'))
