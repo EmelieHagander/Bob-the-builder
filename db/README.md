@@ -748,6 +748,18 @@ The migration adds request-owned gap identities, deterministic request reuse, ca
 Release order: review the exact tree and pass SQL, Edge, browser and real PostgreSQL concurrency gates; apply the migration; deploy matching `ask-bob` and `bob-worker`; verify authenticated event/receipt recovery and the frontend build. Existing worker signatures remain compatible. Older request charges are not guessed: pre-migration requests require a prospective explicit allocation. The current lifecycle/retention/authority owner is [Ask bob conversations — P2 completion](../Docs/ask-bob-conversations.md#p2-completion-events-gaps-and-request-accounting). Exact deployment and model proof belongs in [PR #171](https://github.com/EmelieHagander/Bob-the-builder/pull/171).
 
 
+### Drawing budget removed — owner decision 2026-10-18
+
+Drawing work has no application budget. `20261018194500_bob_drawing_budget_removed.sql`
+makes every Bob job and owner task run without spending or call allotments,
+including automatic drawing jobs for an older owner message (they get the
+active catalog pin). `bob.grant_drawing_budget` and the "Add request budget"
+UI are removed. `drawing_budgets`, `drawing_budget_periods` and
+`drawing_model_calls` remain only as a per-request cost log and to reuse
+already paid results; an uncertain pending provider call still blocks a
+duplicate paid attempt. The cap and grant sections below are historical.
+Expired unlimited jobs pause for credential renewal instead of failing.
+
 ### Atomic drawing continuation — 2026-10-18
 
 `20261018121638_drawing_atomic_continuation.sql` makes a successful

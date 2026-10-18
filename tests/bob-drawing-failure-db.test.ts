@@ -65,7 +65,8 @@ test('failed drawing publishes one honest private answer and status; preserves d
 
 test('cron expiry uses the same failure path after the worker has disappeared', async () => {
   const f = await fixture()
-  await pg.query("update bob_private.bob_jobs set expires_at=now()-interval '1 second' where id=$1", [f.job])
+  // Legacy allotment-bound jobs fail on expiry; unlimited jobs pause (below).
+  await pg.query("update bob_private.bob_jobs set work_allowance_version=0,expires_at=now()-interval '1 second' where id=$1", [f.job])
   await invoke('bob.bob_dispatch_jobs', [])
   assert.equal((await one('select status from bob_private.bob_jobs where id=$1', [f.job])).status, 'failed')
   assert.equal((await one('select reason from bob_private.project_drawing_requests where id=$1', [f.request])).reason, 'background_expired')

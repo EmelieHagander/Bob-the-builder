@@ -87,6 +87,23 @@ export function manageConversationBriefV2(value: unknown, previous: Conversation
   return brief
 }
 
+/** Gist-only memory: the model writes a plain summary and no sequence numbers.
+ * The server alone states which originals are folded and searchable. */
+export function gistOnlyBrief(value: unknown): ConversationBrief {
+  const v = value as { gist?: unknown }
+  if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.gist !== 'string' || !v.gist.trim()) throw new InvalidConversationBrief('shape')
+  const brief = { gist: v.gist, index: [] }
+  if ([...v.gist].length > BRIEF_LIMITS.gist || !briefFitsTokenBudget(brief)) throw new InvalidConversationBrief('size')
+  return brief
+}
+/** Used when a fold cannot be summarised: keep the earlier gist and say which
+ * originals it does not cover, so a failed summary never stops the turn. */
+export function degradedBrief(previous: ConversationBrief, from: number, through: number): ConversationBrief {
+  const note = `Messages ${from}–${through} are not included in this summary; search the conversation history for them.`
+  const kept = { gist: previous.gist.trim() ? previous.gist + '\n\n' + note : note, index: [] }
+  return [...kept.gist].length <= BRIEF_LIMITS.gist && briefFitsTokenBudget(kept) ? kept : { gist: note, index: [] }
+}
+
 export function briefFitsTokenBudget(brief: ConversationBrief): boolean {
   return briefCharacters(brief) <= BRIEF_TOKEN_POLICY.maxCharacters
     && countSerializedTokens(brief) <= BRIEF_TOKEN_POLICY.maxTokens
