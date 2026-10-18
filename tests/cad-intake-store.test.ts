@@ -5,7 +5,9 @@ import type {PGlite} from '@electric-sql/pglite'
 let pg:PGlite
 const one='10000000-0000-4000-8000-000000000001',two='10000000-0000-4000-8000-000000000002',turn='20000000-0000-4000-8000-000000000001'
 let claim:any
-const payload={brief:{brief:'Private original drawing request'},reference_refs:[],evidence:[{value:'132',unit:'cm',revision:2}]}
+const request='30000000-0000-4000-8000-000000000001'
+const scope={area_id:null,component_id:null,step_id:null,artifact_id:null}
+const payload={brief:{...scope,brief:'Private original drawing request'},reference_refs:[],evidence:[{value:'132',unit:'cm',revision:2}]}
 const sql='select bob.bob_drawing_request($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) d'
 const run=async(op:string,id:string|null=null,expected=0,status:string|null=null,value:unknown=null,key:string|null=null,c=claim,uid=one)=>((await asProjectUser(pg,null,sql,['A',uid,c.thread_id,c.turn??turn,c.generation,op,id,expected,status,value,key],'service_role')).rows[0] as any).d
 before(async()=>{
@@ -15,13 +17,15 @@ before(async()=>{
  await pg.query("insert into bob.people(id,project_id,name,initials,auth_user_id) values('one','A','One','ON',$1),('two','A','Two','TW',$2)",[one,two])
  claim=((await asProjectUser(pg,null,'select bob.bob_claim_turn($1,$2,$3,$4) d',['A',one,turn,'Draw the object'],'service_role')).rows[0] as any).d
  assert.equal(claim.status,'claimed')
+ await asProjectUser(pg,one,'select bob.create_drawing_request($1,$2,$3,$4,$5,$6)',['A',claim.thread_id,turn,claim.generation,request,scope])
 })
 after(()=>pg.close())
-test('private request persistence is replay-safe, revision-checked and isolated by owner/thread',async()=>{
- const saved=await run('save',null,0,'needs_data',payload,'write-one')
+test('registered private request persistence is replay-safe, revision-checked and isolated by owner/thread',async()=>{
+ await assert.rejects(run('save',null,0,'needs_data',payload,'unregistered'),/drawing_request_denied/)
+ const saved=await run('save',request,0,'needs_data',payload,'write-one')
  assert.equal(saved.revision,1);assert.deepEqual((await run('load',saved.id)).payload,payload)
- assert.deepEqual(await run('save',null,0,'needs_data',payload,'write-one'),saved,'same journal write cannot create duplicate requests')
- await assert.rejects(run('save',null,0,'needs_data',{...payload,brief:{brief:'Different'}},'write-one'),/write_key_conflict/)
+ assert.deepEqual(await run('save',request,0,'needs_data',payload,'write-one'),saved,'same journal write cannot create duplicate requests')
+ await assert.rejects(run('save',request,0,'needs_data',{...payload,brief:{...payload.brief,brief:'Different'}},'write-one'),/write_key_conflict/)
  await assert.rejects(run('save',saved.id,0,'draft',payload,'wrong-revision'),/revision_conflict/)
  await assert.rejects(run('load',saved.id,0,null,null,null,claim,two),/project_denied/)
  await assert.rejects(run('load',saved.id,0,null,null,null,{...claim,generation:claim.generation+1}),/turn_not_claimed/)
