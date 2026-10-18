@@ -292,24 +292,22 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt fokus — workshop om Bobs minne (2026-10-18):** börja med önskat
-produktbeteende: vad Bob ska hålla kvar om mål, krav, beslut, rättelser och öppna
-frågor, hur dessa ska prioriteras samt när de ska ändras eller sluta gälla.
-Detta är workshopfrågor, inte fastställd struktur. När beställaren och vi har
-landat i beteendet jämför vi det med faktisk implementation och beslutar nästa
-ändring. [Konversationsägaren](ask-bob-conversations.md) äger det gällande
-kontraktet; den nya målbilden ska beslutas innan det kontraktet ändras.
+**Aktivt nästa steg — verifiera och publicera kontextstrategin (2026-10-18):**
+slutför samlad verifiering och PR på `feat/bob-context-strategy`, därefter
+publicera samordnad databas-/Edge-/katalogversion med funktionernas nya Deno-konfiguration.
+Den godkända målbilden och aktuell källimplementation finns
+hos [konversationsägaren](ask-bob-conversations.md#context-strategy--2026-10-18);
+ingen ny produktworkshop behövs för samma beslut. Direkt originalhämtning,
+hybridsökning och fortsatt arbete över kontextcheckpoints ingår nu i detta arbete.
 
-**Parkerat minnesarbete från genomgången (punkterna 1, 3 och 4):**
-
-- Kvalitetsprov med långa samtal: tidiga krav, senare rättelser, parallella
-  uppgifter och återhämtning av rätt original efter flera sammanfattningar.
-- Direkt hämtning av originalmeddelande via minneshänvisning, inom samma privata
-  samtal och behörighetsgräns.
-- Hantering av växande modellkontext under ett enda långt arbete, inklusive
-  mätning och fortsatt arbete från bevarade resultat.
-
-Prioritering och lösning för dessa återupptas efter workshopen.
+Återstående grindar: full CI, Edge-kontroll med ordinarie beroendeupplösning och
+återläsning av installerad kod/katalog måste vara klara före releaseanspråk.
+Den lokala ordinarie Edge-kontrollen blockerades av nätåtkomst till `esm.sh`;
+en separat lokal kontroll med installerade npm-beroenden ersätter inte den grinden.
+Därefter krävs verkliga modellprov med långa
+samtal: tidiga krav, senare rättelser, parallella uppgifter, rätt original efter
+flera sammanfattningar och bibehållen skillnad mellan förslag, beslut och kvitton.
+Tekniska fixturer stänger inte den semantiska acceptansen.
 
 **Kvarstående minnesacceptans (2026-10-18):** prova ett nytt ordinärt meddelande i samma
 privata tråd med den publicerade
@@ -476,7 +474,7 @@ Typad **måttsemantik** och fångad **produktkällevidens** är separata efterf�
 
 **Kvarstående status-/återläsningsacceptans:** den namngivna beställarens vanliga browser behöver visa det sparade projektresultatet efter omladdning och den nya privata konversationens korrekta status utan ett återuppväckt gammalt budgetstopp. [Konversationsägaren](ask-bob-conversations.md#exact-drawing-request-recovery-status--2026-10-09) äger den driftsatta korrigeringen; [verifieringsägaren](foundation-verification.md#drawing-recovery-status-investigation--2026-10-09) äger beviset och gränsen efter användarens konversationsreset. Bevara samma sparade Artifact-revision; det raderade privata ursprungsvarvet kan inte användas som ett nytt liveprov.
 
-**AI-katalogens nästa handling:** städa endast de fyra kvarvarande disponibla gästprojekten med deras bevakade radering; [runtimeägaren](../supabase/README.md#catalog-release-evidence--2026-10-09), [korthetsprovet](../supabase/README.md#concise-communication-follow-up--2026-10-09) och [releasens smoke-prov](foundation-verification.md#drawing-request-loop-budget-release--2026-10-09) anger exakt scope och behållna poster. Tidigare försök stoppades av connectorns request-state-fel. Separat återstår verklig modellacceptans för namngiven medlems privata historik, skrivbehörighet och kollegkedjan samt systematisk bedömning av de omskrivna rolltexternas kvalitet och korthet. Mini-först-eskalering, autonom minnesförvaltning och senarelagd schemaladdning förblir egna beslut/prov.
+**AI-katalogens nästa handling:** städa endast de fyra kvarvarande disponibla gästprojekten med deras bevakade radering; [runtimeägaren](../supabase/README.md#catalog-release-evidence--2026-10-09), [korthetsprovet](../supabase/README.md#concise-communication-follow-up--2026-10-09) och [releasens smoke-prov](foundation-verification.md#drawing-request-loop-budget-release--2026-10-09) anger exakt scope och behållna poster. Tidigare försök stoppades av connectorns request-state-fel. Separat återstår verklig modellacceptans för namngiven medlems privata historik, skrivbehörighet och kollegkedjan samt systematisk bedömning av de omskrivna rolltexternas kvalitet och korthet. Minnesförvaltning och senarelagd schemaladdning ingår nu i den beslutade [kontextstrategin](ask-bob-conversations.md#context-strategy--2026-10-18); mini-först-eskalering förblir ett separat beslut/prov.
 
 **K3:s avgränsade hyllprov är grönt den 5 oktober:** den neutrala rubriken är driftsatt och samma ursprungliga medlem har fått en konceptritning sparad, länkad och återläst från konstruktionsrevision 4. Konstruktionen och dess historik är bevarade. [K3-verifieringen](foundation-verification.md#k3-checked-construction-drawings--2026-10-04) äger release- och livebeviset. Detta stänger hyllans ritningsleverans, inte hela K2–K5 eller produkt-/hållfasthetsacceptansen.
 

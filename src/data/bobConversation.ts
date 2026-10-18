@@ -9,6 +9,7 @@ import { BOB_HISTORY_PAGE_SIZE, readHistoryWindow } from './bobHistory'
 
 const GUEST_EMAIL = 'guest@bob.local'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+export const BOB_CONTEXT_TOO_LARGE = 'This request contains too much material to process at once. Saved work and conversation history are preserved. Ask Bob to work on a smaller part.'
 
 type AskBobResponse = {
   ok: boolean
@@ -180,6 +181,9 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
       if (job.data.error === 'turn_budget_exhausted') {
         retry = undefined
         transcript.messages.push({ from: 'bob', text: 'Bob stopped because this request reached its AI spending or call limit. Review what was saved before starting a new request.' })
+      } else if (job.data.error === 'context_input_too_large') {
+        retry = undefined
+        transcript.messages.push({ from: 'bob', turnId: unfinished.turnId, text: BOB_CONTEXT_TOO_LARGE })
       } else retry = unfinished
     }
   }
@@ -258,7 +262,7 @@ async function callAskBob(body: Record<string, unknown>): Promise<AskBobResponse
         }
         if (response.status === 503) {
           const detail = await response.clone().json().catch(() => null)
-          if (['context_preparing', 'context_unavailable', 'turn_budget_exhausted'].includes(detail?.error)) return { ok: false, error: detail.error }
+          if (['context_preparing', 'context_unavailable', 'context_input_too_large', 'turn_budget_exhausted'].includes(detail?.error)) return { ok: false, error: detail.error }
         }
       }
       return { ok: false, error: 'seam_unreachable' }

@@ -31,7 +31,38 @@ follow it. Existing model-supplied IDs/full-record payloads are migration work,
 not an exception to the principle. This documentation does not activate new
 catalog schemas or change the deployed toolbox.
 
+## Tool and colleague cards — 2026-10-18
+
+**Implemented in source with focused mechanical checks; release verification and
+model acceptance remain. No hosted activation is claimed.** The [context owner](ask-bob-conversations.md#context-strategy--2026-10-18)
+owns memory, source truth and long-work continuation. This section owns the new
+tool surface; older pinned manifests retain the whole-bench contract below.
+
+Bob receives short cards for eligible tools and colleagues. A colleague card gives
+name, title, job description and the real tool through which that colleague is
+engaged. It does not invent a directly callable agent or imply authority to save.
+Only implemented, enabled delegation paths visible to the current caller appear.
+Bob chooses what serves the owner's request; project phase does not choose for him.
+
+`describe_tool` provides the chosen tool's complete instructions and exact input
+schema, including the relevant colleague handoff. Its permitted native function
+becomes available on the following model step. Several independent manuals may be
+requested together. A waiting capability can be explained but cannot run until its
+prerequisite is satisfied. Hidden/disabled capabilities reveal neither a card nor a
+manual. Loading instructions grants no permission and performs no project mutation.
+
+Live policy, membership, source revisions, prerequisites and the prepared-call fence
+are still checked at execution. Main-role context renewal unloads detailed schemas
+and refreshes the prepared-call fence before its first fresh provider request;
+it preserves work/results and reopens only what the next step needs. Full
+descriptions remain versioned in the one AI catalog, rather than copied into an
+ever-growing permanent base prompt. The inline and earlier on-demand-manual modes
+remain compatibility paths for their pinned executions.
+
 ## Current toolbox contract — 2026-09-27
+
+This remains the baseline for older manifests. The new [card contract](#tool-and-colleague-cards--2026-10-18)
+supersedes its loading behavior only after the new version is explicitly activated.
 
 **Definition ownership changes in the 2026-10-09 catalog implementation.**
 [The AI catalog owner](../supabase/README.md#ai-definition-catalog-and-model-tiers)

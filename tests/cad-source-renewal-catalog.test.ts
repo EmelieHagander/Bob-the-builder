@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
-import {catalogFixture} from './support/ai-catalog-fixture.ts'
+import {preContextStrategyCatalogFixture as catalogFixture} from './support/ai-catalog-fixture.ts'
 import type {AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import {DESIGN_CAD_TOOL} from '../supabase/functions/_shared/cad-assistant.ts'
 const publication='20261017180143_cad_source_renewal_catalog.sql'
@@ -17,7 +17,7 @@ before(async()=>{
   prior=(await db.query<{m:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
   policies=(await db.query('select * from bob.tool_catalog order by name')).rows
   settings=(await db.query('select * from shared.ai_settings order by app,function_name,module_id')).rows
- })
+ },publication)
  current=(await pg.query<{m:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
 })
 after(()=>pg?.close())

@@ -6,7 +6,8 @@ import { schemaIssues } from './schema-issues.ts';
  * The ONE OpenAI service, shared by every app in this Supabase project.
  * Canonical copy — keep byte-identical across repos.
  *
- * Text via the Responses API (/v1/responses), images via /v1/images/generations.
+ * Text via /v1/responses, images via /v1/images/generations or edits, and
+ * catalog-pinned vectors via /v1/embeddings.
  * Model choice, token ceilings, reasoning effort, prompt overrides and the kill
  * switch all come from the `shared` schema; every call is costed into
  * shared.ai_usage_events.
@@ -1177,6 +1178,93 @@ async function logAIUsage(
     success: params.success
   });
   if (error) console.error(`[OpenAI Service] Usage log failed: ${error.message}`);
+}
+
+export interface OpenAIEmbeddingsOptions {
+  app: string;
+  module: string;
+  aiFunction: string;
+  coworkerId: string;
+  functionName: string;
+  userId?: string;
+  /** Required: embedding models, dimensions and prices have no local fallback. */
+  aiDefinition: ResolvedAiRole;
+  input: string[];
+  timeoutMs?: number;
+}
+
+/** One synchronous submission, with the same live kill switch, allow-list and
+ * usage ledger as Responses. The caller owns a durable dispatch/result journal:
+ * embeddings have no Responses continuation ID and uncertain attempts must not
+ * be replayed blindly. The caller also chunks source text before calling here. */
+export async function callOpenAIEmbeddings(options: OpenAIEmbeddingsOptions): Promise<OpenAIServiceResponse<number[][]>> {
+  const role = options.aiDefinition;
+  const emptyUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+  const failure = (error: string): OpenAIServiceResponse<number[][]> => ({ success: false, data: null, usage: emptyUsage, model: role?.model.model_name ?? 'unresolved', error });
+  try {
+    if (!role) throw new Error('ai_profile_missing: embedding role');
+    validateAiCall(role, { app: options.app, embeddings: true });
+    if ('model' in options || 'dimensions' in options) throw new Error('ai_profile_incompatible: direct embedding override');
+    if (!Array.isArray(options.input) || !options.input.length || options.input.length > Math.min(2048, Number(role.model.capabilities.max_batch_inputs)) || options.input.some(text => typeof text !== 'string' || !text.trim())) throw new Error('ai_embedding_input_invalid');
+    if (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)) throw new Error('ai_profile_incompatible: timeout');
+  } catch (error) {
+    return failure(error instanceof Error ? error.message : 'ai_profile_incompatible');
+  }
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) return failure('Missing OpenAI API key');
+  let aiClient: SupabaseClient;
+  try { aiClient = createAiClient(); } catch { return failure('Missing Supabase credentials'); }
+
+  try {
+    const [models, settingsResult] = await Promise.all([
+      loadPinnedModel(aiClient, role),
+      aiClient.from('ai_settings').select('module_id,is_enabled').eq('app', options.app)
+        .eq('coworker_id', options.coworkerId).eq('function_name', options.functionName).in('module_id', [options.module, 'global']),
+    ]);
+    const settings = (settingsResult.data as AiSettingsRow[] | null)?.find(row => row.module_id === options.module)
+      ?? (settingsResult.data as AiSettingsRow[] | null)?.find(row => row.module_id === 'global');
+    if (settingsResult.error || !settings) return failure('ai_profile_missing: function enablement');
+    if (settings.is_enabled !== true) return failure('AI function is disabled');
+    if (!models.length) return failure('ai_tier_unavailable: model retired or allow-list unavailable');
+  } catch { return failure('ai_catalog_unavailable'); }
+
+  const dimensions = Number(role.providerParameters.dimensions);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.min(options.timeoutMs ?? 120000, role.timeoutMs ?? Infinity));
+  try {
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: role.model.model_name, input: options.input, dimensions, encoding_format: 'float' }),
+      signal: controller.signal,
+    });
+    // Never log provider bodies: they may echo private source material.
+    const body = await response.json().catch(() => null);
+    const usageKnown = Number.isSafeInteger(body?.usage?.prompt_tokens) && body.usage.prompt_tokens >= 0
+      && Number.isSafeInteger(body?.usage?.total_tokens) && body.usage.total_tokens >= body.usage.prompt_tokens;
+    const usage = usageKnown ? { input_tokens: body.usage.prompt_tokens, output_tokens: 0, total_tokens: body.usage.total_tokens } : emptyUsage;
+    const cost = usageKnown ? computeCostUsd(role.model, usage) : null;
+    const vectors: number[][] = new Array(options.input.length);
+    let valid = response.ok && usageKnown && body?.model === role.model.model_name && Array.isArray(body?.data) && body.data.length === options.input.length;
+    if (valid) for (const row of body.data) {
+      if (!Number.isSafeInteger(row?.index) || row.index < 0 || row.index >= vectors.length || vectors[row.index]
+        || !Array.isArray(row.embedding) || row.embedding.length !== dimensions
+        || !row.embedding.every((value: unknown) => typeof value === 'number' && Number.isFinite(value))
+        || !row.embedding.some((value: number) => value !== 0)) { valid = false; break; }
+      vectors[row.index] = row.embedding;
+    }
+    await logAIUsage(aiClient, {
+      app: options.app, userId: options.userId, module: options.module, aiFunction: options.aiFunction,
+      model: role.model.model_name, inputTokens: usage.input_tokens, outputTokens: 0, cachedInputTokens: 0,
+      reasoningTokens: 0, totalTokens: usage.total_tokens, costUsd: cost,
+      inputPricePer1m: Number(role.model.input_cost_per_1m_tokens), outputPricePer1m: Number(role.model.output_cost_per_1m_tokens), success: valid,
+    });
+    return { success: valid, data: valid ? vectors : null, usage, model: role.model.model_name, estimatedCostUsd: cost,
+      ...(valid ? {} : { error: response.ok ? 'ai_embedding_response_invalid' : `ai_embedding_provider_error: ${response.status}` }) };
+  } catch {
+    // No automatic retry: after dispatch, a lost reply may still be billable.
+    return { ...failure(controller.signal.aborted ? 'ai_embedding_timeout' : 'ai_embedding_transport_error'), priorAttemptUncertain: true };
+  } finally { clearTimeout(timeout); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

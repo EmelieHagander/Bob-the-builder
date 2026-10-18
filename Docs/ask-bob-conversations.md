@@ -2,6 +2,149 @@
 
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
+## Context strategy — 2026-10-18
+
+**Implemented in source; focused mechanical checks pass, full release verification
+and model acceptance remain.** This section owns the new memory/context behavior.
+It does not claim hosted activation.
+The [active State](bob-delivery-flow.md#state) owns remaining release and acceptance
+work. Older pinned jobs retain their existing prompt, memory and tool contracts;
+the September/October behavior below remains their compatibility reference.
+
+Bob is the owner's building expert and advising project colleague. He carries out
+the delegated work, explains relevant choices and uses colleagues when their
+expertise helps. Project phase describes the setting; it does not prescribe a
+generic sequence or enlarge the assignment to finishing the entire project.
+
+### What memory keeps
+
+The working brief is editable derived context: the memory assistant may rewrite
+it, merge related material and remove detail that no longer helps the current
+discussion. It preserves the active assignment, applicable constraints, decisions,
+corrections and unresolved questions with useful original references. These are
+meanings to preserve, not a parallel set of authoritative project records.
+Relevance is assessed for the current task and search; there is no permanent
+relevance score or archival threshold. Less relevant does not mean false or revoked.
+
+Original conversation remains available even when a hint leaves the brief.
+Measurements, selected solutions, requirements, construction revisions, approvals
+and saved outcomes stay with their existing domain owners. An owner instruction
+can be a binding requirement without becoming an observed physical fact. A proposal
+is not a decision, an estimate is not a measurement, and prose claiming a save is
+not a receipt. Applicable governing constraints must be read from their structured
+sources; they must not depend solely on whether a summary or search retained them.
+This means the compact relevant constraint set, not every record in the project.
+
+### Small context, exact sources
+
+Each ordinary new turn retains the four most recent previous individual messages
+plus the pending owner message, with their original roles and full text. The memory
+assistant receives the previous brief and only the newly older batch. V2 selects
+useful pointers rather than indexing every folded message; the persisted fold
+cursor tracks coverage. Unknown, duplicate or future references still fail
+validation. An oversized brief is rewritten from its sources, never silently cut.
+
+The versioned target limits are content tokens measured with `o200k_base`, including
+serialized metadata/references where applicable. They are context-size controls,
+not spending limits or permission to abandon unfinished work.
+
+| Context component | Target / maximum |
+| --- | --- |
+| Rolling conversation brief | Aim for 800–1,200; maximum 1,600 tokens including pointers |
+| Base role instructions | 700 tokens |
+| Project description | 500 tokens |
+| Current work description | 250 tokens |
+| Each tool or colleague card | 80 tokens |
+| Short ending orientation | 150 tokens |
+
+The existing 12,000-character storage guard and 40-pointer maximum remain secondary
+guards. The five original messages are not silently shortened to meet these small
+component targets. Token counts do not represent billed usage or fully account for
+provider envelopes and image inputs; the runtime reserves space for those separately.
+
+The workshop's logical reading order is **managed memory → latest five messages →
+base role → project description → colleagues → tools → short orientation**. The
+provider's role hierarchy stays intact: trusted base instructions and the capability
+directory are system content. The initial data messages then contain managed memory,
+the five unchanged originals, project orientation, pending work and any current
+image carrier, ending with a short server-labelled orientation. Project text and
+memory never become system instructions. The footer reorients Bob to the project,
+current work and latest owner request; it does not introduce another request.
+
+The source packet reads the approved plan, all available Area pages and an exact
+focused Task when needed. Screen focus takes precedence over explicitly saved plan
+focus; an arbitrary first active Step is not an assignment. The packet gives parent,
+sibling and child cards, exact focused Step Completion Requirements with their saved
+revision/evidence, and a separate pointer to any unapproved plan proposal. Description
+and footer limits apply to their text; their source references remain separate.
+Oversized descriptions use a validated advisory presentation. Failed presentation
+is marked unavailable with a source pointer, rather than clipped or presented as an
+original. Other governing facts still require their existing domain readers; this
+packet does not claim to select every applicable constraint automatically.
+
+### Retrieval and colleague handoffs
+
+The first retrieval slice combines text and semantic search over the same private
+conversation. Candidates are ranked for the query and returned as bounded excerpts
+with exact sequence/source references. `read_conversation_message` opens an
+original sequence in pages. Exact IDs, units and source versions remain exact;
+semantic similarity is a way to find a source, not evidence that it is applicable.
+The transcript is canonical; embeddings are a rebuildable index bound to source
+fingerprint and embedding-model identity. A stale vector cannot make an edited
+source current. Missing embeddings or an embedding outage leave text/exact retrieval
+available, with the actual retrieval mode exposed. An uncertain embedding-provider
+submission is not automatically sent again; lexical/exact recall remains available.
+
+Every page/index operation retains owner, project, private-thread and active-turn
+authority. This does not vector-index all project data: current project facts and
+constraints still come through their existing authorized domain readers. Do not
+mix another member's private conversation into a project-wide memory.
+
+Bob and colleagues share context-management mechanics but receive the task and
+relevant source packet appropriate to their role. A designer and an independent
+reviewer do not receive interchangeable assignments or competing project memories.
+The [tool owner](ask-bob-tools.md#tool-and-colleague-cards--2026-10-18) owns concise
+capability cards and loading the complete instructions/schema when needed.
+
+### Continue long work from confirmed results
+
+The new continuation contract renews an oversized provider chain within the same
+authorized job. The initial trigger is 64,000 input tokens, retaining the two latest
+tool exchanges and a source-linked handoff of at most 1,600 tokens. The handoff
+preserves the assignment, relevant results, uncertainty, open questions and next
+steps; original tool operations remain available through `get_work_history`.
+Current authorization, exact revisions and verified write receipts remain separate
+from that summary. Compaction neither reruns completed operations nor turns an
+uncertain write into permission to repeat it. It is a checkpoint for continuation,
+not a new owner message, mandate, budget period or completion claim.
+
+Main-role rollover atomically refreshes the tool directory and prepared-call fence
+before the first fresh provider request. Detailed manuals must be loaded again;
+a removed native schema cannot still execute through the earlier fence. The new
+manual remains available on the following step. Work handlers and their receipts
+are not reset.
+
+The same wrapper serves supported colleague tool loops with their own original
+task/source seed. A technical 96,000-token input ceiling remains: if an indivisible
+original seed, required result or retained exchange cannot fit after renewal, the
+runtime returns `context_input_too_large` before a paid dispatch. It does not silently
+cut the five original messages or claim that every possible input fits. This is a
+payload boundary, not a renewed task budget. A blocked
+source, lost authority or genuine provider error still has an honest outcome;
+context renewal does not bypass those checks. Mechanical coverage must verify
+small packets, exact-source retrieval, old-job replay and duplicate-free continued
+work. Real-model tests must separately prove useful semantic retention and delivery
+after many folds; synthetic summaries do not establish that quality.
+
+Source owners are `bob-conversation-brief.ts`, `bob-memory-retrieval.ts`,
+`bob-project-orientation.ts`, `bob-context-continuation.ts` and the existing
+`project-answer.ts`/`project-turn.ts` seam. Focused fixtures cover exact five-message
+composition, source references, token limits, lazy loading, refreshed authority and
+the pre-strategy main call's unchanged journal fingerprint. The new function-level
+Deno import configuration is part of the Edge deployment; copying only TypeScript
+files is insufficient. Build/fixture success is separate from hosted readback and
+ordinary-model acceptance.
+
 ## Active memory and continued work — 2026-10-17
 
 The continuation publication uses existing T1 recent messages, T2 older gist/index
@@ -38,9 +181,10 @@ further writes and preserves already confirmed changes. Neither renewal nor a
 technical worker continuation is another owner message or a fresh budget.
 
 This section supersedes the older application-budget and four-fold preparation
-rules below for policy-1 durable work. It does not implement arbitrary same-turn
-provider-context rollover; a provider context-limit error remains a technical
-failure with saved receipts preserved. No model or reasoning tier changes in this
+rules below for policy-1 durable work. This release did not implement arbitrary
+same-turn provider-context rollover; the [new context strategy](#context-strategy--2026-10-18)
+owns its successor contract. Older jobs retain the technical context-limit failure
+with saved receipts preserved. No model or reasoning tier changes in this
 release. [Hosted release evidence](foundation-verification.md#bob-continuation-release-2026-10-17)
 records the installed runtime/catalog and the remaining ordinary owner acceptance.
 
@@ -255,6 +399,10 @@ Otherwise, load T1 and the unsummarized older prefix under the service-only clai
 The separate summarizer has no tools, receives no provider cursor, treats transcript text as untrusted data and preserves units, assumptions, explicit corrections and open dependencies. Structured output indexes each newly folded message using a supplied sequence number; invalid/future/duplicate pointers are rejected before saving. Older pointer topics compress into the gist while originals remain retrievable. Claimed saves in prose are not receipts. `context-summary/global` has its own governed mini/low settings and usage category through the same shared AI service. `ask-bob/global` is reserved for the main standard/high model. Neither changes another app's settings.
 
 ### Managed memory navigation — 2026-10-17
+
+This is the released V1 compatibility contract. The [V2 strategy](#context-strategy--2026-10-18)
+adds token-bounded, semantically selected memory for new activated executions;
+it must not rewrite already-journalled V1 inputs.
 
 New executions pin `memoryManagementVersion: 1` in their durable execution identity.
 The model maintains the gist; code manages its bounded navigation index. Every

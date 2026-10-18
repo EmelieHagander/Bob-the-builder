@@ -14,6 +14,7 @@ const expiresAt = Math.floor(Date.now() / 1000) + 3600
 const token = [JSON.stringify({ alg: 'HS256', typ: 'JWT' }), JSON.stringify({ sub: user.id, exp: expiresAt, role: 'authenticated' }), 'fixture'].map(p => Buffer.from(p).toString('base64url')).join('.')
 const projects = ['A', 'B'].map(id => ({ id, slug: id.toLowerCase(), name: `Reset project ${id}`, description: 'Keep project data', theme: 'birch', phase: 'concept', location: '', type: 'Renovation', start_label: '', start_date: null, end_date: null }))
 const cache = id => `bob:ask-bob-history:v1:${id}:member${id}`
+const contextTooLarge = 'This request contains too much material to process at once. Saved work and conversation history are preserved. Ask Bob to work on a smaller part.'
 let browser
 try {
   for (let n = 0; ; n++) {
@@ -157,16 +158,24 @@ try {
           else releaseAnswer = finish
           return respond({ status: 409, json: { error: 'turn_in_flight' } })
         }
+        if (sendMode === 'context-too-large') {
+          h.messages.push({ role: 'user', text: body.message, turn_id: body.clientTurnId, screen: body.screen,
+            delivery_state: 'failed', background: true, jobId: crypto.randomUUID(), jobStatus: 'failed', error: 'context_input_too_large',
+            updated_at: new Date().toISOString(), seq: h.next_seq++ })
+          return respond({ status: 503, json: { ok: false, error: 'context_input_too_large' } })
+        }
         if (sendMode !== 'normal') {
           const pending = { role: 'user', text: body.message, turn_id: body.clientTurnId, screen:body.screen, delivery_state: 'pending', updated_at: new Date().toISOString(), seq: h.next_seq++ }
-          if (sendMode === 'background') { pending.background = true; pending.jobId = crypto.randomUUID(); pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
+          if (sendMode === 'background' || sendMode === 'background-context-too-large') { pending.background = true; pending.jobId = crypto.randomUUID(); pending.updated_at = new Date(Date.now() - 6 * 60_000).toISOString() }
           h.messages.push(pending)
           const finish = () => {
             pending.delivery_state = 'completed'
             h.messages.push({ role: 'assistant', text: 'RECOVERED ANSWER', turn_id: body.clientTurnId, delivery_state: 'completed', seq: h.next_seq++, evidence: { kind: 'ai_assessment', sources: [], partial: false } })
           }
-          if (sendMode === 'background') {
-            releaseAnswer = finish
+          if (sendMode === 'background' || sendMode === 'background-context-too-large') {
+            releaseAnswer = sendMode === 'background-context-too-large' ? () => {
+              pending.delivery_state = 'failed'; pending.jobStatus = 'failed'; pending.error = 'context_input_too_large'
+            } : finish
             return respond({ status: 202, json: { ok: true, status: 'accepted', projectId: body.projectId, jobId: pending.jobId, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() } })
           }
           if (sendMode === 'lost' || sendMode === 'busy') {
@@ -607,6 +616,71 @@ try {
     assert.equal(await drawer.getByText('Held before reset', { exact: true }).count(), 0)
     assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
     sendMode = 'normal'
+    // Oversized context is a terminal outcome for this exact input, with an
+    // editable next request. Neither HTTP failure nor a failed durable job
+    // should trap the owner in the same Retry request or require clearing chat.
+    const beforeOversize = histories.get('A')
+    beforeOversize.id ??= crypto.randomUUID()
+    const savedTurn = crypto.randomUUID()
+    beforeOversize.messages.push({ role: 'user', text: 'Save the earlier planning brief', turn_id: savedTurn, delivery_state: 'completed', seq: beforeOversize.next_seq++ },
+      { role: 'assistant', text: 'EARLIER PLANNING BRIEF SAVED', turn_id: savedTurn, delivery_state: 'completed', seq: beforeOversize.next_seq++,
+        evidence: { kind: 'ai_assessment', sources: [], partial: false, writes: [{ projectId: 'A', dataset: 'tasks', recordId: 'retained-brief',
+          label: 'Preserved planning brief', operation: 'updated', savedAt: new Date().toISOString() }] } })
+    const preservedPrefix = structuredClone(beforeOversize.messages)
+    for (const mode of ['context-too-large', 'background-context-too-large']) {
+      // A fresh read also removes the earlier mode's transient error notice
+      // once its smaller follow-up has completed.
+      await page.reload(); drawer = await open()
+      await drawer.getByText('EARLIER PLANNING BRIEF SAVED', { exact: true }).waitFor()
+      sendMode = mode
+      const requestText = `Oversized material ${mode}`
+      const callsBefore = answerCalls, resetBefore = resetCalls
+      const arrival = page.waitForRequest(req => new URL(req.url()).pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.message === requestText)
+      await drawer.getByRole('textbox').fill(requestText)
+      await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+      const failedBody = (await arrival).postDataJSON()
+      if (mode === 'background-context-too-large') {
+        await drawer.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+        await drawer.getByRole('textbox').fill('Keep this smaller follow-up draft')
+        releaseAnswer()
+      }
+      await drawer.getByText(contextTooLarge, { exact: true }).waitFor()
+      assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+      assert.equal(await drawer.getByRole('button', { name: 'Stop', exact: true }).count(), 0)
+      assert.equal(await drawer.getByRole('textbox').inputValue(), mode === 'context-too-large' ? requestText : 'Keep this smaller follow-up draft')
+      assert(await drawer.getByRole('button', { name: 'Send', exact: true }).isEnabled(), 'The owner can edit and send a smaller request')
+      assert.equal(answerCalls, callsBefore + 1)
+      assert.deepEqual(beforeOversize.messages.slice(0, preservedPrefix.length), preservedPrefix, 'Failure cannot alter saved history or receipts')
+      await page.reload(); drawer = await open()
+      await drawer.getByText(contextTooLarge, { exact: true }).waitFor()
+      assert.equal(await drawer.getByRole('button', { name: 'Retry request', exact: true }).count(), 0)
+      assert.equal(await drawer.getByRole('button', { name: 'Stop', exact: true }).count(), 0)
+      assert.equal(answerCalls, callsBefore + 1, 'Reload never resubmits the unchanged oversized input')
+      while (await drawer.getByRole('button', { name: 'Show older messages', exact: true }).count()) {
+        await Promise.all([
+          page.waitForResponse(response => new URL(response.url()).pathname === '/rest/v1/bob_messages'),
+          drawer.getByRole('button', { name: 'Show older messages', exact: true }).click(),
+        ])
+        await drawer.getByRole('button', { name: 'Loading older messages…', exact: true }).waitFor({ state: 'hidden' })
+      }
+      await drawer.getByText('EARLIER PLANNING BRIEF SAVED', { exact: true }).waitFor()
+      await drawer.getByText('Preserved planning brief', { exact: false }).waitFor()
+      await drawer.getByText(contextTooLarge, { exact: true }).scrollIntoViewIfNeeded()
+      await page.screenshot({ path: `test-results/bob-${mode}-${viewport.width}.png` })
+      assert(await drawer.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'Context error remains readable without horizontal overflow')
+      sendMode = 'normal'
+      const smallerText = `Work on one smaller part after ${mode}`
+      const smaller = page.waitForRequest(req => new URL(req.url()).pathname === '/functions/v1/ask-bob' && req.postDataJSON()?.message === smallerText)
+      const answersBefore = await drawer.getByText('FRESH ANSWER', { exact: true }).count()
+      await drawer.getByRole('textbox').fill(smallerText)
+      await drawer.getByRole('button', { name: 'Send', exact: true }).click()
+      assert.notEqual((await smaller).postDataJSON().clientTurnId, failedBody.clientTurnId, 'Edited scope starts a new logical request')
+      await drawer.getByText('FRESH ANSWER', { exact: true }).nth(answersBefore).waitFor()
+      assert.equal(answerCalls, callsBefore + 2)
+      assert.equal(resetCalls, resetBefore, 'Recovering with a smaller request does not clear the conversation')
+      assert.equal(sentTurns.filter(turn => turn.clientTurnId === failedBody.clientTurnId).length, 1)
+      assert.deepEqual(beforeOversize.messages.slice(0, preservedPrefix.length), preservedPrefix)
+    }
     // Shared guest must clear only this device; an auth failure is never guest mode.
     // A cold open fetches five messages; older pages keep the draft and scroll.
     const pagedHistory = histories.get('A')

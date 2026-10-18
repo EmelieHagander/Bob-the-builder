@@ -1,5 +1,6 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.110.2'
 import type { ContextStore } from './bob-working-context.ts'
+import { memoryRetrievalStore } from './bob-memory-retrieval.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { parseBobScreen, type BobScreenPointer } from '../../../src/domain/bobScreen.ts'
 import { parseBobImageIds } from '../../../src/domain/bobImages.ts'
@@ -41,6 +42,7 @@ export function createBobConversationStore(client: SupabaseClient<any, 'bob', an
       const args = { p_project: binding.projectId, p_user: binding.userId, p_thread: binding.threadId, p_turn: binding.turnId, p_generation: binding.generation }
       const rpc = async (name: string, extra = {}) => checked(await client.rpc(name, { ...args, ...extra }).abortSignal(AbortSignal.timeout(12000)) as RpcResult<unknown>, 'conversation context')
       return {
+        ...memoryRetrievalStore(rpc),
         load: () => rpc('bob_load_context'),
         save: (expected, through, summary) => rpc('bob_save_context_summary', { p_expected_seq: expected, p_through_seq: through, p_summary: summary }),
         search: (query, before) => rpc('bob_search_context_history', { p_query: query, p_before_seq: before }),

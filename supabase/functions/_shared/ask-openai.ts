@@ -37,12 +37,15 @@ import { createMediaAdapter, resolveMediaImage } from './project-context/media.t
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, generateImage } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage } from './openai-service.ts'
+import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
+import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
+import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectAnswer, TurnProgress } from './project-answer.ts'
-import { createProjectWriter } from './project-write.ts'
+import { compactReceipts, createProjectWriter } from './project-write.ts'
 import { prepareWorkingContext } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
@@ -75,10 +78,12 @@ export async function answerWithOpenAi(opts: {
   const journal = opts.background?.journal
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
   let priorDrawingAttemptUncertain = false
+  let memoryEmbeddingOutcomeUncertain = false
   const priorDrawingNotice='Utfallet för ett tidigare AI-försök var okänt när ett nytt försök startades. Kostnader kan därför finnas för båda försöken.'
   const withResendNotice = (answer: string) => {
     const notice=journal&&journal.uncertainResends()>0?RESEND_NOTICE:priorDrawingAttemptUncertain?priorDrawingNotice:null
-    return notice&&!answer.includes(notice)?answer+'\n\n'+notice:answer
+    const embeddingNotice = memoryEmbeddingOutcomeUncertain ? 'Ett anrop för minnessökningen tappade kontakten. Det kan ha debiterats, men skickades inte om. Textsökning i samtalet finns fortfarande tillgänglig.' : null
+    return [notice, embeddingNotice].reduce<string>((text, value) => value && !text.includes(value) ? text + '\n\n' + value : text, answer)
   }
   const memo = async <T>(stream: string, input: unknown, work: (identity?: JournalIdentity) => Promise<T>, reserve = 0, signal?:AbortSignal): Promise<T> =>
     journal ? journal.run(stream, input, work, reserve, signal) : work()
@@ -106,7 +111,7 @@ export async function answerWithOpenAi(opts: {
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
-  const callModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
+  const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
     ?{requestId:drawingRequestId,options}:undefined
@@ -158,6 +163,11 @@ export async function answerWithOpenAi(opts: {
    return result
   })
   }
+  let contextContinuation: ReturnType<typeof createBobContextContinuation> | undefined
+  let refreshMainContextSurface: (() => Promise<ContextSurface>) | undefined
+  let mainContextEpoch = 0
+  const callModel = (requested: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) =>
+    contextContinuation ? contextContinuation.call(requested, beforeDispatch) : dispatchModel(requested, beforeDispatch)
   const mediaAdapter = () => {
     const adapter = createMediaAdapter(opts.projectId, mediaTransport, true)
     return { ...adapter,checkpointed:!!journal,
@@ -222,7 +232,25 @@ export async function answerWithOpenAi(opts: {
     return result
   } }
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution=await memo('execution:identity',{},async()=>({id:crypto.randomUUID(),startedAt:Date.now(),constructionReplayVersion:2,memoryManagementVersion:1 as const}))
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1 } =
+    await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
+      memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
+      ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
+    }))
+  const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
+  if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
+    onRollover: ({ role }) => { if (role === 'ask-bob') mainContextEpoch++ },
+    refreshSurface: async ({ role }) => role === 'ask-bob' ? refreshMainContextSurface?.() : undefined,
+    snapshot: ({ role }) => role === 'ask-bob' ? {
+      // Only receipts reached at this replay position, never writes restored
+      // from a later checkpoint or another colleague's private conversation.
+      confirmed_writes: compactReceipts((writer?.executedReceipts ?? []).slice(-16)),
+      earlier_confirmed_writes: Math.max(0, (writer?.executedReceipts.length ?? 0) - 16),
+      unresolved_tools: writer?.unresolvedTools ?? [],
+      unsaved_plan_candidate_available: planAssistant.canSave,
+      unsaved_drawing_candidate_available: !!cadAssistant.candidate,
+    } : undefined,
+  })
   metrics=createExecutionMetrics({runId:execution.id,turnId:opts.clientTurnId,startedAt:execution.startedAt,write:async event=>{
     const {error}=await internal.from('execution_events').upsert(event,{onConflict:'run_id,event_key'}).abortSignal(AbortSignal.timeout(3000))
     if(error)throw new Error('metrics_unavailable')
@@ -584,28 +612,41 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy: createToolPolicyReader(client, opts.projectId),
-    ...(claimedServer && threadId ? { prepareContext: () => prepareWorkingContext({
+    ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
+      registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
+    } : {}),
+    ...(claimedServer && threadId ? { prepareContext: () => {
+      const sourceStore = conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation })
+      const journalled = contextStrategy ? journalMemoryStore(sourceStore, memo) : undefined
+      const store = journalled ? { ...journalled,
+        load: async () => ({ ...await journalled.load() as object, generation: claimedServer.generation }),
+      } : {
+        load: async () => ({ ...await memo('context:load', {}, sourceStore.load) as object, generation: claimedServer.generation }),
+        save: (expected: number, through: number, summary: string) => memo('context:save', { expected, through, summary }, async () => {
+          try { return await sourceStore.save(expected, through, summary) }
+          catch (error) {
+            const current = await sourceStore.load() as { lastFoldedSeq?: number; summary?: string }
+            if (current.lastFoldedSeq === through && current.summary === summary) return { lastFoldedSeq: through }
+            throw error
+          }
+        }),
+        search: (query: string, before: number | null) => memo('context:search', { query, before }, () => sourceStore.search(query, before)),
+      }
+      const embeddingRole = contextStrategy ? aiCatalog.role('memory-embedding') : undefined
+      const retrieval = embeddingRole ? createMemoryRetrieval({ projectId: opts.projectId, threadId, store, hasAccess,
+        embedder: createJournalledMemoryEmbedder({ model: embeddingRole.model.model_name, identity: embeddingRole, memo, hasAccess,
+          onUncertain: () => { memoryEmbeddingOutcomeUncertain = true },
+          invoke: texts => callOpenAIEmbeddings({ app: 'bob', coworkerId: 'bob', module: 'global', functionName: 'memory-embedding', aiFunction: 'memory-embedding',
+            userId: opts.userId, aiDefinition: embeddingRole, input: texts, timeoutMs: Math.max(1000, Math.min(15000, deadline - Date.now(), journal ? journal.remaining() - 3000 : Infinity)),
+          }),
+        }),
+      }) : undefined
+      return prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       memoryManagementVersion: execution.memoryManagementVersion,
-      store: (() => {
-        const store = conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation })
-        return {
-          load: async () => ({ ...await memo('context:load', {}, store.load) as object, generation: claimedServer.generation }),
-          save: (expected: number, through: number, summary: string) => memo('context:save', { expected, through, summary }, async () => {
-            try { return await store.save(expected, through, summary) }
-            catch (error) {
-              // Summary CAS may have committed immediately before a checkpoint
-              // was lost. Read back that exact summary instead of folding twice.
-              const current = await store.load() as { lastFoldedSeq?: number; summary?: string }
-              if (current.lastFoldedSeq === through && current.summary === summary) return { lastFoldedSeq: through }
-              throw error
-            }
-          }),
-          search: (query: string, before: number | null) => memo('context:search', { query, before }, () => store.search(query, before)),
-        }
-      })(),
+      store, ...(retrieval ? { retrieval } : {}),
       callModel, hasAccess, unlimitedWork, deadline: unlimitedWork ? deadline : Math.min(deadline - 60000, Date.now() + 105000),
-    }) } : {}),
+    }) } } : {}),
     // The main answer/continuation model gets the evidence policy. The older-history
     // summarizer above is deliberately separate: it must not fetch project images.
     callModel: createGroundedModelCall({

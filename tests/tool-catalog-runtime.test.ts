@@ -8,7 +8,7 @@ import { createProjectWriter, WRITE_TOOLS } from '../supabase/functions/_shared/
 import { createBobToolSession } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { modelParameters } from '../supabase/functions/_shared/project-tools/session.ts'
 import { isBobAnswerEvidence } from '../src/data/bobEvidence.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preContextStrategyCatalogFixture } from './support/ai-catalog-fixture.ts'
 import { createAiCatalogSession } from '../supabase/functions/_shared/ai-catalog.ts'
 const usage={input_tokens:1,output_tokens:1,total_tokens:2}, time='2026-09-21T08:00:00Z'
 const userId='00000000-0000-4000-8000-000000000001'
@@ -30,7 +30,8 @@ function fixture() {
 
 test('real claimed loop offers the task tool immediately, reviews its saved result once and persists its receipt',async()=>{
   const f=fixture();let calls=0,committed:any;const observations:any[]=[]
-  const manifest=structuredClone(catalogFixture().manifest())
+  // Replay the inline-guide publication; lazy manuals have separate current-path tests.
+  const manifest=structuredClone(preContextStrategyCatalogFixture().manifest())
   manifest.manifest_id='task-guide-revision'
   const taskDefinition=manifest.definitions.find(row=>row.prompt_key==='tools.save_project_task')!
   taskDefinition.definition.description='Save or revise the project Task.'

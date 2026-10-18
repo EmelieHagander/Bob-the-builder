@@ -18,6 +18,9 @@ import { buildBobHands } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import type { WorkingContext } from './bob-working-context.ts'
+import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
+import { countContextTokens } from './bob-token-budget.ts'
+import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
@@ -46,6 +49,33 @@ function buildTurnFrame(aiCatalog: AiCatalogSession, projectId: string, briefing
     ...(!unlimitedWork ? [aiCatalog.text('bob.frame.limits', { steps: BOB_TURN_LIMITS.steps, writes: BOB_TURN_LIMITS.writes })] : []),
     text('briefing-label'), JSON.stringify(briefing),
   ].join('\n\n')
+}
+
+/** Derived memory and original conversation stay separate from current saved
+ * project facts. These are labelled data messages, never role instructions. */
+function buildManagedMessages(aiCatalog: AiCatalogSession, opts: {
+  projectId: string; message: string; context?: WorkingContext; currentView?: CurrentView;
+  orientation: ProjectOrientation; catalog: unknown; drawingRequests: unknown;
+}): NonNullable<OpenAIServiceOptions['messages']> {
+  const text = (key: string) => aiCatalog.text('bob.frame.' + key)
+  const { footer: _footer, ...orientation } = opts.orientation
+  const context = opts.context
+  return [
+    ...(context ? [{ role: 'user' as const, content: [text('prior-conversation'), text('history'),
+      JSON.stringify({ throughSeq: context.throughSeq, summary: context.summary, index: context.historyIndex ?? [] }),
+      text('recent'), JSON.stringify({ messageStates: context.recent.map(m => ({ seq: m.seq, state: m.state })) }),
+    ].join('\n\n') }] : []),
+    ...(context ? context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
+    { role: 'user', content: [text('current'), aiCatalog.text('bob.frame.binding', { project_id: opts.projectId }), text('briefing-trust'),
+      ...(opts.currentView ? [text('current-view'), JSON.stringify(opts.currentView)] : []),
+      ...(context?.recentWrites?.length ? [text('saved'), JSON.stringify({ recentWrites: context.recentWrites })] : []),
+      ...(context?.recentSources?.length ? [text('sources'), JSON.stringify({ recentSources: context.recentSources })] : []),
+      text('briefing-label'), JSON.stringify(orientation),
+      ...(opts.catalog ? [text('catalog'), JSON.stringify(opts.catalog)] : []),
+    ].join('\n\n') },
+    ...(Array.isArray(opts.drawingRequests) && opts.drawingRequests.length
+      ? [{ role: 'user' as const, content: text('outstanding') + '\n' + JSON.stringify(opts.drawingRequests) }] : []),
+  ]
 }
 export type ModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<string>>
 export type ProjectAnswer =
@@ -87,6 +117,10 @@ export async function runProjectAnswer(opts: {
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   /** Internal comparison only; never read from the owner's request body. */
   toolInstructions?: ToolInstructions;
+  /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
+  contextEpoch?: () => number;
+  /** Refresh the active tool fence atomically before a fresh provider chain. */
+  registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   calculator?: ProjectCalculator;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
@@ -94,8 +128,12 @@ export async function runProjectAnswer(opts: {
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
   const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
+  const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
+  const contextStrategy = contract.context_strategy_version === 1
+  if (contextStrategy && countContextTokens(opts.aiCatalog.role('ask-bob').systemMessage) > 700) throw new Error('context_input_too_large')
+  const toolInstructions = opts.toolInstructions ?? (contextStrategy ? 'lazy' : undefined)
   const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
-  const toolbox = createBobToolSession({ ...opts, readPolicy: opts.readToolPolicy ?? (async () => {
+  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), readPolicy: opts.readToolPolicy ?? (async () => {
     const policy = await seedToolPolicy()
     // Offline/injected callers use the pinned catalog's advertised versions.
     // Production always supplies the live caller-authorized policy reader.
@@ -108,23 +146,26 @@ export async function runProjectAnswer(opts: {
   }) })
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
-  const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.unlimitedWork === true && contract.work_allowance_version === 1
   const completionV2 = contract.work_completion_version === 2
   const completionAware = contract.work_completion_version === 1 || completionV2
   const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
   const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = []
-  let previousResponseId = opts.context ? undefined : opts.previousResponseId
+  let previousResponseId = opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=await opts.cadAssistant?.pending()
-  // Pending domain work is background context. Keep the owner's current request
-  // after it so a paused drawing cannot become the turn's newest instruction.
-  let messages: OpenAIServiceOptions['messages'] = [
+  const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
+  const orientation = contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline }) : undefined
+  const initialFooter = orientation ? { role: 'user' as const,
+    content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer }) } : undefined
+  // Legacy pins retain their original message order. New context explicitly
+  // labels pending work as data and ends with source-bound request orientation.
+  let messages: OpenAIServiceOptions['messages'] = orientation ? buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [
     { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView, unlimitedWork) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
-  const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
+  let preparedEpoch = contextStrategy ? opts.contextEpoch?.() : undefined
   const observation: TurnObservation = { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' }
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }
   const progress = (value: Omit<TurnProgress, 'saved'>) => { try { opts.onProgress?.({ ...value, saved: opts.writer?.receipts.length ?? 0 }) } catch { /* progress is advisory */ } }
@@ -139,12 +180,31 @@ export async function runProjectAnswer(opts: {
     let tools: NonNullable<OpenAIServiceOptions['tools']> = []
     const lastStep = !unlimitedWork && step >= steps - 1, lateInTurn = !unlimitedWork && Date.now() + 40000 >= deadline
     try {
+      if (contextStrategy && opts.contextEpoch && !opts.registerContextSurface) {
+        const epoch = opts.contextEpoch()
+        if (epoch !== preparedEpoch) { toolbox.resetInstructions(); preparedEpoch = epoch }
+      }
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
     const closedByLimit = lastStep || lateInTurn
     const closedByCommentary = completionAware && commentaryStreak >= 2
-    const shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
+    let shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
+    const schemaParameters = () => ({ server_quote: !!opts.message.trim(), include_manual: toolInstructions !== 'on_demand' && toolInstructions !== 'lazy',
+      ...(toolInstructions === 'lazy' ? { card: true } : {}), categories: (tools.find(t => t.function.name === 'list_project_category')?.function.parameters.properties as Record<string, any> | undefined)?.category?.enum ?? [] })
+    if (contextStrategy && opts.registerContextSurface) opts.registerContextSurface(async () => {
+      if (!await opts.hasAccess()) throw new Error('project_denied')
+      if (opts.validateCurrentView && !await opts.validateCurrentView()) throw new Error('context_unavailable')
+      if (opts.projectContext && !await opts.projectContext.validate()) throw new Error('context_unavailable')
+      toolbox.resetInstructions()
+      if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
+      else { toolbox.closeSurface(); tools = [] }
+      shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
+      // The returned provider request and its eventual handlers share this
+      // refreshed fence. A new describe call remains loaded for the next step.
+      return { systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), tools: tools.length ? tools : undefined,
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: undefined }
+    })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
       messages = [...messages, { role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.closed', { budget: lastStep ? 'step' : 'time' }) }]
@@ -160,8 +220,8 @@ export async function runProjectAnswer(opts: {
       ? {success:true,data:cadFailure.user_message,model:'server',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
       : await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
-      userId: opts.userId, systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), catalogRoleKey: 'ask-bob', catalogSchemaParameters: { server_quote: !!opts.message.trim(), include_manual: opts.toolInstructions !== 'on_demand', categories: (tools.find(t => t.function.name === 'list_project_category')?.function.parameters.properties as Record<string, any> | undefined)?.category?.enum ?? [] },
-      messages: [...messages, ...(opts.projectContext?.carrier() ?? [])], previousResponseId, tools: tools.length ? tools : undefined,
+      userId: opts.userId, systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
+      messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
     })
@@ -276,7 +336,7 @@ export async function runProjectAnswer(opts: {
     observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
     return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
       evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: completionAware && response.outputPhase === 'refusal' || facts.length > 0 || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        partial: completionAware && response.outputPhase === 'refusal' || facts.length > 0 || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
         ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
     }
   }

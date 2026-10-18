@@ -2,7 +2,8 @@ import type { ModelCall } from './project-answer.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import type { ProjectWriteReceipt } from '../../../src/data/provenance.ts'
 import { isProjectWriteReceipt } from '../../../src/data/bobEvidence.ts'
-import { checkedBrief, manageConversationBrief, readStoredBrief, BRIEF_LIMITS, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
+import { checkedBrief, manageConversationBrief, manageConversationBriefV2, readStoredBrief, briefFitsTokenBudget, BRIEF_LIMITS, BRIEF_TOKEN_POLICY, InvalidConversationBrief, type ConversationBrief } from './bob-conversation-brief.ts'
+import type { MemoryRetrieval, MemoryRetrievalStore } from './bob-memory-retrieval.ts'
 
 export interface ContextMessage { seq: number; role: 'user' | 'assistant'; text: string; state: 'pending' | 'completed' | 'failed' }
 export interface ContextFrame {
@@ -15,7 +16,7 @@ export interface ContextFrame {
 export interface RecentSource { dataset: string; recordId: string; label: string }
 const validSource = (v: unknown): v is RecentSource => !!v && typeof v === 'object' && !Array.isArray(v)
   && ['dataset', 'recordId', 'label'].every(k => typeof (v as Record<string, unknown>)[k] === 'string' && ((v as Record<string, string>)[k]).length > 0 && ((v as Record<string, string>)[k]).length <= 200)
-export interface ContextStore {
+export interface ContextStore extends MemoryRetrievalStore {
   load(): Promise<unknown>;
   save(expected: number, through: number, summary: string): Promise<unknown>;
   search(query: string, before: number | null): Promise<unknown>;
@@ -25,7 +26,9 @@ export interface WorkingContext {
   historyIndex?: ConversationBrief['index'];
   recentWrites?: ProjectWriteReceipt[];
   recentSources?: RecentSource[];
-  history: { readonly remaining: number; search(value: unknown): Promise<{ status: string; [key: string]: unknown }> };
+  memoryManagementVersion?: 1 | 2;
+  history: { readonly remaining: number; search(value: unknown): Promise<{ status: string; [key: string]: unknown }>;
+    read?(value: unknown): Promise<{ status: string; [key: string]: unknown }> };
 }
 
 export const HISTORY_TOOL = {
@@ -63,6 +66,27 @@ function frame(value: unknown, binding: { projectId: string; threadId: string; g
   return v
 }
 
+/** SQL owns the snapshot and compare-and-swap. Check its complete folded range
+ * before trusting a model's editable selection. Retried current requests can
+ * have an older sequence; they are explicitly excluded by the SQL snapshot. */
+function checkFrameCoverage(state: ContextFrame): void {
+  const current = state.recent.at(-1)!
+  const previousRecent = state.recent.slice(0, -1)
+  if (new Set(state.recent.map(message => message.seq)).size !== state.recent.length
+    || previousRecent.some((message, at) => at > 0 && message.seq <= previousRecent[at - 1].seq)) throw new Error('context_unavailable')
+  const cutoff = previousRecent[0]?.seq ?? current.seq
+  let next = state.lastFoldedSeq + 1
+  for (const message of state.older) {
+    if (next === current.seq && next < cutoff) next++
+    if (message.seq !== next || message.seq >= cutoff) throw new Error('context_unavailable')
+    next++
+  }
+  const actualThrough = state.older.at(-1)?.seq ?? state.lastFoldedSeq
+  if (actualThrough !== state.foldThroughSeq) throw new Error('context_unavailable')
+  if (next === current.seq && next < cutoff) next++
+  if (state.hasMore ? next >= cutoff : next !== cutoff) throw new Error('context_unavailable')
+}
+
 /** Incremental Launchpad-style T1/T2/T3 separation, not provider compaction.
  * A failed fold is retryable and never falls through to an amnesic answer.
  * Successful chunks survive retries; transcript and exact T1 are never rewritten.
@@ -71,56 +95,76 @@ export async function prepareWorkingContext(opts: {
   projectId: string; userId: string; threadId: string; generation: number; message: string;
   store: ContextStore; callModel: ModelCall; hasAccess: () => Promise<boolean>; deadline: number; unlimitedWork?: boolean;
   /** Pinned in the durable execution identity; old journals retain their folds. */
-  memoryManagementVersion?: 1;
+  memoryManagementVersion?: 1 | 2;
+  retrieval?: MemoryRetrieval;
 }): Promise<WorkingContext> {
+  const managed = opts.memoryManagementVersion === 2
   const load = async () => {
     if (!await opts.hasAccess()) throw new Error('project_denied')
-    return frame(await opts.store.load(), opts)
+    const loaded = frame(await opts.store.load(), opts)
+    if (managed) checkFrameCoverage(loaded)
+    return loaded
   }
   let state = await load()
-  for (let fold = 0; state.older.length && (opts.unlimitedWork || fold < 4); fold++) {
+  const needsRewrite = () => managed && !briefFitsTokenBudget(readStoredBrief(state.summary, state.lastFoldedSeq))
+  for (let fold = 0; (state.older.length || needsRewrite()) && (opts.unlimitedWork || fold < 4); fold++) {
     const previousBrief = readStoredBrief(state.summary, state.lastFoldedSeq)
+    const refreshOnly = state.older.length === 0
+    if (refreshOnly && !opts.store.refresh) throw new Error('context_unavailable')
     const known = new Set([...previousBrief.index.map(e => e.seq), ...state.older.map(m => m.seq)])
     let brief: ConversationBrief | undefined
-    let validationFeedback: { reason: string; limits: typeof BRIEF_LIMITS; requiredSequences: number[] } | undefined
+    let validationFeedback: Record<string, unknown> | undefined
     for (let attempt = 0; attempt < 2; attempt++) {
       if (Date.now() + 5000 >= opts.deadline) throw new Error('context_preparing')
       const response = await opts.callModel({
         app: 'bob', coworkerId: 'bob', functionName: 'context-summary', aiFunction: 'context-summary', module: 'global', userId: opts.userId,
-        catalogRoleKey:'context-summary',catalogSchemaKey:'bob_conversation_brief',schemaName:'bob_conversation_brief',
+        catalogRoleKey:'context-summary',catalogSchemaKey:managed ? 'bob_conversation_brief_v2' : 'bob_conversation_brief',schemaName:managed ? 'bob_conversation_brief_v2' : 'bob_conversation_brief',
 
-        messages: [{ role: 'user', content: JSON.stringify({ previousBrief, throughSeq: state.lastFoldedSeq, olderMessages: state.older, ...(validationFeedback ? { validationFeedback } : {}) }) }],
+        messages: [{ role: 'user', content: JSON.stringify({ previousBrief, throughSeq: state.lastFoldedSeq, olderMessages: state.older,
+          ...(managed ? { foldThroughSeq: state.foldThroughSeq, currentRequest: state.recent.at(-1), memoryPolicy: BRIEF_TOKEN_POLICY } : {}),
+          ...(validationFeedback ? { validationFeedback } : {}) }) }],
         maxOutputTokens: 3000, timeoutMs: Math.min(30000, opts.deadline - Date.now()),
       })
       if (!response.success || response.toolCalls?.length) throw new Error(response.error==='turn_budget_exhausted'?'turn_budget_exhausted':'context_unavailable')
       try {
-        const candidate = opts.memoryManagementVersion === 1
+        const candidate = managed
+          ? manageConversationBriefV2(response.data, previousBrief, state.older, state.foldThroughSeq)
+          : opts.memoryManagementVersion === 1
           ? manageConversationBrief(response.data, previousBrief, state.older, state.foldThroughSeq)
           : checkedBrief(response.data, state.foldThroughSeq, BRIEF_LIMITS.gist)
-        if (candidate.index.some(e => !known.has(e.seq)) || state.older.some(m => !candidate.index.some(e => e.seq === m.seq))) throw new InvalidConversationBrief('coverage')
+        if (!managed && (candidate.index.some(e => !known.has(e.seq)) || state.older.some(m => !candidate.index.some(e => e.seq === m.seq)))) throw new InvalidConversationBrief('coverage')
         brief = candidate
         break
       } catch (error) {
         if (!(error instanceof InvalidConversationBrief)) throw error
         console.warn('[Bob memory]', JSON.stringify({ attempt: attempt + 1, reason: error.reason, characters: [...JSON.stringify(response.data ?? null)].length }))
         if (attempt === 1) throw error
-        validationFeedback = { reason: error.reason, limits: BRIEF_LIMITS, requiredSequences: state.older.map(m => m.seq) }
+        validationFeedback = managed
+          ? { reason: error.reason, memoryPolicy: BRIEF_TOKEN_POLICY, availableSequences: [...known] }
+          : { reason: error.reason, limits: BRIEF_LIMITS, requiredSequences: state.older.map(m => m.seq) }
       }
     }
     if (!brief) throw new Error('context_unavailable')
     if (!await opts.hasAccess()) throw new Error('project_denied')
-    const saved = await opts.store.save(state.lastFoldedSeq, state.foldThroughSeq, JSON.stringify(brief)) as { lastFoldedSeq?: number }
+    const saved = await (refreshOnly
+      ? opts.store.refresh!(state.lastFoldedSeq, state.summary, JSON.stringify(brief))
+      : opts.store.save(state.lastFoldedSeq, state.foldThroughSeq, JSON.stringify(brief))) as { lastFoldedSeq?: number }
     if (saved?.lastFoldedSeq !== state.foldThroughSeq) throw new Error('context_unavailable')
     state = await load()
+    if (managed && (state.lastFoldedSeq !== saved.lastFoldedSeq || state.summary !== JSON.stringify(brief))) throw new Error('context_unavailable')
   }
-  if (state.older.length || state.hasMore) throw new Error('context_preparing')
+  if (state.older.length || state.hasMore || needsRewrite()) throw new Error('context_preparing')
+  if (managed && opts.retrieval) await opts.retrieval.index()
   let searches = 0
   const brief = readStoredBrief(state.summary, state.lastFoldedSeq)
   return { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent, recentWrites: state.recentWrites ?? [], recentSources: state.recentSources ?? [],
+    ...(managed ? { memoryManagementVersion: 2 as const } : {}),
     history: {
       get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 4 - searches) },
+      ...(managed && opts.retrieval ? { read: (value: unknown) => opts.retrieval!.read(value) } : {}),
       async search(value: unknown) {
         if (++searches > 4 && !opts.unlimitedWork) return { status: 'budget_exhausted' }
+        if (managed && opts.retrieval) return opts.retrieval.search(value)
         const v = value as { query?: unknown; before_seq?: unknown }
         if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some(k => !['query', 'before_seq'].includes(k))
           || typeof v.query !== 'string' || v.query.length > 200
