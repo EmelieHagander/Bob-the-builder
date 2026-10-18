@@ -3622,3 +3622,26 @@ delivery. Ordinary owner/model/CAD acceptance remains in
 explicitly adopt its current construction revision (last observed 5), then
 verify independent review, a saved drawing receipt and reload. Its retained
 source revision 3 was not silently replaced during installation.
+## Memory pointer and repeated notice correction — 2026-10-18
+
+**Prepared correction; deployment and ordinary owner acceptance pending.**
+The 17:37 UTC owner attempt failed before project/CAD work with
+`context_unavailable`. Its two successful `context-summary` provider responses
+both included sequence 49 (the current request) in the older-history pointer
+index. Both failed the `pointers` validator. This was not a drawing renderer
+failure or an AI spending cap.
+
+The repeated Swedish drawing-error cards in the reported screenshot were distinct
+persisted automatic failures, delivered at 2026-10-17 21:36 UTC and 2026-10-18
+11:49 UTC. The latest owner attempt added no assistant answer. The drawing request
+remained quarantined with `drawing_continuation_mismatch`; its packet revision 9
+and source geometry were unchanged. That prior quarantine prevented another
+automatic child from being queued after the new memory failure.
+
+The correction binds memory pointers to exact supplied older sources through the
+pinned catalog schema and separates the pending request's relevance text. It keeps
+strict validation, original messages, prior manifests and paid replay. A separate
+database correction suppresses only consecutive identical terminal drawing
+notices for the same mandate, retaining each operational failure. It does not
+delete old chat or relax construction/source validation. Behavior belongs to
+[conversations](ask-bob-conversations.md#small-context-exact-sources).

@@ -136,6 +136,22 @@ function toolParameters(row: AiCatalogDefinition, parameters: JsonObject): JsonO
  * This never merges an arbitrary caller-provided schema into a definition. */
 function boundSchema(row: AiCatalogDefinition, source: JsonObject, parameters: JsonObject): JsonObject {
   const result = JSON.parse(JSON.stringify(source)) as JsonObject
+  // Conversation pointers may name only originals in this exact fold. The
+  // current request guides relevance, but is not an older-history source.
+  if (row.metadata.memory_pointer_scope_version === 1) {
+    const sequences = parameters.memory_sequences
+    if (!Array.isArray(sequences) || sequences.length > 56
+      || !sequences.every(seq => Number.isSafeInteger(seq) && Number(seq) > 0)
+      || new Set(sequences).size !== sequences.length) fail('ai_contract_missing', 'memory sequences')
+    const properties = object(result.properties) ? result.properties : undefined
+    const index = properties && object(properties.index) ? properties.index : undefined
+    const item = index && object(index.items) ? index.items : undefined
+    const fields = item && object(item.properties) ? item.properties : undefined
+    const seq = fields && object(fields.seq) ? fields.seq : undefined
+    if (!index || !seq || seq.type !== 'integer') fail('ai_contract_missing', 'memory pointer schema')
+    if (sequences.length) seq.enum = [...sequences].sort((a, b) => Number(a) - Number(b))
+    else index.maxItems = 0
+  }
   const bindings = object(row.metadata.schema_bindings) ? row.metadata.schema_bindings : object(row.definition.schema_bindings) ? row.definition.schema_bindings : {}
   for (const [path, sourceName] of Object.entries(bindings)) {
     if (typeof sourceName !== 'string' || !sourceName.startsWith('server.')) fail('ai_contract_missing','schema binding')

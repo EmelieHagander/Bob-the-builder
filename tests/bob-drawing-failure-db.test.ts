@@ -72,6 +72,45 @@ test('cron expiry uses the same failure path after the worker has disappeared', 
   assert.equal((await one("select count(*)::int n from bob.bob_messages where thread_id=$1 and turn_id=$2 and role='assistant'", [f.thread, f.job])).n, 1)
 })
 
+async function nextFailure(f: Awaited<ReturnType<typeof fixture>>, error = 'background_expired') {
+  const job = randomUUID(), claim = randomUUID()
+  const header = await one('update bob_private.project_drawing_requests set observed_event=observed_event+1 where id=$1 returning observed_event,revision', [f.request])
+  const generation = (await one('update bob_private.bob_thread_provider_state set generation=generation+1,in_flight_turn_id=$2,lock_started_at=clock_timestamp() where thread_id=$1 returning generation', [f.thread, f.turn])).generation
+  await pg.query(`insert into bob_private.bob_jobs(id,project_id,actor_id,thread_id,turn_id,generation,credential,worker_url,expires_at,status,claim_token,lease_until,drawing_request_id,drawing_event_revision,waiting_ai_job)
+    values($1,$2,$3,$4,$5,$6,'{}','https://fixture.supabase.co/functions/v1/bob-worker',now()+interval '20 minutes','running',$7,now()+interval '150 seconds',$8,$9,$10)`,
+    [job, f.project, f.owner, f.thread, f.turn, generation, claim, f.request, header.observed_event, f.ai])
+  await pg.query('insert into bob_private.drawing_attempts(id,request_id,event_revision,request_revision) values($1,$2,$3,$4)', [job, f.request, header.observed_event, header.revision])
+  assert.equal((await invoke('bob.bob_finish_job', [job, claim, error])).status, 'failed')
+  return job
+}
+
+test('repeated automatic failures retain separate diagnostics without duplicate consecutive chat cards', async () => {
+  const f = await fixture()
+  await invoke('bob.bob_finish_job', [f.job, f.claimToken, 'background_expired'])
+  const sequence = await one('select next_seq from bob.bob_threads where id=$1', [f.thread])
+  const next = await nextFailure(f)
+  assert.deepEqual(await one('select next_seq from bob.bob_threads where id=$1', [f.thread]), sequence)
+  assert.equal((await one("select count(*)::int n from bob.bob_messages where thread_id=$1 and turn_id=$2", [f.thread, next])).n, 0)
+  assert.equal((await one("select count(*)::int n from bob.execution_events where run_id in ($1,$2) and event_key='background_failure'", [f.job, next])).n, 2)
+  assert.equal((await one('select payload from bob_private.drawing_requests where id=$1', [f.request])).payload.execution_failure.job_id, next)
+  assert.equal((await one('select status from bob_private.drawing_attempts where id=$1', [next])).status, 'failed')
+  assert.deepEqual((await one('select payload from bob_private.drawing_requests where id=$1', [f.request])).payload.draft, f.draft)
+})
+
+test('changed error, uncertainty or an intervening owner message receives a fresh failure notice', async () => {
+  for (const boundary of ['error', 'receipt', 'owner']) {
+    const f = await fixture()
+    await invoke('bob.bob_finish_job', [f.job, f.claimToken, 'background_expired'])
+    if (boundary === 'receipt') await pg.query("update shared_private.ai_jobs set submission_state='prepared' where id=$1", [f.ai])
+    if (boundary === 'owner') {
+      const { seq } = await one('update bob.bob_threads set next_seq=next_seq+1 where id=$1 returning next_seq-1 seq', [f.thread])
+      await pg.query("insert into bob.bob_messages(thread_id,seq,turn_id,role,text) values($1,$2,$3,'user','Please continue')", [f.thread, seq, randomUUID()])
+    }
+    const next = await nextFailure(f, boundary === 'error' ? 'background_failed' : 'background_expired')
+    assert.equal((await one("select count(*)::int n from bob.bob_messages where thread_id=$1 and turn_id=$2 and role='assistant'", [f.thread, next])).n, 1, boundary)
+  }
+})
+
 test('saved, cancelled, reset, superseded and revoked requests retain their authority and receive no stale error answer', async () => {
   for (const boundary of ['saved', 'cancelled', 'paused', 'new_turn', 'new_event', 'revoked']) {
     const f = await fixture()

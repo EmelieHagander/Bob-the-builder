@@ -19,6 +19,16 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
+ if(memoryPointers){
+  for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){
+   const row=seed.find(row=>row.key===key)
+   const{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,publication:'bob-memory-pointer-scope-v1',...(key.startsWith('schema.')?{memory_pointer_scope_version:1}:{})}
+   if(key==='context-summary.contract')row.content+='\n\n'+memoryPointers[1]
+   versions.set(key,versions.get(key)!+1)
+  }
+ }
  const coverageAdditions=source.match(/\$context_coverage_additions\$([\s\S]+?)\$context_coverage_additions\$/)
  if(coverageAdditions){
   preContextCoverageRows=structuredClone(seed);preContextCoverageVersions=new Map(versions)

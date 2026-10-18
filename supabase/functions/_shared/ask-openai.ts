@@ -657,6 +657,8 @@ export async function answerWithOpenAi(opts: {
       return prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       memoryManagementVersion: execution.memoryManagementVersion,
+      ...(contextStrategy && aiCatalog.definition('schema.bob_conversation_brief_v2').metadata.memory_pointer_scope_version === 1
+        ? { memoryPointerScopeVersion: 1 as const } : {}),
       store, ...(retrieval ? { retrieval } : {}),
       callModel, hasAccess, unlimitedWork, deadline: unlimitedWork ? deadline : Math.min(deadline - 60000, Date.now() + 105000),
     }) } } : {}),
