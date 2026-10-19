@@ -88,7 +88,7 @@ test('truncation and unavailable/budget-exhausted data remain explicit, not comp
 })
 
 test('revocation, denied reads and wrong-project results stop before the image provider call', async () => {
-  for (const mode of ['before', 'after', 'read-denied', 'wrong-project', 'image-deleted']) {
+  for (const readOrder of ['parallel', 'serial'] as const) for (const mode of ['before', 'after', 'read-denied', 'wrong-project', 'image-deleted']) {
     const f = fixture()
     if (mode === 'before') f.revoke()
     if (mode === 'image-deleted') f.invalidate()
@@ -98,7 +98,7 @@ test('revocation, denied reads and wrong-project results stop before the image p
       const read = f.deps.lookup.search
       f.deps.lookup.search = async i => { const r = await read(i); f.revoke(); return r }
     }
-    await assert.rejects(createGroundedModelCall(f.deps)(options), /project_denied|context_unavailable/)
+    await assert.rejects(createGroundedModelCall({ ...f.deps, readOrder })(options), /project_denied|context_unavailable/)
     assert.equal(f.providerCalls, 0)
     if (mode === 'before') assert.equal(f.calls.length, 0)
   }

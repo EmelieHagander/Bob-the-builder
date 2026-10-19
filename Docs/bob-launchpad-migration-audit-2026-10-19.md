@@ -108,6 +108,42 @@ the same failed job and no replacement job. Its three bootstrap calls cost
 owner's decision. No successful model run on the correction is claimed; a new
 attempt at the long image job and log review remain required before PR2.
 
+<a id="pr1-live-grounding-regression"></a>
+### Second live job: image-grounding read order on resume
+
+The next attempt began at **11:27:10 UTC** on worker v111 / ask-bob v143. It
+passed tool-card checkpoint storage, completed **six main model calls and ten
+tool executions**, and opened the project image. After an asynchronous context
+summary, it failed at **11:34:26 UTC** with `continuation_changed` on
+`rpc:search_bob_project_data_v8:6`, after **ten claims**. Terminal privacy cleanup
+removed the working state as designed. Observed worker shutdown samples reported
+**275–588 ms** of CPU and `EarlyDrop`; this subset is not proof of a successful
+long run or constant CPU.
+
+The image wrapper starts two lookup reads. Both await a journaled observation
+before taking a position in the shared RPC stream. Cold persistence and warm
+replay can complete those observations in different orders, assigning the same
+RPC position to different inputs. The new regression fixture reproduced the
+exact operation mismatch before the correction: it restores the model boundary
+after an accepted asynchronous compactor call and reverses observation timing.
+
+The correction pins `groundingReadOrderVersion: 1` in the saved execution
+identity for new checkpoint turns and performs those two reads serially. Existing
+identities without that flag retain their original parallel contract. Journal
+fingerprints, live project/image authority checks, write receipts and CAD behavior
+are preserved. No schema change is needed.
+
+The focused grounding, lookup continuation and checkpoint-resume suites passed
+**23 / 23** tests, including the 43-claim fixture. After expanding the authority
+test to cover both read orders, the two grounding suites passed **9 / 9** tests.
+The regression asserts no repeated source reads or compactor submission, identical
+compactor input, preserved image reference and equal source evidence after
+restart. Both affected Edge entrypoints passed Deno graph checking using the
+same scratch dependency mapping described above. Diff and documentation review
+were performed directly in this session, not by an independent reviewer. Full
+CI remains deferred. Release readback and a new ordinary long-image run are still
+required before this correction can close the live gate.
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from
