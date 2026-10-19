@@ -1,11 +1,9 @@
 name: CI
 
-# Expensive full validation belongs at the explicit review gate, not every
-# synchronization push. Keep the PR draft while iterating and mark it ready
-# only when the exact head should receive full CI.
+# Full verification runs only when requested in GitHub Actions.
+# Select the exact review branch before merging; a push or PR state change
+# must not launch this expensive workflow.
 on:
-  pull_request:
-    types: [ready_for_review]
   workflow_dispatch:
 
 jobs:

@@ -1,20 +1,8 @@
 name: Dependency security
 
+# Full dependency audit is scheduled explicitly from Actions rather
+# than triggered by every PR synchronization or main-branch push.
 on:
-  pull_request:
-    types: [ready_for_review]
-    paths:
-      - package.json
-      - package-lock.json
-      - .github/workflows/dependency-security.yml
-  push:
-    branches:
-      - main
-      - security/dependency-audit-2026-09-15
-    paths:
-      - package.json
-      - package-lock.json
-      - .github/workflows/dependency-security.yml
   workflow_dispatch:
 
 permissions:

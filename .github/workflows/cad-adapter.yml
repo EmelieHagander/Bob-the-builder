@@ -1,33 +1,7 @@
 name: CAD adapter
 
+# Review-time verification only; main release/deployment is separate.
 on:
-  pull_request:
-    types: [ready_for_review]
-    paths:
-      - 'cad-worker/**'
-      - 'supabase/functions/_shared/cad-adapter.ts'
-      - 'supabase/functions/_shared/cad-transport.ts'
-      - 'supabase/functions/_shared/cad-assistant.ts'
-      - 'tests/checked-construction-drawing.test.ts'
-      - 'tests/cad-adapter.test.ts'
-      - 'tests/cad-wireframe.test.ts'
-      - 'tests/fixtures/cad-wireframes.json'
-      - 'Docs/cad-adapter.md'
-      - '.github/workflows/cad-adapter.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'cad-worker/**'
-      - 'supabase/functions/_shared/cad-adapter.ts'
-      - 'supabase/functions/_shared/cad-transport.ts'
-      - 'supabase/functions/_shared/cad-assistant.ts'
-      - 'tests/checked-construction-drawing.test.ts'
-      - 'tests/cad-adapter.test.ts'
-      - 'tests/cad-wireframe.test.ts'
-      - 'tests/fixtures/cad-wireframes.json'
-      - 'Docs/cad-adapter.md'
-      - '.github/workflows/cad-adapter.yml'
-
   workflow_dispatch:
 
 permissions:

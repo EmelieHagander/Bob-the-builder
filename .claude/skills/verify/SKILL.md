@@ -11,7 +11,7 @@ for a change, then the required CI gates in `.github/workflows/ci.yml`.
 
 ## Verification cadence
 
-During implementation, run focused tests and impacted type checks. Keep a work-in-progress PR in draft: full CI, CAD and dependency Actions are reserved for its `ready_for_review` event or an explicit manual run, not each new commit. If the tested head changes afterward, verify the final head again before merge. Main-branch publication and authorized live model probes have separate release controls.
+During implementation, run focused tests and impacted type checks. Full CI, CAD, PostgreSQL concurrency and dependency-audit workflows are **manual-only** (`workflow_dispatch`): use Actions → choose workflow → Run workflow → select the exact review branch. Verify the selected commit SHA and all required outcomes before merging; rerun after code changes. Opening a PR, pushing a commit or marking it ready for review must not start a full test run. Main-branch Pages publication and authorized live model checks have separate release controls.
 
 ## Automated checks
 

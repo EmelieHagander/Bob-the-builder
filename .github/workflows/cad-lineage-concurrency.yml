@@ -1,13 +1,6 @@
 name: CAD lineage concurrency
+# Run manually on the reviewed branch; avoid duplicate runs per push.
 on:
-  pull_request:
-    types: [ready_for_review]
-    paths:
-      - 'supabase/migrations/**'
-      - 'db/migrations/**'
-      - 'tests/support/**'
-      - 'scripts/*cad-lineage*'
-      - '.github/workflows/cad-lineage-concurrency.yml'
   workflow_dispatch:
 jobs:
   postgres:
