@@ -293,8 +293,8 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — isolerad rättning före aktivering av PR2 (2026-10-19):**
-slutför installation och livekontroll av den verifierade felorsaken när JWT förnyas
-under modellväntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
+gör livekontrollen av rättningen i PR #284, installerad som `bob-worker` v113 och
+`ask-bob` v145. Den sparar modelloperationens sluttid när JWT förnyas under väntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
 inte en färdig leverans. Den nya rättningen sparar modellanropets ursprungliga
 sluttid; [auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
 äger bevis, kostnad och kvarstående acceptans. PR1 är tekniskt driftsatt men

@@ -239,6 +239,29 @@ as successful long-work delivery. Finish this isolated fix and its live check
 before activating the complete-request migration. The earlier UI working-state
 report also remains unverified.
 
+### Authority-renewal hotfix technical release — PR #284
+
+[PR #284](https://github.com/EmelieHagander/Bob-the-builder/pull/284) merged as
+`9a6f43450123fb828a8878a70a4decec6d6f529a`; tested source is
+`b8b33a11f9ecb4675ad3305aaf64856572717d36`. **15/15 targeted tests** passed,
+including renewal during model wait, checkpoint boundaries and write recovery.
+Both Bob Edge dependency graphs passed the exact-version local Deno check.
+Full CI was not run, per the owner's explicit decision. Review was direct code
+and contract review, not an independent agent review.
+
+At **13:18:15 UTC**, `bob-worker` **v113** became ACTIVE with JWT verification
+**false**, package SHA256
+`1721b2c46c553d9ab8742d1211d831b312bbd29da707f87afb2a81a5a28af53a`.
+At **13:18:27 UTC**, `ask-bob` **v145** became ACTIVE with JWT verification
+**true**, package SHA256
+`3dae45effed1e1a11f6cb10edf5583ed57241c0fd68b9613f01479c879e94c49`.
+Readback matched the reviewed runtime sources, including the new deadline helper;
+only the previously documented type-only files were erased/omitted. Neither
+endpoint contains `completeRequestVersion`: stage 2 is **not deployed**.
+No schema migration was applied and no jobs were active before release.
+A new ordinary long-image result and the reported UI status behavior remain
+unverified. Installation does not retroactively accept the recovered run.
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from
