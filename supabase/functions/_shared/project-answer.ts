@@ -222,7 +222,9 @@ export async function runProjectAnswer(opts: {
     }
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
-    console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: buildBobSystemMessage(opts.aiCatalog, tools, shelf).length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
+    // Built once per step: replay rebuilds it for every recorded step too.
+    const systemMessage = buildBobSystemMessage(opts.aiCatalog, tools, shelf)
+    console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: systemMessage.length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
     // A terminal design failure has a known cause. Deliver it without another
     // paid model call that can retry the same job or invent a renderer outage.
     const cadFailure=opts.cadAssistant?.failure
@@ -231,7 +233,7 @@ export async function runProjectAnswer(opts: {
       ? {success:true,data:cadFailure.user_message,model:'server',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
       : await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
-      userId: opts.userId, systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
+      userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),

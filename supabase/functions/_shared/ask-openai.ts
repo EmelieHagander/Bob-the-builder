@@ -233,9 +233,9 @@ export async function answerWithOpenAi(opts: {
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
-      lookupObservationVersion: 1 as const,
+      lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const,
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
     }))
@@ -257,6 +257,9 @@ export async function answerWithOpenAi(opts: {
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
+    // Older in-flight journals keep their recorded call sequence and re-page.
+    ...(execution.contextPagingVersion === 1 && journal ? { pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) =>
+      memo('context:pages', { source }, compute) } : {}),
     onRollover: ({ role }) => { if (role === 'ask-bob') mainContextEpoch++ },
     refreshSurface: async ({ role }) => role === 'ask-bob'
       ? refreshMainContextSurface?.()

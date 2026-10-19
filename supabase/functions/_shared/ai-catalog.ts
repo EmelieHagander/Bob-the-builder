@@ -202,8 +202,18 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
   let snapshot = options.manifest === undefined ? undefined : validateAiManifest(options.manifest, options.app)
   let pending: Promise<AiCatalogManifest> | undefined
   const manifest = () => snapshot ?? fail('ai_catalog_not_loaded')
+  // The loaded manifest is frozen. Every model step resolves the same roles
+  // and ~100 tool keys again (also on each journal replay), so index the keys
+  // once and reuse a resolved role instead of re-scanning every definition.
+  type Row = AiCatalogManifest['definitions'][number]
+  let indexed: { of: AiCatalogManifest; rows: Map<string, Row>; roles: Map<string, ResolvedAiRole> } | undefined
+  const index = () => {
+    const current = manifest()
+    if (indexed?.of !== current) indexed = { of: current, rows: new Map(current.definitions.map(row => [row.prompt_key, row])), roles: new Map() }
+    return indexed
+  }
   const definition = (key: string, kind?: AiDefinitionKind) => {
-    const found = manifest().definitions.find(row => row.prompt_key === key)
+    const found = index().rows.get(key)
     if (!found || (kind && found.definition_kind !== kind)) fail(kind === 'prompt' || kind === 'instruction_fragment' ? 'ai_prompt_missing' : kind === 'execution_profile' ? 'ai_profile_missing' : 'ai_contract_missing',key)
     return found!
   }
@@ -264,11 +274,11 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       if (config.timeout_ms !== undefined && (!finite(config.timeout_ms) || config.timeout_ms <= 0)) fail('ai_profile_incompatible','timeout')
       return freeze({ app: options.app, manifestId: manifest().manifest_id, roleKey: row.prompt_key, roleVersionId: row.id, profileVersionId: profile.id, tierVersionId: binding.id,
         tier: tier as AiTier, model, providerAdapter: adapter as ResolvedAiRole['providerAdapter'], reasoningEffort: effort as string | null, maxOutputTokens: limit as number, timeoutMs: config.timeout_ms as number | undefined,
-        ...(options.app === 'bob' && options.unlimitedWork === true && manifest().definitions.some(d => d.prompt_key === 'agent-contract.ask-bob' && d.definition_kind === 'agent_contract' && d.metadata.work_allowance_version === 1) ? { unlimitedWork: true as const } : {}),
+        ...(options.app === 'bob' && options.unlimitedWork === true && index().rows.get('agent-contract.ask-bob')?.definition_kind === 'agent_contract' && index().rows.get('agent-contract.ask-bob')!.metadata.work_allowance_version === 1 ? { unlimitedWork: true as const } : {}),
         providerParameters: params, systemMessage, definition: row, profile })
     },
     tool(key, parameters = {}) {
-      const fullKey = manifest().definitions.some(d => d.prompt_key === key) ? key : 'tools.' + key
+      const fullKey = index().rows.has(key) ? key : 'tools.' + key
       const row = definition(fullKey,'tool_contract'), body = row.definition
       const functionBody = object(body.function) ? body.function : body
       if (!string(functionBody.name) || typeof functionBody.description !== 'string' || !object(functionBody.parameters)) fail('ai_contract_missing',fullKey)
@@ -279,12 +289,24 @@ export function createAiCatalogSession(client: AiCatalogClient, options: { app: 
       return { type: 'function', function: { name: functionBody.name, description, parameters: boundSchema(row,functionBody.parameters,toolParameters(row,parameters)), strict: functionBody.strict === true } }
     },
     schema(key, parameters = {}) {
-      const fullKey = manifest().definitions.some(d => d.prompt_key === key) ? key : 'schema.' + key
+      const fullKey = index().rows.has(key) ? key : 'schema.' + key
       const row = definition(fullKey,'response_schema'), body = row.definition
       const schema = body.schema ?? body.output_schema ?? (body.type ? body : undefined)
       if (!object(schema)) fail('ai_contract_missing',fullKey)
       return { name: string(body.name) ? body.name : fullKey.replace(/^schema\./,''), description: typeof body.description === 'string' ? body.description : undefined, schema: boundSchema(row,schema,parameters), strict: body.strict !== false }
     },
+  }
+  // A resolved role is frozen and depends only on the manifest and variables.
+  const resolveRole = session.role
+  session.role = (key, variables = {}) => {
+    const roles = index().roles, cacheKey = JSON.stringify([key, variables])
+    let role = roles.get(cacheKey)
+    if (!role) {
+      role = resolveRole(key, variables)
+      if (roles.size >= 256) roles.clear()
+      roles.set(cacheKey, role)
+    }
+    return role
   }
   return session
 }

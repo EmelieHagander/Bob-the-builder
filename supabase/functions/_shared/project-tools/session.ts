@@ -132,6 +132,17 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
+  // Cards come from the pinned catalog and repeat on every step (and replay);
+  // bind and count each card once per session.
+  const cards = new Map<string, string | undefined>()
+  const cardDescription = (row: { name: string; description?: string }) => {
+    const key = row.name + '\u0000' + (opts.catalogTool ? '' : row.description ?? '')
+    if (cards.has(key)) return cards.get(key)
+    const description = opts.catalogTool ? opts.catalogTool(row.name, { card: true }).function.description : row.description
+    if (description && countContextTokens(description) > 80) throw new Error('tool_card_too_large')
+    cards.set(key, description)
+    return description
+  }
   return {
     get partial() { return partial },
     get events() { return events.slice() },
@@ -151,8 +162,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (loaded.get(row.name) !== def.version) loaded.delete(row.name)
         visible.set(row.name, def.version)
         const group = def.group ?? 'Other tools'
-        const card = lazy ? { description: opts.catalogTool ? opts.catalogTool(row.name, { card: true }).function.description : row.description, instructionLoaded: loaded.has(row.name) } : {}
-        if (card.description && countContextTokens(card.description) > 80) throw new Error('tool_card_too_large')
+        const card = lazy ? { description: cardDescription(row), instructionLoaded: loaded.has(row.name) } : {}
         if (state === 'available') {
           if (!lazy || loaded.has(row.name)) { specs.push(surfaceSpec(row, def)); offered.set(row.name, def.version) }
           shelf.push({ name: row.name, group, state: 'offered', ...card })
