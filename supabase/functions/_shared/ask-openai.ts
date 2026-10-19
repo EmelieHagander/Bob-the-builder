@@ -34,11 +34,11 @@ import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, resolveMediaImage } from './project-context/media.ts'
+import { createMediaAdapter, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
@@ -117,7 +117,24 @@ export async function answerWithOpenAi(opts: {
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    // Claimed server turns reuse one stored provider file per image revision
+    // instead of re-sending pixels; the image itself stays in bob storage.
+    if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
+  }
+  const imageFiles: ProviderImageFiles = {
+    async find(mediaId, revision, signal) {
+      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
+      if (error) throw new Error('unavailable')
+      return typeof data === 'string' ? data : null
+    },
+    upload: (bytes, contentType, signal) => uploadOpenAIVisionFile(bytes, contentType as 'image/png' | 'image/jpeg' | 'image/webp', signal),
+    async save(entry, signal) {
+      const { error } = await internal.rpc('bob_record_image_provider_file', { ...binding, p_user: opts.userId, p_media: entry.mediaId,
+        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt,
+      }).abortSignal(signal)
+      if (error) throw new Error('unavailable')
+    },
   }
   // Background workers live ~150 s. Reserve a realistic duration per role, not the
   // full timeout, so several calls share one segment; a call cut off at the segment

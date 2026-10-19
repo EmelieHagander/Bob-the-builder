@@ -1480,3 +1480,23 @@ export async function generateImage(options: ImageCallOptions): Promise<ImageCal
     clearTimeout(timer);
   }
 }
+
+const VISION_FILE_SECONDS = 30 * 24 * 3600;
+/** Upload one image for vision input. The provider deletes it after 30 days;
+ * callers keep their own copy as the source and store only the returned id. */
+export async function uploadOpenAIVisionFile(bytes: Uint8Array, contentType: 'image/png' | 'image/jpeg' | 'image/webp', signal: AbortSignal): Promise<{ fileId: string; expiresAt: string }> {
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) throw new Error('Missing OpenAI API key');
+  const form = new FormData();
+  form.append('purpose', 'vision');
+  form.append('expires_after[anchor]', 'created_at');
+  form.append('expires_after[seconds]', String(VISION_FILE_SECONDS));
+  form.append('file', new Blob([new Uint8Array(bytes)], { type: contentType }), 'image.' + contentType.slice(6));
+  const response = await fetch('https://api.openai.com/v1/files', { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal });
+  if (!response.ok) { await response.body?.cancel(); throw new Error('vision_file_upload_failed'); }
+  const file = await response.json() as { id?: unknown; created_at?: unknown; expires_at?: unknown };
+  if (typeof file.id !== 'string') throw new Error('vision_file_upload_failed');
+  const created = typeof file.created_at === 'number' ? file.created_at * 1000 : Date.now();
+  const expires = typeof file.expires_at === 'number' ? file.expires_at * 1000 : created + VISION_FILE_SECONDS * 1000;
+  return { fileId: file.id, expiresAt: new Date(Math.min(expires, Date.now() + VISION_FILE_SECONDS * 1000)).toISOString() };
+}

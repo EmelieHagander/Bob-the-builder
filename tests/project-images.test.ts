@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createProjectContext } from './support/colleague-catalog-fixture.ts'
-import { createMediaAdapter, resolveMediaImage, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
+import { createMediaAdapter, resolveMediaImage, resolveMediaImageFile, readImageResponse, validImageSignature, type MediaRow, type MediaTransport } from '../supabase/functions/_shared/project-context/media.ts'
 import { responseMessageContent, hasImageContent, prepareResponseImages } from '../supabase/functions/_shared/openai-content.ts'
 import type { ProjectSource } from '../src/data/provenance.ts'
 import {DRAWING_REVIEW_INSTRUCTION} from './support/colleague-catalog-fixture.ts'
@@ -181,6 +181,44 @@ test('four large source images checkpoint as references; exact pixels load only 
   f.rows[1].state = 'deleting'
   await assert.rejects(resolve(replay[1].image.image_url), /context_changed/)
   await assert.rejects(prepareResponseImages(request), /private_image_resolver_missing/)
+})
+
+test('a stored OpenAI file id replaces re-sent pixels for one exact image revision only', async () => {
+  const f = fixture(), signal = AbortSignal.timeout(5000)
+  const record = await createMediaAdapter('A', f.transport, true).open(ref(), signal)
+  const pointer = record.image.image_url
+  const stored = new Map<string, string>(), saved: any[] = []
+  let uploads = 0, finds = 0
+  const files = {
+    find: async (media: string, revision: string) => { finds++; return stored.get(media + '/' + revision) ?? null },
+    upload: async (bytes: Uint8Array, type: string) => { uploads++; assert.deepEqual(bytes, png); assert.equal(type, 'image/png'); return { fileId: 'file-abc' + uploads, expiresAt: '2026-11-18T10:00:00Z' } },
+    save: async (entry: any) => { saved.push(entry); stored.set(entry.mediaId + '/' + entry.revision, entry.fileId) },
+  }
+  const resolve = () => resolveMediaImageFile('A', f.transport, record, pointer, files, signal)
+  assert.equal(await resolve(), 'file-abc1')
+  assert.equal(f.downloads, 1)
+  assert.equal(saved[0].mediaId, id()); assert.equal(saved[0].revision, pointer.split('/').pop()); assert.match(saved[0].sha256, /^[0-9a-f]{64}$/)
+  assert.equal(await resolve(), 'file-abc1', 'second fresh request reuses the stored id')
+  assert.equal(f.downloads, 1, 'no pixels downloaded or uploaded again'); assert.equal(uploads, 1)
+  const request = { input: [{ role: 'user', content: [{ type: 'input_image', image_url: pointer, detail: 'high' }] }] }
+  const prepared: any = await prepareResponseImages(request, resolve)
+  assert.deepEqual(prepared.input[0].content[0], { type: 'input_image', detail: 'high', file_id: 'file-abc1' })
+  assert.equal(request.input[0].content[0].image_url, pointer, 'journal input is not mutated')
+  await assert.rejects(resolveMediaImageFile('A', f.transport, record, pointer.slice(0, -1) + (pointer.endsWith('0') ? '1' : '0'), files, signal), /context_changed/)
+  f.rows[0].updated_at = '2026-09-28T15:00:00Z'
+  await assert.rejects(resolve(), /context_changed/, 'a changed image never reuses the old file')
+})
+
+test('provider file failures fall back to inline pixels instead of blocking the view', async () => {
+  const f = fixture(), signal = AbortSignal.timeout(5000)
+  const record = await createMediaAdapter('A', f.transport, true).open(ref(), signal)
+  const inline = 'data:image/png;base64,' + Buffer.from(png).toString('base64')
+  const base = { find: async () => null, upload: async () => ({ fileId: 'file-x', expiresAt: '2026-11-18T10:00:00Z' }), save: async () => {} }
+  assert.equal(await resolveMediaImageFile('A', f.transport, record, record.image.image_url, { ...base, find: async () => { throw new Error('unavailable') } }, signal), inline, 'lookup unavailable before the migration')
+  assert.equal(await resolveMediaImageFile('A', f.transport, record, record.image.image_url, { ...base, upload: async () => { throw new Error('vision_file_upload_failed') } }, signal), inline)
+  assert.equal(await resolveMediaImageFile('A', f.transport, record, record.image.image_url, { ...base, upload: async () => ({ fileId: 'not-a-file', expiresAt: '' }) }, signal), inline)
+  assert.equal(await resolveMediaImageFile('A', f.transport, record, record.image.image_url, { ...base, save: async () => { throw new Error('unavailable') } }, signal), 'file-x', 'a failed save still uses this upload')
+  f.revoke()
 })
 
 test('descriptions require delivered current pixels and remain unverified, revision-bound selection aids', async () => {

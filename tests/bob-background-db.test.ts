@@ -199,6 +199,33 @@ test('image descriptions are private derived cache, claim-bound and hidden after
   assert.equal((await pg.query<any>('select count(*)::int n from bob_private.image_descriptions where media_id=$1',[media])).rows[0].n,0)
 })
 
+test('image provider file ids are claim-bound metadata for one exact revision and vanish with the image', async () => {
+  const q = await enqueue(), c = await claimJob(q.jobId), media = newId(), revision = 'c'.repeat(64)
+  const timestamp = '2026-10-19T12:00:00Z'
+  await pg.query("insert into bob.media_assets(id,project_id,original_name,title,purpose,content_type,byte_size,width,height,state,created_by,updated_at) values($1,'A','fixture.png','Entry','current_state','image/png',11,10,10,'ready',$2,$3)", [media,one,timestamp])
+  const expires = new Date(Date.now() + 29 * 86400_000).toISOString()
+  const args = ['A',one,c.threadId,q.turn,c.generation,media,revision,timestamp,'d'.repeat(64),'file-Abc_123',expires]
+  const read = async (user:string,rev=revision) => (await as(user,'select bob.bob_image_provider_file($1,$2,$3) result',['A',media,rev])).rows[0].result
+  assert.equal(await read(one),null)
+  assert.equal(await service('bob_record_image_provider_file', args),true)
+  assert.equal(await read(one),'file-Abc_123')
+  assert.equal(await read(both),'file-Abc_123','any project member reuses the same provider copy')
+  assert.equal(await read(one,'e'.repeat(64)),null,'another revision never gets this file')
+  await assert.rejects(read(two),/project_denied/)
+  await assert.rejects(as(one,'select * from bob_private.image_provider_files'),/permission denied/)
+  await assert.rejects(as(one,'select bob.bob_record_image_provider_file($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',args),/permission denied/)
+  await assert.rejects(service('bob_record_image_provider_file', [...args.slice(0,4),c.generation+1,...args.slice(5)]),/turn_not_claimed/)
+  await assert.rejects(service('bob_record_image_provider_file', [...args.slice(0,9),'sk-not-a-file',expires]),/check constraint/)
+  await assert.rejects(service('bob_record_image_provider_file', [...args.slice(0,10),new Date(Date.now()+40*86400_000).toISOString()]),/invalid_expiry/)
+  await pg.query("update bob_private.image_provider_files set expires_at=clock_timestamp()+interval '30 minutes' where media_id=$1",[media])
+  assert.equal(await read(one),null,'a provider copy about to expire is not reused')
+  await pg.query("update bob.media_assets set updated_at=updated_at+interval '1 second' where id=$1",[media])
+  await assert.rejects(service('bob_record_image_provider_file',args),/context_changed/)
+  await service('bob_finish_job',[q.jobId,c.claimToken,'fixture_done'])
+  await pg.query('delete from bob.media_assets where id=$1',[media])
+  assert.equal((await pg.query<any>('select count(*)::int n from bob_private.image_provider_files where media_id=$1',[media])).rows[0].n,0)
+})
+
 test('explicit retry reuses only the failed turn\'s successful model results, claim-bound, and forgets them on completion',async()=>{
   const q=await enqueue(),c=await claimJob(q.jobId),fp='c'.repeat(64)
   await service('bob_save_job_step',[q.jobId,c.claimToken,'model:chat:0',fp,{ok:true,result:{success:true,text:'paid once'}}])

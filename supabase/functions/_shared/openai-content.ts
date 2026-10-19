@@ -21,8 +21,8 @@ export function responseMessageContent(role: 'user' | 'assistant', value: OpenAI
 export function hasImageContent(messages?: Array<{ content: OpenAIMessageContent }>): boolean {
   return !!messages?.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))
 }
-/** Hydrate only explicit private image references, just before a NEW submission.
- * No mutation of journaled inputs. Deduplicate a repeated image within this request. */
+/** Hydrate only explicit private image references, just before a NEW submission:
+ * a stored provider file id when one exists, else inline pixels. No mutation of journaled inputs. Deduplicate a repeated image within this request. */
 export async function prepareResponseImages(request: Record<string, unknown>, resolve?: (ref: string) => Promise<string>): Promise<Record<string, unknown>> {
   const images = new Map<string, Promise<string>>()
   const input = request.input
@@ -34,6 +34,10 @@ export async function prepareResponseImages(request: Record<string, unknown>, re
       if (!resolve) throw new Error('private_image_resolver_missing')
       if (!images.has(part.image_url)) images.set(part.image_url, resolve(part.image_url))
       const url = await images.get(part.image_url)!
+      if (/^file-[A-Za-z0-9_-]{1,120}$/.test(url)) {
+        const { image_url: _ref, ...rest } = part
+        return { ...rest, file_id: url }
+      }
       if (!/^data:image\/(png|jpeg|webp);base64,/.test(url)) throw new Error('invalid_resolved_image')
       return { ...part, image_url: url }
     })) }
