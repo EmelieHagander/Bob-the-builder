@@ -43,6 +43,12 @@ export const WORK_RECORD_TOOLS_V2 = WORK_RECORD_TOOLS.map(spec => !(WORK_VALUE_T
 }))
 export const SUPERSEDED_WORK_TOOLS = ['save_project_area', 'save_project_task', 'save_project_measurement', 'archive_project_measurement', 'update_project_task_work', 'save_project_build_day', 'delete_project_task', 'delete_project_build_day', 'archive_project_area', 'set_project_phase', 'update_project_schedule', 'delete_shopping_item', 'manage_task_readiness']
 export type WorkSnapshot = { project_id: string; resource: WorkResource; key: string; scope_label: string; record: Record<string, any>; relations: Record<string, any> }
+export type WorkRecordsState = {
+  version: 1; projectId: string; reads: number; partial: boolean;
+  snapshots: [string, WorkSnapshot][];
+  pages: [string, { resource: WorkResource; query: string | null; after: string }][];
+  latest: [string, { resource: WorkResource; ref: string; scope: string; content: Record<string, unknown> }][];
+}
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
 const nonempty = (v: unknown, max = 1000): v is string => typeof v === 'string' && !!v.trim() && v.length <= max
 const contentFields: Partial<Record<WorkResource, string[]>> = { project: ['start_date', 'end_date'], areas: ['name', 'description'], tasks: ['name', 'instructions'], measurements: ['subject', 'value', 'unit', 'truth', 'source', 'notes', 'required'], build_days: ['title', 'day', 'time', 'place', 'food'] }
@@ -117,6 +123,19 @@ export function createWorkRecords(opts: {
   }
   return {
     tools: WORK_RECORD_TOOLS, get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 24 - reads) }, get partial() { return partial },
+    exportState(): WorkRecordsState {
+      return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, snapshots: [...snapshots], pages: [...pages], latest: [...latest] }))
+    },
+    restoreState(state: WorkRecordsState) {
+      if (!state || state.version !== 1 || state.projectId !== opts.projectId || !Number.isSafeInteger(state.reads) || state.reads < 0 || typeof state.partial !== 'boolean'
+        || !Array.isArray(state.snapshots) || !Array.isArray(state.pages) || !Array.isArray(state.latest)
+        || state.snapshots.some(entry => !Array.isArray(entry) || typeof entry[0] !== 'string' || entry[1]?.project_id !== opts.projectId)) throw new Error('invalid_work_records_state')
+      const saved = structuredClone(state)
+      snapshots.clear(); for (const [key, value] of saved.snapshots) snapshots.set(key, value)
+      pages.clear(); for (const [key, value] of saved.pages) pages.set(key, value)
+      latest.clear(); for (const [key, value] of saved.latest) latest.set(key, value)
+      reads = saved.reads; partial = saved.partial
+    },
     /** Latest authorized snapshots, without server identities or stale versions. */
     get currentRecords() { return structuredClone([...latest.values()]) },
     async execute(name: string, value: unknown, schemaVersion: 1 | 2 = 1, refreshValidation = false): Promise<any> {

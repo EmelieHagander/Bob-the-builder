@@ -11,6 +11,11 @@ export const PLAN_LINK_TOOLS = [
 export const SUPERSEDED_PLAN_LINK_TOOLS = ['set_project_plan_focus', 'link_project_plan_task']
 export type PlanLinkResource = 'plan' | 'steps' | 'tasks'
 export type PlanLinkSnapshot = { project_id: string; resource: PlanLinkResource; key: string; scope_label: string; head: Record<string, any>; record: Record<string, any>; links: Record<string, any>[] }
+export type PlanLinksState = {
+  version: 1; projectId: string; reads: number; partial: boolean;
+  snapshots: [string, PlanLinkSnapshot][];
+  pages: [string, { resource: PlanLinkResource; query: string | null; after: string }][];
+}
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
 const nonempty = (v: unknown, max = 1000): v is string => typeof v === 'string' && !!v.trim() && v.length <= max
 const pick = (r: Record<string, any>, keys: string[]) => Object.fromEntries(keys.map(k => [k, r[k]]))
@@ -28,6 +33,18 @@ export function createPlanLinks(opts: {
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   return {
     tools: PLAN_LINK_TOOLS, get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 24 - reads) }, get partial() { return partial },
+    exportState(): PlanLinksState {
+      return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, snapshots: [...snapshots], pages: [...pages] }))
+    },
+    restoreState(state: PlanLinksState) {
+      if (!state || state.version !== 1 || state.projectId !== opts.projectId || !Number.isSafeInteger(state.reads) || state.reads < 0 || typeof state.partial !== 'boolean'
+        || !Array.isArray(state.snapshots) || !Array.isArray(state.pages)
+        || state.snapshots.some(entry => !Array.isArray(entry) || typeof entry[0] !== 'string' || entry[1]?.project_id !== opts.projectId)) throw new Error('invalid_plan_links_state')
+      const saved = structuredClone(state)
+      snapshots.clear(); for (const [key, value] of saved.snapshots) snapshots.set(key, value)
+      pages.clear(); for (const [key, value] of saved.pages) pages.set(key, value)
+      reads = saved.reads; partial = saved.partial
+    },
     async execute(name: string, value: unknown): Promise<any> {
       if (!await opts.hasAccess()) return { status: 'denied' }
       if (name === 'read_plan_link_context') {

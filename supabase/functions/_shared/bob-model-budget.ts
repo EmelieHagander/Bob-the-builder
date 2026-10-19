@@ -13,6 +13,7 @@ export type DrawingBudgetAuthority = {
  requestId: string;
  options: Pick<OpenAIServiceOptions,'app'|'coworkerId'|'module'|'functionName'|'aiFunction'|'aiDefinition'>;
 }
+export interface BobModelBudgetState { version:1; spent:number; calls:number; unpriced:boolean }
 /** Constructed inside the trusted requestModel scope, never from model/browser
  * input. These calls also pass through the durable DB reservation before work.
  * A bound request does not make Bob, planners or other roles CAD operations. */
@@ -35,6 +36,11 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
 export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean } = {}) {
  let spent = 0, calls = 0, unpriced = false
  return {
+  exportState():BobModelBudgetState{return {version:1,spent,calls,unpriced}},
+  restoreState(state:BobModelBudgetState){
+   if(state?.version!==1||!Number.isFinite(state.spent)||state.spent<0||!Number.isSafeInteger(state.calls)||state.calls<0||typeof state.unpriced!=='boolean')throw new Error('model_budget_checkpoint_invalid')
+   spent=state.spent;calls=state.calls;unpriced=state.unpriced
+  },
   get usage() { return { spent, calls, unpriced, limitUsd } },
   async run<T>(work: () => Promise<OpenAIServiceResponse<T>>, role?: string, authority?: DrawingBudgetAuthority): Promise<OpenAIServiceResponse<T>> {
    if(isDrawingModelCall(authority,role))return work()

@@ -35,6 +35,14 @@ export interface LookupResult {
 export type LookupTransport = ((projectId: string, input: LookupInput, signal: AbortSignal) =>
   PromiseLike<{ data: unknown; error: { code?: string } | null }>) & { checkpointed?: boolean }
 
+export interface ProjectLookupState {
+  version: 1
+  projectId: string
+  used: number
+  incomplete: boolean
+  sources: ProjectSource[]
+}
+
 export function parseLookup(value: unknown): LookupInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
@@ -89,6 +97,22 @@ export function createProjectLookup(projectId: string, transport: LookupTranspor
   let incomplete = false
   return {
     sources,
+    exportState(): ProjectLookupState {
+      return structuredClone({ version: 1, projectId, used, incomplete, sources })
+    },
+    restoreState(state: ProjectLookupState): void {
+      if (!state || state.version !== 1 || state.projectId !== projectId
+        || !Number.isSafeInteger(state.used) || state.used < 0 || typeof state.incomplete !== 'boolean'
+        || !Array.isArray(state.sources) || state.sources.some(source => !source || source.projectId !== projectId
+          || typeof source.dataset !== 'string' || typeof source.recordId !== 'string' || typeof source.label !== 'string'
+          || typeof source.retrievedAt !== 'string' || !Number.isFinite(Date.parse(source.retrievedAt))
+          || source.updatedAt !== null && typeof source.updatedAt !== 'string'
+          || !['measured', 'provided_spec', 'estimated', 'ai_assessment', 'unknown'].includes(source.truth))) throw new Error('lookup_checkpoint_invalid')
+      const restored = structuredClone(state)
+      used = restored.used; incomplete = restored.incomplete
+      // Image context and other readers share this exact source-array instance.
+      sources.splice(0, sources.length, ...restored.sources)
+    },
     async inspectStairs(value: unknown) {
       if (used>=budget) { incomplete=true; return {status:'budget_exhausted',saved:false} }
       const input=parseStairInspection(value)

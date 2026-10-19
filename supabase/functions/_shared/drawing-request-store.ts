@@ -1,9 +1,14 @@
 import {drawingInputFingerprint} from './drawing-request-recovery.ts'
-import type { DrawingRequestStore } from './cad-intake.ts'
+import type { DrawingRequest, DrawingRequestStore } from './cad-intake.ts'
 import type { BobJournal } from './bob-job-journal.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 
 type Input=Record<string,unknown>
+export interface DrawingRequestStoreState { version:1; restored:[string,DrawingRequest][] }
+export type CheckpointDrawingRequestStore=DrawingRequestStore&{
+ exportState():DrawingRequestStoreState
+ restoreState(state:DrawingRequestStoreState):void
+}
 /** Project identity creation/cancellation use the caller JWT. Only the private
  * working packet and its operational projection use the claimed server RPC. */
 export function createDrawingRequestStore(opts:{
@@ -14,8 +19,8 @@ export function createDrawingRequestStore(opts:{
  release?:(ids:string[])=>Promise<any>;
  journal?:BobJournal;
  aiCatalog:AiCatalogSession;
-}):DrawingRequestStore {
- const restored=new Map<string,any>()
+}):CheckpointDrawingRequestStore {
+ const restored=new Map<string,DrawingRequest>()
  let requireRecorded:(()=>void)|undefined
  // Rebuild the same transcript after a worker pause. Our own later saves and
  // paid calls change revisions/budget; they must not rewrite earlier reads.
@@ -26,6 +31,20 @@ export function createDrawingRequestStore(opts:{
  }
  const read=(id:string|null,after:string|null=null)=>caller('project_drawing_requests',{p_project:opts.projectId,p_id:id,p_after:after})
  return {
+  exportState():DrawingRequestStoreState {
+   if(requireRecorded)throw new Error('drawing_request_checkpoint_inflight')
+   return JSON.parse(JSON.stringify({version:1,restored:[...restored]}))
+  },
+  restoreState(state:DrawingRequestStoreState){
+   if(state?.version!==1||!Array.isArray(state.restored)||state.restored.some(row=>!Array.isArray(row)||row.length!==2||typeof row[0]!=='string'
+     ||!row[1]||typeof row[1]!=='object'||row[1].id!==row[0]||!Number.isSafeInteger(row[1].revision)||row[1].revision<0
+     ||typeof row[1].status!=='string'||!row[1].payload||typeof row[1].payload!=='object'))throw new Error('drawing_request_store_checkpoint_invalid')
+   const stateCopy:DrawingRequestStoreState=JSON.parse(JSON.stringify(state))
+   restored.clear();for(const [id,request] of stateCopy.restored)restored.set(id,request)
+   // A replay restriction belongs to the active call stack, never the next
+   // worker lease. The new operation journal creates its own scope on demand.
+   requireRecorded=undefined
+  },
   withReplayScope:async work=>{
    if(!opts.journal)return work()
    return opts.journal.replayScope(async restrict=>{

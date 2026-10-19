@@ -30,6 +30,18 @@ export interface WorkingContext {
   history: { readonly remaining: number; search(value: unknown): Promise<{ status: string; [key: string]: unknown }>;
     read?(value: unknown): Promise<{ status: string; [key: string]: unknown }> };
 }
+export interface WorkingContextState {
+  version: 1; projectId: string; threadId: string; searches: number;
+  context: Omit<WorkingContext, 'history'>;
+}
+export interface WorkingContextSession extends WorkingContext {
+  exportState(): WorkingContextState;
+  restoreState(state: WorkingContextState): void;
+}
+export interface WorkingContextRestoreOptions {
+  projectId: string; threadId: string; message: string; store: ContextStore;
+  hasAccess: () => Promise<boolean>; unlimitedWork?: boolean; retrieval?: MemoryRetrieval;
+}
 
 export const HISTORY_TOOL = {
   type: 'function' as const,
@@ -102,7 +114,7 @@ export async function prepareWorkingContext(opts: {
    * failed fold keeps the earlier gist instead of failing the turn. */
   memoryGistOnlyVersion?: 1;
   retrieval?: MemoryRetrieval;
-}): Promise<WorkingContext> {
+}): Promise<WorkingContextSession> {
   const managed = opts.memoryManagementVersion === 2
   const gistOnly = managed && opts.memoryGistOnlyVersion === 1
   let degraded = false
@@ -183,10 +195,49 @@ export async function prepareWorkingContext(opts: {
   }
   if (state.older.length || state.hasMore || needsRewrite()) throw new Error('context_preparing')
   if (managed && opts.retrieval) await opts.retrieval.index()
-  let searches = 0
   const brief = readStoredBrief(state.summary, state.lastFoldedSeq)
-  return { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent, recentWrites: state.recentWrites ?? [], recentSources: state.recentSources ?? [],
-    ...(managed ? { memoryManagementVersion: 2 as const } : {}),
+  return restoreWorkingContext({ version: 1, projectId: opts.projectId, threadId: opts.threadId, searches: 0,
+    context: { summary: brief.gist, historyIndex: brief.index, throughSeq: state.lastFoldedSeq, recent: state.recent,
+      recentWrites: state.recentWrites ?? [], recentSources: state.recentSources ?? [],
+      ...(managed ? { memoryManagementVersion: 2 as const } : {}) },
+  }, opts)
+}
+
+/** Rebuild only the request-bound reader. Preparation products are immutable
+ * turn inputs: restoring must not reload/fold memory or reindex older text. */
+export function restoreWorkingContext(saved: WorkingContextState, opts: WorkingContextRestoreOptions): WorkingContextSession {
+  const validate = (state: WorkingContextState) => {
+    const value = state?.context
+    if (state?.version !== 1 || state.projectId !== opts.projectId || state.threadId !== opts.threadId
+      || !Number.isSafeInteger(state.searches) || state.searches < 0 || !value || typeof value.summary !== 'string'
+      || !Number.isSafeInteger(value.throughSeq) || value.throughSeq < 0
+      || !Array.isArray(value.recent) || value.recent.length < 1 || value.recent.length > 5 || !value.recent.every(validMessage)
+      || value.recent.at(-1)!.role !== 'user' || value.recent.at(-1)!.state !== 'pending' || value.recent.at(-1)!.text !== opts.message
+      || value.memoryManagementVersion !== undefined && value.memoryManagementVersion !== 1 && value.memoryManagementVersion !== 2
+      || value.historyIndex !== undefined && (!Array.isArray(value.historyIndex) || !value.historyIndex.every(entry => entry
+        && Number.isSafeInteger(entry.seq) && entry.seq > 0 && typeof entry.descriptor === 'string'))
+      || value.recentWrites !== undefined && (!Array.isArray(value.recentWrites) || value.recentWrites.length > 16
+        || !value.recentWrites.every(receipt => isProjectWriteReceipt(receipt, opts.projectId)))
+      || value.recentSources !== undefined && (!Array.isArray(value.recentSources) || value.recentSources.length > 24 || !value.recentSources.every(validSource))) {
+      throw new Error('context_checkpoint_invalid')
+    }
+  }
+  validate(saved)
+  let searches = saved.searches
+  const managed = saved.context.memoryManagementVersion === 2
+  const session: WorkingContextSession = { ...structuredClone(saved.context),
+    exportState() {
+      const { history: _history, exportState: _export, restoreState: _restore, ...context } = session
+      return structuredClone({ version: 1, projectId: opts.projectId, threadId: opts.threadId, searches, context })
+    },
+    restoreState(state) {
+      validate(state)
+      if ((state.context.memoryManagementVersion === 2) !== managed) throw new Error('context_checkpoint_invalid')
+      const context = structuredClone(state.context)
+      for (const key of ['historyIndex', 'recentWrites', 'recentSources', 'memoryManagementVersion'] as const) delete session[key]
+      Object.assign(session, context)
+      searches = state.searches
+    },
     history: {
       get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 4 - searches) },
       ...(managed && opts.retrieval ? { read: (value: unknown) => opts.retrieval!.read(value) } : {}),
@@ -208,4 +259,5 @@ export async function prepareWorkingContext(opts: {
       },
     },
   }
+  return session
 }

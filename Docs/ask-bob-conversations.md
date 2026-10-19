@@ -2,6 +2,133 @@
 
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
+<a id="launchpad-migration"></a>
+## Launchpad-pattern migration — SPECIFIED 2026-10-19
+
+**PR1 is an implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
+awaiting stage-specific verification and live acceptance; it is not merged or deployed. PR2 and PR3
+remain specified.** The owner accepted the staged direction: one PR
+at a time, verify before the next stage, deterministic references for older tool
+results, and CAD after Bob's main turn. The
+[dated audit](bob-launchpad-migration-audit-2026-10-19.md) records the baseline,
+live CPU evidence and differences from actual Launchpad. This section owns the
+corrected target; [State](bob-delivery-flow.md#state) owns the next action.
+
+**Owner verification decision — 2026-10-19:** for this three-stage migration,
+each PR requires the relevant targeted regression tests, app and Edge typechecks,
+independent review and behavior acceptance before the next stage. Run the full
+suite and CI after the final stage's behavior is confirmed. This explicit decision
+replaces the original per-stage full-CI gate for this migration; it does not
+change CI workflows or settings. The ordinary long-image acceptance and release
+ordering below remain, and CAD still follows acceptance of Bob's main turn.
+
+The existing context-strategy/replay behavior below remains the implemented
+compatibility reference until a versioned successor is released. This migration
+preserves the owner's no-application-quotas decision: no added step, call, write,
+cost or job-duration quotas. Provider capacity, payload/schema boundaries,
+authorization, cancellation and uncertain-outcome handling remain. A payload
+boundary must not be disguised as successful completion.
+
+### PR1 — resume the next operation
+
+New jobs pin an execution version at enqueue. A worker restores a current private
+snapshot head plus the active operation journal, then continues at the next
+unfinished operation. It does not replay historical main-loop handlers. Bootstrap
+memory/orientation/view results are retained once per turn. Reading/folding every
+historical row on each restart is not the target; measure snapshot size and
+serialization as well as database calls. The storage/RPC design must preserve
+existing claim fencing and may require an additive migration.
+
+Checkpoints cover durable operation boundaries, not only completed model steps.
+They retain the model response and original offered-tool fence, pending tool index,
+stable journal cursors/operation identities and exact pending write. A completed
+database write is reconciled through the existing receipt ledger if the following
+checkpoint was lost. A pending asynchronous model operation resumes its stored job
+identity; an uncertain paid image dispatch is not silently repeated. Duplicate or
+stale workers cannot advance state or commit through a newer claim.
+
+The complete state inventory includes messages/provider cursor, loaded manuals and
+workflow cards, counters/outcome/partial state, pending/delivered image context,
+source observations, writer receipts and accepted current-view changes, server-issued
+work/edit/solution/plan references and page cursors, plan proposals, generated-image
+attempts and drawing-request state. Each owner provides validated save/restore
+behavior. Saved observations retain their historical meaning; they do not become
+fresh project records or permission.
+
+Current membership, policy, model enablement, image/source versions and canonical
+write guards remain checked at new-work boundaries, including after model waits.
+Removing checks for replayed operations must not reduce live checks to once per
+worker invocation. Existing jobs retain their old execution version; do not
+reinterpret their journal or change their pinned catalog. CAD continues through
+its existing active-operation mechanism in this stage.
+
+**Exit gate:** interruption at each operation boundary, exactly-once domain effects,
+pending-model recovery without resubmission, stale-worker/revocation/cancellation
+cases and every state roundtrip pass. A 40-step restart fixture shows historical
+handler/control-flow work removed with equivalent answer, receipts and images;
+report CPU, read/write bytes and RPC counts at early and late claims. Complete
+the stage-specific tests, typechecks and review, followed by the ordinary long
+image job on the reviewed release before PR2 begins.
+Observed installed versions and live acceptance belong in release evidence.
+
+**Release order:** apply the additive checkpoint migration, deploy the compatible
+`bob-worker`, then deploy `ask-bob` to activate v4 enqueue for new jobs. Keep the
+existing authentication modes. To stop new checkpoint jobs, roll back the enqueue
+endpoint first; retain a compatible worker until every version-1 job has drained.
+An older worker is deliberately refused checkpoint-native jobs. Do not remove the
+schema or reinterpret their journal during rollback. This is the release plan;
+PR1 has not been deployed by this documentation change.
+
+### PR2 — build each request from complete state
+
+One request builder assembles trusted base instructions, the complete eligible
+short-tool directory and workflow cards, loaded manuals, managed memory and five
+unchanged recent originals, turn-start orientation/view and the current turn's
+ordered native exchanges. Keep stable content first without promoting project or
+tool content into trusted instructions. Tool counts are catalog-derived. A loaded
+manual remains carried for the turn, subject to current eligibility and the pinned
+definition; carrying it never enlarges authority.
+
+Remove the main Bob provider chain only after preserving ordered native Responses
+items, encrypted reasoning, call/output pairing and assistant phases. Preserve the
+authorized image content needed on subsequent calls; a cleared carrier or textual
+reference does not replace pixels. New requests are self-contained. Shared logs
+remain content-free; any private request diagnostics follow explicit access and
+retention rules. Do not remove unrelated completion/write protections from #280.
+
+**Exit gate:** exact provider-request fixtures, loaded-manual and image resume tests,
+native reasoning/tool-pair validity and ordinary model outcome acceptance. Compare
+cache share and cost per equivalent delivered task against an identified baseline;
+neither 86% nor an unchanged cache ratio is assumed. CAD stays on its existing
+path until the main-turn migration is accepted.
+
+### PR3 — bound result payloads without an AI history summary
+
+Reduce default tool pages toward approximately 2,000 content tokens where their
+contract permits, with explicit continuation. Retain complete original results in
+an authorized, versioned archive before replacing old result bodies with exact
+references. Reopening retrieves that observed result, not a newly executed mutation
+or a silently changed current record. Preserve tool-call/output pairs, governing
+constraints, unresolved decisions and receipts required for safe execution.
+
+Only then retire main-turn AI compaction for the new execution version. Do not
+silently truncate native reasoning, images, required source detail or the five
+original messages. Deterministic result demotion alone cannot guarantee arbitrary
+unlimited work below 64,000 tokens; measure complete provider input and preserve an
+honest capacity outcome with durable work intact. No new application work quota
+or forced completion is introduced. Legacy compaction remains until its jobs drain;
+shared CAD behavior is migrated separately after main-turn acceptance.
+
+**Exit gate:** an ordinary image job exceeding 40 steps completes without main-turn
+AI compaction, and its final measured input stays below the 64,000-token test
+target. Exact archived results reopen after restart, no duplicate effects occur,
+and long-work model tests retain constraints and useful delivery. This is a tested
+workload target, not a universal bound. After the final stage's behavior is
+confirmed, the full suite and CI must pass before the migration is accepted as
+complete. Remove replay fingerprints, carry/paging
+compatibility and compactor code only when no supported execution version needs
+them and the corresponding protections have a verified successor.
+
 ## Context strategy — 2026-10-18
 
 **The foundation was published through PR #267.** The subsequent

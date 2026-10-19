@@ -14,6 +14,13 @@ type Chain = {
   pendingInternal: Message[]; inputTokens: number; outputTokens: number
   operations: Map<string, Operation>
 }
+/** Only live provider heads are retained. Map entries are arrays on disk so
+ * a worker can restore a chain without replaying completed model/tool calls. */
+export interface BobContextContinuationState {
+  version: 1;
+  strategyVersion: number;
+  chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
+}
 const HISTORY_TOOL = 'get_work_history'
 const PAGE_TOKENS = 1600
 const SOURCE_BATCH_TOKENS = 12000
@@ -169,6 +176,40 @@ export function createBobContextContinuation(opts: {
 }) {
   const chains = new Map<string, Chain>()
   const enabled = opts.version === 1
+  const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
+    chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
+  })
+  const restoreState = (state: BobContextContinuationState): void => {
+    const message = (value: unknown): boolean => object(value) && ['system', 'user', 'assistant', 'tool'].includes(String(value.role))
+      && (typeof value.content === 'string' || Array.isArray(value.content))
+      && (value.tool_calls === undefined || Array.isArray(value.tool_calls) && value.tool_calls.every(call => object(call)
+        && typeof call.id === 'string' && call.type === 'function' && object(call.function)
+        && typeof call.function.name === 'string' && typeof call.function.arguments === 'string'))
+    const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
+    const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
+    if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0) || !Array.isArray(state.chains)
+      || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
+    const restored = new Map<string, Chain>()
+    for (const entry of state.chains) {
+      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || !entry[0] || !object(entry[1])) throw new Error('context_checkpoint_invalid')
+      const [id, chain] = entry
+      if (typeof chain.identity !== 'string' || !messages(chain.seed) || !Array.isArray(chain.groups) || !chain.groups.every(messages)
+        || typeof chain.compacted !== 'boolean' || !messages(chain.pendingInternal) || !natural(chain.inputTokens) || !natural(chain.outputTokens)
+        || !Array.isArray(chain.operations) || new Set(chain.operations.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== chain.operations.length
+        || chain.handoff !== undefined && (!object(chain.handoff) || typeof chain.handoff.summary !== 'string'
+          || !['open_questions', 'next_steps', 'source_refs'].every(key => Array.isArray(chain.handoff![key as keyof Handoff])
+            && (chain.handoff![key as keyof Handoff] as unknown[]).every(value => typeof value === 'string')))) throw new Error('context_checkpoint_invalid')
+      for (const operation of chain.operations) {
+        if (!Array.isArray(operation) || operation.length !== 2 || typeof operation[0] !== 'string' || !object(operation[1])
+          || operation[1].call_id !== operation[0] || typeof operation[1].tool_name !== 'string' || typeof operation[1].arguments !== 'string'
+          || !(typeof operation[1].output === 'string' || Array.isArray(operation[1].output))) throw new Error('context_checkpoint_invalid')
+      }
+      const copy = clone(chain)
+      restored.set(id, { ...copy, operations: new Map(copy.operations) })
+    }
+    chains.clear()
+    for (const [id, chain] of restored) chains.set(id, chain)
+  }
   const policy = enabled ? opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata : {}
   const limit = Number(policy.continuation_input_tokens)
   const ceiling = Number(policy.context_input_ceiling_tokens)
@@ -403,5 +444,6 @@ export function createBobContextContinuation(opts: {
   }
   // Native readers are implicitly bound to their own chain. This explicit
   // server-only accessor requires the same response identity for diagnostics.
-  return { call, readOperation: (input: unknown, responseId?: string) => readArchivedOperation(input, responseId ? chains.get(responseId) : undefined) }
+  return { call, exportState, restoreState,
+    readOperation: (input: unknown, responseId?: string) => readArchivedOperation(input, responseId ? chains.get(responseId) : undefined) }
 }

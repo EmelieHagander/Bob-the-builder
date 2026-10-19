@@ -1,6 +1,13 @@
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { ProjectSource } from '../../../src/data/provenance.ts'
 import type { WriteReadback } from './project-write.ts'
+import { isBobCurrentView } from '../../../src/data/bobEvidence.ts'
+
+export interface CurrentViewGuardState {
+  version: 1
+  initial: CurrentView
+  accepted: CurrentView
+}
 
 type Row = Record<string, unknown>
 const object = (value: unknown): value is Row => !!value && typeof value === 'object' && !Array.isArray(value)
@@ -69,9 +76,20 @@ function proves(receipt: WriteReadback, source: ProjectSource, initial: CurrentV
  * The caller supplies receipts from the guarded writer, never model/browser data. */
 export function createCurrentViewGuard(opts: { initial: CurrentView; read: () => Promise<CurrentView>;
   hasAccess: () => Promise<boolean>; receipts: () => WriteReadback[] }) {
-  const initial = structuredClone(opts.initial)
+  let initial = structuredClone(opts.initial)
   let accepted = structuredClone(initial)
   return {
+    exportState(): CurrentViewGuardState { return structuredClone({ version: 1, initial, accepted }) },
+    restoreState(state: CurrentViewGuardState): void {
+      if (!state || state.version !== 1 || !isBobCurrentView(state.initial, opts.initial.projectId)
+        || !isBobCurrentView(state.accepted, opts.initial.projectId)
+        || state.initial.surface !== opts.initial.surface || state.accepted.surface !== state.initial.surface
+        || !equal(state.initial.viewer, state.accepted.viewer)
+        || !equal(Object.fromEntries(Object.entries(state.initial.focus).map(([key, value]) => [key, value?.id])),
+          Object.fromEntries(Object.entries(state.accepted.focus).map(([key, value]) => [key, value?.id])))) throw new Error('current_view_checkpoint_invalid')
+      const restored = structuredClone(state)
+      initial = restored.initial; accepted = restored.accepted
+    },
     evidence: () => structuredClone(accepted),
     async validate(): Promise<boolean> {
       try {

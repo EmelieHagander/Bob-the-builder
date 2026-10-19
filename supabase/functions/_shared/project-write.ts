@@ -217,6 +217,19 @@ function checkedReceipt(value: unknown, projectId: string): WriteReadback {
 export function compactReceipts(receipts: WriteReadback[]): ProjectWriteReceipt[] {
   return receipts.map(({ record: _record, ...receipt }) => receipt)
 }
+export interface ProjectWriterState {
+  version: 1
+  projectId: string
+  used: number
+  invalidAttempts: number
+  uncertain: boolean
+  settled: boolean
+  receipts: WriteReadback[]
+  seenReceipts: string[]
+  executedReceipts: WriteReadback[]
+  seenExecutedReceipts: string[]
+  corrections: string[]
+}
 export function createProjectWriter(projectId: string, userMessage: string, transport: WriteTransport, read: ReceiptTransport, settle: ReceiptTransport, options: { taskWorkDiagnostics?: boolean; unlimitedWork?: boolean } = {}) {
   let used = 0, invalidAttempts = 0
   let uncertain = false
@@ -240,6 +253,40 @@ export function createProjectWriter(projectId: string, userMessage: string, tran
   const rememberExecuted = (r: WriteReadback) => rememberIn(executedReceipts, seenExecutedReceipts, r)
   return {
     receipts,
+    exportState(): ProjectWriterState {
+      return structuredClone({ version: 1, projectId, used, invalidAttempts, uncertain, settled,
+        receipts, seenReceipts: [...seenReceipts], executedReceipts, seenExecutedReceipts: [...seenExecutedReceipts], corrections: [...corrections] })
+    },
+    /** Restore before ledger recovery. The seen sets include earlier revisions,
+     * so replaying an old receipt cannot replace a newer recovered readback. */
+    restoreState(state: ProjectWriterState): void {
+      const strings = (value: unknown): value is string[] => Array.isArray(value)
+        && value.every(item => typeof item === 'string') && new Set(value).size === value.length
+      if (!state || state.version !== 1 || state.projectId !== projectId
+        || ![state.used, state.invalidAttempts].every(value => Number.isSafeInteger(value) && value >= 0)
+        || typeof state.uncertain !== 'boolean' || typeof state.settled !== 'boolean'
+        || !Array.isArray(state.receipts) || !Array.isArray(state.executedReceipts)
+        || !strings(state.seenReceipts) || !strings(state.seenExecutedReceipts) || !strings(state.corrections)) throw new Error('writer_checkpoint_invalid')
+      const restored = structuredClone(state)
+      try {
+        for (const receipt of [...restored.receipts, ...restored.executedReceipts]) checkedReceipt(receipt, projectId)
+        for (const key of [...restored.seenReceipts, ...restored.seenExecutedReceipts]) {
+          const value = JSON.parse(key)
+          if (!Array.isArray(value) || value.length !== 5 || value.slice(0, 3).some(v => typeof v !== 'string')
+            || value[3] !== null && !Number.isSafeInteger(value[3]) || typeof value[4] !== 'string' || !Number.isFinite(Date.parse(value[4]))) throw new Error()
+        }
+        for (const key of restored.corrections) {
+          const value = JSON.parse(key)
+          if (!Array.isArray(value) || ![2, 4].includes(value.length) || typeof value[0] !== 'string') throw new Error()
+        }
+      } catch { throw new Error('writer_checkpoint_invalid') }
+      used = restored.used; invalidAttempts = restored.invalidAttempts; uncertain = restored.uncertain; settled = restored.settled
+      receipts.splice(0, receipts.length, ...restored.receipts)
+      executedReceipts.splice(0, executedReceipts.length, ...restored.executedReceipts)
+      seenReceipts.clear(); for (const key of restored.seenReceipts) seenReceipts.add(key)
+      seenExecutedReceipts.clear(); for (const key of restored.seenExecutedReceipts) seenExecutedReceipts.add(key)
+      corrections.clear(); for (const key of restored.corrections) corrections.add(key)
+    },
     /** Only results reached at this execution/replay position. Recovery may know
      * later writes, which must not change an earlier journaled review input. */
     get executedReceipts() { return [...executedReceipts] },

@@ -19,7 +19,7 @@ import type { WorkingContext } from './bob-working-context.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
-import { runProjectAnswer, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
+import { runProjectAnswer, type BobAnswerCheckpoint, type ModelCall, type ProjectAnswer, type TurnObservation, type TurnProgress } from './project-answer.ts'
 import type { createProjectLookup } from './project-lookup.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
@@ -42,6 +42,7 @@ export async function runClaimedProjectTurn(opts: {
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
+  checkpoint?: BobAnswerCheckpoint;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;
   fail: (generation: number) => Promise<void>;
 }): Promise<ProjectAnswer> {
@@ -78,7 +79,8 @@ export async function runClaimedProjectTurn(opts: {
   if (opts.writer) {
     const uncertain = opts.writer.uncertain
     try { generation = await opts.writer.settle() }
-    catch {
+    catch (error) {
+      rethrowContinuation(error)
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       return { ok: true, projectId: opts.projectId, answer: formatNotice.fallback({notice:'uncertain',receipts:opts.writer.receipts}),
@@ -120,7 +122,8 @@ export async function runClaimedProjectTurn(opts: {
   if (opts.commit) {
     if (!result.providerResponseId && !result.evidence.writes?.length && !cadFailureNotice) { await fail(); return { ok: false, error: 'provider_state_unavailable' } }
     try { await opts.commit(result, generation) }
-    catch {
+    catch (error) {
+      rethrowContinuation(error)
       await fail()
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       if (!result.evidence.writes?.length) return { ok: false, error: 'conversation_unavailable' }

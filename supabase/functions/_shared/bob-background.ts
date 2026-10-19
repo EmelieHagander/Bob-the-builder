@@ -2,7 +2,8 @@ import { drawingErrorCode } from './drawing-errors.ts'
 import {drawingRuntimeVersion} from './drawing-runtime.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { answerWithOpenAi } from './ask-openai.ts'
-import { BobContinuation, createBobJournal } from './bob-job-journal.ts'
+import { BobContinuation, createBobJournal, rethrowContinuation } from './bob-job-journal.ts'
+import { createBobTurnCheckpoint } from './bob-turn-checkpoint.ts'
 import { sealCredential, openCredential } from './bob-job-credentials.ts'
 import { parseBobScreen } from '../../../src/domain/bobScreen.ts'
 import type { BobTurnInput } from './bob-request.ts'
@@ -30,7 +31,7 @@ export async function enqueueBobTurn(input: Input) {
   const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
   const expires = Number(payload.exp) * 1000 // SQL applies the pinned legacy/new policy.
   if (!Number.isFinite(expires) || expires < Date.now() + 30000) return { ok: false as const, error: 'unauthorized' }
-  const result = await s.rpc('bob_enqueue_job_v3', {
+  const result = await s.rpc('bob_enqueue_job_v4', {
     p_project: input.projectId, p_user: input.userId, p_turn: input.clientTurnId, p_message: input.message,
     p_credential: await sealCredential(token, binding(input), s.secret), p_expires: new Date(expires).toISOString(),
     p_worker_url: s.url.replace(/\/$/, '') + '/functions/v1/bob-worker',
@@ -98,7 +99,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
   if (!body || typeof body.jobId !== 'string' || !uuid.test(body.jobId) || Object.keys(body).length !== 1) return new Response(null, { status: 400 })
   const s = services(), started = Date.now()
   let job: any
-  try { job = await s.rpc('bob_claim_job', { p_job: body.jobId, p_capability: capability }) }
+  try { job = await s.rpc('bob_claim_job_v2', { p_job: body.jobId, p_capability: capability }) }
   catch { return new Response(null, { status: 403 }) }
   if (job.status !== 'claimed') return new Response(null, { status: 204 })
   const args = { p_job: job.id, p_claim: job.claimToken }
@@ -116,17 +117,17 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       // An explicit retry of a failed turn reuses its paid model results with
       // identical input. Unavailable means the ordinary paid path, never a guess.
       let reusable = new Map<string, unknown>()
-      if (!job.drawingRequestId) {
+      if (!job.drawingRequestId && job.checkpointVersion !== 1) {
         try {
           const rows = await s.rpc('bob_job_reusable_models', args)
           if (Array.isArray(rows)) reusable = new Map(rows.filter((r: any) => typeof r?.fingerprint === 'string').map((r: any) => [r.fingerprint, r.value]))
         } catch { /* reuse is an optimisation */ }
       }
-      if(job.pagedJournal===true){
+      if(job.pagedJournal===true || job.checkpointJournalPaged===true){
         job.entries=[]
         let after:string|null=null
         do{
-          const page=await s.rpc('bob_job_steps_page',{...args,p_after:after})
+          const page=await s.rpc(job.checkpointJournalPaged===true ? 'bob_checkpoint_steps_page' : 'bob_job_steps_page',{...args,p_after:after})
           job.entries.push(...page.entries)
           after=page.next
         }while(after!==null)
@@ -134,6 +135,20 @@ export async function serveBobWorker(req: Request): Promise<Response> {
       const journal = createBobJournal({ entries: job.entries, save: async entry => {
         await s.rpc('bob_save_job_step', { ...args, p_key: entry.key, p_fingerprint: entry.fingerprint, p_value: entry.value })
       } }, started + 140000, Date.now, reusable, {unlimitedWork,authorityExpiresAt:Date.parse(job.expiresAt)})
+      if (job.checkpointVersion === 1) {
+        // Pin exact-match retry results once in bootstrap. Subsequent claims
+        // retain this paid-work reuse without fetching prior job history again.
+        try {
+          const rows = await journal.run('execution:reusable-models', {}, () => s.rpc('bob_job_reusable_models', args))
+          if (Array.isArray(rows)) for (const row of rows) if (typeof row?.fingerprint === 'string') reusable.set(row.fingerprint, row.value)
+        } catch (error) { rethrowContinuation(error) /* reuse is an optimisation */ }
+      }
+      if (job.checkpointVersion !== undefined && job.checkpointVersion !== 0 && job.checkpointVersion !== 1) throw new Error('turn_checkpoint_version_invalid')
+      const checkpoint = job.checkpointVersion === 1 ? createBobTurnCheckpoint({ jobId: job.id, turnId: job.clientTurnId,
+        catalogManifestId: job.catalogManifestId, checkpoint: job.checkpoint, journal,
+        save: write => s.rpc('bob_save_turn_checkpoint', { ...args, p_expected_revision: write.expectedRevision,
+          p_state: write.state, p_journal_state: write.journalState }),
+      }) : undefined
       phase = 'answer'
       // Content-free progress for the owner's chat, at most every 1.5 s. Advisory:
       // a lost update never affects the turn.
@@ -146,7 +161,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
       }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId, screen: parseBobScreen(job.screen),
-        background: { drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
+        background: { checkpoint, drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           workAllowanceVersion:job.workAllowanceVersion,catalogManifestId:job.catalogManifestId,authorityExpiresAt:job.expiresAt,
           deadline: unlimitedWork ? Infinity : Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()

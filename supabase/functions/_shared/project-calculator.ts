@@ -58,10 +58,14 @@ function stairResult(plan:ReturnType<typeof checkedBuildingPlan>,recipe:StairSpe
 
 /** Shared by Bob and specialists in one turn. Invalid attempts count; live
  * caller access is checked before and after every read, including replay. */
+export interface ProjectCalculatorState { version:1; used:number }
 export function createProjectCalculator(opts:CalculatorOptions){
  let used=0
  const enabled=async()=>{try{return await opts.isEnabled?.()??true}catch(error){rethrowContinuation(error);return false}}
- return {tools:[CALCULATOR_TOOL],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ return {
+ exportState():ProjectCalculatorState{return {version:1,used}},
+ restoreState(state:ProjectCalculatorState){if(state?.version!==1||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('project_calculator_checkpoint_invalid');used=state.used},
+ tools:[CALCULATOR_TOOL],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async offered(){return (opts.unlimitedWork||used<12)&&await opts.hasAccess()&&await enabled()?[CALCULATOR_TOOL]:[]},
  async execute(raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted',saved:false}

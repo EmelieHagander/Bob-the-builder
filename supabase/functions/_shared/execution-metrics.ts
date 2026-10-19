@@ -7,6 +7,9 @@ export type ExecutionEvent = {
   duration_ms: number; input_tokens: number | null; output_tokens: number | null; cost_usd: number | null;
   counts: Record<string, number | boolean | string | string[] | null>
 }
+export interface ExecutionMetricsState {
+  version: 1; runId: string; turnId: string; startedAt: number; observation: TurnObservation | null;
+}
 // Event attribution preserves historic role names; this is not a dispatch registry.
 const roles=new Set(['ask-bob','cad-research','cad-designer','cad-reviewer','context-summary','plan-compiler','plan-reviewer','bob-delivery-language'])
 const outputPhases=new Set(['commentary','final_answer','legacy','tool_calls','refusal','incomplete'])
@@ -28,9 +31,20 @@ const failureKind=(result:OpenAIServiceResponse<unknown>)=>result.success?null
 export function createExecutionMetrics(opts:{runId:string;turnId:string;startedAt:number;write:(e:ExecutionEvent)=>Promise<void>;now?:()=>number}){
   const now=opts.now??Date.now
   let turn:TurnObservation|undefined
+  let startedAt=opts.startedAt
   const base=()=>({run_id:opts.runId,turn_id:opts.turnId})
   const write=async(e:ExecutionEvent)=>{try{await opts.write(e)}catch{console.warn('[Bob metrics] unavailable')}}
   return {
+    exportState():ExecutionMetricsState{return structuredClone({version:1,runId:opts.runId,turnId:opts.turnId,startedAt,observation:turn??null})},
+    restoreState(state:ExecutionMetricsState){
+      if(state?.version!==1||state.runId!==opts.runId||state.turnId!==opts.turnId||!Number.isFinite(state.startedAt)||state.startedAt<0
+        ||state.observation!==null&&(!state.observation||!['steps','tool_calls','deferred_calls','completion_checks','nudges'].every(key=>Number.isSafeInteger(state.observation![key as keyof TurnObservation])&&Number(state.observation![key as keyof TurnObservation])>=0)
+          ||!['answered','asked','step_budget','time_budget','refused','commentary_limit','failed'].includes(state.observation.end)
+          ||state.observation.completion_gate!==undefined&&!['done','review'].includes(state.observation.completion_gate)
+          ||state.observation.output_phase!==undefined&&!outputPhases.has(state.observation.output_phase)))throw new Error('metrics_checkpoint_invalid')
+      turn=state.observation===null?undefined:structuredClone(state.observation)
+      startedAt=state.startedAt
+    },
     observe(value:TurnObservation){turn=structuredClone(value)},
     /** step is the journal key (model:<function>:<position>); attempt>0 marks a re-sent call. */
     async model(options:OpenAIServiceOptions,result:OpenAIServiceResponse<unknown>,elapsed:number,call:{step:string|null;attempt:number}={step:null,attempt:0}){
@@ -58,7 +72,7 @@ export function createExecutionMetrics(opts:{runId:string;turnId:string;startedA
       const end=turn?.end
       const status=!input.ok?'failed':input.uncertain?'uncertain':input.recovered?'recovered':input.partial?'partial'
         :end==='asked'?'asked':end==='step_budget'||end==='time_budget'||end==='refused'||end==='commentary_limit'?end:input.writes>0?'saved':input.cad?.review_passed?'candidate_ready':'answered'
-      await write({...base(),event_key:'delivery',kind:'delivery',role:'bob',status,duration_ms:Math.max(0,now()-opts.startedAt),input_tokens:null,output_tokens:null,cost_usd:null,
+      await write({...base(),event_key:'delivery',kind:'delivery',role:'bob',status,duration_ms:Math.max(0,now()-startedAt),input_tokens:null,output_tokens:null,cost_usd:null,
         counts:{...phaseCounts(turn?.output_phase),end_reason:!input.ok?code(input.error,'failed'):end??null,steps:turn?.steps??null,tool_calls:turn?.tool_calls??null,deferred_calls:turn?.deferred_calls??null,
           completion_checks:turn?.completion_checks??null,nudges:turn?.nudges??null,saved_records:number(input.writes),
           cad_consultations:input.cad?.consultations??0,cad_renders:input.cad?.renders??0,cad_input_corrections:input.cad?.input_corrections??0,

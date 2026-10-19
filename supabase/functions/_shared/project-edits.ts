@@ -28,6 +28,12 @@ export type EditSnapshot = {
   target: { area_id: string | null; revision: number; solution_id: string; solution_revision: number } | null;
 }
 type ReadTransport = (input: { resource: Resource; query: string | null; after: string | null }) => PromiseLike<{ data: unknown; error: unknown }>
+export type ProjectEditsState = {
+  version: 1; projectId: string; reads: number; partial: boolean;
+  contexts: [string, EditSnapshot][];
+  pages: [string, { resource: Resource; query: string | null; after: string }][];
+  sources: ProjectSource[];
+}
 const exact = (v: unknown, keys: string[]): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === [...keys].sort().join(',')
 const fail = (message: string): WriteResult => ({ status: 'invalid', message: 'No change made. ' + message })
 const safeText = (v: unknown, max: number, empty = false): v is string => typeof v === 'string' && v.length <= max && (empty || !!v.trim())
@@ -115,6 +121,20 @@ export function createProjectEdits(opts: { projectId: string; read: ReadTranspor
   const unavailable = () => { partial = true; return { status: 'unavailable' } }
   return {
     tools: PROJECT_EDIT_TOOLS,
+    exportState(): ProjectEditsState {
+      return JSON.parse(JSON.stringify({ version: 1, projectId: opts.projectId, reads, partial, contexts: [...contexts], pages: [...pages], sources: opts.sources ?? [] }))
+    },
+    restoreState(state: ProjectEditsState) {
+      if (!state || state.version !== 1 || state.projectId !== opts.projectId || !Number.isSafeInteger(state.reads) || state.reads < 0 || typeof state.partial !== 'boolean'
+        || !Array.isArray(state.contexts) || !Array.isArray(state.pages) || !Array.isArray(state.sources)
+        || state.contexts.some(entry => !Array.isArray(entry) || typeof entry[0] !== 'string' || entry[1]?.project_id !== opts.projectId)
+        || state.sources.some(source => source?.projectId !== opts.projectId)) throw new Error('invalid_project_edits_state')
+      const saved = structuredClone(state)
+      contexts.clear(); for (const [key, value] of saved.contexts) contexts.set(key, value)
+      pages.clear(); for (const [key, value] of saved.pages) pages.set(key, value)
+      opts.sources?.splice(0, opts.sources.length, ...saved.sources)
+      reads = saved.reads; partial = saved.partial
+    },
     get partial() { return partial },
     get remaining() { return opts.unlimitedWork ? Infinity : Math.max(0, 16 - reads) },
     async execute(name: string, value: unknown): Promise<any> {

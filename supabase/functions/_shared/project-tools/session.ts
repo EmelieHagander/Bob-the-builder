@@ -92,6 +92,20 @@ export interface WorkflowCard { name: string; card: string; method: string; tool
 
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
+/** Data only: handlers and policy readers are recreated for each worker lease. */
+export interface ToolSessionState {
+  version: 1
+  loaded: [string, number][]
+  carried: string[]
+  partial: boolean
+  snapshot: ToolSnapshot | null
+  offered: [string, number][]
+  visible: [string, number][]
+  shelf: ToolboxEntry[]
+  events: { operation: string; name: string; status: string }[]
+  cards: [string, string | null][]
+}
+
 export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
@@ -147,6 +161,26 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     return description
   }
   return {
+    exportState(): ToolSessionState {
+      return JSON.parse(JSON.stringify({ version: 1, loaded: [...loaded], carried: [...carried], partial,
+        snapshot, offered: [...offered], visible: [...visible], shelf, events,
+        cards: [...cards].map(([name, description]) => [name, description ?? null]) }))
+    },
+    restoreState(state: ToolSessionState) {
+      const versions = (rows: [string, number][]) => Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.length === 2 && typeof row[0] === 'string' && Number.isSafeInteger(row[1]) && row[1] > 0)
+      if (state?.version !== 1 || typeof state.partial !== 'boolean' || !versions(state.loaded) || !versions(state.offered) || !versions(state.visible)
+        || !Array.isArray(state.carried) || state.carried.some(name => typeof name !== 'string')
+        || !Array.isArray(state.shelf) || !Array.isArray(state.events) || state.events.length > 200 || !Array.isArray(state.cards)
+        || state.cards.some(row => !Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string' || !(row[1] === null || typeof row[1] === 'string'))) throw new Error('tool_session_checkpoint_invalid')
+      const restored: ToolSessionState = JSON.parse(JSON.stringify(state))
+      const policy = restored.snapshot === null ? null : checkedToolSnapshot(restored.snapshot)
+      loaded.clear(); for (const [name, version] of restored.loaded) loaded.set(name, version)
+      carried.clear(); for (const name of restored.carried) carried.add(name)
+      partial = restored.partial; snapshot = policy
+      offered = new Map(restored.offered); visible = new Map(restored.visible); shelf = restored.shelf
+      events.splice(0, events.length, ...restored.events)
+      cards.clear(); for (const [name, description] of restored.cards) cards.set(name, description ?? undefined)
+    },
     get partial() { return partial },
     get events() { return events.slice() },
     get phase() { return snapshot?.phase ?? null },

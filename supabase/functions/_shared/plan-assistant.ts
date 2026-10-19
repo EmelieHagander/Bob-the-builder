@@ -11,6 +11,17 @@ import { callWithCalculator, type SpecialistContextSurfaceRegistrar } from './ca
 type Lookup = ReturnType<typeof createProjectLookup>
 export type PlanAssistantModelCall = (options: OpenAIServiceOptions) => Promise<OpenAIServiceResponse<any>>
 
+export interface PlanAssistantState {
+  version: 1
+  used: number
+  editUsed: number
+  partial: boolean
+  compilationAttempted: boolean
+  repairFeedback: null | { compiled_plan: unknown; review: unknown; server_validation: unknown }
+  savableProposal: null | { expected_revision: number; summary: string; reason: string; steps: unknown[]; task_links: { step_position: number; task_id: string }[] }
+  sources: ProjectSource[]
+}
+
 type Mode='compile_plan'|'audit_plan'
 const MAX_CALLS=2
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
@@ -174,10 +185,22 @@ export function createPlanAssistant(opts:{
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
   let used=0,editUsed=0,partial=false
   let compilationAttempted=false
-  let repairFeedback:null|{compiled_plan:unknown;review:unknown;server_validation:unknown}=null
-  let savableProposal:null|{expected_revision:number;summary:string;reason:string;steps:unknown[];task_links:{step_position:number;task_id:string}[]}=null
+  let repairFeedback:PlanAssistantState['repairFeedback']=null
+  let savableProposal:PlanAssistantState['savableProposal']=null
   const sources:ProjectSource[]=[]
   return {
+    exportState(): PlanAssistantState {
+      return JSON.parse(JSON.stringify({version:1,used,editUsed,partial,compilationAttempted,repairFeedback,savableProposal,sources}))
+    },
+    restoreState(state: PlanAssistantState) {
+      if(state?.version!==1||![state.used,state.editUsed].every(n=>Number.isSafeInteger(n)&&n>=0)
+        ||typeof state.partial!=='boolean'||typeof state.compilationAttempted!=='boolean'||!Array.isArray(state.sources)
+        ||!(state.repairFeedback===null||object(state.repairFeedback))||!(state.savableProposal===null||object(state.savableProposal)))throw new Error('plan_assistant_checkpoint_invalid')
+      const restored:PlanAssistantState=JSON.parse(JSON.stringify(state))
+      used=restored.used;editUsed=restored.editUsed;partial=restored.partial;compilationAttempted=restored.compilationAttempted
+      repairFeedback=restored.repairFeedback;savableProposal=restored.savableProposal
+      sources.splice(0,sources.length,...restored.sources)
+    },
     tools:[COMPILE_PLAN_TOOL,AUDIT_PLAN_TOOL,EDIT_PLAN_TOOL],
     get canSave(){return savableProposal!==null},
     get compilationAttempted(){return compilationAttempted},

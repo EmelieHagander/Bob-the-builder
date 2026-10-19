@@ -8,7 +8,7 @@ import {physicalLineageSources} from './cad-physical-lineage.ts'
 import { buildCadLineage } from './cad-lineage.ts'
 import { type DrawingRequestStore, type DrawingRequest } from './cad-intake.ts'
 import { collectDrawingReviewEvidence } from './drawing-review.ts'
-import { createCadPieces } from './cad-pieces.ts'
+import { createCadPieces, type CadPiecesState } from './cad-pieces.ts'
 import { READ_CAD_SHELL_TOOL, parseCadShellRead } from './cad-shell.ts'
 import type { KnowledgeReader } from './building-knowledge.ts'
 import { fingerprint, rethrowContinuation, stableJsonValue } from './bob-job-journal.ts'
@@ -44,17 +44,49 @@ export const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your p
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
 
+/** Top-level tool boundaries only. In-flight review/render work resumes through
+ * its operation journal; no JavaScript closure or nested stack is persisted. */
+export interface CadAssistantState {
+ version:1
+ lifecycleUsed:number
+ used:number
+ candidate:CadCandidate|null
+ partial:boolean
+ requiredTools:string[]
+ savedRequest:{id:string;revision:number;payload:DrawingRequest['payload']}|null
+ terminalFailure:Record<string,unknown>|null
+ acceptedReview:{fingerprint:string;review:CadReview}|null
+ metrics:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number}
+ sources:ReturnType<typeof createProjectLookup>['sources']
+ pieces:CadPiecesState
+}
+
 export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
- let savedRequest:(()=>Promise<void>)|null=null
+ let savedRequest:CadAssistantState['savedRequest']=null
  let terminalFailure:Record<string,unknown>|null=null
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
  const metrics={consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
  const pieces=createCadPieces({unlimitedWork:opts.unlimitedWork,aiCatalog:opts.aiCatalog,projectId:opts.projectId,requestStore:opts.requestStore,ownerRequest:opts.ownerRequest??null,hasAccess:opts.hasAccess,checkConstruction:opts.checkConstruction})
- return {tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,...(opts.readShell?[READ_CAD_SHELL_TOOL]:[]),READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-lifecycleUsed)},
+ return {
+ exportState():CadAssistantState{return JSON.parse(JSON.stringify({version:1,lifecycleUsed,used,candidate,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState()}))},
+ restoreState(state:CadAssistantState){
+  if(state?.version!==1||![state.lifecycleUsed,state.used].every(n=>Number.isSafeInteger(n)&&n>=0)||typeof state.partial!=='boolean'
+    ||!Array.isArray(state.requiredTools)||state.requiredTools.some(name=>typeof name!=='string')||!Array.isArray(state.sources)
+    ||!object(state.metrics)||Object.keys(metrics).some(key=>!Number.isSafeInteger((state.metrics as any)[key])||(state.metrics as any)[key]<0)
+    ||![state.candidate,state.terminalFailure,state.acceptedReview].every(value=>value===null||object(value))
+    ||!(state.savedRequest===null||object(state.savedRequest)&&uuid(state.savedRequest.id)&&Number.isSafeInteger(state.savedRequest.revision)&&state.savedRequest.revision>=0&&object(state.savedRequest.payload)))throw new Error('cad_assistant_checkpoint_invalid')
+  if(state.savedRequest&&(!opts.requestStore||opts.requestStore.atomicSave))throw new Error('cad_assistant_checkpoint_store_changed')
+  const restored:CadAssistantState=JSON.parse(JSON.stringify(state))
+  pieces.restoreState(restored.pieces)
+  lifecycleUsed=restored.lifecycleUsed;used=restored.used;candidate=restored.candidate;partial=restored.partial;requiredTools=restored.requiredTools
+  savedRequest=restored.savedRequest;terminalFailure=restored.terminalFailure;acceptedReview=restored.acceptedReview
+  Object.assign(metrics,restored.metrics);sources.splice(0,sources.length,...restored.sources)
+ },
+ tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,...(opts.readShell?[READ_CAD_SHELL_TOOL]:[]),READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-lifecycleUsed)},
  async lifecycle(name:string,raw:unknown){
   if(!object(raw))return {status:'invalid'}
   if(!await opts.hasAccess())throw new Error('project_denied')
@@ -86,7 +118,13 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerCont
    return result
   }
   return {status:'invalid'}
- },sources,markSaved:async()=>{await savedRequest?.()},pending:()=>opts.requestStore?.list()??Promise.resolve([]),get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:opts.unlimitedWork?Infinity:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
+ },sources,markSaved:async()=>{
+  if(savedRequest){
+   if(!opts.requestStore)throw new Error('cad_assistant_checkpoint_store_changed')
+   const saved=await opts.requestStore.save(savedRequest.id,savedRequest.revision,'saved',savedRequest.payload)
+   savedRequest={id:saved.id,revision:saved.revision,payload:savedRequest.payload}
+  }
+ },pending:()=>opts.requestStore?.list()??Promise.resolve([]),get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:opts.unlimitedWork?Infinity:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
@@ -403,7 +441,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerCont
       // The calculator wrapper retains this schema while offering optional tools.
       // The governed setting includes reasoning tokens as well as the verdict.
       // Do not silently cap it at the former 5k value; two live reviews exhausted it.
-      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,registerContextSurface:opts.registerContextSurface,unlimitedWork:opts.unlimitedWork,calculator:opts.calculator?{tools:opts.calculator.tools,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
+      maxOutputTokens:5000,timeoutMs:Math.min(90000,until-Date.now())},{catalog:opts.aiCatalog,registerContextSurface:opts.registerContextSurface,unlimitedWork:opts.unlimitedWork,calculator:opts.calculator?{...opts.calculator,offered:()=>opts.calculator!.offered(),get remaining(){return opts.calculator!.remaining},execute:raw=>executeRead('calculate_project',raw)}:undefined,hasAccess:async()=>await checkAuthority()&&(!opts.context||await opts.context.validate()),deadline:until,callModel})
      opts.context?.confirmDelivery()
      if(!await checkAuthority()||opts.context&&!await opts.context.validate())throw new Error('project_denied')
      if(!checked.success&&checked.error==='turn_budget_exhausted')throw new Error(checked.error)
@@ -421,7 +459,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerCont
       acceptedReview={fingerprint:pinned,review}
       await persist('reviewed',{reviewed_candidate:drawingCandidateCommitment(candidate)})
       if(request&&opts.requestStore?.atomicSave)candidate.drawing_request={id:request.id,revision:request.revision}
-      savedRequest=opts.requestStore?.atomicSave?null:()=>persist('saved')
+      savedRequest=opts.requestStore?.atomicSave||!request?null:{id:request.id,revision:request.revision,payload:structuredClone(payload)}
       return {status:'ready',request_id:request?.id??null,saved:false,summary:review.summary,quality:acceptedReview,candidate:{title:candidate.title,part_count:candidate.packet.recipe.instances.length,assumptions:candidate.assumptions}}
      }
      metrics.review_rejections++
