@@ -90,8 +90,23 @@ with populated lazy-tool snapshots persisted through the actual checkpoint RPC,
 restored and compared for both pinned and unpinned catalog bindings. JSON-only
 roundtrips had not caught this boundary. The focused checkpoint-database and
 tool-state suites passed **20 / 20** tests; Deno checking of `session.ts` and
-`git diff --check` passed. Independent review found no blocker. Deployment and
-live behavior verification of the corrected candidate remain open.
+`git diff --check` passed. Independent review found no blocker.
+
+The correction shipped through [PR #282](https://github.com/EmelieHagander/Bob-the-builder/pull/282),
+merged as `a37706912e85c2e78c4432157c70b65a5a2b7467`, with the tested runtime from
+`b32a83d`. No migration was required. `bob-worker` **v111** was deployed at
+approximately **11:20:44 UTC**, followed by `ask-bob` **v143** at approximately
+**11:21:04 UTC**; both were ACTIVE with unchanged JWT verification (worker false,
+ask-bob true). Retrieved bundle SHA-256 values were respectively
+`0ec5cba2b3859d91e827421579a34387d297e29ec7abce0f1701b6277f67dada` and
+`30dcd799864460a8e962baf762327a9b2a9ffa51ea476152dfa4997e025578a5`.
+All runtime sources matched the reviewed release across 101 worker and 103
+ask-bob returned files, with the same empty type-only file and omissions recorded
+for the first release above. At **11:21:46 UTC**, read-only inspection still found
+the same failed job and no replacement job. Its three bootstrap calls cost
+**USD 0.014636**; main-role calls remained zero. Full CI remains deferred by the
+owner's decision. No successful model run on the correction is claimed; a new
+attempt at the long image job and log review remain required before PR2.
 
 ## Observed Bob baseline
 
