@@ -118,6 +118,9 @@ export async function runProjectAnswer(opts: {
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   /** Internal comparison only; never read from the owner's request body. */
   toolInstructions?: ToolInstructions;
+  /** Pinned per execution: a context rollover keeps loaded tools, with their
+   * manuals in the offered schemas, instead of resetting them. */
+  carryLoadedTools?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
   /** Refresh the active tool fence atomically before a fresh provider chain. */
@@ -210,7 +213,7 @@ export async function runProjectAnswer(opts: {
     try {
       if (contextStrategy && opts.contextEpoch && !opts.registerContextSurface) {
         const epoch = opts.contextEpoch()
-        if (epoch !== preparedEpoch) { toolbox.resetInstructions(); preparedEpoch = epoch }
+        if (epoch !== preparedEpoch) { if (opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions(); preparedEpoch = epoch }
       }
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
@@ -224,14 +227,14 @@ export async function runProjectAnswer(opts: {
       if (!await opts.hasAccess()) throw new Error('project_denied')
       if (opts.validateCurrentView && !await opts.validateCurrentView()) throw new Error('context_unavailable')
       if (opts.projectContext && !await opts.projectContext.validate()) throw new Error('context_unavailable')
-      toolbox.resetInstructions()
+      if (opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions()
       if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
       else { toolbox.closeSurface(); tools = [] }
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
       return { systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), tools: tools.length ? tools : undefined,
-        catalogSchemaParameters: schemaParameters(), catalogToolParameters: undefined }
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: opts.carryLoadedTools ? toolbox.toolParameters() : undefined }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -251,6 +254,7 @@ export async function runProjectAnswer(opts: {
       : await opts.callModel({
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
+      ...(opts.carryLoadedTools && toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),

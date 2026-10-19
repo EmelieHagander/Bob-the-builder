@@ -71,6 +71,21 @@ finished and in use; parts join, mirrored parts match; compare with mockups; fix
 causes in the saved source). Methods describe judgement, never magic words.
 Manifests pinned before this publication show no workflows.
 
+**Loaded tools survive a context rollover (2026-10-19, execution `toolCarryVersion: 1`).**
+A live job on 2026-10-19 re-described 3–5 tools after every rollover (about 40
+`describe_tool` steps in 20), each a full model call with a cache miss. New
+executions keep the loaded tools at a rollover; their offered schemas then carry
+the manual (`include_manual`, no card) because the manuals moved into the
+summarized history. Policy, gate and version checks still run on every prepare.
+Executions started before this keep the original reset.
+
+**Replay freshness window (2026-10-19).** A journal replay re-ran every recorded
+step's access, tool-policy and opened-image checks within milliseconds (about
+500 round trips per claim in that job). `ask-openai.ts` reuses a successful live
+answer for 3 s; a failed or denied answer is never reused, the image check right
+before a new submission stays live, and writes stay enforced by RLS and the
+domain commands.
+
 Live policy, membership, source revisions, prerequisites and the prepared-call fence
 are still checked at execution. Bob and specialist context renewal unloads detailed schemas
 and refreshes the prepared-call fence before its first fresh provider request;

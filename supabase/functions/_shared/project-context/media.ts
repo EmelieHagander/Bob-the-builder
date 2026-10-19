@@ -44,10 +44,17 @@ export function validImageSignature(bytes: Uint8Array, mime: string): boolean {
   if (mime === 'image/webp') return bytes.length >= 12 && String.fromCharCode(...bytes.slice(0,4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8,12)) === 'WEBP'
   return false
 }
+// Encode 3-byte-aligned chunks, so the concatenation equals one btoa of the
+// whole image without building a multi-megabyte binary string first.
 function base64(bytes: Uint8Array): string {
-  let value = ''
-  for (let i = 0; i < bytes.length; i += 8192) value += String.fromCharCode(...bytes.subarray(i, i + 8192))
-  return btoa(value)
+  const parts: string[] = []
+  for (let i = 0; i < bytes.length; i += 24576) {
+    const chunk = bytes.subarray(i, i + 24576)
+    let binary = ''
+    for (let j = 0; j < chunk.length; j += 8192) binary += String.fromCharCode(...chunk.subarray(j, j + 8192))
+    parts.push(btoa(binary))
+  }
+  return parts.join('')
 }
 /** Metadata checkpoints can defer pixels until a fresh provider submission. */
 export function createMediaAdapter(projectId: string, transport: MediaTransport, deferred = false): ContextAdapter {

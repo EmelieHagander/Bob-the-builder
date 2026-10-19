@@ -96,6 +96,9 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   const lazy = opts.toolInstructions === 'lazy'
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
+  // Loaded across a context rollover: their manuals moved into summarized
+  // history, so the offered schema carries the manual itself.
+  const carried = new Set<string>()
   const handlers = new Map<string, ToolDefinition>()
   for (const def of opts.definitions) {
     const name = def.spec.function.name
@@ -123,7 +126,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     ? opts.catalogTool(row.name, { include_manual: includeManual }).function.description
     : [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => opts.catalogTool
-    ? opts.catalogTool(row.name, { include_manual: !onDemand, ...(lazy ? { card: true } : {}), server_quote: quote !== undefined,
+    ? opts.catalogTool(row.name, { include_manual: !onDemand || carried.has(row.name), ...(lazy && !carried.has(row.name) ? { card: true } : {}), server_quote: quote !== undefined,
         ...(row.name === 'list_project_category' && object(def.spec.function.parameters.properties) && object(def.spec.function.parameters.properties.category)
           ? { categories: def.spec.function.parameters.properties.category.enum } : {}) })
     : ({
@@ -151,15 +154,23 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     get toolbox() { return shelf.slice() },
     /** Context rollover releases schemas for the next prepare. Preserve the
      * fence of an already submitted model request and its in-flight results. */
-    resetInstructions() { loaded.clear() },
+    resetInstructions() { loaded.clear(); carried.clear() },
+    /** Rollover that keeps the loaded tools: each offered schema then includes
+     * its manual, instead of Bob describing the same tools again. */
+    carryInstructions() { carried.clear(); for (const name of loaded.keys()) carried.add(name) },
+    /** Per-tool catalog binding for carried tools (manual inside the schema). */
+    toolParameters(): Record<string, { card: false; include_manual: true }> | undefined {
+      const offeredCarried = [...carried].filter(name => offered.has(name))
+      return offeredCarried.length ? Object.fromEntries(offeredCarried.map(name => [name, { card: false, include_manual: true }])) : undefined
+    },
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
       const current = await refresh(), specs: ToolSpec[] = []
       offered = new Map(); visible = new Map(); shelf = []
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
-        if (!def || state === 'unavailable' || state === 'not_allowed') { loaded.delete(row.name); continue }
-        if (loaded.get(row.name) !== def.version) loaded.delete(row.name)
+        if (!def || state === 'unavailable' || state === 'not_allowed') { loaded.delete(row.name); carried.delete(row.name); continue }
+        if (loaded.get(row.name) !== def.version) { loaded.delete(row.name); carried.delete(row.name) }
         visible.set(row.name, def.version)
         const group = def.group ?? 'Other tools'
         const card = lazy ? { description: cardDescription(row), instructionLoaded: loaded.has(row.name) } : {}

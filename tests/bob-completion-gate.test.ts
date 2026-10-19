@@ -86,3 +86,28 @@ test('the publication adds only the gate role and its parts, and the fixture mat
     assert.doesNotMatch(live.text('completion-gate.contract'), /\bsay "|säg |fortsätt/i)
   } finally { await pg.close() }
 })
+
+test('a context rollover keeps loaded tools offered, with their manual in the schema, instead of re-describing them', async () => {
+  const { createToolSession } = await import('../supabase/functions/_shared/project-tools/session.ts')
+  const rows = ['read_construction_draft', 'check_construction_draft'].map(name => ({ name, description: 'Card.', how_to: 'Manual.', schema_version: 1, always_load: false, preload_phases: [], active: true }))
+  const catalogTool = (name: string, p: Record<string, unknown>) => ({ type: 'function' as const, function: { name,
+    description: p.card === true ? `card:${name}` : p.include_manual === true ? `manual:${name}` : `plain:${name}`, parameters: { type: 'object', properties: {} } } })
+  const session = createToolSession({ toolInstructions: 'lazy', readPolicy: async () => ({ phase: 'design', tools: rows }), catalogTool,
+    definitions: rows.map(row => ({ version: 1, spec: { type: 'function', function: { name: row.name, description: 'x', parameters: { type: 'object', properties: {} } } },
+      gate: () => 'available', execute: async () => ({ status: 'ok' }) })) } as any)
+  const names = (specs: any[]) => specs.map(s => s.function.name)
+  assert.deepEqual(names(await session.prepare()), ['describe_tool'])
+  assert.equal((await session.execute('describe_tool', { name: 'read_construction_draft' })).status, 'ok')
+  let specs = await session.prepare()
+  assert.deepEqual(names(specs), ['read_construction_draft', 'describe_tool'])
+  assert.equal(specs[0].function.description, 'card:read_construction_draft')
+  assert.equal(session.toolParameters(), undefined)
+  session.carryInstructions()
+  specs = await session.prepare()
+  assert.deepEqual(names(specs), ['read_construction_draft', 'describe_tool'], 'still callable after the rollover')
+  assert.equal(specs[0].function.description, 'manual:read_construction_draft', 'the manual travels with the schema')
+  assert.deepEqual(session.toolParameters(), { read_construction_draft: { card: false, include_manual: true } })
+  assert(session.toolbox.find(entry => entry.name === 'read_construction_draft')?.instructionLoaded)
+  session.resetInstructions()
+  assert.deepEqual(names(await session.prepare()), ['describe_tool'], 'older journals keep the reset')
+})
