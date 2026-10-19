@@ -10,6 +10,7 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preConstructionEditsRows:any[]|undefined,preConstructionEditsVersions:Map<string,number>|undefined
 let preContextCoverageRows:any[]|undefined,preContextCoverageVersions:Map<string,number>|undefined
 let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string,number>|undefined
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
@@ -19,6 +20,22 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const constructionEdit=source.match(/\$construction_edit_contract\$([\s\S]+?)\$construction_edit_contract\$/)
+ if(constructionEdit){
+  preConstructionEditsRows=structuredClone(seed);preConstructionEditsVersions=new Map(versions)
+  const patch=JSON.parse(constructionEdit[1]),policy=JSON.parse(source.match(/\$construction_edit_policy\$([\s\S]+?)\$construction_edit_policy\$/)![1])
+  const manual=source.match(/\$construction_edit_manual\$([\s\S]+?)\$construction_edit_manual\$/)![1]
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'construction-edits-v1'};versions.set(row.key,(versions.get(row.key)??0)+1)}
+  const row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key='tools.edit_construction_parts'
+  row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],card_description:policy.description,additional_description:policy.how_to}
+  seed.push(row);publish(row)
+  for(const key of ['tools.save_construction_draft','tools.change_construction_parameters','bob.tools','bob.workflows']){
+   const r=seed.find(row=>row.key===key);publish(r)
+   if(key==='bob.tools'){r.definition.catalog.push(policy);r.definition.contract_keys.push('tools.edit_construction_parts');r.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push('edit_construction_parts')}
+   else if(key==='bob.workflows'){const w=r.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing');w.tools.push('edit_construction_parts');w.method+=manual}
+   else {r.definition.additional_description=(r.definition.additional_description??'')+manual;if(key==='tools.change_construction_parameters')r.definition.description=r.definition.description.replace('Use save_construction_draft for topology/material/formula changes.','Use edit_construction_parts for topology/material/formula changes.')}
+  }
+ }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
   for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){
@@ -334,7 +351,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -344,6 +361,8 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
   supports_images:true,supports_reasoning:true,supports_image_output:tier==='image',input_cost_per_1m_tokens:1,output_cost_per_1m_tokens:2,cached_input_cost_per_1m_tokens:null,
   capabilities:{provider_adapter:tier==='embedding'?'openai-embeddings-v1':tier==='image'?'openai-images-v1':'openai-responses-v1',supports_functions:true,supports_json_schema:true,reasoning_efforts:['none','minimal','low','medium','high','xhigh'],...(tier==='embedding'?{supports_embedding_dimensions:true,max_embedding_dimensions:1536,max_batch_inputs:2048}:{})}})),
 }}
+const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
+export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
 const preContextCoverageManifest=fixtureManifest(preContextCoverageRows??seed,preContextCoverageVersions??versions,'fixture-pre-context-coverage-manifest')
 export function preContextCoverageCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextCoverageManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}

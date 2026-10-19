@@ -450,6 +450,12 @@ export async function answerWithOpenAi(opts: {
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}
       return data
     },
+    preciseEditDiagnostics:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.edit_construction_parts'),
+    prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_edit_preparation_failed'}
+      return data
+    },
     prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_parameter_change',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_change_preparation_failed'}

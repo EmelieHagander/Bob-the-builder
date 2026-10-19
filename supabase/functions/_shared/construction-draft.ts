@@ -1,3 +1,4 @@
+import { CONSTRUCTION_EDIT_TOOL, constructionEditIssues } from './construction-edits.ts'
 import { checkConstruction } from './construction-checks.ts'
 import { constructionLists } from './construction-lists.ts'
 import { constructionCutFit } from './construction-cut-fit.ts'
@@ -94,6 +95,8 @@ export interface ConstructionToolsState { version:1; used:number }
 export function createConstructionTools(opts:{projectId:string;message:string;writer?:ProjectWriter;hasAccess:()=>Promise<boolean>;unlimitedWork?:boolean;
  read:(id:string|null,revision:number|null,after:string|null)=>Promise<unknown>;
  readCurrent?:(id:string)=>Promise<unknown>;
+ preciseEditDiagnostics?:boolean;
+ prepareEdit?:(payload:WritePayload)=>Promise<Record<string,any>>;
  prepareParameterChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
  prepareLegacyTransition?:(payload:WritePayload)=>Promise<Record<string,any>>;
  prepareRoleChange?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -106,10 +109,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  return {
  exportState():ConstructionToolsState{return {version:1,used}},
  restoreState(state:ConstructionToolsState){if(state?.version!==1||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('construction_tools_checkpoint_invalid');used=state.used},
- tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
+ tools:[CONSTRUCTION_READ_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CHANGES_TOOL,...(opts.writer?[CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CONTINUE_TOOL,CONSTRUCTION_CUT_SAVE_TOOL]:[])],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-used)},
  async execute(name:string,raw:unknown):Promise<Record<string,any>>{
   if(++used>12&&!opts.unlimitedWork)return {status:'budget_exhausted'}
-  const spec=[CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_READ_TOOL,CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
+  const spec=[CONSTRUCTION_EDIT_TOOL,CONSTRUCTION_LEGACY_TOOL,CONSTRUCTION_PARAMETER_TOOL,CONSTRUCTION_READ_TOOL,CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_CHECK_TOOL,CONSTRUCTION_LIST_TOOL,CONSTRUCTION_CUT_FIT_TOOL,CONSTRUCTION_CUT_SAVE_TOOL,CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].find(s=>s.function.name===name)
   if(!spec)return {status:'invalid'}
   // An older pinned catalog may omit this new field. Preserve its uncertainty;
   // the database inherits an existing policy rather than erasing it.
@@ -169,6 +172,33 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
     if(!['ready','saved'].includes(prepared.status))return {...prepared,message:prepared.status==='already_prepared'
      ?'Use this existing construction ID and its current revision; no duplicate was created. Check or correct it, then render the original drawing identity.'
      :prepared.status==='needs_data'?'No transition saved. Establish the listed evidence without inventing parameter roles, material pins or joints.':prepared.message}
+    return await opts.writer.commit(payload)
+   }
+   if(name===CONSTRUCTION_EDIT_TOOL.function.name){
+    if(!opts.writer||!opts.prepareEdit)return {status:'unavailable'}
+    if(!v.request_quote.trim()||!opts.message.includes(v.request_quote))return {status:'invalid',issues:[{code:'request_quote',path:'request_quote'}]}
+    const payload:WritePayload={kind:'construction_edit',record_id:v.record_id,expected_revision:v.expected_revision,expected_updated_at:null,request_quote:v.request_quote,
+     data:{key:v.key,change_note:v.change_note,changes:v.changes,computed:null}}
+    const prepared=await opts.prepareEdit(payload)
+    if(!await opts.hasAccess())return {status:'denied'}
+    if(prepared.status!=='ready'&&prepared.status!=='saved')return prepared
+    if(prepared.status==='ready'){
+     const draft=prepared.draft,next=prepared.next
+     if(draft?.projectId!==opts.projectId||draft.artifact_id!==v.record_id||draft.revision!==v.expected_revision||draft.current_revision!==v.expected_revision||draft.archived)return {status:'conflict'}
+     if(!next)return {status:'unavailable'}
+     const issues=constructionEditIssues(next,draft)
+     if(issues.length)return {status:'invalid',issues,message:'No construction changed. Correct only the named posts and their dependencies.'}
+     const recipe=parseCadAssemblyRequest(structuredClone(next.recipe))
+     if(!recipe)return {status:'invalid',issues:[{code:'invalid_recipe',path:'changes'}]}
+     constructionInstancePolicy(recipe,next.instance_policy)
+     const plan=parseParameterPlan(next.parameter_plan)
+     if(plan.frames.some(f=>f.kind==='image'))return {status:'invalid',issues:[{code:'unsupported_image_frame',path:'frames'}]}
+     const sources=await opts.readSources(parameterSourcePins(plan))
+     const parameters=compileCadParameters(opts.projectId,recipe,plan,sources.project,sources.physical)
+     if(!parseCadAssemblyRequest(recipe))return {status:'invalid',issues:[{code:'computed_geometry_invalid',path:'changes'}]}
+     payload.data.computed={recipe,parameters}
+    }
+    if(!await opts.hasAccess())return {status:'denied'}
     return await opts.writer.commit(payload)
    }
    if(name===CONSTRUCTION_PARAMETER_TOOL.function.name){
@@ -240,6 +270,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(readiness.status!=='ready')return {status:readiness.status,readiness,issues:readiness.issues,
      message:'No construction saved. Resolve the listed evidence and design choices before fixing their geometry: investigate relevant sources, explain alternatives and recommend a supported direction. Reuse prior choices or decide within the existing mandate, then save and select that solution revision.'}
    if(readiness.target_revision!==v.target_revision)return {status:'conflict',message:'The selected target changed. Read its exact current revision and shared advice before fixing construction geometry.'}
+   if(opts.preciseEditDiagnostics){
+    const issues=constructionEditIssues({...v,instance_policy:v.instance_policy??constructionInstancePolicy(v.recipe,null)})
+    if(issues.length)return {status:'invalid',issues,message:'No construction changed. Correct only the named posts; for an existing construction use edit_construction_parts.'}
+   }
    const recipe=parseCadAssemblyRequest(structuredClone(v.recipe))
    if(!recipe)return {status:'invalid',message:'Invalid CAD recipe or referenced part IDs.'}
    constructionInstancePolicy(recipe,v.instance_policy)

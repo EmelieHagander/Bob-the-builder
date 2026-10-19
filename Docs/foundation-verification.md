@@ -1,5 +1,58 @@
 # Foundation verification and rollout
 
+## Bounded construction edits — 2026-10-19
+
+**Prepared on `codex/bob-construction-edits`, based on main `5806e85`; not merged,
+migrated or deployed.** This implements only delivery 1 of the
+[remediation plan](bob-green-release-plan-2026-10-19.md). The
+[Artifact owner](artifacts.md#bounded-part-changes--prepared-2026-10-19) owns behavior.
+
+Targeted local verification passed **33 tests across five files** (Node counts
+parent tests as well as subtests), run in focused groups with
+`node --no-wasm-code-gc --import tsx --test`:
+
+| Test file | Passing tests | Evidence |
+| --- | ---: | --- |
+| `tests/construction-edits.test.ts` | 14 | Migrated local SQL, three new volumes with every prior post/metadata retained; exact receipt retry and changed-key conflict; stale heads, no-ops and bad IDs; precise missing-note/self-joint/dependency errors; unknown input; forged computed values/source snapshots; identity reuse; explicit dependency removal; real SQL commit followed by continuation before acknowledgement; access/claim loss; source drift after preparation; old pinned catalogs exclude the new handler; new full-save diagnostics. |
+| `tests/construction-draft.test.ts` | 7 | Existing full-save/read/revise, source and material pins, raw-table/RPC authority, archive/history and generic joint topology. |
+| `tests/construction-parameters.test.ts` | 8 | Existing bounded parameter changes, compilation/source truth, claims, concurrency and accepted receipt replay after drift. |
+| `tests/bob-workflows-judgement.test.ts` | 3 | Historical immutable workflow publication, fixture and runtime behavior. |
+| `tests/tool-catalog-parity.test.ts` | 1 | Historical policy boundary plus exact new seed/publication parity. Initially failed because the new seed entry was incorrectly included in the older boundary; explicit publication-boundary correction passed on rerun. |
+
+Both `ask-bob/index.ts` and `bob-worker/index.ts` pass Deno checking with the
+existing local dependency map and manual node_modules. The generated catalog
+passes `scripts/build-construction-edit-catalog.ts ... --check`; `git diff --check`
+passes. Review used the existing documentation-steward guidance manually; no
+independent agent review is claimed. No paid model or renderer was called; no
+hosted data was changed. These fixtures do not establish actual model choices,
+end-to-end drawing delivery, production CPU behavior, or dollar savings.
+
+Release order after the final acceptance/CI gate:
+
+1. Apply `20261019172133_construction_edits.sql` without activating the new tool.
+   It adds preparation/merge and a delegated writer; existing commands retain
+   their current route. Existing table data is not rewritten.
+2. Install compatible `ask-bob` and `bob-worker` runtimes. Old pinned catalogs keep
+   their earlier handler set and full-save diagnostic behavior.
+3. Apply `20261019172346_ai_construction_edits.sql` to atomically publish/activate
+   the new command, policy and workflow/manual versions. Read back the catalog
+   and runtime versions before allowing new jobs to use the command.
+4. Rollback first restores the prior active catalog for new jobs. Retain the new
+   SQL/runtime compatibility while any job pins the new catalog; do not remove
+   its handler or reinterpret accepted receipts during rollback.
+
+The Supabase CLI aborted in Bun before `migration new` could create a file.
+The new filenames use the observed UTC timestamp fallback; no historical
+migration was renamed or rewritten. The catalog SQL is reproducible from the
+executable tool and seed, checked against actual migrated publication.
+
+This slice increases the selected construction workflow from 19 to 20 schemas.
+It reduces required write arguments by allowing changed posts only, but leaves
+full construction reads and workflow-wide loading for deliveries 2 and 3.
+Full CI and the complete suite remain deferred until the final-stage local
+behavior is confirmed, as requested. Commits use `[skip ci]`; workflows are
+unchanged. [State](bob-delivery-flow.md#state) owns remaining review and acceptance.
+
 ## Bob context coverage corrections — 2026-10-18
 
 **All five [coverage-audit findings](bob-context-coverage-audit-2026-10-18.md)

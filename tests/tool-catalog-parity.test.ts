@@ -22,7 +22,10 @@ test('historical policy keeps seed parity and current policy matches only the th
   const exactRead=fixturePolicies.find(policy=>policy.name==='read_conversation_message')
   assert(exactRead,'the current catalog publishes exact private-message reading')
   assert.deepEqual(seed.filter(policy=>policy.name==='read_conversation_message'),[exactRead],'the later seed addition exactly matches its current published policy')
-  assert.deepEqual(historical,sorted(seed.filter(policy=>!['read_conversation_message','read_project_orientation'].includes(policy.name))),'all policies present at the historical boundary retain exact seed parity')
+  const constructionEdit=fixturePolicies.find(policy=>policy.name==='edit_construction_parts')
+  assert(constructionEdit,'the later construction-edit publication has a pinned policy')
+  assert.deepEqual(seed.filter(policy=>policy.name==='edit_construction_parts'),[constructionEdit],'the new seed entry exactly matches its published policy')
+  assert.deepEqual(historical,sorted(seed.filter(policy=>!['read_conversation_message','read_project_orientation','edit_construction_parts'].includes(policy.name))),'all policies present at the historical boundary retain exact seed parity')
   const {rows}=await pg.query<ToolPolicy>(policySql)
   const manifest=(await pg.query<{manifest:AiCatalogManifest}>("select shared.resolve_ai_catalog('bob',null) manifest")).rows[0].manifest
   const currentPolicies=manifest.definitions.find(d=>d.prompt_key==='bob.tools')!.definition.catalog as ToolPolicy[]

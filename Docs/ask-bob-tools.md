@@ -33,6 +33,18 @@ catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
 
+**Prepared addition, 2026-10-19; not activated:** the versioned
+`edit_construction_parts` command sends only changed canonical construction posts.
+Its [Artifact contract](artifacts.md#bounded-part-changes--prepared-2026-10-19)
+owns merge, identity, source and receipt rules. The new publication adds it to the
+construction workflow and directs small edits away from full-document saves.
+Earlier pinned catalogs do not acquire this handler or the new full-save
+diagnostics. This slice still uses the existing workflow loading behavior:
+selecting the construction workflow loads 20 schemas instead of 19. Selective
+schema loading and small read views belong to later deliveries in the
+[remediation plan](bob-green-release-plan-2026-10-19.md); no total prompt/cost
+reduction is claimed yet.
+
 **Main Bob's foundation was published through PR #267.** The
 [coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same
 instruction-loading mechanics to active specialists and remove dormant CAD roles.

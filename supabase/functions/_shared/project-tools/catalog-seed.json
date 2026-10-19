@@ -939,5 +939,14 @@
     "always_load": false,
     "preload_phases": [],
     "active": true
+  },
+  {
+    "name": "edit_construction_parts",
+    "description": "Change only named parts and dependencies of an exact saved construction.",
+    "how_to": "Read the exact revision and relevant stable IDs. Send only changed collections with explicit upserts/removals; preserve unrelated parts. Resolve dependent bindings, nodes, joints, materials and roles explicitly. Keep unknown evidence unknown. Use parameter/role commands for those narrower changes. Corrected input gets a new key; exact retry reuses its receipt. Check the saved revision and read_construction_changes before drawing or claiming completion.",
+    "schema_version": 1,
+    "always_load": false,
+    "preload_phases": [],
+    "active": true
   }
 ]

@@ -106,6 +106,37 @@ Before moving a legacy drawing onto this path, inspect its existing geometry, gr
 
 Acceptance must cover a dimension-only change and all dependent placements/list values, the exact construction-to-drawing pin after reload, stale/concurrent changes, an invalid or unknown input, a failed render followed by receipt-safe retry, and a legacy transition preserving history. Measure the whole model chain before/after on equivalent work. The expected saving is fewer repeated geometry-design calls and smaller deltas; no percentage or successful mockup match is established by this specification.
 
+### Bounded part changes — prepared 2026-10-19
+
+**Implemented and locally verified on the preparation branch; not deployed.**
+`edit_construction_parts` edits an existing construction at an exact expected
+revision. It accepts only named upserts/removals of definitions, instances,
+parameter nodes/bindings, material pins, joints and instance roles. Each upsert
+is a complete changed post; omitted collections and posts remain server-owned.
+There are no arbitrary JSON paths, silent dependency removals, metadata changes
+or new coordinate-frame types. Existing numeric inputs and role-only changes
+retain their smaller dedicated commands.
+
+The claimed-user `prepare_construction_edit` RPC merges against the canonical
+current revision. Compilation stays inside the runtime. Commit repeats the merge
+under the existing project lock, checks the compiled graph against the exact
+requested changes and delegates through the existing construction writer,
+source checks, readiness, identity rules and affected-output tracking. A changed
+joint endpoint needs a new joint ID. New roles require evidence or explicit
+`unknown`/`unknown`; unrecorded historical roles remain unknown.
+
+The existing receipt ledger uses `construction_edit:<key>` for this command.
+Exact retries return the same receipt before recompilation, including after a
+later source/head change; changed input under the same key conflicts. Access and
+turn ownership are checked first. A saved construction is still not a checked,
+rendered or reviewed drawing. Complete the affected outputs for its exact revision.
+
+Small diagnostics identify missing fields, self-joints, identity reuse and dangling
+dependencies without exposing raw database errors. Existing pinned catalogs keep
+their old handlers and full-save diagnostic sequence. [Verification and release
+order](foundation-verification.md#bounded-construction-edits--2026-10-19) own the
+evidence and rollout limits; [State](bob-delivery-flow.md#state) owns next work.
+
 ### Instance roles and affected outputs — release D
 
 **Implemented; release installation/readback is tracked in [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d).** A version-1 `instance_policy` belongs to one exact construction revision. It contains one entry per stable recipe instance ID, an explicit role, its matching quantity policy and a reason. Geometry, definitions and numeric provenance remain in the existing construction; the policy does not alter the CAD recipe contract.

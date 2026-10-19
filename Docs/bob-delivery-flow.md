@@ -292,15 +292,20 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — isolerad rättning före aktivering av PR2 (2026-10-19):**
-gör livekontrollen av rättningen i PR #284, installerad som `bob-worker` v113 och
-`ask-bob` v145. Den sparar modelloperationens sluttid när JWT förnyas under väntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
-inte en färdig leverans. Den nya rättningen sparar modellanropets ursprungliga
-sluttid; [auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
-äger bevis, kostnad och kvarstående acceptans. PR1 är tekniskt driftsatt men
-fortfarande inte beteendeaccepterad. Beställaren har godkänt fortsatt förberedelse
-av steg 2 i separat PR; aktivering ska bedömas efter rättningen och liveprovet.
-Utred också rapporten om kvarhängande arbetsstatus efter föregående serverslut.
+**Aktivt nästa steg — granska leverans 1 före fortsatt implementation (2026-10-19):**
+granska de avgränsade konstruktionsändringarna på `codex/bob-construction-edits`
+mot [åtgärdsplanens första leverans](bob-green-release-plan-2026-10-19.md#leverans-1--små-konstruktionsändringar-och-precisa-fel).
+[Lokala bevis och releaseordning](foundation-verification.md#bounded-construction-edits--2026-10-19)
+skiljer färdig implementation från kvarstående aktivering och modellacceptans.
+Nästa implementationsleverans är små relevanta läsvyer och bevarade arbetsresultat.
+Draft #285/#286 ska därefter anpassas till konstruktionsrättningarna före aktivering.
+Inget nytt betalt långprov ingår; cirka $1 är ett mjukt mål utan nya hårda tak.
+
+Den tidigare uppmaningen att omedelbart köra ett nytt liveprov är ersatt av denna
+ordning. PR1:s tekniska installation och kvarstående beteendeacceptans behålls;
+[auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
+äger tidigare driftbevis. Utred fortfarande rapporten om kvarhängande arbetsstatus
+efter föregående serverslut.
 
 Riktade tester och typkontroller gäller per steg. Full testsvit och CI väntar tills
 sista stegets beteende bekräftats enligt
