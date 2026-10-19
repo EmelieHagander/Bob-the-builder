@@ -112,9 +112,19 @@ export function parseOperationalWrite(name:string,v:Record<string,any>,report?:(
   }
   return base
 }
+export type OperationalReaderState = { version: 1; projectId: string; used: number; partial: boolean; sources: ProjectSource[] }
 export function createOperationalReader(projectId:string,read:(v:Record<string,unknown>)=>Promise<{data:any;error:any}>,hasAccess:()=>Promise<boolean>,sources:ProjectSource[],options:{unlimitedWork?:boolean}={}){
   let used=0,partial=false
-  return{tools:[READ_OPERATIONS_TOOL],get remaining(){return options.unlimitedWork?Infinity:Math.max(0,16-used)},get partial(){return partial},async execute(v:unknown){
+  return{tools:[READ_OPERATIONS_TOOL],
+  exportState(): OperationalReaderState { return JSON.parse(JSON.stringify({ version: 1, projectId, used, partial, sources })) },
+  restoreState(state: OperationalReaderState) {
+    if (!state || state.version !== 1 || state.projectId !== projectId || !Number.isSafeInteger(state.used) || state.used < 0 || typeof state.partial !== 'boolean'
+      || !Array.isArray(state.sources) || state.sources.some(source => source?.projectId !== projectId)) throw new Error('invalid_operational_reader_state')
+    const saved = structuredClone(state)
+    sources.splice(0, sources.length, ...saved.sources)
+    used = saved.used; partial = saved.partial
+  },
+  get remaining(){return options.unlimitedWork?Infinity:Math.max(0,16-used)},get partial(){return partial},async execute(v:unknown){
     if(++used>16&&!options.unlimitedWork)return{status:'budget_exhausted'}
     if(!object(v)||Object.keys(v).sort().join(',')!=='after_id,record_id,resource'||!['task_work','stock','requirement','cut_plan','product','pack_purchase','shopping','build_day'].includes(v.resource)
       ||[v.record_id,v.after_id].some(x=>x!==null&&!text(x)))return{status:'invalid'}

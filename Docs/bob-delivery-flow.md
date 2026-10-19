@@ -292,7 +292,17 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — ordinär minnes-/modellacceptans:** prova ett nytt
+**Aktivt nästa steg — PR1 för återupptagning (2026-10-19):** slutför och granska
+den versionsstyrda fortsättningen från sparat operationsläge enligt
+[migrationskontraktet](ask-bob-conversations.md#launchpad-migration).
+PR1 är **under implementation, inte färdig eller driftsatt**. Stäng avbrotts-,
+tillstånds- och skrivsäkerhetsproven samt 40-stegsregressionen, hela testsviten och
+CI före release. Därefter krävs beställarens långa bildjobb och loggkontroll innan
+PR2 börjar. [Auditen](bob-launchpad-migration-audit-2026-10-19.md) äger de daterade
+CPU-, replay- och cacheobservationerna; äldre fel bevisar inte utfallet på senaste
+driftsättningen. CAD-migreringen kommer efter Bobs huvudtur.
+
+**Kvarstående ordinär minnes-/modellacceptans:** prova ett nytt
 meddelande i samma privata tråd med den aktiverade
 [kontextstrategin](ask-bob-conversations.md#context-strategy--2026-10-18).
 Bekräfta att Bob fortsätter uppdraget, behåller exakt fem senaste meddelanden och

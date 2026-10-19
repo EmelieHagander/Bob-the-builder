@@ -23,9 +23,13 @@ export const PLAN_CAD_PIECES_TOOL={type:'function' as const,function:{name:'plan
    artifact_id:{type:'string',description:'Exact saved construction Artifact ID for this piece.'},
    construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Exact saved/read construction revision; every piece requires a source.'}}}}}}}}
 
+export interface CadPiecesState { version:1; used:number }
 export function createCadPieces(opts:{unlimitedWork?:boolean;requestStore?:DrawingRequestStore;projectId:string;ownerRequest:string|null;hasAccess:()=>Promise<boolean>;aiCatalog:AiCatalogSession;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>}){
  let used=0
- return {tools:opts.requestStore?.releasePieces?[PLAN_CAD_PIECES_TOOL]:[],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,1-used)},
+ return {
+ exportState():CadPiecesState{return {version:1,used}},
+ restoreState(state:CadPiecesState){if(state?.version!==1||!Number.isSafeInteger(state.used)||state.used<0)throw new Error('cad_pieces_checkpoint_invalid');used=state.used},
+ tools:opts.requestStore?.releasePieces?[PLAN_CAD_PIECES_TOOL]:[],get remaining(){return opts.unlimitedWork?Infinity:Math.max(0,1-used)},
  async execute(raw:unknown){
   const store=opts.requestStore
   if(!store?.releasePieces)return {status:'unavailable',saved:false}

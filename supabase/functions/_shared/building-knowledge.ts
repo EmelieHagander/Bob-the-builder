@@ -14,9 +14,18 @@ export function searchKnowledge(query:string,jurisdiction:string,today:string,ca
   .map(card=>{const words=tokens([card.title,...card.keywords,card.summary].join(' '));return{card,score:terms.reduce((n,t)=>n+words.filter(w=>w===t||t.length>=4&&w.startsWith(t)).length,0)}})
   .filter(c=>c.score>0).sort((a,b)=>b.score-a.score||a.card.id.localeCompare(b.card.id)).slice(0,4).map(c=>c.card)
 }
+export type KnowledgeReaderState = { version: 1; used: number; references: ReferenceEvidence[] }
 export function createKnowledgeReader(hasAccess:()=>Promise<boolean>,now=()=>new Date(),options:{unlimitedWork?:boolean}={}){
  let used=0;const references:ReferenceEvidence[]=[]
- return{tools:[KNOWLEDGE_TOOL],references,get remaining(){return options.unlimitedWork?Infinity:Math.max(0,8-used)},async execute(v:unknown){
+ return{tools:[KNOWLEDGE_TOOL],references,
+ exportState(): KnowledgeReaderState { return JSON.parse(JSON.stringify({ version: 1, used, references })) },
+ restoreState(state: KnowledgeReaderState) {
+  if (!state || state.version !== 1 || !Number.isSafeInteger(state.used) || state.used < 0 || !Array.isArray(state.references)) throw new Error('invalid_knowledge_reader_state')
+  const saved = structuredClone(state)
+  references.splice(0, references.length, ...saved.references)
+  used = saved.used
+ },
+ get remaining(){return options.unlimitedWork?Infinity:Math.max(0,8-used)},async execute(v:unknown){
   if(++used>8&&!options.unlimitedWork)return{status:'budget_exhausted'}
   if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).sort().join(',')!=='jurisdiction,query')return{status:'invalid'}
   const input=v as {query:unknown;jurisdiction:unknown}

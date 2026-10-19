@@ -1,7 +1,14 @@
 /** Navigate large records without treating a transport limit as missing evidence. */
 export const RECORD_DETAIL_TOOL={type:'function' as const,function:{name:'read_project_record_section',description:'Read a section of a large plan or CAD record. Start with path=[]; too_large returns keys or array_length so you can choose a narrower JSON path. For a plan use the revision as record_id; for CAD use the Artifact UUID. Exact revision is required for CAD. drawing reads current drawing metadata, source_state/source_reasons and linked work Steps, without geometry; check source freshness before relying on the saved classification; use its Artifact UUID and revision. This is project-bound read-only data.',parameters:{type:'object',additionalProperties:false,properties:{dataset:{type:'string',enum:['plan','cad','drawing']},record_id:{type:'string'},revision:{type:['integer','null']},path:{type:'array',maxItems:8,items:{type:'string'}}},required:['dataset','record_id','revision','path']}}}
+export type RecordDetailReaderState = { version: 1; used: number }
 export function createRecordDetailReader(read:(dataset:'plan'|'cad'|'drawing',id:string,revision:number|null)=>Promise<unknown>,hasAccess:()=>Promise<boolean>,options:{unlimitedWork?:boolean}={}){let used=0
- return {tools:[RECORD_DETAIL_TOOL],get remaining(){return options.unlimitedWork?Infinity:Math.max(0,16-used)},async execute(raw:unknown){
+ return {tools:[RECORD_DETAIL_TOOL],
+ exportState(): RecordDetailReaderState { return { version: 1, used } },
+ restoreState(state: RecordDetailReaderState) {
+  if (!state || state.version !== 1 || !Number.isSafeInteger(state.used) || state.used < 0) throw new Error('invalid_record_detail_reader_state')
+  used = state.used
+ },
+ get remaining(){return options.unlimitedWork?Infinity:Math.max(0,16-used)},async execute(raw:unknown){
  if(++used>16&&!options.unlimitedWork)return {status:'budget_exhausted'}
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return {status:'invalid'}
  const v=raw as Record<string,any>

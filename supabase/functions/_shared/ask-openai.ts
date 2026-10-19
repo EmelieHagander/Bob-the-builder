@@ -24,6 +24,7 @@ import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
 import { BobContinuation, type BobJournal, type JournalIdentity } from './bob-job-journal.ts'
+import type { BobTurnCheckpointStore } from './bob-turn-checkpoint.ts'
 export const RESEND_NOTICE = 'Obs: ett modellanrop tappade kontakten innan svaret kom fram och skickades om en gång. Det första försöket kan ha debiterats, så den här turen kan ha kostat något mer än vanligt.'
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
@@ -45,9 +46,9 @@ import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
 import { createProjectLookup, type LookupInput } from './project-lookup.ts'
 import { createPlanAssistant } from './plan-assistant.ts'
-import type { ProjectAnswer, TurnProgress } from './project-answer.ts'
+import type { BobAnswerState, ProjectAnswer, TurnProgress } from './project-answer.ts'
 import { compactReceipts, createProjectWriter } from './project-write.ts'
-import { prepareWorkingContext } from './bob-working-context.ts'
+import { prepareWorkingContext, restoreWorkingContext, type WorkingContextSession, type WorkingContextState } from './bob-working-context.ts'
 import { runClaimedProjectTurn } from './project-turn.ts'
 import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 
@@ -72,7 +73,7 @@ export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
   imageIds?: string[];
-  background?: { workAllowanceVersion?: number; catalogManifestId?: string; authorityExpiresAt?: string; drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
+  background?: { checkpoint?: BobTurnCheckpointStore; workAllowanceVersion?: number; catalogManifestId?: string; authorityExpiresAt?: string; drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -92,6 +93,10 @@ export async function answerWithOpenAi(opts: {
   let aiCatalog: AiCatalogSession
   const conversations = createBobConversationStore(internal)
   const journal = opts.background?.journal
+  const checkpoint = opts.background?.checkpoint
+  const restart = checkpoint?.current()
+  if (checkpoint && opts.background?.drawingRequestId) throw new Error('turn_checkpoint_scope_invalid')
+  let workingContext: WorkingContextSession | undefined
   // The owner chose to hear about possibly double-billed re-sends (K5, 2026-10-07).
   let priorDrawingAttemptUncertain = false
   let memoryEmbeddingOutcomeUncertain = false
@@ -222,7 +227,7 @@ export async function answerWithOpenAi(opts: {
       },
       // current() remains live, including for already-replayed image evidence;
       // a replay re-checks every opened image per step within milliseconds.
-      current: reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
+      current: checkpoint ? adapter.current : reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
     }
   }
   const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
@@ -230,12 +235,14 @@ export async function answerWithOpenAi(opts: {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }, signal))
-  const hasAccess = reuseFresh(async () => {
+  const readAccess = async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
     return !error && data?.id === opts.projectId
-  }, granted => granted)
-  const readToolPolicy = reuseFresh(createToolPolicyReader(client, opts.projectId), () => true)
+  }
+  const hasAccess = checkpoint ? readAccess : reuseFresh(readAccess, granted => granted)
+  const policyReader = createToolPolicyReader(client, opts.projectId)
+  const readToolPolicy = checkpoint ? policyReader : reuseFresh(policyReader, () => true)
 
   if (!await hasAccess()) return { ok: false, error: 'project_denied' }
   let claim: BobTurnClaim
@@ -318,6 +325,7 @@ export async function answerWithOpenAi(opts: {
   let currentView: CurrentView | undefined
   let validateCurrentView: (() => Promise<boolean>) | undefined
   let getCurrentViewEvidence: (() => CurrentView) | undefined
+  let currentViewGuard: ReturnType<typeof createCurrentViewGuard> | undefined
   if (!opts.background?.drawingRequestId) {
     try {
       const screen = claimedServer && threadId
@@ -332,7 +340,7 @@ export async function answerWithOpenAi(opts: {
         // A lease replay rebuilds the same model input; only fresh caller reads
         // can authorize its reuse. Never journal the freshness check itself.
         currentView = await memo('context:current_view', screen, read)
-        const guard = createCurrentViewGuard({ initial: currentView, read, hasAccess,
+        const guard = currentViewGuard = createCurrentViewGuard({ initial: currentView, read, hasAccess,
           receipts: () => writer?.receipts ?? [] })
         validateCurrentView = guard.validate
         getCurrentViewEvidence = guard.evidence
@@ -510,16 +518,7 @@ export async function answerWithOpenAi(opts: {
       return data
   }})
 
-  const cadAssistant = createCadAssistant({ unlimitedWork,
-    allowSourceRenewal:execution.constructionReplayVersion===2,
-    aiCatalog,calculator,
-    ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
-    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
-    requestModel:async(id,_options,work)=>{
-      const previous=drawingRequestId;drawingRequestId=id
-      try{return await work()}finally{drawingRequestId=previous}
-    },
-    ...(claimedServer?{requestStore:createDrawingRequestStore({aiCatalog,projectId:opts.projectId,binding,journal,
+  const requestStore = claimedServer ? createDrawingRequestStore({aiCatalog,projectId:opts.projectId,binding,journal,
       privateCall:drawingRequestCall,
       // One stable id per piece key; the unkeyed id keeps its existing journal identity.
       newId:key=>memo('cad:project_request_id',key?{key}:{},async()=>crypto.randomUUID()),
@@ -533,7 +532,18 @@ export async function answerWithOpenAi(opts: {
         if(error)throw new Error(drawingErrorCode(error)??'drawing_request_unavailable')
         return data
       },
-    })}:{}),
+    }) : undefined
+
+  const cadAssistant = createCadAssistant({ unlimitedWork,
+    allowSourceRenewal:execution.constructionReplayVersion===2,
+    aiCatalog,calculator,
+    ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
+    runtimeVersion:()=>memo('cad:runtime',{},()=>drawingRuntimeVersion(internal,{model:!!Deno.env.get('OPENAI_API_KEY'),cad:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN')},aiCatalog)),
+    requestModel:async(id,_options,work)=>{
+      const previous=drawingRequestId;drawingRequestId=id
+      try{return await work()}finally{drawingRequestId=previous}
+    },
+    ...(requestStore ? { requestStore } : {}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
     readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
@@ -667,6 +677,49 @@ export async function answerWithOpenAi(opts: {
       :await rpc('read_cad_artifact',{p_project:opts.projectId,p_artifact:id,p_revision:revision},AbortSignal.timeout(10000));
     if(error)throw new Error('record_unavailable');return dataset==='plan'?data?.record:data
   },hasAccess,{unlimitedWork})
+  // Only the active operation replays. These components own the exact refs,
+  // receipts, candidates and evidence that completed operations already made.
+  const components: Record<string, { exportState(): unknown; restoreState(state: any): void } | undefined> = {
+    projectLookup, groundingLookup, writer, projectContext, currentViewGuard, knowledgeReader, operationalReader,
+    catalogReader, constructionTools, calculator, planAssistant, cadAssistant, imageTools, recordReader,
+    planLinks, workRecords, solutionActions, projectEdits, requestStore, modelBudget, contextContinuation, metrics,
+  }
+  if (restart) {
+    const state = restart.state
+    if (state.version !== 1 || !state.answer || !state.components || typeof state.components !== 'object'
+      || !state.runtime || typeof state.runtime !== 'object') throw new Error('turn_checkpoint_invalid')
+    const saved = state.components as Record<string, unknown>
+    if (Object.keys(saved).some(name => !components[name])) throw new Error('turn_checkpoint_component_missing')
+    for (const [name, component] of Object.entries(components)) {
+      if (!component) continue
+      if (!(name in saved)) throw new Error('turn_checkpoint_component_missing')
+      component.restoreState(saved[name])
+    }
+    const runtime = state.runtime as { imageRefs: [string, Opened][]; mainContextEpoch: number; priorDrawingAttemptUncertain: boolean; memoryEmbeddingOutcomeUncertain: boolean }
+    if (!Array.isArray(runtime.imageRefs) || !Number.isSafeInteger(runtime.mainContextEpoch) || runtime.mainContextEpoch < 0
+      || typeof runtime.priorDrawingAttemptUncertain !== 'boolean' || typeof runtime.memoryEmbeddingOutcomeUncertain !== 'boolean') throw new Error('turn_checkpoint_invalid')
+    imageRefs.clear()
+    for (const [ref, record] of runtime.imageRefs) {
+      if (typeof ref !== 'string' || !ref.startsWith('private-image:') || !record?.source || record.source.projectId !== opts.projectId) throw new Error('turn_checkpoint_invalid')
+      imageRefs.set(ref, structuredClone(record))
+    }
+    mainContextEpoch = runtime.mainContextEpoch
+    priorDrawingAttemptUncertain = runtime.priorDrawingAttemptUncertain
+    memoryEmbeddingOutcomeUncertain = runtime.memoryEmbeddingOutcomeUncertain
+    // Bootstrap used its original positions above. Restore the durable cursor
+    // only now, before the pending action and its nested operation journal run.
+    journal!.restoreState(restart.journalState)
+  }
+  const answerCheckpoint = checkpoint ? {
+    state: restart?.state.answer as BobAnswerState | undefined,
+    save: async (answer: BobAnswerState) => {
+      await checkpoint.commit({ version: 1, answer,
+        components: Object.fromEntries(Object.entries(components).filter((entry): entry is [string, NonNullable<typeof entry[1]>] => !!entry[1]).map(([name, component]) => [name, component.exportState()])),
+        workingContext: workingContext?.exportState(),
+        runtime: { imageRefs: [...imageRefs], mainContextEpoch, priorDrawingAttemptUncertain, memoryEmbeddingOutcomeUncertain },
+      })
+    },
+  } : undefined
   try {
   const result=await runClaimedProjectTurn({
     aiCatalog,
@@ -676,12 +729,13 @@ export async function answerWithOpenAi(opts: {
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
     readToolPolicy,
+    checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
     } : {}),
-    ...(claimedServer && threadId ? { prepareContext: () => {
+    ...(claimedServer && threadId ? { prepareContext: async () => {
       const sourceStore = conversations.workingContext({ projectId: opts.projectId, userId: opts.userId, threadId, turnId: opts.clientTurnId, generation: claimedServer.generation })
       const journalled = contextStrategy ? journalMemoryStore(sourceStore, memo) : undefined
       const store = journalled ? { ...journalled,
@@ -707,7 +761,12 @@ export async function answerWithOpenAi(opts: {
           }),
         }),
       }) : undefined
-      return prepareWorkingContext({
+      if (restart) {
+        const saved = restart.state.workingContext as WorkingContextState | undefined
+        if (!saved) throw new Error('context_checkpoint_invalid')
+        return workingContext = restoreWorkingContext(saved, { projectId: opts.projectId, threadId, message: opts.message, store, hasAccess, unlimitedWork, retrieval })
+      }
+      return workingContext = await prepareWorkingContext({
       projectId: opts.projectId, userId: opts.userId, threadId, generation: claimedServer.generation, message: opts.message,
       memoryManagementVersion: execution.memoryManagementVersion,
       ...(contextStrategy && aiCatalog.definition('schema.bob_conversation_brief_v2').metadata.memory_pointer_scope_version === 1

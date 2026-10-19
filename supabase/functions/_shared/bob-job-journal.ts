@@ -16,11 +16,28 @@ const UNCERTAIN_RETRY_REASONS = new Set(['provider_uncertain', 'segment_wall'])
 const MAX_UNCERTAIN_RETRIES = 1
 /** attempt counts earlier dispatched retries of this exact operation (0 = first send). */
 export type JournalIdentity = { key: string; fingerprint: string; attempt: number }
+/** Cursor positions at a completed boundary, never an in-flight operation. */
+export type BobJournalState = {
+  version: 1
+  positions: Record<string, number>
+  reusedModelCalls: number
+  uncertainResends: number
+}
+export function validateBobJournalState(value: unknown): BobJournalState {
+  const state = value as Partial<BobJournalState> | null
+  if (!state || state.version !== 1 || !state.positions || typeof state.positions !== 'object'
+    || Array.isArray(state.positions) || Object.entries(state.positions).some(([key, position]) => !key || key.length > 150 || !Number.isSafeInteger(position) || position < 0)
+    || !Number.isSafeInteger(state.reusedModelCalls) || state.reusedModelCalls! < 0
+    || !Number.isSafeInteger(state.uncertainResends) || state.uncertainResends! < 0) throw new Error('invalid_journal_state')
+  return stableJsonValue(state as BobJournalState)
+}
 export interface JournalStore {
   entries: JournalEntry[]
   save(entry: JournalEntry): Promise<void>
 }
 export interface BobJournal {
+  exportState(): BobJournalState
+  restoreState(state: BobJournalState): void
   /** Reconstruct a completed operation from recorded steps only. The scope
    * must opt in after a fresh lifecycle check; it grants no new dispatch. */
   replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T>
@@ -82,9 +99,29 @@ async function abortable<T>(work:()=>Promise<T>,signal?:AbortSignal):Promise<T>{
 export function createBobJournal(store: JournalStore, segmentDeadline: number, now = Date.now, reusable: ReadonlyMap<string, unknown> = new Map(), options: { unlimitedWork?: boolean; authorityExpiresAt?: number } = {}): BobJournal {
   const entries = new Map(store.entries.map(e => [e.key, e]))
   const positions = new Map<string, number>()
+  let activeOperations = 0
+  let restored: BobJournalState | undefined
+  const afterCursor = (entry: JournalEntry) => {
+    if (!restored) return true
+    const operation = /^(.*):(\d+)$/.exec(entry.key.replace(/:(?:waiting|started|retry:\d+)$/, ''))
+    return !operation || Number(operation[2]) >= (restored.positions[operation[1]] ?? 0)
+  }
+  const reusedCount = () => (restored?.reusedModelCalls ?? 0) + [...entries.values()].filter(e => afterCursor(e) && (e.value as { reused?: unknown } | null)?.reused === true).length
+  const uncertainCount = () => (restored?.uncertainResends ?? 0) + [...entries.values()].filter(e => afterCursor(e) && /:retry:\d+$/.test(e.key)
+    && UNCERTAIN_RETRY_REASONS.has(String((e.value as { reason?: unknown } | null)?.reason))).length
   let stopped: BobContinuation | undefined
   const replayScopes: { recordedOnly: boolean }[] = []
   return {
+    exportState() {
+      if (stopped || replayScopes.length || activeOperations) throw new Error('journal_boundary_required')
+      return { version: 1, positions: Object.fromEntries(positions), reusedModelCalls: reusedCount(), uncertainResends: uncertainCount() }
+    },
+    restoreState(state) {
+      if (stopped || replayScopes.length || activeOperations) throw new Error('journal_boundary_required')
+      restored = validateBobJournalState(state)
+      positions.clear()
+      for (const [stream, position] of Object.entries(restored.positions)) positions.set(stream, position)
+    },
     async replayScope<T>(work: (requireRecorded: () => void) => Promise<T>): Promise<T> {
       const scope = { recordedOnly: false }
       replayScopes.push(scope)
@@ -93,14 +130,11 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
     },
     check() { if (stopped) throw stopped },
     remaining() { return Math.max(0, segmentDeadline - now()) },
-    reusedModelCalls() {
-      return [...entries.values()].filter(e => (e.value as { reused?: unknown } | null)?.reused === true).length
-    },
-    uncertainResends() {
-      return [...entries.values()].filter(e => /:retry:\d+$/.test(e.key)
-        && UNCERTAIN_RETRY_REASONS.has(String((e.value as { reason?: unknown } | null)?.reason))).length
-    },
+    reusedModelCalls: reusedCount,
+    uncertainResends: uncertainCount,
     async run<T>(stream: string, input: unknown, operation: (identity: JournalIdentity) => Promise<T>, reserveMs = 0, signal?:AbortSignal): Promise<T> {
+      activeOperations++
+      try {
       if (stopped) throw stopped
       const position = positions.get(stream) ?? 0
       positions.set(stream, position + 1)
@@ -195,6 +229,7 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       entries.set(key, entry)
       if (failure) throw new Error(failure)
       return stableJsonValue(value) as T
+      } finally { activeOperations-- }
     },
   }
 }

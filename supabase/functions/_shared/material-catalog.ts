@@ -149,10 +149,21 @@ export function catalogRejection(message = ''): { fields: string[]; message: str
   return null
 }
 export type CatalogTransport = ((input: Record<string, unknown>, signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>) & { checkpointed?: boolean }
+export type MaterialCatalogReaderState = { version: 1; projectId: string; used: number; partial: boolean; sources: ProjectSource[] }
 export function createMaterialCatalogReader(projectId: string, transport: CatalogTransport, hasAccess: () => Promise<boolean>, sources: ProjectSource[], timeoutMs = 10000, options: { unlimitedWork?: boolean } = {}) {
   let used = 0, partial = false
   return {
     tools: [CATALOG_SEARCH_TOOL, CATALOG_READ_TOOL],
+    exportState(): MaterialCatalogReaderState {
+      return JSON.parse(JSON.stringify({ version: 1, projectId, used, partial, sources }))
+    },
+    restoreState(state: MaterialCatalogReaderState) {
+      if (!state || state.version !== 1 || state.projectId !== projectId || !Number.isSafeInteger(state.used) || state.used < 0 || typeof state.partial !== 'boolean'
+        || !Array.isArray(state.sources) || state.sources.some(source => source?.projectId !== projectId)) throw new Error('invalid_material_catalog_reader_state')
+      const saved = structuredClone(state)
+      sources.splice(0, sources.length, ...saved.sources)
+      used = saved.used; partial = saved.partial
+    },
     get remaining() { return options.unlimitedWork ? Infinity : Math.max(0, 12 - used) }, get partial() { return partial },
     async read(name: string, value: unknown): Promise<Record<string, unknown>> {
       if (++used > 12 && !options.unlimitedWork) { partial = true; return { status: 'budget_exhausted' } }

@@ -16,6 +16,13 @@ export interface OrientationDirectory {
   sections: Record<Section, { available: number; total: number | null; included: number; omitted: number; sourceComplete: boolean;
     next: { tool: 'read_project_orientation'; arguments: { section: Section; snapshot_id: string; after_cursor: string } } | null }>;
 }
+export interface OrientationDirectoryState {
+  version: 1;
+  snapshotId: string;
+  snapshot: ProjectOrientation;
+  orientation: ProjectOrientation;
+  pageMaxTokens: number;
+}
 
 /** Unlike journal fingerprints, an exact source snapshot must not normalize
  * any record key or literal text that happens to look like transport metadata. */
@@ -76,10 +83,6 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
   const sections = Object.fromEntries(SECTIONS.map(section => [section, snapshot[section]])) as Record<Section, unknown[]>
   const complete: Record<Section, boolean> = { siblings: snapshot.completeness.hierarchy, children: snapshot.completeness.hierarchy,
     completionRequirements: snapshot.completeness.requirements, recentSharedFacts: true }
-  const availableSources = (value: unknown): OrientationSource[] => {
-    const ids = sourceIds(value)
-    return snapshot.sources.filter(source => ids.has(source.id))
-  }
   const cursor = (index: number, offset = 0) => `${index}:${offset}`
   const included: Record<Section, number> = { siblings: 0, children: 0, completionRequirements: 0, recentSharedFacts: 0 }
   function packet() {
@@ -114,8 +117,38 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
   }
   orientation = packet()
   if (orientation.tokenBudget!.tokens > opts.maxTokens) throw new Error('context_input_too_large')
+  if (!await opts.hasAccess()) throw new Error('project_denied')
+  return restoreOrientationDirectory({ version: 1, snapshotId, snapshot, orientation, pageMaxTokens: opts.pageMaxTokens },
+    { projectId: snapshot.projectId, hasAccess: opts.hasAccess })
+}
 
-  const reader = { tools: [ORIENTATION_DIRECTORY_TOOL], async execute(raw: unknown) {
+/** The directory has no mutable cursor: every continuation is encoded in the
+ * tool arguments. Restore the exact original and its prepared first packet,
+ * without hashing/tokenizing the entire project or reading it again. */
+export function restoreOrientationDirectory(state: OrientationDirectoryState, opts: {
+  projectId: string; hasAccess: () => Promise<boolean>;
+}) {
+  if (state?.version !== 1 || typeof state.snapshotId !== 'string' || !/^[a-f0-9]{64}$/.test(state.snapshotId)
+    || state.snapshot?.projectId !== opts.projectId || state.orientation?.projectId !== opts.projectId
+    || state.orientation.directory?.snapshotId !== state.snapshotId
+    || !Number.isSafeInteger(state.pageMaxTokens) || state.pageMaxTokens < 2048 || state.pageMaxTokens > 12_000
+    || !SECTIONS.every(section => Array.isArray(state.snapshot[section]) && Array.isArray(state.orientation[section]))
+    || !Array.isArray(state.snapshot.sources) || state.snapshot.sources.some(source => source.projectId !== opts.projectId)
+    || !state.snapshot.completeness || !['hierarchy', 'requirements'].every(key => typeof state.snapshot.completeness[key as 'hierarchy' | 'requirements'] === 'boolean')) {
+    throw new Error('context_checkpoint_invalid')
+  }
+  const saved = structuredClone(state)
+  const { snapshot, snapshotId, orientation, pageMaxTokens } = saved
+  const sections = Object.fromEntries(SECTIONS.map(section => [section, snapshot[section]])) as Record<Section, unknown[]>
+  const complete: Record<Section, boolean> = { siblings: snapshot.completeness.hierarchy, children: snapshot.completeness.hierarchy,
+    completionRequirements: snapshot.completeness.requirements, recentSharedFacts: true }
+  const availableSources = (value: unknown): OrientationSource[] => {
+    const ids = sourceIds(value)
+    return snapshot.sources.filter(source => ids.has(source.id))
+  }
+  const cursor = (index: number, offset = 0) => `${index}:${offset}`
+  const reader = { tools: [ORIENTATION_DIRECTORY_TOOL], exportState: (): OrientationDirectoryState => structuredClone(saved),
+    async execute(raw: unknown) {
     if (!await opts.hasAccess()) throw new Error('project_denied')
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { status: 'invalid' }
     const input = raw as Record<string, unknown>
@@ -129,7 +162,7 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
     const base = { projectId: snapshot.projectId, snapshot_id: snapshotId, section, start: index,
       total: complete[section] ? records.length : null, available: records.length, sourceComplete: complete[section] }
     const page = (end: number) => measured({ ...base, status: 'ok', records: records.slice(index, end), sources: availableSources(records.slice(index, end)),
-      returned: end - index, omitted: records.length - end, next_cursor: end < records.length ? cursor(end) : null }, opts.pageMaxTokens)
+      returned: end - index, omitted: records.length - end, next_cursor: end < records.length ? cursor(end) : null }, pageMaxTokens)
     let result: unknown
     if (offset === 0) {
       // A bounded search window avoids re-encoding the entire remaining
@@ -137,7 +170,7 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
       let low = index, high = Math.min(records.length, index + 128)
       while (low < high) {
         const middle = Math.ceil((low + high) / 2)
-        if (page(middle).tokenBudget.tokens <= opts.pageMaxTokens) low = middle
+        if (page(middle).tokenBudget.tokens <= pageMaxTokens) low = middle
         else high = middle - 1
       }
       if (low > index || index === records.length) result = page(low)
@@ -148,11 +181,11 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
       const fragment = (end: number) => measured({ ...base, status: 'partial_record', records: [], sources: availableSources(records[index]),
         fragment: { record_index: index, json_start: offset, json_end: end, json_length: json.length, content: json.slice(offset, end) },
         returned: 0, omitted: records.length - index - (end === json.length ? 1 : 0),
-        next_cursor: end < json.length ? cursor(index, end) : index + 1 < records.length ? cursor(index + 1) : null }, opts.pageMaxTokens)
-      let low = offset, high = Math.min(json.length, offset + opts.pageMaxTokens * 8)
+        next_cursor: end < json.length ? cursor(index, end) : index + 1 < records.length ? cursor(index + 1) : null }, pageMaxTokens)
+      let low = offset, high = Math.min(json.length, offset + pageMaxTokens * 8)
       while (low < high) {
         const middle = Math.ceil((low + high) / 2)
-        if (fragment(middle).tokenBudget.tokens <= opts.pageMaxTokens) low = middle
+        if (fragment(middle).tokenBudget.tokens <= pageMaxTokens) low = middle
         else high = middle - 1
       }
       // Do not split a Unicode surrogate pair across fragment boundaries.
@@ -163,7 +196,6 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
     if (!await opts.hasAccess()) throw new Error('project_denied')
     return result
   } }
-  if (!await opts.hasAccess()) throw new Error('project_denied')
   return { orientation, reader }
 }
 export type OrientationDirectoryReader = Awaited<ReturnType<typeof boundProjectOrientation>>['reader']

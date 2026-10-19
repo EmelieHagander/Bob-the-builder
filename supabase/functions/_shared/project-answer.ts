@@ -20,6 +20,7 @@ import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import type { WorkingContext } from './bob-working-context.ts'
 import { prepareProjectOrientation, type ProjectOrientation } from './bob-project-orientation.ts'
 import { ORIENTATION_DIRECTORY_TOOL, type OrientationDirectoryReader } from './bob-orientation-directory.ts'
+import { restoreOrientationDirectory } from './bob-orientation-directory.ts'
 import { countContextTokens } from './bob-token-budget.ts'
 import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
@@ -107,7 +108,35 @@ function unfinishedFacts(aiCatalog: AiCatalogSession, opts: { writer?: ProjectWr
   return facts
 }
 
-export async function runProjectAnswer(opts: {
+/** Private, versioned execution state. This is data, never an authorization grant.
+ * A committed boundary skips earlier model/tool handlers; an interrupted active
+ * operation still uses the existing journal and SQL write ledger. */
+export interface BobAnswerState {
+  version: 1
+  projectId: string
+  step: number
+  phase: 'ready' | 'model' | 'response' | 'tools'
+  initial: { briefing: unknown; catalog: unknown; drawingRequests: unknown; orientation?: ProjectOrientation; directory?: unknown }
+  messages: NonNullable<OpenAIServiceOptions['messages']>
+  previousResponseId?: string
+  preparedEpoch?: number
+  observation: TurnObservation
+  toolbox: ReturnType<ReturnType<typeof createBobToolSession>['exportState']>
+  workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[]
+  completionChecked: boolean; protocolNudges: number; emptyNudges: number; closedNoteSent: boolean; commentaryStreak: number
+  rejectionSignature?: string; rejectionStreak: number
+  tools: NonNullable<OpenAIServiceOptions['tools']>
+  closedByLimit: boolean; closedByCommentary: boolean
+  request?: OpenAIServiceOptions
+  response?: OpenAIServiceResponse<string>
+  toolIndex: number
+  result?: ProjectAnswer
+}
+export interface BobAnswerCheckpoint {
+  state?: BobAnswerState
+  save(state: BobAnswerState): Promise<void>
+}
+export type ProjectAnswerOptions = {
   aiCatalog: AiCatalogSession;
   projectId: string; userId: string; message: string;
   lookup: ReturnType<typeof createProjectLookup>; callModel: ModelCall;
@@ -127,10 +156,40 @@ export async function runProjectAnswer(opts: {
   registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   calculator?: ProjectCalculator;
   currentView?: CurrentView; validateCurrentView?: () => Promise<boolean>; getCurrentViewEvidence?: () => CurrentView;
+  checkpoint?: BobAnswerCheckpoint;
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
-}): Promise<ProjectAnswer> {
+}
+export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<ProjectAnswer> {
+  const saved = opts.checkpoint?.state
+  if (saved) {
+    const counter = (n: unknown) => Number.isSafeInteger(n) && Number(n) >= 0
+    const invalid = saved.version !== 1 || saved.projectId !== opts.projectId || !counter(saved.step)
+      || !['ready', 'model', 'response', 'tools'].includes(saved.phase)
+      || ![saved.toolIndex, saved.protocolNudges, saved.emptyNudges, saved.commentaryStreak, saved.rejectionStreak].every(counter)
+      || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
+      || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
+      || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
+      || (['response', 'tools'].includes(saved.phase) && !saved.response)
+      || (saved.phase === 'tools' && (!saved.response?.responseId || !saved.response.toolCalls?.length || saved.toolIndex > saved.response.toolCalls.length))
+      || (saved.phase === 'ready' && (saved.toolIndex !== 0 || saved.request !== undefined || saved.response !== undefined))
+      || (saved.result?.ok === true && saved.result.projectId !== opts.projectId)
+    if (invalid) throw new Error('turn_checkpoint_invalid')
+  }
+  if (saved?.result) return structuredClone(saved.result)
+  let latest = saved
+  const checkpoint = opts.checkpoint ? { state: saved, save: async (state: BobAnswerState) => {
+    await opts.checkpoint!.save(state); latest = state
+  } } : undefined
+  const result = await runProjectAnswerFromState({ ...opts, checkpoint })
+  // Settlement and transcript commit can themselves yield. Never regenerate a
+  // completed answer while reconciling those final operations.
+  if (checkpoint && latest) await checkpoint.save({ ...latest, result })
+  return result
+}
+async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<ProjectAnswer> {
+  const restored = opts.checkpoint?.state
   if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
-  const briefing = await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
+  const briefing = restored ? restored.initial.briefing as Awaited<ReturnType<typeof opts.lookup.search>> : await opts.lookup.search({ dataset: 'project', query: null, status: null, area_id: null, record_id: null })
   if (briefing.status !== 'ok') return { ok: false, error: briefing.status === 'denied' ? 'project_denied' : 'project_unavailable' }
   const contract = opts.aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const contextStrategy = contract.context_strategy_version === 1
@@ -139,11 +198,14 @@ export async function runProjectAnswer(opts: {
   let orientationReader: OrientationDirectoryReader | undefined
   if (contextStrategy && countContextTokens(opts.aiCatalog.role('ask-bob').systemMessage) > 700) throw new Error('context_input_too_large')
   const toolInstructions = opts.toolInstructions ?? (contextStrategy ? 'lazy' : undefined)
-  const catalog = opts.projectContext ? await opts.projectContext.catalog() : null
+  const catalog = restored ? restored.initial.catalog : opts.projectContext ? await opts.projectContext.catalog() : null
   const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.execute(raw)
+    }, exportState: () => {
+      if (!orientationReader) throw new Error('context_unavailable')
+      return orientationReader.exportState()
     } } } : {}), readPolicy: opts.readToolPolicy ?? (async () => {
     const policy = await seedToolPolicy()
     // Offline/injected callers use the pinned catalog's advertised versions.
@@ -155,6 +217,7 @@ export async function runProjectAnswer(opts: {
       return version ? { ...row, schema_version: version } : row
     }) }
   }) })
+  if (restored) toolbox.restoreState(restored.toolbox)
   // The manifest is pinned before any journal operation. Do not add even an
   // undefined option or change the call sequence of an older running turn.
   const unlimitedWork = opts.unlimitedWork === true && contract.work_allowance_version === 1
@@ -162,7 +225,7 @@ export async function runProjectAnswer(opts: {
   const completionAware = contract.work_completion_version === 1 || completionV2
   const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
-  const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = []
+  const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = structuredClone(restored?.workResults ?? [])
   // A read-only answer with nothing unfinished would otherwise be regenerated
   // by a full review. Manifests with the completion gate ask a small read-only
   // role first; no gate, a failed call or an invalid result keeps the review.
@@ -180,10 +243,14 @@ export async function runProjectAnswer(opts: {
     observation.completion_gate = (verdict as { work_remaining?: unknown } | null)?.work_remaining === false ? 'done' : 'review'
     return !(result.success && (verdict as { work_remaining?: unknown } | null)?.work_remaining === false)
   }
-  let previousResponseId = opts.context || contextStrategy ? undefined : opts.previousResponseId
-  const drawingRequests=await opts.cadAssistant?.pending()
+  let previousResponseId = restored ? restored.previousResponseId : opts.context || contextStrategy ? undefined : opts.previousResponseId
+  const drawingRequests=restored ? restored.initial.drawingRequests : await opts.cadAssistant?.pending()
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
-  const orientation = contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
+  if (restored?.initial.directory) {
+    const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })
+    orientationReader = directory.reader
+  }
+  const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
     ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
   }) : undefined
@@ -191,25 +258,40 @@ export async function runProjectAnswer(opts: {
     content: opts.aiCatalog.text('bob.note.prefix') + JSON.stringify({ orientation: orientation.footer }) } : undefined
   // Legacy pins retain their original message order. New context explicitly
   // labels pending work as data and ends with source-bound request orientation.
-  let messages: OpenAIServiceOptions['messages'] = orientation ? buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [
+  let messages: NonNullable<OpenAIServiceOptions['messages']> = restored ? structuredClone(restored.messages) : orientation ? buildManagedMessages(opts.aiCatalog, { ...opts, orientation, catalog, drawingRequests }) : [
     { role: 'user', content: buildTurnFrame(opts.aiCatalog, opts.projectId, briefing, opts.context, opts.currentView, unlimitedWork) + (catalog ? opts.aiCatalog.text('bob.frame.catalog') + JSON.stringify(catalog) : '') },
     ...(Array.isArray(drawingRequests)&&drawingRequests.length?[{role:'user' as const,content:opts.aiCatalog.text('bob.frame.outstanding')+'\n'+JSON.stringify(drawingRequests)}]:[]),
     ...(opts.context ? opts.context.recent.map(m => ({ role: m.role, content: m.text })) : [{ role: 'user' as const, content: opts.message }]),
   ]
-  let preparedEpoch = contextStrategy ? opts.contextEpoch?.() : undefined
-  const observation: TurnObservation = { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' }
+  let preparedEpoch = restored ? restored.preparedEpoch : contextStrategy ? opts.contextEpoch?.() : undefined
+  const observation: TurnObservation = structuredClone(restored?.observation ?? { steps: 0, tool_calls: 0, deferred_calls: 0, completion_checks: 0, nudges: 0, end: 'failed' })
   const observe = (end: TurnObservation['end']) => { observation.end = end; opts.observe?.({ ...observation }) }
   const progress = (value: Omit<TurnProgress, 'saved'>) => { try { opts.onProgress?.({ ...value, saved: opts.writer?.receipts.length ?? 0 }) } catch { /* progress is advisory */ } }
   const saved = (name: string) => toolbox.events.some(e => e.operation === 'execute' && e.name === name && e.status === 'saved')
-  let completionChecked = false, protocolNudges = 0, emptyNudges = 0, closedNoteSent = false, commentaryStreak = 0
-  let rejectionSignature: string | undefined, rejectionStreak = 0
-  for (let step = 0; unlimitedWork || step < steps; step++) {
+  let completionChecked = restored?.completionChecked ?? false, protocolNudges = restored?.protocolNudges ?? 0, emptyNudges = restored?.emptyNudges ?? 0, closedNoteSent = restored?.closedNoteSent ?? false, commentaryStreak = restored?.commentaryStreak ?? 0
+  let rejectionSignature = restored?.rejectionSignature, rejectionStreak = restored?.rejectionStreak ?? 0
+  let phase = restored?.phase ?? 'ready', toolIndex = restored?.toolIndex ?? 0
+  let request = restored?.request, pendingResponse = restored?.response
+  let tools: NonNullable<OpenAIServiceOptions['tools']> = structuredClone(restored?.tools ?? [])
+  let closedByLimit = restored?.closedByLimit ?? false, closedByCommentary = restored?.closedByCommentary ?? false
+  const save = async (step: number) => {
+    if (!opts.checkpoint) return
+    await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
+      initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState() },
+      messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
+      completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak,
+      tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
+  }
+  const next = async (step: number) => { phase = 'ready'; request = undefined; pendingResponse = undefined; toolIndex = 0; await save(step + 1) }
+  if (!restored) await save(0)
+  for (let step = restored?.step ?? 0; unlimitedWork || step < steps; step++) {
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
     if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
-    let tools: NonNullable<OpenAIServiceOptions['tools']> = []
     const lastStep = !unlimitedWork && step >= steps - 1, lateInTurn = !unlimitedWork && Date.now() + 40000 >= deadline
+    if (phase === 'ready') {
+    tools = []
     try {
       if (contextStrategy && opts.contextEpoch && !opts.registerContextSurface) {
         const epoch = opts.contextEpoch()
@@ -218,8 +300,9 @@ export async function runProjectAnswer(opts: {
       if (!lastStep && !lateInTurn && commentaryStreak < 2) tools = await toolbox.prepare()
       else toolbox.closeSurface()
     } catch (error) { rethrowContinuation(error); return { ok: false, error: toolFailureCode(error) } }
-    const closedByLimit = lastStep || lateInTurn
-    const closedByCommentary = completionAware && commentaryStreak >= 2
+    closedByLimit = lastStep || lateInTurn
+    closedByCommentary = completionAware && commentaryStreak >= 2
+    }
     let shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
     const schemaParameters = () => ({ server_quote: !!opts.message.trim(), include_manual: toolInstructions !== 'on_demand' && toolInstructions !== 'lazy',
       ...(toolInstructions === 'lazy' ? { card: true } : {}), categories: (tools.find(t => t.function.name === 'list_project_category')?.function.parameters.properties as Record<string, any> | undefined)?.category?.enum ?? [] })
@@ -249,19 +332,31 @@ export async function runProjectAnswer(opts: {
     // paid model call that can retry the same job or invent a renderer outage.
     const cadFailure=opts.cadAssistant?.failure
     if(cadFailure?.reason==='turn_budget_exhausted'&&typeof cadFailure.user_message!=='string')return {ok:false,error:'turn_budget_exhausted'}
-    const response: OpenAIServiceResponse<string> = typeof cadFailure?.user_message==='string'
-      ? {success:true,data:cadFailure.user_message,model:'server',usage:{input_tokens:0,output_tokens:0,total_tokens:0}}
-      : await opts.callModel({
+    if (phase === 'ready') {
+      request = {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
       ...(opts.carryLoadedTools && toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
-    })
+      }
+      phase = 'model'
+      await save(step)
+    }
+    if (phase === 'model') {
+      if (!request) throw new Error('turn_checkpoint_invalid')
+      pendingResponse = typeof cadFailure?.user_message === 'string'
+        ? { success: true, data: cadFailure.user_message, model: 'server', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } }
+        : await opts.callModel(request)
+      if (pendingResponse.success && !cadFailure?.user_message) opts.projectContext?.confirmDelivery()
+      phase = 'response'
+      await save(step)
+    }
+    if (!pendingResponse) throw new Error('turn_checkpoint_invalid')
+    const response = pendingResponse
     if (completionAware && response.outputPhase) observation.output_phase = response.outputPhase
     if (!response.success) { observe('failed'); return { ok: false, error: response.error === 'turn_budget_exhausted' ? response.error : 'ai_unavailable' } }
-    if(!cadFailure?.user_message)opts.projectContext?.confirmDelivery()
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     if (response.toolCalls?.length) {
       commentaryStreak = 0
@@ -269,12 +364,17 @@ export async function runProjectAnswer(opts: {
       // Access can end while the model is thinking; nothing runs after that.
       if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
       if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
-      previousResponseId = response.responseId; messages = []
-      for (const [index, call] of response.toolCalls.entries()) {
+      if (phase === 'response') {
+        previousResponseId = response.responseId; messages = []; toolIndex = 0; phase = 'tools'
+        await save(step)
+      }
+      for (let index = toolIndex; index < response.toolCalls.length; index++) {
+        const call = response.toolCalls[index]
         if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }
         if (!unlimitedWork && index >= BOB_TURN_LIMITS.callsPerStep) {
           observation.deferred_calls++
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'deferred', message: opts.aiCatalog.text('bob.note.deferred', { calls: BOB_TURN_LIMITS.callsPerStep }) }) })
+          toolIndex = index + 1; await save(step)
           continue
         }
         // Each awaited call opens a new concurrency window, including within
@@ -311,7 +411,9 @@ export async function runProjectAnswer(opts: {
           if (rejectionStreak >= 3) { observe('failed'); return { ok: false, error: 'tool_no_progress' } }
         } else { rejectionSignature = undefined; rejectionStreak = 0 }
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ ...result, ...(!unlimitedWork ? { execution_budget: { model_steps: steps - step - 1, project_reads: opts.lookup.remaining, writes: opts.writer?.remaining ?? 0, corrections: opts.writer?.correctionsRemaining ?? 0, cad_consultations: opts.cadAssistant?.remaining ?? 0, catalog_reads: opts.catalogReader?.remaining ?? 0, image_operations: opts.projectContext?.remaining ?? 0, history_reads: opts.context?.history.remaining ?? 0 } } : {}) }) })
+        toolIndex = index + 1; await save(step)
       }
+      await next(step)
       continue
     }
     const answerText = typeof response.data === 'string' ? response.data.trim() : ''
@@ -322,6 +424,7 @@ export async function runProjectAnswer(opts: {
       if (commentaryStreak < 2 && response.responseId && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)) {
         commentaryStreak++; observation.nudges++; previousResponseId = response.responseId
         messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text(commentaryStreak === 2 ? 'bob.note.commentary-limit' : 'bob.note.commentary') }]
+        await next(step)
         continue
       }
       observe('commentary_limit'); return { ok: false, error: 'commentary_limit' }
@@ -331,6 +434,7 @@ export async function runProjectAnswer(opts: {
       if (protocolNudges < 2 && canContinue) {
         protocolNudges++; observation.nudges++; previousResponseId = response.responseId
         messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.native-call') }]
+        await next(step)
         continue
       }
       observe('failed'); return { ok: false, error: 'unsupported_tool_response' }
@@ -339,6 +443,7 @@ export async function runProjectAnswer(opts: {
       if (emptyNudges < 1 && response.responseId && (unlimitedWork ? Date.now() < deadline : step < steps - 1 && Date.now() + 20000 < deadline)) {
         emptyNudges++; observation.nudges++; previousResponseId = response.responseId
         messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + opts.aiCatalog.text('bob.note.empty') }]
+        await next(step)
         continue
       }
       observe('failed'); return { ok: false, error: 'empty_response' }
@@ -364,6 +469,7 @@ export async function runProjectAnswer(opts: {
           current_content_in_prior_tool_results: true,
           unresolved_tools: opts.writer.unresolvedTools, reads_partial: opts.lookup.partial || !!opts.workRecords?.partial,
         }) }) : opts.aiCatalog.text('bob.note.finish', { facts: facts.join(' ') })) }]
+      await next(step)
       continue
     }
     if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }

@@ -9,12 +9,29 @@ export const IMAGE_TOOLS=[
  tool('attach_project_image','Attach an existing ready project image to an Area, Task, instruction step or living-plan Step. Reuses the original file.',{media_id:str,target_kind:target,target_id:str,request_quote:str}),
  tool('finalize_project_image','Recover a pending image whose bytes were uploaded successfully. Makes no new generation or upload; storage metadata is checked before ready status.',{media_id:str,request_quote:str}),
 ]
+export interface ProjectImageToolsState {
+ version:1
+ generated:boolean
+ pendingMedia:string|null
+ generatedRequests:[string,string][]
+ attemptedRequests:string[]
+}
 export function createProjectImageTools(opts:{unlimitedWork?:boolean;projectId:string;message:string;writer:ProjectWriter;hasAccess:()=>Promise<boolean>;deadline:number;defaultImageIds?:string[];newId?:()=>Promise<string>;generate:(prompt:string,referenceIds:string[])=>Promise<{ok:true;image:Uint8Array}|{ok:false;error:string}>;upload:(id:string,bytes:Uint8Array)=>Promise<void>}){
  let generated=false
  let pendingMedia:string|null=null
  const generatedRequests=new Map<string,string>()
  const attemptedRequests=new Set<string>()
- return {tools:IMAGE_TOOLS,get remaining(){return opts.writer.remaining},async execute(name:string,raw:unknown){
+ return {
+ exportState():ProjectImageToolsState{return {version:1,generated,pendingMedia,generatedRequests:[...generatedRequests],attemptedRequests:[...attemptedRequests]}},
+ restoreState(state:ProjectImageToolsState){
+  if(state?.version!==1||typeof state.generated!=='boolean'||!(state.pendingMedia===null||typeof state.pendingMedia==='string')
+    ||!Array.isArray(state.generatedRequests)||state.generatedRequests.some(row=>!Array.isArray(row)||row.length!==2||row.some(value=>typeof value!=='string'))
+    ||!Array.isArray(state.attemptedRequests)||state.attemptedRequests.some(value=>typeof value!=='string'))throw new Error('project_image_tools_checkpoint_invalid')
+  generated=state.generated;pendingMedia=state.pendingMedia
+  generatedRequests.clear();for(const [key,id] of state.generatedRequests)generatedRequests.set(key,id)
+  attemptedRequests.clear();for(const key of state.attemptedRequests)attemptedRequests.add(key)
+ },
+ tools:IMAGE_TOOLS,get remaining(){return opts.writer.remaining},async execute(name:string,raw:unknown){
   const spec=IMAGE_TOOLS.find(t=>t.function.name===name)
   if(!spec||!raw||typeof raw!=='object'||Array.isArray(raw))return {status:'invalid'}
   const v=raw as Record<string,string>

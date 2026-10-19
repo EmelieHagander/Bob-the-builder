@@ -1,0 +1,158 @@
+# Bob / Launchpad migration audit — 2026-10-19
+
+**Dated evidence, not the implementation contract.** The corrected three-PR
+contract lives in [the conversation owner](ask-bob-conversations.md#launchpad-migration).
+[Active State](bob-delivery-flow.md#state) owns the next action. PR1 is **IN
+IMPLEMENTATION**, not complete or deployed; PR2/PR3 remain specified. This record
+does not close ordinary owner, long-work, image or CAD acceptance.
+
+## Scope and verdict
+
+The source baseline was Bob main `b4e04986ad9d96a03ca748f14745e4314a6c6c55`.
+Launchpad was inspected read-only through its repository at
+`9448bad116f78c44178f5415520602406df7ef69`. No Launchpad production flag or
+end-to-end behavior was verified. Live Bob inspection was read-only; private job
+identifiers and conversation content are intentionally absent from this record.
+
+**Proceed with the corrected first stage.** Removing historical orchestration
+replay addresses a measured cause of growing work. A literal implementation of
+the proposed plan would leave crash-consistency and authority gaps. The later
+stateless-prompt and result-demotion stages need their own compatibility and model
+quality gates. No application work quotas are reintroduced, and this audit makes
+no promise that arbitrary unlimited work fits below 64,000 tokens.
+
+## Observed Bob baseline
+
+Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from
+`bob-worker` **v105**, reported **2,057 / 2,056 / 2,084 / 2,168 / 2,022 ms**.
+These are runtime shutdown observations, not an inferred database failure. At
+the audit, installed endpoints were `bob-worker` **v109**, updated
+**2026-10-19 08:58:30 UTC**, and `ask-bob` **v141**, updated **08:58:19 UTC**.
+The latest inspected failed job had **40 claims** on worker **v108**, before that
+deployment. There were **no active jobs at the audit snapshot**. The older
+failures establish the incident; they do not establish a failure or a successful
+long run on the newly installed versions.
+
+The available **169 `ask-bob` calls** showed **41.65%** cached input in aggregate;
+the latest inspected call showed **32.73%**. The proposed **86%** is therefore
+not a general verified baseline for this migration. Cost and cache comparisons
+must use comparable completed work, identify the sample and preserve outcome
+quality. A stable prompt prefix helps caching but cannot guarantee the same
+percentage when tool schemas and prompt contents change.
+
+### Forty-step replay probe
+
+A local synthetic probe exercised the baseline main loop, job journal and
+project image context with the current catalog fixture and a tiny image. It
+interrupted and restarted after model steps, used no network, and did not use
+`reuseFresh` or context compaction. The final answer and evidence matched the
+uninterrupted run. This isolates replay cost; it is not a hosted Edge CPU or real
+model/image acceptance test.
+
+| Work per claim | Claim 2 | Claim 20 | Claim 40 |
+| --- | ---: | ---: | ---: |
+| Access checks | 23 | 113 | 210 |
+| Tool-policy reads | 5 | 41 | 79 |
+| Image validations | 5 | 41 | 80 |
+| Model-wrapper traversals | 3 | 21 | 40 |
+| Actual model dispatches | 1 | 1 | 1 |
+
+Across 40 claims the probe made **40 actual model dispatches and 780 historical
+model traversals**. Node CPU totaled **1,638 ms**, compared with **122.844 ms**
+uninterrupted; claim 2 used **8.692 ms**, and claim 40 **62.995 ms**. These are one
+synthetic run's timings, not a production latency prediction. Baseline TypeScript
+checking passed. The full baseline suite passed **1,557 / 1,557** tests in
+**502,257 ms**; that run started before the new checkpoint tests were added and
+does not verify the migration. The implementation fixture below adds separate
+restart regression coverage.
+
+### Implementation fixture follow-up — still local, not released
+
+The new full-state restart fixture used **43 claims** and serialized
+**86,565,004 bytes across 214 checkpoint boundaries**. Both paths made **43 main
+and eight summary calls** and produced the same final result. The timing includes
+fresh component construction and state restoration. This is one synthetic Node
+run with warm token caches, an in-memory transport/ledger and private image
+references without pixels; it is not a hosted transport or CPU benchmark.
+
+| Whole fixture | Legacy replay | Checkpoint resume |
+| --- | ---: | ---: |
+| CPU | 7,258.582 ms | 3,445.492 ms |
+| Wall time | 9,891.742 ms | 3,816.437 ms |
+| Access checks | 5,417 | 271 |
+| Tool-policy reads | 2,041 | 88 |
+| Image validations | 1,959 | 88 |
+| Catalog traversals | 43 | 1 |
+| Tool executions/traversals | 1,028 | 43 |
+
+At **claims 2 / 20 / 40**, starting from completed-step indices **1 / 19 / 39**,
+checkpoint CPU was **33.014 / 44.582 / 56.257 ms** and wall time
+**35.134 / 48.178 / 56.735 ms**. The largest complete snapshot within those claims
+was **131,078 / 478,368 / 691,153 bytes**; its retained context-compaction archive
+was **13,951 / 346,475 / 553,611 bytes**. Across the whole run the maxima were
+**710,811 bytes** for a complete snapshot and **573,057 bytes** for that archive.
+These are individual observations, not percentiles, and are not directly
+comparable with the smaller baseline probe above.
+
+This confirms an improvement while exposing a remaining limit: PR1 removes
+historical handler execution, but snapshot bytes, copying and serialization
+still grow with retained state. It does **not** establish constant CPU per claim.
+The large contributor is the current context archive, whose replacement belongs
+to the separately gated later stages. The new full-suite result and hosted
+long-image acceptance remain separate from these local measurements.
+
+## Corrections to the starting plan
+
+| Finding in current Bob | Required correction |
+| --- | --- |
+| `bob-background.ts` reads the journal and re-enters `project-answer.ts` from the beginning. Saved model responses avoid new dispatches, but historical control flow and live checks still run. | Restore an explicit execution head and continue at the next operation. Keep the active operation journal for an unfinished call. |
+| Journal identity uses stream positions. A resumed loop that simply skips old steps would restart positions and collide with existing results. | Persist and restore operation cursors and stable identities together with runtime state. |
+| A model response can contain several tool calls. A write can commit before the state checkpoint, and a worker can lose ownership while waiting. | Checkpoint operation boundaries, native response, original offered-tool fence, pending tool index and exact pending write. Reconcile writes through the existing database receipt ledger and retain claim/lease fencing. |
+| State includes more than tool names and counters: server-issued work/edit/solution/plan references and page cursors, image carriers, source observations, accepted current-view receipts, plan proposals, drawing requests and outcome/partial state. | Inventory every state owner; roundtrip it without rerunning historical reads. A loaded manual is not proof of current permission. |
+| Folding all historical rows on every restart still grows with history. Saving the entire history every step can also multiply storage and serialization. | Use a current snapshot head plus the active operation journal. Measure bytes read/written and serialization as well as RPC counts. Do not promise constant CPU merely because old handlers no longer run. |
+| Current authorization, tool policy, record versions and kill switches can change while a model is working. | Remove checks for historical operations, not checks before new dispatches or writes. Revalidate at the existing live authority boundaries. |
+| `bob-prompt.ts::buildBobHands` already includes the eligible toolbox directory. The workflow cards are not Bob's only capability view; manual carry is already versioned. | Preserve the complete eligible directory and loaded manuals. Do not describe the migration as first exposing all tools, hardcode a count of 93, or remove all of PR #280 with the obsolete carry workaround. Completion and write guards remain. |
+| Bob currently relies on `previousResponseId`; its shared adapter does not retain all native Responses output. Delivered image carriers are cleared after delivery. | Before dropping the chain in PR2, preserve ordered native output/reasoning items and the original authorized image content needed by subsequent requests. Text-only fixtures cannot establish parity. |
+| Smaller tool pages alone do not bound manuals, assistant text, tool arguments, image inputs or encrypted reasoning. | PR3 needs exact retrievable results, protected receipts/constraints, measured input size and an honest provider-capacity outcome. No silent clipping, invented summaries or new application work quota. |
+| The private journal is cleared on terminal handling; shared diagnostics are content-free. | Do not introduce permanent full-prompt logging as a side effect. Private diagnostic retention and authorization must be explicit. |
+
+The relevant Bob owners are [the main loop](../supabase/functions/_shared/project-answer.ts),
+[worker](../supabase/functions/_shared/bob-background.ts),
+[journal](../supabase/functions/_shared/bob-job-journal.ts),
+[tool session](../supabase/functions/_shared/project-tools/session.ts),
+[image dispatcher](../supabase/functions/_shared/project-context/dispatcher.ts),
+[current-view guard](../supabase/functions/_shared/current-view-guard.ts),
+[lookup](../supabase/functions/_shared/project-lookup.ts) and
+[writer](../supabase/functions/_shared/project-write.ts). Their current working
+tree may advance beyond the pinned audit baseline above.
+
+## What Launchpad actually does
+
+| Pattern | Inspected source behavior | Implication |
+| --- | --- | --- |
+| Resume | `resumeInnerLoop` restores messages/discovered tools and starts at `iterationsConsumed + 1`; the carried memory brief is not surveyed again. | Useful model for explicit resume and durable tool loading. |
+| Checkpoint storage | Self-contained pause envelopes; `session_execution_checkpoints` holds one replaceable private snapshot per Session, retained atomically when consuming a timeout pause. Retention is gated by `SESSION_TIMEOUT_CHECKPOINT_RETENTION_ENABLED`, default false. | Not proof of append-only per-step checkpoints or arbitrary crash resume. |
+| Model requests | Full assembled input, no `previous_response_id`, `store:false`. The inspected OpenAI adapter does not roundtrip native encrypted reasoning. | Stateless prompts are demonstrated; Bob's native reasoning preservation is additional work. |
+| Mid-turn context | Optional deterministic demotion keeps three recent rounds raw. `LAF_INNER_LOOP_BOUNDED_REBUILD` defaults off; production value was not checked. | Source availability is not proof of a deployed bounded-context guarantee. |
+| Older outputs | Glances describe shape/size and explicitly promise no retrieval. Mutation-fact results stay raw. On resume, prior conversation becomes the stable head; demotion applies to subsequent rounds. | Bob needs a real archive/reopen path rather than copying this information loss. |
+| Images | An optional demotion removes image pixels after grounding; its own comments identify later visual reasoning as a correctness risk. | Bob's image acceptance must verify retained pixels/versioned reopening, not just presence of a textual reference. |
+| Work limits | Ten inner-loop iterations, then a prose-only forced finalization; 30 absolute timeout resumes and two stalled windows. | Launchpad does not prove unlimited work without context or step constraints. These application quotas are not adopted for Bob. |
+| Recovery safety | Exact ownership fences, 15-second lease renewal, physical-dispatch admission and committed-mutation suppression. Expired execution recovery seals interrupted/failed rather than replaying uncertain paid work. | Preserve Bob's existing write/uncertain-outcome safety while changing resume. |
+
+Pinned Launchpad sources:
+
+- [Resume and iteration limit](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/ai-workers/inner-loop/run-inner-loop.ts), [iteration core and finalization](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/ai-workers/inner-loop/iteration-core.ts).
+- [OpenAI adapter](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/ai-services/openai/service.ts), [bounded rebuild](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/ai-workers/inner-loop/bounded-rebuild.ts), [timeout bounds](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/sessions/turn-loop.ts).
+- [Checkpoint schema and authority](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/migrations/20261009170958_laf_laf926_timeout_checkpoint_retention.sql), [current claim/snapshot replacement](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/migrations/20261014183225_laf_memory_guest_execution_receipt.sql).
+- [Execution lease/admission](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/sessions/execution-lease.ts), [interrupted recovery](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/sessions/execution-recovery.ts), [committed-mutation suppression](https://github.com/EmelieHagander/Launchpad/blob/9448bad116f78c44178f5415520602406df7ef69/supabase/functions/_shared/ai-workers/inner-loop/committed-mutation-skip.ts).
+
+## Regression gates still to pass
+
+The [owning migration contract](ask-bob-conversations.md#launchpad-migration)
+defines acceptance per PR. In particular, test interruption before and after each
+durable boundary, committed-write-before-checkpoint, pending asynchronous model
+resume, stale/duplicate workers, cancellation/session expiry and revoked authority.
+Check every state owner's roundtrip and exact legacy-job compatibility. Compare
+40-step restart counts, CPU and bytes without dropping image/source checks for new
+work. Then run the complete suite/CI and the ordinary long image task on the
+reviewed deployment. Passing synthetic tests alone does not close that live gate.
