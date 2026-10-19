@@ -157,6 +157,31 @@ returned files, with the same type-only erasure and omissions recorded above.
 No migration was required. This is technical release evidence, not a successful
 authenticated long-image turn.
 
+<a id="pr1-live-provider-credit-blocker"></a>
+### Third live job: provider credit exhaustion
+
+The attempt starting at **12:15:52 UTC** used worker v112 / ask-bob v144;
+the stored execution identity explicitly pinned `groundingReadOrderVersion: 1`.
+It reached checkpoint revision **48**, model step **6**, with **six successful
+main model calls and 22 tool executions** (20 `ok`, one `checked`, one
+`not_found`). It resumed across context compaction, but did not open an image.
+At **12:19:56 UTC** the job terminated with `ai_unavailable`.
+
+The retained provider error for both a context-summary attempt and the final
+main call is **`credit_balance_exhausted` / `insufficient_quota`**: the API
+account had no remaining credits. This establishes an external billing blocker,
+not recurrence of the earlier `continuation_changed` failure. Worker shutdowns
+in the inspected **12:15:50–12:20:40 UTC** window were `EarlyDrop`, with observed
+CPU **293–781 ms**; no `CPUTime` shutdown was observed in that window.
+Recorded model usage totaled **USD 0.394307** (main **0.354864**, summaries
+**0.039443**). Main input was **136,328** tokens, of which **28,672** were cached.
+This failed, shorter run is not a comparable completed-work cost benchmark.
+
+The next live acceptance attempt requires restoring credits on Bob's OpenAI API
+account. No runtime change or redeployment was made for this billing failure.
+Image-grounding resume and the ordinary long-work gate remain unverified in
+production; PR2 must still wait. Full CI remains deferred by the owner's decision.
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from
