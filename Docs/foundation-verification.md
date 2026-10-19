@@ -1,5 +1,214 @@
 # Foundation verification and rollout
 
+## Bob final integration — 2026-10-19
+
+Delivery 4 combines the complete-request/result-reference drafts with the three
+construction deliveries. Merge is authorized; hosted migrations, deployment and
+new paid model/CAD acceptance are not part of this verification. Earlier sections
+record their preparation state at that time; current integration evidence follows
+here and in the final PR/CI.
+
+The construction workflow now introduces the builder role, scope and exact tool
+routes in **227 tokens instead of 558**. History-recall guidance has one owner in
+the native tool manual, carried after catalog rebinding. The publication changes
+four immutable prompt definitions and preserves policy grants, SQL/source fences
+and agent execution metadata. Its generator and migrated SQL fixture agree.
+Manual review used the prompt-craft subtraction/exclusivity tests and Archie
+placement rules; this is not an independent agent review.
+
+`bob-release-capacity.test.ts` runs the production estimator and reconstructed
+checkpoint loop with two images, 2,000-token read pages and opaque native-item
+transport placeholders. The 500-reasoning-token-per-step profile completes
+**43 main calls, two writes, zero summaries**, with peak input estimate **52,388**
+and maximum checkpoint **723,780 bytes**. The 2,500-token profile reaches the
+existing capacity rejection after **27 calls**, with the last dispatched estimate
+**94,578**; original native items are preserved. These are scripted stress profiles,
+not actual provider token/cache prices or hosted CPU measurements. Database/policy
+work stays bounded in the late claim; serialized native history and local CPU do
+not become constant-size.
+
+`bob-release-delivery.test.ts` combines real SQL/RLS and production tool/session,
+construction, checker, writer, CAD review orchestration and context continuation.
+Only model/CAD network responses and the original image transport are fixtures.
+Every persisted boundary destroys and reconstructs all runtime components from
+JSON: **73 leases, 16 scripted main responses, one renderer, one reviewer and two
+writes** (construction delta and drawing). The drawing recipe equals revision 2,
+the pre-existing part is unchanged, the contextual reference remains excluded,
+and exact drawing/Step readback succeeds. The original image is opened once;
+loaded manuals and the historical check survive restoration. Peak assembled
+input estimate is **28,088 tokens**. The separate 43-call profile above exercises
+long turns; this construction fixture does not pretend its 73 leases are 73
+model decisions or that fixtures establish real model judgement.
+
+All seven Edge entry graphs pass Deno checks; the production app builds. Catalog
+generator parity, vocabulary and performance-read checks pass. No local Chrome
+is installed, so browser verification belongs to the full PR workflow. Full test
+suite/CI results are recorded in the final PR rather than inferred from these
+focused passes.
+
+Consequently new complete-request/reference execution requires explicit paired
+immutable catalog flags; this release does not set them. No hard dollar cap or
+new task quota is introduced. The heavier profile is an **open activation gate**,
+not a successful long-work outcome. The ordinary real-model image outcome, cache
+share and approximately USD 1 goal remain unproven.
+
+
+## Selective tools and construction work — 2026-10-19
+
+**Delivery 3 prepared on `codex/bob-selective-tools`, stacked on #288 (`c54b537`)
+and #287; not merged, activated or deployed.** Contracts live in the
+[tool owner](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19) and
+[Artifact owner](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19).
+
+**109 distinct targeted tests pass across 13 files**, counting parent/subtests.
+Focused groups: `tool-session`, `bob-context-toolbox`, `bob-tool-state-checkpoints`,
+`cad-arrays`, `cad-pieces`, `bob-selective-tools`, `construction-repeats`,
+`construction-draft`, `construction-edits`, `construction-views`,
+`bob-context-strategy-main`, `bob-memory-toolbox-integration`, and
+`bob-checkpoint-resume`. Commands use `node --no-wasm-code-gc --import tsx --test`
+(SQL-heavy final groups use `--test-concurrency=1`). Initial failures identified
+a missing test-model binding in the historical fixture and a legacy K1 test turn
+whose existing write allowance was already consumed. The fixture now binds its
+test model and uses a fresh claimed turn for the independent repetition scenario;
+no production allowance was raised. Source lineage is asserted on source nodes
+and the exact derived graph, consistent with the canonical parameter contract.
+
+Evidence includes old/new pinned catalog parity, unchanged policy grants, no
+group schema expansion, next-step offer fences, withdrawn authority, waiting
+prerequisites, incompatible checkpoint rejection, full manual placement after
+catalog rebinding, and actual main-loop checkpoint interruptions after each step.
+The four scripted main calls restore the workflow and selected tool without
+replaying completed reads. Existing 40-step checkpoint tests remain green.
+
+The deterministic construction comparison offers 21 native schemas after the
+old workflow selection (20 members plus `describe_tool`), versus one after new
+workflow selection and two after explicitly loading its reader. Serialized tool
+bytes fall from **59,295 to 3,167** for that specific comparison. This is not a
+whole-prompt, cache-rate or dollar measurement. Loaded full manuals do now live
+in each relevant native tool definition; a turn that deliberately loads many
+tools will still have a larger schema surface.
+
+Repeated-part tests compare an independently authored expanded graph, geometry,
+bindings and exact source revision with compact input. Isolated migrated SQL
+saves both natural pieces, rejects tampered geometry, and returns one receipt/
+revision on retry after state restoration. Invalid counts, missing bindings and
+joint targets cannot reach the writer. Part-queue tests retain common coordinates
+and each piece's own requirements/source without copying sibling raw geometry;
+the existing SQL queue still releases one renderer at a time. These scripted
+tests do not prove that the real model chooses good sub-constructions or meets $1.
+
+Both affected Edge entry points (`ask-bob`, `bob-worker`) pass Deno type checks.
+The generated immutable catalog publication matches its runtime schema.
+`20261019180806_ai_selective_tools.sql` publishes method/tool changes only, after
+compatible runtime and delivery 2 catalog installation. Its UTC filename was
+created through the generator because the installed migration CLI crashes before
+creating files (same environment limitation as delivery 2). No hosted migration,
+paid model/CAD run, workflow edit, full suite or full CI was performed. Commits
+retain `[skip ci]`. Review this stack, then adapt #285/#286 and run delivery 4's
+combined offline acceptance before the final full-CI gate.
+
+## Construction views — 2026-10-19
+
+**Delivery 2 prepared on `codex/bob-construction-views`, above #287's `d43f823`;
+not merged, activated or deployed.** The [Artifact owner](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19)
+defines selection, coverage, exact observation references and remaining limits.
+
+**72 targeted tests pass across six files**, including parent/subtest counts:
+`construction-views` (10), `construction-checks` (12), `construction-edits` (14),
+`construction-lists` (15), `bob-tool-state-checkpoints` (9) and
+`bob-turn-checkpoint-db` (12). Run with
+`node --no-wasm-code-gc --import tsx --test tests/<name>.test.ts` in focused groups.
+The six-file run passed 71 tests; the final views-only run adds the explicit
+cut-assessment case and verifies the final presentation corrections.
+
+Evidence covers a synthetic canonical packet over 600,000 characters with a
+small overview and exact late-selected measured value/source revision; transitive
+formula/source/unknown dependencies; complete bindings pages; oversized Unicode
+notes restored exactly; invalid cross-view/revision cursors; all check findings
+beyond 200; exact check/list/cut sections and quantity/stock limitations; old
+catalog parity; withdrawn access and changed sources; unchanged independent CAD
+checks; stable observation time across active-operation replay; and JSONB key
+reordering without cursor drift. A real local SQL checkpoint save/yield/new claim
+restores 280 original findings without rerunning their assessment. Existing
+40-step checkpoint, authority, write-receipt and source tests remain green.
+
+`ask-bob` and `bob-worker` pass Deno checking with the existing local dependency
+map. The generated catalog matches its executable tool (`build-construction-view-catalog.ts ... --check`),
+and `git diff --check` passes. Review was manual, including owning documentation
+guidance. No independent-agent review, hosted deployment, paid model/CAD call,
+full suite or full CI is claimed. `[skip ci]` is retained; workflows are unchanged.
+
+Release follows delivery 1's schema/runtime/catalog order, then installs both
+view-compatible Bob runtimes before applying
+`20261019175234_ai_construction_views.sql`. This migration changes only immutable
+AI catalog versions and their atomic activation; no domain table or source rule
+is changed. CLI migration creation was unavailable after its previously observed
+Bun crash; this filename uses the observed UTC clock and the SQL is generated.
+Read back `construction_view_version=1` in the pinned reader manifest. Older jobs
+retain their original reader and version-1 component state; new jobs use the
+version-2 construction-tools state. Rollback deactivates the new catalog for new
+jobs while retaining compatible handlers for every still-running pinned job.
+
+This demonstrates smaller model-facing construction data and complete selected
+coverage, not fewer autonomous model decisions or measured dollar savings. The
+workflow still loads 20 schemas. The generic result history in #286, long-turn
+storage/native-reasoning capacity, production CPU and final end-to-end acceptance
+remain in [the plan](bob-green-release-plan-2026-10-19.md) and
+[State](bob-delivery-flow.md#state). No new hard cost/step/time cap was introduced.
+
+## Bounded construction edits — 2026-10-19
+
+**Prepared on `codex/bob-construction-edits`, based on main `5806e85`; not merged,
+migrated or deployed.** This implements only delivery 1 of the
+[remediation plan](bob-green-release-plan-2026-10-19.md). The
+[Artifact owner](artifacts.md#bounded-part-changes--prepared-2026-10-19) owns behavior.
+
+Targeted local verification passed **33 tests across five files** (Node counts
+parent tests as well as subtests), run in focused groups with
+`node --no-wasm-code-gc --import tsx --test`:
+
+| Test file | Passing tests | Evidence |
+| --- | ---: | --- |
+| `tests/construction-edits.test.ts` | 14 | Migrated local SQL, three new volumes with every prior post/metadata retained; exact receipt retry and changed-key conflict; stale heads, no-ops and bad IDs; precise missing-note/self-joint/dependency errors; unknown input; forged computed values/source snapshots; identity reuse; explicit dependency removal; real SQL commit followed by continuation before acknowledgement; access/claim loss; source drift after preparation; old pinned catalogs exclude the new handler; new full-save diagnostics. |
+| `tests/construction-draft.test.ts` | 7 | Existing full-save/read/revise, source and material pins, raw-table/RPC authority, archive/history and generic joint topology. |
+| `tests/construction-parameters.test.ts` | 8 | Existing bounded parameter changes, compilation/source truth, claims, concurrency and accepted receipt replay after drift. |
+| `tests/bob-workflows-judgement.test.ts` | 3 | Historical immutable workflow publication, fixture and runtime behavior. |
+| `tests/tool-catalog-parity.test.ts` | 1 | Historical policy boundary plus exact new seed/publication parity. Initially failed because the new seed entry was incorrectly included in the older boundary; explicit publication-boundary correction passed on rerun. |
+
+Both `ask-bob/index.ts` and `bob-worker/index.ts` pass Deno checking with the
+existing local dependency map and manual node_modules. The generated catalog
+passes `scripts/build-construction-edit-catalog.ts ... --check`; `git diff --check`
+passes. Review used the existing documentation-steward guidance manually; no
+independent agent review is claimed. No paid model or renderer was called; no
+hosted data was changed. These fixtures do not establish actual model choices,
+end-to-end drawing delivery, production CPU behavior, or dollar savings.
+
+Release order after the final acceptance/CI gate:
+
+1. Apply `20261019172133_construction_edits.sql` without activating the new tool.
+   It adds preparation/merge and a delegated writer; existing commands retain
+   their current route. Existing table data is not rewritten.
+2. Install compatible `ask-bob` and `bob-worker` runtimes. Old pinned catalogs keep
+   their earlier handler set and full-save diagnostic behavior.
+3. Apply `20261019172346_ai_construction_edits.sql` to atomically publish/activate
+   the new command, policy and workflow/manual versions. Read back the catalog
+   and runtime versions before allowing new jobs to use the command.
+4. Rollback first restores the prior active catalog for new jobs. Retain the new
+   SQL/runtime compatibility while any job pins the new catalog; do not remove
+   its handler or reinterpret accepted receipts during rollback.
+
+The Supabase CLI aborted in Bun before `migration new` could create a file.
+The new filenames use the observed UTC timestamp fallback; no historical
+migration was renamed or rewritten. The catalog SQL is reproducible from the
+executable tool and seed, checked against actual migrated publication.
+
+This slice increases the selected construction workflow from 19 to 20 schemas.
+It reduces required write arguments by allowing changed posts only, but leaves
+full construction reads and workflow-wide loading for deliveries 2 and 3.
+Full CI and the complete suite remain deferred until the final-stage local
+behavior is confirmed, as requested. Commits use `[skip ci]`; workflows are
+unchanged. [State](bob-delivery-flow.md#state) owns remaining review and acceptance.
+
 ## Bob context coverage corrections — 2026-10-18
 
 **All five [coverage-audit findings](bob-context-coverage-audit-2026-10-18.md)

@@ -51,8 +51,9 @@ test('productive work continues beyond 24 rounds and executes the whole tool bat
 
 test('the new lazy toolbox executes productive unlimited work beyond 24 rounds after fetching its exact manual', async () => {
   let calls = 0
+  const session = catalogFixture()
   const queries: string[] = [], observations: any[] = []
-  const result = await runProjectAnswer({ ...base(), aiCatalog: catalogFixture(),
+  const result = await runProjectAnswer({ ...base(), aiCatalog: session,
     lookup: createProjectLookup('A', async (_project, input) => {
       if (input.query) queries.push(input.query)
       return payload(input.dataset)
@@ -66,7 +67,11 @@ test('the new lazy toolbox executes productive unlimited work beyond 24 rounds a
       assert(options.tools?.some(spec => spec.function.name === 'search_project_data'))
       const output = JSON.parse(String(options.messages![0].content))
       if (calls === 2) {
-        assert.equal(output.status, 'ok'); assert(output.parameters); assert(output.manual)
+        assert.equal(output.status, 'ok')
+        assert.equal(output.instructions_ref, 'next_request_tool_definition')
+        assert.equal(output.parameters, undefined); assert.equal(output.manual, undefined)
+        assert.deepEqual(options.tools!.find(t => t.function.name === 'search_project_data'),
+          session.tool('search_project_data', { card: false, include_manual: true, server_quote: true, categories: [] }))
         assert.equal(output.callable_from_next_step, true)
         assert.equal(options.previousResponseId, 'lazy-manual')
       } else {

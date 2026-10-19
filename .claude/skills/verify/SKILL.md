@@ -9,6 +9,10 @@ React + Vite SPA with automated Node/TypeScript tests, full-schema PGlite
 fixtures, Edge type checks and Playwright browser flows. Use the relevant tests
 for a change, then the required CI gates in `.github/workflows/ci.yml`.
 
+## Verification cadence
+
+During implementation, run focused tests and impacted type checks. Full CI, CAD, PostgreSQL concurrency and dependency-audit workflows are **manual-only** (`workflow_dispatch`): use Actions → choose workflow → Run workflow → select the exact review branch. Verify the selected commit SHA and all required outcomes before merging; rerun after code changes. Opening a PR, pushing a commit or marking it ready for review must not start a full test run. Main-branch Pages publication and authorized live model checks have separate release controls.
+
 ## Automated checks
 
 ```bash

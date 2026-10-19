@@ -292,20 +292,27 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — isolerad rättning före aktivering av PR2 (2026-10-19):**
-gör livekontrollen av rättningen i PR #284, installerad som `bob-worker` v113 och
-`ask-bob` v145. Den sparar modelloperationens sluttid när JWT förnyas under väntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
-inte en färdig leverans. Den nya rättningen sparar modellanropets ursprungliga
-sluttid; [auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
-äger bevis, kostnad och kvarstående acceptans. PR1 är tekniskt driftsatt men
-fortfarande inte beteendeaccepterad. Beställaren har godkänt fortsatt förberedelse
-av steg 2 i separat PR; aktivering ska bedömas efter rättningen och liveprovet.
-Utred också rapporten om kvarhängande arbetsstatus efter föregående serverslut.
+**Aktivt nästa steg — slutverifiera och merga leverans 4 (2026-10-19):**
+`codex/bob-launchpad-release` förenar #285/#286 med #287–#289 och följer den nya
+promptfilosofin: mindre roll/metod, en ägare per manual och exakta kontrakt i kod.
+Kör samlad offlineacceptans och full CI före den nu godkända mergen.
+[Verifieringsägaren](foundation-verification.md#bob-final-integration--2026-10-19)
+skiljer källkod och tester från kvarstående drift-/modellacceptans.
 
-Riktade tester och typkontroller gäller per steg. Full testsvit och CI väntar tills
-sista stegets beteende bekräftats enligt
-[migrationskontraktet](ask-bob-conversations.md#launchpad-migration).
-CAD-migreringen kommer efter Bobs huvudtur.
+**Aktiveringshinder:** tungt kvarhållet modellresonemang kan fortfarande överstiga
+kontextutrymmet. Korta verktygssvar bevisar inte att en sådan lång tur ryms.
+Behåll fullständig native historik oaktiverad tills arbetsenheter/fortsättning
+har verifierats för denna belastning, utan att kasta resonemang eller införa
+nya arbets-/kostnadstak. Konstruktionsförmågorna och promptpubliceringen kan
+släppas i ordning enligt sina ägare; merge är inte hosted installation.
+Inget nytt betalt långprov ingår. Cirka $1 är ett mjukt mål, ännu inte uppmätt
+för ett jämförbart färdigt resultat. CAD:s egen kontextmigrering väntar.
+
+Den tidigare uppmaningen att omedelbart köra ett nytt liveprov är ersatt av denna
+ordning. PR1:s tekniska installation och kvarstående beteendeacceptans behålls;
+[auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
+äger tidigare driftbevis. Utred fortfarande rapporten om kvarhängande arbetsstatus
+efter föregående serverslut.
 
 **Kvarstående ordinär minnes-/modellacceptans:** prova ett nytt
 meddelande i samma privata tråd med den aktiverade

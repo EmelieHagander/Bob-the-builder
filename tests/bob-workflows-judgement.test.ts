@@ -6,7 +6,7 @@ import { createToolSession, type ToolPolicy } from '../supabase/functions/_share
 import { TOOLBOX_SHELVES } from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import { bobWorkflows, buildBobHands } from '../supabase/functions/_shared/bob-prompt.ts'
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+import { preConstructionEditsCatalogFixture as catalogFixture } from './support/ai-catalog-fixture.ts'
 
 // Owner request 2026-10-18: Bob reasons like a builder again within the lazy
 // context strategy. Workflows group tools by delegated outcome; judgement

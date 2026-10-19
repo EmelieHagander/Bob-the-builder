@@ -63,14 +63,32 @@ async function count(c: Claim) {
 test('all retained receipt quota guards change only their pinned-mode predicate and preserve authority settings', async () => {
   const current = (await pg.query(inventorySql)).rows as any[]
   assert.ok(beforeWriters.length >= 16, 'includes original and renamed domain writers')
-  assert.deepEqual(current.map(x => x.signature), beforeWriters.map(x => x.signature))
+  // The later bounded-construction migration moves v16's original body to a
+  // private delegate and installs a new v16 dispatcher. The moved body's old
+  // receipt guard must still be identical apart from the unlimited-work predicate.
+  const v16 = 'bob_private.bob_project_write_v16(text,uuid,uuid,bigint,jsonb)'
+  const predecessor = 'bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)'
+  const byOriginalSignature = new Map(current.map(x => [x.signature === predecessor ? v16 : x.signature, x]))
+  assert.deepEqual([...byOriginalSignature.keys()].sort(), beforeWriters.map(x => x.signature))
   const pattern = /if\s*(\(select count\(\*\) from bob_private\.bob_write_receipts where project_id=p_project and actor_id=auth\.uid\(\) and turn_id=p_turn\)>=(?:8|32)) then/g
-  for (let i = 0; i < current.length; i++) {
-    const old = beforeWriters[i], next = current[i]
+  for (const old of beforeWriters) {
+    const next = byOriginalSignature.get(old.signature)!
     const expected = old.prosrc.replace(pattern, 'if not bob_private.bob_turn_unlimited_work(p_project,p_thread,p_turn,p_generation) and $1 then')
     assert.notEqual(expected, old.prosrc, old.signature)
     assert.equal(next.prosrc, expected, old.signature)
-    assert.deepEqual([next.prosecdef, next.proconfig, next.acl], [old.prosecdef, old.proconfig, old.acl], old.signature)
+    assert.deepEqual([next.prosecdef, next.proconfig], [old.prosecdef, old.proconfig], old.signature)
+    // Only the renamed private delegate intentionally loses its execute grant.
+    if (old.signature !== v16) assert.equal(next.acl, old.acl, old.signature)
+  }
+  const oldV16 = beforeWriters.find(x => x.signature === v16)!
+  const dispatcher = (await pg.query(`select prosrc,prosecdef,proconfig,proacl::text acl from pg_proc
+    where oid=$1::regprocedure`, [v16])).rows[0]
+  assert.match(dispatcher.prosrc, /if p_payload->>'kind' is distinct from 'construction_edit' then return bob_private\.bob_project_write_before_construction_edits\(/)
+  assert.deepEqual([dispatcher.prosecdef, dispatcher.proconfig, dispatcher.acl],
+    [oldV16.prosecdef, oldV16.proconfig, oldV16.acl], 'the public-facing v16 authority contract stays intact')
+  for (const role of ['anon', 'authenticated', 'service_role']) {
+    assert.equal((await pg.query("select has_function_privilege($1,$2,'execute') allowed", [role, predecessor])).rows[0].allowed, false,
+      'the original writer is no longer directly callable after it becomes a delegate')
   }
   for (const role of ['anon', 'authenticated', 'service_role']) {
     assert.equal((await pg.query("select has_function_privilege($1,'bob_private.bob_turn_unlimited_work(text,uuid,uuid,bigint)','execute') allowed", [role])).rows[0].allowed, false)

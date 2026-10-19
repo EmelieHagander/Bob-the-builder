@@ -1,4 +1,4 @@
-import { responseMessageContent, hasImageContent, prepareResponseImages, type OpenAIMessageContent } from './openai-content.ts';
+import { responseMessageContent, hasImageContent, prepareResponseImages, readResponseItems, type OpenAIResponseItem, type OpenAIMessageContent } from './openai-content.ts';
 import { AIBackgroundPending, AIBackgroundStorageError, backgroundResponse, type BackgroundCall } from './ai-background.ts';
 import { validateAiCall, type ResolvedAiRole, type AiVariables } from './ai-catalog.ts';
 import { schemaIssues } from './schema-issues.ts';
@@ -183,6 +183,8 @@ export interface OpenAIServiceOptions {
   /** Trusted caller opt-in, pinned with that caller's execution contract.
    * Legacy callers retain their exact output selection and input wire shape. */
   responsePhaseMode?: 'aware';
+  /** Opt-in native replay; existing callers retain their original wire/parser. */
+  responseItemsMode?: 'preserve';
   messages?: Array<{
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: OpenAIMessageContent;
@@ -196,6 +198,9 @@ export interface OpenAIServiceOptions {
       };
     }>;
     tool_call_id?: string;
+    nativeOutput?: OpenAIResponseItem[];
+    /** Counting metadata only; never sent as provider input. */
+    nativeReasoningTokens?: number;
   }>;
   tools?: Array<{
     type: 'function';
@@ -230,6 +235,7 @@ export interface OpenAIServiceResponse<T = unknown> {
   reasoningEffort?: string | null;
   error?: string;
   responseId?: string;
+  outputItems?: OpenAIResponseItem[];
   outputPhase?: 'commentary' | 'final_answer' | 'legacy' | 'tool_calls' | 'refusal' | 'incomplete';
   toolCalls?: Array<{
     id: string;
@@ -496,6 +502,11 @@ export async function callOpenAIResponses<T = unknown>(
     if (options.messages && options.messages.length > 0) {
       for (const msg of options.messages) {
         if (msg.role === 'system') continue;
+        if (msg.nativeOutput !== undefined) {
+          if (options.responseItemsMode !== 'preserve' || msg.role !== 'assistant') throw new Error('native_response_replay_not_enabled');
+          inputMessages.push(...readResponseItems(msg.nativeOutput));
+          continue;
+        }
         
         if (msg.role === 'tool') {
           inputMessages.push({
@@ -619,6 +630,7 @@ export async function callOpenAIResponses<T = unknown>(
     if (options.previousResponseId) {
       requestBody.previous_response_id = options.previousResponseId;
     }
+    if (options.responseItemsMode === 'preserve') requestBody.include = ['reasoning.encrypted_content'];
     
     // Add tools if provided
     if (options.tools && options.tools.length > 0) {
@@ -782,6 +794,15 @@ export async function callOpenAIResponses<T = unknown>(
     }
 
     const phaseAware = options.responsePhaseMode === 'aware';
+    let nativeOutput: { outputItems?: OpenAIResponseItem[] } = {};
+    if (options.responseItemsMode === 'preserve') {
+      try { nativeOutput = { outputItems: readResponseItems(responseData.output) }; }
+      catch (error) {
+        await logAIUsage(aiClient, { ...usageBase, success: false });
+        return { success: false, data: null, usage, model: currentModel, reasoningEffort: appliedEffort,
+          estimatedCostUsd, error: error instanceof Error ? error.message : 'native_response_invalid' };
+      }
+    }
     const assistantItems = phaseAware && Array.isArray(responseData.output)
       ? responseData.output.filter((item: any) => item.type === 'message' && (!item.role || item.role === 'assistant')) : [];
     const refusal = assistantItems.flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
@@ -791,7 +812,7 @@ export async function callOpenAIResponses<T = unknown>(
       const strict = !!(options.schema && options.schemaName);
       await logAIUsage(aiClient, { ...usageBase, success: !strict });
       return { success: !strict, data: strict ? null : refusal as T, usage, model: currentModel,
-        reasoningEffort: appliedEffort, estimatedCostUsd, responseId: responseData.id, outputPhase: 'refusal',
+        reasoningEffort: appliedEffort, estimatedCostUsd, responseId: responseData.id, outputPhase: 'refusal', ...nativeOutput,
         ...(strict ? { error: 'model_refusal' } : {}) };
     }
 
@@ -814,6 +835,7 @@ export async function callOpenAIResponses<T = unknown>(
         data: null,
         toolCalls,
         responseId: responseData.id,
+        ...nativeOutput,
         usage,
         model: currentModel, reasoningEffort: appliedEffort,
         estimatedCostUsd,
@@ -850,7 +872,7 @@ export async function callOpenAIResponses<T = unknown>(
         const strict = !!(options.schema && options.schemaName);
         await logAIUsage(aiClient, { ...usageBase, success: !strict });
         return { success: !strict, data: null, usage, model: currentModel, reasoningEffort: appliedEffort,
-          responseId: responseData.id, estimatedCostUsd, outputPhase,
+          responseId: responseData.id, estimatedCostUsd, outputPhase, ...nativeOutput,
           ...(strict ? { error: 'model_commentary_only' } : {}) };
       }
     }
@@ -925,6 +947,7 @@ export async function callOpenAIResponses<T = unknown>(
         usage,
         model: currentModel, reasoningEffort: appliedEffort,
         responseId: responseData.id,
+        ...nativeOutput,
         estimatedCostUsd,
         ...(phaseAware ? { outputPhase: outputPhase ?? 'legacy' as const } : {})
       };
@@ -939,7 +962,7 @@ export async function callOpenAIResponses<T = unknown>(
       const valid = parsedData !== null && schemaIssues(schema!, parsedData).length === 0;
       await logAIUsage(aiClient, { ...usageBase, success: valid });
       return { success: valid, data: valid ? parsedData : null, usage,
-        model: currentModel, reasoningEffort: appliedEffort, responseId: responseData.id,
+        model: currentModel, reasoningEffort: appliedEffort, responseId: responseData.id, ...nativeOutput,
         estimatedCostUsd, ...(phaseAware ? { outputPhase: outputPhase ?? 'legacy' as const } : {}),
         ...(valid ? {} : { error: 'invalid_structured_output' }) };
     }
@@ -1091,6 +1114,7 @@ export async function callOpenAIResponses<T = unknown>(
         usage,
         model: currentModel, reasoningEffort: appliedEffort,
         responseId: responseData.id,
+        ...nativeOutput,
         estimatedCostUsd
       };
     } else {

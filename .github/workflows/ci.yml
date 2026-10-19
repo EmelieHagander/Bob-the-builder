@@ -1,7 +1,9 @@
 name: CI
 
+# Full verification runs only when requested in GitHub Actions.
+# Select the exact review branch before merging; a push or PR state change
+# must not launch this expensive workflow.
 on:
-  pull_request:
   workflow_dispatch:
 
 jobs:

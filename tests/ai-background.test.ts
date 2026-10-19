@@ -19,6 +19,40 @@ const id = '11111111-1111-4111-8111-111111111111'
 const call = { key: 'session/model/0', fingerprint: 'a'.repeat(64), receiver: 'fixture', context: { session: 'one' }, expiresAt: '2030-01-01T00:00:00Z' }
 const accounting = { user_id: null, module: 'test', ai_function: 'designer', model: 'fixture', input_price_per_1m: 1, output_price_per_1m: 2, cached_price_per_1m: .1 }
 
+test('native replay jobs pin encrypted retrieval and never accept the first incomplete GET', async t => {
+  const prior = globalThis.fetch; t.after(() => { globalThis.fetch = prior })
+  const requests: { url: string; body?: any }[] = []; const accepted: any[] = []
+  let reserved = false, failRetrieval = false
+  const result = { id: 'resp_native', status: 'completed', metadata: { ai_job_id: id, ai_replay_items: '1' },
+    output: [{ type: 'reasoning', id: 'rs_native', summary: [], encrypted_content: 'opaque-fixture' }] }
+  const rpc = async (name: string, args: any) => {
+    if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
+    if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { id, submit, status: 'pending', response_id: submit ? null : result.id } }
+    if (name === 'ai_work_claim') return { response_id: result.id }
+    if (name === 'ai_job_accept') { accepted.push(args.p_response); return true }
+    if (['ai_job_deliver', 'ai_work_finish', 'ai_work_record_failure'].includes(name)) return null
+    return null
+  }
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) })
+    if (init?.method === 'POST') return Response.json({ ...result, status: 'queued', output: [] })
+    if (String(url).includes('include%5B%5D')) {
+      if (failRetrieval) return Response.json({ error: { message: 'Temporary unavailable' } }, { status: 503 })
+      return Response.json(result)
+    }
+    return Response.json({ ...result, output: [{ type: 'reasoning', id: 'rs_native', summary: [] }] })
+  }
+  await assert.rejects(() => backgroundResponse(rpc, 'key', 'bob', call, { include: ['reasoning.encrypted_content'] }, accounting), AIBackgroundPending)
+  assert.equal(requests[0].body.metadata.ai_replay_items, '1')
+  accepted.length = 0
+  failRetrieval = true
+  await assert.rejects(() => reconcileAiWork(rpc, 'key', 'event', id, id))
+  assert.equal(accepted.length, 0, 'a missing encrypted payload must remain retryable')
+  failRetrieval = false
+  await reconcileAiWork(rpc, 'key', 'event', id, id)
+  assert.deepEqual(accepted, [result])
+})
+
 test('long model survives restarts: one POST, retrieve same response, then journal the finished tool call', async () => {
   const oldFetch = globalThis.fetch; let posts = 0, gets = 0, reserved = false
   let job: any = { id, status: 'submitting', response_id: null, response: null }

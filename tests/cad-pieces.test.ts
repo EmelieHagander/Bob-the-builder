@@ -45,6 +45,25 @@ test('an invalid piece stores nothing',async()=>{
  assert.equal((await createCadPieces({requestStore:store,ownerRequest:null,hasAccess:async()=>true}).execute(dup) as any).status,'invalid')
  assert.equal((await createCadPieces({requestStore:store,ownerRequest:null,hasAccess:async()=>true}).execute(input(1)) as any).status,'invalid','a single piece belongs in design_project_cad')
 })
+test('each queued piece carries shared coordinates and its own exact source, never sibling raw geometry',async()=>{
+ const {store,saved}=fakeStore(),v=input(2)
+ for(const [i,p] of v.pieces.entries()){
+  p.brief=`Only piece ${i}; join at the shared north datum. Source construction ${p.artifact_id} revision 1.`
+  p.handoff={...structuredClone(handoff),coordinates:{origin:'North-west floor corner',positive_x:'east',positive_y:'south',positive_z:'up'},deliverable:`Piece ${i}`}
+ }
+ const checks:string[]=[]
+ const result=await createCadPieces({requestStore:store,ownerRequest:'Build these two parts',hasAccess:async()=>true,checkConstruction:async(id:string,revision:number)=>{
+  checks.push(id);return {status:'ready',draft:{projectId:'p_fixture',artifact_id:id,revision,area_id:null,recipe:{privateRawGeometry:'internal-only-'+id}}}
+ }}).execute(v)
+ assert.equal(result.status,'queued');assert.deepEqual(checks,v.pieces.map(p=>p.artifact_id))
+ for(const [i,row] of saved.entries()){
+  assert.equal(row.payload.brief.artifact_id,v.pieces[i].artifact_id)
+  assert.deepEqual(row.payload.brief.handoff.coordinates,v.pieces[i].handoff.coordinates)
+  assert(JSON.stringify(row.payload).includes(v.assembly_brief))
+  assert(!JSON.stringify(row.payload).includes(v.pieces[1-i].artifact_id))
+  assert(!JSON.stringify(row.payload).includes('privateRawGeometry'))
+ }
+})
 test('missing or unready construction in any piece prevents every store and release',async()=>{
  for(const mode of ['missing','unready','foreign'] as const){
   const {store,saved}=fakeStore(),v=input();let checks=0,releases=0

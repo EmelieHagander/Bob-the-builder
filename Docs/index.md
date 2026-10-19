@@ -6,6 +6,10 @@
 
 ## Start here
 
+- [Selective tools and methods](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19)
+  and [canonical repetition / natural pieces](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19)
+  — delivery 3 prepared above #287/#288, not activated; [evidence](foundation-verification.md#selective-tools-and-construction-work--2026-10-19).
+
 | I need to understand… | Start with |
 |---|---|
 | what bob is / current app shape | `README.md` |
@@ -20,6 +24,7 @@
 | memory/prompt strategy, hybrid recall and long-work context checkpoints | [Context strategy](ask-bob-conversations.md#context-strategy--2026-10-18) — published and activated; [release evidence](foundation-verification.md#bob-context-strategy-release--2026-10-18) separates technical proof from remaining ordinary owner/long-memory acceptance in State |
 | context-strategy coverage across colleagues and tools | [Coverage corrections](foundation-verification.md#bob-context-coverage-corrections--2026-10-18) — all five findings corrected and activated; [dated audit](bob-context-coverage-audit-2026-10-18.md) preserves the original evidence; ordinary owner/model acceptance remains in [State](bob-delivery-flow.md#state) |
 | next work on Bob's end-to-end delivery | [State and next action](bob-delivery-flow.md#state) — remaining work and open gates; [six data-driven outcomes in five releases](bob-delivery-flow.md#six-outcomes-in-five-releases); the active stage lives there, not in this index |
+| expensive construction rewrites and the staged correction | [Remediation plan](bob-green-release-plan-2026-10-19.md) — audit-linked delivery sequence, soft cost target and final CI gate; [bounded edits](artifacts.md#bounded-part-changes--prepared-2026-10-19), [small views and exact results](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19) and [local evidence](foundation-verification.md#construction-views--2026-10-19) distinguish preparation from deployment |
 | end-to-end delegated delivery, source lineage, handoffs and implementation priorities | [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — cross-domain target, remaining P3 named-member acceptance and P4 cases; actual implemented/released scope lives with domain owners |
 | data-driven handoff gaps and server-owned changes/status | [Data boundary review](bob-delivery-flow.md#kvarstående-datagränser--kodgranskning-2026-10-10) — reviewed gaps, existing guards and domain routing; remaining implementation is in State |
 | exact instance roles and persisted affected-output continuation | [Artifact role/work owner](artifacts.md#instance-roles-and-affected-outputs--release-d) — manufacturing policy, retries and preserved work; [installation evidence](foundation-verification.md#construction-instance-roles-and-consequences--release-d) |

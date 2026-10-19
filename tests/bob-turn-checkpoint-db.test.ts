@@ -6,6 +6,7 @@ import type { PGlite } from './support/pglite.ts'
 import { createBobJournal, BobContinuation, fingerprint } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { createBobTurnCheckpoint, validateBobTurnCheckpoint } from '../supabase/functions/_shared/bob-turn-checkpoint.ts'
 import { createToolSession, type ToolDefinition, type ToolPolicy } from '../supabase/functions/_shared/project-tools/session.ts'
+import {createConstructionViews} from '../supabase/functions/_shared/construction-views.ts'
 
 let pg: PGlite
 const owner = '00000000-0000-4000-8000-000000000001'
@@ -46,6 +47,23 @@ before(async () => {
   await pg.query("update shared.ai_prompts set active_version_id=$1 where app='bob' and prompt_key='agent-contract.ask-bob'", [version])
 })
 after(() => pg.close())
+
+test('construction observations survive actual SQL checkpoint save, yield and claim without rerunning a check',async()=>{
+ const q=await enqueue(),first=await claim(q.jobId),artifact=randomUUID(),views=createConstructionViews('A',()=>new Date('2026-10-19T17:00:00Z'))
+ const output={status:'checked',concept_ready:false,issue_count:280,issues:Array.from({length:280},(_,i)=>({code:'fixture_constraint',ids:['part'+i],message:'Keep exact finding '+i}))}
+ const summary=await views.observe('check',artifact,1,output)
+ const original=views.exportState()
+ await save(first,0,{components:{constructionTools:{version:2,used:1,observations:original}}})
+ await service('bob_yield_job',[first.id,first.claimToken])
+ const resumed=await claim(first.id),restored=createConstructionViews('A')
+ restored.restoreState(resumed.checkpoint.state.components.constructionTools.observations)
+ assert.deepEqual(restored.exportState(),original)
+ let query={...summary.result.read,section:'issues'} as any;const findings:any[]=[]
+ do{const page=await restored.read({current_revision:2,source_state:'changed',archived:false},query);assert.equal(page.observation,'historical');assert.equal(page.source_state,'changed');findings.push(...page.items.map((r:any)=>r.value));query=page.next_read}while(query)
+ assert.deepEqual(findings,output.issues)
+ await assert.rejects(save(first,1,{components:{}}),/job_not_claimed/)
+ await finish(resumed.id,resumed.claimToken)
+})
 
 test('only a newly enqueued v4 main job adopts checkpoints; old jobs retain the original claim contract', async () => {
   const old = await enqueue(3)

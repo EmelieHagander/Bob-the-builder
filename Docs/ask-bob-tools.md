@@ -1,5 +1,31 @@
 # Ask Bob: tool discovery, loading and authority
 
+## Selective methods and tools — prepared 2026-10-19
+
+**Delivery 3 is source-only above #287/#288; not activated or deployed.** A pinned
+`bob.workflows.metadata.selective_tools_version=1` separates workflow selection
+from schema loading. `describe_tool(workflow_name)` retains the method in current
+system instructions and lists member availability, without loading their schemas.
+`describe_tool(tool_name)` loads only that tool. Its result is a reference: the
+next request carries the full manual and schema once in the native tool definition.
+The short directory remains available, including waiting prerequisites.
+
+Tool-session checkpoint v2 saves selected method names and loaded tool versions.
+Methods resolve from the immutable manifest; current instructions and per-tool
+catalog overrides are rebuilt after restart/rollover. Current policy, handler
+version, prerequisite and the submitted offer fence still gate execution. A
+checkpoint cannot grant authority. Old manifests retain v1 group loading and
+their original response shape; state modes cannot be interchanged.
+
+The construction method chooses numeric/role/part edits for existing work and
+natural saved sub-constructions for larger new builds. It includes the existing
+`plan_cad_pieces` queue without automatically loading it. Repetitions and shared
+interfaces belong to the [Artifact contract](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19).
+Complete provider-independent requests/history are still delivery 4 (#285/#286);
+this change prepares their authoritative instruction surface, not their release.
+[Verification](foundation-verification.md#selective-tools-and-construction-work--2026-10-19)
+separates scripted surface evidence from actual model behavior and cost.
+
 **Owner decision / implementation in PR #91 (2026-09-21).** This document owns
 Bob's tool surface and loading contract. The PR records the exact tested commit,
 managed migration, merge, deployed Edge version, Pages and live-check evidence;
@@ -32,6 +58,18 @@ not an exception to the principle. This documentation does not activate new
 catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
+
+**Prepared addition, 2026-10-19; not activated:** the versioned
+`edit_construction_parts` command sends only changed canonical construction posts.
+Its [Artifact contract](artifacts.md#bounded-part-changes--prepared-2026-10-19)
+owns merge, identity, source and receipt rules. The new publication adds it to the
+construction workflow and directs small edits away from full-document saves.
+Earlier pinned catalogs do not acquire this handler or the new full-save
+diagnostics. Delivery 2 adds [small read views and observed-result references](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19),
+with a pinned reader contract. Delivery 3's [selective surface](#selective-methods-and-tools--prepared-2026-10-19)
+replaces group expansion for new manifests. The [dated payload audit](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit)
+records the original failure and measured baseline; these changes are not yet
+proof of a real-model tool-choice or dollar improvement.
 
 **Main Bob's foundation was published through PR #267.** The
 [coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same

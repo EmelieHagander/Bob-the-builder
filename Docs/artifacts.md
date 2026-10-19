@@ -106,6 +106,110 @@ Before moving a legacy drawing onto this path, inspect its existing geometry, gr
 
 Acceptance must cover a dimension-only change and all dependent placements/list values, the exact construction-to-drawing pin after reload, stale/concurrent changes, an invalid or unknown input, a failed render followed by receipt-safe retry, and a legacy transition preserving history. Measure the whole model chain before/after on equivalent work. The expected saving is fewer repeated geometry-design calls and smaller deltas; no percentage or successful mockup match is established by this specification.
 
+### Bounded part changes — prepared 2026-10-19
+
+**Implemented and locally verified on the preparation branch; not deployed.**
+`edit_construction_parts` edits an existing construction at an exact expected
+revision. It accepts only named upserts/removals of definitions, instances,
+parameter nodes/bindings, material pins, joints and instance roles. Each upsert
+is a complete changed post; omitted collections and posts remain server-owned.
+There are no arbitrary JSON paths, silent dependency removals, metadata changes
+or new coordinate-frame types. Existing numeric inputs and role-only changes
+retain their smaller dedicated commands.
+
+The claimed-user `prepare_construction_edit` RPC merges against the canonical
+current revision. Compilation stays inside the runtime. Commit repeats the merge
+under the existing project lock, checks the compiled graph against the exact
+requested changes and delegates through the existing construction writer,
+source checks, readiness, identity rules and affected-output tracking. A changed
+joint endpoint needs a new joint ID. New roles require evidence or explicit
+`unknown`/`unknown`; unrecorded historical roles remain unknown.
+
+The existing receipt ledger uses `construction_edit:<key>` for this command.
+Exact retries return the same receipt before recompilation, including after a
+later source/head change; changed input under the same key conflicts. Access and
+turn ownership are checked first. A saved construction is still not a checked,
+rendered or reviewed drawing. Complete the affected outputs for its exact revision.
+
+Small diagnostics identify missing fields, self-joints, identity reuse and dangling
+dependencies without exposing raw database errors. Existing pinned catalogs keep
+their old handlers and full-save diagnostic sequence. [Verification and release
+order](foundation-verification.md#bounded-construction-edits--2026-10-19) own the
+evidence and rollout limits; [State](bob-delivery-flow.md#state) owns next work.
+
+### Compact repetition and natural pieces — prepared 2026-10-19
+
+**Delivery 3, source-only above #287/#288.** The pinned save-tool metadata
+`construction_repeat_version=1` accepts `recipe.arrays`: exact template ID,
+definition ID, axis and count, with six start bindings and one spacing binding.
+Empty arrays mean ordinary authoring. Server expansion generates stable
+`<id>.1`…`<id>.<count>` instances and derived arithmetic nodes before normal
+geometry, role, source and parameter validation. SQL independently checks the
+expanded canonical graph and geometry under the existing claim/write ledger.
+No compact template is stored as a competing construction. Subsequent small
+edits operate on saved parameter/part IDs. Roles and joints explicitly name the
+expanded instances; omitted roles remain unknown, never manufactured by default.
+Duplicate IDs, absent bindings, unknown inputs, unsupported geometry and existing
+canonical size limits still reject saving. Old pinned saves do not accept arrays.
+
+For larger new builds, the workflow establishes shared coordinates, interfaces
+and exact source revisions, then saves/checks one natural sub-construction before
+the next. Carry common interfaces and receipts; reopen relevant bounded views
+when needed. The existing part queue checks each pinned construction afresh and
+hands each renderer its own source and requirements plus the common brief,
+without siblings' raw geometry. It does not design constructions or verify an
+otherwise unproven cross-piece fit. Small furniture corrections stay in their
+existing construction. No retired designer/candidate path is reintroduced.
+
+Structured data continues through deterministic selectors and compilation; no
+remaining mandatory unstructured reading requirement has been established for
+this slice, so no additional paid reading model is introduced. Actual model
+selection/decomposition and the soft $1 goal remain unverified; see
+[release evidence](foundation-verification.md#selective-tools-and-construction-work--2026-10-19).
+
+### Construction views and observed results — prepared 2026-10-19
+
+**Implemented and locally verified above delivery 1; not activated or deployed.**
+The new pinned `read_construction_draft` contract returns an overview by default.
+It exposes exact revision-bound `parts`, `parameters`, `bindings`, `joints`,
+`materials`, `roles`, `notes` and `dependencies` views. Missing historical roles
+are reported as unknown. The description and original open questions remain
+available in notes; an overview never claims that omitted constraints are resolved.
+
+Named selectors retain canonical IDs, values, truth states, formulas and source
+pins. The dependency view follows parameter ancestors/dependents, affected
+bindings/parts and directly attached joints/materials/roles. Its declared scope
+does not claim to traverse every additional dependency of newly reached neighbor
+parts; those can be selected in a further dependency read. Every page identifies
+its selection, missing IDs, total selected rows and `next_read`. Pages fit 2,000
+serialized content tokens. Whole posts are preferred; an oversized post uses
+explicit exact JSON fragments with Unicode offsets. Original data is not shortened
+or replaced by model-generated text. Cursors cannot move between revisions/views.
+
+Checks, derived lists and cut assessments keep their complete observed output in
+the construction-tools checkpoint component. The model receives status/counts,
+bounds where available, section names and an exact result reference. Identical
+outputs share stored content. All checker findings, including those beyond the
+old 200-finding presentation limit, are reachable via `view=result` and a returned
+section. Empty collections, explicit unknowns, candidate inputs, quantities and
+limitations remain recoverable. Result order and page cursors survive JSONB key
+ordering. The active operation journals its observation time so a replay cannot
+silently change the next model input.
+
+References are private to the current turn and survive worker restart, not job
+completion or a new turn. Reopening verifies current project access and reads
+the requested canonical revision; it does not rerun a checker or read catalog
+materials again. Historical observation time and current source/head status are
+separate. Old results cannot authorize a write, render, stock allocation or
+purchase. The drawing gate retains its independent full canonical read/check.
+
+This component owns the original domain assessment. Draft #286's future generic
+history will archive the model-visible summaries/pages and references, without
+another full construction-result copy. Existing checkpoint storage limits remain;
+whole-turn capacity/CPU and real-model cost belong to the final acceptance gate.
+[Verification](foundation-verification.md#construction-views--2026-10-19) records
+the local evidence, catalog compatibility and release order.
+
 ### Instance roles and affected outputs — release D
 
 **Implemented; release installation/readback is tracked in [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d).** A version-1 `instance_policy` belongs to one exact construction revision. It contains one entry per stable recipe instance ID, an explicit role, its matching quantity policy and a reason. Geometry, definitions and numeric provenance remain in the existing construction; the policy does not alter the CAD recipe contract.

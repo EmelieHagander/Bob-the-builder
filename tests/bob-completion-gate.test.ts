@@ -68,7 +68,7 @@ test('the publication adds only the gate role and its parts, and the fixture mat
   let prior: any
   const pg = await projectSchema(async (db, name) => {
     if (name.endsWith('_bob_completion_gate_catalog.sql')) prior = (await db.query<{ m: any }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
-  })
+  }, '20261019080000_bob_completion_gate_catalog.sql')
   try {
     const current = (await pg.query<{ m: any }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
     const keys = (m: any) => m.definitions.map((d: any) => d.prompt_key)

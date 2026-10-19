@@ -6,6 +6,7 @@ import { createProjectEdits } from './project-edits.ts'
 import {createProjectCalculator,hasCalculatorContract} from './project-calculator.ts'
 import { readPhysicalCadSources } from './cad-physical-lineage.ts'
 import { parameterSourcePins } from './cad-parameters.ts'
+import { bobCompleteRequestVersions } from './bob-complete-request.ts'
 import { createConstructionTools, checkedConstructionForDrawing, constructionCurrentReader, constructionChangeReaders } from './construction-draft.ts'
 import {parseDesignReadiness,type DesignPurpose,type DesignReadiness} from './project-design-intent.ts'
 import { readBudgetStop } from './bob-budget-stop.ts'
@@ -281,16 +282,19 @@ export async function answerWithOpenAi(opts: {
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
+      ...bobCompleteRequestVersions(!!checkpoint, contract),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
     }))
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
   if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
+  if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
+  if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
     // work pins each observation, including invalid/failed reads, before its
@@ -308,6 +312,7 @@ export async function answerWithOpenAi(opts: {
   } }
   const contextStrategy = execution.contextStrategyVersion === 1 && contract.context_strategy_version === 1
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
+    ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     // Older in-flight journals keep their recorded call sequence and re-page.
     ...(execution.contextPagingVersion === 1 && journal ? { pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) =>
       memo('context:pages', { source }, compute) } : {}),
@@ -448,6 +453,15 @@ export async function answerWithOpenAi(opts: {
     prepareLegacyTransition:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_legacy_construction_transition',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'legacy_transition_preparation_failed'}
+      return data
+    },
+    preciseEditDiagnostics:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.edit_construction_parts'),
+    constructionViews:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_view_version===1),
+    constructionRepeats:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.save_construction_draft'&&row.metadata?.construction_repeat_version===1),
+    observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
+    prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
+      const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
+      if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_edit_preparation_failed'}
       return data
     },
     prepareParameterChange:async(payload:import('./project-write.ts').WritePayload)=>{
@@ -741,6 +755,8 @@ export async function answerWithOpenAi(opts: {
     checkpoint: answerCheckpoint,
     // Older in-flight journals keep their recorded post-rollover requests.
     carryLoadedTools: execution.toolCarryVersion === 1,
+    ...(execution.completeRequestVersion === 1 ? { completeRequest: true } : {}),
+    ...(execution.resultReferenceVersion === 1 ? { resultReferences: true } : {}),
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
     } : {}),

@@ -6,8 +6,9 @@
 ## Launchpad-pattern migration — 2026-10-19
 
 **PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
-with ordinary member/model and long-image acceptance still open. PR2 is being
-prepared separately under the owner's continuation instruction; PR3 remains specified.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
+with ordinary member/model and long-image acceptance still open. PR2 is prepared in
+[draft #285](https://github.com/EmelieHagander/Bob-the-builder/pull/285); PR3 is prepared
+separately on top of it. Neither is activated.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 records the installed migration, source and authentication readback. The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
@@ -16,12 +17,23 @@ live CPU evidence and differences from actual Launchpad. This section owns the
 corrected target; [State](bob-delivery-flow.md#state) owns the next action.
 
 **Owner verification decision — 2026-10-19:** for this three-stage migration,
-each PR requires the relevant targeted regression tests, app and Edge typechecks,
-independent review and behavior acceptance before the next stage. Run the full
+each PR requires the relevant targeted regression tests, app and Edge typechecks.
+The later cost decision permits preparing subsequent stages offline before live
+acceptance; independent review and behavior acceptance remain release gates. Run the full
 suite and CI after the final stage's behavior is confirmed. This explicit decision
 replaces the original per-stage full-CI gate for this migration; it does not
 change CI workflows or settings. The ordinary long-image acceptance and release
 ordering below remain, and CAD still follows acceptance of Bob's main turn.
+
+**Owner cost decision — 2026-10-19:** approximately **USD 1 per comparable completed
+task is a soft efficiency target, not a spending cap or a reason to stop unfinished
+work**. Do not introduce a new step, call, token-output, cost or wall-time quota to
+meet it. Do not run another paid model test now. Continue with saved usage and
+offline fixtures, and distinguish reduced payload/summary work from measured
+delivery quality and actual savings. Model and reasoning settings stay unchanged.
+The expensive partial run is a diagnostic baseline, not an accepted-task benchmark;
+[cost evidence](bob-launchpad-migration-audit-2026-10-19.md#offline-cost-review) owns
+the breakdown and remaining gap.
 
 The existing context-strategy/replay behavior below remains the compatibility
 reference for legacy jobs. This migration
@@ -116,7 +128,56 @@ cache share and cost per equivalent delivered task against an identified baselin
 neither 86% nor an unchanged cache ratio is assumed. CAD stays on its existing
 path until the main-turn migration is accepted.
 
+**Stage-2 implementation, awaiting activation/live acceptance:** durable main
+turns opt in only when their immutable `agent-contract.ask-bob` metadata sets
+`complete_request_version: 1` and `result_reference_version: 1` together, with
+`context_strategy_version: 1`. Code installation alone leaves the existing mode
+unchanged. The execution pins `completeRequestVersion: 1` and
+`resultReferenceVersion: 1`; existing jobs keep their recorded identity. `buildBobRequest` reconstructs seed memory,
+turn-start context and ordered retained native exchanges from checkpoint state;
+the response ID remains only a local state key and is omitted from the provider
+request. The complete eligible tool directory precedes workflow cards and changing
+availability. Loaded eligible manuals are included in schemas on every call.
+`responseItemsMode: preserve` retains native IDs, phases, function calls and opaque
+`reasoning.encrypted_content`. Both POST and completed asynchronous retrieval
+request encrypted items; a missing payload fails closed. Historical images stay
+native inputs and resolve under the existing authorized file/pixel transport.
+
+This PR deliberately retains the existing AI compactor until PR3: a complete
+request includes the current handoff plus retained native exchanges and images,
+**not every older exchange verbatim after compaction**. Ciphertext is never fed to
+the text summarizer or counted as plaintext tokens. Original operation results
+remain available through the existing authorized history tool. No claim of zero
+mid-turn compaction, constant cost or improved cache share is made at this stage.
+The shared async worker must be upgraded before activating new main executions;
+old jobs and CAD omit the opt-in and retain their prior wire behavior. No new
+schema migration or public request-history logging is introduced.
+
 ### PR3 — bound result payloads without an AI history summary
+
+**Prepared, not activated.** The explicit catalog opt-in above pins
+`resultReferenceVersion: 1` together with complete requests. Their native main-turn adapter never invokes
+the AI compactor and offers `get_work_history` from the first request. Legacy jobs
+and specialist/CAD chains retain their pinned behavior. Restore rejects a
+different result-reference version.
+
+The immutable operation archive stores exact arguments and results once, plus
+small presentation copies prepared at observation time. It is private to the
+current turn/response head and restored from the checkpoint; it is not a public
+URL or permanent post-turn archive. Reopening pages the exact original, with a
+Unicode-codepoint cursor and a serialized envelope bounded to 2,000 tokens. It
+never invokes the original project handler or repeats a write. Current dispatch
+authorization still applies, including history-only followups.
+
+At the model boundary, large string results receive a bounded first page. Successful
+read/list/search/open results older than two model exchanges become explicit
+historical references; small write receipts, check results and error feedback stay
+literal. Large receipts/feedback keep their bounded first page plus exact recall.
+Native image content, original user messages and assistant/reasoning items are not
+demoted. Loaded manuals remain in the full tool surface. This bounds model-visible
+text; it does not make every underlying database read paged. New orientation
+directory pages also use a 2,000-token source limit; older snapshots retain 6,000.
+No API permission, source freshness check or write ledger is bypassed.
 
 Reduce default tool pages toward approximately 2,000 content tokens where their
 contract permits, with explicit continuation. Retain complete original results in

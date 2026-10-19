@@ -74,7 +74,7 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
   hasAccess: () => Promise<boolean>; maxTokens: number; pageMaxTokens: number;
 }) {
   if (!Number.isSafeInteger(opts.maxTokens) || opts.maxTokens < 2048 || opts.maxTokens > 24_000
-    || !Number.isSafeInteger(opts.pageMaxTokens) || opts.pageMaxTokens < 2048 || opts.pageMaxTokens > 12_000) throw new Error('context_policy_unavailable')
+    || !Number.isSafeInteger(opts.pageMaxTokens) || opts.pageMaxTokens < 2000 || opts.pageMaxTokens > 12_000) throw new Error('context_policy_unavailable')
   // Retained read results are immutable for this turn, including after context
   // renewal. A replay reconstructs them from the same journaled domain reads.
   const snapshot = exactJson(structuredClone(original)) as ProjectOrientation
@@ -131,7 +131,7 @@ export function restoreOrientationDirectory(state: OrientationDirectoryState, op
   if (state?.version !== 1 || typeof state.snapshotId !== 'string' || !/^[a-f0-9]{64}$/.test(state.snapshotId)
     || state.snapshot?.projectId !== opts.projectId || state.orientation?.projectId !== opts.projectId
     || state.orientation.directory?.snapshotId !== state.snapshotId
-    || !Number.isSafeInteger(state.pageMaxTokens) || state.pageMaxTokens < 2048 || state.pageMaxTokens > 12_000
+    || !Number.isSafeInteger(state.pageMaxTokens) || state.pageMaxTokens < 2000 || state.pageMaxTokens > 12_000
     || !SECTIONS.every(section => Array.isArray(state.snapshot[section]) && Array.isArray(state.orientation[section]))
     || !Array.isArray(state.snapshot.sources) || state.snapshot.sources.some(source => source.projectId !== opts.projectId)
     || !state.snapshot.completeness || !['hierarchy', 'requirements'].every(key => typeof state.snapshot.completeness[key as 'hierarchy' | 'requirements'] === 'boolean')) {

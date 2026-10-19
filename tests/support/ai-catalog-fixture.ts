@@ -10,6 +10,10 @@ if(!seedFile)throw new Error('AI catalog migration seed is missing')
 const originalSeed=JSON.parse(readFileSync(seedFile,'utf8').match(/\$ai_catalog_seed\$([\s\S]+?)\$ai_catalog_seed\$/)![1]) as any[]
 const seed=structuredClone(originalSeed)
 const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
+let preConstructionEditsRows:any[]|undefined,preConstructionEditsVersions:Map<string,number>|undefined
+let preConstructionViewsRows:any[]|undefined,preConstructionViewsVersions:Map<string,number>|undefined
+let preSelectiveToolsRows:any[]|undefined,preSelectiveToolsVersions:Map<string,number>|undefined
+let preCompleteContextRows:any[]|undefined,preCompleteContextVersions:Map<string,number>|undefined
 let preContextCoverageRows:any[]|undefined,preContextCoverageVersions:Map<string,number>|undefined
 let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string,number>|undefined
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
@@ -19,6 +23,54 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const completeContext=source.match(/\$bob_complete_context_patches\$([\s\S]+?)\$bob_complete_context_patches\$/)
+ if(completeContext){
+  preCompleteContextRows=structuredClone(seed);preCompleteContextVersions=new Map(versions)
+  for(const patch of JSON.parse(completeContext[1])){
+   const row=seed.find(row=>row.key===patch.key);row.definition={...row.definition,...patch.definition}
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'bob-complete-context-v1',...patch.metadata};versions.set(row.key,versions.get(row.key)!+1)
+   if(patch.content!==undefined)row.content=patch.content
+   if(patch.workflow_method)row.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing').method=patch.workflow_method
+  }
+ }
+ const selective=source.match(/\$selective_tools_patches\$([\s\S]+?)\$selective_tools_patches\$/)
+ if(selective){
+  preSelectiveToolsRows=structuredClone(seed);preSelectiveToolsVersions=new Map(versions)
+  const method=source.match(/\$selective_construction_method\$([\s\S]+?)\$selective_construction_method\$/)![1]
+  for(const patch of JSON.parse(selective[1])){
+   const row=seed.find(row=>row.key===patch.key);row.definition={...row.definition,...patch.definition}
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'selective-tools-v1',...patch.metadata};versions.set(row.key,versions.get(row.key)!+1)
+   if(patch.content!==undefined)row.content=patch.content
+   if(patch.key==='bob.workflows'){const w=row.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing');w.method+=method;w.tools.push('plan_cad_pieces')}
+  }
+ }
+ const constructionViews=source.match(/\$construction_view_patches\$([\s\S]+?)\$construction_view_patches\$/)
+ if(constructionViews){
+  preConstructionViewsRows=structuredClone(seed);preConstructionViewsVersions=new Map(versions)
+  const patches=JSON.parse(constructionViews[1]),manual=source.match(/\$construction_view_manual\$([\s\S]+?)\$construction_view_manual\$/)![1]
+  for(const patch of [...patches,{key:'bob.workflows',definition:{},metadata:{}}]){
+   const row=seed.find(row=>row.key===patch.key);row.definition={...row.definition,...patch.definition}
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'construction-views-v1',...patch.metadata};versions.set(row.key,versions.get(row.key)!+1)
+   if(patch.key==='bob.workflows')row.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing').method+=manual
+   else if(patch.key!=='tools.read_construction_draft')row.definition.additional_description=(row.definition.additional_description??'')+manual
+  }
+ }
+ const constructionEdit=source.match(/\$construction_edit_contract\$([\s\S]+?)\$construction_edit_contract\$/)
+ if(constructionEdit){
+  preConstructionEditsRows=structuredClone(seed);preConstructionEditsVersions=new Map(versions)
+  const patch=JSON.parse(constructionEdit[1]),policy=JSON.parse(source.match(/\$construction_edit_policy\$([\s\S]+?)\$construction_edit_policy\$/)![1])
+  const manual=source.match(/\$construction_edit_manual\$([\s\S]+?)\$construction_edit_manual\$/)![1]
+  const publish=(row:any)=>{const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'construction-edits-v1'};versions.set(row.key,(versions.get(row.key)??0)+1)}
+  const row=structuredClone(seed.find(row=>row.key==='tools.save_construction_draft'));row.key='tools.edit_construction_parts'
+  row.definition={...row.definition,...patch,handler:patch.name,required_parameters:patch.parameters.required,optional_parameters:[],card_description:policy.description,additional_description:policy.how_to}
+  seed.push(row);publish(row)
+  for(const key of ['tools.save_construction_draft','tools.change_construction_parameters','bob.tools','bob.workflows']){
+   const r=seed.find(row=>row.key===key);publish(r)
+   if(key==='bob.tools'){r.definition.catalog.push(policy);r.definition.contract_keys.push('tools.edit_construction_parts');r.definition.shelves.find((s:any)=>s.label==='Drawings and CAD').tools.push('edit_construction_parts')}
+   else if(key==='bob.workflows'){const w=r.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing');w.tools.push('edit_construction_parts');w.method+=manual}
+   else {r.definition.additional_description=(r.definition.additional_description??'')+manual;if(key==='tools.change_construction_parameters')r.definition.description=r.definition.description.replace('Use save_construction_draft for topology/material/formula changes.','Use edit_construction_parts for topology/material/formula changes.')}
+  }
+ }
  const memoryPointers=source.match(/\$memory_pointer_instructions\$([\s\S]+?)\$memory_pointer_instructions\$/)
  if(memoryPointers){
   for(const key of ['context-summary.contract','schema.bob_conversation_brief_v2']){
@@ -334,7 +386,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -344,6 +396,8 @@ function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):Ai
   supports_images:true,supports_reasoning:true,supports_image_output:tier==='image',input_cost_per_1m_tokens:1,output_cost_per_1m_tokens:2,cached_input_cost_per_1m_tokens:null,
   capabilities:{provider_adapter:tier==='embedding'?'openai-embeddings-v1':tier==='image'?'openai-images-v1':'openai-responses-v1',supports_functions:true,supports_json_schema:true,reasoning_efforts:['none','minimal','low','medium','high','xhigh'],...(tier==='embedding'?{supports_embedding_dimensions:true,max_embedding_dimensions:1536,max_batch_inputs:2048}:{})}})),
 }}
+const preConstructionEditsManifest=fixtureManifest(preConstructionEditsRows??seed,preConstructionEditsVersions??versions,'fixture-pre-construction-edits-manifest')
+export function preConstructionEditsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionEditsManifest)})}
 const manifest=fixtureManifest(seed,versions,'fixture-manifest')
 const preContextCoverageManifest=fixtureManifest(preContextCoverageRows??seed,preContextCoverageVersions??versions,'fixture-pre-context-coverage-manifest')
 export function preContextCoverageCatalogFixture(update?:(snapshot:AiCatalogManifest)=>void):AiCatalogSession{const snapshot=structuredClone(preContextCoverageManifest);update?.(snapshot);return createAiCatalogSession({rpc:async()=>{throw new Error('Fixture must use pinned manifest')}},{app:'bob',manifest:snapshot})}
@@ -362,3 +416,9 @@ export function catalogCall<T>(call:(options:OpenAIServiceOptions,beforeDispatch
  return (options:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>call(applyCatalogModelOptions(session,options),beforeDispatch)
 }
 export const DRAWING_REVIEW_INSTRUCTION=catalogFixture().text('drawing-review.instruction')
+const preConstructionViewsManifest=fixtureManifest(preConstructionViewsRows??seed,preConstructionViewsVersions??versions,'fixture-pre-construction-views-manifest')
+export function preConstructionViewsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionViewsManifest)})}
+const preSelectiveToolsManifest=fixtureManifest(preSelectiveToolsRows??seed,preSelectiveToolsVersions??versions,'fixture-pre-selective-tools-manifest')
+export function preSelectiveToolsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preSelectiveToolsManifest)})}
+const preCompleteContextManifest=fixtureManifest(preCompleteContextRows??seed,preCompleteContextVersions??versions,'fixture-pre-complete-context-manifest')
+export function preCompleteContextCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCompleteContextManifest)})}
