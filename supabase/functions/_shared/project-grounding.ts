@@ -17,7 +17,7 @@ function packet(result: LookupResult) {
 }
 
 /** Keep the normal metadata-first path. Re-anchor only calls containing selected pixels.
- * Two bounded, parallel reads use the existing caller-JWT dispatcher with a reserved
+ * Two bounded reads use the existing caller-JWT dispatcher with a reserved
  * grounding pool. User-directed reads cannot silently consume this reserve.
  * No keyword router, duplicate store, automatic image open or construction-specific constants.
  */
@@ -25,6 +25,9 @@ export function createGroundedModelCall(opts: {
   groundingInstruction: string;
   projectId: string; message: string; lookup: GroundingLookup; callModel: ModelCall;
   hasAccess: () => Promise<boolean>; validateImages: () => Promise<boolean>; deadline: number;
+  /** Durable nested reads share journal cursors: pin their order before a wait.
+   * Older turns retain their original parallel execution contract. */
+  readOrder?: 'serial' | 'parallel';
 }): ModelCall {
   return async options => {
     if (Date.now() >= opts.deadline) throw new Error('context_unavailable')
@@ -34,10 +37,9 @@ export function createGroundedModelCall(opts: {
     if (hasPixels) {
       if (!await opts.hasAccess()) throw new Error('project_denied')
       // Fresh for every image-bearing call, including after a same-turn write/reopen.
-      const results = await Promise.all([
-        opts.lookup.search(input('project')),
-        opts.lookup.search(input('measurements')),
-      ])
+      const results = opts.readOrder === 'serial'
+        ? [await opts.lookup.search(input('project')), await opts.lookup.search(input('measurements'))]
+        : await Promise.all([opts.lookup.search(input('project')), opts.lookup.search(input('measurements'))])
       if (results.some(r => r.status === 'denied') || !await opts.hasAccess()) throw new Error('project_denied')
       if (results.some(r => r.projectId !== opts.projectId) || !await opts.validateImages()) throw new Error('context_unavailable')
       groundedMessages = [...messages, { role: 'user', content: [
