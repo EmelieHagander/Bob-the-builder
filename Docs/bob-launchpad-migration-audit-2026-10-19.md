@@ -71,6 +71,28 @@ jobs and no new jobs. No positive member/model call or long-image acceptance is
 claimed. Full CI remains deferred to the final stage by the owner's decision;
 ordinary long-image behavior and log review remain required before PR2.
 
+<a id="pr1-live-checkpoint-regression"></a>
+### First live job: checkpoint serialization failure
+
+A live job started at **11:13:50 UTC** and ended with `background_stalled` at
+**11:15:44 UTC**, after **9 claims**. Three bootstrap `context-summary` calls
+succeeded; **no main `ask-bob` model call** was submitted. Checkpoint revision 1
+saved the `ready` state at step 0. The following six checkpoint saves failed with
+`unsupported Unicode escape sequence`: lazy tool preparation added internal card
+cache keys containing U+0000, which PostgreSQL JSONB rejects. No `CPUTime`
+shutdown was observed for this job. Normal terminal privacy cleanup removed its
+working snapshot.
+
+This is a checkpoint-storage regression in PR1, not successful model acceptance.
+The corrected candidate encodes the derived cache key as a JSON tuple without
+U+0000. Its new regression test first reproduced SQLSTATE `22P05`, then passed
+with populated lazy-tool snapshots persisted through the actual checkpoint RPC,
+restored and compared for both pinned and unpinned catalog bindings. JSON-only
+roundtrips had not caught this boundary. The focused checkpoint-database and
+tool-state suites passed **20 / 20** tests; Deno checking of `session.ts` and
+`git diff --check` passed. Independent review found no blocker. Deployment and
+live behavior verification of the corrected candidate remain open.
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from

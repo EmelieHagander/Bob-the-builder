@@ -292,9 +292,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — beteendeacceptans för PR1 (2026-10-19):** verifiera
-beställarens långa bildjobb som vanlig medlem och granska loggarna innan PR2
-börjar. PR1 är **mergad och tekniskt driftsatt**;
+**Aktivt nästa steg — driftsätt rättningen för PR1 (2026-10-19):** installera
+den granskade kandidaten med JSONB-giltiga cachenycklar och verifiera livebeteendet.
+Kodrättning, riktade databastester och granskning är verifierade. Därefter
+återstår beställarens långa bildjobb och loggkontroll innan PR2 börjar.
+[Det första livefelet](bob-launchpad-migration-audit-2026-10-19.md#pr1-live-checkpoint-regression)
+äger incidentens bevis. PR1 är **mergad och tekniskt driftsatt, inte beteendeaccepterad**;
 [releasebeviset](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 skiljer verifierad migration/källkod från den kvarstående modellacceptansen.
 Beställarens beslut är riktad verifiering och beteendeacceptans per steg, med full
