@@ -47,7 +47,7 @@ test('the assembled Bob toolbox exposes an exact-memory card, loads its database
   assert.equal(card.description,f.aiCatalog.tool('read_conversation_message',{card:true}).function.description)
   const manual=await f.session.execute('describe_tool',{name:'read_conversation_message'})
   assert.equal(manual.status,'ok'); assert.equal(manual.callable_from_next_step,true)
-  assert.deepEqual(manual.parameters,f.aiCatalog.tool('read_conversation_message').function.parameters)
+  assert.equal(manual.parameters,undefined);assert.equal(manual.instructions_ref,'next_request_tool_definition')
   assert.equal((await f.session.execute('read_conversation_message',{seq:7,offset:null})).status,'not_offered')
   const specs=await f.session.prepare()
   assert(specNames(specs).includes('read_conversation_message'))
@@ -62,7 +62,7 @@ test('the assembled Bob toolbox exposes an exact-memory card, loads its database
 test('the assembled history search takes its new catalog schema and dispatches through hybrid retrieval',async()=>{
   const f=fixture();await f.session.prepare()
   const manual=await f.session.execute('describe_tool',{name:'search_conversation_history'})
-  assert.equal(manual.status,'ok');assert.deepEqual(manual.parameters,f.aiCatalog.tool('search_conversation_history').function.parameters)
+  assert.equal(manual.status,'ok');assert.equal(manual.parameters,undefined);assert.equal(manual.instructions_ref,'next_request_tool_definition')
   await f.session.prepare()
   const result=await f.session.execute('search_conversation_history',{query:'bekräftad bredd',before_seq:null})
   assert.equal(result.status,'ok');assert.equal(result.searchMode,'hybrid');assert.deepEqual(result.sources,[f.source])

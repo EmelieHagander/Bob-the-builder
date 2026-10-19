@@ -1,7 +1,7 @@
 import { rethrowContinuation } from '../bob-job-journal.ts'
 import { countContextTokens } from '../bob-token-budget.ts'
-/** Bob's toolbox. Every registered, active and currently available tool is offered
- * on every model step; there is no capability discovery round. Offering
+/** Bob's toolbox. Inline mode offers all available tools; pinned lazy mode offers
+ * loaded tools and lists the remaining capabilities as short cards. Offering
  * is not authorization: the catalog policy, schema version and server-owned gate
  * are checked again on every execution. A model never supplies policy. */
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
@@ -85,16 +85,17 @@ function policySupportsHandler(name: string, policyVersion: number, handlerVersi
     : policyVersion === handlerVersion
 }
 
-/** A catalog workflow: a method for one kind of delegated outcome plus the tools
- * it uses. Describing it loads every available member tool at once. Orientation
- * only; each member keeps its own policy, gate and version checks. */
+/** A catalog workflow: method plus member directory. Older manifests load the
+ * group; selective manifests retain only the method until individual selection.
+ * Each member keeps its own policy, gate and version checks. */
 export interface WorkflowCard { name: string; card: string; method: string; tools: string[] }
 
 export interface ToolboxEntry { name: string; group: string; state: 'offered' | 'waiting' | 'budget_exhausted'; waitingFor?: string; description?: string; instructionLoaded?: boolean }
 
 /** Data only: handlers and policy readers are recreated for each worker lease. */
 export interface ToolSessionState {
-  version: 1
+  version: 1 | 2
+  workflows?: string[]
   loaded: [string, number][]
   carried: string[]
   partial: boolean
@@ -106,8 +107,10 @@ export interface ToolSessionState {
   cards: [string, string | null][]
 }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
+  const selective = lazy && opts.selectiveTools === true
+  const workflows = new Set<string>()
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
   // Loaded across a context rollover: their manuals moved into summarized
@@ -140,12 +143,12 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     ? opts.catalogTool(row.name, { include_manual: includeManual }).function.description
     : [...new Set([row.description, def.spec.function.description, ...(includeManual ? [row.how_to] : [])].map(s => s?.trim()).filter(Boolean))].join('\n\n')
   const surfaceSpec = (row: ToolPolicy, def: ToolDefinition): ToolSpec => opts.catalogTool
-    ? opts.catalogTool(row.name, { include_manual: !onDemand || carried.has(row.name), ...(lazy && !carried.has(row.name) ? { card: true } : {}), server_quote: quote !== undefined,
+    ? opts.catalogTool(row.name, { include_manual: selective || !onDemand || carried.has(row.name), ...(lazy && !selective && !carried.has(row.name) ? { card: true } : {}), server_quote: quote !== undefined,
         ...(row.name === 'list_project_category' && object(def.spec.function.parameters.properties) && object(def.spec.function.parameters.properties.category)
           ? { categories: def.spec.function.parameters.properties.category.enum } : {}) })
     : ({
     type: 'function', function: { name: row.name,
-      description: description(row, def, !onDemand),
+      description: description(row, def, selective || !onDemand),
       parameters: quote === undefined ? structuredClone(def.spec.function.parameters) : modelParameters(def.spec.function.parameters) },
   })
   function safeStatus(status: string, message?: string) { if (status !== 'ok') partial = true; return { status, ...(message ? { message } : {}) } }
@@ -164,19 +167,20 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   }
   return {
     exportState(): ToolSessionState {
-      return JSON.parse(JSON.stringify({ version: 1, loaded: [...loaded], carried: [...carried], partial,
+      return JSON.parse(JSON.stringify({ version: selective ? 2 : 1, ...(selective ? { workflows: [...workflows] } : {}), loaded: [...loaded], carried: [...carried], partial,
         snapshot, offered: [...offered], visible: [...visible], shelf, events,
         cards: [...cards].map(([name, description]) => [name, description ?? null]) }))
     },
     restoreState(state: ToolSessionState) {
       const versions = (rows: [string, number][]) => Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.length === 2 && typeof row[0] === 'string' && Number.isSafeInteger(row[1]) && row[1] > 0)
-      if (state?.version !== 1 || typeof state.partial !== 'boolean' || !versions(state.loaded) || !versions(state.offered) || !versions(state.visible)
+      if (state?.version !== (selective ? 2 : 1) || selective && (!Array.isArray(state.workflows) || state.workflows.some(name => !opts.catalogWorkflows?.().some(w => w.name === name))) || typeof state.partial !== 'boolean' || !versions(state.loaded) || !versions(state.offered) || !versions(state.visible)
         || !Array.isArray(state.carried) || state.carried.some(name => typeof name !== 'string')
         || !Array.isArray(state.shelf) || !Array.isArray(state.events) || state.events.length > 200 || !Array.isArray(state.cards)
         || state.cards.some(row => !Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string' || !(row[1] === null || typeof row[1] === 'string'))) throw new Error('tool_session_checkpoint_invalid')
       const restored: ToolSessionState = JSON.parse(JSON.stringify(state))
       const policy = restored.snapshot === null ? null : checkedToolSnapshot(restored.snapshot)
       loaded.clear(); for (const [name, version] of restored.loaded) loaded.set(name, version)
+      workflows.clear(); for (const name of restored.workflows ?? []) workflows.add(name)
       carried.clear(); for (const name of restored.carried) carried.add(name)
       partial = restored.partial; snapshot = policy
       offered = new Map(restored.offered); visible = new Map(restored.visible); shelf = restored.shelf
@@ -188,15 +192,17 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     get phase() { return snapshot?.phase ?? null },
     /** The whole shelf as last prepared, including tools waiting for a prerequisite. */
     get toolbox() { return shelf.slice() },
+    /** Resolve only immutable pinned methods; checkpoint state never grants tools. */
+    get workflowInstructions() { return selective ? (opts.catalogWorkflows?.() ?? []).filter(w => workflows.has(w.name)).map(w => `${w.name}\n${w.method}`).join('\n\n') : '' },
     /** Context rollover releases schemas for the next prepare. Preserve the
      * fence of an already submitted model request and its in-flight results. */
-    resetInstructions() { loaded.clear(); carried.clear() },
+    resetInstructions() { if (!selective) { loaded.clear(); carried.clear() } },
     /** Rollover that keeps the loaded tools: each offered schema then includes
      * its manual, instead of Bob describing the same tools again. */
     carryInstructions() { carried.clear(); for (const name of loaded.keys()) carried.add(name) },
     /** Per-tool catalog binding for carried tools (manual inside the schema). */
     toolParameters(): Record<string, { card: false; include_manual: true }> | undefined {
-      const offeredCarried = [...carried].filter(name => offered.has(name))
+      const offeredCarried = [...(selective ? loaded.keys() : carried)].filter(name => offered.has(name))
       return offeredCarried.length ? Object.fromEntries(offeredCarried.map(name => [name, { card: false, include_manual: true }])) : undefined
     },
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
@@ -238,10 +244,11 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
             const member = current.tools.find(r => r.name === name)
             const found = member ? resolve(member) : null
             if (!member || !found?.def || found.state === 'unavailable' || found.state === 'not_allowed' || visible.get(name) !== found.def.version) continue
-            if (found.state === 'available') { loaded.set(name, found.def.version); loadedNow.push(name) }
+            if (!selective && found.state === 'available') { loaded.set(name, found.def.version); loadedNow.push(name) }
             members.push({ name, state: found.state })
           }
           if (!members.length) return finish(safeStatus('unavailable'))
+          if (selective) { workflows.add(workflow.name); return finish({ status: 'ok', workflow: workflow.name, method_ref: 'current_system_instructions', tools: members, callable_from_next_step: [], next_action: 'Read the selected workflow method in the next request. describe_tool by exact tool name loads only that tool.' }) }
           return finish({ status: 'ok', workflow: workflow.name, method: workflow.method, tools: members, callable_from_next_step: loadedNow })
         }
         const row = current.tools.find(r => r.name === args.name)
@@ -250,6 +257,10 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (!visible.has(row.name)) return finish(safeStatus('not_offered'))
         if (visible.get(row.name) !== resolved.def.version) return finish(safeStatus('contract_changed'))
         if (lazy) loaded.set(row.name, resolved.def.version)
+        if (selective) return finish({ status: 'ok', name: row.name, schema_version: resolved.def.version, state: resolved.state,
+          instructions_ref: 'next_request_tool_definition', callable_from_next_step: resolved.state === 'available',
+          colleagues: opts.catalogColleagues?.(row.name) ?? [],
+          ...(resolved.state === 'missing_context' && resolved.def.waitingFor ? { waiting_for: resolved.def.waitingFor } : {}) })
         return finish({ status: 'ok', name: row.name, schema_version: resolved.def.version, state: resolved.state,
           manual: description(row, resolved.def, true),
           ...(lazy ? { parameters: surfaceSpec(row, resolved.def).function.parameters, callable_from_next_step: resolved.state === 'available', colleagues: opts.catalogColleagues?.(row.name) ?? [] } : {}),

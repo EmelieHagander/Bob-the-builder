@@ -6,6 +6,10 @@
 
 ## Start here
 
+- [Selective tools and methods](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19)
+  and [canonical repetition / natural pieces](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19)
+  — delivery 3 prepared above #287/#288, not activated; [evidence](foundation-verification.md#selective-tools-and-construction-work--2026-10-19).
+
 | I need to understand… | Start with |
 |---|---|
 | what bob is / current app shape | `README.md` |

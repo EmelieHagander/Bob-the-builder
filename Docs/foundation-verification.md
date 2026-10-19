@@ -1,5 +1,59 @@
 # Foundation verification and rollout
 
+## Selective tools and construction work — 2026-10-19
+
+**Delivery 3 prepared on `codex/bob-selective-tools`, stacked on #288 (`c54b537`)
+and #287; not merged, activated or deployed.** Contracts live in the
+[tool owner](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19) and
+[Artifact owner](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19).
+
+**109 distinct targeted tests pass across 13 files**, counting parent/subtests.
+Focused groups: `tool-session`, `bob-context-toolbox`, `bob-tool-state-checkpoints`,
+`cad-arrays`, `cad-pieces`, `bob-selective-tools`, `construction-repeats`,
+`construction-draft`, `construction-edits`, `construction-views`,
+`bob-context-strategy-main`, `bob-memory-toolbox-integration`, and
+`bob-checkpoint-resume`. Commands use `node --no-wasm-code-gc --import tsx --test`
+(SQL-heavy final groups use `--test-concurrency=1`). Initial failures identified
+a missing test-model binding in the historical fixture and a legacy K1 test turn
+whose existing write allowance was already consumed. The fixture now binds its
+test model and uses a fresh claimed turn for the independent repetition scenario;
+no production allowance was raised. Source lineage is asserted on source nodes
+and the exact derived graph, consistent with the canonical parameter contract.
+
+Evidence includes old/new pinned catalog parity, unchanged policy grants, no
+group schema expansion, next-step offer fences, withdrawn authority, waiting
+prerequisites, incompatible checkpoint rejection, full manual placement after
+catalog rebinding, and actual main-loop checkpoint interruptions after each step.
+The four scripted main calls restore the workflow and selected tool without
+replaying completed reads. Existing 40-step checkpoint tests remain green.
+
+The deterministic construction comparison offers 21 native schemas after the
+old workflow selection (20 members plus `describe_tool`), versus one after new
+workflow selection and two after explicitly loading its reader. Serialized tool
+bytes fall from **59,295 to 3,167** for that specific comparison. This is not a
+whole-prompt, cache-rate or dollar measurement. Loaded full manuals do now live
+in each relevant native tool definition; a turn that deliberately loads many
+tools will still have a larger schema surface.
+
+Repeated-part tests compare an independently authored expanded graph, geometry,
+bindings and exact source revision with compact input. Isolated migrated SQL
+saves both natural pieces, rejects tampered geometry, and returns one receipt/
+revision on retry after state restoration. Invalid counts, missing bindings and
+joint targets cannot reach the writer. Part-queue tests retain common coordinates
+and each piece's own requirements/source without copying sibling raw geometry;
+the existing SQL queue still releases one renderer at a time. These scripted
+tests do not prove that the real model chooses good sub-constructions or meets $1.
+
+Both affected Edge entry points (`ask-bob`, `bob-worker`) pass Deno type checks.
+The generated immutable catalog publication matches its runtime schema.
+`20261019180806_ai_selective_tools.sql` publishes method/tool changes only, after
+compatible runtime and delivery 2 catalog installation. Its UTC filename was
+created through the generator because the installed migration CLI crashes before
+creating files (same environment limitation as delivery 2). No hosted migration,
+paid model/CAD run, workflow edit, full suite or full CI was performed. Commits
+retain `[skip ci]`. Review this stack, then adapt #285/#286 and run delivery 4's
+combined offline acceptance before the final full-CI gate.
+
 ## Construction views — 2026-10-19
 
 **Delivery 2 prepared on `codex/bob-construction-views`, above #287's `d43f823`;

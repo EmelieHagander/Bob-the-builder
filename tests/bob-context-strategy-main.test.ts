@@ -7,8 +7,9 @@ import type { WorkingContext } from '../supabase/functions/_shared/bob-working-c
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 import { countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import { fingerprint } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { BobContinuation } from '../supabase/functions/_shared/bob-job-journal.ts'
 import type { ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
-import { catalogFixture, preContextStrategyCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
+import { catalogFixture, preContextStrategyCatalogFixture, preSelectiveToolsCatalogFixture, catalogCall } from './support/ai-catalog-fixture.ts'
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
 const response = (data = 'Jag fortsätter från det sparade underlaget.'): OpenAIServiceResponse<string> => ({ success: true, data, responseId: 'final', model: 'fixture', usage })
@@ -30,6 +31,29 @@ function fixture() {
   return { reads, context, opts: { projectId: 'A', userId: 'owner', lookup, context,
     message: context.recent.at(-1)!.text, previousResponseId: 'old-full-conversation', hasAccess: async () => true, unlimitedWork: true } }
 }
+
+test('selective main requests restore workflow knowledge and one authoritative manual through each step boundary',async()=>{
+ const f=fixture(),session=catalogFixture();let saved:any,yielded=0,calls=0,epoch=0,result:any
+ for(let lease=0;lease<5&&!result;lease++){
+  try{result=await runProjectAnswer({...f.opts,aiCatalog:session,contextEpoch:()=>epoch,
+   checkpoint:{state:saved,save:async state=>{saved=JSON.parse(JSON.stringify(state));if(state.phase==='ready'&&state.step>yielded){yielded=state.step;epoch++;throw new BobContinuation('yield')}}},
+   callModel:catalogCall(async options=>{
+    calls++
+    if(calls===1)return toolResponse('describe_tool',{name:'workflow_facts_and_site'},'workflow')
+    const method=session.definition('bob.workflows').definition.workflows.find((w:any)=>w.name==='workflow_facts_and_site').method
+    assert.equal(options.systemMessage!.split(method).length-1,1,'method lives once in current instructions')
+    assert(!JSON.stringify(options.messages).includes(method),'history carries a method reference')
+    if(calls===2){assert.deepEqual(names(options),['describe_tool']);return toolResponse('describe_tool',{name:'search_project_data'},'loaded')}
+    assert(names(options).includes('search_project_data'))
+    assert.deepEqual(options.tools!.find(t=>t.function.name==='search_project_data'),session.tool('search_project_data',{card:false,include_manual:true,server_quote:true,categories:[]}))
+    assert(!JSON.stringify(options.messages).includes('"parameters"'),'describe result does not duplicate schema')
+    if(calls===3)return toolResponse('search_project_data',query,'read')
+    assert.equal(calls,4);return response()
+   },session)})}catch(e){assert(e instanceof BobContinuation)}
+ }
+ assert(result?.ok);assert.equal(calls,4);assert.equal(yielded,3)
+ assert.equal(f.reads.filter(r=>r.dataset==='project').length,2,'initial orientation and one new read; none replayed')
+})
 
 test('new main strategy sends compact memory, exact five originals, source-bound project orientation and a final data footer', async () => {
   const f = fixture(), session = catalogFixture()
@@ -61,8 +85,8 @@ test('new main strategy sends compact memory, exact five originals, source-bound
   assert.deepEqual(f.reads.map(read => read.dataset), ['project', 'plan', 'areas'])
 })
 
-test('lazy main loop preserves the just-offered fence, then reloads manuals after a compaction epoch', async () => {
-  const f = fixture(), session = catalogFixture()
+test('old pinned lazy main loop preserves the fence then reloads manuals after compaction', async () => {
+  const f = fixture(), session = preSelectiveToolsCatalogFixture()
   let calls = 0, epoch = 0
   const result = await runClaimedProjectTurn({ ...f.opts, aiCatalog: session, contextEpoch: () => epoch,
     prepareContext: async () => f.context, fail: async () => assert.fail('successful work must not fail'),
@@ -106,8 +130,8 @@ test('a new-strategy caller without private memory still cannot carry an untrack
   assert(result.ok)
 })
 
-test('atomic context refresh drops manuals before the fresh request and changes the actual execution fence', async () => {
-  const f = fixture(), session = catalogFixture()
+test('old pinned atomic refresh drops manuals and changes the actual execution fence', async () => {
+  const f = fixture(), session = preSelectiveToolsCatalogFixture()
   let refresh: (() => Promise<ContextSurface>) | undefined, calls = 0, epoch = 0
   const result = await runClaimedProjectTurn({ ...f.opts, aiCatalog: session, prepareContext: async () => f.context,
     registerContextSurface: callback => { refresh = callback }, contextEpoch: () => epoch,

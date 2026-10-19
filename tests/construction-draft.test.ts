@@ -12,6 +12,7 @@ import {createBobToolSession} from '../supabase/functions/_shared/project-tools/
 import {seedToolPolicy} from '../supabase/functions/_shared/project-answer.ts'
 import type {CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 import {designIntent} from './support/design-intent-fixture.ts'
+import {repeatedParts} from './support/construction-repeat-fixture.ts'
 
 export function shelf(){
  const placement=(x:number,z:number)=>({x,y:0,z,rx:0,ry:0,rz:0})
@@ -158,6 +159,39 @@ test('K1 claimed tools create/read/revise the same construction; SQL authority, 
   const stale=structuredClone(p);stale.data.key='staleSource';stale.record_id=saved.recordId;stale.expected_revision=1
   await assert.rejects(save(stale),/measurement.*changed|stale_measurement|measurement.*revision/i)
   assert.equal((await read(saved.recordId,1)).recipe.definitions[0].z_mm,1000)
+ })
+ await t.test('repeat authoring uses canonical SQL validation and idempotent receipts for separate pieces',async()=>{
+  // A fresh claimed owner turn: earlier K1 cases intentionally exercise the
+  // legacy writer's existing per-turn write allowance. Do not alter that gate.
+  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
+  turn=randomUUID();claim=await call(null,'bob.bob_claim_turn',[project,owner,turn,message],'service_role')
+  const commits:any[]=[],sqlErrors:string[]=[]
+  const repeatWriter=createProjectWriter(project,message,async p=>{commits.push(structuredClone(p));try{return {data:await save(p),error:null}}catch(e:any){sqlErrors.push(e.message);return {data:null,error:{code:e.code,message:e.message}}}},async()=>({data:[],error:null}),async()=>({data:[],error:null}))
+  let allowed=true
+  const make=()=>createConstructionTools({projectId:project,message,writer:repeatWriter,constructionRepeats:true,preciseEditDiagnostics:true,unlimitedWork:true,hasAccess:async()=>allowed,
+   read:(id,rev)=>read(id,rev),readSources:async()=>({project:new Map(),physical:new Map()}),
+   readDesignReadiness:(target,purpose,area)=>call(owner,'bob.read_design_readiness',[project,area??null,target,purpose])})
+  const {recipe,plan}=repeatedParts(5)
+  const v:any={...input,key:'repeatOne',title:'North slats',recipe,parameter_plan:plan,instance_policy:null,joints:[],materials:[{...input.materials[0],definition_id:'slat',material_revision:2}]}
+  const first=make(),result=await first.execute('save_construction_draft',v)
+  assert.equal(result.status,'saved',JSON.stringify(result));const saved=await read(result.receipt.recordId)
+  assert.deepEqual(saved.recipe.instances.map((i:any)=>i.placement.x),[0,100,200,300,400]);assert(!('arrays' in saved.recipe))
+  assert.equal(saved.parameters.bindings.some((b:any)=>b.path.startsWith('arrays/')),false)
+  const resumed=make();resumed.restoreState(JSON.parse(JSON.stringify(first.exportState())))
+  assert.deepEqual(await resumed.execute('save_construction_draft',v),result)
+  assert.equal((await pg.query('select count(*) n from bob.artifact_construction_revisions where artifact_id=$1',[result.receipt.recordId])).rows[0].n,1)
+  const other=structuredClone(v);other.key='repeatTwo';other.title='South slats';other.recipe.assembly_id='south';other.parameter_plan.nodes.find((n:any)=>n.id==='origin').value=2000
+  const second=await resumed.execute('save_construction_draft',other)
+  assert.equal(second.status,'saved',JSON.stringify({second,sqlErrors}));assert.notEqual(second.receipt.recordId,result.receipt.recordId)
+  assert.equal((await read(second.receipt.recordId)).recipe.instances[0].placement.x,2000)
+  assert.deepEqual((await read(result.receipt.recordId)).recipe,saved.recipe,'a second natural piece never rebuilds the first')
+  for(const mutate of [(p:any)=>p.recipe.arrays[0].count=1,(p:any)=>p.parameter_plan.bindings.pop(),(p:any)=>p.joints=[{id:'bad',method:'unresolved',first:{instance_id:'slats.1',face:'x_min'},second:{instance_id:'missing',face:'x_max'},reason:'Bad reference'}]]){
+   const bad=structuredClone(v);bad.key='badRepeat';mutate(bad);const count=commits.length
+   assert.equal((await resumed.execute('save_construction_draft',bad)).status,'invalid');assert.equal(commits.length,count)
+  }
+  allowed=false;assert.equal((await resumed.execute('save_construction_draft',{...v,key:'deniedRepeat'})).status,'denied')
+  const tampered=structuredClone(commits[0]);tampered.data.key='tamperedRepeat';tampered.data.recipe.instances[2].placement.x=1234
+  await assert.rejects(save(tampered),/parameter|binding|result|recipe/,'SQL independently verifies expanded geometry against its graph')
  })
  await call(null,'bob.bob_fail_turn_v2',[project,owner,claim.thread_id,turn,claim.generation],'service_role')
 })

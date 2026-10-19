@@ -137,6 +137,36 @@ their old handlers and full-save diagnostic sequence. [Verification and release
 order](foundation-verification.md#bounded-construction-edits--2026-10-19) own the
 evidence and rollout limits; [State](bob-delivery-flow.md#state) owns next work.
 
+### Compact repetition and natural pieces — prepared 2026-10-19
+
+**Delivery 3, source-only above #287/#288.** The pinned save-tool metadata
+`construction_repeat_version=1` accepts `recipe.arrays`: exact template ID,
+definition ID, axis and count, with six start bindings and one spacing binding.
+Empty arrays mean ordinary authoring. Server expansion generates stable
+`<id>.1`…`<id>.<count>` instances and derived arithmetic nodes before normal
+geometry, role, source and parameter validation. SQL independently checks the
+expanded canonical graph and geometry under the existing claim/write ledger.
+No compact template is stored as a competing construction. Subsequent small
+edits operate on saved parameter/part IDs. Roles and joints explicitly name the
+expanded instances; omitted roles remain unknown, never manufactured by default.
+Duplicate IDs, absent bindings, unknown inputs, unsupported geometry and existing
+canonical size limits still reject saving. Old pinned saves do not accept arrays.
+
+For larger new builds, the workflow establishes shared coordinates, interfaces
+and exact source revisions, then saves/checks one natural sub-construction before
+the next. Carry common interfaces and receipts; reopen relevant bounded views
+when needed. The existing part queue checks each pinned construction afresh and
+hands each renderer its own source and requirements plus the common brief,
+without siblings' raw geometry. It does not design constructions or verify an
+otherwise unproven cross-piece fit. Small furniture corrections stay in their
+existing construction. No retired designer/candidate path is reintroduced.
+
+Structured data continues through deterministic selectors and compilation; no
+remaining mandatory unstructured reading requirement has been established for
+this slice, so no additional paid reading model is introduced. Actual model
+selection/decomposition and the soft $1 goal remain unverified; see
+[release evidence](foundation-verification.md#selective-tools-and-construction-work--2026-10-19).
+
 ### Construction views and observed results — prepared 2026-10-19
 
 **Implemented and locally verified above delivery 1; not activated or deployed.**

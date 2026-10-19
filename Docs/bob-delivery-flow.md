@@ -292,15 +292,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — granska leverans 2 före fortsatt implementation (2026-10-19):**
-granska små konstruktionsvyer och bevarade arbetsresultat på
-`codex/bob-construction-views`, ovanpå första leveransens draft #287.
-[Åtgärdsplanens andra leverans](bob-green-release-plan-2026-10-19.md#leverans-2--relevanta-läsvyer-och-bibehållna-arbetsresultat)
-äger omfattningen; [lokala bevis och releaseordning](foundation-verification.md#construction-views--2026-10-19)
+**Aktivt nästa steg — granska leverans 3 och färdigställ sedan leverans 4 (2026-10-19):**
+granska `codex/bob-selective-tools`, staplad ovanpå #288/#287.
+[Lokala bevis och releaseordning](foundation-verification.md#selective-tools-and-construction-work--2026-10-19)
 skiljer förberedd kod från kvarstående aktivering och modellacceptans.
-Nästa implementationsleverans är selektiv verktygsladdning och avgränsat
-konstruktionsarbete enligt leverans 3. Båda konstruktionsleveranserna är oaktiverade.
-Draft #285/#286 ska därefter anpassas till konstruktionsrättningarna före aktivering.
+Anpassa därefter draft #285/#286 till de små konstruktionsvyerna, de selektivt
+laddade manualerna och de bevarade arbetsmetoderna. Kör åtgärdsplanens samlade
+offlineacceptans före full CI. Alla tre konstruktionsleveranserna är oaktiverade.
 Inget nytt betalt långprov ingår; cirka $1 är ett mjukt mål utan nya hårda tak.
 
 Den tidigare uppmaningen att omedelbart köra ett nytt liveprov är ersatt av denna

@@ -316,8 +316,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
-      return { systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), tools: tools.length ? tools : undefined,
-        catalogSchemaParameters: schemaParameters(), catalogToolParameters: opts.carryLoadedTools ? toolbox.toolParameters() : undefined }
+      return { systemMessage: [buildBobSystemMessage(opts.aiCatalog, tools, shelf), toolbox.workflowInstructions].filter(Boolean).join('\n\n'), tools: tools.length ? tools : undefined,
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: toolbox.toolParameters() }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -326,7 +326,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
     // Built once per step: replay rebuilds it for every recorded step too.
-    const systemMessage = buildBobSystemMessage(opts.aiCatalog, tools, shelf)
+    const systemMessage = [buildBobSystemMessage(opts.aiCatalog, tools, shelf), toolbox.workflowInstructions].filter(Boolean).join('\n\n')
     console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: systemMessage.length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
     // A terminal design failure has a known cause. Deliver it without another
     // paid model call that can retry the same job or invent a renderer outage.
@@ -336,7 +336,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       request = {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
-      ...(opts.carryLoadedTools && toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
+      ...(toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
