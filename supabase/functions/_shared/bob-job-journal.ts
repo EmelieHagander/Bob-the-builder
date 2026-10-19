@@ -45,18 +45,24 @@ export function stableJsonValue<T>(value: T): T {
   ) as T
   return value
 }
+// Same order as String#localeCompare (recorded fingerprints depend on it),
+// without constructing a collator for every key comparison.
+const collate = new Intl.Collator().compare
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !['timeoutMs', 'retrievedAt'].includes(key)).sort(([a], [b]) => a.localeCompare(b))
+    .filter(([key]) => !['timeoutMs', 'retrievedAt'].includes(key)).sort(([a], [b]) => collate(a, b))
     .map(([key, v]) => [key, canonical(v)]))
   // Lookup packets are also embedded in tool-message strings. Retrieval time
   // is metadata, not an input change; record versions and all facts still match.
   return typeof value === 'string' ? value.replace(/"retrievedAt":"[^"]*"/g, '"retrievedAt":"recorded"') : value
 }
+const HEX = Array.from({ length: 256 }, (_, b) => b.toString(16).padStart(2, '0'))
 export async function fingerprint(value: unknown): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical(value))))
-  return Array.from(new Uint8Array(bytes), b => b.toString(16).padStart(2, '0')).join('')
+  let hex = ''
+  for (const b of new Uint8Array(bytes)) hex += HEX[b]
+  return hex
 }
 /** A caller timeout seals the recorded outcome even if an SDK ignores abort
  * and resolves later. The checkpoint itself must finish before delivery. */

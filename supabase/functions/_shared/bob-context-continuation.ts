@@ -73,24 +73,36 @@ function countSurfaceTokens(value: unknown): number {
 
 /** A page boundary is a Unicode-codepoint offset into an immutable original.
  * This is paging, never truncation of the persisted source. */
+// summarize() pages one source many times; split it into codepoints once.
+let pagedText: { text: string; chars: string[] } | undefined
 function textPage(text: string, after: number, tokens: number): { text: string; next: number | null } {
-  const chars = Array.from(text)
+  if (pagedText?.text !== text) pagedText = { text, chars: Array.from(text) }
+  const chars = pagedText.chars
   if (after > chars.length) throw new Error('context_cursor_invalid')
   // Encode a bounded window from the cursor, never the whole remaining source:
   // a resumed job re-pages every summarized batch, under the Edge CPU limit.
-  let span = Math.max(256, tokens * 8), window: string
+  // A window that fits whole is returned unchanged; only then is it widened.
+  let span = Math.max(256, tokens * 8), prefix: string
   for (;;) {
-    window = chars.slice(after, after + span).join('')
-    if (after + span >= chars.length || countContextTokens(window) > tokens) break
+    const window = chars.slice(after, after + span).join('')
+    prefix = contextTokenPrefix(window, tokens)
+    if (after + span >= chars.length || prefix !== window) break
     span *= 2
   }
-  const page = Array.from(contextTokenPrefix(window, tokens)).length
+  const page = Array.from(prefix).length
   if (page === 0 && after < chars.length) throw new Error('context_page_unavailable')
   const low = after + page
   return { text: chars.slice(after, low).join(''), next: low < chars.length ? low : null }
 }
 
+// Operations are write-once, and a rollover lists the latest forty again.
+const statuses = new WeakMap<Operation, Record<string, unknown>>()
 function statusOf(operation: Operation): Record<string, unknown> {
+  let status = statuses.get(operation)
+  if (!status) statuses.set(operation, status = readStatus(operation))
+  return { ...status }
+}
+function readStatus(operation: Operation): Record<string, unknown> {
   let output: unknown = operation.output
   try { if (typeof output === 'string') output = JSON.parse(output) } catch { /* exact original remains available */ }
   return { call_id: operation.call_id, tool_name: operation.tool_name,
@@ -150,6 +162,10 @@ export function createBobContextContinuation(opts: {
   snapshot?: (value: { functionName: string; role: string }) => unknown
   onRollover?: (value: { functionName: string; role: string }) => void
   refreshSurface?: (value: { functionName: string; role: string }) => Promise<ContextSurface | undefined>
+  /** Journalled checkpoint for summary page boundaries. Paging is pure but
+   * tokenizes the whole batch; a resumed job reads the recorded boundaries
+   * instead of re-encoding every summarized batch on each claim. */
+  pageBoundaries?: (source: string, compute: () => Promise<(number | null)[]>) => Promise<unknown>
 }) {
   const chains = new Map<string, Chain>()
   const enabled = opts.version === 1
@@ -202,15 +218,41 @@ export function createBobContextContinuation(opts: {
     }
   }
 
+  // Each entry is a page's exclusive end; null marks the final page.
+  const sourcePages = async (source: string): Promise<{ text: string; next: number | null }[]> => {
+    const compute = async () => {
+      const ends: (number | null)[] = []
+      for (let after = 0; ;) {
+        const { next } = textPage(source, after, SOURCE_BATCH_TOKENS)
+        ends.push(next)
+        if (next === null) return ends
+        after = next
+      }
+    }
+    const ends = opts.pageBoundaries ? await opts.pageBoundaries(source, compute) : await compute()
+    if (pagedText?.text !== source) pagedText = { text: source, chars: Array.from(source) }
+    const chars = pagedText.chars
+    if (!Array.isArray(ends) || !ends.length || ends.at(-1) !== null) throw new Error('context_cursor_invalid')
+    let after = 0
+    return ends.map((next, index) => {
+      const last = index === ends.length - 1
+      if (last ? next !== null : !Number.isInteger(next) || Number(next) <= after || Number(next) >= chars.length) throw new Error('context_cursor_invalid')
+      const page = { text: chars.slice(after, next ?? chars.length).join(''), next: next as number | null }
+      after = next ?? chars.length
+      return page
+    })
+  }
+
   const summarize = async (options: OpenAIServiceOptions, chain: Chain, groups: Message[][], beforeDispatch?: () => Promise<void>): Promise<Handoff> => {
     const refs = new Set([...(chain.handoff?.source_refs ?? []), ...groups.flatMap(group => group.flatMap(message =>
       (message.tool_calls ?? []).map(call => 'operation:' + call.id)))])
     // Source batches are independently bounded, including the manager's own
     // input. Its previous compact handoff is the only carried context.
     const source = JSON.stringify(stableJsonValue(compactSource(groups)))
+    const pages = await sourcePages(source)
     let after = 0, handoff = chain.handoff
     do {
-      const page = textPage(source, after, SOURCE_BATCH_TOKENS)
+      const page = pages.shift()!
       let accepted: Handoff | undefined
       for (let attempt = 0; attempt < 2; attempt++) {
         const response = await opts.callModel({ app: options.app, coworkerId: options.coworkerId,
