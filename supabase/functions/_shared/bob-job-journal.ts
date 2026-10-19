@@ -103,7 +103,10 @@ export function createBobJournal(store: JournalStore, segmentDeadline: number, n
       if(waiting&&waiting.fingerprint!==hash){
         stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
       }
-      const retries=[...entries.values()].filter(e=>e.key.startsWith(key+':retry:'))
+      // Retry markers are numbered from 1 without gaps; look them up directly
+      // instead of scanning every entry on each replayed call.
+      const retries:JournalEntry[]=[]
+      for(let n=1;entries.has(key+':retry:'+n);n++)retries.push(entries.get(key+':retry:'+n)!)
       if(retries.some(e=>e.fingerprint!==hash)){
         stopped=new BobContinuation('stop','continuation_changed',undefined,key);throw stopped
       }

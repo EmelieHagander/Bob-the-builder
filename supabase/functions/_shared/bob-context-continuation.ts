@@ -18,6 +18,9 @@ const HISTORY_TOOL = 'get_work_history'
 const PAGE_TOKENS = 1600
 const SOURCE_BATCH_TOKENS = 12000
 const clone = <T>(value: T): T => structuredClone(value)
+/** Operations are write-once records; copy the index, not every recorded
+ * output, so a long chain is not deep-cloned twice per step. */
+const copyChain = (chain: Chain): Chain => ({ ...clone({ ...chain, operations: undefined }), operations: new Map(chain.operations) })
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 
 /** Count text separately from native image transport. Base64/URL spelling is
@@ -53,6 +56,19 @@ function countInputTokens(value: unknown): number {
     return tokens
   }
   return count(normalize(value)) + imageAllowance
+}
+
+/** The instruction and tool surface repeats on every step; count each exact
+ * surface once per invocation. */
+const surfaceTokens = new Map<string, number>()
+function countSurfaceTokens(value: unknown): number {
+  const text = JSON.stringify(value)
+  let tokens = surfaceTokens.get(text)
+  if (tokens === undefined) {
+    if (surfaceTokens.size >= 64) surfaceTokens.clear()
+    surfaceTokens.set(text, tokens = countContextTokens(text))
+  }
+  return tokens
 }
 
 /** A page boundary is a Unicode-codepoint offset into an immutable original.
@@ -231,7 +247,7 @@ export function createBobContextContinuation(opts: {
         const previous = chains.get(options.previousResponseId)
         if (!previous) throw new Error('context_chain_unavailable')
         if (previous.identity !== identity) throw new Error('context_chain_scope_mismatch')
-        chain = clone(previous)
+        chain = copyChain(previous)
         const incoming = [...chain.pendingInternal, ...clone(options.messages ?? [])]
         chain.pendingInternal = []
         recordOperations(chain, incoming)
@@ -247,7 +263,7 @@ export function createBobContextContinuation(opts: {
       // or thin tool cards while the actual wire carries their complete bound
       // schemas. Keep the original options unchanged for stable replay.
       const resolved = applyCatalogModelOptions(opts.aiCatalog, options)
-      const fixed = Math.ceil(countSerializedTokens({ instruction: resolved.systemMessage,
+      const fixed = Math.ceil(countSurfaceTokens({ instruction: resolved.systemMessage,
         tools: resolved.tools ?? [], schema: resolved.schema ?? null,
         schemaName: resolved.schemaName ?? null, schemaDescription: resolved.schemaDescription ?? null }) * 1.1) + 256
       const input = countInputTokens(options.messages ?? options.prompt ?? '')
@@ -313,7 +329,7 @@ export function createBobContextContinuation(opts: {
       // report it rather than silently trimming the assignment or tool result.
       if (!options.previousResponseId) {
         const fresh = applyCatalogModelOptions(opts.aiCatalog, options)
-        const freshTokens = Math.ceil(countSerializedTokens({ instruction: fresh.systemMessage,
+        const freshTokens = Math.ceil(countSurfaceTokens({ instruction: fresh.systemMessage,
           tools: fresh.tools ?? [], schema: fresh.schema ?? null,
           schemaName: fresh.schemaName ?? null, schemaDescription: fresh.schemaDescription ?? null }) * 1.1) + 256
           + countInputTokens(fresh.messages ?? fresh.prompt ?? '')
@@ -331,7 +347,7 @@ export function createBobContextContinuation(opts: {
         try { input = JSON.parse(tool.function.arguments) } catch { input = null }
         chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(readArchivedOperation(input, chain)) })
       }
-      chains.set(response.responseId, clone(chain))
+      chains.set(response.responseId, copyChain(chain))
       // Only the live head is needed. Keeping a full archive copy at every
       // historical response would make long work consume quadratic RAM.
       if (consumedResponseId && consumedResponseId !== response.responseId) chains.delete(consumedResponseId)
