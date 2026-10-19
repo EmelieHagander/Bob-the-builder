@@ -1,5 +1,58 @@
 # Foundation verification and rollout
 
+## Bob final integration — 2026-10-19
+
+Delivery 4 combines the complete-request/result-reference drafts with the three
+construction deliveries. Merge is authorized; hosted migrations, deployment and
+new paid model/CAD acceptance are not part of this verification. Earlier sections
+record their preparation state at that time; current integration evidence follows
+here and in the final PR/CI.
+
+The construction workflow now introduces the builder role, scope and exact tool
+routes in **227 tokens instead of 558**. History-recall guidance has one owner in
+the native tool manual, carried after catalog rebinding. The publication changes
+four immutable prompt definitions and preserves policy grants, SQL/source fences
+and agent execution metadata. Its generator and migrated SQL fixture agree.
+Manual review used the prompt-craft subtraction/exclusivity tests and Archie
+placement rules; this is not an independent agent review.
+
+`bob-release-capacity.test.ts` runs the production estimator and reconstructed
+checkpoint loop with two images, 2,000-token read pages and opaque native-item
+transport placeholders. The 500-reasoning-token-per-step profile completes
+**43 main calls, two writes, zero summaries**, with peak input estimate **52,388**
+and maximum checkpoint **723,780 bytes**. The 2,500-token profile reaches the
+existing capacity rejection after **27 calls**, with the last dispatched estimate
+**94,578**; original native items are preserved. These are scripted stress profiles,
+not actual provider token/cache prices or hosted CPU measurements. Database/policy
+work stays bounded in the late claim; serialized native history and local CPU do
+not become constant-size.
+
+`bob-release-delivery.test.ts` combines real SQL/RLS and production tool/session,
+construction, checker, writer, CAD review orchestration and context continuation.
+Only model/CAD network responses and the original image transport are fixtures.
+Every persisted boundary destroys and reconstructs all runtime components from
+JSON: **73 leases, 16 scripted main responses, one renderer, one reviewer and two
+writes** (construction delta and drawing). The drawing recipe equals revision 2,
+the pre-existing part is unchanged, the contextual reference remains excluded,
+and exact drawing/Step readback succeeds. The original image is opened once;
+loaded manuals and the historical check survive restoration. Peak assembled
+input estimate is **28,088 tokens**. The separate 43-call profile above exercises
+long turns; this construction fixture does not pretend its 73 leases are 73
+model decisions or that fixtures establish real model judgement.
+
+All seven Edge entry graphs pass Deno checks; the production app builds. Catalog
+generator parity, vocabulary and performance-read checks pass. No local Chrome
+is installed, so browser verification belongs to the full PR workflow. Full test
+suite/CI results are recorded in the final PR rather than inferred from these
+focused passes.
+
+Consequently new complete-request/reference execution requires explicit paired
+immutable catalog flags; this release does not set them. No hard dollar cap or
+new task quota is introduced. The heavier profile is an **open activation gate**,
+not a successful long-work outcome. The ordinary real-model image outcome, cache
+share and approximately USD 1 goal remain unproven.
+
+
 ## Selective tools and construction work — 2026-10-19
 
 **Delivery 3 prepared on `codex/bob-selective-tools`, stacked on #288 (`c54b537`)

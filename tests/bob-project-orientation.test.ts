@@ -147,10 +147,10 @@ test('cross-project sources and revoked access cannot enter orientation', async 
   await assert.rejects(prepareProjectOrientation(f.opts), /context_unavailable/)
 })
 
-async function bounded(f: ReturnType<typeof fixture>, overrides: Partial<Parameters<typeof prepareProjectOrientation>[0]> = {}) {
+async function bounded(f: ReturnType<typeof fixture>, overrides: Partial<Parameters<typeof prepareProjectOrientation>[0]> = {}, pageMaxTokens = Number(ORIENTATION_DIRECTORY_LIMITS.page)) {
   let reader: OrientationDirectoryReader | undefined
   const packet = await prepareProjectOrientation({ ...f.opts, ...overrides, directory: {
-    maxTokens: ORIENTATION_DIRECTORY_LIMITS.initial, pageMaxTokens: ORIENTATION_DIRECTORY_LIMITS.page,
+    maxTokens: ORIENTATION_DIRECTORY_LIMITS.initial, pageMaxTokens,
     ready: value => { reader = value },
   } })
   assert(reader)
@@ -222,12 +222,12 @@ test('large peer directories preserve exact screen focus and governing requireme
   assert.equal(result.records[0].id, f.steps.filter(step => step.id !== 's2' && step.area_id === 'a0')[packet.siblings.length].id)
 })
 
-test('oversized exact requirements and shared facts are explicit and their JSON fragments round-trip unchanged', async () => {
+for (const pageMaxTokens of [2000, ORIENTATION_DIRECTORY_LIMITS.page]) test(`oversized exact requirements and shared facts round-trip unchanged with ${pageMaxTokens}-token pages`, async () => {
   const f = fixture()
   f.steps[1].requirements[0].description = 'UNVERIFIED 🪵 exact instruction. '.repeat(4000)
   f.project.working_plan.recent_shared_facts = [{ truth: 'unknown', note: 'Preserve the owner correction. '.repeat(4000) }]
   const expected = structuredClone(f.steps[1].requirements[0])
-  const { packet, reader } = await bounded(f)
+  const { packet, reader } = await bounded(f, {}, pageMaxTokens)
   assert.equal(packet.completionRequirements.length, 0); assert(!packet.completeness.requirements)
   assert.equal(packet.directory!.sections.completionRequirements.omitted, 1)
   assert.equal(packet.directory!.sections.recentSharedFacts.omitted, 1)
@@ -238,7 +238,7 @@ test('oversized exact requirements and shared facts are explicit and their JSON 
       assert.equal(result.status, 'partial_record')
       assert.equal(result.fragment.json_start, json.length)
       assert.equal(result.tokenBudget.tokens, countContextTokens(JSON.stringify(result)))
-      assert(result.tokenBudget.tokens <= ORIENTATION_DIRECTORY_LIMITS.page)
+      assert(result.tokenBudget.tokens <= pageMaxTokens)
       json += result.fragment.content; next = result.next_cursor
       assert(++pages < 100)
     }

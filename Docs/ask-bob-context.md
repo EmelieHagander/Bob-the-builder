@@ -39,6 +39,33 @@ for the immutable source, runtime readback and remaining model-acceptance bounda
 
 ## Decision
 
+### Owner refinement — 2026-10-19: small source views before main-model work
+
+**Specified, not implemented by the current Launchpad drafts.** Main Bob should
+receive the relevant actual image, a deterministic database pick/parts list, or
+a small description with exact revision/source pointers. Raw geometry documents,
+all parameter bindings and whole editable records are not default context. Code
+selects and computes structured facts first; existing geometry checks and list
+derivation keep their server-side originals and authority gates.
+
+If a large unstructured source genuinely needs interpretation, a bounded smaller
+model reader returns relevant findings with exact source references, omissions,
+conflicts and uncertainty. It must not write project truth, approve dimensions or
+fabrication, invent source identifiers, or substitute a prose summary for exact
+values required by a later check. Reuse an observation for the same immutable
+source revision/question; do not create a new summarization call at every main
+step. Main Bob retains responsibility for the user's requested outcome. Critical
+visual comparisons may still require direct pixels.
+
+The earlier Project Librarian illustration below used a stronger synthesis model;
+that default is superseded by this decision. A cheap reader is not yet installed:
+the existing mini context-summary/compactor/presentation roles do not establish a
+general large-source reading path. `describe_project_image` stores Bob's own
+already-viewed-image description; it is not a separate cheap image interpreter.
+Use [the audit](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit) for
+the measured gap and implementation order. Payload pagination alone does not
+satisfy this relevance contract.
+
 Bob should receive **exactly the information needed for the current question, when it is needed**.
 
 That means separating five concerns that are easy to conflate:
@@ -570,7 +597,7 @@ RETRIEVE    deterministic project adapters
         ↓
 RERANK      cheap structured model
         ↓
-SYNTHESIZE  stronger configured model
+SYNTHESIZE  smaller configured reader (owner refinement 2026-10-19)
         ↓
 GATE        cheap grounding/coverage check
         ↓

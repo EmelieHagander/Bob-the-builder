@@ -6,7 +6,7 @@ import {createConstructionTools} from '../supabase/functions/_shared/constructio
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {bobWorkflows} from '../supabase/functions/_shared/bob-prompt.ts'
 import {applyCatalogModelOptions,createAiCatalogSession} from '../supabase/functions/_shared/ai-catalog.ts'
-import {catalogFixture,preSelectiveToolsCatalogFixture} from './support/ai-catalog-fixture.ts'
+import {preCompleteContextCatalogFixture as catalogFixture,preSelectiveToolsCatalogFixture} from './support/ai-catalog-fixture.ts'
 import {projectSchema} from './support/project-schema.ts'
 
 test('selective methods and exact manuals survive restart without bulk loading or duplicate instructions',async()=>{
@@ -56,7 +56,7 @@ test('real Bob registration selects new semantics only for the pinned publicatio
 })
 
 test('immutable SQL publication matches executable fixture and preserves old manifests',async t=>{
- const pg=await projectSchema();t.after(()=>pg.close())
+ const pg=await projectSchema(undefined,'20261019180806_ai_selective_tools.sql');t.after(()=>pg.close())
  const m=(await pg.query<any>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
  const sql=createAiCatalogSession({rpc:async()=>{throw Error('pinned')}},{app:'bob',manifest:m}),fixture=catalogFixture(),old=preSelectiveToolsCatalogFixture()
  for(const key of ['bob.workflows','tools.describe_tool','tools.save_construction_draft','bob.toolbox.intro-lazy']){

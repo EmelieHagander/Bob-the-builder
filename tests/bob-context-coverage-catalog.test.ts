@@ -6,7 +6,8 @@ import { projectSchema } from './support/project-schema.ts'
 import { createAiCatalogSession, type AiCatalogManifest } from '../supabase/functions/_shared/ai-catalog.ts'
 import { LINK_CAD_SHELL_STEPS_TOOL } from '../supabase/functions/_shared/cad-shell.ts'
 import { ORIENTATION_DIRECTORY_TOOL } from '../supabase/functions/_shared/bob-orientation-directory.ts'
-import { catalogFixture } from './support/ai-catalog-fixture.ts'
+// Later construction publications have their own whole-catalog parity tests.
+import { preConstructionEditsCatalogFixture as catalogFixture } from './support/ai-catalog-fixture.ts'
 const root = new URL('../supabase/migrations/', import.meta.url)
 const publication = readdirSync(root).find(name => name.endsWith('_ai_context_coverage_catalog.sql'))!
 const sql = readFileSync(new URL(publication, root), 'utf8')

@@ -19,6 +19,7 @@ const policy = (JSON.parse(readFileSync('supabase/functions/_shared/project-tool
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_plan_links_catalog.sql'))||!['read_plan_link_context','change_plan_focus','change_plan_task_link'].includes(row.name))
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_context_strategy_catalog.sql'))||row.name!=='read_conversation_message')
   .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_context_coverage_catalog.sql'))||row.name!=='read_project_orientation')
+  .filter(row=>!process.argv.includes('--check')||!readdirSync(migrationRoot).some(name=>name.endsWith('_ai_construction_edits.sql'))||row.name!=='edit_construction_parts')
 const changed = new Map<string, any>()
 const row = (key: string) => structuredClone(baseline.find(item => item.key === key) ?? (() => { throw new Error('Missing catalog key ' + key) })())
 function publish(item: any) {

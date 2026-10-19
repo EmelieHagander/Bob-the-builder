@@ -74,5 +74,35 @@ test('actual shared AI service opts into background, resumes tools and preserves
   const empty=await service.callOpenAIResponses({...base,background})
   assert.equal(empty.error,'model_reasoning_only');assert.equal(empty.estimatedCostUsd,.0022);assert.equal(empty.usage.reasoning_tokens,200)
 
+  const nativeItems=[
+   {type:'reasoning',id:'rs_exact',summary:[],encrypted_content:'opaque-fixture'},
+   {type:'message',id:'msg_exact',role:'assistant',phase:'commentary',content:[{type:'output_text',text:'I will read the original.',annotations:[]}]},
+   {type:'function_call',id:'fc_exact',call_id:'read_exact',name:'read_record',arguments:'{}',status:'completed'},
+  ]
+  const finalItems=[{type:'reasoning',id:'rs_final',summary:[],encrypted_content:'opaque-final'},
+   {type:'message',id:'msg_final',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'The source remains unmeasured.',annotations:[]}]}]
+  const {previousResponseId:_old,...completeBase}=base
+  const complete={...completeBase,responseItemsMode:'preserve',responsePhaseMode:'aware',messages:[
+   {role:'user',content:'Read the original.'},{role:'assistant',content:'',nativeOutput:nativeItems},
+   {role:'tool',tool_call_id:'read_exact',content:'Exact original revision 3'},
+   {role:'user',content:[{type:'image_url',image_url:'private-image:fixture/revision'}]},
+  ],resolveImage:vision.resolveImage}
+  g.fetch=async (_url:string,init:RequestInit)=>{requests.push(JSON.parse(String(init.body)));return Response.json({id:'resp_complete',status:'completed',output:finalItems,usage:{input_tokens:100,output_tokens:20,total_tokens:120}})}
+  const completed=await service.callOpenAIResponses(complete)
+  assert.equal(completed.success,true);assert.equal(completed.data,'The source remains unmeasured.')
+  assert.deepEqual(completed.outputItems,finalItems);assert.equal(completed.outputPhase,'final_answer')
+  const wire=requests.at(-1)
+  assert.equal(wire.previous_response_id,undefined)
+  assert.deepEqual(wire.include,['reasoning.encrypted_content'])
+  assert.deepEqual(wire.input.slice(1,4),nativeItems,'native IDs, order and commentary phase survive the real adapter')
+  assert.equal(wire.input[4].type,'function_call_output');assert.equal(wire.input[4].call_id,'read_exact')
+  assert.equal(wire.input[5].content[0].image_url,'data:image/png;base64,iVBORw0KGgo=')
+  stored={id:'resp_native_stored',status:'completed',output:nativeItems,usage:{input_tokens:100,output_tokens:20,total_tokens:120}}
+  const replayed=await service.callOpenAIResponses({...complete,background})
+  assert.deepEqual(replayed.outputItems,nativeItems);assert.equal(replayed.toolCalls[0].id,'read_exact')
+  stored.output=[{type:'reasoning',id:'rs_missing',summary:[]}]
+  const missing=await service.callOpenAIResponses({...complete,background})
+  assert.equal(missing.success,false);assert.equal(missing.error,'native_reasoning_content_missing');assert.equal(missing.toolCalls,undefined)
+
  } finally {g.fetch=oldFetch;g.Deno=oldDeno;delete g.__backgroundClient}
 })

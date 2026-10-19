@@ -1,5 +1,6 @@
 /** Optional durable Responses transport shared by all apps. No app tools or data access. */
 import { AIProviderHttpError, AIBackgroundStorageError, AIBackgroundNotSubmitted, recordAiFailure } from './ai-background-diagnostics.ts'
+import { readResponseItems } from './openai-content.ts'
 export { AIProviderHttpError, AIBackgroundStorageError } from './ai-background-diagnostics.ts'
 export interface BackgroundCall {
   key: string
@@ -66,7 +67,8 @@ export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string
     let response: any
     try {
       response = await providerRequest(apiKey, '', { ...prepared, background: true, store: true,
-        metadata: { ai_job_id: job.id } })
+        metadata: { ai_job_id: job.id,
+          ...(Array.isArray(prepared.include) && prepared.include.includes('reasoning.encrypted_content') ? { ai_replay_items: '1' } : {}) } })
     } catch (error) {
       await recordAiFailure(rpc, 'job', job.id, 'submit', error, started)
       if (error instanceof AIProviderHttpError && [400, 401, 403, 404, 422, 429].includes(error.status)) {
@@ -79,6 +81,7 @@ export async function backgroundResponse(rpc: AiRpc, apiKey: string, app: string
       throw new AIBackgroundPending(job.id, false)
     }
     try {
+      if (response.status === 'completed' && Array.isArray(prepared.include) && prepared.include.includes('reasoning.encrypted_content')) readResponseItems(response.output)
       if (await rpc('ai_job_accept', { p_job: job.id, p_response: response }) === false) throw new AIBackgroundStorageError()
     }
     catch (error) {
@@ -106,6 +109,18 @@ export async function reconcileAiWork(rpc: AiRpc, apiKey: string, kind: 'job' | 
     let response: any
     try { response = work.cancel ? await providerRequest(apiKey, path + '/cancel', {}) : await providerRequest(apiKey, path) }
     catch (error) { await recordAiFailure(rpc, kind, id, work.cancel ? 'cancel' : 'retrieve', error, started, work.response_id); throw error }
+    // The signed event only carries an ID. Its provider metadata pins whether
+    // this caller requires encrypted items. Never persist an incomplete replay
+    // payload or change retrieval for legacy jobs and other callers.
+    if (!work.cancel && response.status === 'completed' && response.metadata?.ai_replay_items === '1') {
+      try {
+        const originalId = response.id, originalJob = response.metadata?.ai_job_id
+        response = await providerRequest(apiKey, path + '?include%5B%5D=reasoning.encrypted_content')
+        if (response.id !== originalId || response.metadata?.ai_job_id !== originalJob || response.status !== 'completed') throw new Error('native_response_identity_changed')
+        readResponseItems(response.output)
+      }
+      catch (error) { await recordAiFailure(rpc, kind, id, 'retrieve', error, started, work.response_id); throw error }
+    }
     const jobId = kind === 'job' ? id : response.metadata?.ai_job_id
     if (typeof jobId === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(jobId)) {
       try { await rpc('ai_job_accept', { p_job: jobId, p_response: response }) }

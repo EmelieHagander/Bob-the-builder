@@ -13,6 +13,7 @@ const versions=new Map<string,number>(seed.map(row=>[row.key,1]))
 let preConstructionEditsRows:any[]|undefined,preConstructionEditsVersions:Map<string,number>|undefined
 let preConstructionViewsRows:any[]|undefined,preConstructionViewsVersions:Map<string,number>|undefined
 let preSelectiveToolsRows:any[]|undefined,preSelectiveToolsVersions:Map<string,number>|undefined
+let preCompleteContextRows:any[]|undefined,preCompleteContextVersions:Map<string,number>|undefined
 let preContextCoverageRows:any[]|undefined,preContextCoverageVersions:Map<string,number>|undefined
 let preContextStrategyRows:any[]|undefined,preContextStrategyVersions:Map<string,number>|undefined
 let preContinuationRows:any[]|undefined,preContinuationVersions:Map<string,number>|undefined
@@ -22,6 +23,16 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const completeContext=source.match(/\$bob_complete_context_patches\$([\s\S]+?)\$bob_complete_context_patches\$/)
+ if(completeContext){
+  preCompleteContextRows=structuredClone(seed);preCompleteContextVersions=new Map(versions)
+  for(const patch of JSON.parse(completeContext[1])){
+   const row=seed.find(row=>row.key===patch.key);row.definition={...row.definition,...patch.definition}
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'bob-complete-context-v1',...patch.metadata};versions.set(row.key,versions.get(row.key)!+1)
+   if(patch.content!==undefined)row.content=patch.content
+   if(patch.workflow_method)row.definition.workflows.find((w:any)=>w.name==='workflow_construction_drawing').method=patch.workflow_method
+  }
+ }
  const selective=source.match(/\$selective_tools_patches\$([\s\S]+?)\$selective_tools_patches\$/)
  if(selective){
   preSelectiveToolsRows=structuredClone(seed);preSelectiveToolsVersions=new Map(versions)
@@ -375,7 +386,7 @@ for(const migration of migrations){
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.
-for(const rows of [seed,originalSeed,...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
+for(const rows of [seed,originalSeed,...(preCompleteContextRows?[preCompleteContextRows]:[]),...(preSelectiveToolsRows?[preSelectiveToolsRows]:[]),...(preConstructionViewsRows?[preConstructionViewsRows]:[]),...(preConstructionEditsRows?[preConstructionEditsRows]:[]),...(preContextCoverageRows?[preContextCoverageRows]:[]),...(preTaskWorkflowRows?[preTaskWorkflowRows]:[]),...(preContinuationRows?[preContinuationRows]:[]),...(preSourceRenewalRows?[preSourceRenewalRows]:[]),...(preContextStrategyRows?[preContextStrategyRows]:[])])for(const row of rows)if(row.kind==='tier_binding'&&row.definition.model_name===null)row.definition.model_name='fixture-'+row.definition.tier+'-model'
 function fixtureManifest(rows:any[],revisionMap:Map<string,number>,id:string):AiCatalogManifest{
  const modelTiers=new Map(rows.filter(row=>row.kind==='tier_binding').map(row=>[row.definition.model_name,row.definition.tier]))
  return{format_version:1,app:'bob',manifest_id:id,created_at:'2026-10-09T14:00:00Z',
@@ -409,3 +420,5 @@ const preConstructionViewsManifest=fixtureManifest(preConstructionViewsRows??see
 export function preConstructionViewsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preConstructionViewsManifest)})}
 const preSelectiveToolsManifest=fixtureManifest(preSelectiveToolsRows??seed,preSelectiveToolsVersions??versions,'fixture-pre-selective-tools-manifest')
 export function preSelectiveToolsCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preSelectiveToolsManifest)})}
+const preCompleteContextManifest=fixtureManifest(preCompleteContextRows??seed,preCompleteContextVersions??versions,'fixture-pre-complete-context-manifest')
+export function preCompleteContextCatalogFixture(){return createAiCatalogSession({rpc:async()=>{throw new Error('Pinned fixture')}},{app:'bob',manifest:structuredClone(preCompleteContextManifest)})}

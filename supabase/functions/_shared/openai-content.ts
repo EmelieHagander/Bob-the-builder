@@ -3,6 +3,23 @@ export type OpenAIContentPart =
   | { type: 'text' | 'input_text' | 'output_text'; text: string }
   | { type: 'image_url'; image_url: string | { url: string; detail?: 'auto' | 'low' | 'high' } }
 export type OpenAIMessageContent = string | null | OpenAIContentPart[]
+/** Opaque Responses items. Preserve provider order, IDs, phases and encrypted
+ * reasoning without interpreting or logging the encrypted payload. */
+export type OpenAIResponseItem = Record<string, unknown> & { type: string }
+export function readResponseItems(value: unknown): OpenAIResponseItem[] {
+  if (!Array.isArray(value) || !value.length) throw new Error('native_response_items_missing')
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('native_response_item_invalid')
+    if (item.type === 'reasoning') {
+      if (typeof item.encrypted_content !== 'string' || !item.encrypted_content) throw new Error('native_reasoning_content_missing')
+    } else if (item.type === 'message') {
+      if (item.role !== 'assistant' || !Array.isArray(item.content)) throw new Error('native_response_message_invalid')
+    } else if (item.type === 'function_call') {
+      if (![item.call_id, item.name, item.arguments].every(v => typeof v === 'string')) throw new Error('native_response_call_invalid')
+    } else throw new Error('native_response_item_unsupported')
+  }
+  return structuredClone(value)
+}
 export function responseMessageContent(role: 'user' | 'assistant', value: OpenAIMessageContent): Array<Record<string, unknown>> {
   const textType = role === 'user' ? 'input_text' : 'output_text'
   if (typeof value === 'string' || value === null) return [{ type: textType, text: value ?? '' }]
