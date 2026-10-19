@@ -17,7 +17,24 @@ for(const omitted of [false,true]) test(`shell plan installation (${omitted?'hos
    exists(select 1 from pg_proc where pronamespace='bob_private'::regnamespace and position('cad_shell_steps' in prosrc)>0) writer`)).rows
  }},undefined,omitted?['20261008150000_cad_shell_plan_link.sql']:[]);t.after(()=>pg.close())
  assert.deepEqual(originalShell!,[{installed:!omitted,writer:!omitted}],'fixture reproduces the real missing installation')
- assert.deepEqual((await pg.query(delegatesSql)).rows,originalDelegates!,'v16–v20, conflict transport and atomic drawing continuation remain byte-identical')
+ // A later construction-edit migration wraps v16 but preserves its complete
+ // former body in a private delegate. Every other writer and drawing handler
+ // must still be byte-identical to the original shell-plan installation.
+ const currentDelegates=(await pg.query(delegatesSql)).rows as any[]
+ const preserved=(rows:any[])=>rows.filter(row=>row.proname!=='bob_project_write_v16')
+ assert.deepEqual(preserved(currentDelegates),preserved(originalDelegates as any[]),
+  'v17–v20, conflict transport and atomic drawing continuation remain byte-identical')
+ const originalV16=(originalDelegates as any[]).find(row=>row.proname==='bob_project_write_v16')
+ const currentV16=currentDelegates.find(row=>row.proname==='bob_project_write_v16')
+ assert.ok(originalV16&&currentV16)
+ assert.equal(currentV16.acl,originalV16.acl,'the accessible v16 entrypoint keeps its authority')
+ assert.match(currentV16.definition,/if p_payload->>'kind' is distinct from 'construction_edit' then return bob_private\.bob_project_write_before_construction_edits\(/)
+ const predecessor=(await pg.query(`select pg_get_functiondef('bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)'::regprocedure) definition`)).rows[0].definition as string
+ assert.equal(predecessor.replace('bob_project_write_before_construction_edits','bob_project_write_v16'),originalV16.definition,
+  'the original v16 implementation remains intact behind its renamed delegate')
+ for(const role of ['anon','authenticated','service_role']) {
+  assert.equal((await pg.query(`select has_function_privilege($1,'bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)','execute') allowed`,[role])).rows[0].allowed,false)
+ }
  for(const role of ['anon','authenticated','service_role']) {
   assert.equal((await pg.query(`select has_function_privilege($1,'bob_private.bob_project_write_before_consequences(text,uuid,uuid,bigint,jsonb)','execute') allowed`,[role])).rows[0].allowed,false,'no direct internal writer access')
  }

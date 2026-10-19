@@ -26,7 +26,15 @@ test('D publishes only role/work and affected manuals; old catalogs and all mode
  }
  const session=(manifest:AiCatalogManifest)=>createAiCatalogSession({rpc:async()=>{throw Error('Pinned only')}},{app:'bob',manifest})
  const now=session(current),before=session(previous),tools=[CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL]
- for(const catalog of [now,catalogFixture()])for(const tool of [...tools,CONSTRUCTION_SAVE_TOOL])assert.deepEqual(catalog.tool(tool.function.name).function.parameters,tool.function.parameters)
+ // D is a historical publication boundary. Later selective-tool releases add
+ // compact recipe arrays to the save schema without changing the pinned D one.
+ for(const catalog of [now,catalogFixture()])for(const tool of tools)assert.deepEqual(catalog.tool(tool.function.name).function.parameters,tool.function.parameters)
+ const saveAtD:any=now.tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
+ assert(Object.hasOwn(saveAtD.properties,'instance_policy'),'D introduces instance roles')
+ assert(!Object.hasOwn(saveAtD.properties.recipe.properties,'arrays'),'D predates compact arrays')
+ const saveLatest:any=catalogFixture().tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
+ assert.deepEqual(saveLatest,CONSTRUCTION_SAVE_TOOL.function.parameters,'the final catalog matches the current canonical compiler')
+ assert(Object.hasOwn(saveLatest.properties.recipe.properties,'arrays'),'the later release adds compact arrays')
  for(const tool of tools){assert.throws(()=>before.tool(tool.function.name),/ai_contract_missing/);const parameters:any=now.tool(tool.function.name,{server_quote:true}).function.parameters;assert(!parameters.properties.request_quote);for(const field of ['recipe','dimensions','quantity','computed','layout'])assert(!parameters.properties[field])}
  assert(!Object.hasOwn(before.tool('save_construction_draft').function.parameters.properties,'instance_policy'))
  assert.match(now.definition('tools.derive_cad_material_requirement','tool_contract').definition.additional_description,/only manufacture/)
