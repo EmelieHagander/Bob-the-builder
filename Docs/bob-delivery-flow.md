@@ -292,12 +292,19 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — slutverifiera och merga leverans 4 (2026-10-19):**
-`codex/bob-launchpad-release` förenar #285/#286 med #287–#289 och följer den nya
-promptfilosofin: mindre roll/metod, en ägare per manual och exakta kontrakt i kod.
-Kör samlad offlineacceptans och full CI före den nu godkända mergen.
-[Verifieringsägaren](foundation-verification.md#bob-final-integration--2026-10-19)
-skiljer källkod och tester från kvarstående drift-/modellacceptans.
+**Aktivt nästa steg — förbered separat driftsättning (2026-10-19):**
+[PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291) är mergad
+till `main` och omfattar #285–#289. Full CI, CAD, PostgreSQL och
+beroendesäkerhet passerade; [verifieringsägaren](foundation-verification.md#bob-final-integration--2026-10-19)
+har exakta körningar och återläsning. De äldre utkasten är stängda.
+
+**Ingen produktionsaktivering ingår i mergen.** Läs aktuell drift och migreringsliggare
+igen, kontrollera jobb i arbete och inhämta separat driftsättningsbeslut innan
+konstruktions-SQL, kompatibla Bob-/bakgrundsruntimes och därefter immutabla
+verktygs-/promptpubliceringar installeras i beroendeordning. Hosted readback
+2026-10-19 visar fortfarande ask-bob 145 / bob-worker 113 och inga nya
+leverans-1–4-migrationer. Manuell CI körs bara vid behov; inga betalda
+modell-/CAD-prover ingick i denna kodmerge.
 
 **Aktiveringshinder:** tungt kvarhållet modellresonemang kan fortfarande överstiga
 kontextutrymmet. Korta verktygssvar bevisar inte att en sådan lång tur ryms.

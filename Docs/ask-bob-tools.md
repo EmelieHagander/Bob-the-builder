@@ -1,8 +1,9 @@
 # Ask Bob: tool discovery, loading and authority
 
-## Selective methods and tools — prepared 2026-10-19
+## Selective methods and tools — merged source 2026-10-19
 
-**Delivery 3 is source-only above #287/#288; not activated or deployed.** A pinned
+**Delivery 3 is merged in main through [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291);
+its runtime/catalog is not yet hosted or activated.** A pinned
 `bob.workflows.metadata.selective_tools_version=1` separates workflow selection
 from schema loading. `describe_tool(workflow_name)` retains the method in current
 system instructions and lists member availability, without loading their schemas.
@@ -21,8 +22,9 @@ The construction method chooses numeric/role/part edits for existing work and
 natural saved sub-constructions for larger new builds. It includes the existing
 `plan_cad_pieces` queue without automatically loading it. Repetitions and shared
 interfaces belong to the [Artifact contract](artifacts.md#compact-repetition-and-natural-pieces--prepared-2026-10-19).
-Complete provider-independent requests/history are still delivery 4 (#285/#286);
-this change prepares their authoritative instruction surface, not their release.
+Complete provider-independent requests and exact result recall are integrated in
+the same source merge. Their paired catalog opt-in remains inactive pending the
+heavy-reasoning and ordinary model acceptance gates.
 [Verification](foundation-verification.md#selective-tools-and-construction-work--2026-10-19)
 separates scripted surface evidence from actual model behavior and cost.
 

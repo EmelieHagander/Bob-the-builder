@@ -2,11 +2,11 @@
 
 ## Bob final integration — 2026-10-19
 
-Delivery 4 combines the complete-request/result-reference drafts with the three
-construction deliveries. Merge is authorized; hosted migrations, deployment and
-new paid model/CAD acceptance are not part of this verification. Earlier sections
-record their preparation state at that time; current integration evidence follows
-here and in the final PR/CI.
+**Merged source, not a hosted release.** [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291)
+integrates the complete-request/result-reference drafts and three construction
+deliveries in main merge `f0647bda5a6dd3aa5bb2afd4b43cbd237550458c` on
+2026-10-19. Earlier sections retain the preparation state at the time. No new
+paid model/CAD acceptance or hosted installation is claimed.
 
 The construction workflow now introduces the builder role, scope and exact tool
 routes in **227 tokens instead of 558**. History-recall guidance has one owner in
@@ -40,11 +40,24 @@ input estimate is **28,088 tokens**. The separate 43-call profile above exercise
 long turns; this construction fixture does not pretend its 73 leases are 73
 model decisions or that fixtures establish real model judgement.
 
-All seven Edge entry graphs pass Deno checks; the production app builds. Catalog
-generator parity, vocabulary and performance-read checks pass. No local Chrome
-is installed, so browser verification belongs to the full PR workflow. Full test
-suite/CI results are recorded in the final PR rather than inferred from these
-focused passes.
+Final source verification: [CI 39315572961](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39315572961)
+passed **1,661/1,661 tests** with all Edge/type, production build, PWA and browser
+steps green. [CAD adapter 39315572992](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39315572992),
+[PostgreSQL concurrency 39315573016](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39315573016)
+and [dependency security 39315572886](https://github.com/EmelieHagander/Bob-the-builder/actions/runs/39315572886)
+also passed. The tested head was `6c1d24671c51aa2fdd34cfb65846fc8ad850affd`;
+the final PR head only changed manual-only Actions workflows and verification
+instructions. The merge preserves #290's prompt-craft documents and exact
+integration source. Review was direct code/contract inspection, not an
+independent agent run.
+
+Read-only Supabase readback on 2026-10-19: `ask-bob` is ACTIVE v145 (JWT
+required), `bob-worker` ACTIVE v113 (private worker authentication), and
+the latest listed migration is `20261019120000 / bob_image_provider_files`.
+None of the five delivery-1–4 migrations is installed. The active workflow,
+construction reader and `agent-contract.ask-bob` catalog metadata lack the new
+selective-tool, construction-view and complete-request opt-in flags. A source
+merge and offline CI therefore do **not** make the new behavior live.
 
 Consequently new complete-request/reference execution requires explicit paired
 immutable catalog flags; this release does not set them. No hard dollar cap or

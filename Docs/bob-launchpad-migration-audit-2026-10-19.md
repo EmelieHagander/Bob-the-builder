@@ -5,13 +5,14 @@ contract lives in [the conversation owner](ask-bob-conversations.md#launchpad-mi
 [Active State](bob-delivery-flow.md#state) owns the next action. PR1 is
 **merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281)**;
 [the release readback below](#pr1-technical-release) does not close ordinary
-member/model, long-work, image or CAD acceptance. PR2 is prepared in draft #285;
-PR3 is prepared separately on top of it. Neither is activated.
+member/model, long-work, image or CAD acceptance. PR2/PR3 source is merged via
+[PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291),
+but remains inactive in production.
 
 **Later integration:** [delivery 4 verification](foundation-verification.md#bob-final-integration--2026-10-19)
-combines these drafts with the construction fixes. Its explicit activation gate
+records the combined merge and 1,661-test CI. Its explicit activation gate
 supersedes automatic opt-in in the prepared drafts; the historical measurements
-below remain unchanged. Full CI is now authorized for the final integration.
+below remain unchanged.
 
 <a id="offline-cost-review"></a>
 ## Offline cost review and PR3 preparation — 2026-10-19

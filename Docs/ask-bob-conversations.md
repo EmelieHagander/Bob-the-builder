@@ -5,10 +5,11 @@
 <a id="launchpad-migration"></a>
 ## Launchpad-pattern migration — 2026-10-19
 
-**PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
-with ordinary member/model and long-image acceptance still open. PR2 is prepared in
-[draft #285](https://github.com/EmelieHagander/Bob-the-builder/pull/285); PR3 is prepared
-separately on top of it. Neither is activated.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
+**PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281).
+PR2/PR3 source code is merged into main through [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291),
+but complete native requests and result references are still not activated.**
+Ordinary member/model and long-image acceptance remain open.
+[Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 records the installed migration, source and authentication readback. The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
@@ -18,12 +19,12 @@ corrected target; [State](bob-delivery-flow.md#state) owns the next action.
 
 **Owner verification decision — 2026-10-19:** for this three-stage migration,
 each PR requires the relevant targeted regression tests, app and Edge typechecks.
-The later cost decision permits preparing subsequent stages offline before live
-acceptance; independent review and behavior acceptance remain release gates. Run the full
-suite and CI after the final stage's behavior is confirmed. This explicit decision
-replaces the original per-stage full-CI gate for this migration; it does not
-change CI workflows or settings. The ordinary long-image acceptance and release
-ordering below remain, and CAD still follows acceptance of Bob's main turn.
+The later cost decision permitted preparing subsequent stages offline before
+live acceptance. The combined source passed 1,661 tests and full CI in PR #291;
+independent model/behavior acceptance remains open. Full CI, CAD, PostgreSQL
+concurrency and dependency-audit workflows now require an explicit manual Actions
+run. Original long-image acceptance and release order still apply, and CAD's
+context migration follows acceptance of Bob's main turn.
 
 **Owner cost decision — 2026-10-19:** approximately **USD 1 per comparable completed
 task is a soft efficiency target, not a spending cap or a reason to stop unfinished
