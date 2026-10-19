@@ -182,6 +182,32 @@ account. No runtime change or redeployment was made for this billing failure.
 Image-grounding resume and the ordinary long-work gate remain unverified in
 production; PR2 must still wait. Full CI remains deferred by the owner's decision.
 
+<a id="pr1-fourth-live-attempt"></a>
+### Fourth live job: image resume passed, delivery still pending
+
+The owner started a new turn at **12:30:34 UTC** after reporting that the previous
+UI still required a manual stop. Read-only inspection found only one active job;
+the previous job and its user message had already been marked failed at
+**12:19:56 UTC**. The UI mismatch is reported, not reproduced or fixed.
+
+The new job pins `groundingReadOrderVersion: 1`. It opened **two images**, resumed
+after an asynchronous compactor, received the subsequent main model response and
+continued through more tools. At **12:44:58 UTC** it remained running at checkpoint
+revision **115**, tools phase at step index **17**, with **43 tool executions**
+and **19 context-summary calls**. The latest inspected state retained all **24
+loaded manuals**, all carried after rollover; recent main calls offered **26
+tools**, including the write and construction tools. No provider credit failure
+or `continuation_changed` was observed in this attempt to that point.
+
+The inspected **12:30:34–12:45:00 UTC** log window contained **33** worker shutdowns,
+all `EarlyDrop`, with CPU **301–934 ms**. This is positive image-resume and CPU
+evidence, not proof of constant CPU or a completed 40-model-step turn. Several
+native read requests repeat identical arguments; the old compactor runs very
+frequently. These are model-requested reads, not evidence of historical handler
+replay. Their effect on useful progress remains under review. No saved delivery
+or completed long-work acceptance is claimed. Continue from the live result;
+do not launch PR2 based solely on this intermediate snapshot.
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from

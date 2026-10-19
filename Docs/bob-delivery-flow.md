@@ -292,10 +292,12 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — återställ API-krediter inför beteendeacceptans (2026-10-19):**
-fyll på OpenAI-kontot som Bob använder; gör därefter ett nytt långt bildjobb på
-rättningen från PR #283 och granska loggarna innan PR2 börjar.
-[Kreditstoppet i tredje liveprovet](bob-launchpad-migration-audit-2026-10-19.md#pr1-live-provider-credit-blocker)
+**Aktivt nästa steg — slutför beteendeacceptansen för fjärde liveprovet (2026-10-19):**
+granska slututfallet för körningen som startade 12:30:34 UTC på PR #283 innan PR2
+börjar. Bildåterstarten har passerats, men upprepade läsningar och täta
+sammanfattningar behöver bedömas mot faktisk leverans. Utred också beställarens
+rapport om kvarhängande arbetsstatus efter föregående serverslut.
+[Pågående fjärde liveprov](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
 äger evidensen. PR1 är **mergad och tekniskt driftsatt, inte beteendeaccepterad**;
 [releasebeviset](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 skiljer verifierad migration/källkod från den kvarstående modellacceptansen.
