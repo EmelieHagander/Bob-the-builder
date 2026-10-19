@@ -141,8 +141,21 @@ compactor input, preserved image reference and equal source evidence after
 restart. Both affected Edge entrypoints passed Deno graph checking using the
 same scratch dependency mapping described above. Diff and documentation review
 were performed directly in this session, not by an independent reviewer. Full
-CI remains deferred. Release readback and a new ordinary long-image run are still
-required before this correction can close the live gate.
+CI remains deferred. A new ordinary long-image run is still required before this
+correction can close the live gate.
+
+The correction shipped through [PR #283](https://github.com/EmelieHagander/Bob-the-builder/pull/283),
+merged as `38c5c70edf6672afbb0973d8e1df180eee4ed48e`, with tested runtime from
+`3c28690b61ceb22126c591052fc85a090d4710df`. Read-only inspection at **12:10:04 UTC**
+found no active jobs. Worker **v112** was installed at **12:10:15 UTC**, followed
+by ask-bob **v144** at **12:10:35 UTC**, both ACTIVE with unchanged JWT verification
+(worker false, ask-bob true). Retrieved bundle SHA-256 values were respectively
+`927c8c33eb4973c6c231e0258db1d3f1747e6acd37dea63bcb6f2d0241608f4f` and
+`70cc722a29d9e23f7e7545c716f8545a47626fcafea5ccdcba109012962510d5`.
+All runtime sources matched the reviewed merge across 101 worker and 103 ask-bob
+returned files, with the same type-only erasure and omissions recorded above.
+No migration was required. This is technical release evidence, not a successful
+authenticated long-image turn.
 
 ## Observed Bob baseline
 

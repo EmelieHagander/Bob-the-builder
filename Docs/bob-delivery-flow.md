@@ -292,9 +292,9 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — rätta bildåterstarten efter andra liveprovet (2026-10-19):**
-publicera och läs tillbaka den riktat testade rättningen av läsordningen; därefter
-behövs ett nytt långt bildjobb och logggranskning innan PR2 börjar.
+**Aktivt nästa steg — beteendeacceptans efter bildåterstartsrättningen (2026-10-19):**
+beställaren gör ett nytt försök med det långa bildjobbet på rättningen från PR #283;
+granska därefter loggarna innan PR2 börjar.
 [Andra incidenten och dess verifiering](bob-launchpad-migration-audit-2026-10-19.md#pr1-live-grounding-regression)
 äger evidensen. PR1 är **mergad och tekniskt driftsatt, inte beteendeaccepterad**;
 [releasebeviset](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
