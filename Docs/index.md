@@ -149,6 +149,8 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 ## AI / Ask bob
 
+- [Prompt craft](prompt-craft.md) — the owner's three authoring principles for this `CLAUDE.md`, coding subagents and Bob's runtime prompts. On-demand craft only; tools, working context and result acceptance keep their own owners.
+
 - [Server-bound edits and canonical data reuse](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14) — **owner decision 2026-10-14; description/solution/alternative/selection/evidence adapters technically deployed; work-record core/runtime installed with catalog blocked; plan focus/Task links in source; broader migration and member/model acceptance remaining**: Bob reads and changes data while the runtime owns identities, concurrency and reuse of canonical values. Includes create/revise separation, preservation rules and acceptance gates.
 
 - [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract and active State**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and staged delivery. Domain owners distinguish implemented, deployed and remaining target scope. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in PR/CI or the archive below.

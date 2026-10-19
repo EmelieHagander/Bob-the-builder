@@ -18,6 +18,15 @@
    - verification → read `.claude/skills/verify/SKILL.md`.
 3. Inspect current runtime/code before changing a contract. Do not work from remembered chat context when a canonical repo source exists.
 
+## Agent and prompt craft
+
+This `CLAUDE.md`, coding subagents and Bob's runtime prompts follow
+**stay slim · softcode judgement · storybook**: introduce the role and
+outcome, retain exact interfaces and safety fences, and route changing
+truth to its owner. Read [Docs/prompt-craft.md](Docs/prompt-craft.md)
+only when authoring prompts. For weak AI outcomes, inspect tools,
+context, execution and completed results before adding behavioural rules.
+
 ## Product north stars
 
 - **Idea to completed build without prior knowledge.** The five outcome use cases in `Docs/user-stories.md` are the product acceptance baseline. Tie changes to an observable outcome; a working technical slice does not prove the full user journey.
