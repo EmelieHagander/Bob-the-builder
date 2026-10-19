@@ -99,6 +99,134 @@ retaining native reasoning is not a proof that an equivalent final request fits
 64,000 tokens. The existing provider-capacity estimate remains explicit. Do not
 activate this draft based only on the small-reasoning fixtures.
 
+<a id="tool-payload-audit"></a>
+## Source and tool payload audit — 2026-10-19, before activation
+
+**Finding: source selection and tool expansion need correction, not just a
+larger context window or generic 2,000-token pages.** The owner requests relevant
+pixels, database pick/parts lists or short descriptions for main Bob, with a smaller
+reader only when large unstructured sources require interpretation. This audit
+updates the [tool target](ask-bob-tools.md#payload-audit-and-revised-target--2026-10-19)
+and [context decision](ask-bob-context.md#owner-refinement--2026-10-19-small-source-views-before-main-model-work).
+The changes below are not deployed runtime behavior.
+
+### Evidence and measurement boundary
+
+Read-only queries scoped to the failed fourth job identified its immutable catalog
+manifest `b395affa-abf8-4c14-a5f3-7260139b78a8`. The full manifest was analyzed locally
+with production `createAiCatalogSession().tool()` and the existing o200k tokenizer.
+Only names and size aggregates are reported here. Neither raw customer geometry
+nor the private manifest is committed. Reproduce from an authorized local manifest:
+
+```sh
+node --no-wasm-code-gc --import tsx scripts/audit-bob-tool-payload.ts --manifest /path/to/pinned-manifest.json
+```
+
+The script makes no model, RPC or network calls. Counts are serialized catalog
+estimates, not a reconstructed provider request or billed token attribution.
+Workflow counts assume every member is available; actual policy/prerequisite
+gates can reduce them. Per-request category/evidence enums can also change size.
+
+| Surface from pinned catalog | Tools | Full description/manual + schema tokens | Parameter schema tokens |
+|---|---:|---:|---:|
+| Construction/drawing workflow | 19 | 14,952 | 10,055 |
+| Workflow plus individually described tools | 24 | 16,380 | 10,801 |
+| Individually described tools alone | 8 | 7,592 | 5,878 |
+| `save_construction_draft` alone | 1 | 5,580 | 4,995 |
+
+The workflow method itself is only **149 tokens**. The manually described eight
+tools' `manual` and `parameters` fields total approximately **7,512 tokens** in
+isolation, illustrating the potential second copy in history. This is not proof
+that every duplicate survived each live compaction. The eight-tool subset is a
+size comparison, not a proven sufficient set for completing the task.
+
+### Findings
+
+1. **Workflow selection expands too much at once.** `createToolSession.execute`
+   marks every available workflow member loaded. The construction workflow has
+   19 members, including rendering, lists, image operations, catalog, knowledge
+   and calculator. The jump after selecting a workflow is therefore not just a
+   short method. Even card descriptions retain each callable tool's full parameter
+   schema: the workflow's card/schema set is still **10,778 tokens**. Shorter prose
+   alone cannot remove the schema load.
+2. **Instruction loading is being confused with repeated prompt inclusion.** In
+   this latest run the nine `describe_tool` requests were eight distinct tools and
+   one workflow, each requested once. It was not nine repeated reloads of one
+   manual. `toolCarryVersion` retains loaded tools at rollover and PR2 carries
+   full manuals in every request; individual describe results also contain their
+   manual and schema. A single canonical provider copy is a valid optimization
+   target, but losing workflow methods, prerequisites or durable availability is
+   not. Earlier runs really did re-describe tools after compaction; distinguish
+   that historical failure from the current payload duplication.
+3. **Conversation gist is bounded; the complete memory packet is broader.** The
+   managed brief is at most **1,600 tokens**, plus five original messages and
+   bounded receipt/source metadata. Originals are not truncated to 1,600. The
+   actual first main input was **7,574 tokens**, growing to **32,408** at call 5
+   and **49,304** at call 6 after discovery/reads. These measurements do not support
+   blaming a huge initial memory gist. Exact per-component live inputs were not
+   retained after this job, so the audit does not invent a full token pie chart.
+4. **Construction detail reads expose internal state wholesale.** An exact
+   `read_construction_draft` returns recipe, every parameter binding, materials,
+   joints and questions; its cursor pages the list of drafts, not the selected
+   draft's body. The scoped immutable stored rows were **38,356 characters** for
+   revision 6 and **42,182** for revision 7 (not 600,000). Parameter data alone was
+   **22,406 / 25,538 characters**; joints were **9,039** in both. These are stored
+   row sizes, not full RPC envelopes. The **600,000-character limit** is a safety
+   rejection boundary, not a sensible model page target. Read/edit context has a
+   similar breadth risk: a few records can still contain up to a 240,000-character
+   transport boundary. PR3 transport pages preserve originals but do not choose
+   which section actually matters.
+5. **Writes make the expensive model regenerate whole construction documents.**
+   The three save requests contained **43,918 / 44,074 / 44,024 characters** of
+   normalized JSON arguments. The first omitted required `change_note`, confirmed
+   against the pinned schema; later requests included it. The handler rejects
+   missing required fields before writing. These are three attempts, not three
+   committed revisions. Full saved tool-error envelopes are no longer available,
+   so this does not identify every reason for the later retry. Existing
+   `change_construction_parameters` can handle bounded parameter changes while
+   preserving the canonical recipe, but cannot substitute for arbitrary topology
+   or joint redesign. Such edits need a narrow domain command, not an assumed
+   ability to patch any raw field.
+6. **The proposed cheap reader is not installed.** The pinned main role is
+   `gpt-5.4/high`; summary/compactor/presentation roles use `gpt-5.4-mini/low`.
+   These mini roles do not intercept large construction records. The generic
+   Project Librarian is still a specification. `describe_project_image` accepts
+   and caches main Bob's description after actual pixels were delivered; it does
+   not call another smaller vision model. Existing deterministic
+   `derive_construction_lists` and geometry checks already provide a code-first
+   foundation; structured quantities do not need model summarization.
+
+### Corrective sequence and acceptance
+
+1. **Tool surface:** retain the complete short directory, separate workflow method
+   selection from blanket schema loading, and eliminate provably duplicate
+   manual/schema copies. Preserve exact instructions in durable state and live
+   authorization. Test restored callability and instruction retrieval, not merely
+   a smaller serialized prompt. Do not silently apply a changed contract to old
+   executions.
+2. **Source views:** make construction default reads small, revision-bound overview
+   views; provide explicit relevant parts/materials/parameters/issues views and
+   actual images where useful. Keep full canonical geometry server-side for
+   deterministic checks/list derivation. Verify a known answer/quantity and its
+   source revision survive selection; late governing constraints must remain
+   discoverable. A page of arbitrary JSON is not this acceptance test.
+3. **Writes:** use existing parameter changes where they match the requested edit;
+   add domain-specific edits for uncovered changes. Do not force full-document
+   regeneration to repair one field. Preserve write-ledger idempotency, source
+   versions, unknown measurements and unrelated parts. A failed validation is not
+   permission to fill missing facts automatically.
+4. **Only then add a smaller source reader where necessary:** unstructured source
+   interpretation with a precise question, bounded output, immutable source refs,
+   explicit uncertainty and no writes. Reuse by source revision/question. No
+   automatic expensive synthesis stage or per-step summary loop. Code handles
+   database facts and arithmetic; main Bob handles the user-facing judgment.
+
+The audit script and pinned-catalog measurement were executed offline; no runtime
+code, schema, model setting or deployment changed in this audit. No new paid test
+or full CI was run. The proposed reductions are not yet verified quality or dollar
+savings. These findings block activating drafts #285/#286 as an accepted
+efficiency solution. The roughly USD 1 completed-task goal stays soft.
+
 ## Scope and verdict
 
 The source baseline was Bob main `b4e04986ad9d96a03ca748f14745e4314a6c6c55`.

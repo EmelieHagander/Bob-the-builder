@@ -33,6 +33,33 @@ catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
 
+### Payload audit and revised target — 2026-10-19
+
+The owner requests an audit before activation of the Launchpad drafts: main Bob
+should receive a relevant image, deterministic database pick/parts lists, or a
+small description. Large unstructured sources may be interpreted by a smaller
+model when necessary; expensive main-model raw-data processing is not the default.
+[The dated payload evidence](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit)
+owns measured sizes and the corrective sequence. The following is a revised
+target, not a deployed capability or a claim that the draft PRs already meet it.
+
+Loading a tool into durable turn state and sending its full schema on every
+subsequent request are separate responsibilities. Preserve discovery and access
+to all authorized capabilities, but avoid expanding an entire workflow's schemas
+when only its short method and a few tools are needed. A loaded instruction must
+remain recoverable without another discovery/model loop. Keep one authoritative
+copy of needed manual/schema content in the provider request; do not retain a
+second full copy in a successful `describe_tool` result when the equivalent
+current definition is already present. Preserve workflow methods, prerequisites,
+colleague instructions and unavailable-tool feedback when deduplicating.
+
+This revisits the PR2 proposal to carry every loaded full manual in every request:
+durable availability remains required, but broad perpetual wire expansion is not
+an accepted efficiency result. Schema selection must not introduce permission
+prompts, remove authorized discovery, or bypass live policy/version checks.
+Changing this behavior requires pinned execution/catalog compatibility and tests;
+this audit does not change the currently deployed loading contract below.
+
 **Main Bob's foundation was published through PR #267.** The
 [coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same
 instruction-loading mechanics to active specialists and remove dormant CAD roles.

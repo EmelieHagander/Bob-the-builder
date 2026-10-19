@@ -293,6 +293,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — kostnadsmedveten förberedelse utan nya betalprov (2026-10-19):**
+den senaste fördjupningen visar för bred verktygsladdning, dubblerade
+manual/schemadelar och stora konstruktionsläsningar/-skrivningar. Börja med
+[auditens rättningsordning](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit)
+innan draft #285/#286 aktiveras: smalare verktygsyta, relevanta bild-/datavyer och
+små ändringskommandon; mindre modell endast för nödvändig tolkning av stora
+ostrukturerade källor. Detta är ännu inte infört. Samtalsminnets original och
+behörighets-/källkontroller ska bevaras.
+
 beställarens senaste beslut är cirka **1 USD som mål per jämförbar färdig uppgift,
 utan hårt tak**. Fortsätt med sparade kördata och lokala tester; starta inget nytt
 betalt modellprov nu. PR2 finns i draft #285 och steg 3 förbereds separat ovanpå
