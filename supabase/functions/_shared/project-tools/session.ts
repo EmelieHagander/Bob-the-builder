@@ -153,7 +153,9 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   // bind and count each card once per session.
   const cards = new Map<string, string | undefined>()
   const cardDescription = (row: { name: string; description?: string }) => {
-    const key = row.name + '\u0000' + (opts.catalogTool ? '' : row.description ?? '')
+    // These keys are persisted inside JSONB checkpoints. Encode the tuple so
+    // the binding stays exact without a NUL separator PostgreSQL cannot store.
+    const key = JSON.stringify([row.name, opts.catalogTool ? '' : row.description ?? ''])
     if (cards.has(key)) return cards.get(key)
     const description = opts.catalogTool ? opts.catalogTool(row.name, { card: true }).function.description : row.description
     if (description && countContextTokens(description) > 80) throw new Error('tool_card_too_large')

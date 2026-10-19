@@ -5,6 +5,7 @@ import { projectSchema, asProjectUser } from './support/project-schema.ts'
 import type { PGlite } from './support/pglite.ts'
 import { createBobJournal, BobContinuation, fingerprint } from '../supabase/functions/_shared/bob-job-journal.ts'
 import { createBobTurnCheckpoint, validateBobTurnCheckpoint } from '../supabase/functions/_shared/bob-turn-checkpoint.ts'
+import { createToolSession, type ToolDefinition, type ToolPolicy } from '../supabase/functions/_shared/project-tools/session.ts'
 
 let pg: PGlite
 const owner = '00000000-0000-4000-8000-000000000001'
@@ -143,6 +144,38 @@ test('checkpoint tables and mutation RPCs are never exposed to a normal caller',
   assert.throws(() => validateBobTurnCheckpoint(packet, { jobId: job.id, turnId: randomUUID(), catalogManifestId: job.catalogManifestId }), /invalid_turn_checkpoint/)
   assert.throws(() => validateBobTurnCheckpoint(packet, { jobId: job.id, turnId: q.turn, catalogManifestId: randomUUID() }), /invalid_turn_checkpoint/)
   await finish(job.id, job.claimToken)
+})
+
+test('prepared tool cards survive the ready-to-model checkpoint through PostgreSQL JSONB', async () => {
+  for (const pinnedCatalog of [false, true]) {
+    const q = await enqueue(), job = await claim(q.jobId)
+    const definition: ToolDefinition = {
+      version: 1, spec: { type: 'function', function: { name: 'read_source', description: 'Read the exact source.', parameters: { type: 'object', properties: {} } } },
+      gate: () => 'available', execute: async () => ({ status: 'ok' }),
+    }
+    const policy: ToolPolicy = { name: 'read_source', description: 'Read the exact source.', how_to: 'Keep its version.', schema_version: 1, always_load: false, preload_phases: [], active: true }
+    let cardBindings = 0
+    const make = () => createToolSession({ definitions: [definition], toolInstructions: 'lazy', readPolicy: async () => ({ phase: 'design', tools: [policy] }),
+      ...(pinnedCatalog ? { catalogTool: (name: string, parameters: Record<string, unknown>) => {
+        if (name === policy.name && parameters.card) cardBindings++
+        return { type: 'function' as const, function: { ...definition.spec.function, name } }
+      } } : {}),
+    })
+    const first = make()
+    await save(job, 0, { phase: 'ready', toolbox: first.exportState() })
+    await first.prepare()
+    assert.equal(first.exportState().cards.length, 1)
+    // JSON.stringify roundtrips NUL, whereas PostgreSQL JSONB rejects it. This
+    // must cross the production RPC boundary after cards have been populated.
+    const stored = await save(job, 1, { phase: 'model', toolbox: first.exportState() })
+    assert.equal(stored.revision, 2)
+    const restored = make()
+    restored.restoreState(stored.state.toolbox)
+    assert.deepEqual(restored.exportState(), first.exportState())
+    assert.deepEqual(await restored.prepare(), await first.prepare())
+    if (pinnedCatalog) assert.equal(cardBindings, 1, 'the restored cache keeps its exact catalog binding')
+    await finish(job.id, job.claimToken)
+  }
 })
 
 test('checkpoint journal pages retain byte and row bounds without reading archived operations', async () => {
