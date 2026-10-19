@@ -20,14 +20,12 @@
 
 ## Agent and prompt craft
 
-This `CLAUDE.md`, the coding subagents under `.claude/agents/`, and Bob's
-runtime prompts deserve the same discipline: **stay slim, softcode judgement,
-storybook prompting**. Introduce the role and useful outcome; keep exact paths,
-interfaces and real authority fences precise. For prompt authorship read
-[Docs/prompt-craft.md](Docs/prompt-craft.md) on demand, not at every session
-start. A broken tool, missing context or lost work state is an implementation
-problem, not a reason to add more behavioural prompt rules. Bob's actual
-capabilities and outcomes belong to their existing contracts.
+This `CLAUDE.md`, coding subagents and Bob's runtime prompts follow
+**stay slim · softcode judgement · storybook**: introduce the role and
+outcome, retain exact interfaces and safety fences, and route changing
+truth to its owner. Read [Docs/prompt-craft.md](Docs/prompt-craft.md)
+only when authoring prompts. For weak AI outcomes, inspect tools,
+context, execution and completed results before adding behavioural rules.
 
 ## Product north stars
 
