@@ -3,11 +3,12 @@
 > **Implementation: September 2026 context release.** This supersedes the earlier provider-cursor-only design and its unimplemented provider-compaction/reseed plan. Code and migrations are not deployment proof: the merged PR release record owns hosted migration versions, Edge version and live verification.
 
 <a id="launchpad-migration"></a>
-## Launchpad-pattern migration — SPECIFIED 2026-10-19
+## Launchpad-pattern migration — 2026-10-19
 
-**PR1 is an implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
-awaiting stage-specific verification and live acceptance; it is not merged or deployed. PR2 and PR3
-remain specified.** The owner accepted the staged direction: one PR
+**PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
+with ordinary member/model and long-image acceptance still open. PR2 and PR3
+remain specified.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
+records the installed migration, source and authentication readback. The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
 [dated audit](bob-launchpad-migration-audit-2026-10-19.md) records the baseline,
@@ -22,8 +23,8 @@ replaces the original per-stage full-CI gate for this migration; it does not
 change CI workflows or settings. The ordinary long-image acceptance and release
 ordering below remain, and CAD still follows acceptance of Bob's main turn.
 
-The existing context-strategy/replay behavior below remains the implemented
-compatibility reference until a versioned successor is released. This migration
+The existing context-strategy/replay behavior below remains the compatibility
+reference for legacy jobs. This migration
 preserves the owner's no-application-quotas decision: no added step, call, write,
 cost or job-duration quotas. Provider capacity, payload/schema boundaries,
 authorization, cancellation and uncertain-outcome handling remain. A payload
@@ -76,8 +77,9 @@ Observed installed versions and live acceptance belong in release evidence.
 existing authentication modes. To stop new checkpoint jobs, roll back the enqueue
 endpoint first; retain a compatible worker until every version-1 job has drained.
 An older worker is deliberately refused checkpoint-native jobs. Do not remove the
-schema or reinterpret their journal during rollback. This is the release plan;
-PR1 has not been deployed by this documentation change.
+schema or reinterpret their journal during rollback. The
+[technical release record](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
+records execution of this order; it does not close model acceptance.
 
 ### PR2 — build each request from complete state
 

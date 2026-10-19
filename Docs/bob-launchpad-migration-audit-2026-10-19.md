@@ -2,17 +2,17 @@
 
 **Dated evidence, not the implementation contract.** The corrected three-PR
 contract lives in [the conversation owner](ask-bob-conversations.md#launchpad-migration).
-[Active State](bob-delivery-flow.md#state) owns the next action. PR1 is an
-**implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281)**,
-awaiting stage-specific verification and live acceptance; it is not merged or deployed. PR2/PR3 remain
-specified. This record does not close ordinary owner, long-work, image or CAD acceptance.
+[Active State](bob-delivery-flow.md#state) owns the next action. PR1 is
+**merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281)**;
+[the release readback below](#pr1-technical-release) does not close ordinary
+member/model, long-work, image or CAD acceptance. PR2/PR3 remain specified.
 
 ## Scope and verdict
 
 The source baseline was Bob main `b4e04986ad9d96a03ca748f14745e4314a6c6c55`.
 Launchpad was inspected read-only through its repository at
 `9448bad116f78c44178f5415520602406df7ef69`. No Launchpad production flag or
-end-to-end behavior was verified. Live Bob inspection was read-only; private job
+end-to-end behavior was verified. Baseline live Bob inspection was read-only; private job
 identifiers and conversation content are intentionally absent from this record.
 
 **Proceed with the corrected first stage.** Removing historical orchestration
@@ -44,6 +44,32 @@ confirmed. The initial billing failure remains historical evidence, not an activ
 blocker or proof of a later passing CI run. No workflow or CI setting is changed
 by this exception. The long-image gate before PR2, release ordering and rollback remain in
 [the migration contract](ask-bob-conversations.md#launchpad-migration).
+
+<a id="pr1-technical-release"></a>
+## PR1 technical release
+
+PR #281 was merged as `fa725fe6f92fcd63bf4b1271517ef29852ac4e13`; its runtime
+code is the tested `495cb44` candidate. Deployment followed the required order:
+additive migration, compatible worker, then enqueue activation through `ask-bob`.
+The hosted migration is **`20261019104918_bob_turn_checkpoints`**, corresponding
+to repository `20261019101005_bob_turn_checkpoints.sql`, with SQL SHA-256
+`42fc255f98dd09e23bd3f698bee59e528139570e096377f388b9d3be0a1e6da6`.
+Read-only metadata at **2026-10-19 10:49:40 UTC** confirmed all 11 checked RPC
+ACL/security definitions, enabled private-table RLS and absent direct table
+grants. All 16 existing jobs retained execution version 0.
+
+| Installed endpoint | Status / JWT verification | Retrieved bundle SHA-256 | Source readback |
+| --- | --- | --- | --- |
+| `bob-worker` v110 | ACTIVE / false | `c512e7fa846f6b272716a0d7159117d4634f3553613552310563eaf027e75b7a` | 101 returned files: 100 nonempty files exactly match reviewed source; type-only `cad-intake` is empty. `provenance` and `bob-request` are omitted from this bundle. |
+| `ask-bob` v142 | ACTIVE / true | `b3d5aae7a2996112862a39ad0e5abdbb991a4956e168d0ddab11db126468fc15` | 103 returned files: 102 nonempty files exactly match reviewed source; type-only `cad-intake` is empty. `provenance` is omitted from this bundle. |
+
+All runtime sources in both retrieved bundles matched the immutable release.
+An unauthenticated `GET` returned **401** from `ask-bob` and **405** from
+`bob-worker`. These are boundary checks, not a successful authenticated model
+turn. At **10:51:13 UTC**, the queue still contained the same 16 terminal legacy
+jobs and no new jobs. No positive member/model call or long-image acceptance is
+claimed. Full CI remains deferred to the final stage by the owner's decision;
+ordinary long-image behavior and log review remain required before PR2.
 
 ## Observed Bob baseline
 
