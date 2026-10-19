@@ -2,6 +2,7 @@ name: Dependency security
 
 on:
   pull_request:
+    types: [ready_for_review]
     paths:
       - package.json
       - package-lock.json

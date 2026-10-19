@@ -1,6 +1,7 @@
 name: CAD lineage concurrency
 on:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'supabase/migrations/**'
       - 'db/migrations/**'

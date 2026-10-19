@@ -1,7 +1,11 @@
 name: CI
 
+# Expensive full validation belongs at the explicit review gate, not every
+# synchronization push. Keep the PR draft while iterating and mark it ready
+# only when the exact head should receive full CI.
 on:
   pull_request:
+    types: [ready_for_review]
   workflow_dispatch:
 
 jobs:
