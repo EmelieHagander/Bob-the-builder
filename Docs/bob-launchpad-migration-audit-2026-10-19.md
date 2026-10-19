@@ -183,7 +183,7 @@ Image-grounding resume and the ordinary long-work gate remain unverified in
 production; PR2 must still wait. Full CI remains deferred by the owner's decision.
 
 <a id="pr1-fourth-live-attempt"></a>
-### Fourth live job: image resume passed, delivery still pending
+### Fourth live job: image resume passed; authority-renewal failure recovered one receipt
 
 The owner started a new turn at **12:30:34 UTC** after reporting that the previous
 UI still required a manual stop. Read-only inspection found only one active job;
@@ -204,9 +204,40 @@ all `EarlyDrop`, with CPU **301–934 ms**. This is positive image-resume and CP
 evidence, not proof of constant CPU or a completed 40-model-step turn. Several
 native read requests repeat identical arguments; the old compactor runs very
 frequently. These are model-requested reads, not evidence of historical handler
-replay. Their effect on useful progress remains under review. No saved delivery
-or completed long-work acceptance is claimed. Continue from the live result;
-do not launch PR2 based solely on this intermediate snapshot.
+replay. The intermediate snapshot did not establish a completed delivery.
+
+**Final readback:** job `a307c296-a27f-415d-adba-8ac3e0c86d91` ended at
+**13:05:56 UTC** with database status `completed`, but delivery status `recovered`,
+`end_reason: failed`, **28 recorded main steps / 53 tool executions / one saved
+record**. The owner received only a verified construction-revision receipt and an
+explicit notice that the request was incomplete. This does **not** close behavior
+acceptance. The provider completed **29 main calls, 37 context-summary calls and
+one delivery-language call**, costing **$3.94513665** from each reservation's
+pinned prices. Main input was **1,091,664 tokens**, including **489,472 cached
+(44.84%)**; summary input was **409,241**, including **1,280 cached (0.31%)**.
+This is a failed/partial-task baseline, not cost per accepted delivery.
+
+At **13:05:30.773 UTC**, the worker logged reserve failure `P0001 /
+ai_operation_changed`. The final main provider response was already completed
+with a native `check_construction_draft` call. Its reservation expiry remained
+**13:15:40 UTC**, while the parent Bob job had renewed to **14:05:22 UTC**.
+`shared.ai_job_reserve` correctly requires the original immutable expiry; Bob
+was incorrectly passing its newly renewed JWT expiry during resume. The journal
+fingerprint had passed before this separate transport guard rejected the call.
+
+The narrowly scoped correction pins a deadline per model operation, before its
+first reservation, for new checkpoint executions (`modelDeadlineVersion: 1`).
+A renewed login supplies the next operation's deadline; it never changes an
+accepted provider job, skips an authority check or authorizes another POST.
+Older execution manifests retain their journal sequence. The regression test
+reproduces the old rejection, then restores a fresh journal after renewal and
+reads the original completed response with exactly one provider POST.
+
+The owner authorized continuing implementation of PR2 while this live test was
+pending. That authorizes preparing a separate PR, not describing this recovery
+as successful long-work delivery. Finish this isolated fix and its live check
+before activating the complete-request migration. The earlier UI working-state
+report also remains unverified.
 
 ## Observed Bob baseline
 

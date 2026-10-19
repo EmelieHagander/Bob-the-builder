@@ -19,6 +19,7 @@ import {createDrawingRequestStore} from './drawing-request-store.ts'
 import { createBobModelBudget, isDrawingModelCall, type DrawingBudgetAuthority } from './bob-model-budget.ts'
 import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
+import { pinBobModelDeadline } from './bob-model-deadline.ts'
 import { hasImageContent } from './openai-content.ts'
 import { rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
@@ -163,6 +164,11 @@ export async function answerWithOpenAi(opts: {
    const modelStream=options.catalogSchemaKey==='bob_delivery_language'?'model:delivery-language-v1':'model:'+options.functionName
    try{return await memo(modelStream, options, async identity => {
     await beforeDispatch?.()
+    const expiresAt = opts.background?.workAllowanceVersion === 1 ? opts.background.authorityExpiresAt! : new Date(opts.background?.deadline ?? 0).toISOString()
+    // A refreshed owner JWT must not alter an already accepted model job's
+    // immutable reservation. Old execution manifests retain their call order.
+    const modelExpiresAt = asyncModels && identity && execution.modelDeadlineVersion === 1
+      ? await pinBobModelDeadline(memo, identity, expiresAt) : expiresAt
     const started = performance.now()
     const wall = journal ? journal.remaining() + 8000 : Infinity
     const allowed = Math.max(1000, Math.min(timeout, wall))
@@ -172,7 +178,7 @@ export async function answerWithOpenAi(opts: {
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
-          expiresAt: opts.background!.workAllowanceVersion === 1 ? opts.background!.authorityExpiresAt! : new Date(opts.background!.deadline).toISOString(),
+          expiresAt: modelExpiresAt,
           ...recovery,
         } } : {}),
       })
@@ -275,15 +281,16 @@ export async function answerWithOpenAi(opts: {
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; groundingReadOrderVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const,
-      ...(checkpoint ? { groundingReadOrderVersion: 1 as const } : {}),
+      ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
     }))
   if (execution.lookupObservationVersion !== undefined && execution.lookupObservationVersion !== 1) throw new Error('lookup_observation_version_invalid')
   if (execution.groundingReadOrderVersion !== undefined && execution.groundingReadOrderVersion !== 1) throw new Error('grounding_read_order_version_invalid')
+  if (execution.modelDeadlineVersion !== undefined && execution.modelDeadlineVersion !== 1) throw new Error('model_deadline_version_invalid')
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
     // work pins each observation, including invalid/failed reads, before its
