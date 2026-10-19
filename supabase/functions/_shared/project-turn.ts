@@ -36,6 +36,7 @@ export async function runClaimedProjectTurn(opts: {
   knowledgeReader?: KnowledgeReader; operationalReader?: OperationalReader; recordReader?: RecordDetailReader; imageTools?: ProjectImageTools; cadAssistant?: CadAssistant; catalogReader?: MaterialCatalogReader; constructionTools?: ConstructionTools; projectEdits?: ProjectEdits; solutionActions?: SolutionActions; workRecords?: WorkRecords; planLinks?: PlanLinks; planAssistant?: ReturnType<typeof createPlanAssistant>;
   readToolPolicy?: ToolPolicyReader;
   toolInstructions?: ToolInstructions; contextEpoch?: () => number;
+  carryLoadedTools?: boolean;
   registerContextSurface?: (refresh: () => Promise<ContextSurface>) => void;
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;

@@ -34,11 +34,11 @@ import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
 import { createGroundedModelCall } from './project-grounding.ts'
 import { createProjectContext, type Opened } from './project-context/dispatcher.ts'
-import { createMediaAdapter, resolveMediaImage } from './project-context/media.ts'
+import { createMediaAdapter, resolveMediaImage, resolveMediaImageFile, type ProviderImageFiles } from './project-context/media.ts'
 import { prepareChatImages } from './project-context/chat-images.ts'
 import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
-import { callOpenAIResponses, callOpenAIEmbeddings, generateImage } from './openai-service.ts'
+import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
@@ -53,6 +53,21 @@ import { createAiCatalogSession, applyCatalogModelOptions, type AiCatalogSession
 
 /** Project reads and writes use the caller JWT. Service access is restricted to shared AI
  * config/accounting, content-free execution diagnostics and Bob's private transcript/provider-state commands. */
+/** Journal replay re-runs every recorded step's access, tool-policy and image
+ * freshness checks within milliseconds (hundreds of round trips per claim).
+ * Reuse a successful live answer for a few seconds; a failure is never reused,
+ * and writes stay enforced by RLS and the domain commands at their boundary. */
+const FRESH_MS = 3000
+function reuseFresh<A extends unknown[], T>(read: (...args: A) => Promise<T>, reusable: (value: T) => boolean, key: (...args: A) => string = () => '') {
+  const seen = new Map<string, { at: number; value: T }>()
+  return async (...args: A): Promise<T> => {
+    const id = key(...args), hit = seen.get(id)
+    if (hit && Date.now() - hit.at < FRESH_MS) return hit.value
+    const value = await read(...args)
+    if (reusable(value)) seen.set(id, { at: Date.now(), value }); else seen.delete(id)
+    return value
+  }
+}
 export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
@@ -102,13 +117,30 @@ export async function answerWithOpenAi(opts: {
   const resolveImage = async (ref: string) => {
     const record = imageRefs.get(ref)
     if (!record) throw new Error('image_not_opened')
+    // Claimed server turns reuse one stored provider file per image revision
+    // instead of re-sending pixels; the image itself stays in bob storage.
+    if (claimedServer) return resolveMediaImageFile(opts.projectId, mediaTransport, record, ref, imageFiles, AbortSignal.timeout(30000))
     return resolveMediaImage(opts.projectId, mediaTransport, record, AbortSignal.timeout(12000))
+  }
+  const imageFiles: ProviderImageFiles = {
+    async find(mediaId, revision, signal) {
+      const { data, error } = await client.rpc('bob_image_provider_file', { p_project: opts.projectId, p_media: mediaId, p_revision: revision }).abortSignal(signal)
+      if (error) throw new Error('unavailable')
+      return typeof data === 'string' ? data : null
+    },
+    upload: (bytes, contentType, signal) => uploadOpenAIVisionFile(bytes, contentType as 'image/png' | 'image/jpeg' | 'image/webp', signal),
+    async save(entry, signal) {
+      const { error } = await internal.rpc('bob_record_image_provider_file', { ...binding, p_user: opts.userId, p_media: entry.mediaId,
+        p_revision: entry.revision, p_updated_at: entry.updatedAt, p_sha256: entry.sha256, p_file_id: entry.fileId, p_expires_at: entry.expiresAt,
+      }).abortSignal(signal)
+      if (error) throw new Error('unavailable')
+    },
   }
   // Background workers live ~150 s. Reserve a realistic duration per role, not the
   // full timeout, so several calls share one segment; a call cut off at the segment
   // wall yields into a fresh segment, consuming the same bounded retry budget
   // as other dispatched failures. Durable AI waiting does not consume retries.
-  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'bob-delivery-language': 15000 }
+  const RESERVE_MS: Record<string, number> = { 'ask-bob': 75000, 'cad-reviewer': 60000, 'plan-compiler': 45000, 'plan-reviewer': 30000, 'context-summary': 30000, 'completion-gate': 15000, 'bob-delivery-language': 15000 }
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
@@ -188,7 +220,9 @@ export async function answerWithOpenAi(opts: {
         if (opened.image.image_url.startsWith('private-image:')) imageRefs.set(opened.image.image_url, opened)
         return opened
       },
-      // current() remains LIVE, including for already-replayed image evidence.
+      // current() remains live, including for already-replayed image evidence;
+      // a replay re-checks every opened image per step within milliseconds.
+      current: reuseFresh(adapter.current, unchanged => unchanged, (ref, expected) => ref + '\u0000' + expected),
     }
   }
   const lookupTransport = checkpointed((projectId: string, input: LookupInput, signal: AbortSignal) =>
@@ -196,11 +230,12 @@ export async function answerWithOpenAi(opts: {
       p_project_id: projectId, p_dataset: input.dataset, p_query: input.query,
       p_status: input.status, p_area_id: input.area_id, p_record_id: input.record_id, p_after_id: input.after_id ?? null,
     }, signal))
-  const hasAccess = async () => {
+  const hasAccess = reuseFresh(async () => {
     const { data, error } = await client.from('projects').select('id').eq('id', opts.projectId)
       .abortSignal(AbortSignal.timeout(10_000)).maybeSingle()
     return !error && data?.id === opts.projectId
-  }
+  }, granted => granted)
+  const readToolPolicy = reuseFresh(createToolPolicyReader(client, opts.projectId), () => true)
 
   if (!await hasAccess()) return { ok: false, error: 'project_denied' }
   let claim: BobTurnClaim
@@ -233,9 +268,9 @@ export async function answerWithOpenAi(opts: {
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   modelBudget = createBobModelBudget(undefined, undefined, undefined, { unlimitedWork })
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1 } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1 } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
-      lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const,
+      lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const,
       memoryManagementVersion: contract.context_strategy_version === 1 ? 2 as const : 1 as const,
       ...(contract.context_strategy_version === 1 ? { contextStrategyVersion: 1 as const } : {}),
     }))
@@ -431,7 +466,7 @@ export async function answerWithOpenAi(opts: {
   }
   const constructionTools = createConstructionTools(constructionOptions)
   const calculator=hasCalculatorContract(aiCatalog)?createProjectCalculator({ unlimitedWork,projectId:opts.projectId,hasAccess,
-    isEnabled:async()=>{const policy=await createToolPolicyReader(client,opts.projectId)();return policy.tools.some(t=>t.name==='calculate_project'&&t.active&&t.schema_version===1)},
+    isEnabled:async()=>{const policy=await readToolPolicy();return policy.tools.some(t=>t.name==='calculate_project'&&t.active&&t.schema_version===1)},
     readSources:constructionOptions.readSources,
     readConstruction:async(id,revision)=>{
       const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:null}).abortSignal(AbortSignal.timeout(12000))
@@ -640,7 +675,9 @@ export async function answerWithOpenAi(opts: {
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.
     ...opts, unlimitedWork, currentView, validateCurrentView, getCurrentViewEvidence, resume: !!opts.background, beforeSettle: () => journal?.check(), modelTimeoutMs: opts.background ? 100000 : 45000, lookup, hasAccess, writer, knowledgeReader, operationalReader, projectContext, catalogReader, constructionTools, projectEdits, solutionActions, workRecords, planLinks, calculator, planAssistant, cadAssistant, imageTools, recordReader, generation: claimedServer?.generation, deadline,
-    readToolPolicy: createToolPolicyReader(client, opts.projectId),
+    readToolPolicy,
+    // Older in-flight journals keep their recorded post-rollover requests.
+    carryLoadedTools: execution.toolCarryVersion === 1,
     ...(contextStrategy ? { contextEpoch: () => mainContextEpoch,
       registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshMainContextSurface = refresh },
     } : {}),

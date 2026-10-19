@@ -1,7 +1,7 @@
 import { cadPreviewKeys, parseCadAssemblyResult, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { CadPacket } from './cad-assistant.ts'
 /** Plain loop: Uint8Array.from with a mapper costs ~100 ms per MB of CPU. */
-function decodeBase64(encoded:string):Uint8Array{const text=atob(encoded),raw=new Uint8Array(text.length);for(let i=0;i<text.length;i++)raw[i]=text.charCodeAt(i);return raw}
+function decodeBase64(encoded:string):Uint8Array<ArrayBuffer>{const text=atob(encoded),raw=new Uint8Array(text.length);for(let i=0;i<text.length;i++)raw[i]=text.charCodeAt(i);return raw}
 export const CAD_TRANSPORT_CONTRACT='2026-10-17-paged-construction-annotations'
 
 /** The host and secret are deployment configuration, never model input. */
