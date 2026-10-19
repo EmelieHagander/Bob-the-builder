@@ -292,15 +292,19 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — isolerad rättning före aktivering av PR2 (2026-10-19):**
-gör livekontrollen av rättningen i PR #284, installerad som `bob-worker` v113 och
-`ask-bob` v145. Den sparar modelloperationens sluttid när JWT förnyas under väntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
-inte en färdig leverans. Den nya rättningen sparar modellanropets ursprungliga
-sluttid; [auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
-äger bevis, kostnad och kvarstående acceptans. PR1 är tekniskt driftsatt men
-fortfarande inte beteendeaccepterad. Beställaren har godkänt fortsatt förberedelse
-av steg 2 i separat PR; aktivering ska bedömas efter rättningen och liveprovet.
-Utred också rapporten om kvarhängande arbetsstatus efter föregående serverslut.
+**Aktivt nästa steg — kostnadsmedveten förberedelse utan nya betalprov (2026-10-19):**
+beställarens senaste beslut är cirka **1 USD som mål per jämförbar färdig uppgift,
+utan hårt tak**. Fortsätt med sparade kördata och lokala tester; starta inget nytt
+betalt modellprov nu. PR2 finns i draft #285 och steg 3 förbereds separat ovanpå
+den. Inget av dem är aktiverat. [Kostnadsgranskningen](bob-launchpad-migration-audit-2026-10-19.md#offline-cost-review)
+äger baslinjen och förklarar varför färre sammanfattningar inte ensamt når målet.
+
+PR #284 är installerad som `bob-worker` v113 och `ask-bob` v145 och sparar
+modelloperationens ursprungliga sluttid vid JWT-förnyelse. Dess riktade reproduktion
+är verifierad, men ordinary liveacceptans är fortfarande öppen. Fjärde liveprovet
+slutade med ett återställt skrivkvitto, inte en färdig leverans. Förberedelse av nästa
+steg innebär därför inte att PR1 är beteendeaccepterad. Utred också rapporten om
+kvarhängande arbetsstatus efter föregående serverslut.
 
 Riktade tester och typkontroller gäller per steg. Full testsvit och CI väntar tills
 sista stegets beteende bekräftats enligt

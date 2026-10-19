@@ -4,24 +4,27 @@ import { contextTokenPrefix, countContextTokens, countSerializedTokens } from '.
 import { stableJsonValue } from './bob-job-journal.ts'
 import { buildBobRequest } from './bob-complete-request.ts'
 import { readResponseItems } from './openai-content.ts'
+import { bobResultPage, projectBobResult, prepareBobResult, BOB_RESULT_HISTORY_INSTRUCTIONS, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from './bob-result-references.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 type ToolCall = NonNullable<OpenAIServiceResponse['toolCalls']>[number]
 type ModelCall = (options: OpenAIServiceOptions, beforeDispatch?: () => Promise<void>) => Promise<OpenAIServiceResponse<any>>
 export type ContextSurface = Pick<OpenAIServiceOptions, 'systemMessage' | 'tools' | 'catalogSchemaParameters' | 'catalogToolParameters'>
 type Handoff = { summary: string; open_questions: string[]; next_steps: string[]; source_refs: string[] }
-type Operation = { call_id: string; tool_name: string; arguments: string; output: Message['content'] }
+type Operation = BobArchivedOperation
 type Chain = {
   identity: string; seed: Message[]; groups: Message[][]; handoff?: Handoff; compacted: boolean
   pendingInternal: Message[]; inputTokens: number; outputTokens: number
   operations: Map<string, Operation>
   historicalImages?: Message[]
+  resultReferences?: 1
 }
 /** Only live provider heads are retained. Map entries are arrays on disk so
  * a worker can restore a chain without replaying completed model/tool calls. */
 export interface BobContextContinuationState {
   version: 1;
   strategyVersion: number;
+  resultReferenceVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
@@ -179,6 +182,9 @@ function validHandoff(value: unknown, allowed: ReadonlySet<string>, tokens: numb
  */
 export function createBobContextContinuation(opts: {
   version?: number; aiCatalog: AiCatalogSession; callModel: ModelCall
+  /** Pinned only for new native main turns. CAD and legacy jobs keep their
+   * existing compactor and archive cursor contract. */
+  mainResultReferences?: 1
   snapshot?: (value: { functionName: string; role: string }) => unknown
   onRollover?: (value: { functionName: string; role: string }) => void
   refreshSurface?: (value: { functionName: string; role: string }) => Promise<ContextSurface | undefined>
@@ -190,6 +196,7 @@ export function createBobContextContinuation(opts: {
   const chains = new Map<string, Chain>()
   const enabled = opts.version === 1
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
+    ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -202,13 +209,15 @@ export function createBobContextContinuation(opts: {
         && typeof call.function.name === 'string' && typeof call.function.arguments === 'string'))
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
-    if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0) || !Array.isArray(state.chains)
+    if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
+      || state.resultReferenceVersion !== opts.mainResultReferences || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
       if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || !entry[0] || !object(entry[1])) throw new Error('context_checkpoint_invalid')
       const [id, chain] = entry
       if (typeof chain.identity !== 'string' || !messages(chain.seed) || !Array.isArray(chain.groups) || !chain.groups.every(messages)
+        || chain.resultReferences !== undefined && (chain.resultReferences !== 1 || opts.mainResultReferences !== 1 || chain.compacted || chain.handoff !== undefined)
         || chain.historicalImages !== undefined && !messages(chain.historicalImages)
         || typeof chain.compacted !== 'boolean' || !messages(chain.pendingInternal) || !natural(chain.inputTokens) || !natural(chain.outputTokens)
         || !Array.isArray(chain.operations) || new Set(chain.operations.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== chain.operations.length
@@ -219,6 +228,11 @@ export function createBobContextContinuation(opts: {
         if (!Array.isArray(operation) || operation.length !== 2 || typeof operation[0] !== 'string' || !object(operation[1])
           || operation[1].call_id !== operation[0] || typeof operation[1].tool_name !== 'string' || typeof operation[1].arguments !== 'string'
           || !(typeof operation[1].output === 'string' || Array.isArray(operation[1].output))) throw new Error('context_checkpoint_invalid')
+        if (chain.resultReferences === 1) {
+          const view = operation[1].presentation
+          if (!object(view) || !object(view.observed) || view.observed.call_id !== operation[0] || view.observed.tool_name !== operation[1].tool_name
+            || !(typeof view.older === 'string' || Array.isArray(view.older))) throw new Error('context_checkpoint_invalid')
+        }
       }
       const copy = clone(chain)
       restored.set(id, { ...copy, operations: new Map(copy.operations) })
@@ -249,13 +263,15 @@ export function createBobContextContinuation(opts: {
     if (input.call_id === null) {
       const all = [...chain.operations.values()]
       if (after > all.length) return { status: 'invalid' }
-      const page = all.slice(after, after + 20).map(statusOf)
+      const page = all.slice(after, after + 20).map(operation => operation.presentation?.observed ?? statusOf(operation))
+      if (chain.resultReferences === 1) while (page.length && countSerializedTokens(page) > BOB_RESULT_PAGE_TOKENS - 100) page.pop()
       const next = after + page.length < all.length ? after + page.length : null
       return { status: 'ok', operations: page, after, next_after: next, truncated: next !== null }
     }
     const operation = chain.operations.get(input.call_id as string)
     if (!operation) return { status: 'not_found' }
     try {
+      if (chain.resultReferences === 1) return bobResultPage(operation, after)
       const page = textPage(JSON.stringify({ arguments: operation.arguments, output: operation.output }), after, PAGE_TOKENS - 100)
       return { status: 'ok', call_id: operation.call_id, tool_name: operation.tool_name,
         content: page.text, after, next_after: page.next, truncated: page.next !== null }
@@ -270,8 +286,13 @@ export function createBobContextContinuation(opts: {
       if (!tool) throw new Error('context_tool_protocol_invalid')
       const operation = { call_id: tool.id, tool_name: tool.function.name, arguments: tool.function.arguments, output: clone(message.content) }
       const prior = chain.operations.get(tool.id)
-      if (prior && JSON.stringify(stableJsonValue(prior)) !== JSON.stringify(stableJsonValue(operation))) throw new Error('context_operation_changed')
-      chain.operations.set(tool.id, operation)
+      if (prior) {
+        const { presentation: _view, ...original } = prior
+        if (JSON.stringify(stableJsonValue(original)) !== JSON.stringify(stableJsonValue(operation))) throw new Error('context_operation_changed')
+      }
+      const archived = prior ?? (chain.resultReferences === 1 ? prepareBobResult(operation) : operation)
+      chain.operations.set(tool.id, archived)
+      if (chain.resultReferences === 1) message.content = projectBobResult(archived, false)
     }
   }
 
@@ -337,17 +358,21 @@ export function createBobContextContinuation(opts: {
     // The compactor is deliberately not recursive. Other callers can use this
     // adapter without rewriting their schema, specialist loop or old journal.
     if (!enabled || requested.catalogRoleKey === 'context-compactor') return opts.callModel(requested, beforeDispatch)
-    let options = requested
+    const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
+      && requested.functionName === 'ask-bob' && (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
+    let options = references ? { ...requested, systemMessage: [requested.systemMessage ?? opts.aiCatalog.role('ask-bob').systemMessage,
+      BOB_RESULT_HISTORY_INSTRUCTIONS].join('\n\n') } : requested
     for (;;) {
       const consumedResponseId = options.previousResponseId
       const native = options.responseItemsMode === 'preserve'
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
-        ...(native ? ['complete-request-v1'] : [])])
+        ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : [])])
       let chain: Chain
       if (options.previousResponseId) {
         const previous = chains.get(options.previousResponseId)
         if (!previous) throw new Error('context_chain_unavailable')
         if (previous.identity !== identity) throw new Error('context_chain_scope_mismatch')
+        if (previous.resultReferences !== (references ? 1 : undefined)) throw new Error('context_chain_scope_mismatch')
         chain = copyChain(previous)
         const incoming = [...chain.pendingInternal, ...clone(options.messages ?? [])]
         chain.pendingInternal = []
@@ -357,8 +382,23 @@ export function createBobContextContinuation(opts: {
       } else {
         // A one-shot prompt-only image request needs no continuation shadow.
         if (!options.messages?.length && options.images?.length) return opts.callModel(options, beforeDispatch)
-        chain = { identity, seed: initialMessages(options), groups: [], compacted: false, pendingInternal: [], inputTokens: 0, outputTokens: 0, operations: new Map() }
+        chain = { identity, seed: initialMessages(options), groups: [], compacted: false, pendingInternal: [], inputTokens: 0, outputTokens: 0, operations: new Map(),
+          ...(references ? { resultReferences: 1 as const } : {}) }
       }
+      if (references) {
+        // Original results live once in the private operation archive. Keep
+        // only bounded projections in the model transcript/checkpoint; native
+        // assistant items, images and user constraints remain literal.
+        chain.groups = chain.groups.map((group, index) => group.map(message => {
+          if (message.role !== 'tool' || !message.tool_call_id) return message
+          const operation = chain.operations.get(message.tool_call_id)
+          if (!operation) throw new Error('context_operation_unavailable')
+          return index < chain.groups.length - 2 ? { ...message, content: projectBobResult(operation, true) } : message
+        }))
+      }
+      if (!references) {
+      // Legacy rollover sizing is unnecessary in the reference mode; its
+      // fully assembled native request is counted once below.
       // This wrapper is deliberately outside catalog resolution/journalling.
       // Resolve a counting copy: caller options may contain only a schema key
       // or thin tool cards while the actual wire carries their complete bound
@@ -429,7 +469,8 @@ export function createBobContextContinuation(opts: {
           opts.onRollover?.(rollover)
         }
       }
-      if (chain.compacted) {
+      }
+      if (chain.compacted || references) {
         const history = opts.aiCatalog.tool(HISTORY_TOOL)
         options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL), history],
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
@@ -460,7 +501,7 @@ export function createBobContextContinuation(opts: {
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
       chain.outputTokens = Math.max(0, response.usage.output_tokens)
       chain.groups.push([resultMessage(response)])
-      const internal: ToolCall[] = chain.compacted ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL) ?? [] : []
+      const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL) ?? [] : []
       const external = response.toolCalls?.filter(tool => !internal.includes(tool)) ?? []
       for (const tool of internal) {
         let input: unknown

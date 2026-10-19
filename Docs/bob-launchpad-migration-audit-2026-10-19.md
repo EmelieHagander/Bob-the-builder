@@ -5,7 +5,99 @@ contract lives in [the conversation owner](ask-bob-conversations.md#launchpad-mi
 [Active State](bob-delivery-flow.md#state) owns the next action. PR1 is
 **merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281)**;
 [the release readback below](#pr1-technical-release) does not close ordinary
-member/model, long-work, image or CAD acceptance. PR2/PR3 remain specified.
+member/model, long-work, image or CAD acceptance. PR2 is prepared in draft #285;
+PR3 is prepared separately on top of it. Neither is activated.
+
+<a id="offline-cost-review"></a>
+## Offline cost review and PR3 preparation — 2026-10-19
+
+The owner's latest decision is **approximately USD 1 per comparable completed
+task, without a hard cap**. No new paid model test, model/profile downgrade, output
+quota, step limit or cost stop is part of this preparation. Full suite/CI remain
+deferred until final behavior confirmation. This supersedes the earlier immediate
+request for another long live test; unfinished behavior acceptance stays visible.
+
+Read-only analysis of the fourth run's reservation accounting, scoped to job
+`a307c296-a27f-415d-adba-8ac3e0c86d91`, gives:
+
+| Role | Provider calls | Input tokens (cached) | Output tokens (reasoning) | Recorded USD |
+|---|---:|---:|---:|---:|
+| Main Bob | 29 | 1,091,664 (489,472) | 122,040 (102,659) | 3.458448 |
+| Context summaries | 37 | 409,241 (1,280) | 38,849 (2,044) | 0.48089365 |
+| Delivery language | 1 | 482 (0) | 306 (22) | 0.005795 |
+| Total | 67 | 1,501,387 (490,752) | 161,195 (104,725) | **3.94513665** |
+
+These are historical pinned prices, not current advertised pricing. Main output
+alone cost **USD 1.830600**; main uncached input cost **1.505480**, and cached input
+**0.122368**. Even eliminating all 37 summary calls cannot on its own reach USD 1.
+The same output volume at those prices exceeds the goal even with free input.
+Fewer unnecessary model rounds/output work must therefore be demonstrated without
+losing quality; a lower instruction/payload count is not proof of that outcome.
+
+The provider outputs contained 55 requested tool calls, distinct from 53 executed
+tools in the final delivery metrics. A read-only aggregation of function names and
+argument hashes (no reasoning text) found 16 exact repeated requests: five
+`read_construction_draft`, three `check_construction_draft`, three
+`read_project_edit_context`, two `list_project_category`, two `open_project_item`,
+and one `search_project_data`. Rechecking after a write can be necessary; these
+counts are candidates for review, not 16 proven unnecessary executions. No generic
+read cache suppresses current-data or authority checks.
+
+### Prepared PR3 behavior and verification
+
+The separate branch `codex/bob-result-references` is based on PR2 commit
+`41a4157839e375803caa08c7241b2655b8d2190e`. The [conversation owner](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)
+defines the pinned main-only mode, 2,000-token pages, exact private recall,
+receipt/error preservation and legacy/CAD boundary. Small projections are prepared
+once when a result is observed; restoring a turn does not retokenize all archived
+originals to recreate references. Authoritative originals remain immutable.
+
+Targeted checks cover Unicode/JSON round trips; bounded complete page envelopes;
+43 restored native exchanges with every original retrievable; image and native
+reasoning retention; mixed recall/project calls; history-only dispatch revocation;
+scope/version rejection; explicit existing capacity failure without summary;
+legacy specialist compaction; and the actual main loop resuming after each
+checkpoint, an accepted async wait and a lost acknowledgement after a write.
+Two fixture writes remain exactly two and no summary is dispatched in the new
+mode. This proves mechanics, not real model choices or construction quality.
+
+Run the reproducible, fully offline comparison with:
+
+```sh
+node --no-wasm-code-gc --import tsx scripts/benchmark-bob-resume.ts --compare-context
+```
+
+The scripted comparison produced identical final answers/receipts, with **43 main
+model calls and two writes in both modes**:
+
+| Offline fixture measure | PR2 transitional compactor | PR3 references |
+|---|---:|---:|
+| Summary dispatches | 8 | 0 |
+| All model dispatches | 51 | 43 |
+| Final serialized fixture tokens | 14,303 | 19,244 |
+| Largest gross serialized checkpoint bytes | 701,303 | 606,364 |
+| Retained context bytes | 561,177 | 466,344 |
+
+The larger final fixture input is an explicit tradeoff for keeping native history;
+do not describe this as a demonstrated reduction in every provider request.
+These counts are synthetic and exclude real image/reasoning billing. Local Node
+CPU samples were noisy, including one late 2.6-second claim during concurrent
+verification; they do **not** establish constant CPU or a hosted 2-second pass.
+The unused legacy rollover estimate is skipped for reference-mode requests; the
+fully assembled input is still capacity-checked once. Hosted CPU remains a gate.
+
+Verification: **54 distinct targeted tests** across result references, complete
+requests, context continuation, orientation, checkpoint resume and model deadline;
+app typecheck and the four affected Edge entry graphs. The added orientation case
+checks exact fragmented requirements at both 2,000 and legacy 6,000 tokens.
+
+No new hosted migration, deployment, paid model request, full suite or CI run was
+performed. Direct code review is not an independent review. Live cache share,
+completed delivery near USD 1, and the ordinary long-image acceptance remain open.
+In particular, the historical run produced over 100,000 reasoning tokens in total:
+retaining native reasoning is not a proof that an equivalent final request fits
+64,000 tokens. The existing provider-capacity estimate remains explicit. Do not
+activate this draft based only on the small-reasoning fixtures.
 
 ## Scope and verdict
 

@@ -12,7 +12,7 @@ import { catalogFixture, catalogCall } from '../tests/support/ai-catalog-fixture
 import type { OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
 import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
 import { createBobContextContinuation, type BobContextContinuationState, type ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
-import { contextTokenPrefix, countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
+import { contextTokenPrefix, countContextTokens, countSerializedTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 
 const TIME = '2026-10-19T10:00:00.000Z', IMAGE = '10000000-0000-4000-8000-000000000001'
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -41,6 +41,7 @@ export interface ResumeProbeOptions {
    * production context-continuation adapter with its pinned rollover policy. */
   stress?: boolean
   completeRequest?: boolean
+  resultReferences?: boolean
   onRequest?: (request: OpenAIServiceOptions) => void
   onCheckpoint?: (state: BobAnswerState, revoke: () => void) => void
 }
@@ -172,6 +173,7 @@ export function createResumeProbe(options: ResumeProbeOptions) {
     }, session)
     let contextEpoch = capsule?.contextEpoch ?? 0, refreshSurface: (() => Promise<ContextSurface>) | undefined
     const continuation = options.stress || options.completeRequest ? createBobContextContinuation({ version: 1, aiCatalog: session, callModel: dispatchModel,
+      ...(options.resultReferences ? { mainResultReferences: 1 } : {}),
       pageBoundaries: (source, compute) => journal.run('context:pages', { source }, compute),
       onRollover: () => { contextEpoch++ }, refreshSurface: () => refreshSurface?.() ?? Promise.resolve(undefined),
       snapshot: () => ({ confirmed_writes: writer.executedReceipts.map(({ record: _record, ...receipt }) => receipt), unresolved_tools: writer.unresolvedTools }),
@@ -184,6 +186,7 @@ export function createResumeProbe(options: ResumeProbeOptions) {
       result = await runProjectAnswer({ aiCatalog: session, projectId: 'A', userId: 'owner', message: 'Continue this synthetic task.',
         lookup, writer, hasAccess, projectContext: context, carryLoadedTools: true, unlimitedWork: true, deadline: Infinity,
         ...(options.completeRequest ? { completeRequest: true } : {}),
+        ...(options.resultReferences ? { resultReferences: true } : {}),
         readToolPolicy: async () => { c.policy++; return policy }, onTool: () => { c.toolTraversals++ }, callModel,
         ...(continuation ? { contextEpoch: () => contextEpoch, registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshSurface = refresh } } : {}),
         ...(options.checkpoint ? { checkpoint: { state: capsule?.answer, save: async (answer: BobAnswerState) => {
@@ -227,10 +230,30 @@ export function createResumeProbe(options: ResumeProbeOptions) {
   }
 }
 
+/** Compare staged context strategies on identical scripted outcomes, not on
+ * a new model-generated task. Never interpret fixture tokens as provider bills. */
+async function compareContext() {
+  const results = [], reports = []
+  for (const resultReferences of [false, true]) {
+    let final: OpenAIServiceOptions | undefined
+    const probe = createResumeProbe({ checkpoint: true, completeRequest: true, resultReferences, stress: true, yieldMode: 'boundary',
+      onRequest: request => { if (request.functionName === 'ask-bob') final = request } })
+    results.push(await probe.runToEnd())
+    reports.push({ resultReferences, total: probe.totals(), claims: probe.claims.length,
+      finalSerializedFixtureTokens: countSerializedTokens(final),
+      earlyCpuMs: probe.claims.filter(row => row.step === 2).map(row => row.cpuMs),
+      lateCpuMs: probe.claims.filter(row => row.step === 40).map(row => row.cpuMs) })
+  }
+  assert.deepEqual(results[0], results[1])
+  return { note: 'Offline scripted comparison: no paid model calls, actual pixels, hosted CPU, real reasoning or cache-hit measurements. Gross serialized checkpoint bytes are not persisted delta bytes. Node token caches stay warm between claims. Equal fixture outcomes do not prove model quality or cost savings.', reports }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const log = console.log
   console.log = () => {}
   try {
+    if (process.argv.includes('--compare-context')) log(JSON.stringify(await compareContext(), null, 2))
+    else {
     const stress = process.argv.includes('--stress')
     await createResumeProbe({ checkpoint: false, yieldMode: 'none', stress }).runToEnd()
     const legacy = createResumeProbe({ checkpoint: false, yieldMode: 'step', stress }), checkpoint = createResumeProbe({ checkpoint: true, yieldMode: 'step', stress })
@@ -241,5 +264,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       selected: probe.claims.filter(row => [2, 20, 40, 43].includes(row.claim)) })
     log(JSON.stringify({ note: 'Synthetic Node core-runtime benchmark; reader invocations are not production RPC counts. CPU is process.cpuUsage including runtime construction and restore, not Supabase Edge CPU. In-memory transport and media refs; no network or pixels. Module token caches remain warm between restored worker instances. Checkpoint bytes measure gross complete-state serialization, not persisted delta bytes.',
       stress, readDetailTokens: checkpoint.readDetailTokens, legacy: report(legacy), checkpoint: report(checkpoint) }, null, 2))
+    }
   } finally { console.log = log }
 }

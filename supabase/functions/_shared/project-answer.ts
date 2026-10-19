@@ -152,6 +152,7 @@ export type ProjectAnswerOptions = {
   carryLoadedTools?: boolean;
   /** Pinned for new durable main turns; never changes a running old job. */
   completeRequest?: boolean;
+  resultReferences?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
   /** Refresh the active tool fence atomically before a fresh provider chain. */
@@ -253,7 +254,8 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     orientationReader = directory.reader
   }
   const orientation = restored ? restored.initial.orientation : contextStrategy ? await prepareProjectOrientation({ ...opts, briefing, deadline,
-    ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: Number(contract.orientation_page_max_tokens),
+    ...(boundedOrientation ? { directory: { maxTokens: Number(contract.orientation_max_tokens), pageMaxTokens: opts.resultReferences
+      ? Math.min(2000, Number(contract.orientation_page_max_tokens)) : Number(contract.orientation_page_max_tokens),
       ready: (reader: OrientationDirectoryReader) => { orientationReader = reader } } } : {}),
   }) : undefined
   const initialFooter = orientation ? { role: 'user' as const,
