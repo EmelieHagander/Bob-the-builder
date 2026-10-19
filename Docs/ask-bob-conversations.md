@@ -6,8 +6,8 @@
 ## Launchpad-pattern migration — 2026-10-19
 
 **PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
-with ordinary member/model and long-image acceptance still open. PR2 and PR3
-remain specified.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
+with ordinary member/model and long-image acceptance still open. PR2 is being
+prepared separately under the owner's continuation instruction; PR3 remains specified.** [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 records the installed migration, source and authentication readback. The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
@@ -80,6 +80,18 @@ An older worker is deliberately refused checkpoint-native jobs. Do not remove th
 schema or reinterpret their journal during rollback. The
 [technical release record](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 records execution of this order; it does not close model acceptance.
+
+### Immutable model deadline across authority renewal
+
+New checkpoint executions pin `modelDeadlineVersion: 1`. Before each asynchronous
+model reservation, `bob-model-deadline.ts` records its original absolute expiry
+in the private operation journal. Resuming that same operation uses the recorded
+expiry even when the owner's JWT has renewed; the next operation uses the current
+authority expiry. Membership, cancellation and actual worker authority are still
+checked afresh. The shared reservation identity guard is unchanged. Old manifests
+retain their original journal order. This fixes the fourth live attempt's observed
+`ai_operation_changed`; [the audit](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
+separates local regression evidence from installation and live acceptance.
 
 ### PR2 — build each request from complete state
 

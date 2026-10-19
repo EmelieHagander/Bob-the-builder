@@ -292,17 +292,18 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — slutför beteendeacceptansen för fjärde liveprovet (2026-10-19):**
-granska slututfallet för körningen som startade 12:30:34 UTC på PR #283 innan PR2
-börjar. Bildåterstarten har passerats, men upprepade läsningar och täta
-sammanfattningar behöver bedömas mot faktisk leverans. Utred också beställarens
-rapport om kvarhängande arbetsstatus efter föregående serverslut.
-[Pågående fjärde liveprov](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
-äger evidensen. PR1 är **mergad och tekniskt driftsatt, inte beteendeaccepterad**;
-[releasebeviset](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
-skiljer verifierad migration/källkod från den kvarstående modellacceptansen.
-Beställarens beslut är riktad verifiering och beteendeacceptans per steg, med full
-testsvit och CI efter att sista stegets beteende har bekräftats enligt
+**Aktivt nästa steg — isolerad rättning före aktivering av PR2 (2026-10-19):**
+slutför installation och livekontroll av den verifierade felorsaken när JWT förnyas
+under modellväntan. Fjärde liveprovet slutade med ett återställt skrivkvitto,
+inte en färdig leverans. Den nya rättningen sparar modellanropets ursprungliga
+sluttid; [auditens slututfall](bob-launchpad-migration-audit-2026-10-19.md#pr1-fourth-live-attempt)
+äger bevis, kostnad och kvarstående acceptans. PR1 är tekniskt driftsatt men
+fortfarande inte beteendeaccepterad. Beställaren har godkänt fortsatt förberedelse
+av steg 2 i separat PR; aktivering ska bedömas efter rättningen och liveprovet.
+Utred också rapporten om kvarhängande arbetsstatus efter föregående serverslut.
+
+Riktade tester och typkontroller gäller per steg. Full testsvit och CI väntar tills
+sista stegets beteende bekräftats enligt
 [migrationskontraktet](ask-bob-conversations.md#launchpad-migration).
 CAD-migreringen kommer efter Bobs huvudtur.
 
