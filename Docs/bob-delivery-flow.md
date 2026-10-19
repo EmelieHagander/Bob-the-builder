@@ -292,17 +292,19 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — PR1 för återupptagning (2026-10-19):** häv GitHubs
-faktureringsspärr och kör CI på slutlig kandidat i
+**Aktivt nästa steg — PR1 för återupptagning (2026-10-19):** slutför riktade
+regressionstester, typkontroll och oberoende granskning av slutlig kandidat i
 [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281).
-PR1 är **implementerad som kandidat, inte mergad eller driftsatt**. CI stoppades
-innan teststegen startade eftersom kontot är låst; den slutliga lokala
-helhetskörningen passerade **1 605 / 1 605** tester. Grön slutlig CI krävs före merge och release enligt
+PR1 är **implementerad som kandidat, inte mergad eller driftsatt**. Installera
+den granskade kandidaten i ordningen migration, kompatibel worker och aktivering
+av nya jobb enligt
 [migrationskontraktet](ask-bob-conversations.md#launchpad-migration).
 Därefter krävs beställarens långa bildjobb och loggkontroll innan PR2 börjar.
-[Auditen](bob-launchpad-migration-audit-2026-10-19.md) äger blockerarens bevis och
-de daterade CPU-, replay- och cacheobservationerna. CAD-migreringen kommer efter
-Bobs huvudtur.
+Beställarens beslut är riktad verifiering och beteendeacceptans per steg, med full
+testsvit och CI efter att sista stegets beteende har bekräftats. Faktureringsfelet
+är enligt beställaren åtgärdat. [Auditen](bob-launchpad-migration-audit-2026-10-19.md)
+äger de daterade verifierings-, CPU-, replay- och cacheobservationerna.
+CAD-migreringen kommer efter Bobs huvudtur.
 
 **Kvarstående ordinär minnes-/modellacceptans:** prova ett nytt
 meddelande i samma privata tråd med den aktiverade

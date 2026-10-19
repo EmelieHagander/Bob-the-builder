@@ -6,13 +6,21 @@
 ## Launchpad-pattern migration — SPECIFIED 2026-10-19
 
 **PR1 is an implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
-awaiting full CI and live acceptance; it is not merged or deployed. PR2 and PR3
+awaiting stage-specific verification and live acceptance; it is not merged or deployed. PR2 and PR3
 remain specified.** The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
 [dated audit](bob-launchpad-migration-audit-2026-10-19.md) records the baseline,
 live CPU evidence and differences from actual Launchpad. This section owns the
 corrected target; [State](bob-delivery-flow.md#state) owns the next action.
+
+**Owner verification decision — 2026-10-19:** for this three-stage migration,
+each PR requires the relevant targeted regression tests, app and Edge typechecks,
+independent review and behavior acceptance before the next stage. Run the full
+suite and CI after the final stage's behavior is confirmed. This explicit decision
+replaces the original per-stage full-CI gate for this migration; it does not
+change CI workflows or settings. The ordinary long-image acceptance and release
+ordering below remain, and CAD still follows acceptance of Bob's main turn.
 
 The existing context-strategy/replay behavior below remains the implemented
 compatibility reference until a versioned successor is released. This migration
@@ -58,8 +66,9 @@ its existing active-operation mechanism in this stage.
 pending-model recovery without resubmission, stale-worker/revocation/cancellation
 cases and every state roundtrip pass. A 40-step restart fixture shows historical
 handler/control-flow work removed with equivalent answer, receipts and images;
-report CPU, read/write bytes and RPC counts at early and late claims. Full suite
-and CI must pass, followed by the ordinary long image job on the reviewed release.
+report CPU, read/write bytes and RPC counts at early and late claims. Complete
+the stage-specific tests, typechecks and review, followed by the ordinary long
+image job on the reviewed release before PR2 begins.
 Observed installed versions and live acceptance belong in release evidence.
 
 **Release order:** apply the additive checkpoint migration, deploy the compatible
@@ -114,7 +123,9 @@ shared CAD behavior is migrated separately after main-turn acceptance.
 AI compaction, and its final measured input stays below the 64,000-token test
 target. Exact archived results reopen after restart, no duplicate effects occur,
 and long-work model tests retain constraints and useful delivery. This is a tested
-workload target, not a universal bound. Remove replay fingerprints, carry/paging
+workload target, not a universal bound. After the final stage's behavior is
+confirmed, the full suite and CI must pass before the migration is accepted as
+complete. Remove replay fingerprints, carry/paging
 compatibility and compactor code only when no supported execution version needs
 them and the corresponding protections have a verified successor.
 
