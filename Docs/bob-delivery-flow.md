@@ -292,26 +292,29 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — förbered separat driftsättning (2026-10-19):**
+**Aktivt nästa steg — verklig modell-/ritningsacceptans (2026-10-19):**
 [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291) är mergad
-till `main` och omfattar #285–#289. Full CI, CAD, PostgreSQL och
-beroendesäkerhet passerade; [verifieringsägaren](foundation-verification.md#bob-final-integration--2026-10-19)
-har exakta körningar och återläsning. De äldre utkasten är stängda.
+och de äldre #285–289-staplarna stängda. **Teknisk driftsättning är nu installerad:**
+konstruktionsändringar, riktade vyer, selektiv verktygsladdning och smalare
+promptmetod är publicerade i ordnad release. Edge-versioner: `ask-bob` **146**,
+`bob-worker` **114**, delad AI-worker/webhook **10/10**. Fem nya
+managed migrationer finns i databasen. [Exakt release- och säkerhetsbevis](foundation-verification.md#bob-final-integration--2026-10-19)
+äger installerade ID:n, kataloger och källåterläsning. Upprepa **inte**
+denna SQL-/Edge-installation utifrån tidigare utkast.
 
-**Ingen produktionsaktivering ingår i mergen.** Läs aktuell drift och migreringsliggare
-igen, kontrollera jobb i arbete och inhämta separat driftsättningsbeslut innan
-konstruktions-SQL, kompatibla Bob-/bakgrundsruntimes och därefter immutabla
-verktygs-/promptpubliceringar installeras i beroendeordning. Hosted readback
-2026-10-19 visar fortfarande ask-bob 145 / bob-worker 113 och inga nya
-leverans-1–4-migrationer. Manuell CI körs bara vid behov; inga betalda
-modell-/CAD-prover ingick i denna kodmerge.
+Nästa handling är ett **separat godkänt, verkligt medlems-/modellprov** med relevanta
+bilder, tre nya konstruktionsdelar, felrättning, kontroll, ritningsgranskning,
+sparande och återöppning utan extra användarknuff. Läs samma uppdrags-/källrevision
+och avslutade kvitton före nytt betalt försök; återskapa inte den gamla kostsamma
+körningen. Mät både användbart resultat och provider-token/cache, anrop, kostnad
+och tid. Mergen och driftsättningen innebar ingen ny betald modell-/CAD-körning.
 
 **Aktiveringshinder:** tungt kvarhållet modellresonemang kan fortfarande överstiga
 kontextutrymmet. Korta verktygssvar bevisar inte att en sådan lång tur ryms.
 Behåll fullständig native historik oaktiverad tills arbetsenheter/fortsättning
 har verifierats för denna belastning, utan att kasta resonemang eller införa
-nya arbets-/kostnadstak. Konstruktionsförmågorna och promptpubliceringen kan
-släppas i ordning enligt sina ägare; merge är inte hosted installation.
+nya arbets-/kostnadstak. Konstruktionsförmågorna och promptpubliceringen är driftsatta; den
+fullständiga native-historikens separata aktivering väntar fortfarande.
 Inget nytt betalt långprov ingår. Cirka $1 är ett mjukt mål, ännu inte uppmätt
 för ett jämförbart färdigt resultat. CAD:s egen kontextmigrering väntar.
 

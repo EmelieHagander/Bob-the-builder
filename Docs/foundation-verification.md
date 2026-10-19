@@ -2,11 +2,13 @@
 
 ## Bob final integration — 2026-10-19
 
-**Merged source, not a hosted release.** [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291)
+**Merged source, followed by a separately verified hosted technical release.**
+[PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291)
 integrates the complete-request/result-reference drafts and three construction
 deliveries in main merge `f0647bda5a6dd3aa5bb2afd4b43cbd237550458c` on
-2026-10-19. Earlier sections retain the preparation state at the time. No new
-paid model/CAD acceptance or hosted installation is claimed.
+2026-10-19. Earlier sections retain the preparation state at the time.
+The [hosted release below](#hosted-bob-release--2026-10-19) installs the compatible
+source and construction/tool/prompt catalogs; real paid model/CAD acceptance remains open.
 
 The construction workflow now introduces the builder role, scope and exact tool
 routes in **227 tokens instead of 558**. History-recall guidance has one owner in
@@ -65,6 +67,72 @@ new task quota is introduced. The heavier profile is an **open activation gate**
 not a successful long-work outcome. The ordinary real-model image outcome, cache
 share and approximately USD 1 goal remain unproven.
 
+
+<a id="hosted-bob-release--2026-10-19"></a>
+### Hosted Bob construction and tools release — 2026-10-19
+
+**Installed and read back; no paid model/CAD probe.** Owner-approved release
+of main source `329b522096ea108e9b61e88e52bccbcb382a2364` to Supabase
+`yuobtgoidmmmwfqenkau`, after read-only confirmation of **zero** active Bob
+jobs and the prior migration/runtime baselines. Source/test acceptance belongs
+to [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291)
+and the CI evidence above.
+
+Managed migration identities differ from their reviewed source filenames:
+
+| Installed managed version / name | Exact source migration |
+| --- | --- |
+| `20261019214334 / construction_edits` | `20261019172133_construction_edits.sql` |
+| `20261019214826 / ai_construction_edits` | `20261019172346_ai_construction_edits.sql` |
+| `20261019214854 / ai_construction_views` | `20261019175234_ai_construction_views.sql` |
+| `20261019214918 / ai_selective_tools` | `20261019180806_ai_selective_tools.sql` |
+| `20261019214955 / ai_bob_complete_context` | `20261019184338_ai_bob_complete_context.sql` |
+
+Applied in order: canonical SQL core; shared async background worker and
+webhook; compatible `bob-worker` then `ask-bob`; immutable edit, view,
+selective-tool and prompt publications. Each installation was followed by
+managed-ledger or function-source readback. The source package includes the
+required CAD repetition module and exact legacy dependencies; type-only files
+may be erased by the deployed bundler.
+
+| Edge function | Prior → active | Authentication retained |
+| --- | --- | --- |
+| `ai-background-worker` | 9 → **10** | Existing private worker auth, `verify_jwt=false` |
+| `ai-background-webhook` | 9 → **10** | Existing webhook signature auth, `verify_jwt=false` |
+| `bob-worker` | 113 → **114** | Private capability auth, `verify_jwt=false` |
+| `ask-bob` | 145 → **146** | `verify_jwt=true` |
+
+The installed code was read back at the executable closure. Essential Bob,
+construction-edit and complete-request source files match the submitted package.
+The current resolved Bob manifest is
+`f7da3bda-21db-4681-b9bf-d386aa3824a9` with **292** definitions. Active
+`tools.edit_construction_parts` is v1; `tools.read_construction_draft` is
+v4 with `construction_view_version=1`; `tools.save_construction_draft` is
+v7 with `construction_repeat_version=1`; `bob.workflows` is v5 with
+`selective_tools_version=1` and `prompt_craft_version=1`.
+Provider-model and settings hashes are unchanged from pre-installation
+(`84c9f33dbf9ca170ff998a21a1a75fb5` /
+`c20f60563479e0d09ecb4f531d1f8b4b`). No Bob jobs were active after
+installation.
+
+**Authority readback:** `bob.prepare_construction_edit` is present and
+executable by authenticated users but not anonymous users. It validates the
+current claimed turn and original project scope; its historical private writer
+delegate is not directly executable by `anon` or `authenticated`.
+Supabase security advisors still report cross-app lints, including the
+[intentional authenticated SECURITY DEFINER entrypoint](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable);
+these notices are not being labelled as a universally clean project audit.
+The installed function's server-side claim, grants and legacy delegation remain
+the bounded domain authority, rather than an advisory suppression.
+
+**Activation gate remains open:** `agent-contract.ask-bob` v5 still has
+neither `complete_request_version` nor `result_reference_version`.
+Complete native historical replay and the related long-reasoning workload must
+not be enabled just because source and tool catalogs are installed. CAD's own
+context strategy is unchanged. No ordinary image/multi-part/model/CAD success,
+hosted CPU or comparable USD-per-delivery improvement is claimed. A separately
+authorized natural member task and exact output/readback are next; preserve
+original project data, paid receipts and previous failed job evidence.
 
 ## Selective tools and construction work — 2026-10-19
 

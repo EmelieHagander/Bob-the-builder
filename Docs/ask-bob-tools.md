@@ -1,9 +1,12 @@
 # Ask Bob: tool discovery, loading and authority
 
-## Selective methods and tools — merged source 2026-10-19
+<a id="selective-methods-and-tools--prepared-2026-10-19"></a>
+## Selective methods and tools — hosted 2026-10-19
 
-**Delivery 3 is merged in main through [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291);
-its runtime/catalog is not yet hosted or activated.** A pinned
+**Delivery 3 is merged through [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291)
+and now technically installed and activated for new catalog manifests.**
+[Hosted verification](foundation-verification.md#hosted-bob-release--2026-10-19)
+owns the runtime versions and publication receipts. A pinned
 `bob.workflows.metadata.selective_tools_version=1` separates workflow selection
 from schema loading. `describe_tool(workflow_name)` retains the method in current
 system instructions and lists member availability, without loading their schemas.
@@ -61,7 +64,7 @@ catalog schemas or change the deployed toolbox.
 
 ## Tool and colleague cards — 2026-10-18
 
-**Prepared addition, 2026-10-19; not activated:** the versioned
+**Hosted addition, 2026-10-19:** the versioned
 `edit_construction_parts` command sends only changed canonical construction posts.
 Its [Artifact contract](artifacts.md#bounded-part-changes--prepared-2026-10-19)
 owns merge, identity, source and receipt rules. The new publication adds it to the

@@ -7,8 +7,12 @@
 
 **PR1 is merged and technically deployed through [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281).
 PR2/PR3 source code is merged into main through [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291),
-but complete native requests and result references are still not activated.**
-Ordinary member/model and long-image acceptance remain open.
+and compatible Bob runtimes are now hosted, but complete native requests and
+result references are still **not activated**: the required paired immutable
+agent-contract flags remain unset.**
+[Hosted verification](foundation-verification.md#hosted-bob-release--2026-10-19)
+owns the installed versions and metadata readback. Ordinary member/model and
+long-image acceptance remain open.
 [Release evidence](bob-launchpad-migration-audit-2026-10-19.md#pr1-technical-release)
 records the installed migration, source and authentication readback. The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
