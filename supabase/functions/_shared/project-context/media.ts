@@ -137,7 +137,7 @@ export async function resolveMediaImageFile(projectId: string, transport: MediaT
     uploaded = await files.upload(bytes, row.content_type, signal)
     if (!FILE_ID.test(uploaded.fileId)) throw new Error('invalid_file_id')
   } catch { return `data:${row.content_type};base64,${base64(bytes)}` }
-  try { await files.save({ mediaId, revision, updatedAt: record.source.updatedAt, sha256, fileId: uploaded.fileId, expiresAt: uploaded.expiresAt }, signal) }
+  try { await files.save({ mediaId, revision, updatedAt: row.updated_at, sha256, fileId: uploaded.fileId, expiresAt: uploaded.expiresAt }, signal) }
   catch { /* used now; the next fresh request uploads again */ }
   return uploaded.fileId
 }
