@@ -23,7 +23,7 @@ export function constructionKnowledge(today: string) {
  return seed.cards.filter(c => ['timber.fasteners', 'timber.adhesives'].includes(c.id) && c.status === 'active' && c.audience === 'public'
   && c.rights === 'original_summary_links_only' && c.reviewed_at <= today && c.review_due >= today)
 }
-export function checkConstruction(draft: RecordData, catalog: Map<string, RecordData>, today: string) {
+export function checkConstruction(draft: RecordData, catalog: Map<string, RecordData>, today: string, allFindings=false) {
  const issues: Issue[] = [], gaps: Issue[] = [], boxes: Box[] = [],visibleBoxes:Box[]=[]
  const add = (code: string, ids: string[], message: string) => { issues.push({ code, ids, message }) }
  const gap = (code: string, ids: string[], message: string) => { gaps.push({ code, ids, message }) }
@@ -150,7 +150,7 @@ export function checkConstruction(draft: RecordData, catalog: Map<string, Record
  function result(extra:RecordData={}) {
   return { status:'checked', checker_version:checkerVersion, artifact_id:draft.artifact_id, revision:draft.revision,
    concept_ready:issues.length===0, fabrication_ready:false, rendered:false, reviewed:false,
-   issues:issues.slice(0,200), issue_count:issues.length, fabrication_gaps:gaps.slice(0,200), fabrication_gap_count:gaps.length,
+   issues:allFindings?issues:issues.slice(0,200), issue_count:issues.length, fabrication_gaps:allFindings?gaps:gaps.slice(0,200), fabrication_gap_count:gaps.length,
    references:knowledge.map(c=>({id:c.id,title:c.title,url:c.url,version:c.version,reviewed_at:c.reviewed_at,limitations:c.limitations})),
    limits:['Declared requirements still need comparison with the reported bounds and part count.','No strength, stability, tip resistance, raw-stock nesting, fastener layout or manufacturer-product approval.','A check result is revision-bound evidence, not a saved drawing or permission to manufacture.'], ...extra }
  }

@@ -292,12 +292,14 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
-**Aktivt nästa steg — granska leverans 1 före fortsatt implementation (2026-10-19):**
-granska de avgränsade konstruktionsändringarna på `codex/bob-construction-edits`
-mot [åtgärdsplanens första leverans](bob-green-release-plan-2026-10-19.md#leverans-1--små-konstruktionsändringar-och-precisa-fel).
-[Lokala bevis och releaseordning](foundation-verification.md#bounded-construction-edits--2026-10-19)
-skiljer färdig implementation från kvarstående aktivering och modellacceptans.
-Nästa implementationsleverans är små relevanta läsvyer och bevarade arbetsresultat.
+**Aktivt nästa steg — granska leverans 2 före fortsatt implementation (2026-10-19):**
+granska små konstruktionsvyer och bevarade arbetsresultat på
+`codex/bob-construction-views`, ovanpå första leveransens draft #287.
+[Åtgärdsplanens andra leverans](bob-green-release-plan-2026-10-19.md#leverans-2--relevanta-läsvyer-och-bibehållna-arbetsresultat)
+äger omfattningen; [lokala bevis och releaseordning](foundation-verification.md#construction-views--2026-10-19)
+skiljer förberedd kod från kvarstående aktivering och modellacceptans.
+Nästa implementationsleverans är selektiv verktygsladdning och avgränsat
+konstruktionsarbete enligt leverans 3. Båda konstruktionsleveranserna är oaktiverade.
 Draft #285/#286 ska därefter anpassas till konstruktionsrättningarna före aktivering.
 Inget nytt betalt långprov ingår; cirka $1 är ett mjukt mål utan nya hårda tak.
 

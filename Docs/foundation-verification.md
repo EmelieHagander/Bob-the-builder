@@ -1,5 +1,54 @@
 # Foundation verification and rollout
 
+## Construction views — 2026-10-19
+
+**Delivery 2 prepared on `codex/bob-construction-views`, above #287's `d43f823`;
+not merged, activated or deployed.** The [Artifact owner](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19)
+defines selection, coverage, exact observation references and remaining limits.
+
+**72 targeted tests pass across six files**, including parent/subtest counts:
+`construction-views` (10), `construction-checks` (12), `construction-edits` (14),
+`construction-lists` (15), `bob-tool-state-checkpoints` (9) and
+`bob-turn-checkpoint-db` (12). Run with
+`node --no-wasm-code-gc --import tsx --test tests/<name>.test.ts` in focused groups.
+The six-file run passed 71 tests; the final views-only run adds the explicit
+cut-assessment case and verifies the final presentation corrections.
+
+Evidence covers a synthetic canonical packet over 600,000 characters with a
+small overview and exact late-selected measured value/source revision; transitive
+formula/source/unknown dependencies; complete bindings pages; oversized Unicode
+notes restored exactly; invalid cross-view/revision cursors; all check findings
+beyond 200; exact check/list/cut sections and quantity/stock limitations; old
+catalog parity; withdrawn access and changed sources; unchanged independent CAD
+checks; stable observation time across active-operation replay; and JSONB key
+reordering without cursor drift. A real local SQL checkpoint save/yield/new claim
+restores 280 original findings without rerunning their assessment. Existing
+40-step checkpoint, authority, write-receipt and source tests remain green.
+
+`ask-bob` and `bob-worker` pass Deno checking with the existing local dependency
+map. The generated catalog matches its executable tool (`build-construction-view-catalog.ts ... --check`),
+and `git diff --check` passes. Review was manual, including owning documentation
+guidance. No independent-agent review, hosted deployment, paid model/CAD call,
+full suite or full CI is claimed. `[skip ci]` is retained; workflows are unchanged.
+
+Release follows delivery 1's schema/runtime/catalog order, then installs both
+view-compatible Bob runtimes before applying
+`20261019175234_ai_construction_views.sql`. This migration changes only immutable
+AI catalog versions and their atomic activation; no domain table or source rule
+is changed. CLI migration creation was unavailable after its previously observed
+Bun crash; this filename uses the observed UTC clock and the SQL is generated.
+Read back `construction_view_version=1` in the pinned reader manifest. Older jobs
+retain their original reader and version-1 component state; new jobs use the
+version-2 construction-tools state. Rollback deactivates the new catalog for new
+jobs while retaining compatible handlers for every still-running pinned job.
+
+This demonstrates smaller model-facing construction data and complete selected
+coverage, not fewer autonomous model decisions or measured dollar savings. The
+workflow still loads 20 schemas. The generic result history in #286, long-turn
+storage/native-reasoning capacity, production CPU and final end-to-end acceptance
+remain in [the plan](bob-green-release-plan-2026-10-19.md) and
+[State](bob-delivery-flow.md#state). No new hard cost/step/time cap was introduced.
+
 ## Bounded construction edits — 2026-10-19
 
 **Prepared on `codex/bob-construction-edits`, based on main `5806e85`; not merged,

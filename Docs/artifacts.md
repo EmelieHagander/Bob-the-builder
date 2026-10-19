@@ -137,6 +137,49 @@ their old handlers and full-save diagnostic sequence. [Verification and release
 order](foundation-verification.md#bounded-construction-edits--2026-10-19) own the
 evidence and rollout limits; [State](bob-delivery-flow.md#state) owns next work.
 
+### Construction views and observed results — prepared 2026-10-19
+
+**Implemented and locally verified above delivery 1; not activated or deployed.**
+The new pinned `read_construction_draft` contract returns an overview by default.
+It exposes exact revision-bound `parts`, `parameters`, `bindings`, `joints`,
+`materials`, `roles`, `notes` and `dependencies` views. Missing historical roles
+are reported as unknown. The description and original open questions remain
+available in notes; an overview never claims that omitted constraints are resolved.
+
+Named selectors retain canonical IDs, values, truth states, formulas and source
+pins. The dependency view follows parameter ancestors/dependents, affected
+bindings/parts and directly attached joints/materials/roles. Its declared scope
+does not claim to traverse every additional dependency of newly reached neighbor
+parts; those can be selected in a further dependency read. Every page identifies
+its selection, missing IDs, total selected rows and `next_read`. Pages fit 2,000
+serialized content tokens. Whole posts are preferred; an oversized post uses
+explicit exact JSON fragments with Unicode offsets. Original data is not shortened
+or replaced by model-generated text. Cursors cannot move between revisions/views.
+
+Checks, derived lists and cut assessments keep their complete observed output in
+the construction-tools checkpoint component. The model receives status/counts,
+bounds where available, section names and an exact result reference. Identical
+outputs share stored content. All checker findings, including those beyond the
+old 200-finding presentation limit, are reachable via `view=result` and a returned
+section. Empty collections, explicit unknowns, candidate inputs, quantities and
+limitations remain recoverable. Result order and page cursors survive JSONB key
+ordering. The active operation journals its observation time so a replay cannot
+silently change the next model input.
+
+References are private to the current turn and survive worker restart, not job
+completion or a new turn. Reopening verifies current project access and reads
+the requested canonical revision; it does not rerun a checker or read catalog
+materials again. Historical observation time and current source/head status are
+separate. Old results cannot authorize a write, render, stock allocation or
+purchase. The drawing gate retains its independent full canonical read/check.
+
+This component owns the original domain assessment. Draft #286's future generic
+history will archive the model-visible summaries/pages and references, without
+another full construction-result copy. Existing checkpoint storage limits remain;
+whole-turn capacity/CPU and real-model cost belong to the final acceptance gate.
+[Verification](foundation-verification.md#construction-views--2026-10-19) records
+the local evidence, catalog compatibility and release order.
+
 ### Instance roles and affected outputs — release D
 
 **Implemented; release installation/readback is tracked in [verification](foundation-verification.md#construction-instance-roles-and-consequences--release-d).** A version-1 `instance_policy` belongs to one exact construction revision. It contains one entry per stable recipe instance ID, an explicit role, its matching quantity policy and a reason. Geometry, definitions and numeric provenance remain in the existing construction; the policy does not alter the CAD recipe contract.

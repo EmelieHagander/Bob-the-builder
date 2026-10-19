@@ -451,6 +451,8 @@ export async function answerWithOpenAi(opts: {
       return data
     },
     preciseEditDiagnostics:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.edit_construction_parts'),
+    constructionViews:aiCatalog.manifest().definitions.some(row=>row.prompt_key==='tools.read_construction_draft'&&row.metadata?.construction_view_version===1),
+    observationTime:(input:unknown)=>memo('construction:observation',input,async()=>new Date().toISOString()),
     prepareEdit:async(payload:import('./project-write.ts').WritePayload)=>{
       const {data,error}=await rpc('prepare_construction_edit',{...binding,p_payload:payload},AbortSignal.timeout(12000))
       if(error)return {status:error.code==='42501'?'denied':['PT409','40001'].includes(error.code??'')?'conflict':error.code==='22023'?'invalid':'unavailable',reason:'construction_edit_preparation_failed'}

@@ -40,10 +40,15 @@ owns merge, identity, source and receipt rules. The new publication adds it to t
 construction workflow and directs small edits away from full-document saves.
 Earlier pinned catalogs do not acquire this handler or the new full-save
 diagnostics. This slice still uses the existing workflow loading behavior:
-selecting the construction workflow loads 20 schemas instead of 19. Selective
-schema loading and small read views belong to later deliveries in the
-[remediation plan](bob-green-release-plan-2026-10-19.md); no total prompt/cost
-reduction is claimed yet.
+selecting the construction workflow loads 20 schemas instead of 19. Delivery 2
+now prepares [small read views and observed-result references](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19)
+on that same tool surface. A pinned `construction_view_version` distinguishes
+the new reader/result presentation from earlier manifests; the old full reader
+and checkpoint shape remain only for jobs that pin the old contract. New jobs
+with the new catalog do not silently fall back to it. The workflow still offers
+20 schemas; selective loading remains delivery 3 in the
+[remediation plan](bob-green-release-plan-2026-10-19.md). No actual dollar saving
+or real-model tool-choice improvement is established by the offline fixtures.
 
 **Main Bob's foundation was published through PR #267.** The
 [coverage corrections](bob-context-coverage-audit-2026-10-18.md) extend the same
