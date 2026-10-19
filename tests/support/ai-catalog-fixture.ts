@@ -50,6 +50,11 @@ for(const migration of migrations){
   row.content+='\n'+source.match(/\$bob_judgement_principles\$([\s\S]+?)\$bob_judgement_principles\$/)![1]
   versions.set(row.key,versions.get(row.key)!+1)
  }
+ const completionGate=source.match(/\$completion_gate_additions\$([\s\S]+?)\$completion_gate_additions\$/)
+ if(completionGate)for(const addition of JSON.parse(completionGate[1])){
+  seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-completion-gate-v1'}})
+  versions.set(addition.key,1)
+ }
  const coverageAdditions=source.match(/\$context_coverage_additions\$([\s\S]+?)\$context_coverage_additions\$/)
  if(coverageAdditions){
   preContextCoverageRows=structuredClone(seed);preContextCoverageVersions=new Map(versions)

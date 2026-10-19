@@ -887,6 +887,17 @@ within the existing authority, time and write budgets, or report a genuine
 blocker. It creates no follow-up job, budget reset or universal stop control.
 Ordinary information answers do not acquire an extra classifier/review call.
 
+**Completion gate (2026-10-19, publication `bob-completion-gate-v1`).** The v2
+review regenerated every final answer, including read-only answers, at the main
+role's effort (about 15% of turn cost on 2026-10-19). Manifests that contain
+`role.completion-gate` first ask that small read-only role (mini/low, schema
+`bob_completion_gate`) whether a read-only answer with no unfinished facts
+leaves delegated work undone. Only a valid `work_remaining: false` skips the
+review; a failed call or unreadable verdict keeps it. Turns that attempted or
+saved work, or carry unfinished facts, are always reviewed. Pinned manifests
+without the role keep their recorded review sequence. Metrics record
+`completion_gate: done | review`.
+
 Versioned method guidance integrates changes into complete Task instructions,
 preserves relevant sources and unknowns, and distinguishes planning progress
 from physical completion. Closing messages report saved and remaining work

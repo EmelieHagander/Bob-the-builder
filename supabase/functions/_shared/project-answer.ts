@@ -83,7 +83,7 @@ export type ProjectAnswer =
   | { ok: true; answer: string; projectId: string; evidence: AnswerEvidence; providerResponseId?: string }
   | { ok: false; error: string }
 export type TurnEnd = 'answered' | 'asked' | 'step_budget' | 'time_budget' | 'refused' | 'commentary_limit'
-export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
+export interface TurnObservation { steps: number; tool_calls: number; deferred_calls: number; completion_checks: number; nudges: number; completion_gate?: 'done' | 'review'; end: TurnEnd | 'failed'; output_phase?: OpenAIServiceResponse['outputPhase'] }
 export interface TurnProgress { stage: 'thinking' | 'tool' | 'finishing'; tool?: string; step: number; saved: number }
 
 /** Embedded seed is for injected/offline callers only. Production supplies the
@@ -160,6 +160,23 @@ export async function runProjectAnswer(opts: {
   const writeTools = new Set(completionAware ? opts.aiCatalog.manifest().definitions.filter(row => row.definition_kind === 'tool_contract'
     && Object.hasOwn((row.definition.parameters as any)?.properties ?? {}, 'request_quote')).map(row => row.definition.name as string) : [])
   const workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[] = []
+  // A read-only answer with nothing unfinished would otherwise be regenerated
+  // by a full review. Manifests with the completion gate ask a small read-only
+  // role first; no gate, a failed call or an invalid result keeps the review.
+  const completionGate = completionV2 && opts.aiCatalog.manifest().definitions.some(row => row.prompt_key === 'role.completion-gate')
+  const workRemains = async (answer: string): Promise<boolean> => {
+    if (!completionGate) return true
+    const result = await opts.callModel({ app: 'bob', coworkerId: 'bob', functionName: 'completion-gate', aiFunction: 'completion-gate', module: 'global',
+      userId: opts.userId, catalogRoleKey: 'completion-gate', catalogSchemaKey: 'bob_completion_gate',
+      messages: [{ role: 'user', content: JSON.stringify({ latest_instruction: opts.message, memory_summary: opts.context?.summary ?? null,
+        recent_conversation: (opts.context?.recent ?? []).slice(-6).map(({ role, text }) => ({ role, text: text.slice(0, 2000) })),
+        candidate_final_answer: answer }) }],
+      timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, 30_000, deadline - Date.now()) })
+    let verdict: unknown = result.data
+    try { if (typeof verdict === 'string') verdict = JSON.parse(verdict) } catch { return true }
+    observation.completion_gate = (verdict as { work_remaining?: unknown } | null)?.work_remaining === false ? 'done' : 'review'
+    return !(result.success && (verdict as { work_remaining?: unknown } | null)?.work_remaining === false)
+  }
   let previousResponseId = opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=await opts.cadAssistant?.pending()
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
@@ -327,9 +344,11 @@ export async function runProjectAnswer(opts: {
     // latest instruction refines that mandate rather than replacing its memory.
     // Bob decides; his words are never replaced by a server notice.
     const facts = unfinishedFacts(opts.aiCatalog, opts, saved)
-    const reviewWork = completionAware && (completionV2 || workResults.length > 0 || !!opts.writer?.executedReceipts.length)
+    const attemptedWork = workResults.length > 0 || !!opts.writer?.executedReceipts.length
+    const reviewWork = completionAware && (completionV2 || attemptedWork)
     if ((facts.length || reviewWork) && !completionChecked && opts.writer && opts.writer.remaining > 0 && (!completionAware || !opts.writer.uncertain)
-      && canContinue && (!completionAware || response.outputPhase !== 'refusal')) {
+      && canContinue && (!completionAware || response.outputPhase !== 'refusal')
+      && (facts.length || attemptedWork || await workRemains(answerText))) {
       completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId
       messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + (completionAware
         ? opts.aiCatalog.text('bob.note.review-work', { request: opts.message, facts: facts.join(' '), results: JSON.stringify({

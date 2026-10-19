@@ -15,8 +15,10 @@ let pg: Awaited<ReturnType<typeof projectSchema>>, prior: AiCatalogManifest, cur
 before(async () => {
   pg = await projectSchema(async (db, name) => {
     if (name.endsWith('_bob_workflows_judgement_catalog.sql')) prior = (await db.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
+    // Compare this publication alone, before later ones are activated.
+    if (name.endsWith('_bob_completion_gate_catalog.sql')) current = (await db.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
   })
-  current = (await pg.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
+  current ??= (await pg.query<{ m: AiCatalogManifest }>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
 })
 after(() => pg?.close())
 const catalog = (manifest = current) => createAiCatalogSession({ rpc: async () => { throw new Error('Pinned') } }, { app: 'bob', manifest })
