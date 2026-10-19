@@ -142,17 +142,18 @@ for(const omitted of [false,true]) test(`shell plan installation (${omitted?'hos
   await assert.rejects(call(outsider,'bob.read_cad_shell',[project,shell,null]),/project_denied/)
  })
 
- await t.test('reapplying preserves data and refuses unknown writer drift',async()=>{
+ await t.test('the historical restore refuses a newer writer without changing saved drawings',async()=>{
   const sql=await readFile(new URL('../supabase/migrations/'+restoration,import.meta.url),'utf8')
   const before=await read()
-  await pg.exec(sql)
-  assert.deepEqual(await read(),before,'existing drawings, placements, links and materials are untouched')
-  const signature='bob_private.bob_project_write_before_consequences(text,uuid,uuid,bigint,jsonb)'
-  const definition=(await pg.query('select pg_get_functiondef($1::regprocedure) definition',[signature])).rows[0].definition as string
-  await pg.exec(definition.replace("raise exception 'cad_shell_invalid'","raise exception 'changed_contract'"))
-  await assert.rejects(pg.exec(sql),/cad_shell_plan_unexpected_existing_installation/)
-  await pg.exec('rollback')
-  await pg.exec(definition)
-  assert.deepEqual(await read(),before,'failed guard cannot alter project data')
+  // The original restore verified the v16 consequences dispatcher. Delivery 1
+  // intentionally wrapped v16 again for bounded edits. Replaying an older
+  // migration at this later boundary must fail closed, not replace newer code.
+  await assert.rejects(pg.exec(sql),/cad_shell_plan_prerequisites_missing/,
+   'the older installer cannot reinterpret the new construction-edit delegate')
+  assert.deepEqual(await read(),before,'saved drawings, placements, links and materials survive the rejected restore')
+  const original=(originalDelegates as any[]).find(x=>x.proname==='bob_project_write_v16')
+  const retained=(await pg.query(`select pg_get_functiondef('bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)'::regprocedure) definition`)).rows[0].definition as string
+  assert.equal(retained.replace('bob_project_write_before_construction_edits','bob_project_write_v16'),original.definition,
+   'the older writer remains recoverable without running the old migration')
  })
 })
