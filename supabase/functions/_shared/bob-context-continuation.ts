@@ -1,6 +1,6 @@
 import { applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
-import { countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
+import { contextTokenPrefix, countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
@@ -24,6 +24,10 @@ const object = (value: unknown): value is Record<string, unknown> => !!value && 
  * not visual token usage. Reserve a conservative per-image allowance until
  * the provider reports actual usage; this is an estimate, not image billing.
  * Only a counting copy changes: original pixels/references stay on the wire. */
+// Replay recounts the same chain on every step. Count each message once per
+// worker invocation and add one separator token per element, so a resumed
+// journal stays within the Edge CPU limit instead of re-encoding the chain.
+const messageTokens = new Map<string, number>()
 function countInputTokens(value: unknown): number {
   let imageAllowance = 0
   const normalize = (item: unknown): unknown => {
@@ -36,7 +40,19 @@ function countInputTokens(value: unknown): number {
     }
     return Object.fromEntries(Object.entries(item).map(([key, child]) => [key, normalize(child)]))
   }
-  return countSerializedTokens(normalize(value)) + imageAllowance
+  const count = (item: unknown): number => {
+    if (Array.isArray(item)) return item.reduce((sum: number, child) => sum + count(child) + 1, 1)
+    // Inside an array JSON spells an absent value as null.
+    const text = JSON.stringify(item) ?? 'null'
+    if (text.length < 256) return countContextTokens(text)
+    let tokens = messageTokens.get(text)
+    if (tokens === undefined) {
+      if (messageTokens.size >= 4096) messageTokens.clear()
+      messageTokens.set(text, tokens = countContextTokens(text))
+    }
+    return tokens
+  }
+  return count(normalize(value)) + imageAllowance
 }
 
 /** A page boundary is a Unicode-codepoint offset into an immutable original.
@@ -44,13 +60,17 @@ function countInputTokens(value: unknown): number {
 function textPage(text: string, after: number, tokens: number): { text: string; next: number | null } {
   const chars = Array.from(text)
   if (after > chars.length) throw new Error('context_cursor_invalid')
-  let low = after, high = chars.length
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2)
-    if (countContextTokens(chars.slice(after, middle).join('')) <= tokens) low = middle
-    else high = middle - 1
+  // Encode a bounded window from the cursor, never the whole remaining source:
+  // a resumed job re-pages every summarized batch, under the Edge CPU limit.
+  let span = Math.max(256, tokens * 8), window: string
+  for (;;) {
+    window = chars.slice(after, after + span).join('')
+    if (after + span >= chars.length || countContextTokens(window) > tokens) break
+    span *= 2
   }
-  if (low === after && after < chars.length) throw new Error('context_page_unavailable')
+  const page = Array.from(contextTokenPrefix(window, tokens)).length
+  if (page === 0 && after < chars.length) throw new Error('context_page_unavailable')
+  const low = after + page
   return { text: chars.slice(after, low).join(''), next: low < chars.length ? low : null }
 }
 
