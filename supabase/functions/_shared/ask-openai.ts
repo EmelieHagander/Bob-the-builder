@@ -603,7 +603,11 @@ export async function answerWithOpenAi(opts: {
         let encoded = ''; for (let i=0;i<generated.image.length;i+=8192) encoded+=String.fromCharCode(...generated.image.subarray(i,i+8192))
         return {ok:true as const,image:btoa(encoded)}
       },100000)
-      return result.ok ? {ok:true,image:Uint8Array.from(atob(result.image),c=>c.charCodeAt(0))} : result
+      if (!result.ok) return result
+      // Runs on every replay of the journaled image: a plain loop, not a per-byte mapper.
+      const binary = atob(result.image), image = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) image[i] = binary.charCodeAt(i)
+      return {ok:true,image}
     },
     upload:async(id,bytes)=>{await memo('image:upload',id,async()=>{
       const storage=client.storage.from('bob-project-media'),path=`${opts.projectId}/${id}`

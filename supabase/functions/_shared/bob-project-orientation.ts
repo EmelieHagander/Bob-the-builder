@@ -175,8 +175,11 @@ export async function prepareProjectOrientation(opts: {
       sourceIds: [...new Set([projectSource, focus.sourceId, requestSource])], maxTokens: ORIENTATION_TOKEN_LIMITS.footer },
   ]
   const presentations = new Map<string, BoundedPresentation>()
-  for (const block of blocks) if (countContextTokens(block.text) <= block.maxTokens) presentations.set(block.key,
-    { text: block.text, sourceIds: block.sourceIds, maxTokens: block.maxTokens, kind: 'original', tokens: countContextTokens(block.text) })
+  for (const block of blocks) {
+    const tokens = countContextTokens(block.text)
+    if (tokens <= block.maxTokens) presentations.set(block.key,
+      { text: block.text, sourceIds: block.sourceIds, maxTokens: block.maxTokens, kind: 'original', tokens })
+  }
   const oversized = blocks.filter(block => !presentations.has(block.key))
   if (oversized.length) {
     let feedback: string | undefined

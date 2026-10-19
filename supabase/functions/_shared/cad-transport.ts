@@ -1,5 +1,7 @@
 import { cadPreviewKeys, parseCadAssemblyResult, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { CadPacket } from './cad-assistant.ts'
+/** Plain loop: Uint8Array.from with a mapper costs ~100 ms per MB of CPU. */
+function decodeBase64(encoded:string):Uint8Array{const text=atob(encoded),raw=new Uint8Array(text.length);for(let i=0;i<text.length;i++)raw[i]=text.charCodeAt(i);return raw}
 export const CAD_TRANSPORT_CONTRACT='2026-10-17-paged-construction-annotations'
 
 /** The host and secret are deployment configuration, never model input. */
@@ -21,7 +23,7 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
   if(Object.keys(packet.files).sort().join(',')!==expected.sort().join(','))throw new Error('invalid_cad_files')
   for(const k of expected){
    const encoded=packet.files[k];if(typeof encoded!=='string'||encoded.length>4*1024*1024)throw new Error('invalid_cad_file')
-   const raw=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))
+   const raw=decodeBase64(encoded)
    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
    if(digest!==manifest.exports[k].sha256)throw new Error('cad_hash_mismatch')
   }
@@ -33,7 +35,7 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
    const sourceView=view.split('.')[0]
    const encoded=packet.previews[view], metadata=packet.manifest.previews?.[view]
    if(typeof encoded!=='string'||encoded.length>700000||!metadata||Object.keys(metadata).sort().join(',')!=='file,sha256,source_sha256'||metadata.file!==view+'.png'||typeof metadata.sha256!=='string'||!/^[0-9a-f]{64}$/.test(metadata.sha256)||metadata.source_sha256!==manifest.exports[sourceView].sha256)throw new Error('invalid_cad_preview')
-   const raw=Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))
+   const raw=decodeBase64(encoded)
    if(![137,80,78,71,13,10,26,10].every((n,i)=>raw[i]===n)||raw.length<24)throw new Error('invalid_cad_preview')
    const header=new DataView(raw.buffer),width=header.getUint32(16),height=header.getUint32(20)
    if(!width||!height||width>1024||height>1024)throw new Error('invalid_cad_preview')

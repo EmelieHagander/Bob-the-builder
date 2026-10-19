@@ -48,3 +48,14 @@ test('summarized history pages reconstruct the exact source without re-encoding 
   }
   assert.ok(performance.now() - started < 5000, 'replay of this journal stays far from seconds of CPU per step')
 })
+
+test('replaying a long journal stays linear: retry markers are looked up, not scanned', async () => {
+  const { createBobJournal } = await import('../supabase/functions/_shared/bob-job-journal.ts')
+  const entries: any[] = []
+  const first = createBobJournal({ entries, save: async e => { entries.push(e) } }, Infinity, Date.now, new Map(), { unlimitedWork: true })
+  for (let i = 0; i < 4000; i++) await first.run('tool:read', { i }, async () => ({ status: 'ok', i }))
+  const replay = createBobJournal({ entries, save: async () => assert.fail('a replay never saves') }, Infinity, Date.now, new Map(), { unlimitedWork: true })
+  const started = performance.now()
+  for (let i = 0; i < 4000; i++) assert.equal((await replay.run('tool:read', { i }, async () => assert.fail('no dispatch')) as any).i, i)
+  assert.ok(performance.now() - started < 2000)
+})

@@ -47,6 +47,22 @@ function measured<T extends object>(value: T, maxTokens: number): T & { tokenBud
   throw new Error('context_token_count_unstable')
 }
 
+/** Largest end in [low, high] that still fits, given that low fits. Probes grow
+ * from low, so each measured packet stays near the final size instead of the
+ * whole section (this runs again on every journal replay). Same result as a
+ * bisection over the full range for a monotone fit. */
+function largestFitting(low: number, high: number, fits: (end: number) => boolean): number {
+  let step = 1
+  while (low + step <= high && fits(low + step)) { low += step; step *= 2 }
+  high = Math.min(high, low + step - 1)
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (fits(middle)) low = middle
+    else high = middle - 1
+  }
+  return low
+}
+
 export async function boundProjectOrientation(original: ProjectOrientation, opts: {
   hasAccess: () => Promise<boolean>; maxTokens: number; pageMaxTokens: number;
 }) {
@@ -90,13 +106,10 @@ export async function boundProjectOrientation(original: ProjectOrientation, opts
   // Exact governing requirements take precedence over directories. If even an
   // individual original is large it stays exact behind a fragmentable page.
   for (const section of ['completionRequirements', 'recentSharedFacts', 'children', 'siblings'] as const) {
-    let low = 0, high = sections[section].length
-    while (low < high) {
-      const middle = Math.ceil((low + high) / 2)
-      included[section] = middle
-      if (packet().tokenBudget!.tokens <= opts.maxTokens) low = middle
-      else high = middle - 1
-    }
+    const low = largestFitting(0, sections[section].length, end => {
+      included[section] = end
+      return packet().tokenBudget!.tokens <= opts.maxTokens
+    })
     included[section] = low
   }
   orientation = packet()
