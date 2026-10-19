@@ -120,6 +120,24 @@ Rita reviews that candidate. Plantus/Vera cards describe compile/audit;
 Immutable historical catalog versions, manifests and execution evidence remain
 retrievable; they do not restore removed capabilities.
 
+## Capability supports autonomy; prompt prose does not replace it
+
+Bob chooses the work, tool and investigation path; the server provides
+discoverable, caller-eligible, actually executable capabilities with usable
+manuals, source-linked context and honest execution receipts. A catalog row
+or a green isolated handler test does not prove Bob can use that capability in
+a real turn. Tool success is not completion of the owner's request; acceptance
+remains with [the conversation contract](ask-bob-conversations.md) and
+[the user outcomes](user-stories.md).
+
+When Bob stalls, repeats work or asks needlessly, diagnose what was **offered
+and callable**, what context and previous receipts survived, which operation
+failed, and what user-facing outcome is still missing. Fix the owning tool,
+context or execution seam before prescribing a tool order, a confirmation
+loop or a new behavioural prompt clause. Preserve backend authority, physical
+uncertainty and high-consequence decisions. The [prompt-craft guide](prompt-craft.md)
+owns how to write prompts, not this runtime contract.
+
 ## Current toolbox contract — 2026-09-27
 
 This remains the baseline for older manifests. The new [card contract](#tool-and-colleague-cards--2026-10-18)
