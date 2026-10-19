@@ -126,7 +126,8 @@ test('phase never narrows or mandates the toolbox and never expands authority',a
 
 test('production binds its caller-JWT catalog reader and retains selected-image grounding',async()=>{
   const code=await readFile(new URL('../supabase/functions/_shared/ask-openai.ts',import.meta.url),'utf8')
-  assert.match(code,/const readToolPolicy = reuseFresh\(createToolPolicyReader\(client, opts.projectId\)/)
+  assert.match(code,/const policyReader = createToolPolicyReader\(client, opts.projectId\)/)
+  assert.match(code,/const readToolPolicy = checkpoint \? policyReader : reuseFresh\(policyReader, \(\) => true\)/)
   assert.match(code,/^    readToolPolicy,$/m)
   assert.match(code,/callModel: createGroundedModelCall/)
   const reader=await readFile(new URL('../supabase/functions/_shared/project-tools/policy-reader.ts',import.meta.url),'utf8')

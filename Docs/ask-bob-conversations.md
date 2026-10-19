@@ -5,8 +5,9 @@
 <a id="launchpad-migration"></a>
 ## Launchpad-pattern migration — SPECIFIED 2026-10-19
 
-**PR1 is IN IMPLEMENTATION; PR2 and PR3 are specified. None is declared complete
-or deployed by this section.** The owner accepted the staged direction: one PR
+**PR1 is an implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281),
+awaiting full CI and live acceptance; it is not merged or deployed. PR2 and PR3
+remain specified.** The owner accepted the staged direction: one PR
 at a time, verify before the next stage, deterministic references for older tool
 results, and CAD after Bob's main turn. The
 [dated audit](bob-launchpad-migration-audit-2026-10-19.md) records the baseline,

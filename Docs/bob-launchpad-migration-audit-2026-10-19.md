@@ -2,9 +2,10 @@
 
 **Dated evidence, not the implementation contract.** The corrected three-PR
 contract lives in [the conversation owner](ask-bob-conversations.md#launchpad-migration).
-[Active State](bob-delivery-flow.md#state) owns the next action. PR1 is **IN
-IMPLEMENTATION**, not complete or deployed; PR2/PR3 remain specified. This record
-does not close ordinary owner, long-work, image or CAD acceptance.
+[Active State](bob-delivery-flow.md#state) owns the next action. PR1 is an
+**implemented candidate in [PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281)**,
+awaiting full CI and live acceptance; it is not merged or deployed. PR2/PR3 remain
+specified. This record does not close ordinary owner, long-work, image or CAD acceptance.
 
 ## Scope and verdict
 
@@ -21,6 +22,23 @@ stateless-prompt and result-demotion stages need their own compatibility and mod
 quality gates. No application work quotas are reintroduced, and this audit makes
 no promise that arbitrary unlimited work fits below 64,000 tokens.
 
+## PR candidate and CI blocker
+
+[PR #281](https://github.com/EmelieHagander/Bob-the-builder/pull/281) was opened at
+initial head `5f3521eaca9fdfec7056b1edaa215e7b9ae5f7df`. Its GitHub CI jobs stopped
+before executing steps: the check annotations reported that the account was
+locked by a billing issue. The annotations were verified through a read-only
+GitHub request. This is an infrastructure blocker, not a passing CI result or a
+test failure inside the workflow. The final local full suite passed **1,605 / 1,605**
+tests in **493,382 ms**. The first updated run had one obsolete source assertion
+for the legacy policy-cache wiring; that assertion now checks both execution
+modes. Build, vocabulary and app typechecking also passed. All seven Edge
+entrypoints passed Deno graph checking with scratch-only mappings to the exact
+Supabase 2.49.8 / 2.110.2 and tokenizer 3.4.0 dependencies; the unchanged CI
+command remains required because esm.sh was unreachable locally. No merge or deployment proceeds until
+the final candidate has green CI. Release ordering and rollback remain in
+[the migration contract](ask-bob-conversations.md#launchpad-migration).
+
 ## Observed Bob baseline
 
 Five `CPUTime` shutdown records on **2026-10-18, 20:47–20:59 UTC**, from
@@ -34,7 +52,7 @@ failures establish the incident; they do not establish a failure or a successful
 long run on the newly installed versions.
 
 The available **169 `ask-bob` calls** showed **41.65%** cached input in aggregate;
-the latest inspected call showed **32.73%**. The proposed **86%** is therefore
+the latest inspected long job showed **32.73%**. The proposed **86%** is therefore
 not a general verified baseline for this migration. Cost and cache comparisons
 must use comparable completed work, identify the sample and preserve outcome
 quality. A stable prompt prefix helps caching but cannot guarantee the same
