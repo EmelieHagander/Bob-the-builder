@@ -102,6 +102,15 @@ activate this draft based only on the small-reasoning fixtures.
 <a id="tool-payload-audit"></a>
 ## Source and tool payload audit — 2026-10-19, before activation
 
+**Follow-up trace:** [the earlier construction split](bob-construction-path-audit-2026-10-19.md)
+identifies the removed candidate-delta/array execution path, the checked-source
+prerequisite before queuing pieces, and the actual three-part addition in this run.
+The parameter-only command cannot make that addition. It also confirms a missing
+change note and an accidentally self-connected existing joint in the first two
+full-save proposals. The live short directory already includes individual tools;
+absence from a workflow is not absence from the complete shelf. These findings
+refine the corrective sequence below without reactivating legacy CAD colleagues.
+
 **Finding: source selection and tool expansion need correction, not just a
 larger context window or generic 2,000-token pages.** The owner requests relevant
 pixels, database pick/parts lists or short descriptions for main Bob, with a smaller

@@ -293,6 +293,13 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 ## 12. State — nästa arbete
 
 **Aktivt nästa steg — kostnadsmedveten förberedelse utan nya betalprov (2026-10-19):**
+beställarens begärda [spårning av den tidigare uppdelningen](bob-construction-path-audit-2026-10-19.md)
+är genomförd. Den visar att delkön kräver färdiga konstruktioner, medan små
+topologiändringar fortfarande kräver att huvudmodellen skickar hela konstruktionen.
+Det granskade jobbet lade till tre lådvolymer; parameterkommandot räckte inte.
+Prioritera en avgränsad kanonisk ändringsväg och precisa fel/små läsvyer, med
+befintliga kontroller och oförändrade delar bevarade. Återinför inte gamla CAD-kollegor.
+
 den senaste fördjupningen visar för bred verktygsladdning, dubblerade
 manual/schemadelar och stora konstruktionsläsningar/-skrivningar. Börja med
 [auditens rättningsordning](bob-launchpad-migration-audit-2026-10-19.md#tool-payload-audit)
