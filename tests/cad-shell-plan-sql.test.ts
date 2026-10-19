@@ -150,6 +150,7 @@ for(const omitted of [false,true]) test(`shell plan installation (${omitted?'hos
   // migration at this later boundary must fail closed, not replace newer code.
   await assert.rejects(pg.exec(sql),/cad_shell_plan_prerequisites_missing/,
    'the older installer cannot reinterpret the new construction-edit delegate')
+  await pg.exec('rollback')
   assert.deepEqual(await read(),before,'saved drawings, placements, links and materials survive the rejected restore')
   const original=(originalDelegates as any[]).find(x=>x.proname==='bob_project_write_v16')
   const retained=(await pg.query(`select pg_get_functiondef('bob_private.bob_project_write_before_construction_edits(text,uuid,uuid,bigint,jsonb)'::regprocedure) definition`)).rows[0].definition as string
