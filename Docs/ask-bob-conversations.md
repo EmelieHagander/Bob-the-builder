@@ -116,6 +116,27 @@ cache share and cost per equivalent delivered task against an identified baselin
 neither 86% nor an unchanged cache ratio is assumed. CAD stays on its existing
 path until the main-turn migration is accepted.
 
+**Stage-2 implementation, awaiting release/live acceptance:** new durable main
+turns pin `completeRequestVersion: 1`. `buildBobRequest` reconstructs seed memory,
+turn-start context and ordered retained native exchanges from checkpoint state;
+the response ID remains only a local state key and is omitted from the provider
+request. The complete eligible tool directory precedes workflow cards and changing
+availability. Loaded eligible manuals are included in schemas on every call.
+`responseItemsMode: preserve` retains native IDs, phases, function calls and opaque
+`reasoning.encrypted_content`. Both POST and completed asynchronous retrieval
+request encrypted items; a missing payload fails closed. Historical images stay
+native inputs and resolve under the existing authorized file/pixel transport.
+
+This PR deliberately retains the existing AI compactor until PR3: a complete
+request includes the current handoff plus retained native exchanges and images,
+**not every older exchange verbatim after compaction**. Ciphertext is never fed to
+the text summarizer or counted as plaintext tokens. Original operation results
+remain available through the existing authorized history tool. No claim of zero
+mid-turn compaction, constant cost or improved cache share is made at this stage.
+The shared async worker must be upgraded before activating new main executions;
+old jobs and CAD omit the opt-in and retain their prior wire behavior. No new
+schema migration or public request-history logging is introduced.
+
 ### PR3 — bound result payloads without an AI history summary
 
 Reduce default tool pages toward approximately 2,000 content tokens where their

@@ -14,7 +14,7 @@ import type { createPlanAssistant } from './plan-assistant.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { createProjectLookup } from './project-lookup.ts'
-import { buildBobHands } from './bob-prompt.ts'
+import { buildBobHands, buildBobCompleteHands } from './bob-prompt.ts'
 import type { AiCatalogSession } from './ai-catalog.ts'
 import { compactReceipts, type ProjectWriter } from './project-write.ts'
 import type { WorkingContext } from './bob-working-context.ts'
@@ -32,8 +32,8 @@ import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checke
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
 
 /** Instruction content comes from the pinned database manifest; shelf state is data. */
-export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = []): string {
-  return [aiCatalog.role('ask-bob').systemMessage, buildBobHands(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[]))].join('\n\n')
+export function buildBobSystemMessage(aiCatalog: AiCatalogSession, tools: OpenAIServiceOptions['tools'] = [], toolbox: ToolboxEntry[] = [], completeRequest = false): string {
+  return [aiCatalog.role('ask-bob').systemMessage, (completeRequest ? buildBobCompleteHands : buildBobHands)(aiCatalog, tools, sortToolbox(toolbox, aiCatalog.definition('bob.tools', 'tool_contract').definition.shelves as { label: string; tools: string[] }[]))].join('\n\n')
 }
 
 /** Legacy pinned contracts retain their original per-turn work ceilings. */
@@ -150,6 +150,8 @@ export type ProjectAnswerOptions = {
   /** Pinned per execution: a context rollover keeps loaded tools, with their
    * manuals in the offered schemas, instead of resetting them. */
   carryLoadedTools?: boolean;
+  /** Pinned for new durable main turns; never changes a running old job. */
+  completeRequest?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
   /** Refresh the active tool fence atomically before a fresh provider chain. */
@@ -293,6 +295,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (phase === 'ready') {
     tools = []
     try {
+      if (opts.completeRequest) toolbox.carryInstructions()
       if (contextStrategy && opts.contextEpoch && !opts.registerContextSurface) {
         const epoch = opts.contextEpoch()
         if (epoch !== preparedEpoch) { if (opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions(); preparedEpoch = epoch }
@@ -310,14 +313,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       if (!await opts.hasAccess()) throw new Error('project_denied')
       if (opts.validateCurrentView && !await opts.validateCurrentView()) throw new Error('context_unavailable')
       if (opts.projectContext && !await opts.projectContext.validate()) throw new Error('context_unavailable')
-      if (opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions()
+      if (opts.completeRequest || opts.carryLoadedTools) toolbox.carryInstructions(); else toolbox.resetInstructions()
       if (!closedByLimit && !closedByCommentary) tools = await toolbox.prepare()
       else { toolbox.closeSurface(); tools = [] }
       shelf = closedByLimit || closedByCommentary ? [] : toolbox.toolbox
       // The returned provider request and its eventual handlers share this
       // refreshed fence. A new describe call remains loaded for the next step.
-      return { systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf), tools: tools.length ? tools : undefined,
-        catalogSchemaParameters: schemaParameters(), catalogToolParameters: opts.carryLoadedTools ? toolbox.toolParameters() : undefined }
+      return { systemMessage: buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest), tools: tools.length ? tools : undefined,
+        catalogSchemaParameters: schemaParameters(), catalogToolParameters: opts.completeRequest || opts.carryLoadedTools ? toolbox.toolParameters() : undefined }
     })
     if (closedByLimit && step > 0 && !closedNoteSent) {
       closedNoteSent = true
@@ -326,7 +329,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     observation.steps = step + 1
     progress({ stage: step === 0 ? 'thinking' : tools.length ? 'thinking' : 'finishing', step: step + 1 })
     // Built once per step: replay rebuilds it for every recorded step too.
-    const systemMessage = buildBobSystemMessage(opts.aiCatalog, tools, shelf)
+    const systemMessage = buildBobSystemMessage(opts.aiCatalog, tools, shelf, opts.completeRequest)
     console.log('[Bob context]', JSON.stringify({ step, tools: tools.length, system_chars: systemMessage.length, tool_schema_bytes: new TextEncoder().encode(JSON.stringify(tools)).length, message_bytes: new TextEncoder().encode(JSON.stringify(messages)).length, remaining_ms: Math.max(0, deadline - Date.now()) }))
     // A terminal design failure has a known cause. Deliver it without another
     // paid model call that can retry the same job or invent a renderer outage.
@@ -336,9 +339,10 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       request = {
       app: 'bob', coworkerId: 'bob', functionName: 'ask-bob', aiFunction: 'ask-bob', module: 'global',
       userId: opts.userId, systemMessage, catalogRoleKey: 'ask-bob', catalogSchemaParameters: schemaParameters(),
-      ...(opts.carryLoadedTools && toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
+      ...((opts.completeRequest || opts.carryLoadedTools) && toolbox.toolParameters() ? { catalogToolParameters: toolbox.toolParameters() } : {}),
       messages: [...messages, ...(opts.projectContext?.carrier() ?? []), ...(step === 0 && initialFooter ? [initialFooter] : [])], previousResponseId, tools: tools.length ? tools : undefined,
       ...(completionAware ? { responsePhaseMode: 'aware' as const } : {}),
+      ...(opts.completeRequest ? { responseItemsMode: 'preserve' as const, responsePhaseMode: 'aware' as const } : {}),
       maxOutputTokens: opts.writer ? 8000 : 900, timeoutMs: Math.min(opts.modelTimeoutMs ?? 45_000, deadline - Date.now()),
       }
       phase = 'model'

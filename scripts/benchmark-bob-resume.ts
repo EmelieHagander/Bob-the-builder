@@ -10,6 +10,7 @@ import { BobContinuation, createBobJournal, type BobJournalState, type JournalEn
 import { AIBackgroundPending, backgroundResponse } from '../supabase/functions/_shared/ai-background.ts'
 import { catalogFixture, catalogCall } from '../tests/support/ai-catalog-fixture.ts'
 import type { OpenAIServiceResponse } from '../supabase/functions/_shared/openai-service.ts'
+import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
 import { createBobContextContinuation, type BobContextContinuationState, type ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
 import { contextTokenPrefix, countContextTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 
@@ -39,6 +40,8 @@ export interface ResumeProbeOptions {
   /** Approximately 2000-token read pages, two 4 MB media references, and the
    * production context-continuation adapter with its pinned rollover policy. */
   stress?: boolean
+  completeRequest?: boolean
+  onRequest?: (request: OpenAIServiceOptions) => void
   onCheckpoint?: (state: BobAnswerState, revoke: () => void) => void
 }
 
@@ -116,6 +119,7 @@ export function createResumeProbe(options: ResumeProbeOptions) {
     }
     const dispatchModel = catalogCall(async request => {
       c.modelRequests++
+      options.onRequest?.(request)
       return journal.run('model:' + request.functionName, request, async identity => {
         if (request.catalogRoleKey === 'context-compactor') {
           c.summaryPosts++; c.providerPosts++
@@ -156,11 +160,18 @@ export function createResumeProbe(options: ResumeProbeOptions) {
             throw error
           } finally { globalThis.fetch = originalFetch }
         } else c.providerPosts++
-        return scripted(step)
+        const result = scripted(step)
+        return request.responseItemsMode === 'preserve' ? { ...result, outputItems: [
+          { type: 'reasoning', id: 'rs_' + step, summary: [], encrypted_content: 'opaque-fixture-' + step },
+          ...(result.toolCalls?.map(call => ({ type: 'function_call', id: 'fc_' + call.id, call_id: call.id,
+            name: call.function.name, arguments: call.function.arguments, status: 'completed' })) ?? [
+            { type: 'message', id: 'msg_' + step, role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: result.data, annotations: [] }] },
+          ]),
+        ] } : result
       })
     }, session)
     let contextEpoch = capsule?.contextEpoch ?? 0, refreshSurface: (() => Promise<ContextSurface>) | undefined
-    const continuation = options.stress ? createBobContextContinuation({ version: 1, aiCatalog: session, callModel: dispatchModel,
+    const continuation = options.stress || options.completeRequest ? createBobContextContinuation({ version: 1, aiCatalog: session, callModel: dispatchModel,
       pageBoundaries: (source, compute) => journal.run('context:pages', { source }, compute),
       onRollover: () => { contextEpoch++ }, refreshSurface: () => refreshSurface?.() ?? Promise.resolve(undefined),
       snapshot: () => ({ confirmed_writes: writer.executedReceipts.map(({ record: _record, ...receipt }) => receipt), unresolved_tools: writer.unresolvedTools }),
@@ -172,6 +183,7 @@ export function createResumeProbe(options: ResumeProbeOptions) {
       await writer.recover()
       result = await runProjectAnswer({ aiCatalog: session, projectId: 'A', userId: 'owner', message: 'Continue this synthetic task.',
         lookup, writer, hasAccess, projectContext: context, carryLoadedTools: true, unlimitedWork: true, deadline: Infinity,
+        ...(options.completeRequest ? { completeRequest: true } : {}),
         readToolPolicy: async () => { c.policy++; return policy }, onTool: () => { c.toolTraversals++ }, callModel,
         ...(continuation ? { contextEpoch: () => contextEpoch, registerContextSurface: (refresh: () => Promise<ContextSurface>) => { refreshSurface = refresh } } : {}),
         ...(options.checkpoint ? { checkpoint: { state: capsule?.answer, save: async (answer: BobAnswerState) => {

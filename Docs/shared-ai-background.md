@@ -60,6 +60,18 @@ Submission, acceptance, retrieval, cancellation and callback delivery have separ
 
 The initial transport covers **OpenAI Responses** calls, including app tool loops. The separate `/images/generations` helper and external CAD rendering service retain their own contracts; they do not acquire background support by setting this Responses option. Additional provider/long-running tool adapters need an explicit lifecycle integration.
 
+## Optional native Responses replay — stage 2, pending release
+
+Callers opting into `responseItemsMode: preserve` request
+`reasoning.encrypted_content` and retain the provider's ordered output items.
+The POST pins `ai_replay_items: 1` in opaque provider metadata. A completed worker
+GET for such a job retrieves the include-enabled payload before acceptance,
+validates its response/job identity and native payload, and leaves retrieval
+retryable on failure. Legacy callers retain their existing one-GET behavior.
+Opaque ciphertext belongs only in the existing private result/checkpoint stores;
+it is never included in content-free diagnostics or text summaries. Upgrade the
+shared async worker before enabling an app's new replay contract.
+
 ## Bob integration and user-visible behavior
 
 New Bob jobs pin `async_models` at enqueue time from the receiver's enabled setting. Already-running legacy jobs keep their original transport. Bob journals one stable operation key per model call and parks on `waiting_ai_job`, without consuming stall retries or repeatedly claiming a worker while OpenAI computes. Completion-before-wait and wait-before-completion both preserve wakeup. The existing owner JWT, current membership checks, generation fencing and exact artifact review remain authoritative.

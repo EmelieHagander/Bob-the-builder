@@ -2,6 +2,8 @@ import { applyCatalogModelOptions, type AiCatalogSession } from './ai-catalog.ts
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import { contextTokenPrefix, countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 import { stableJsonValue } from './bob-job-journal.ts'
+import { buildBobRequest } from './bob-complete-request.ts'
+import { readResponseItems } from './openai-content.ts'
 
 type Message = NonNullable<OpenAIServiceOptions['messages']>[number]
 type ToolCall = NonNullable<OpenAIServiceResponse['toolCalls']>[number]
@@ -13,6 +15,7 @@ type Chain = {
   identity: string; seed: Message[]; groups: Message[][]; handoff?: Handoff; compacted: boolean
   pendingInternal: Message[]; inputTokens: number; outputTokens: number
   operations: Map<string, Operation>
+  historicalImages?: Message[]
 }
 /** Only live provider heads are retained. Map entries are arrays on disk so
  * a worker can restore a chain without replaying completed model/tool calls. */
@@ -40,9 +43,17 @@ const object = (value: unknown): value is Record<string, unknown> => !!value && 
 const messageTokens = new Map<string, number>()
 function countInputTokens(value: unknown): number {
   let imageAllowance = 0
+  let reasoningAllowance = 0
   const normalize = (item: unknown): unknown => {
     if (Array.isArray(item)) return item.map(normalize)
     if (!object(item)) return item
+    if (item.nativeOutput !== undefined) {
+      // Count every visible native item (including commentary beside calls)
+      // once. Ciphertext length is not its token count; use reported usage.
+      const { nativeOutput, nativeReasoningTokens } = item
+      reasoningAllowance += typeof nativeReasoningTokens === 'number' ? nativeReasoningTokens : 0
+      return normalize((nativeOutput as Record<string, unknown>[]).map(({ encrypted_content: _opaque, ...visible }) => visible))
+    }
     if (item.type === 'image_url' && (typeof item.image_url === 'string' || object(item.image_url))) {
       const detail = object(item.image_url) ? item.image_url.detail ?? 'auto' : 'auto'
       imageAllowance += detail === 'low' ? 1024 : 8192
@@ -62,7 +73,8 @@ function countInputTokens(value: unknown): number {
     }
     return tokens
   }
-  return count(normalize(value)) + imageAllowance
+  const normalized = normalize(value)
+  return count(normalized) + imageAllowance + reasoningAllowance
 }
 
 /** The instruction and tool surface repeats on every step; count each exact
@@ -120,7 +132,8 @@ function readStatus(operation: Operation): Record<string, unknown> {
 function resultMessage(result: OpenAIServiceResponse): Message {
   return { role: 'assistant', content: typeof result.data === 'string' ? result.data : result.data === null ? '' : JSON.stringify(result.data),
     ...(result.toolCalls?.length ? { tool_calls: clone(result.toolCalls) } : {}),
-    ...(result.outputPhase === 'commentary' || result.outputPhase === 'final_answer' ? { phase: result.outputPhase } : {}) }
+    ...(result.outputPhase === 'commentary' || result.outputPhase === 'final_answer' ? { phase: result.outputPhase } : {}),
+    ...(result.outputItems ? { nativeOutput: readResponseItems(result.outputItems), nativeReasoningTokens: result.usage.reasoning_tokens ?? 0 } : {}) }
 }
 
 function initialMessages(options: OpenAIServiceOptions): Message[] {
@@ -135,7 +148,7 @@ function initialMessages(options: OpenAIServiceOptions): Message[] {
 /** Do not feed image encodings to a text summarizer. The original is retained
  * by the journal; exact native image messages remain in the recent exchange. */
 function compactSource(messages: Message[][]): unknown {
-  return messages.map(group => group.map(message => ({ ...message,
+  return messages.map(group => group.map(({ nativeOutput: _opaque, nativeReasoningTokens: _tokens, ...message }) => ({ ...message,
     content: Array.isArray(message.content) ? message.content.map(part => part.type === 'image_url'
       ? { type: 'archived_image', reference: typeof part.image_url === 'string' && part.image_url.startsWith('private-image:') ? part.image_url : null }
       : part) : message.content,
@@ -182,6 +195,8 @@ export function createBobContextContinuation(opts: {
   const restoreState = (state: BobContextContinuationState): void => {
     const message = (value: unknown): boolean => object(value) && ['system', 'user', 'assistant', 'tool'].includes(String(value.role))
       && (typeof value.content === 'string' || Array.isArray(value.content))
+      && (value.nativeOutput === undefined || value.role === 'assistant' && !!readResponseItems(value.nativeOutput))
+      && (value.nativeReasoningTokens === undefined || typeof value.nativeReasoningTokens === 'number' && Number.isFinite(value.nativeReasoningTokens) && value.nativeReasoningTokens >= 0)
       && (value.tool_calls === undefined || Array.isArray(value.tool_calls) && value.tool_calls.every(call => object(call)
         && typeof call.id === 'string' && call.type === 'function' && object(call.function)
         && typeof call.function.name === 'string' && typeof call.function.arguments === 'string'))
@@ -194,6 +209,7 @@ export function createBobContextContinuation(opts: {
       if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || !entry[0] || !object(entry[1])) throw new Error('context_checkpoint_invalid')
       const [id, chain] = entry
       if (typeof chain.identity !== 'string' || !messages(chain.seed) || !Array.isArray(chain.groups) || !chain.groups.every(messages)
+        || chain.historicalImages !== undefined && !messages(chain.historicalImages)
         || typeof chain.compacted !== 'boolean' || !messages(chain.pendingInternal) || !natural(chain.inputTokens) || !natural(chain.outputTokens)
         || !Array.isArray(chain.operations) || new Set(chain.operations.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== chain.operations.length
         || chain.handoff !== undefined && (!object(chain.handoff) || typeof chain.handoff.summary !== 'string'
@@ -324,7 +340,9 @@ export function createBobContextContinuation(opts: {
     let options = requested
     for (;;) {
       const consumedResponseId = options.previousResponseId
-      const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName])
+      const native = options.responseItemsMode === 'preserve'
+      const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
+        ...(native ? ['complete-request-v1'] : [])])
       let chain: Chain
       if (options.previousResponseId) {
         const previous = chains.get(options.previousResponseId)
@@ -351,8 +369,10 @@ export function createBobContextContinuation(opts: {
         schemaName: resolved.schemaName ?? null, schemaDescription: resolved.schemaDescription ?? null }) * 1.1) + 256
       const input = countInputTokens(options.messages ?? options.prompt ?? '')
       if (fixed + input > ceiling) throw new Error('context_input_too_large')
-      const estimate = Math.max(fixed + countInputTokens([chain.seed, chain.handoff, chain.groups]),
-        chain.inputTokens + chain.outputTokens + fixed + input)
+      const fullEstimate = fixed + countInputTokens(native
+        ? [chain.seed, chain.handoff, chain.historicalImages, chain.groups]
+        : [chain.seed, chain.handoff, chain.groups])
+      const estimate = native ? fullEstimate : Math.max(fullEstimate, chain.inputTokens + chain.outputTokens + fixed + input)
       if (options.previousResponseId && estimate >= limit && chain.groups.length > keep) {
         const all = chain.groups.flat()
         const calls = all.flatMap(message => message.tool_calls ?? [])
@@ -384,6 +404,13 @@ export function createBobContextContinuation(opts: {
         }
         if (complete && split > 0) {
           chain.handoff = await summarize(options, chain, chain.groups.slice(0, split), beforeDispatch)
+          if (native) {
+            // Image delivery remains literal even while the legacy text
+            // compactor is retained for the separately tested PR3 transition.
+            const images = [...(chain.historicalImages ?? []), ...chain.groups.slice(0, split).flat()
+              .filter(message => Array.isArray(message.content) && message.content.some(part => part.type === 'image_url'))]
+            chain.historicalImages = [...new Map(images.map(message => [JSON.stringify(message), clone(message)])).values()]
+          }
           chain.groups = chain.groups.slice(split)
           chain.compacted = true
           const rollover = { functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }
@@ -407,6 +434,15 @@ export function createBobContextContinuation(opts: {
         options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL), history],
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
       }
+      if (native) options = buildBobRequest(options, {
+        seed: chain.seed, history: chain.groups.flat(), historicalImages: chain.historicalImages,
+        ...(chain.handoff ? { handoff: { role: 'user', content: JSON.stringify({
+          context_handoff: chain.handoff, original_assignment_preserved: true,
+          completed_operations: [...chain.operations.values()].slice(-40).map(statusOf),
+          operation_archive: { tool: HISTORY_TOOL, list: { call_id: null, after: null } },
+          ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
+        }) } as Message } : {}),
+      })
       // Compaction preserves the exact seed and native tool exchanges. If
       // these indispensable inputs themselves exceed the configured envelope,
       // report it rather than silently trimming the assignment or tool result.
@@ -420,6 +456,7 @@ export function createBobContextContinuation(opts: {
       }
       const response = await opts.callModel(options, beforeDispatch)
       if (!response.success || !response.responseId) return response
+      if (native) readResponseItems(response.outputItems)
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
       chain.outputTokens = Math.max(0, response.usage.output_tokens)
       chain.groups.push([resultMessage(response)])
