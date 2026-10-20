@@ -21,10 +21,14 @@ for(const omitted of [false,true]) test(`shell plan installation (${omitted?'hos
  // former body in a private delegate. Every other writer and drawing handler
  // must still be byte-identical to the original shell-plan installation.
  const currentDelegates=(await pg.query(delegatesSql)).rows as any[]
+ // 20261020203000 deliberately re-raises every custom conflict as PT409 instead
+ // of 40001 (PostgREST 14 retries 40001 without limit). That is the only change
+ // a later migration may make to these bodies.
+ const conflictCode=(rows:any[])=>rows.map(row=>({...row,definition:String(row.definition).replaceAll("errcode='40001'","errcode='PT409'")}))
  const preserved=(rows:any[])=>rows.filter(row=>!(row.nspname==='bob_private'&&row.proname==='bob_project_write_v16'))
- assert.deepEqual(preserved(currentDelegates),preserved(originalDelegates as any[]),
-  'v17–v20, conflict transport and atomic drawing continuation remain byte-identical')
- const originalV16=(originalDelegates as any[]).find(row=>row.nspname==='bob_private'&&row.proname==='bob_project_write_v16')
+ assert.deepEqual(preserved(currentDelegates),preserved(conflictCode(originalDelegates as any[])),
+  'v17–v20, conflict transport and atomic drawing continuation remain byte-identical apart from the conflict SQLSTATE')
+ const originalV16=conflictCode(originalDelegates as any[]).find(row=>row.nspname==='bob_private'&&row.proname==='bob_project_write_v16')
  const currentV16=currentDelegates.find(row=>row.nspname==='bob_private'&&row.proname==='bob_project_write_v16')
  assert.ok(originalV16&&currentV16)
  assert.equal(currentV16.acl,originalV16.acl,'the accessible v16 entrypoint keeps its authority')
