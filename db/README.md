@@ -1192,3 +1192,37 @@ and activation contract belong to [the AI owner](../supabase/README.md#ai-defini
 isolation, v20/PT409 routing, ordinary shell delegation, receipt replay, quota
 policy, drift rejection and data preservation. Hosted readback and real-model
 acceptance are separate evidence.
+
+### Conflict SQLSTATE under PostgREST 14 — 2026-10-20
+
+**Rule:** a Bob function must never raise with `errcode='40001'`
+(`serialization_failure`). PostgREST 14, which serves this project, retries
+the request's transaction without limit on that code
+([Supabase troubleshooting](https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b)).
+Raise custom conflicts with `errcode='PT409'` (HTTP 409, `error.code
+'PT409'` in supabase-js); the edge code already treats both codes as
+`conflict`.
+
+**Why:** on 2026-10-20 one stale `bob-worker` claim turned into
+`bob_save_job_step`/`bob_yield_job` failing about 1,500 times per second for
+the whole day (4.1 million `job_not_claimed` Postgres log lines, 59 million
+rolled-back transactions, one PostgREST thread killed by its timeout manager
+every minute). The load pushed `read_construction_draft` past the 8 s
+`authenticated` statement timeout, so `design_project_cad` reported
+`construction_read_unavailable` in the live runs that
+`Docs/bob-delivery-flow.md` tracks. The 2026-10-16 write-conflict transport
+translated 40001 only at the public write boundaries.
+
+**Migration:** `20261020203000_bob_conflict_sqlstate_pt409.sql` recreates every
+installed function in `bob`, `bob_private` and `bob_volunteer_private` whose
+source raises with `errcode='40001'` (68 functions, 151 raises at
+installation) from its installed definition with `errcode='PT409'`, then fails
+if any `40001` remains in those schemas. Messages, bodies, grants and owners
+are unchanged; existing `when serialization_failure` handlers keep catching
+genuine serialization failures. Requests already looping inside PostgREST stop
+on their next retry. `shared.site_command`, `shared.agent_asset_commit` and the
+`maidin`/`hearth` functions still raise 40001 and belong to their own apps.
+
+**Evidence to collect after applying:** `job_not_claimed` lines stop in the
+Postgres logs, `pg_stat_database.xact_rollback` stops climbing, and the next
+live drawing run (`bob.execution_events`) reaches the CAD render.
