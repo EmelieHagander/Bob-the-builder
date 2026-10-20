@@ -444,3 +444,31 @@ test('native image token allowance is independent of URL/base64 encoding and pre
   const guarded = createBobContextContinuation({ version: 1, aiCatalog: small, callModel: async () => { throw new Error('Image allowance was ignored') } })
   await assert.rejects(guarded.call({ ...seed, messages: [{ role: 'user', content: [{ type: 'image_url', image_url: reference }] }] }), /context_input_too_large/)
 })
+
+test('reported input is counted once, so a refreshed request is not summarized again on every step', async () => {
+  const words = (n: number) => Array.from({ length: n }, (_, i) => 'ord' + (i % 97)).join(' ')
+  const run = async (rolloverVersion?: 1) => {
+    const policy = { definition: () => ({ metadata: { continuation_input_tokens: 10000, context_input_ceiling_tokens: 96000,
+      continuation_summary_tokens: 1600, retained_tool_exchanges: 2, continuation_retention_version: 2 } }) }
+    const big = { type: 'function' as const, function: { name: 'read_construction_draft', description: words(3000), parameters: { type: 'object' } } }
+    let rollovers = 0, main = 0, provider = 0
+    const adapter = createBobContextContinuation({ version: 1, ...(rolloverVersion ? { rolloverVersion } : {}), aiCatalog: { ...catalog, ...policy } as unknown as AiCatalogSession,
+      onRollover: () => { rollovers++ }, callModel: async options => {
+        if (options.catalogRoleKey === 'context-compactor') return handoff(options)
+        main++
+        // Provider input includes instructions, tools and the whole chain.
+        provider = options.previousResponseId ? provider + 50 + countContextTokens(JSON.stringify(options.messages))
+          : countContextTokens(JSON.stringify({ system: options.systemMessage, tools: options.tools, messages: options.messages }))
+        return { ...response('r' + main, [call('c' + main, 'read_construction_draft')]), usage: { input_tokens: provider, output_tokens: 600, total_tokens: provider + 600 } }
+      } })
+    const start = { ...seed, tools: [big], messages: [{ role: 'user' as const, content: 'Finish the delegated drawing. ' + words(500) }] }
+    let last = await adapter.call(start)
+    for (let step = 1; step < 30; step++) last = await adapter.call({ ...start, previousResponseId: last.responseId,
+      messages: [output('c' + main, { status: 'ok', page: words(300) })] })
+    return { rollovers, main }
+  }
+  const before = await run(), after = await run(1)
+  assert.equal(before.main, 30); assert.equal(after.main, 30)
+  assert(before.rollovers >= 20, `pinned version 0 reproduces the per-step refresh: ${before.rollovers}`)
+  assert(after.rollovers <= 6, `a refresh happens only when it frees real room: ${after.rollovers}`)
+})

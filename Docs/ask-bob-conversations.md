@@ -374,6 +374,16 @@ exchange slot; intervening context remains exact and late outputs retain their
 matching calls. Earlier immutable manifests keep their recorded grouping solely
 to replay already journaled model inputs. Unknown explicit policy versions fail.
 
+**Rollover sizing (`rolloverVersion: 1`, 2026-10-20).** The earlier estimate
+added the tool surface on top of the provider-reported input, which already
+contains it. With construction manuals loaded, a freshly refreshed request then
+looked over 64,000 at once, so almost every step was summarized again and Bob
+kept only his last two exchanges (the 2026-10-20 run: 55 summaries in 62 main
+calls, 150 repeated construction reads, no edit). New executions count reported
+input once and refresh only when the part to be summarized is at least a quarter
+of the trigger, so a refresh actually frees room. This is not a cap on Bob's
+work. Executions pinned without the flag keep their recorded behaviour.
+
 New durable executions also pin `lookupObservationVersion: 1`. Each project
 lookup records its observation time before its RPC, including invalid and failed
 reads. Worker replay restores that original time in the tool result and source
