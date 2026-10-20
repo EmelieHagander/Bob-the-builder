@@ -1,7 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {createToolSession} from '../supabase/functions/_shared/project-tools/session.ts'
-import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
+import {createBobToolSession,DRAWING_CONTINUATION_PRELOAD} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
 import {createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {createProjectLookup} from '../supabase/functions/_shared/project-lookup.ts'
 import {bobWorkflows} from '../supabase/functions/_shared/bob-prompt.ts'
@@ -83,4 +83,27 @@ test('construction workflow no longer expands twenty schemas, while all cards re
   sizes.push(new TextEncoder().encode(JSON.stringify(offered)).length)
  }
  assert(sizes[1]<sizes[0]);t.diagnostic(`Native tool bytes: workflow bulk ${sizes[0]}; selective workflow plus one reader ${sizes[1]}. Scripted surface comparison, not model cost evidence.`)
+})
+
+test('a pending drawing preloads the construction tools without a describe_tool round',async()=>{
+ const catalog=catalogFixture(),names=['read_construction_draft','save_construction_draft','check_construction_draft']
+ let ready=false,preload:string[]=[]
+ const rows=names.map(name=>({name,description:'Short card',how_to:'manual',schema_version:1,always_load:false,preload_phases:[],active:true}))
+ const make=()=>createToolSession({toolInstructions:'lazy',selectiveTools:true,preloadTools:()=>preload,
+  catalogTool:(name,p)=>catalog.tool(name,p),catalogWorkflows:()=>bobWorkflows(catalog),
+  readPolicy:async()=>({phase:'design',tools:rows}),
+  definitions:rows.map(r=>({version:1,spec:catalog.tool(r.name),gate:()=>r.name==='check_construction_draft'&&!ready?'missing_context':'available',execute:async()=>({status:'ok'})}))})
+ const idle=make()
+ assert.deepEqual((await idle.prepare()).map(t=>t.function.name),['describe_tool'],'no pending drawing: nothing is loaded ahead')
+ preload=['read_construction_draft','check_construction_draft','not_a_tool']
+ const s=make()
+ assert.deepEqual((await s.prepare()).map(t=>t.function.name).sort(),['describe_tool','read_construction_draft'],'available preloads are offered at once; waiting ones wait')
+ assert.equal((await s.execute('read_construction_draft',{})).status,'ok')
+ ready=true
+ assert.deepEqual((await s.prepare()).map(t=>t.function.name).sort(),['check_construction_draft','describe_tool','read_construction_draft'])
+ const next=make();next.restoreState(JSON.parse(JSON.stringify(s.exportState())))
+ assert.deepEqual((await next.prepare()).map(t=>t.function.name).sort(),['check_construction_draft','describe_tool','read_construction_draft'],'checkpoint keeps the preloaded set')
+ // save_cad_design is the CAD assistant's own save step (Drawings and CAD shelf, waiting until a reviewed candidate); the rest are workflow members.
+ for(const name of DRAWING_CONTINUATION_PRELOAD)if(name!=='save_cad_design')assert(bobWorkflows(catalog).find(w=>w.name==='workflow_construction_drawing')!.tools.includes(name),name+' belongs to the construction drawing workflow')
+ assert(DRAWING_CONTINUATION_PRELOAD.includes('save_cad_design'))
 })

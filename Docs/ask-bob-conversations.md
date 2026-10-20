@@ -182,7 +182,9 @@ item ids; calls, call ids and visible text stay. Without this, a reasoning-heavy
 40-step probe exceeded the context ceiling (`context_input_too_large`); with it the
 same probe peaks at about 36k estimated input.
 
-At the model boundary, large string results receive a bounded first page. Successful
+At the model boundary, large string results receive a bounded first page (3,000
+tokens since 2026-10-20, sized so that one whole 2,000-token construction view
+page stays literal instead of costing one or two `get_work_history` steps). Successful
 read/list/search/open results older than two model exchanges become explicit
 historical references; small write receipts, check results and error feedback stay
 literal. Large receipts/feedback keep their bounded first page plus exact recall.

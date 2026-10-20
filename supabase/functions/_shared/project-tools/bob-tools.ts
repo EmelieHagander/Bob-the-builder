@@ -42,8 +42,17 @@ const shelfOf = (name: string) => TOOLBOX_SHELVES.find(s => s.tools.includes(nam
 
 /** Sole handler-registration seam. Catalog names/descriptions are data; offering a
  * tool never grants authority. New handlers register here, not in the model loop. */
+/** Loaded from the first step of a turn whose thread has a pending drawing
+ * request: the construction-drawing tools every such turn on 2026-10-20 read
+ * one or a few at a time (7 manual loads each for read/check/design). */
+export const DRAWING_CONTINUATION_PRELOAD = ['read_construction_draft', 'check_construction_draft', 'design_project_cad',
+  'read_drawing_requests', 'read_drawing_request_work', 'read_construction_changes', 'change_construction_parameters',
+  'edit_construction_parts', 'save_cad_design']
+
 export function createBobToolSession(opts: {
   aiCatalog?: AiCatalogSession;
+  /** Tools of work already in progress, loaded without a describe_tool round. */
+  preloadTools?: () => string[];
   calculator?: ProjectCalculator;
   orientationReader?: OrientationDirectoryReader;
   lookup: ReturnType<typeof createProjectLookup>; writer?: ProjectWriter;
@@ -156,7 +165,7 @@ export function createBobToolSession(opts: {
       },
     }] : []),
   ]
-  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions,
+  return createToolSession({ definitions: registered.map(shelved), readPolicy: opts.readPolicy, message: opts.message, toolInstructions: opts.toolInstructions, ...(opts.preloadTools ? { preloadTools: opts.preloadTools } : {}),
     selectiveTools: opts.aiCatalog?.manifest().definitions.some(row => row.prompt_key === 'bob.workflows' && row.metadata?.selective_tools_version === 1),
     ...(opts.aiCatalog ? { catalogTool: (name, parameters) => opts.aiCatalog!.tool(name, parameters),
       ...(opts.toolInstructions === 'lazy' ? { catalogColleagues: (name: string) => bobColleagues(opts.aiCatalog!, [name]),
