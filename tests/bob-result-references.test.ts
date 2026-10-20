@@ -175,3 +175,28 @@ test('actual main loop with images and lost write checkpoint completes offline w
   assert.deepEqual(resumed.receipts, baseline.receipts)
   assert(resumed.totals().toolTraversals >= 40)
 })
+
+test('a token window keeps the newest results whole, so a reopened result survives the next exchanges', async () => {
+  const sent: OpenAIServiceOptions[] = []
+  const opts = { version: 1, mainResultReferences: 1 as const, resultWindowTokens: 5000, aiCatalog: catalog, callModel: async (request: OpenAIServiceOptions) => {
+    sent.push(disk(request)); return response('r' + sent.length)
+  } }
+  let adapter = createBobContextContinuation(opts)
+  const page = projectBobResult({ ...operation, call_id: 'x' }, false)
+  const size = countSerializedTokens(page)
+  for (let i = 0; i < 12; i++) {
+    const saved = disk(adapter.exportState()); adapter = createBobContextContinuation(opts); adapter.restoreState(saved)
+    await adapter.call(i === 0 ? seed : { ...seed, previousResponseId: 'r' + i, messages: [output('r' + i, large)] })
+  }
+  const results = sent.at(-1)!.messages!.filter(m => m.role === 'tool')
+  const omitted = results.map(m => !!JSON.parse(String(m.content)).content_omitted)
+  const kept = Math.floor(5000 / size)
+  // Two latest exchanges are always whole; the window adds the newest older ones, contiguously.
+  assert.deepEqual(omitted, results.map((_, i) => i < results.length - 2 - kept))
+  assert(kept >= 1 && omitted.some(Boolean))
+  // Without the window only the two latest exchanges stay whole (pinned older jobs).
+  const legacy: OpenAIServiceOptions[] = []
+  const old = createBobContextContinuation({ ...opts, resultWindowTokens: undefined, callModel: async (request: OpenAIServiceOptions) => { legacy.push(disk(request)); return response('r' + legacy.length) } })
+  for (let i = 0; i < 12; i++) await old.call(i === 0 ? seed : { ...seed, previousResponseId: 'r' + i, messages: [output('r' + i, large)] })
+  assert.equal(legacy.at(-1)!.messages!.filter(m => m.role === 'tool' && !JSON.parse(String(m.content)).content_omitted).length, 2)
+})

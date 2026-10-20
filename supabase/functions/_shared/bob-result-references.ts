@@ -5,6 +5,8 @@ type Content = NonNullable<OpenAIServiceOptions['messages']>[number]['content']
 export type BobArchivedOperation = { call_id: string; tool_name: string; arguments: string; output: Content;
   presentation?: { older: Content; observed: Record<string, unknown> } }
 export const BOB_RESULT_PAGE_TOKENS = 2000
+/** Recent results kept whole across exchanges before older ones become references. */
+export const BOB_RESULT_WINDOW_TOKENS = 20000
 
 const sources = new WeakMap<BobArchivedOperation, string[]>()
 const firstPages = new WeakMap<BobArchivedOperation, string>()

@@ -195,6 +195,10 @@ export function createBobContextContinuation(opts: {
   /** Pinned only for new native main turns. CAD and legacy jobs keep their
    * existing compactor and archive cursor contract. */
   mainResultReferences?: 1
+  /** Pinned per execution. Older results stay whole, newest first, up to this
+   * many tokens before they become references. A fixed two-exchange window
+   * hid results Bob had just reopened, so he reopened them again (2026-10-20). */
+  resultWindowTokens?: number
   /** Pinned per execution. Version 1 counts the provider-reported input once
    * (it already contains the tool surface) and refreshes only when the part
    * it would summarize is large enough to make the next request smaller. */
@@ -208,6 +212,7 @@ export function createBobContextContinuation(opts: {
   pageBoundaries?: (source: string, compute: () => Promise<(number | null)[]>) => Promise<unknown>
 }) {
   const chains = new Map<string, Chain>()
+  const resultTokens = new Map<string, number>()
   const enabled = opts.version === 1
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
@@ -402,6 +407,19 @@ export function createBobContextContinuation(opts: {
         // Original results live once in the private operation archive. Keep
         // only bounded projections in the model transcript/checkpoint; native
         // assistant items, images and user constraints remain literal.
+        const whole = new Set<string>()
+        if (opts.resultWindowTokens) {
+          // Newest first and contiguous: a demoted result is never restored.
+          let used = 0
+          window: for (let i = chain.groups.length - 3; i >= 0; i--) for (const message of [...chain.groups[i]].reverse()) {
+            if (message.role !== 'tool' || !message.tool_call_id) continue
+            const key = message.tool_call_id + '\u0000' + (typeof message.content === 'string' ? message.content.length : 'parts')
+            let size = resultTokens.get(key)
+            if (size === undefined) resultTokens.set(key, size = countSerializedTokens(message.content))
+            if (used + size > opts.resultWindowTokens) break window
+            used += size; whole.add(message.tool_call_id)
+          }
+        }
         chain.groups = chain.groups.map((group, index) => group.map(message => {
           if (message.nativeOutput && index < chain.groups.length - 2) {
             // Private reasoning belongs to the exchange it led to. Older ones
@@ -416,7 +434,7 @@ export function createBobContextContinuation(opts: {
           if (message.role !== 'tool' || !message.tool_call_id) return message
           const operation = chain.operations.get(message.tool_call_id)
           if (!operation) throw new Error('context_operation_unavailable')
-          return index < chain.groups.length - 2 ? { ...message, content: projectBobResult(operation, true) } : message
+          return index < chain.groups.length - 2 && !whole.has(message.tool_call_id) ? { ...message, content: projectBobResult(operation, true) } : message
         }))
       }
       if (!references) {
