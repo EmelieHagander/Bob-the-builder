@@ -403,6 +403,16 @@ export function createBobContextContinuation(opts: {
         // only bounded projections in the model transcript/checkpoint; native
         // assistant items, images and user constraints remain literal.
         chain.groups = chain.groups.map((group, index) => group.map(message => {
+          if (message.nativeOutput && index < chain.groups.length - 2) {
+            // Private reasoning belongs to the exchange it led to. Older ones
+            // add their full size to every later request, so a long turn ran
+            // out of context (40-step probe); their calls and text remain.
+            // Item ids go too: the provider rejects an id-bearing call whose
+            // reasoning item is missing.
+            const visible = readResponseItems(message.nativeOutput).filter(item => item.type !== 'reasoning').map(({ id: _id, ...item }) => item)
+            const { nativeOutput: _items, nativeReasoningTokens: _reasoning, ...plain } = message
+            return visible.length ? { ...plain, nativeOutput: visible, nativeReasoningTokens: 0 } : plain
+          }
           if (message.role !== 'tool' || !message.tool_call_id) return message
           const operation = chain.operations.get(message.tool_call_id)
           if (!operation) throw new Error('context_operation_unavailable')

@@ -23,6 +23,11 @@ let preSourceRenewalRows:any[]|undefined,preSourceRenewalVersions:Map<string,num
 // The historical seed stays available for pinned-manifest compatibility tests.
 for(const migration of migrations){
  const source=readFileSync(migration,'utf8')
+ const activation=source.match(/\$complete_request_activation_flags\$([\s\S]+?)\$complete_request_activation_flags\$/)
+ if(activation){
+  const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication:'bob-complete-request-activation-v1',...JSON.parse(activation[1])};versions.set(row.key,versions.get(row.key)!+1)
+ }
  const completeContext=source.match(/\$bob_complete_context_patches\$([\s\S]+?)\$bob_complete_context_patches\$/)
  if(completeContext){
   preCompleteContextRows=structuredClone(seed);preCompleteContextVersions=new Map(versions)
