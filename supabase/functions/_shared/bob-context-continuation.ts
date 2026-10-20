@@ -29,6 +29,10 @@ export interface BobContextContinuationState {
 }
 const HISTORY_TOOL = 'get_work_history'
 const PAGE_TOKENS = 1600
+/** The main-turn ceiling sizes Bob's own conversation. A specialist's single
+ * request (e.g. the CAD review with its preview images) is bounded by its own
+ * model, so it gets this wider envelope: a 2026-10-20 review stopped at 96k. */
+export const SPECIALIST_INPUT_CEILING_TOKENS = 200000
 const SOURCE_BATCH_TOKENS = 12000
 const clone = <T>(value: T): T => structuredClone(value)
 /** Operations are write-once records; copy the index, not every recorded
@@ -380,6 +384,7 @@ export function createBobContextContinuation(opts: {
     const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
       && requested.functionName === 'ask-bob' && (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
     let options = requested
+    const roleCeiling = (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob' ? ceiling : Math.max(ceiling, SPECIALIST_INPUT_CEILING_TOKENS)
     for (;;) {
       const consumedResponseId = options.previousResponseId
       const native = options.responseItemsMode === 'preserve'
@@ -449,7 +454,7 @@ export function createBobContextContinuation(opts: {
         tools: resolved.tools ?? [], schema: resolved.schema ?? null,
         schemaName: resolved.schemaName ?? null, schemaDescription: resolved.schemaDescription ?? null }) * 1.1) + 256
       const input = countInputTokens(options.messages ?? options.prompt ?? '')
-      if (fixed + input > ceiling) throw new Error('context_input_too_large')
+      if (fixed + input > roleCeiling) throw new Error('context_input_too_large')
       const fullEstimate = fixed + countInputTokens(native
         ? [chain.seed, chain.handoff, chain.historicalImages, chain.groups]
         : [chain.seed, chain.handoff, chain.groups])
@@ -540,7 +545,7 @@ export function createBobContextContinuation(opts: {
       if (!options.previousResponseId) {
         const fresh = applyCatalogModelOptions(opts.aiCatalog, options)
         const freshTokens = estimateBobRequestInput(fresh).total
-        if (freshTokens > ceiling) throw new Error('context_input_too_large')
+        if (freshTokens > roleCeiling) throw new Error('context_input_too_large')
       }
       const response = await opts.callModel(options, beforeDispatch)
       if (!response.success || !response.responseId) return response
