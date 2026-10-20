@@ -115,27 +115,11 @@ export async function reconcileAiWork(rpc: AiRpc, apiKey: string, kind: 'job' | 
     let response: any
     try { response = work.cancel ? await providerRequest(apiKey, path + '/cancel', {}) : await providerRequest(apiKey, path) }
     catch (error) { await recordAiFailure(rpc, kind, id, work.cancel ? 'cancel' : 'retrieve', error, started, work.response_id); throw error }
-    // The signed event only carries an ID. Its provider metadata pins whether
-    // this caller requires encrypted items. Never persist an incomplete replay
-    // payload or change retrieval for legacy jobs and other callers.
+    // Native replay jobs need complete output items. A persisted response
+    // carries its reasoning by item id; the provider refuses encrypted content
+    // for it (2026-10-20), so the plain retrieval is the complete payload.
     if (!work.cancel && response.status === 'completed' && response.metadata?.ai_replay_items === '1') {
-      try {
-        const originalId = response.id, originalJob = response.metadata?.ai_job_id
-        let replay: any
-        try { replay = await providerRequest(apiKey, path + '?include%5B%5D=reasoning.encrypted_content') }
-        catch (error) {
-          if (!(error instanceof AIProviderHttpError && error.status === 400)) throw error
-          // 2026-10-20: retrieval refused the encrypted reasoning of a stored
-          // background response, so the job waited forever. Deliver its calls
-          // and text without private reasoning; item ids go too, since a call
-          // id without its reasoning item is rejected on the next request.
-          replay = { ...response, output: (Array.isArray(response.output) ? response.output : [])
-            .filter((item: any) => item?.type !== 'reasoning').map(({ id: _id, ...item }: any) => item) }
-        }
-        response = replay
-        if (response.id !== originalId || response.metadata?.ai_job_id !== originalJob || response.status !== 'completed') throw new Error('native_response_identity_changed')
-        readResponseItems(response.output)
-      }
+      try { readResponseItems(response.output) }
       catch (error) { await recordAiFailure(rpc, kind, id, 'retrieve', error, started, work.response_id); throw error }
     }
     const jobId = kind === 'job' ? id : response.metadata?.ai_job_id

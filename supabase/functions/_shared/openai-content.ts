@@ -11,7 +11,10 @@ export function readResponseItems(value: unknown): OpenAIResponseItem[] {
   for (const item of value) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('native_response_item_invalid')
     if (item.type === 'reasoning') {
-      if (typeof item.encrypted_content !== 'string' || !item.encrypted_content) throw new Error('native_reasoning_content_missing')
+      // Persisted responses (the default store) are referenced by item id;
+      // the provider refuses encrypted content for them (2026-10-20).
+      const stored = item.encrypted_content === undefined && typeof item.id === 'string' && !!item.id
+      if (!stored && (typeof item.encrypted_content !== 'string' || !item.encrypted_content)) throw new Error('native_reasoning_content_missing')
     } else if (item.type === 'message') {
       if (item.role !== 'assistant' || !Array.isArray(item.content)) throw new Error('native_response_message_invalid')
     } else if (item.type === 'function_call') {

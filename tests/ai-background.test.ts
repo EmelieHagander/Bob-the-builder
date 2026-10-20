@@ -19,12 +19,12 @@ const id = '11111111-1111-4111-8111-111111111111'
 const call = { key: 'session/model/0', fingerprint: 'a'.repeat(64), receiver: 'fixture', context: { session: 'one' }, expiresAt: '2030-01-01T00:00:00Z' }
 const accounting = { user_id: null, module: 'test', ai_function: 'designer', model: 'fixture', input_price_per_1m: 1, output_price_per_1m: 2, cached_price_per_1m: .1 }
 
-test('native replay jobs pin encrypted retrieval and never accept the first incomplete GET', async t => {
+test('native replay jobs accept stored reasoning by id and stay retryable when retrieval fails', async t => {
   const prior = globalThis.fetch; t.after(() => { globalThis.fetch = prior })
   const requests: { url: string; body?: any }[] = []; const accepted: any[] = []
   let reserved = false, failRetrieval = false
   const result = { id: 'resp_native', status: 'completed', metadata: { ai_job_id: id, ai_replay_items: '1' },
-    output: [{ type: 'reasoning', id: 'rs_native', summary: [], encrypted_content: 'opaque-fixture' }] }
+    output: [{ type: 'reasoning', id: 'rs_native', summary: [] }] }
   const rpc = async (name: string, args: any) => {
     if (name === 'ai_job_start_submission') return { submit: true, status: 'submitting' }
     if (name === 'ai_job_prepare') { const submit = !reserved; reserved = true; return { id, submit, status: 'pending', response_id: submit ? null : result.id } }
@@ -36,21 +36,35 @@ test('native replay jobs pin encrypted retrieval and never accept the first inco
   globalThis.fetch = async (url, init) => {
     requests.push({ url: String(url), ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) })
     if (init?.method === 'POST') return Response.json({ ...result, status: 'queued', output: [] })
-    if (String(url).includes('include%5B%5D')) {
-      if (failRetrieval) return Response.json({ error: { message: 'Temporary unavailable' } }, { status: 503 })
-      return Response.json(result)
-    }
-    return Response.json({ ...result, output: [{ type: 'reasoning', id: 'rs_native', summary: [] }] })
+    if (String(url).includes('include%5B%5D')) return Response.json({ error: { message: 'Encrypted content cannot be requested for persisted responses.' } }, { status: 400 })
+    if (failRetrieval) return Response.json({ error: { message: 'Temporary unavailable' } }, { status: 503 })
+    return Response.json(result)
   }
   await assert.rejects(() => backgroundResponse(rpc, 'key', 'bob', call, { include: ['reasoning.encrypted_content'] }, accounting), AIBackgroundPending)
   assert.equal(requests[0].body.metadata.ai_replay_items, '1')
   accepted.length = 0
   failRetrieval = true
   await assert.rejects(() => reconcileAiWork(rpc, 'key', 'event', id, id))
-  assert.equal(accepted.length, 0, 'a missing encrypted payload must remain retryable')
+  assert.equal(accepted.length, 0, 'a failed retrieval must remain retryable')
   failRetrieval = false
+  requests.length = 0
   await reconcileAiWork(rpc, 'key', 'event', id, id)
   assert.deepEqual(accepted, [result])
+  assert.ok(requests.every(request => !request.url.includes('include%5B%5D')), 'retrieval never asks for encrypted content')
+})
+
+test('a native replay item without encrypted content or id is still refused', async t => {
+  const prior = globalThis.fetch; t.after(() => { globalThis.fetch = prior })
+  const accepted: any[] = []
+  const broken = { id: 'resp_broken', status: 'completed', metadata: { ai_job_id: id, ai_replay_items: '1' }, output: [{ type: 'reasoning', summary: [] }] }
+  const rpc = async (name: string, args: any) => {
+    if (name === 'ai_work_claim') return { response_id: broken.id }
+    if (name === 'ai_job_accept') { accepted.push(args.p_response); return true }
+    return null
+  }
+  globalThis.fetch = async () => Response.json(broken)
+  await assert.rejects(() => reconcileAiWork(rpc, 'key', 'event', id, id), /native_reasoning_content_missing/)
+  assert.equal(accepted.length, 0)
 })
 
 test('long model survives restarts: one POST, retrieve same response, then journal the finished tool call', async () => {
@@ -147,7 +161,7 @@ test('local image preparation failure rejects reservation without a provider POS
   } finally { globalThis.fetch = oldFetch }
 })
 
-test('a refused encrypted retrieval delivers calls and text without private reasoning instead of waiting forever', async t => {
+test('a stored response delivers its reasoning and call ids unchanged', async t => {
   const prior = globalThis.fetch; t.after(() => { globalThis.fetch = prior })
   const accepted: any[] = []
   const stored = { id: 'resp_stored', status: 'completed', metadata: { ai_job_id: id, ai_replay_items: '1' }, output: [
@@ -161,5 +175,5 @@ test('a refused encrypted retrieval delivers calls and text without private reas
   globalThis.fetch = async url => String(url).includes('include%5B%5D')
     ? Response.json({ error: { code: 'invalid_request', message: 'Not supported' } }, { status: 400 }) : Response.json(stored)
   await reconcileAiWork(rpc, 'key', 'event', id, id)
-  assert.deepEqual(accepted, [{ ...stored, output: [{ type: 'function_call', call_id: 'call1', name: 'read_construction_draft', arguments: '{}' }] }])
+  assert.deepEqual(accepted, [stored])
 })
