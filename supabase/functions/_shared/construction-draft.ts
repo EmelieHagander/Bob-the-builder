@@ -257,7 +257,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(name===CONSTRUCTION_CHECK_TOOL.function.name||name===CONSTRUCTION_LIST_TOOL.function.name||(name===CONSTRUCTION_CUT_FIT_TOOL.function.name||name===CONSTRUCTION_CUT_SAVE_TOOL.function.name)){
     if(!opts.readCatalog)return {status:'unavailable'}
     const draft=await opts.read(v.artifact_id,v.revision,null) as Record<string,any>
-    if(!draft||draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||draft.revision!==v.revision)return {status:'unavailable'}
+    if(!draft||draft.projectId!==opts.projectId||draft.status!=='ok'||draft.artifact_id!==v.artifact_id||draft.revision!==v.revision){
+     console.error('[Construction tool unavailable]',JSON.stringify({tool:name,reason:'draft_read_mismatch',status:draft?.status??null,revision:draft?.revision??null,expected:v.revision,project_match:draft?.projectId===opts.projectId}))
+     return {status:'unavailable'}
+    }
     const pins=new Map<string,{id:string;revision:number}>()
     for(const m of draft.materials??[])for(const kind of ['material','part'])if(m[kind+'_id'])pins.set(`${m[kind+'_id']}@${m[kind+'_revision']}`,{id:m[kind+'_id'],revision:m[kind+'_revision']})
     if(pins.size>32)return {status:'unsupported',message:'This check supports at most 32 distinct catalog revisions.'}
@@ -330,7 +333,10 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
    if(opts.constructionViews&&message==='construction_view_cursor_invalid')return {status:'invalid',message:'Use next_read from this exact revision, view and selection. A cursor cannot be reused for another selection.'}
    if(opts.constructionViews&&message==='construction_view_header_too_large')return {status:'invalid',message:'Use fewer named IDs or one result section to keep the page envelope small. No data was omitted as complete.'}
    const known=/^(invalid_instance_policy|invalid_parameter_[a-z_]+|parameter_[a-z_]+|unknown_required_parameters|coordinate_[a-z_]+)$/
-   return known.test(message)?{status:'invalid',message}:{status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
+   if(known.test(message))return {status:'invalid',message}
+   // The owner-facing text stays generic; the cause must still reach the logs.
+   console.error('[Construction tool unavailable]',JSON.stringify({tool:name,error:(error instanceof Error?error.name+': '+message:String(error)).slice(0,300)}))
+   return {status:'unavailable',message:'Could not verify construction data. Read again; a failed lookup does not mean data is absent.'}
   }
  }}
 }
