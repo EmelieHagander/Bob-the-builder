@@ -121,7 +121,7 @@ test('a loaded tool stays while Bob uses it, a rejected call keeps it, and a ste
 })
 
 test('the notebook publication matches its generator and pins the notebook only with result references', () => {
-  assert.match(execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-notebook-catalog.ts', 'supabase/migrations/20261020110000_ai_bob_notebook.sql', '--check'], { encoding: 'utf8' }), /Verified notebook publication/)
+  assert.match(execFileSync(process.execPath, ['--import', 'tsx', 'scripts/build-ai-notebook-catalog.ts', 'supabase/migrations/20261020150000_ai_bob_notebook.sql', '--check'], { encoding: 'utf8' }), /Verified notebook publication/)
   const fixture = catalogFixture(), contract = fixture.definition('agent-contract.ask-bob').metadata
   assert.equal(contract.notebook_version, 1); assert.equal(contract.result_reference_version, 1)
   assert.equal(fixture.tool('bob_notebook', { card: false, include_manual: true }).function.name, 'bob_notebook')

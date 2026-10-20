@@ -292,6 +292,11 @@ Mät minst: andel beställningar som når korrekt leverans utan extra knuff, kor
 <a id="state"></a>
 ## 12. State — nästa arbete
 
+**Senast (2026-10-20):** loop-, kostnads- och ritningsfelen är utredda och
+#292–#299 är live. [Audit och överlämning](bob-loop-and-drawing-audit-2026-10-20.md)
+äger nästa steg: verifiera #299 med en ny ritningskörning, och beslut om
+notebook samt spärren på 1 USD. Texten nedan från 2026-10-19 är äldre.
+
 **Aktivt nästa steg — verklig modell-/ritningsacceptans (2026-10-19):**
 [PR #291](https://github.com/EmelieHagander/Bob-the-builder/pull/291) är mergad
 och de äldre #285–289-staplarna stängda. **Teknisk driftsättning är nu installerad:**
