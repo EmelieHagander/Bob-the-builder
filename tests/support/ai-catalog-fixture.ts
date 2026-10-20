@@ -28,6 +28,14 @@ for(const migration of migrations){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
   row.metadata={...rest,publication:'bob-complete-request-activation-v1',...JSON.parse(activation[1])};versions.set(row.key,versions.get(row.key)!+1)
  }
+ const notebookAdditions=source.match(/\$bob_notebook_additions\$([\s\S]+?)\$bob_notebook_additions\$/)
+ if(notebookAdditions){
+  for(const addition of JSON.parse(notebookAdditions[1])){seed.push({content:'',definition:{},variables:[],...addition,metadata:{publication:'bob-notebook-v1'}});versions.set(addition.key,1)}
+  for(const patch of JSON.parse(source.match(/\$bob_notebook_edits\$([\s\S]+?)\$bob_notebook_edits\$/)![1])){
+   const row=seed.find(row=>row.key===patch.key);const{seed_version,source_revision,...rest}=row.metadata??{}
+   row.metadata={...rest,publication:'bob-notebook-v1',...patch.metadata};if(patch.content!==undefined)row.content=patch.content;versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
  const usdStop=source.match(/\$turn_usd_stop_flags\$([\s\S]+?)\$turn_usd_stop_flags\$/)
  if(usdStop){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}

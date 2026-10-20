@@ -155,6 +155,7 @@ export type ProjectAnswerOptions = {
   /** Pinned for new durable main turns; never changes a running old job. */
   completeRequest?: boolean;
   resultReferences?: boolean;
+  releaseIdleTools?: boolean;
   /** Main-role compaction epoch; loaded manuals expire on the next prepare. */
   contextEpoch?: () => number;
   /** Refresh the active tool fence atomically before a fresh provider chain. */
@@ -306,6 +307,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (phase === 'ready') {
     tools = []
     try {
+      toolbox.beginStep(step)
       if (opts.completeRequest) toolbox.carryInstructions()
       if (contextStrategy && opts.contextEpoch && !opts.registerContextSurface) {
         const epoch = opts.contextEpoch()
