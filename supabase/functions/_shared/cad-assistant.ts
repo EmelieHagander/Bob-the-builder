@@ -367,7 +367,14 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerCont
     await refreshDesignReadiness(true)
     if(construction){
      const current=await refreshConstruction(true)
-     if(current?.status!=='ready')throw new Error(current?.status==='unavailable'?'checked_construction_unavailable':'checked_construction_changed')
+     if(current?.status!=='ready'){
+      // 2026-10-20: live renders stopped here although the recorded check was
+      // ready, with no cause on record. Log what the fresh check returned.
+      console.error('[CAD dispatch guard]',JSON.stringify({request_id:request?.id??null,artifact_id:construction.artifact_id,revision:construction.revision,
+       status:current?.status??null,message:typeof (current as any)?.message==='string'?(current as any).message.slice(0,300):null,
+       checked_status:(current as any)?.checked?.status??null,error:typeof (current as any)?.error==='string'?(current as any).error.slice(0,300):null}))
+      throw new Error(current?.status==='unavailable'?'checked_construction_unavailable':'checked_construction_changed')
+     }
     }
    }
    const reviewCurrentCandidate=async():Promise<Record<string,any>>=>{
