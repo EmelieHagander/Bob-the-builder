@@ -174,6 +174,14 @@ Unicode-codepoint cursor and a serialized envelope bounded to 2,000 tokens. It
 never invokes the original project handler or repeats a write. Current dispatch
 authorization still applies, including history-only followups.
 
+**Activation and reasoning retention (2026-10-20, owner option A).** Migration
+`20261020093000_bob_complete_request_activation.sql` sets both opt-in flags on
+`agent-contract.ask-bob`, so only new durable main turns pin this mode. Native
+assistant items older than two model exchanges drop their encrypted reasoning and
+item ids; calls, call ids and visible text stay. Without this, a reasoning-heavy
+40-step probe exceeded the context ceiling (`context_input_too_large`); with it the
+same probe peaks at about 36k estimated input.
+
 At the model boundary, large string results receive a bounded first page. Successful
 read/list/search/open results older than two model exchanges become explicit
 historical references; small write receipts, check results and error feedback stay
