@@ -195,6 +195,10 @@ export function createBobContextContinuation(opts: {
   /** Pinned only for new native main turns. CAD and legacy jobs keep their
    * existing compactor and archive cursor contract. */
   mainResultReferences?: 1
+  /** Pinned per execution. Version 1 counts the provider-reported input once
+   * (it already contains the tool surface) and refreshes only when the part
+   * it would summarize is large enough to make the next request smaller. */
+  rolloverVersion?: 1
   snapshot?: (value: { functionName: string; role: string }) => unknown
   onRollover?: (value: { functionName: string; role: string }) => void
   refreshSurface?: (value: { functionName: string; role: string }) => Promise<ContextSurface | undefined>
@@ -421,7 +425,11 @@ export function createBobContextContinuation(opts: {
       const fullEstimate = fixed + countInputTokens(native
         ? [chain.seed, chain.handoff, chain.historicalImages, chain.groups]
         : [chain.seed, chain.handoff, chain.groups])
-      const estimate = native ? fullEstimate : Math.max(fullEstimate, chain.inputTokens + chain.outputTokens + fixed + input)
+      // Version 0 added the surface on top of reported input that already
+      // includes it, so a fresh request could look over the limit at once
+      // and every step was summarized again (2026-10-20 read loop).
+      const reported = chain.inputTokens + chain.outputTokens + (opts.rolloverVersion === 1 ? 0 : fixed) + input
+      const estimate = native ? fullEstimate : Math.max(fullEstimate, reported)
       if (options.previousResponseId && estimate >= limit && chain.groups.length > keep) {
         const all = chain.groups.flat()
         const calls = all.flatMap(message => message.tool_calls ?? [])
@@ -451,7 +459,11 @@ export function createBobContextContinuation(opts: {
           const owner = chain.groups.findIndex(group => group.some(item => item.tool_calls?.some(tool => tool.id === message.tool_call_id)))
           if (owner >= 0) split = Math.min(split, owner)
         }
-        if (complete && split > 0) {
+        // A refresh that would only fold a few small exchanges cannot bring
+        // the request under the limit; it would just drop exact results Bob
+        // has just read. Wait until the older part is worth summarizing.
+        const worthwhile = opts.rolloverVersion !== 1 || split > 0 && countInputTokens(chain.groups.slice(0, split)) >= Math.ceil(limit / 4)
+        if (complete && split > 0 && worthwhile) {
           chain.handoff = await summarize(options, chain, chain.groups.slice(0, split), beforeDispatch)
           if (native) {
             // Image delivery remains literal even while the legacy text
