@@ -472,3 +472,20 @@ test('reported input is counted once, so a refreshed request is not summarized a
   assert(before.rollovers >= 20, `pinned version 0 reproduces the per-step refresh: ${before.rollovers}`)
   assert(after.rollovers <= 6, `a refresh happens only when it frees real room: ${after.rollovers}`)
 })
+
+// Live 2026-10-20: a CAD review with four high-detail previews, two reference
+// photos and the checked construction stopped at the main-turn 96k ceiling.
+test('a specialist request uses its own wider envelope while Bob keeps the main ceiling', async () => {
+  let sent = 0
+  const envelope = { ...catalog, definition: () => ({ metadata: { continuation_input_tokens: 64000,
+    context_input_ceiling_tokens: 96000, continuation_summary_tokens: 1600, retained_tool_exchanges: 1 } }) } as unknown as AiCatalogSession
+  const adapter = createBobContextContinuation({ version: 1, aiCatalog: envelope, callModel: async () => { sent++; return response('r' + sent) } })
+  const preview = { type: 'image_url' as const, image_url: { url: 'data:image/png;base64,AAAA', detail: 'high' as const } }
+  const review = [{ role: 'user' as const, content: [...Array.from({ length: 12 }, () => preview)] }]
+  const reviewer = { ...seed, functionName: 'cad-reviewer', aiFunction: 'cad-reviewer', catalogRoleKey: 'cad-reviewer', messages: review }
+  await adapter.call(reviewer)
+  assert.equal(sent, 1)
+  await assert.rejects(adapter.call({ ...seed, messages: review }), /context_input_too_large/)
+  await assert.rejects(adapter.call({ ...reviewer, messages: [{ role: 'user', content: Array.from({ length: 30 }, () => preview) }] }), /context_input_too_large/)
+  assert.equal(sent, 1)
+})
