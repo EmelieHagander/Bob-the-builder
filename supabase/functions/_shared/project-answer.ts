@@ -125,6 +125,8 @@ export interface BobAnswerState {
   workResults: { tool: string; status: string; message?: string; refresh_status?: string; validation?: unknown }[]
   completionChecked: boolean; protocolNudges: number; emptyNudges: number; closedNoteSent: boolean; commentaryStreak: number
   rejectionSignature?: string; rejectionStreak: number
+  /** Bob's answer sent back for the completion review; delivered if a spending stop ends the review. */
+  reviewedAnswer?: string
   tools: NonNullable<OpenAIServiceOptions['tools']>
   closedByLimit: boolean; closedByCommentary: boolean
   request?: OpenAIServiceOptions
@@ -170,6 +172,7 @@ export async function runProjectAnswer(opts: ProjectAnswerOptions): Promise<Proj
       || !['ready', 'model', 'response', 'tools'].includes(saved.phase)
       || ![saved.toolIndex, saved.protocolNudges, saved.emptyNudges, saved.commentaryStreak, saved.rejectionStreak].every(counter)
       || ![saved.completionChecked, saved.closedNoteSent, saved.closedByLimit, saved.closedByCommentary].every(v => typeof v === 'boolean')
+      || saved.reviewedAnswer !== undefined && (typeof saved.reviewedAnswer !== 'string' || !saved.reviewedAnswer)
       || !saved.initial || !saved.toolbox || !saved.observation || !Array.isArray(saved.messages) || !Array.isArray(saved.tools) || !Array.isArray(saved.workResults)
       || (saved.phase !== 'ready' && (!saved.request || saved.request.app !== 'bob' || saved.request.aiFunction !== 'ask-bob' || saved.request.userId !== opts.userId))
       || (['response', 'tools'].includes(saved.phase) && !saved.response)
@@ -274,6 +277,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   const saved = (name: string) => toolbox.events.some(e => e.operation === 'execute' && e.name === name && e.status === 'saved')
   let completionChecked = restored?.completionChecked ?? false, protocolNudges = restored?.protocolNudges ?? 0, emptyNudges = restored?.emptyNudges ?? 0, closedNoteSent = restored?.closedNoteSent ?? false, commentaryStreak = restored?.commentaryStreak ?? 0
   let rejectionSignature = restored?.rejectionSignature, rejectionStreak = restored?.rejectionStreak ?? 0
+  let reviewedAnswer = restored?.reviewedAnswer
   let phase = restored?.phase ?? 'ready', toolIndex = restored?.toolIndex ?? 0
   let request = restored?.request, pendingResponse = restored?.response
   let tools: NonNullable<OpenAIServiceOptions['tools']> = structuredClone(restored?.tools ?? [])
@@ -283,9 +287,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     await opts.checkpoint.save(structuredClone({ version: 1, projectId: opts.projectId, step, phase,
       initial: { briefing, catalog, drawingRequests, orientation, directory: orientationReader?.exportState() },
       messages, previousResponseId, preparedEpoch, observation, toolbox: toolbox.exportState(), workResults,
-      completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak,
+      completionChecked, protocolNudges, emptyNudges, closedNoteSent, commentaryStreak, rejectionSignature, rejectionStreak, reviewedAnswer,
       tools, closedByLimit, closedByCommentary, request, response: pendingResponse, toolIndex }))
   }
+  const answered = (text: string, responseId: string | undefined, incomplete: boolean): ProjectAnswer => ({ ok: true, answer: text, projectId: opts.projectId, providerResponseId: responseId,
+      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
+        partial: incomplete || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
+        ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
+    })
   const next = async (step: number) => { phase = 'ready'; request = undefined; pendingResponse = undefined; toolIndex = 0; await save(step + 1) }
   if (!restored) await save(0)
   for (let step = restored?.step ?? 0; unlimitedWork || step < steps; step++) {
@@ -362,6 +371,14 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     if (!pendingResponse) throw new Error('turn_checkpoint_invalid')
     const response = pendingResponse
     if (completionAware && response.outputPhase) observation.output_phase = response.outputPhase
+    if (!response.success && response.error === 'turn_budget_exhausted' && reviewedAnswer) {
+      // The spending stop ended the completion review. Bob's reviewed answer
+      // is delivered as partial instead of a server recovery template.
+      if (!await opts.hasAccess()) return { ok: false, error: 'project_denied' }
+      if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
+      observe('step_budget')
+      return answered(reviewedAnswer, undefined, true)
+    }
     if (!response.success) { observe('failed'); return { ok: false, error: response.error === 'turn_budget_exhausted' ? response.error : 'ai_unavailable' } }
     if (opts.projectContext && !await opts.projectContext.validate()) return { ok: false, error: 'context_unavailable' }
     if (response.toolCalls?.length) {
@@ -465,6 +482,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
       && canContinue && (!completionAware || response.outputPhase !== 'refusal')
       && (facts.length || attemptedWork || await workRemains(answerText))) {
       completionChecked = true; observation.completion_checks++; previousResponseId = response.responseId
+      reviewedAnswer = answerText
       messages = [{ role: 'user', content: opts.aiCatalog.text('bob.note.prefix') + (completionAware
         ? opts.aiCatalog.text('bob.note.review-work', { request: opts.message, facts: facts.join(' '), results: JSON.stringify({
           // Recovery can already contain a later save from this same journal.
@@ -482,11 +500,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
     progress({ stage: 'finishing', step: step + 1 })
     if (opts.validateCurrentView && !await opts.validateCurrentView()) return { ok: false, error: 'context_unavailable' }
     observe(completionAware && response.outputPhase === 'refusal' ? 'refused' : closedByCommentary ? 'commentary_limit' : closedByLimit && step > 0 ? (lastStep ? 'step_budget' : 'time_budget') : /\?\s*$/.test(answerText) ? 'asked' : 'answered')
-    return { ok: true, answer: answerText, projectId: opts.projectId, providerResponseId: response.responseId,
-      evidence: { kind: 'ai_assessment', ...(opts.currentView ? { currentView: opts.getCurrentViewEvidence?.() ?? opts.currentView } : {}), references: opts.knowledgeReader?.references ?? [], sources: [...opts.lookup.sources, ...(opts.planAssistant?.sources ?? []), ...(opts.cadAssistant?.sources ?? [])].filter((s,i,a)=>a.findIndex(x=>x.dataset===s.dataset&&x.recordId===s.recordId)===i),
-        partial: completionAware && response.outputPhase === 'refusal' || facts.length > 0 || !!orientation?.warnings.length || !!opts.projectEdits?.partial || !!opts.solutionActions?.partial || !!opts.workRecords?.partial || !!opts.planLinks?.partial || !!opts.operationalReader?.partial || opts.lookup.partial || toolbox.partial || !!opts.projectContext?.partial || !!opts.catalogReader?.partial || !!opts.planAssistant?.partial || !!opts.cadAssistant?.partial || !!opts.writer?.uncertain || !!opts.writer?.hasUnresolvedWrites,
-        ...(opts.writer?.receipts.length ? { writes: compactReceipts(opts.writer.receipts) } : {}) },
-    }
+    return answered(answerText, response.responseId, completionAware && response.outputPhase === 'refusal' || facts.length > 0)
   }
   observe('failed')
   return { ok: false, error: 'step_budget_exhausted' }

@@ -538,6 +538,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;registerCont
    }
    if(error instanceof Error&&error.message.startsWith('drawing_request_reuse:'))return {status:'existing_request',saved:false,request_id:error.message.split(':')[1],next_action:catalogText("feedback.cad-assistant.next-action.9c82aa7ab11b")}
    const reason=error instanceof Error&&['provider_retry_exhausted','turn_budget_exhausted','model_output_limit','model_reasoning_only','model_unavailable','deadline','too_many_tool_calls'].includes(error.message)?error.message:'design_failed'
+   // 2026-10-20: a live request failed here after one render with no
+   // recorded cause. Log the internal error so the next one is diagnosable.
+   if(reason==='design_failed')console.error('[CAD design failed]',JSON.stringify({request_id:request?.id??null,renders:metrics.renders,
+    error:(error instanceof Error?error.name+': '+error.message:String(error)).slice(0,300),at:error instanceof Error?error.stack?.split('\n').slice(1,4).map(line=>line.trim()):undefined}))
    if(request&&!retryInputs&&(!renewingConstruction||renewalAccepted))await persist('retrieval_failed')
    const failure={status:'unavailable',stage:error instanceof BobBudgetError?error.stage:'design',saved:false,reason,renders:metrics.renders,...(reason==='turn_budget_exhausted'?{budget_stop:readBudgetStop(error),next_action:budgetResumeAction(readBudgetStop(error),opts.aiCatalog)}:{})}
    if(['model_output_limit','model_reasoning_only','model_unavailable','provider_retry_exhausted','turn_budget_exhausted'].includes(reason)){

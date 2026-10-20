@@ -111,3 +111,25 @@ test('a context rollover keeps loaded tools offered, with their manual in the sc
   session.resetInstructions()
   assert.deepEqual(names(await session.prepare()), ['describe_tool'], 'older journals keep the reset')
 })
+
+// Live turn 2026-10-20: Bob's reviewed answer was discarded when the spending
+// stop ended the review, and the owner saw only a recovery template.
+test('a spending stop during the review delivers the reviewed answer as partial', async () => {
+  const stopped = { success: false, model: 'unavailable', data: null, usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, error: 'turn_budget_exhausted' }
+  const { result, calls, observation } = await (async () => {
+    const calls: string[] = [], observations: any[] = []
+    const writer = createProjectWriter('A', 'Hur högt är bordet?', async () => assert.fail('no write'), async () => ({ data: [], error: null }))
+    const result = await runProjectAnswer({ aiCatalog: catalogFixture(), unlimitedWork: true, projectId: 'A', userId: 'u', message: 'Hur högt är bordet?', hasAccess: async () => true,
+      lookup: createProjectLookup('A', async () => payload, 1000, 1000), deadline: Infinity, writer, observe: value => observations.push(value),
+      callModel: async options => {
+        calls.push(options.functionName)
+        if (options.functionName === 'completion-gate') return { success: true, model: 'mini', usage, data: { work_remaining: true, reason: 'Granska.' } }
+        return calls.filter(name => name === 'ask-bob').length === 1 ? answer('Bordet är 72 cm högt enligt ritningen.', 'first') : stopped
+      } })
+    return { result, calls, observation: observations.at(-1) }
+  })()
+  assert(result.ok); assert.equal(result.answer, 'Bordet är 72 cm högt enligt ritningen.')
+  assert.equal(result.evidence.partial, true)
+  assert.deepEqual(calls, ['ask-bob', 'completion-gate', 'ask-bob'])
+  assert.equal(observation.end, 'step_budget')
+})

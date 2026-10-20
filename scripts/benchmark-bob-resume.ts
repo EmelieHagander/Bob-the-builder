@@ -13,6 +13,7 @@ import type { OpenAIServiceResponse } from '../supabase/functions/_shared/openai
 import type { OpenAIServiceOptions } from '../supabase/functions/_shared/openai-service.ts'
 import { createBobContextContinuation, type BobContextContinuationState, type ContextSurface } from '../supabase/functions/_shared/bob-context-continuation.ts'
 import { contextTokenPrefix, countContextTokens, countSerializedTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
+import { BOB_RESULT_WINDOW_TOKENS } from '../supabase/functions/_shared/bob-result-references.ts'
 
 const TIME = '2026-10-19T10:00:00.000Z', IMAGE = '10000000-0000-4000-8000-000000000001'
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
@@ -176,7 +177,7 @@ export function createResumeProbe(options: ResumeProbeOptions) {
     }, session)
     let contextEpoch = capsule?.contextEpoch ?? 0, refreshSurface: (() => Promise<ContextSurface>) | undefined
     const continuation = options.stress || options.completeRequest ? createBobContextContinuation({ version: 1, aiCatalog: session, callModel: dispatchModel,
-      ...(options.resultReferences ? { mainResultReferences: 1 } : {}),
+      ...(options.resultReferences ? { mainResultReferences: 1, resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
       pageBoundaries: (source, compute) => journal.run('context:pages', { source }, compute),
       onRollover: () => { contextEpoch++ }, refreshSurface: () => refreshSurface?.() ?? Promise.resolve(undefined),
       snapshot: () => ({ confirmed_writes: writer.executedReceipts.map(({ record: _record, ...receipt }) => receipt), unresolved_tools: writer.unresolvedTools }),

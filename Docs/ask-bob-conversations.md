@@ -192,6 +192,15 @@ text; it does not make every underlying database read paged. New orientation
 directory pages also use a 2,000-token source limit; older snapshots retain 6,000.
 No API permission, source freshness check or write ledger is bypassed.
 
+**Result window (2026-10-20, owner option A).** The two-exchange rule above also
+hid results Bob had just reopened with `get_work_history`, so a comparison across
+several results looped (one live turn reopened the same result 8 times). New jobs
+pin `resultWindowVersion: 1`: older results stay whole, newest first, up to
+`BOB_RESULT_WINDOW_TOKENS` (20,000), and only older ones become references. The
+40-step probe now peaks at about 55k estimated input (ceiling 96k). Reasoning
+retention is unchanged. If the spending stop ends the completion review, Bob's
+reviewed answer is delivered as partial instead of the recovery template.
+
 Reduce default tool pages toward approximately 2,000 content tokens where their
 contract permits, with explicit continuation. Retain complete original results in
 an authorized, versioned archive before replacing old result bodies with exact
