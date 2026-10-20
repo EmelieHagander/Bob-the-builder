@@ -18,6 +18,8 @@ type Chain = {
   operations: Map<string, Operation>
   historicalImages?: Message[]
   resultReferences?: 1
+  /** Bob's own working notes for this job: never system history or project truth. */
+  notebook?: { text: string; revision: number }
 }
 /** Only live provider heads are retained. Map entries are arrays on disk so
  * a worker can restore a chain without replaying completed model/tool calls. */
@@ -25,9 +27,14 @@ export interface BobContextContinuationState {
   version: 1;
   strategyVersion: number;
   resultReferenceVersion?: 1;
+  notebookVersion?: 1;
   chains: [string, Omit<Chain, 'operations'> & { operations: [string, Operation][] }][];
 }
 const HISTORY_TOOL = 'get_work_history'
+const NOTEBOOK_TOOL = 'bob_notebook'
+/** Sent in full on every request; Bob sees the size and tidies past the soft
+ * limit. The hard limit only refuses a write that would flood every request. */
+export const BOB_NOTEBOOK_TOKENS = { soft: 1500, hard: 4000 }
 const PAGE_TOKENS = 1600
 /** The main-turn ceiling sizes Bob's own conversation. A specialist's single
  * request (e.g. the CAD review with its preview images) is bounded by its own
@@ -203,6 +210,9 @@ export function createBobContextContinuation(opts: {
    * many tokens before they become references. A fixed two-exchange window
    * hid results Bob had just reopened, so he reopened them again (2026-10-20). */
   resultWindowTokens?: number
+  /** Pinned with result references: Bob keeps a per-job notebook, shown
+   * after the history on every request together with confirmed work. */
+  mainNotebook?: 1
   /** Pinned per execution. Version 1 counts the provider-reported input once
    * (it already contains the tool surface) and refreshes only when the part
    * it would summarize is large enough to make the next request smaller. */
@@ -220,6 +230,7 @@ export function createBobContextContinuation(opts: {
   const enabled = opts.version === 1
   const exportState = (): BobContextContinuationState => clone({ version: 1, strategyVersion: opts.version ?? 0,
     ...(opts.mainResultReferences === 1 ? { resultReferenceVersion: 1 as const } : {}),
+    ...(opts.mainNotebook === 1 ? { notebookVersion: 1 as const } : {}),
     chains: [...chains].map(([id, chain]) => [id, { ...chain, operations: [...chain.operations] }]),
   })
   const restoreState = (state: BobContextContinuationState): void => {
@@ -233,7 +244,7 @@ export function createBobContextContinuation(opts: {
     const messages = (value: unknown): boolean => Array.isArray(value) && value.every(message)
     const natural = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0
     if (!state || state.version !== 1 || state.strategyVersion !== (opts.version ?? 0)
-      || state.resultReferenceVersion !== opts.mainResultReferences || !Array.isArray(state.chains)
+      || state.resultReferenceVersion !== opts.mainResultReferences || state.notebookVersion !== opts.mainNotebook || !Array.isArray(state.chains)
       || new Set(state.chains.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== state.chains.length) throw new Error('context_checkpoint_invalid')
     const restored = new Map<string, Chain>()
     for (const entry of state.chains) {
@@ -242,6 +253,8 @@ export function createBobContextContinuation(opts: {
       if (typeof chain.identity !== 'string' || !messages(chain.seed) || !Array.isArray(chain.groups) || !chain.groups.every(messages)
         || chain.resultReferences !== undefined && (chain.resultReferences !== 1 || opts.mainResultReferences !== 1 || chain.compacted || chain.handoff !== undefined)
         || chain.historicalImages !== undefined && !messages(chain.historicalImages)
+        || chain.notebook !== undefined && (opts.mainNotebook !== 1 || chain.resultReferences !== 1 || !object(chain.notebook)
+          || typeof chain.notebook.text !== 'string' || !Number.isSafeInteger(chain.notebook.revision) || chain.notebook.revision < 1)
         || typeof chain.compacted !== 'boolean' || !messages(chain.pendingInternal) || !natural(chain.inputTokens) || !natural(chain.outputTokens)
         || !Array.isArray(chain.operations) || new Set(chain.operations.map(entry => Array.isArray(entry) ? entry[0] : null)).size !== chain.operations.length
         || chain.handoff !== undefined && (!object(chain.handoff) || typeof chain.handoff.summary !== 'string'
@@ -299,6 +312,17 @@ export function createBobContextContinuation(opts: {
       return { status: 'ok', call_id: operation.call_id, tool_name: operation.tool_name,
         content: page.text, after, next_after: page.next, truncated: page.next !== null }
     } catch { return { status: 'invalid' } }
+  }
+
+  const writeNotebook = (input: unknown, chain: Chain): Record<string, unknown> => {
+    if (!object(input) || Object.keys(input).some(key => !['action', 'text'].includes(key))
+      || !['replace', 'append'].includes(String(input.action)) || typeof input.text !== 'string') return { status: 'invalid' }
+    const current = chain.notebook?.text ?? ''
+    const text = input.action === 'append' ? [current, input.text].filter(Boolean).join('\n') : input.text
+    const tokens = countContextTokens(text)
+    if (tokens > BOB_NOTEBOOK_TOKENS.hard) return { status: 'too_large', tokens, soft_limit_tokens: BOB_NOTEBOOK_TOKENS.soft, revision: chain.notebook?.revision ?? 0 }
+    chain.notebook = { text, revision: (chain.notebook?.revision ?? 0) + 1 }
+    return { status: 'saved', revision: chain.notebook.revision, tokens, soft_limit_tokens: BOB_NOTEBOOK_TOKENS.soft, over_soft_limit: tokens > BOB_NOTEBOOK_TOKENS.soft }
   }
 
   const recordOperations = (chain: Chain, incoming: Message[]) => {
@@ -383,13 +407,14 @@ export function createBobContextContinuation(opts: {
     if (!enabled || requested.catalogRoleKey === 'context-compactor') return opts.callModel(requested, beforeDispatch)
     const references = opts.mainResultReferences === 1 && requested.responseItemsMode === 'preserve'
       && requested.functionName === 'ask-bob' && (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
+    const notebook = references && opts.mainNotebook === 1
     let options = requested
     const roleCeiling = (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob' ? ceiling : Math.max(ceiling, SPECIALIST_INPUT_CEILING_TOKENS)
     for (;;) {
       const consumedResponseId = options.previousResponseId
       const native = options.responseItemsMode === 'preserve'
       const identity = JSON.stringify([options.app, options.coworkerId, options.functionName, options.catalogRoleKey ?? options.functionName,
-        ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : [])])
+        ...(native ? ['complete-request-v1'] : []), ...(references ? ['result-references-v1'] : []), ...(notebook ? ['notebook-v1'] : [])])
       let chain: Chain
       if (options.previousResponseId) {
         const previous = chains.get(options.previousResponseId)
@@ -526,8 +551,10 @@ export function createBobContextContinuation(opts: {
       }
       if (chain.compacted || references) {
         const history = opts.aiCatalog.tool(HISTORY_TOOL, references ? { card: false, include_manual: true } : undefined)
-        options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL), history],
-          ...(references ? { catalogToolParameters: { ...options.catalogToolParameters, [HISTORY_TOOL]: { card: false, include_manual: true } } } : {}),
+        const notes = notebook ? [opts.aiCatalog.tool(NOTEBOOK_TOOL, { card: false, include_manual: true })] : []
+        options = { ...options, tools: [...(options.tools ?? []).filter(tool => tool.function.name !== HISTORY_TOOL && tool.function.name !== NOTEBOOK_TOOL), history, ...notes],
+          ...(references ? { catalogToolParameters: { ...options.catalogToolParameters, [HISTORY_TOOL]: { card: false, include_manual: true },
+            ...(notebook ? { [NOTEBOOK_TOOL]: { card: false, include_manual: true } } : {}) } } : {}),
           ...(options.catalogSchemaKey || options.schema ? { structuredToolOutput: true } : {}) }
       }
       if (native) options = buildBobRequest(options, {
@@ -539,6 +566,16 @@ export function createBobContextContinuation(opts: {
           ...(opts.snapshot ? { confirmed_work_state: opts.snapshot({ functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }) } : {}),
         }) } as Message } : {}),
       })
+      if (native && notebook) {
+        // Rebuilt for every request and never recorded in the chain: the
+        // notebook is Bob's own, the confirmed work is the server's record.
+        const role = { functionName: options.functionName, role: options.catalogRoleKey ?? options.functionName }
+        const notes = chain.notebook?.text ?? ''
+        options = { ...options, messages: [...(options.messages ?? []), { role: 'user', content: opts.aiCatalog.text('bob.notebook.current') + '\n' + JSON.stringify({
+          notebook: { revision: chain.notebook?.revision ?? 0, tokens: countContextTokens(notes), soft_limit_tokens: BOB_NOTEBOOK_TOKENS.soft, text: notes },
+          ...(opts.snapshot ? { confirmed_work_state: opts.snapshot(role) } : {}),
+        }) }] }
+      }
       // Compaction preserves the exact seed and native tool exchanges. If
       // these indispensable inputs themselves exceed the configured envelope,
       // report it rather than silently trimming the assignment or tool result.
@@ -553,12 +590,12 @@ export function createBobContextContinuation(opts: {
       chain.inputTokens = Math.max(0, response.usage.input_tokens)
       chain.outputTokens = Math.max(0, response.usage.output_tokens)
       chain.groups.push([resultMessage(response)])
-      const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL) ?? [] : []
+      const internal: ToolCall[] = chain.compacted || references ? response.toolCalls?.filter(tool => tool.function.name === HISTORY_TOOL || notebook && tool.function.name === NOTEBOOK_TOOL) ?? [] : []
       const external = response.toolCalls?.filter(tool => !internal.includes(tool)) ?? []
       for (const tool of internal) {
         let input: unknown
         try { input = JSON.parse(tool.function.arguments) } catch { input = null }
-        chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(readArchivedOperation(input, chain)) })
+        chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(tool.function.name === NOTEBOOK_TOOL ? writeNotebook(input, chain) : readArchivedOperation(input, chain)) })
       }
       chains.set(response.responseId, copyChain(chain))
       // Only the live head is needed. Keeping a full archive copy at every

@@ -96,6 +96,9 @@ export interface ToolboxEntry { name: string; group: string; state: 'offered' | 
 export interface ToolSessionState {
   version: 1 | 2
   workflows?: string[]
+  /** Idle release (pinned per execution): tools touched in the current step,
+   * tools whose last call was rejected, and the last step that released. */
+  idle?: { touched: string[]; failed: string[]; step: number | null }
   loaded: [string, number][]
   carried: string[]
   partial: boolean
@@ -107,9 +110,14 @@ export interface ToolSessionState {
   cards: [string, string | null][]
 }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; releaseIdleTools?: boolean; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
+  // A loaded tool stays while Bob keeps using it; a whole step without it
+  // releases it. A rejected last call keeps it so Bob can correct the call.
+  const releaseIdle = selective && opts.releaseIdleTools === true
+  const touched = new Set<string>(), failed = new Set<string>()
+  let releasedStep: number | null = null
   const workflows = new Set<string>()
   const onDemand = lazy || opts.toolInstructions === 'on_demand'
   const loaded = new Map<string, number>()
@@ -167,7 +175,8 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
   }
   return {
     exportState(): ToolSessionState {
-      return JSON.parse(JSON.stringify({ version: selective ? 2 : 1, ...(selective ? { workflows: [...workflows] } : {}), loaded: [...loaded], carried: [...carried], partial,
+      return JSON.parse(JSON.stringify({ version: selective ? 2 : 1, ...(selective ? { workflows: [...workflows] } : {}),
+        ...(releaseIdle ? { idle: { touched: [...touched], failed: [...failed], step: releasedStep } } : {}), loaded: [...loaded], carried: [...carried], partial,
         snapshot, offered: [...offered], visible: [...visible], shelf, events,
         cards: [...cards].map(([name, description]) => [name, description ?? null]) }))
     },
@@ -177,7 +186,11 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         || !Array.isArray(state.carried) || state.carried.some(name => typeof name !== 'string')
         || !Array.isArray(state.shelf) || !Array.isArray(state.events) || state.events.length > 200 || !Array.isArray(state.cards)
         || state.cards.some(row => !Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string' || !(row[1] === null || typeof row[1] === 'string'))) throw new Error('tool_session_checkpoint_invalid')
+      const names = (value: unknown) => Array.isArray(value) && value.every(name => typeof name === 'string')
+      if (releaseIdle ? !state.idle || !names(state.idle.touched) || !names(state.idle.failed) || !(state.idle.step === null || Number.isSafeInteger(state.idle.step)) : state.idle !== undefined) throw new Error('tool_session_checkpoint_invalid')
       const restored: ToolSessionState = JSON.parse(JSON.stringify(state))
+      touched.clear(); failed.clear(); releasedStep = null
+      if (restored.idle) { for (const name of restored.idle.touched) touched.add(name); for (const name of restored.idle.failed) failed.add(name); releasedStep = restored.idle.step }
       const policy = restored.snapshot === null ? null : checkedToolSnapshot(restored.snapshot)
       loaded.clear(); for (const [name, version] of restored.loaded) loaded.set(name, version)
       workflows.clear(); for (const name of restored.workflows ?? []) workflows.add(name)
@@ -204,6 +217,13 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     toolParameters(): Record<string, { card: false; include_manual: true }> | undefined {
       const offeredCarried = [...(selective ? loaded.keys() : carried)].filter(name => offered.has(name))
       return offeredCarried.length ? Object.fromEntries(offeredCarried.map(name => [name, { card: false, include_manual: true }])) : undefined
+    },
+    /** Start of a model step: release tools Bob did not touch in the step
+     * before. Idempotent per step, so a resumed step never releases twice. */
+    beginStep(step: number) {
+      if (!releaseIdle || releasedStep === step) return
+      for (const name of [...loaded.keys()]) if (!touched.has(name) && !failed.has(name)) loaded.delete(name)
+      touched.clear(); releasedStep = step
     },
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
@@ -257,6 +277,7 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
         if (!visible.has(row.name)) return finish(safeStatus('not_offered'))
         if (visible.get(row.name) !== resolved.def.version) return finish(safeStatus('contract_changed'))
         if (lazy) loaded.set(row.name, resolved.def.version)
+        if (releaseIdle) { touched.add(row.name); failed.delete(row.name) }
         if (selective) return finish({ status: 'ok', name: row.name, schema_version: resolved.def.version, state: resolved.state,
           instructions_ref: 'next_request_tool_definition', callable_from_next_step: resolved.state === 'available',
           colleagues: opts.catalogColleagues?.(row.name) ?? [],
@@ -278,9 +299,11 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
       if (!offered.has(name)) { record('execute', name, 'not_offered'); return safeStatus('not_offered', opts.feedback?.('not-offered') ?? 'This tool became available after this step began. Call it again in your next step.') }
       if (offered.get(name) !== def.version) return safeStatus('contract_changed', opts.feedback?.('contract-changed') ?? 'This tool changed during the turn. Use the version offered on your next step.')
       const input = quote !== undefined && takesQuote(def.spec) && object(args) ? { ...args, [SERVER_QUOTE_FIELD]: quote } : args
+      if (releaseIdle) touched.add(name)
       try {
         const result = await def.execute(input)
         record('execute', name, object(result) && typeof result.status === 'string' ? result.status : 'returned')
+        if (releaseIdle) { if (object(result) && result.status === 'invalid') failed.add(name); else failed.delete(name) }
         return result
       } catch (error) {
         rethrowContinuation(error)

@@ -43,7 +43,7 @@ test('prompt publication is slimmer, keeps exact routes and authority; only the 
  const pg=await projectSchema();t.after(()=>pg.close())
  const manifest=(await pg.query<any>("select shared.resolve_ai_catalog('bob') m")).rows[0].m
  const current=createAiCatalogSession({rpc:async()=>{throw Error('pinned')}},{app:'bob',manifest}),fixture=catalogFixture(),old=preCompleteContextCatalogFixture()
- for(const key of ['bob.workflows','bob.toolbox.intro-lazy','tools.describe_tool','tools.get_work_history']){
+ for(const key of ['bob.workflows','tools.describe_tool','tools.get_work_history']){
   assert.deepEqual(current.definition(key).definition,fixture.definition(key).definition,key)
   assert.equal(current.definition(key).content,fixture.definition(key).content,key)
   assert.deepEqual(current.definition(key).metadata,fixture.definition(key).metadata,key)
@@ -52,8 +52,9 @@ test('prompt publication is slimmer, keeps exact routes and authority; only the 
  assert(countContextTokens(method(current))<countContextTokens(method(old)))
  for(const name of ['change_construction_parameters','change_construction_roles','edit_construction_parts','save_construction_draft','plan_cad_pieces','read_construction_draft','check_construction_draft','design_project_cad'])assert(method(current).includes(name),name)
  assert.deepEqual(current.definition('bob.tools').definition,old.definition('bob.tools').definition)
- const {publication:_p,complete_request_version,result_reference_version,turn_usd_stop:_stop,...contract}=current.definition('agent-contract.ask-bob').metadata
+ const {publication:_p,complete_request_version,result_reference_version,turn_usd_stop:_stop,notebook_version,...contract}=current.definition('agent-contract.ask-bob').metadata
  const {publication:_o,...oldContract}=old.definition('agent-contract.ask-bob').metadata
- assert.deepEqual(contract,oldContract);assert.deepEqual([complete_request_version,result_reference_version],[1,1])
+ assert.deepEqual(contract,oldContract);assert.deepEqual([complete_request_version,result_reference_version,notebook_version],[1,1,1])
+ assert.equal(current.definition('bob.toolbox.intro-lazy').content,fixture.definition('bob.toolbox.intro-lazy').content)
  t.diagnostic(`Construction method tokens ${countContextTokens(method(old))} -> ${countContextTokens(method(current))}; runtime fences unchanged.`)
 })
