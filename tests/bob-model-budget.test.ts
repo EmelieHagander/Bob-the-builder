@@ -140,3 +140,14 @@ test('worker replay reuses governed CAD results and charges the persisted reques
  }
  assert.equal(dispatches,2);assert.equal(charged,1.4);assert.equal(commands,4)
 })
+test('an owner-set spending stop ends an unlimited turn at its USD limit, with no call allotment and the reserve kept for delivery',async()=>{
+ const budget=createBobModelBudget(1,24,undefined,{unlimitedWork:true,usdStop:2});let calls=0
+ for(let i=0;i<20;i++)assert((await budget.run(async()=>{calls++;return reply(.05)})).success)
+ assert((await budget.run(async()=>{calls++;return reply(.85)})).success)
+ const stopped:any=await budget.run(async()=>{calls++;return reply(.01)},'ask-bob')
+ assert.equal(stopped.error,'turn_budget_exhausted');assert.deepEqual(stopped.budget_stop.reasons,['usd_limit','review_reserve'])
+ assert((await budget.run(async()=>{calls++;return reply(.05)},'bob-delivery-language')).success)
+ assert((await budget.run(async()=>{calls++;return reply(.1)},'bob-delivery-language')).success)
+ const final:any=await budget.run(async()=>{calls++;return reply(.01)},'bob-delivery-language')
+ assert.deepEqual(final.budget_stop.reasons,['usd_limit']);assert.equal(calls,23)
+})

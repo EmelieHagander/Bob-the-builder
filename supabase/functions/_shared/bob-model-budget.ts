@@ -33,7 +33,7 @@ export function isDrawingModelCall(authority: DrawingBudgetAuthority | undefined
  * reserved ordinary roles may use the whole limit. A server-bound CAD operation
  * is accounted exactly once by its persisted owner-task period instead: this
  * transient guard cannot override its allocation or starve Bob's final save. */
-export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean } = {}) {
+export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd: number; calls: number; roles: readonly string[] } = BOB_REVIEW_RESERVE, policy: { unlimitedWork?: boolean; usdStop?: number } = {}) {
  let spent = 0, calls = 0, unpriced = false
  return {
   exportState():BobModelBudgetState{return {version:1,spent,calls,unpriced}},
@@ -45,6 +45,13 @@ export function createBobModelBudget(limitUsd = 1, maxCalls = 24, reserve: { usd
   async run<T>(work: () => Promise<OpenAIServiceResponse<T>>, role?: string, authority?: DrawingBudgetAuthority): Promise<OpenAIServiceResponse<T>> {
    if(isDrawingModelCall(authority,role))return work()
    const reserved = !!role && reserve.roles.includes(role)
+   // An owner-set spending stop for unlimited turns: no call allotment, and
+   // the reserve still lets review and delivery finish the answer.
+   const stopUsd = policy.unlimitedWork && policy.usdStop !== undefined ? policy.usdStop : undefined
+   if(stopUsd!==undefined){
+    const usdLimit = reserved ? stopUsd : Math.max(0, stopUsd - reserve.usd)
+    if(spent>=usdLimit)return budgetFailure<T>({scope:'turn',reasons:spent<stopUsd?['usd_limit','review_reserve']:['usd_limit'],calls,spent_usd:spent,usd_limit:usdLimit,unpriced})
+   }
    const usdLimit = reserved ? limitUsd : Math.max(0, limitUsd - reserve.usd)
    const callLimit = reserved ? maxCalls : Math.max(0, maxCalls - reserve.calls)
    const reasons:BobBudgetStop['reasons']=[]

@@ -28,6 +28,11 @@ for(const migration of migrations){
   const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
   row.metadata={...rest,publication:'bob-complete-request-activation-v1',...JSON.parse(activation[1])};versions.set(row.key,versions.get(row.key)!+1)
  }
+ const usdStop=source.match(/\$turn_usd_stop_flags\$([\s\S]+?)\$turn_usd_stop_flags\$/)
+ if(usdStop){
+  const row=seed.find(row=>row.key==='agent-contract.ask-bob');const{seed_version,source_revision,...rest}=row.metadata??{}
+  row.metadata={...rest,publication:'bob-turn-usd-stop-v1',...JSON.parse(usdStop[1])};versions.set(row.key,versions.get(row.key)!+1)
+ }
  const completeContext=source.match(/\$bob_complete_context_patches\$([\s\S]+?)\$bob_complete_context_patches\$/)
  if(completeContext){
   preCompleteContextRows=structuredClone(seed);preCompleteContextVersions=new Map(versions)

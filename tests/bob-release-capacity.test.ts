@@ -52,7 +52,7 @@ test('prompt publication is slimmer, keeps exact routes and authority; only the 
  assert(countContextTokens(method(current))<countContextTokens(method(old)))
  for(const name of ['change_construction_parameters','change_construction_roles','edit_construction_parts','save_construction_draft','plan_cad_pieces','read_construction_draft','check_construction_draft','design_project_cad'])assert(method(current).includes(name),name)
  assert.deepEqual(current.definition('bob.tools').definition,old.definition('bob.tools').definition)
- const {publication:_p,complete_request_version,result_reference_version,...contract}=current.definition('agent-contract.ask-bob').metadata
+ const {publication:_p,complete_request_version,result_reference_version,turn_usd_stop:_stop,...contract}=current.definition('agent-contract.ask-bob').metadata
  const {publication:_o,...oldContract}=old.definition('agent-contract.ask-bob').metadata
  assert.deepEqual(contract,oldContract);assert.deepEqual([complete_request_version,result_reference_version],[1,1])
  t.diagnostic(`Construction method tokens ${countContextTokens(method(old))} -> ${countContextTokens(method(current))}; runtime fences unchanged.`)
