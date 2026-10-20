@@ -200,3 +200,15 @@ test('a token window keeps the newest results whole, so a reopened result surviv
   for (let i = 0; i < 12; i++) await old.call(i === 0 ? seed : { ...seed, previousResponseId: 'r' + i, messages: [output('r' + i, large)] })
   assert.equal(legacy.at(-1)!.messages!.filter(m => m.role === 'tool' && !JSON.parse(String(m.content)).content_omitted).length, 2)
 })
+
+test('one whole construction view page stays literal in the recent window', () => {
+  // A maximal construction view page (CONSTRUCTION_VIEW_TOKENS) plus typical
+  // read arguments must not be paged again at the model boundary.
+  const items = Array.from({ length: 36 }, (_, i) => ({ collection: 'instances', id: 'left_post_' + i, value: { x_mm: 18 + i, y_mm: 282, z_mm: 1430, definition_id: 'd_post', placement: { rx: 0, ry: 0, rz: 0 } } }))
+  const view = JSON.stringify({ status: 'ok', artifact_id: 'dafa721c-3aa6-406d-aa18-fb658c00223b', revision: 11, view: 'parts', items,
+    coverage: { total_items: 36, start_index: 0, start_offset: 0, next_index: 36, fragment_offset: 0, end_of_selection: true, complete: true, scope: 'selected_view_only' }, next_read: null })
+  assert(countSerializedTokens(view) > 1800 && countSerializedTokens(view) <= 2000, 'fixture fills a full view page: ' + countSerializedTokens(view))
+  const read: BobArchivedOperation = { call_id: 'view', tool_name: 'read_construction_draft',
+    arguments: '{"view":"parts","artifact_id":"dafa721c-3aa6-406d-aa18-fb658c00223b","revision":11,"ids":[],"after":null,"section":null,"result_id":null}', output: view }
+  assert.equal(projectBobResult(read, false), view)
+})

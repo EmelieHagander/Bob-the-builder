@@ -4,7 +4,11 @@ import { countSerializedTokens } from './bob-token-budget.ts'
 type Content = NonNullable<OpenAIServiceOptions['messages']>[number]['content']
 export type BobArchivedOperation = { call_id: string; tool_name: string; arguments: string; output: Content;
   presentation?: { older: Content; observed: Record<string, unknown> } }
-export const BOB_RESULT_PAGE_TOKENS = 2000
+/** First page of a large result. Sized above CONSTRUCTION_VIEW_TOKENS (2000)
+ * plus the arguments/escaping envelope so that one whole construction view
+ * page stays literal: at 2000 every view page was cut again here and Bob
+ * paid one or two get_work_history steps per read (96 pages on 2026-10-20). */
+export const BOB_RESULT_PAGE_TOKENS = 3000
 /** Recent results kept whole across exchanges before older ones become references. */
 export const BOB_RESULT_WINDOW_TOKENS = 20000
 

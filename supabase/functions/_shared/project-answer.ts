@@ -26,7 +26,7 @@ import type { ContextSurface } from './bob-context-continuation.ts'
 import type { CurrentView } from '../../../src/domain/bobScreen.ts'
 import type { AnswerEvidence } from '../../../src/data/provenance.ts'
 import { BOB_WRITE_LIMIT } from '../../../src/data/bobEvidence.ts'
-import { createBobToolSession, sortToolbox } from './project-tools/bob-tools.ts'
+import { createBobToolSession, DRAWING_CONTINUATION_PRELOAD, sortToolbox } from './project-tools/bob-tools.ts'
 import type { ProjectCalculator } from './project-calculator.ts'
 import { type ToolPolicyReader, type ToolboxEntry, type ToolInstructions, checkedToolSnapshot } from './project-tools/session.ts'
 import catalogSeed from './project-tools/catalog-seed.json' with { type: 'json' }
@@ -205,7 +205,9 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   if (contextStrategy && countContextTokens(opts.aiCatalog.role('ask-bob').systemMessage) > 700) throw new Error('context_input_too_large')
   const toolInstructions = opts.toolInstructions ?? (contextStrategy ? 'lazy' : undefined)
   const catalog = restored ? restored.initial.catalog : opts.projectContext ? await opts.projectContext.catalog() : null
-  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}),
+  // Set once the pending drawing requests are known below; prepare() reads it at the first model step.
+  let preloadTools: string[] = []
+  const toolbox = createBobToolSession({ ...opts, ...(contextStrategy ? { toolInstructions } : {}), preloadTools: () => preloadTools,
     ...(boundedOrientation ? { orientationReader: { tools: [ORIENTATION_DIRECTORY_TOOL], execute: (raw: unknown) => {
       if (!orientationReader) throw new Error('context_unavailable')
       return orientationReader.execute(raw)
@@ -251,6 +253,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
   }
   let previousResponseId = restored ? restored.previousResponseId : opts.context || contextStrategy ? undefined : opts.previousResponseId
   const drawingRequests=restored ? restored.initial.drawingRequests : await opts.cadAssistant?.pending()
+  if (Array.isArray(drawingRequests) && drawingRequests.length) preloadTools = DRAWING_CONTINUATION_PRELOAD
   const steps = BOB_TURN_LIMITS.steps, deadline = opts.deadline ?? Date.now() + 220_000
   if (restored?.initial.directory) {
     const directory = restoreOrientationDirectory(restored.initial.directory as Parameters<typeof restoreOrientationDirectory>[0], { projectId: opts.projectId, hasAccess: opts.hasAccess })

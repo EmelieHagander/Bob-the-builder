@@ -14,6 +14,19 @@ system instructions and lists member availability, without loading their schemas
 next request carries the full manual and schema once in the native tool definition.
 The short directory remains available, including waiting prerequisites.
 
+**Drawing continuation preload — 2026-10-20.** A turn whose thread has a pending
+drawing request (the same `pending()` read the turn already makes) starts with
+the construction-drawing core loaded: `read_construction_draft`,
+`check_construction_draft`, `design_project_cad`, `read_drawing_requests`,
+`read_drawing_request_work`, `read_construction_changes`,
+`change_construction_parameters`, `edit_construction_parts`, `save_cad_design`
+(`DRAWING_CONTINUATION_PRELOAD` in `project-tools/bob-tools.ts`). Loading uses
+the same gate as `describe_tool` by name; waiting tools appear when ready and
+authority is still checked at execution. Measured reason: on 2026-10-20 every
+drawing turn loaded these one or a few at a time, and the 42 model steps after a
+manual load hit the provider cache 9% of the time against 81% otherwise (2.03 of
+7.88 USD). Other work keeps the selective on-demand loading unchanged.
+
 Tool-session checkpoint v2 saves selected method names and loaded tool versions.
 Methods resolve from the immutable manifest; current instructions and per-tool
 catalog overrides are rebuilt after restart/rollover. Current policy, handler

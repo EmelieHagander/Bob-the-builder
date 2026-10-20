@@ -107,7 +107,7 @@ export interface ToolSessionState {
   cards: [string, string | null][]
 }
 
-export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
+export function createToolSession(opts: { definitions: ToolDefinition[]; readPolicy: ToolPolicyReader; message?: string; toolInstructions?: ToolInstructions; selectiveTools?: boolean; /** Tools of work already in progress, loaded without a describe_tool round (lazy loading only). */ preloadTools?: () => string[]; catalogTool?: (name: string, parameters: Record<string, unknown>) => ToolSpec; catalogToolVersion?: (name: string) => number; catalogColleagues?: (name: string) => unknown[]; catalogWorkflows?: () => WorkflowCard[]; feedback?: (key: string, variables?: Record<string, string>) => string }) {
   const lazy = opts.toolInstructions === 'lazy'
   const selective = lazy && opts.selectiveTools === true
   const workflows = new Set<string>()
@@ -208,6 +208,17 @@ export function createToolSession(opts: { definitions: ToolDefinition[]; readPol
     /** Called once per model step; policy is re-read so a disabled tool disappears at once. */
     async prepare(): Promise<ToolSpec[]> {
       const current = await refresh(), specs: ToolSpec[] = []
+      // Work already in progress names its tools. Loading them here instead of
+      // one describe_tool round each saves the round and the provider cache
+      // miss that every change to the native tool list causes (2026-10-20:
+      // 42 post-manual steps hit the cache 9% of the time against 81%).
+      // Same gate as describe_tool by name; authority is still checked at execution.
+      if (lazy) for (const name of opts.preloadTools?.() ?? []) {
+        if (loaded.has(name)) continue
+        const row = current.tools.find(r => r.name === name)
+        const resolved = row ? resolve(row) : null
+        if (row && resolved?.def && resolved.state !== 'unavailable' && resolved.state !== 'not_allowed') loaded.set(row.name, resolved.def.version)
+      }
       offered = new Map(); visible = new Map(); shelf = []
       for (const row of [...current.tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         const { state, def } = resolve(row)
