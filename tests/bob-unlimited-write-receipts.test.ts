@@ -73,7 +73,11 @@ test('all retained receipt quota guards change only their pinned-mode predicate 
   const pattern = /if\s*(\(select count\(\*\) from bob_private\.bob_write_receipts where project_id=p_project and actor_id=auth\.uid\(\) and turn_id=p_turn\)>=(?:8|32)) then/g
   for (const old of beforeWriters) {
     const next = byOriginalSignature.get(old.signature)!
+    // 20261020203000 re-raises every custom conflict as PT409 instead of 40001
+    // (PostgREST 14 retries 40001 without limit); that is the only other
+    // change a later migration may make to these bodies.
     const expected = old.prosrc.replace(pattern, 'if not bob_private.bob_turn_unlimited_work(p_project,p_thread,p_turn,p_generation) and $1 then')
+      .replaceAll("errcode='40001'", "errcode='PT409'")
     assert.notEqual(expected, old.prosrc, old.signature)
     assert.equal(next.prosrc, expected, old.signature)
     assert.deepEqual([next.prosecdef, next.proconfig], [old.prosecdef, old.proconfig], old.signature)
