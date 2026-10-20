@@ -100,7 +100,7 @@ test('actual shared AI service opts into background, resumes tools and preserves
   stored={id:'resp_native_stored',status:'completed',output:nativeItems,usage:{input_tokens:100,output_tokens:20,total_tokens:120}}
   const replayed=await service.callOpenAIResponses({...complete,background})
   assert.deepEqual(replayed.outputItems,nativeItems);assert.equal(replayed.toolCalls[0].id,'read_exact')
-  stored.output=[{type:'reasoning',id:'rs_missing',summary:[]}]
+  stored.output=[{type:'reasoning',summary:[]}]
   const missing=await service.callOpenAIResponses({...complete,background})
   assert.equal(missing.success,false);assert.equal(missing.error,'native_reasoning_content_missing');assert.equal(missing.toolCalls,undefined)
 
