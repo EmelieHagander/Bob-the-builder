@@ -146,3 +146,20 @@ test('local image preparation failure rejects reservation without a provider POS
     assert.deepEqual(calls, ['ai_job_prepare','ai_work_record_failure','ai_job_reject']); assert.equal(posts,0)
   } finally { globalThis.fetch = oldFetch }
 })
+
+test('a refused encrypted retrieval delivers calls and text without private reasoning instead of waiting forever', async t => {
+  const prior = globalThis.fetch; t.after(() => { globalThis.fetch = prior })
+  const accepted: any[] = []
+  const stored = { id: 'resp_stored', status: 'completed', metadata: { ai_job_id: id, ai_replay_items: '1' }, output: [
+    { type: 'reasoning', id: 'rs_stored', summary: [] },
+    { type: 'function_call', id: 'fc_stored', call_id: 'call1', name: 'read_construction_draft', arguments: '{}' }] }
+  const rpc = async (name: string, args: any) => {
+    if (name === 'ai_work_claim') return { response_id: stored.id }
+    if (name === 'ai_job_accept') { accepted.push(args.p_response); return true }
+    return null
+  }
+  globalThis.fetch = async url => String(url).includes('include%5B%5D')
+    ? Response.json({ error: { code: 'invalid_request', message: 'Not supported' } }, { status: 400 }) : Response.json(stored)
+  await reconcileAiWork(rpc, 'key', 'event', id, id)
+  assert.deepEqual(accepted, [{ ...stored, output: [{ type: 'function_call', call_id: 'call1', name: 'read_construction_draft', arguments: '{}' }] }])
+})

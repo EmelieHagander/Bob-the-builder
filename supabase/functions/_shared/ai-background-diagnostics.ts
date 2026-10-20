@@ -2,7 +2,7 @@
  * bodies, URLs, credentials or model input into either log sink. */
 export type AiFailurePhase = 'reserve' | 'prepare' | 'submit' | 'accept' | 'reject' | 'claim' | 'retrieve' | 'cancel' | 'deliver' | 'finish'
 export class AIProviderHttpError extends Error {
-  constructor(readonly status: number, readonly requestId: string | null = null) { super('ai_provider_http_' + status) }
+  constructor(readonly status: number, readonly requestId: string | null = null, readonly detail: string | null = null) { super('ai_provider_http_' + status) }
 }
 export class AIBackgroundStorageError extends Error {
   constructor(readonly code?: string, readonly reason?: string) { super('ai_background_storage_unavailable') }

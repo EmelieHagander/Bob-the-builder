@@ -23,7 +23,13 @@ export async function providerRequest(apiKey: string, path: string, body?: unkno
     headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
-  if (!response.ok) throw new AIProviderHttpError(response.status, response.headers.get('x-request-id'))
+  if (!response.ok) {
+    // The provider's own error code/message (never request content) explains a rejection.
+    let detail: string | null = null
+    try { const body = await response.json(); detail = [body?.error?.code, body?.error?.param, body?.error?.message].filter(v => typeof v === 'string').join(' | ').slice(0, 300) || null } catch { /* no JSON body */ }
+    if (detail) console.log('[AI provider error]', JSON.stringify({ status: response.status, request_id: response.headers.get('x-request-id'), detail }))
+    throw new AIProviderHttpError(response.status, response.headers.get('x-request-id'), detail)
+  }
   return response.json()
 }
 /** Reserve BEFORE submission. An uncertain POST is never blindly resubmitted.
@@ -115,7 +121,18 @@ export async function reconcileAiWork(rpc: AiRpc, apiKey: string, kind: 'job' | 
     if (!work.cancel && response.status === 'completed' && response.metadata?.ai_replay_items === '1') {
       try {
         const originalId = response.id, originalJob = response.metadata?.ai_job_id
-        response = await providerRequest(apiKey, path + '?include%5B%5D=reasoning.encrypted_content')
+        let replay: any
+        try { replay = await providerRequest(apiKey, path + '?include%5B%5D=reasoning.encrypted_content') }
+        catch (error) {
+          if (!(error instanceof AIProviderHttpError && error.status === 400)) throw error
+          // 2026-10-20: retrieval refused the encrypted reasoning of a stored
+          // background response, so the job waited forever. Deliver its calls
+          // and text without private reasoning; item ids go too, since a call
+          // id without its reasoning item is rejected on the next request.
+          replay = { ...response, output: (Array.isArray(response.output) ? response.output : [])
+            .filter((item: any) => item?.type !== 'reasoning').map(({ id: _id, ...item }: any) => item) }
+        }
+        response = replay
         if (response.id !== originalId || response.metadata?.ai_job_id !== originalJob || response.status !== 'completed') throw new Error('native_response_identity_changed')
         readResponseItems(response.output)
       }
