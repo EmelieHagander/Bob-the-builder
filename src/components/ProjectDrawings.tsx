@@ -13,12 +13,7 @@ export function drawingUrl(drawing: { id: string; revision: number; area_id?: st
 }
 
 function Preview({ drawing }: { drawing: db.ProjectDrawingCard }) {
-  const { data, error, loading } = useAsync(
-    () => db.getProjectDrawingPreview(drawing.project_id, drawing.id, drawing.revision),
-    [drawing.project_id, drawing.id, drawing.revision],
-  )
-  if (error) return <p className="foundation-hint">Preview unavailable. Open the saved drawing.</p>
-  if (loading || !data) return <p className="foundation-hint" role="status">Loading drawing…</p>
+  const data = drawing
   let src = data.preview_svg ? `data:image/svg+xml;base64,${data.preview_svg}` : null
   if (!src && data.parametric_recipe) {
     try {
