@@ -71,6 +71,7 @@ Contract v1 uses canonical millimetres. The September 25 extension adds cylinder
 - solid cylinders and up to 16 local box/cylinder cuts per definition (256 total), for holes and notches;
 - placed/rotated instances;
 - projections of every side and upper corner (since 2026-10-21): `front` (from −Y), `back` (+Y), `left` (−X), `right` (+X), `top` (+Z), `bottom` (−Z), and `isometric` (front-right-top), `isometric_front_left`, `isometric_back_left`, `isometric_back_right`; up to six per drawing. Bob picks the views that show every requirement where it sits — a left-gable requirement needs `left`. Before 2026-10-21 only front/right/top/isometric existed, so a feature on a hidden side (the bunk bed's left gable behind its solid right gable) could not be verified and the reviewer kept rejecting correct geometry. The stored `coordinate_system.views` in parameter graphs still names the original four; it is compared against saved artifacts and is not a list of allowed views.
+- a saved drawing request keeps its views until Bob changes them: `design_project_cad` takes `views` (null keeps the saved list; a 1–6 list replaces it, and the requirements stay as saved). The views are stored in the request's handoff (since 2026-10-21, publication `cad-resume-views-v1`).
 
 The worker rejects cuts that miss the part, erase it or split it into disconnected solids. Each reusable definition is constructed once. Blank dimensions remain the original definition dimensions, not a smaller post-cut bounding box.
 

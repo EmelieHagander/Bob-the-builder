@@ -32,7 +32,7 @@ export function parseDesignHandoff(v: any): DesignHandoff | null {
     || !['user_request', 'project_record', 'working_assumption'].includes(r.basis) || !(r.source_ref === null || text(r.source_ref, 500)))) return null
   if (new Set(v.requirements.map((r: any) => r.id)).size !== v.requirements.length) return null
   if (!exact(v.coordinates, ['origin', 'positive_x', 'positive_y', 'positive_z']) || Object.values(v.coordinates).some(x => x !== null && !text(x, 500))) return null
-  if (!Array.isArray(v.views) || !v.views.length || v.views.length > 4 || new Set(v.views).size !== v.views.length || v.views.some((x: any) => !CAD_VIEWS.includes(x))) return null
+  if (!Array.isArray(v.views) || !v.views.length || v.views.length > CAD_MAX_VIEWS || new Set(v.views).size !== v.views.length || v.views.some((x: any) => !CAD_VIEWS.includes(x))) return null
   if (!Array.isArray(v.unresolved) || v.unresolved.length > 20 || v.unresolved.some((x: unknown) => !text(x))) return null
   return structuredClone(v)
 }

@@ -15,7 +15,7 @@ import { fingerprint, rethrowContinuation, stableJsonValue } from './bob-job-jou
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { AiCatalogSession, AiVariables } from './ai-catalog.ts'
 import { type createProjectLookup } from './project-lookup.ts'
-import { cadPreviewKeys, parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
+import { CAD_MAX_VIEWS, CAD_VIEW_NAMES, cadPreviewKeys, parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
@@ -132,7 +132,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
-  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
+  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision'&&k!=='views').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   if(raw.request_id!=null&&!uuid(raw.request_id))return {status:'invalid',saved:false}
   raw=structuredClone(raw)
@@ -179,8 +179,17 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    required:request?'Resume with handoff:null and requirement_changes:[]; changes must copy saved requirement IDs, while new requirements use requirement_id:null.':'Provide a structured handoff without requirement IDs; the server allocates them.',
    ...(earlier?{handoff:earlier}:{}),maximum:24}
   let handoff=prepared.handoff
+  // Views are presentation, not owner requirements: a saved request may be
+  // redrawn from other sides. Null keeps the saved list.
+  if(raw.views!=null){
+   const views=raw.views,next=Array.isArray(views)&&views.length>=1&&views.length<=CAD_MAX_VIEWS&&new Set(views).size===views.length
+    &&views.every(view=>(CAD_VIEW_NAMES as readonly unknown[]).includes(view))?parseDesignHandoff({...handoff,views:[...views]}):null
+   if(!next)return {status:'invalid',saved:false,reason:'invalid_views',request_id:request?.id??null,allowed:[...CAD_VIEW_NAMES],maximum:CAD_MAX_VIEWS}
+   handoff=next
+  }
   raw.handoff=structuredClone(handoff)
   delete raw.requirement_changes
+  delete raw.views
   const dependencies=createDrawingDependencies(renewingConstruction?undefined:request?.payload.dependencies)
   const makeLookup=()=>{
    const source=opts.makeLookup()
