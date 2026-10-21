@@ -138,6 +138,10 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    const saved=await opts.requestStore.save(savedRequest.id,savedRequest.revision,'saved',savedRequest.payload)
    savedRequest={id:saved.id,revision:saved.revision,payload:savedRequest.payload}
   }
+  // The saved receipt now owns the files. Keeping the candidate kept ~0.7 MB
+  // in every later checkpoint and left it offered as an unsaved drawing.
+  // The accepted review stays for quality/metrics.
+  candidate=null
  },pending:()=>opts.requestStore?.list()??Promise.resolve([]),get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:opts.unlimitedWork?Infinity:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)

@@ -219,6 +219,8 @@ test('reviewed CAD checkpoint restores candidate, provenance and exact save iden
   await next.markSaved()
   assert.equal(writes.length,beforeWrites+1)
   assert.deepEqual(writes.at(-1),{id:saved.id,expected:saved.revision,status:'saved',payload:saved.payload})
+  // The receipt owns the files now: no unsaved candidate stays offered or checkpointed.
+  assert.equal(next.candidate,null);assert.equal(next.exportState().candidate,null);assert.notEqual(next.quality,null)
   assert.equal(models,1);assert.equal(renders,1)
   const again=make();again.restoreState(roundtrip(next.exportState()))
   assert.equal(again.exportState().savedRequest?.revision,row!.revision)
