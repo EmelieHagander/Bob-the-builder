@@ -1,7 +1,10 @@
 /** D publication: immutable role/work contracts, preserving unrelated live
  * definitions, model settings/prices and all earlier pinned manifests. */
 import {readFileSync,writeFileSync} from 'node:fs'
-import {CONSTRUCTION_SAVE_TOOL} from '../supabase/functions/_shared/construction-draft.ts'
+import {CONSTRUCTION_SAVE_TOOL as CURRENT_CONSTRUCTION_SAVE_TOOL} from '../supabase/functions/_shared/construction-draft.ts'
+import {withLegacyCadViews} from '../supabase/functions/_shared/cad-adapter.ts'
+// This publication predates the 2026-10-21 view contract.
+const CONSTRUCTION_SAVE_TOOL=withLegacyCadViews(CURRENT_CONSTRUCTION_SAVE_TOOL)
 import {CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL} from '../supabase/functions/_shared/construction-consequences.ts'
 
 const added=[CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL].map(t=>t.function)

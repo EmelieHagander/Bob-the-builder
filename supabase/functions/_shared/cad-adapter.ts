@@ -15,6 +15,23 @@ export const CAD_VIEW_NAMES=['front','back','left','right','top','bottom','isome
 export type CadView=typeof CAD_VIEW_NAMES[number]
 export const CAD_MAX_VIEWS=6
 export const CAD_VIEWS_DESCRIPTION="Pick views that show every requirement where it is: a feature on one side (for example a left gable, a back panel or an underside) needs that side's view. front from -Y, back +Y, left -X, right +X, top +Z, bottom -Z; isometric from front-right-top, isometric_front_left, isometric_back_left, isometric_back_right from those upper corners."
+/** The view contract before 2026-10-21. Historical catalog publications were
+ * generated from it and must stay byte-reproducible by their builders. */
+export const CAD_VIEW_NAMES_V1=['front','right','top','isometric'] as const
+export function withLegacyCadViews<T>(value:T):T{
+ const walk=(node:any):any=>{
+  if(Array.isArray(node))return node.map(walk)
+  if(!node||typeof node!=='object')return node
+  const out:any=Object.fromEntries(Object.entries(node).map(([k,v])=>[k,walk(v)]))
+  if(out.items&&typeof out.items==='object'&&Array.isArray(out.items.enum)&&out.items.enum.join()===CAD_VIEW_NAMES.join()){
+   out.items={...out.items,enum:[...CAD_VIEW_NAMES_V1]}
+   if(out.maxItems===CAD_MAX_VIEWS)out.maxItems=4
+   if(out.description===CAD_VIEWS_DESCRIPTION)delete out.description
+  }
+  return out
+ }
+ return walk(value)
+}
 export type CadDrawingSource={artifact_id:string;revision:number}
 export type CadClearance={id:string;first_id:string;second_id:string;min_mm:number}
 export type CadMotion={id:string;moving_ids:string[];obstacle_ids:string[];delta:{x:number;y:number;z:number}}
