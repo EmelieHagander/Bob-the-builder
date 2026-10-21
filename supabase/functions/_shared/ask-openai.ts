@@ -567,6 +567,8 @@ export async function answerWithOpenAi(opts: {
     }) : undefined
 
   const cadAssistant = createCadAssistant({ unlimitedWork,
+    // Same fixed grounding read order as Bob's own call: parallel reads can swap journal positions on resume.
+    groundingReadOrder: execution.groundingReadOrderVersion === 1 ? 'serial' : 'parallel',
     allowSourceRenewal:execution.constructionReplayVersion===2,
     aiCatalog,calculator,
     ...(contextStrategy ? { registerContextSurface: registerSpecialistContextSurface } : {}),
