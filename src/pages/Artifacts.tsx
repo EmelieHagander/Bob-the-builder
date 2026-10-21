@@ -463,9 +463,11 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
         filterDrawings(area, event.target.value === 'archived')
       }}><option value="active">Active</option><option value="archived">Archived</option></select></Field></div>
 
-      <h2>Drawings</h2>
-      {!data.drawings.items.length && <p className="card fact-card">No {archived ? 'archived' : 'active'} drawings in this selection.</p>}
-      <div className="fact-list artifact-list">{data.drawings.items.map(item => {
+      {(() => {
+        // Construction sources share titles with the drawings rendered from them; list them apart.
+        const drawings = data.drawings.items.filter(item => !item.isConstruction)
+        const constructions = data.drawings.items.filter(item => item.isConstruction)
+        const card = (item: typeof data.drawings.items[number]) => {
         const comparable = (item.areaId ?? null) === target.requestedAreaId
         const current = comparable && target.decision.revision === item.targetRevision
           && target.solution?.id === item.solutionId
@@ -474,7 +476,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
         const itemArea = areas.find(candidate => candidate.id === item.areaId)
         return <article className="card fact-card" aria-label={item.title} key={item.id}>
           <h3>{item.title}</h3>
-          <div className="foundation-actions"><span className="image-purpose">{KIND_LABELS[item.kind]}</span>
+          <div className="foundation-actions"><span className="image-purpose">{item.isConstruction ? 'Construction' : KIND_LABELS[item.kind]}</span>
             <span className="image-purpose">{STATUS_LABELS[item.status]}</span>
             {itemArea && <span className="image-purpose">{itemArea.name}</span>}
             {item.generator && <span className="image-purpose">Generated</span>}
@@ -489,7 +491,7 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
           {comparable && !current && <p className="solution-attention">The selected target for this scope changed after this drawing version. Review before building from it.</p>}
           {!comparable && itemArea && <p className="foundation-hint">Open {itemArea.name} scope to compare this version with that Area's current target.</p>}
           <div className="foundation-actions">
-            <button className="btn btn-primary" data-drawing-return={`library:${item.id}`} onClick={() => openDrawing(drawingUrl({ id: item.id, revision: item.revision, area_id: item.areaId }), `library:${item.id}`)}>Open drawing</button>
+            <button className="btn btn-primary" data-drawing-return={`library:${item.id}`} onClick={() => openDrawing(drawingUrl({ id: item.id, revision: item.revision, area_id: item.areaId }), `library:${item.id}`)}>{item.isConstruction ? 'Open construction' : 'Open drawing'}</button>
             <details id={`drawing-management-${item.id}`} className="drawing-management"><summary>Manage drawing</summary><div className="foundation-actions">
             {!item.archived && !item.hasRoomLayout && !item.hasMultifloorPlan && !item.hasStairStudy && canCreate && editableInScope && (item.generator
               ? <button className="btn" onClick={() => setDialog({ kind: 'regenerate', record: item })}>Regenerate</button>
@@ -499,7 +501,18 @@ function ConnectedArtifacts({ projectId }: { projectId: string }) {
             </div></details>
           </div>
         </article>
-      })}</div>
+        }
+        return <>
+          <h2>Drawings</h2>
+          {!drawings.length && <p className="card fact-card">No {archived ? 'archived' : 'active'} drawings in this selection.</p>}
+          <div className="fact-list artifact-list">{drawings.map(card)}</div>
+          {constructions.length > 0 && <>
+            <h2>Constructions</h2>
+            <p className="foundation-hint">Saved construction sources: parts, joints and materials. Bob renders the drawings above from them.</p>
+            <div className="fact-list artifact-list">{constructions.map(card)}</div>
+          </>}
+        </>
+      })()}
       <Pager offset={offset} size={24} more={data.drawings.hasMore} move={next => filterDrawings(area, archived, next)} />
       <details id="drawing-target" className="card fact-card drawing-target" open={!target.solution}><summary>Drawing target</summary>
         <h2>{selectedArea ? `Drawing target · ${selectedArea.name}` : 'Project drawing target'}</h2>

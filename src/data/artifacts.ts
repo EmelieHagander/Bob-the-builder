@@ -71,6 +71,8 @@ export interface ProjectArtifact {
   hasStairStudy?: boolean
   hasMultifloorPlan?: boolean
   hasRoomLayout?: boolean
+  /** A saved construction source (parts, joints, materials) that drawings are rendered from, not a drawing itself. */
+  isConstruction?: boolean
 }
 
 export interface CadDrawing { recipe: Record<string, any>; manifest: Record<string, any>; files: Record<string, string>; step_id: string | null; source_artifact_id: string | null; source_revision: number | null; source_changed?: boolean }
@@ -300,7 +302,12 @@ export function createArtifacts(
       const states = filter ? checked(await db.from('artifact_source_status').select('artifact_id,revision,source_state,source_reasons')
         .eq('project_id', projectId).or(filter).limit(24)) as Row[] : []
       guard()
+      // Exact listed versions that are construction sources, not rendered drawings.
+      const constructions = filter ? checked(await db.from('artifact_construction_revisions').select('artifact_id,artifact_revision')
+        .eq('project_id', projectId).or(page.map(row => `and(artifact_id.eq.${row.id},artifact_revision.eq.${row.revision})`).join(',')).limit(24)) as Row[] : []
+      guard()
       return { items: page.map(r => ({ ...artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_id === r.id && p.artifact_revision === r.revision)?.recipe }),
+        isConstruction: constructions.some(c => c.artifact_id === r.id && c.artifact_revision === r.revision),
         sourceStatus: states.find(state => state.artifact_id === r.id && state.revision === r.revision) as DrawingSourceStatus | undefined
           ?? { source_state: 'unavailable' as const, source_reasons: ['source_unavailable'] },
       })), hasMore: rows.length > 24 }
