@@ -12,8 +12,9 @@ test('readiness hosted proof stays wired into the foundation runner and release 
   const ci = await source('.github/workflows/ci.yml')
   assert(ci.includes('node --check scripts/check-live-work-plan.mjs'))
   const live = await source('.github/workflows/live-foundations.yml')
-  assert(live.includes('- scripts/check-live-work-plan.mjs'))
-  assert(live.includes('- supabase/migrations/20260915073000_executable_work_readiness.sql'))
+  // Paid/live checks run only on direct request (2026-10-21): no push trigger.
+  assert.match(live, /^on:\n  workflow_dispatch:/m)
+  assert.doesNotMatch(live, /^  push:/m)
   assert(live.includes('run: node scripts/check-live-foundations.mjs'))
 })
 

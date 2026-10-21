@@ -174,3 +174,23 @@ test('delivery metrics restore cumulative observations and the original start ti
   assert.throws(() => restored.restoreState({ ...saved, turnId: 'different' }), /metrics_checkpoint_invalid/)
   assert.deepEqual(restored.exportState(), saved)
 })
+
+test('a finished specialist chain leaves no pixels in checkpoint state; Bob keeps his resumable head', async () => {
+  const pixels = 'data:image/png;base64,' + 'A'.repeat(200_000)
+  const reviewer: OpenAIServiceOptions = { ...request, aiFunction: 'cad-reviewer', functionName: 'cad-reviewer', catalogRoleKey: 'cad-reviewer', tools: undefined,
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Review this candidate.' }, { type: 'image_url', image_url: { url: pixels, detail: 'high' } }] }] }
+  let n = 0
+  const replies: OpenAIServiceResponse[] = []
+  const continuation = createBobContextContinuation({ version: 1, aiCatalog: catalog(), callModel: async () => replies[n++] })
+  // A specialist mid-loop (tool calls pending) must stay resumable.
+  replies.push(result('s1'), { ...result('s2', []), toolCalls: undefined, outputPhase: 'final' } as OpenAIServiceResponse)
+  await continuation.call(reviewer)
+  assert.deepEqual(disk(continuation.exportState()).chains.map(([id]) => id), ['s1'])
+  await continuation.call({ ...reviewer, previousResponseId: 's1', messages: [output('s1')] })
+  assert.deepEqual(disk(continuation.exportState()).chains, [])
+  assert.ok(JSON.stringify(continuation.exportState()).length < 1000)
+  // Bob's final message can still be nudged or completion-checked.
+  replies.push({ ...result('b1', []), toolCalls: undefined, outputPhase: 'final' } as OpenAIServiceResponse)
+  await continuation.call(request)
+  assert.deepEqual(disk(continuation.exportState()).chains.map(([id]) => id), ['b1'])
+})

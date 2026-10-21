@@ -346,3 +346,25 @@ test('an unchanged request whose last attempt failed technically renders again i
  assert.equal(again.retry_suppressed,undefined,JSON.stringify(again))
  assert.equal(again.status,'ready');assert.equal(f.counts().renders,before.renders+1)
 })
+test('a saved request can be redrawn from other sides; null keeps its views and requirements stay as saved',async()=>{
+ const f=runtime();let saved:any=null,writes=0
+ const store={load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{
+  writes++;saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)};return structuredClone(saved)
+ }}
+ await f.assistant({requestStore:store,render:async()=>{throw Error('offline')}}).consult({...request,construction_revision:1})
+ const id=saved.id,requirements=structuredClone(saved.payload.brief.handoff.requirements),before=writes
+ for(const views of [[],['front','front'],['front','sideways'],['front','back','left','right','top','bottom','isometric'],'left']){
+  const result=await f.assistant({requestStore:store}).consult({...request,request_id:id,handoff:null,requirement_changes:[],construction_revision:1,views})
+  assert.equal(result.reason,'invalid_views',JSON.stringify(views));assert.equal(writes,before)
+ }
+ const views=['front','back','left','isometric_back_left']
+ const a=f.assistant({requestStore:store})
+ const result=await a.consult({...request,request_id:id,handoff:null,requirement_changes:[],construction_revision:1,views})
+ assert.equal(result.status,'ready',JSON.stringify(result))
+ assert.deepEqual(saved.payload.brief.handoff.views,views);assert.deepEqual(saved.payload.brief.handoff.requirements,requirements)
+ assert.equal('views' in saved.payload.brief,false)
+ assert.deepEqual(a.candidate!.packet.recipe.views,views)
+ const again=f.assistant({requestStore:store})
+ assert.equal((await again.consult({...request,request_id:id,handoff:null,requirement_changes:[],construction_revision:1,views:null})).status,'ready')
+ assert.deepEqual(again.candidate!.packet.recipe.views,views)
+})

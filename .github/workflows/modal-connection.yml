@@ -7,9 +7,6 @@ on:
         default: github-pages
         required: true
         type: environment
-  push:
-    branches: [main]
-    paths: ['.github/workflows/modal-connection.yml']
 permissions:
   contents: read
 jobs:

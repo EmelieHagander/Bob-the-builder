@@ -421,6 +421,15 @@ for(const migration of migrations){
    const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-all-views-v1'};versions.set(key,versions.get(key)!+1)
   }
  }
+ const resumeViews=source.match(/\$cad_resume_views_spec\$([\s\S]+?)\$cad_resume_views_spec\$/)
+ if(resumeViews){
+  const spec=JSON.parse(resumeViews[1]),row=seed.find(row=>row.key===spec.key)
+  if(row&&!('views' in row.definition.parameters.properties)){
+   row.definition.parameters.properties.views=structuredClone(spec.property)
+   row.definition.parameters.required=[...(row.definition.parameters.required??[]),'views']
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-resume-views-v1'};versions.set(row.key,versions.get(row.key)!+1)
+  }
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

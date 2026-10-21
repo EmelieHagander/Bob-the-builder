@@ -15,7 +15,7 @@ import { fingerprint, rethrowContinuation, stableJsonValue } from './bob-job-jou
 import type { OpenAIServiceOptions, OpenAIServiceResponse } from './openai-service.ts'
 import type { AiCatalogSession, AiVariables } from './ai-catalog.ts'
 import { type createProjectLookup } from './project-lookup.ts'
-import { cadPreviewKeys, parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
+import { CAD_MAX_VIEWS, CAD_VIEW_NAMES, cadPreviewKeys, parseCadAssemblyRequest, type CadAssemblyRequest, type CadDrawingSource } from './cad-adapter.ts'
 import type { MaterialCatalogReader } from './material-catalog.ts'
 import type { ProjectContext } from './project-context/dispatcher.ts'
 import { CONTEXT_LIMITS } from './project-context/dispatcher.ts'
@@ -29,9 +29,19 @@ const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.lengt
 const uuid=(v:unknown)=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
 const nullable={type:['string','null']}
 function tool(name:string,description:string,properties:Record<string,unknown>){return {type:'function' as const,function:{name,description,parameters:{type:'object',additionalProperties:false,properties,required:Object.keys(properties)}}}}
+/** Resume-only view change (publication cad-resume-views-v1). Historical
+ * publications predate it; withoutResumeViews reproduces them. */
+export const RESUME_VIEWS_SCHEMA={type:['array','null'],items:{type:'string',enum:[...CAD_VIEW_NAMES]},minItems:1,maxItems:CAD_MAX_VIEWS,uniqueItems:true,
+ description:'Null keeps the views saved on the request. To show other sides of a saved request, pass the complete new view list (1-6); its requirements stay as saved. Pick views that show every requirement where it is.'}
+export function withoutResumeViews<T>(value:T):T{
+ const copy:any=structuredClone(value),parameters=copy?.function?.parameters??copy?.parameters
+ if(parameters?.properties?.views===undefined)return copy
+ delete parameters.properties.views;parameters.required=parameters.required.filter((key:string)=>key!=='views')
+ return copy
+}
 export const DESIGN_CAD_TOOL=tool('design_project_cad',
   'Render a requested drawing of one exact saved, checked construction revision. Every project drawing needs its own construction source with stable part IDs, dimensions, placements, pinned catalog materials and declared joints before CAD. Read or save the construction, compare it with the owner requirements and original reference images, run check_construction_draft and correct that same construction before calling this tool. For an older drawing, use transition_legacy_drawing to retain its geometry and identities and establish the missing material/joint evidence. Pass the saved construction Artifact ID, or its already linked drawing ID, and the exact receipt revision. CAD reuses the saved geometry; it cannot design a replacement assembly. Reference pixels and the original requirements accompany independent candidate review. Reuse the same request_id on retry. Returns a checked candidate that still needs save_cad_design.',
-  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'}})
+  {request_id:{...nullable,description:'Use the saved request ID only when the current owner message requests or continues a drawing deliverable. A message about the same object, a correction, an image description, or a project-text update does not by itself request CAD. Complete a text-only request through its own read/write tools and finish the reply without resuming the drawing. When a drawing is requested, reuse this ID, its saved requirements and a source-current draft; no extra confirmation is needed. Null only for a new drawing request. With an ID, pass handoff:null and requirement_changes:[] to preserve ALL requirements; put explicit requirement corrections in requirement_changes.'},brief:{type:'string'},handoff:{anyOf:[HANDOFF_INPUT_SCHEMA,{type:'null'}],description:'New request only: transfer owner requirements without IDs; the server creates and persists their identities. Map coordinates and views, keep unknown directions null and cite exact source refs. Resume with null: the server reads the saved handoff, including earlier corrections. Use requirement_changes only for explicit additions or changes.'},requirement_changes:REQUIREMENT_CHANGES_SCHEMA,area_id:nullable,component_id:nullable,step_id:{...nullable,description:'Current work Step this drawing supports; read the plan and pass its exact ID when relevant. Null for a project-wide drawing. Planning is a phase.'},artifact_id:{type:'string',description:'Exact saved construction Artifact ID, or a drawing already linked to that construction. A missing construction must be saved and checked first. The server renders its geometry verbatim into a linked drawing.'},construction_revision:{type:'integer',minimum:1,maximum:999999999,description:'Copy the exact saved/read construction revision. On retry retain the pinned version. To renew an existing request after revising and checking that SAME construction, explicitly pass its newer current receipt revision with the same request_id and handoff:null. The server preserves requirements, discards obsolete candidates/retries and checks readiness and sources again. It never follows a newer head implicitly or changes construction identity.'},views:RESUME_VIEWS_SCHEMA})
 export const SAVE_CAD_TOOL=tool('save_cad_design','Save the exact independently reviewed rendering of its saved, checked construction revision from this turn, including the construction source pin and plan Step link. Source, material and target revisions are checked again at publication. This concept drawing is not measured truth or structural certification.',
   {request_quote:{type:'string'}})
 const READ_REQUESTS_TOOL=tool('read_drawing_requests','Read minimal project drawing status and exact saved Artifact references. No private chat or drafts. Use after_id for the next page.',{request_id:{type:['string','null']},after_id:{type:['string','null']}})
@@ -132,7 +142,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
-  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
+  if(!object(raw)||Object.keys(raw).filter(k=>k!=='request_id'&&k!=='requirement_changes'&&k!=='construction_revision'&&k!=='views').sort().join(',')!=='area_id,artifact_id,brief,component_id,handoff,step_id'||!text(raw.brief,6000)
     ||[raw.area_id,raw.component_id,raw.step_id,raw.artifact_id].some(v=>v!==null&&!text(v,200)))return {status:'invalid',saved:false}
   if(raw.request_id!=null&&!uuid(raw.request_id))return {status:'invalid',saved:false}
   raw=structuredClone(raw)
@@ -179,8 +189,17 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    required:request?'Resume with handoff:null and requirement_changes:[]; changes must copy saved requirement IDs, while new requirements use requirement_id:null.':'Provide a structured handoff without requirement IDs; the server allocates them.',
    ...(earlier?{handoff:earlier}:{}),maximum:24}
   let handoff=prepared.handoff
+  // Views are presentation, not owner requirements: a saved request may be
+  // redrawn from other sides. Null keeps the saved list.
+  if(raw.views!=null){
+   const views=raw.views,next=Array.isArray(views)&&views.length>=1&&views.length<=CAD_MAX_VIEWS&&new Set(views).size===views.length
+    &&views.every(view=>(CAD_VIEW_NAMES as readonly unknown[]).includes(view))?parseDesignHandoff({...handoff,views:[...views]}):null
+   if(!next)return {status:'invalid',saved:false,reason:'invalid_views',request_id:request?.id??null,allowed:[...CAD_VIEW_NAMES],maximum:CAD_MAX_VIEWS}
+   handoff=next
+  }
   raw.handoff=structuredClone(handoff)
   delete raw.requirement_changes
+  delete raw.views
   const dependencies=createDrawingDependencies(renewingConstruction?undefined:request?.payload.dependencies)
   const makeLookup=()=>{
    const source=opts.makeLookup()

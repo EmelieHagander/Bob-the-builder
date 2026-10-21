@@ -10,13 +10,6 @@ on:
         default: disposable-fixtures-only
         options:
           - disposable-fixtures-only
-  # Installing this reviewed runner starts the requested recovery probe. Its
-  # pinned conversation checkpoint blocks later automatic paid repetitions.
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/live-construction-drawing.yml
-
 permissions:
   contents: read
 
