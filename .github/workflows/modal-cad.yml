@@ -2,12 +2,6 @@ name: Deploy CAD to Modal
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'cad-worker/**'
-      - '.github/workflows/modal-cad.yml'
-
 permissions:
   contents: read
 

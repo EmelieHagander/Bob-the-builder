@@ -46,7 +46,7 @@ context, execution and completed results before adding behavioural rules.
 - Mobile and on-site use are first-class. Preserve reachable controls, generous touch targets, readable states and the mobile navigation contract.
 - A file being uploaded or a migration being committed does not prove runtime consumption. Verify the browser/runtime path that the feature promises.
 - High-consequence AI output is a proposal/assessment unless the product contract explicitly says otherwise and provenance is preserved.
-- **CI stop:** run only the focused tests for the change. The full suite (`npm test`), CI workflows and live/paid model checks run only on the owner's direct request, never per PR or push.
+- **Nothing costs money without the owner's explicit OK.** No workflow, deploy, live check, model call or paid AI flow starts automatically or on an agent's own judgement; every GitHub workflow is manual-only. Run only focused local tests; the full suite (`npm test`) and CI run only on the owner's direct request.
 
 ## Steward routing
 
