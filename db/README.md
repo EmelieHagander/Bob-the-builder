@@ -1226,3 +1226,20 @@ on their next retry. `shared.site_command`, `shared.agent_asset_commit` and the
 **Evidence to collect after applying:** `job_not_claimed` lines stop in the
 Postgres logs, `pg_stat_database.xact_rollback` stops climbing, and the next
 live drawing run (`bob.execution_events`) reaches the CAD render.
+
+### Source assessment plan caching — 2026-10-21
+
+`read_construction_draft` spends almost all its time in the artifact source
+assessment. Its two innermost layers,
+`bob_private.artifact_source_assessment_before_physical` and
+`_before_parameters`, were `LANGUAGE sql` functions with `SET` clauses, which
+PostgreSQL cannot inline and therefore re-plans on every call: 150 ms planning
+against 58 ms execution for one bunk-bed revision. Planning is CPU on the
+shared instance and reached the 8 s authenticated statement timeout under
+load. `20261021150000_source_assessment_cached_plans.sql` recreates both from
+their installed bodies as plpgsql `RETURN QUERY` with
+`plan_cache_mode=force_generic_plan` (19 ms per call after the first on a
+pooled backend). Signature, result, invoker security, settings and grants are
+unchanged; a rollback-only comparison over every hosted artifact revision was
+identical. Rule: a hot read function with `SET` clauses should be plpgsql, not
+`LANGUAGE sql`.
