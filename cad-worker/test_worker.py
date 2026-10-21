@@ -1,6 +1,6 @@
 import tempfile, unittest
 from pathlib import Path
-from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks, _render_preview
+from bob_cad.worker import CadContractError, render_assembly, validate_request, _shape, _checks, _render_preview, _camera, VIEWS, MAX_VIEWS
 from PIL import Image
 from unittest.mock import patch
 import math, hashlib, struct
@@ -48,6 +48,32 @@ class CadWorkerTest(unittest.TestCase):
                     output=Path('test-results/cad');output.mkdir(parents=True,exist_ok=True)
                     for key in keys: shutil.copy(Path(tmp,key+'.png'),output/f'{count}-{key}.png')
                     shutil.copy(Path(tmp,'front.svg'),output/f'{count}-front.svg')
+
+    def test_every_side_and_upper_corner_can_be_drawn(self):
+        # 2026-10-21: a left-gable requirement was invisible in front/right/top/isometric.
+        self.assertEqual(set(VIEWS),{"front","back","left","right","top","bottom","isometric","isometric_front_left","isometric_back_left","isometric_back_right"})
+        center,d=(10,20,30),100
+        expected={"front":(0,-1,0),"back":(0,1,0),"left":(-1,0,0),"right":(1,0,0),"top":(0,0,1),"bottom":(0,0,-1),
+                  "isometric":(1,-1,1),"isometric_front_left":(-1,-1,1),"isometric_back_left":(-1,1,1),"isometric_back_right":(1,1,1)}
+        for view,direction in expected.items():
+            origin,up=_camera(view,center,d)
+            self.assertEqual(tuple((o-c)/d for o,c in zip(origin,center)),direction,view)
+            self.assertNotEqual(tuple(abs(u) for u in up),tuple(abs(x) for x in direction),view)
+        r=fixture();r["views"]=["front","back","left","right","top","bottom"];self.assertEqual(validate_request(r)["views"],r["views"])
+        r=fixture();r["views"]=list(VIEWS)[:MAX_VIEWS+1]
+        with self.assertRaises(CadContractError): validate_request(r)
+        r=fixture();r["views"]=["side"]
+        with self.assertRaises(CadContractError): validate_request(r)
+
+    def test_left_back_and_bottom_views_render_dimensioned_sheets(self):
+        r=fixture();r["views"]=["left","back","bottom","isometric_back_left"]
+        with tempfile.TemporaryDirectory() as tmp:
+            result=render_assembly(r,tmp)
+            self.assertEqual(set(result['exports']),{"step","left","back","bottom","isometric_back_left"})
+            for view,axes in {"left":[1,2],"back":[0,2],"bottom":[0,1],"isometric_back_left":[]}.items():
+                notes=result['annotations']['views'][view]
+                self.assertEqual(notes['dimensions'],[{'axis':'xyz'[i],'mm':result['bounding_box_mm']['size'][i]} for i in axes])
+                self.assertEqual(hashlib.sha256(Path(tmp,view+'.png').read_bytes()).hexdigest(),result['previews'][view]['sha256'])
 
     def test_annotated_views_identify_exact_instances_and_dimensions_before_hashing(self):
         import xml.etree.ElementTree as ET

@@ -398,6 +398,29 @@ for(const migration of migrations){
   box.definition.catalog.find((p:any)=>p.name==='design_project_cad').how_to+='\n\n'+patch.manual
   for(const item of [row,box]){const{seed_version,source_revision,...rest}=item.metadata;item.metadata={...rest,publication:'cad-source-renewal-v1'};versions.set(item.key,versions.get(item.key)!+1)}
  }
+ // Same recursive rewrite as pg_temp.cad_all_views_walk in the migration.
+ const allViews=source.match(/\$cad_all_views_spec\$([\s\S]+?)\$cad_all_views_spec\$/)
+ if(allViews){
+  const spec=JSON.parse(allViews[1]),oldList=JSON.stringify(spec.old),prose=spec.old.join(','),next=spec.views.join(',')
+  const walk=(node:any):any=>{
+   if(Array.isArray(node))return node.map(walk)
+   if(typeof node==='string')return node.replaceAll(prose,next)
+   if(!node||typeof node!=='object')return node
+   const out:any=Object.fromEntries(Object.entries(node).map(([k,v])=>[k,walk(v)]))
+   if(out.items&&typeof out.items==='object'&&JSON.stringify(out.items.enum)===oldList){
+    out.items={...out.items,enum:[...spec.views]}
+    if('maxItems' in out)out.maxItems=spec.max
+    if(!('description' in out))out.description=spec.description
+   }
+   return out
+  }
+  for(const key of spec.keys){
+   const row=seed.find(row=>row.key===key)
+   if(!row||JSON.stringify(row.definition).includes('isometric_back_right'))continue
+   row.definition=walk(row.definition)
+   const{seed_version,source_revision,...rest}=row.metadata??{};row.metadata={...rest,publication:'cad-all-views-v1'};versions.set(key,versions.get(key)!+1)
+  }
+ }
 }
 // The SQL migration resolves preserved image settings at insertion; tests
 // supply that database-owned binding explicitly.

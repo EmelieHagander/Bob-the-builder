@@ -1,10 +1,11 @@
+import { CAD_MAX_VIEWS, CAD_VIEW_NAMES, CAD_VIEWS_DESCRIPTION } from './cad-adapter.ts'
 import type { CadCandidate } from './cad-assistant.ts'
 import { fingerprint } from './bob-job-journal.ts'
 
 const string = { type: 'string', minLength: 1, maxLength: 2000 }
 const nullable = { type: ['string', 'null'], maxLength: 500 }
 const record = <T extends Record<string, unknown>>(properties: T) => ({ type: 'object', additionalProperties: false, properties, required: Object.keys(properties) })
-export const CAD_VIEWS = ['front', 'right', 'top', 'isometric'] as const
+export const CAD_VIEWS = CAD_VIEW_NAMES
 export interface DesignHandoff {
   deliverable: string
   requirements: { id: string; requirement: string; basis: 'user_request' | 'project_record' | 'working_assumption'; source_ref: string | null }[]
@@ -19,7 +20,7 @@ export const DESIGN_HANDOFF_SCHEMA = record({
     basis: { type: 'string', enum: ['user_request', 'project_record', 'working_assumption'] }, source_ref: nullable,
   }) },
   coordinates: record({ origin: nullable, positive_x: nullable, positive_y: nullable, positive_z: nullable }),
-  views: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: { type: 'string', enum: [...CAD_VIEWS] } },
+  views: { type: 'array', minItems: 1, maxItems: CAD_MAX_VIEWS, uniqueItems: true, description: CAD_VIEWS_DESCRIPTION, items: { type: 'string', enum: [...CAD_VIEWS] } },
   unresolved: { type: 'array', maxItems: 20, items: string },
 })
 const exact = (v: any, keys: string[]) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === keys.sort().join(',')

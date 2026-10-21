@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {createCadAdapter,parseCadAssemblyRequest,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
+import {createCadAdapter,parseCadAssemblyRequest,CAD_VIEW_NAMES,CAD_MAX_VIEWS,type CadAssemblyRequest} from '../supabase/functions/_shared/cad-adapter.ts'
 import {cadParts,cadCutListCsv} from '../src/data/cadParts.ts'
 const req=():CadAssemblyRequest=>({contract_version:1,units:'mm',assembly_id:'assembly.test',
   definitions:[{id:'post',primitive:'box',material_ref:'mat.45x70',x_mm:45,y_mm:70,z_mm:1600},{id:'tube',primitive:'tube',material_ref:'mat.pvc',outside_diameter_mm:32,wall_thickness_mm:2,length_mm:500}],
@@ -59,4 +59,14 @@ test('requested geometry checks cannot disappear or claim a different clearance'
  assert.equal((await createCadAdapter(async q=>({...result(q),checks})).render(r)).status,'unavailable')
  checks.clearances[0].status='insufficient'
  assert.equal((await createCadAdapter(async q=>({...result(q),checks})).render(r)).status,'ok')
+})
+
+test('every side and upper corner is a view; at most six per drawing',()=>{
+ assert.deepEqual([...CAD_VIEW_NAMES],['front','back','left','right','top','bottom','isometric','isometric_front_left','isometric_back_left','isometric_back_right'])
+ assert.equal(CAD_MAX_VIEWS,6)
+ const six:any={...req(),views:['front','back','left','right','top','bottom']}
+ assert.deepEqual(parseCadAssemblyRequest(six)?.views,six.views)
+ assert.equal(parseCadAssemblyRequest({...req(),views:[...CAD_VIEW_NAMES].slice(0,7)} as any),null)
+ assert.equal(parseCadAssemblyRequest({...req(),views:['side']} as any),null)
+ assert.equal(parseCadAssemblyRequest({...req(),views:['left','left']} as any),null)
 })

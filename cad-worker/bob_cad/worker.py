@@ -79,8 +79,7 @@ def validate_request(raw:Any)->dict[str,Any]:
         if not isinstance(i,dict) or set(i)!={"id","definition_id","placement"} or not isinstance(i["id"],str) or not ID.fullmatch(i["id"]) or i["id"] in seen or not isinstance(i["definition_id"],str) or i["definition_id"] not in ids: raise CadContractError("instance")
         seen.add(i["id"]); p=i["placement"]
         _placement(p)
-    allowed={"front","right","top","isometric"}
-    if not isinstance(views,list) or not 1<=len(views)<=4 or len(set(views))!=len(views) or any(v not in allowed for v in views): raise CadContractError("views")
+    if not isinstance(views,list) or not 1<=len(views)<=MAX_VIEWS or len(set(views))!=len(views) or any(v not in VIEWS for v in views): raise CadContractError("views")
     check_ids=set()
     for group in ("clearances","motions"):
         checks=raw.get(group,[])
@@ -138,9 +137,19 @@ def _render_preview(path:Path,preview:Path,page=1):
         dark=sum(image.convert('L').histogram()[:200])
         if dark<16: raise CadContractError('preview_unreadable')
 
+# Every side of an assembly can be drawn. Orthographic views look along one
+# axis (front from -Y, back from +Y, left from -X, right from +X, top from +Z,
+# bottom from -Z); the four isometric views look from each upper corner.
+# A requirement on one side is only verifiable in a view of that side.
+VIEWS=("front","back","left","right","top","bottom","isometric","isometric_front_left","isometric_back_left","isometric_back_right")
+MAX_VIEWS=6
+
 def _camera(view,center,d):
     x,y,z=center
-    return {"front":((x,y-d,z),(0,0,1)),"right":((x+d,y,z),(0,0,1)),"top":((x,y,z+d),(0,1,0)),"isometric":((x+d,y-d,z+d),(0,0,1))}[view]
+    return {"front":((x,y-d,z),(0,0,1)),"back":((x,y+d,z),(0,0,1)),"left":((x-d,y,z),(0,0,1)),"right":((x+d,y,z),(0,0,1)),
+            "top":((x,y,z+d),(0,1,0)),"bottom":((x,y,z-d),(0,1,0)),
+            "isometric":((x+d,y-d,z+d),(0,0,1)),"isometric_front_left":((x-d,y-d,z+d),(0,0,1)),
+            "isometric_back_left":((x-d,y+d,z+d),(0,0,1)),"isometric_back_right":((x+d,y+d,z+d),(0,0,1))}[view]
 
 def _overlap(a,b):
     return all(min(a["max"][k],b["max"][k])-max(a["min"][k],b["min"][k])>1e-6 for k in range(3))
