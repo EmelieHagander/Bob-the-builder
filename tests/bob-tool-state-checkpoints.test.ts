@@ -207,7 +207,10 @@ test('reviewed CAD checkpoint restores candidate, provenance and exact save iden
   const state=roundtrip(first.exportState()),next=make(),beforeWrites=writes.length
   next.restoreState(state)
   assert.deepEqual(next.exportState(),state)
-  assert.deepEqual(next.candidate,first.candidate);assert.deepEqual(next.quality,first.quality)
+  // Preview pixels never enter checkpoint state; everything else restores exactly.
+  assert.equal(next.candidate!.packet.previews,undefined);assert(first.candidate!.packet.previews)
+  const {previews:_pixels,...packetWithoutPixels}=first.candidate!.packet
+  assert.deepEqual(next.candidate,{...first.candidate!,packet:packetWithoutPixels});assert.deepEqual(next.quality,first.quality)
   assert.equal(next.lifecycleRemaining,11)
   state.candidate!.title='External mutation';state.sources.length=0
   assert.notEqual(next.candidate?.title,'External mutation')
