@@ -320,3 +320,29 @@ test('K3 SQL ties drawing receipt/readback to current construction, rejects chan
  assert.deepEqual((await read(owner,3)).construction_source,correctedBack.construction_source,'historical archive copies retain the exact typed source despite source drift')
  assert.equal((await pg.query('select count(*) n from bob.artifact_construction_drawings where drawing_artifact_id=$1',[saved.recordId])).rows[0].n,3)
 })
+test('turn checkpoints carry the reviewed candidate without its preview pixels, and a restored candidate still saves',async()=>{
+ const f=runtime(),a=f.assistant()
+ assert.equal((await a.consult(request)).status,'ready')
+ assert(a.candidate!.packet.previews&&Object.keys(a.candidate!.packet.previews).length>0,'review saw previews')
+ const state=JSON.parse(JSON.stringify(a.exportState()))
+ assert.equal(state.candidate.packet.previews,undefined)
+ assert.doesNotMatch(JSON.stringify(state),/iVBORw0KGgo/,'no PNG base64 in checkpoint state')
+ assert.deepEqual(state.candidate.packet.files,a.candidate!.packet.files)
+ assert.deepEqual(state.candidate.packet.manifest.preview_metadata,a.candidate!.packet.manifest.preview_metadata)
+ assert(state.acceptedReview)
+ const b=f.assistant();b.restoreState(state)
+ assert.deepEqual(b.candidate!.packet.files,a.candidate!.packet.files)
+ assert.equal(b.metrics.review_passed,true)
+})
+test('an unchanged request whose last attempt failed technically renders again instead of replaying the failure',async()=>{
+ const f=runtime();let saved:any=null
+ const store={load:async()=>structuredClone(saved),save:async(id:any,revision:any,status:any,payload:any)=>{
+  saved={id:id??'33333333-3333-4333-8333-333333333333',revision:revision+1,status,payload:structuredClone(payload)};return structuredClone(saved)
+ }}
+ const failed=await f.assistant({requestStore:store,runtimeVersion:async()=>'same-renderer',render:async()=>{throw Error('renderer unavailable')}}).consult(request)
+ assert.equal(failed.status,'unavailable');assert.equal(saved.payload.retry.outcome.status,'unavailable')
+ const before=f.counts()
+ const again=await f.assistant({requestStore:store,runtimeVersion:async()=>'same-renderer'}).consult({...request,request_id:saved.id})
+ assert.equal(again.retry_suppressed,undefined,JSON.stringify(again))
+ assert.equal(again.status,'ready');assert.equal(f.counts().renders,before.renders+1)
+})

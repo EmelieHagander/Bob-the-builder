@@ -72,7 +72,11 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
  const pieces=createCadPieces({unlimitedWork:opts.unlimitedWork,aiCatalog:opts.aiCatalog,projectId:opts.projectId,requestStore:opts.requestStore,ownerRequest:opts.ownerRequest??null,hasAccess:opts.hasAccess,checkConstruction:opts.checkConstruction})
  return {
- exportState():CadAssistantState{return JSON.parse(JSON.stringify({version:1,lifecycleUsed,used,candidate,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState()}))},
+ // Preview pixels serve only the review inside the same design call; they may
+ // never enter private state. Up to 700 kB per view and sheet, they made every
+ // turn checkpoint after a render several MB (checkpoint_unavailable 2026-10-20/21).
+ // Save uses packet.files and the manifest's preview hashes, never the pixels.
+ exportState():CadAssistantState{return JSON.parse(JSON.stringify({version:1,lifecycleUsed,used,candidate:candidate?{...candidate,packet:{...candidate.packet,previews:undefined}}:null,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState()}))},
  restoreState(state:CadAssistantState){
   if(state?.version!==1||![state.lifecycleUsed,state.used].every(n=>Number.isSafeInteger(n)&&n>=0)||typeof state.partial!=='boolean'
     ||!Array.isArray(state.requiredTools)||state.requiredTools.some(name=>typeof name!=='string')||!Array.isArray(state.sources)
@@ -491,7 +495,11 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
     // an unchanged rejected candidate still cannot render or buy another review.
     request=await opts.requestStore.save(request.id,request.revision,request.status,{...request.payload,owner_request:ownerRequest})
    }
-   if(request?.payload.retry?.fingerprint===currentFingerprint)return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
+   // Replaying a recorded stop saves a paid render/review only when the stop is
+   // a judgement on unchanged inputs (quality, missing data). A technical
+   // failure ('unavailable': timeouts, provider or engine errors) may be fixed
+   // since; replaying it kept fixed drawings failing on 2026-10-20.
+   if(request?.payload.retry?.fingerprint===currentFingerprint&&request.payload.retry.outcome?.status!=='unavailable')return {...request.payload.retry.outcome,request_id:request.id,retry_suppressed:true,
     next_action:catalogText("feedback.cad-assistant.next-action.d7dc5f3db6a2")}
    used++;metrics.consultations++
    await persist('collecting',{retry:undefined})
