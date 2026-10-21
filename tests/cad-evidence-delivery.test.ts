@@ -81,18 +81,18 @@ test('P0: one request reaches SQL, Step and project readback; failed review cann
         if (o.schemaName === 'bob_delivery_language') return { ...reply(null), success: false }
         const names = o.tools?.map(tool => tool.function.name) ?? []
         if (++calls === 1) { assert(names.includes('design_project_cad')); return reply(null, 'design_project_cad', request) }
-        if (calls === 2 || calls === 3) {
+        if (calls === 2) {
           assert(names.includes('save_cad_design'), 'complete evidence must unlock saving without another owner prompt')
-          // The third call retries the exact save inside the active claim.
           return reply(null, 'save_cad_design', {})
         }
+        // A saved receipt releases the candidate: no second save is offered.
+        if (calls === 3) assert(!names.includes('save_cad_design'), 'a saved drawing is not offered for saving again')
         return reply('Konceptritningen är sparad och kopplad till arbetssteget.')
       },
     })
     assert.deepEqual(good.errors, [], 'the synthetic packet must satisfy the real SQL contract')
-    assert.equal(good.writes, 2); assert.equal(good.renders, 1); assert.equal(good.reviews, 1)
-    assert.equal(good.receipts.length, 2)
-    assert.deepEqual(good.receipts[1], good.receipts[0], 'retry reuses the exact SQL receipt, not a second Artifact')
+    assert.equal(good.writes, 1); assert.equal(good.renders, 1); assert.equal(good.reviews, 1)
+    assert.equal(good.receipts.length, 1)
     const saved = good.receipts[0], id = saved.recordId
     assert.deepEqual(saved.record.step_ids, [step])
     const overview: any = (await query('select * from bob.current_drawing_overview where id=$1', [id])).rows[0]
