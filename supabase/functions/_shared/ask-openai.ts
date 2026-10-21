@@ -44,6 +44,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
 import { BOB_RESULT_WINDOW_TOKENS } from './bob-result-references.ts'
+import { readWithStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
 import { createBobConversationStore, type BobTurnClaim } from './bob-conversation.ts'
@@ -118,6 +119,16 @@ export async function answerWithOpenAi(opts: {
       const { data, error } = await client.rpc(name, args).abortSignal(signal)
       return { data, error }
     },0,signal)
+  }
+  const readWithRetry = (name: string, args: Record<string, unknown>, outer?: AbortSignal) =>
+    // Keep the recorded journal value { data, error } exactly as before.
+    readWithStatementRetry(name, signal => client.rpc(name, args).abortSignal(signal), outer).then(({ data, error }) => ({ data, error }))
+  // Journaled variant: the retry happens inside the recorded operation, so a
+  // resumed turn replays the final outcome and the journal input is unchanged.
+  const readRpc = async (name: string, args: Record<string, unknown>) => {
+    const { p_generation: _generation, ...stable } = args
+    const signal = AbortSignal.timeout(26000)
+    return memo('rpc:' + name, stable, () => readWithRetry(name, args, signal), 0, signal)
   }
   let metrics:ReturnType<typeof createExecutionMetrics>|undefined
   const mediaTransport = createMediaTransport(client, { ...opts, url, key })
@@ -483,15 +494,15 @@ export async function answerWithOpenAi(opts: {
     // Older execution identities retain their original journal call sequence.
     // CAD dispatch independently uses fresh reads below, before paid work.
     readCurrent:constructionCurrentReader(async(id:string)=>{
-      const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:null,p_after:null}).abortSignal(AbortSignal.timeout(12000))
+      const {data,error}=await readWithRetry('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:null,p_after:null})
       if(error)throw new Error('construction_read_unavailable');return data
     },journal,execution.constructionReplayVersion),
     read:async(id:string|null,revision:number|null,after:string|null)=>{
-      const {data,error}=await rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after},AbortSignal.timeout(12000))
+      const {data,error}=await readRpc('read_construction_draft',{p_project:opts.projectId,p_artifact:id,p_revision:revision,p_after:after})
       if(error)throw new Error('construction_read_unavailable');return data
     },
     readCatalog:async(id:string,revision:number)=>{
-      const {data,error}=await rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}},AbortSignal.timeout(12000))
+      const {data,error}=await readRpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id,revision,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
       if(error)throw new Error('construction_source_unavailable');return data
     },
     readSources:async (pins:ReturnType<typeof parameterSourcePins>)=>{
@@ -591,17 +602,28 @@ export async function answerWithOpenAi(opts: {
      },45000)
     },
     checkConstruction:async(id,revision,fresh)=>{
+     // One check reads the same exact revision twice (the check itself and
+     // the final pin comparison). Within one check those reads observe the
+     // same moment, so the second is served from the first.
+     const seen=new Map<string,Promise<unknown>>()
      const check=()=>checkedConstructionForDrawing({...constructionOptions,
       // New CAD dispatch must not consume an interactive historical check.
       readCurrent:undefined,
       // The actual operation reads fresh caller data. Recorded gate outcomes
       // reconstruct earlier replies; render/review dispatch guards bypass them.
-      read:async(artifact,rev,after)=>{
-        const {data,error}=await client.rpc('read_construction_draft',{p_project:opts.projectId,p_artifact:artifact,p_revision:rev,p_after:after}).abortSignal(AbortSignal.timeout(12000))
-        if(error)throw new Error('construction_read_unavailable');return data
+      read:(artifact,rev,after)=>{
+        const key=JSON.stringify([artifact,rev,after])
+        if(rev!==null&&!seen.has(key))seen.set(key,(async()=>{
+          const {data,error}=await readWithRetry('read_construction_draft',{p_project:opts.projectId,p_artifact:artifact,p_revision:rev,p_after:after})
+          if(error)throw new Error('construction_read_unavailable');return data
+        })())
+        if(rev!==null)return seen.get(key)!.then(value=>structuredClone(value))
+        return readWithRetry('read_construction_draft',{p_project:opts.projectId,p_artifact:artifact,p_revision:rev,p_after:after}).then(({data,error})=>{
+          if(error)throw new Error('construction_read_unavailable');return data
+        })
       },
       readCatalog:async(artifact,rev)=>{
-        const {data,error}=await client.rpc('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id:artifact,revision:rev,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}}).abortSignal(AbortSignal.timeout(12000))
+        const {data,error}=await readWithRetry('catalog_read',{p_project:opts.projectId,p_input:{action:'read',id:artifact,revision:rev,kind:null,query:null,after:null,profile_code:null,categories:[],properties:{}}})
         if(error)throw new Error('construction_source_unavailable');return data
       },
      },id,revision)
