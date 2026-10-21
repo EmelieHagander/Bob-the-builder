@@ -170,7 +170,7 @@ The immutable operation archive stores exact arguments and results once, plus
 small presentation copies prepared at observation time. It is private to the
 current turn/response head and restored from the checkpoint; it is not a public
 URL or permanent post-turn archive. Reopening pages the exact original, with a
-Unicode-codepoint cursor and a serialized envelope bounded to 2,000 tokens. It
+Unicode-codepoint cursor and a serialized envelope bounded to 3,000 tokens (2,000 before 2026-10-20). It
 never invokes the original project handler or repeats a write. Current dispatch
 authorization still applies, including history-only followups.
 
