@@ -46,6 +46,7 @@ context, execution and completed results before adding behavioural rules.
 - Mobile and on-site use are first-class. Preserve reachable controls, generous touch targets, readable states and the mobile navigation contract.
 - A file being uploaded or a migration being committed does not prove runtime consumption. Verify the browser/runtime path that the feature promises.
 - High-consequence AI output is a proposal/assessment unless the product contract explicitly says otherwise and provenance is preserved.
+- **CI stop:** run only the focused tests for the change. The full suite (`npm test`), CI workflows and live/paid model checks run only on the owner's direct request, never per PR or push.
 
 ## Steward routing
 

@@ -11,9 +11,11 @@ for a change, then the required CI gates in `.github/workflows/ci.yml`.
 
 ## Verification cadence
 
-During implementation, run focused tests and impacted type checks. Full CI, CAD, PostgreSQL concurrency and dependency-audit workflows are **manual-only** (`workflow_dispatch`): use Actions → choose workflow → Run workflow → select the exact review branch. Verify the selected commit SHA and all required outcomes before merging; rerun after code changes. Opening a PR, pushing a commit or marking it ready for review must not start a full test run. Main-branch Pages publication and authorized live model checks have separate release controls.
+**CI stop:** run focused tests and impacted type checks only. The full suite (`npm test`), every CI/CAD/PostgreSQL/dependency workflow and every live model check run **only on the owner's direct request**; it is too slow and costly per PR. All test and live workflows are manual-only (`workflow_dispatch`): use Actions → choose workflow → Run workflow → select the exact review branch, and verify the commit SHA and outcomes. Opening a PR, pushing a commit or merging must not start a test or paid live run. Only Pages publication (`deploy.yml`) and the CAD worker deploy (`modal-cad.yml`) run on push to main.
 
 ## Automated checks
+
+The full set below is for an explicit owner request only.
 
 ```bash
 npm ci
