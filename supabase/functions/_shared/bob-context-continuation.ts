@@ -560,7 +560,13 @@ export function createBobContextContinuation(opts: {
         try { input = JSON.parse(tool.function.arguments) } catch { input = null }
         chain.pendingInternal.push({ role: 'tool', tool_call_id: tool.id, content: JSON.stringify(readArchivedOperation(input, chain)) })
       }
-      chains.set(response.responseId, copyChain(chain))
+      // Specialists continue a chain only through their own tool calls; only
+      // Bob's main loop resumes after a final message (nudges, completion
+      // check). A finished specialist chain is dead weight: a CAD review kept
+      // ~2.4 MB of preview pixels in every later checkpoint (2026-10-21).
+      const continuable = !!response.toolCalls?.length
+        || (requested.catalogRoleKey ?? requested.functionName) === 'ask-bob'
+      if (continuable) chains.set(response.responseId, copyChain(chain))
       // Only the live head is needed. Keeping a full archive copy at every
       // historical response would make long work consume quadratic RAM.
       if (consumedResponseId && consumedResponseId !== response.responseId) chains.delete(consumedResponseId)

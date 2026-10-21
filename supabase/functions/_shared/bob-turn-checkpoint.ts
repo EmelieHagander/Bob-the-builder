@@ -39,6 +39,23 @@ export function checkpointErrorClass(error: unknown): string {
   return error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'other'
 }
 
+/** A checkpoint is rewritten on every step. Above this it is a leak, not
+ * state: a 4.8 MB snapshot timed out on each save and starved the database
+ * (2026-10-21). Fail the job instead of retrying the same write. */
+export const BOB_CHECKPOINT_MAX_CHARS = 2_000_000
+const CHECKPOINT_WARN_CHARS = 500_000
+
+/** Content-free size map: the largest nested keys two levels deep. */
+export function checkpointSizeBreakdown(state: Record<string, unknown>, limit = 8): [string, number][] {
+  const rows: [string, number][] = []
+  for (const [key, value] of Object.entries(state)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [inner, nested] of Object.entries(value)) rows.push([key + '.' + inner, JSON.stringify(nested ?? null).length])
+    } else rows.push([key, JSON.stringify(value ?? null).length])
+  }
+  return rows.sort((a, b) => b[1] - a[1]).slice(0, limit)
+}
+
 export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
   checkpoint: unknown
   journal: BobJournal
@@ -59,6 +76,9 @@ export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
         const nextState = stableJsonValue(state), journalState = options.journal.exportState()
         const nextStateText = JSON.stringify(nextState)
         stateBytes = nextStateText.length
+        if (stateBytes > CHECKPOINT_WARN_CHARS) console.warn('[Checkpoint size]', JSON.stringify({ job_id: options.jobId, state_chars: stateBytes,
+          largest: checkpointSizeBreakdown(nextState as Record<string, unknown>) }))
+        if (stateBytes > BOB_CHECKPOINT_MAX_CHARS) throw new Error('turn_checkpoint_too_large')
         const same = (snapshot: BobTurnCheckpoint) => JSON.stringify(snapshot.state) === nextStateText
           && JSON.stringify(stableJsonValue(snapshot.journalState)) === JSON.stringify(stableJsonValue(journalState))
         if (current && same(current)) return stableJsonValue(current)
@@ -71,6 +91,7 @@ export function createBobTurnCheckpoint(options: BobTurnCheckpointBinding & {
         return stableJsonValue(next)
       } catch (error) {
         if (error instanceof BobContinuation) throw error
+        if (error instanceof Error && error.message === 'turn_checkpoint_too_large') throw error
         // Content-free: phase, size and time only, never state or error text.
         console.error('[Checkpoint unavailable]', JSON.stringify({ job_id: options.jobId, phase, state_chars: stateBytes,
           elapsed_ms: Date.now() - started, error: checkpointErrorClass(error) }))

@@ -381,7 +381,9 @@ test('several interleaved colleague chains compact, finish and replay without ex
       states.set(role, await adapter.call({ ...seed, functionName: role, catalogRoleKey: role,
         previousResponseId: before.responseId, messages: [write] }))
     }
-    return roles.map(role => {
+    // Finished specialist chains are dropped; only Bob's own head stays resumable.
+    assert.deepEqual(adapter.exportState().chains.map(([id]) => id), ['ask-bob-finished'])
+    return roles.filter(role => role === 'ask-bob').map(role => {
       const state = states.get(role)!
       assert.equal(state.outputPhase, 'final_answer')
       const archive = adapter.readOperation({ call_id: null, after: null }, state.responseId)

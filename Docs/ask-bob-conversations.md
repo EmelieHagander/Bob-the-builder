@@ -73,6 +73,15 @@ attempts and drawing-request state. Each owner provides validated save/restore
 behavior. Saved observations retain their historical meaning; they do not become
 fresh project records or permission.
 
+Snapshot size is bounded. The context adapter keeps only resumable chains:
+Bob's own head and specialist chains with pending tool calls. A finished
+specialist chain, such as a CAD review with its preview pixels, is dropped.
+Above 500 000 characters the worker logs `[Checkpoint size]` with the largest
+keys (names and sizes only). Above `BOB_CHECKPOINT_MAX_CHARS` (2 000 000) it
+fails the job with `turn_checkpoint_too_large` instead of retrying the write.
+This fence exists because a 4.8 MB snapshot timed out on every save and starved
+the database on 2026-10-21.
+
 Current membership, policy, model enablement, image/source versions and canonical
 write guards remain checked at new-work boundaries, including after model waits.
 Removing checks for replayed operations must not reduce live checks to once per
