@@ -37,7 +37,7 @@ def annotate(path, req, rows, bounds, view, camera, up, center, source=None):
     corners=[point(c) for c in itertools.product(*zip(bounds['min'],bounds['max']))]
     x0,x1=min(p[0] for p in corners),max(p[0] for p in corners)
     y0,y1=min(p[1] for p in corners),max(p[1] for p in corners)
-    view_axes={'front':(0,2),'right':(1,2),'top':(0,1)}
+    view_axes={'front':(0,2),'back':(0,2),'left':(1,2),'right':(1,2),'top':(0,1),'bottom':(0,1)}
     dimensions=[{'axis':'xyz'[axis],'mm':bounds['size'][axis]} for axis in view_axes.get(view,[])]
     definitions={d['id']:d for d in req['definitions']}
     parts=[];labels=[]

@@ -12,7 +12,7 @@ function WireframeUnavailable({onFallback}:{onFallback:(message:string)=>void}) 
 export function CadDrawingView({value,title,projectId,artifactId,revision,sourceStatus}:{value:Pick<CadDrawing,'files'|'recipe'|'source_changed'> & Partial<Pick<CadDrawing,'manifest'>>;title:string;projectId?:string;artifactId?:string;revision?:number;sourceStatus?:DrawingSourceStatus}){
  const [interactive,setInteractive]=useState(false),[notice,setNotice]=useState('')
  const fallback=useCallback((message:string)=>{setInteractive(false);setNotice(message)},[])
- const names:Record<string,string>={front:'Front',right:'Right',top:'Top',isometric:'Overview'}
+ const names:Record<string,string>={front:'Front',back:'Back',left:'Left',right:'Right',top:'Top',bottom:'Bottom',isometric:'Overview',isometric_front_left:'Overview front-left',isometric_back_left:'Overview back-left',isometric_back_right:'Overview back-right'}
  const checks=value.manifest?.checks
  if(sourceStatus?.source_state==='unavailable')return <section aria-label={`${title} CAD drawings`}>
   <p className="solution-attention">Current-use drawing preview is withheld until source access and freshness can be checked. This saved revision remains part of the project history.</p>

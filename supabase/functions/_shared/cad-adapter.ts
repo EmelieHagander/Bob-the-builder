@@ -6,7 +6,32 @@ export type CadCut=(Exclude<CadSolid,{primitive:'tube'}>)&{placement:CadPlacemen
 export type CadPrimitive=CadSolid&{id:string;material_ref:string|null;cuts?:CadCut[]}
 export type CadPlacement={x:number;y:number;z:number;rx:number;ry:number;rz:number}
 export type CadInstance={id:string;definition_id:string;placement:CadPlacement}
-export type CadView='front'|'right'|'top'|'isometric'
+/** Every side of an assembly can be drawn: front from -Y, back from +Y, left
+ * from -X, right from +X, top from +Z, bottom from -Z, and an isometric view
+ * from each upper corner. A requirement on one side is only verifiable in a
+ * view of that side (2026-10-21: a left-gable requirement failed review
+ * repeatedly because only front/right/top/isometric existed). */
+export const CAD_VIEW_NAMES=['front','back','left','right','top','bottom','isometric','isometric_front_left','isometric_back_left','isometric_back_right'] as const
+export type CadView=typeof CAD_VIEW_NAMES[number]
+export const CAD_MAX_VIEWS=6
+export const CAD_VIEWS_DESCRIPTION="Pick views that show every requirement where it is: a feature on one side (for example a left gable, a back panel or an underside) needs that side's view. front from -Y, back +Y, left -X, right +X, top +Z, bottom -Z; isometric from front-right-top, isometric_front_left, isometric_back_left, isometric_back_right from those upper corners."
+/** The view contract before 2026-10-21. Historical catalog publications were
+ * generated from it and must stay byte-reproducible by their builders. */
+export const CAD_VIEW_NAMES_V1=['front','right','top','isometric'] as const
+export function withLegacyCadViews<T>(value:T):T{
+ const walk=(node:any):any=>{
+  if(Array.isArray(node))return node.map(walk)
+  if(!node||typeof node!=='object')return node
+  const out:any=Object.fromEntries(Object.entries(node).map(([k,v])=>[k,walk(v)]))
+  if(out.items&&typeof out.items==='object'&&Array.isArray(out.items.enum)&&out.items.enum.join()===CAD_VIEW_NAMES.join()){
+   out.items={...out.items,enum:[...CAD_VIEW_NAMES_V1]}
+   if(out.maxItems===CAD_MAX_VIEWS)out.maxItems=4
+   if(out.description===CAD_VIEWS_DESCRIPTION)delete out.description
+  }
+  return out
+ }
+ return walk(value)
+}
 export type CadDrawingSource={artifact_id:string;revision:number}
 export type CadClearance={id:string;first_id:string;second_id:string;min_mm:number}
 export type CadMotion={id:string;moving_ids:string[];obstacle_ids:string[];delta:{x:number;y:number;z:number}}
@@ -44,11 +69,11 @@ function primitive(v:unknown):v is CadPrimitive{
 export function parseCadAssemblyRequest(v:unknown):CadAssemblyRequest|null{
   if(!obj(v)||!exact(v,['contract_version','units','assembly_id','definitions','instances','views',...('clearances' in v?['clearances']:[]),...('motions' in v?['motions']:[])])||v.contract_version!==1||v.units!=='mm'||!id(v.assembly_id)
     ||!Array.isArray(v.definitions)||v.definitions.length<1||v.definitions.length>128||v.definitions.some(x=>!primitive(x))
-    ||!Array.isArray(v.instances)||v.instances.length<1||v.instances.length>512||!Array.isArray(v.views)||v.views.length<1||v.views.length>4)return null
+    ||!Array.isArray(v.instances)||v.instances.length<1||v.instances.length>512||!Array.isArray(v.views)||v.views.length<1||v.views.length>CAD_MAX_VIEWS)return null
   const defs=v.definitions as CadPrimitive[], ids=new Set(defs.map(d=>d.id)); if(ids.size!==defs.length||defs.reduce((n,d)=>n+(d.cuts?.length??0),0)>256)return null
   const seen=new Set<string>()
   for(const raw of v.instances){if(!obj(raw)||!exact(raw,['id','definition_id','placement'])||!id(raw.id)||seen.has(raw.id)||!id(raw.definition_id)||!ids.has(raw.definition_id)||!place(raw.placement))return null;seen.add(raw.id)}
-  const allowed=new Set<CadView>(['front','right','top','isometric'])
+  const allowed=new Set<string>(CAD_VIEW_NAMES)
   if(new Set(v.views).size!==v.views.length||v.views.some(x=>typeof x!=='string'||!allowed.has(x as CadView)))return null
   const checkIds=new Set<string>()
   const checkId=(x:unknown)=>{if(!id(x)||checkIds.has(x))return false;checkIds.add(x);return true}
@@ -83,7 +108,7 @@ function checkedAnnotations(value:unknown,recipe:CadAssemblyRequest,box:Record<s
   return {number:'P'+(index+1),instance_id:i.id,definition_id:i.definition_id,blank_mm:Object.fromEntries(['x_mm','y_mm','z_mm','diameter_mm','outside_diameter_mm','wall_thickness_mm','length_mm'].filter(k=>k in d).map(k=>[k,d[k]]))}
  })
  for(const view of recipe.views){
-  const entry=value.views[view],axes=({front:[0,2],right:[1,2],top:[0,1],isometric:[]} as const)[view]
+  const entry=value.views[view],axes=(({front:[0,2],back:[0,2],left:[1,2],right:[1,2],top:[0,1],bottom:[0,1]} as Partial<Record<CadView,readonly number[]>>)[view]??[])
   if(!obj(entry)||!exact(entry,['coverage','dimensions','parts'])||entry.coverage!==value.coverage||stable(entry.parts)!==stable(parts)
    ||stable(entry.dimensions)!==stable(axes.map(axis=>({axis:'xyz'[axis],mm:box.size[axis]}))))return false
  }

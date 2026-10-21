@@ -2,6 +2,7 @@ import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {execFileSync} from 'node:child_process'
 import {projectSchema} from './support/project-schema.ts'
+import {withLegacyCadViews} from '../supabase/functions/_shared/cad-adapter.ts'
 import {createAiCatalogSession,type AiCatalogManifest} from '../supabase/functions/_shared/ai-catalog.ts'
 import {CONSTRUCTION_SAVE_TOOL,CONSTRUCTION_REPEAT_SAVE_TOOL,createConstructionTools} from '../supabase/functions/_shared/construction-draft.ts'
 import {CONSTRUCTION_ROLE_TOOL,CONSTRUCTION_CHANGES_TOOL,CONSTRUCTION_CONTINUE_TOOL} from '../supabase/functions/_shared/construction-consequences.ts'
@@ -31,7 +32,8 @@ test('D publishes only role/work and affected manuals; old catalogs and all mode
  for(const catalog of [now,catalogFixture()])for(const tool of tools)assert.deepEqual(catalog.tool(tool.function.name).function.parameters,tool.function.parameters)
  const saveAtD:any=now.tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
  assert(Object.hasOwn(saveAtD.properties,'instance_policy'),'D introduces instance roles')
- assert.deepEqual(saveAtD,CONSTRUCTION_SAVE_TOOL.function.parameters,'the pinned D release matches its pre-arrays save contract')
+ // The pinned D release predates the 2026-10-21 view contract.
+ assert.deepEqual(saveAtD,withLegacyCadViews(CONSTRUCTION_SAVE_TOOL.function.parameters),'the pinned D release matches its pre-arrays save contract')
  assert(!Object.hasOwn(saveAtD.properties.recipe.properties,'arrays'),'D predates compact arrays')
  const saveLatest:any=catalogFixture().tool(CONSTRUCTION_SAVE_TOOL.function.name).function.parameters
  assert.deepEqual(saveLatest,CONSTRUCTION_REPEAT_SAVE_TOOL.function.parameters,'the final catalog matches the current canonical compiler')
