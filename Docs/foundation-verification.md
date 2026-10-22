@@ -2,8 +2,8 @@
 
 ## Construction view pages and cache routing — 2026-10-22
 
-**Prepared on `ccr-1d0233bb-b84nk5` (PR #317); not merged, deployed or measured
-live.** Owner decision A, owned by [conversations](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)
+**Merged in PR #317 (`7e37918`) and technically deployed 2026-10-22 18:07 UTC;
+not yet measured live.** Owner decision A, owned by [conversations](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)
 and [Artifacts](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19).
 
 - **Baseline (read-only production metrics, 2026-10-19 to 2026-10-22):** 539 main
@@ -29,12 +29,21 @@ and [Artifacts](artifacts.md#construction-views-and-observed-results--prepared-2
   in each of the two latest exchanges instead of a 1,850-token read gives about
   62k; two full pages in both gives about 74k, above the 64k test target and under
   the 96k ceiling. A step holds at most max(12,000, 2,000 × reads) tokens of pages.
+- **Deployment (2026-10-22):** after one running job finished, a read-only check
+  found zero queued, running or paused Bob jobs (18:06 UTC). From `7e37918`, with
+  `supabase functions deploy --use-api`: `bob-worker` v133 (verify_jwt false,
+  ezbr `6ec9632c774e…`), then `ask-bob` v165 (verify_jwt true, ezbr
+  `9e7e0412f73d…`); previously v132 / v164. Both downloaded bundles contain
+  `constructionPageVersion`, `prompt_cache_key`, `BOB_CONSTRUCTION_RESULT_TOKENS`,
+  `constructionViewBudget` and `onToolBatch`. Pages run 376 succeeded on the same
+  commit. `ask-bob` answers its CORS preflight (204). No migration, catalog
+  publication or paid model call.
 - **Not verified here:** `npm run check:edge` could not resolve
   `https://esm.sh/...` in this environment (proxy 403); TypeScript over the changed
   edge files with local shims shows the same 13 pre-existing shim errors before
-  and after. No full suite, CI, deploy or paid model call was run. Deploy needs zero
-  queued/running/paused Bob jobs or relies on the per-job pin; cache effect and
-  read-step reduction must be measured from ordinary use after deployment.
+  and after. No full suite or CI was run. The published site could not be fetched
+  from this environment (github.io proxy 403). Cache effect and read-step
+  reduction must be measured from ordinary use.
 
 ## Bob final integration — 2026-10-19
 
