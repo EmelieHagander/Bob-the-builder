@@ -218,8 +218,8 @@ pin `resultWindowVersion: 1`: older results stay whole, newest first, up to
 retention is unchanged. If the spending stop ends the completion review, Bob's
 reviewed answer is delivered as partial instead of the recovery template.
 
-**Larger read pages and cache routing (2026-10-22, owner decision A; prepared,
-not deployed).** Measured read-only from `bob.execution_events` and edge logs:
+**Larger read pages and cache routing (2026-10-22, owner decision A; deployed as
+`ask-bob` v165 / `bob-worker` v133, not yet measured).** Measured read-only from `bob.execution_events` and edge logs:
 one drawing run read a construction in 9 sequential ~2,000-token pages, each a
 model step re-sending 17k–40k input tokens; a third of Bob's steps were draft
 reads. Across 106 consecutive step pairs, instructions and tool schemas never

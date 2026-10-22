@@ -310,9 +310,9 @@ körningen. Mät både användbart resultat och provider-token/cache, anrop, kos
 och tid. Mergen och driftsättningen innebar ingen ny betald modell-/CAD-körning.
 
 **Beslut A (2026-10-22):** större konstruktionssidor och `prompt_cache_key` är
-förberedda i PR #317, inte driftsatta. Efter driftsättning: mät lässteg per
-ritningskörning och cache-andel för `ask-bob` (steg 0 och senare steg) på vanlig
-användning, utan nytt betalt prov. [Bevis](foundation-verification.md#construction-view-pages-and-cache-routing--2026-10-22).
+mergade (PR #317) och driftsatta 2026-10-22 (`ask-bob` v165, `bob-worker` v133).
+Nästa: mät lässteg per ritningskörning och cache-andel för `ask-bob` (steg 0 och
+senare steg) på vanlig användning, utan nytt betalt prov. [Bevis](foundation-verification.md#construction-view-pages-and-cache-routing--2026-10-22).
 
 **Aktiveringshinder:** tungt kvarhållet modellresonemang kan fortfarande överstiga
 kontextutrymmet. Korta verktygssvar bevisar inte att en sådan lång tur ryms.

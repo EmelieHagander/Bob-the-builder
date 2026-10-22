@@ -183,8 +183,8 @@ does not claim to traverse every additional dependency of newly reached neighbor
 parts; those can be selected in a further dependency read. Every page identifies
 its selection, missing IDs, total selected rows and `next_read`. Pages fit 2,000
 serialized content tokens. Jobs whose execution identity pins
-`constructionPageVersion: 1` (owner decision A, 2026-10-22; prepared in PR #317,
-not deployed) give a read up to 6,000 tokens; reads in the same model step share
+`constructionPageVersion: 1` (owner decision A; deployed 2026-10-22 as `ask-bob`
+v165 / `bob-worker` v133) give a read up to 6,000 tokens; reads in the same model step share
 12,000, never below 2,000 each. Larger pages only cut read steps: selection still
 comes from the view and IDs, and the whole construction does not reach the main
 model for a partial task. Jobs without the pin keep 2,000, and a cursor continues

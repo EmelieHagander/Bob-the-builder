@@ -86,8 +86,8 @@ Callers may pass `promptCacheKey`, sent as the Responses `prompt_cache_key`
 routing hint. Bob's main `ask-bob` requests send a hashed, content-free per-thread
 key (per run without a server thread), added after journal, job and drawing-budget
 fingerprints so in-flight jobs replay unchanged. It changes no input, authority or
-price; other roles and apps omit it. Prepared 2026-10-22, not yet deployed or
-measured ([conversation owner](../Docs/ask-bob-conversations.md)).
+price; other roles and apps omit it. Deployed 2026-10-22 (`ask-bob` v165,
+`bob-worker` v133); not yet measured ([conversation owner](../Docs/ask-bob-conversations.md)).
 
 ## AI definition catalog and model tiers
 
