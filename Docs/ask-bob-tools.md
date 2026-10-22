@@ -27,6 +27,10 @@ drawing turn loaded these one or a few at a time, and the 42 model steps after a
 manual load hit the provider cache 9% of the time against 81% otherwise (2.03 of
 7.88 USD). Other work keeps the selective on-demand loading unchanged.
 
+**Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
+restriction or instruction placement for provider caching. The cache work kept is
+a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).
+
 Tool-session checkpoint v2 saves selected method names and loaded tool versions.
 Methods resolve from the immutable manifest; current instructions and per-tool
 catalog overrides are rebuilt after restart/rollover. Current policy, handler

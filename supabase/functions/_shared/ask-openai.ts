@@ -22,7 +22,7 @@ import { createExecutionMetrics } from './execution-metrics.ts'
 import { AIBackgroundPending } from './ai-background.ts'
 import { pinBobModelDeadline } from './bob-model-deadline.ts'
 import { hasImageContent } from './openai-content.ts'
-import { rethrowContinuation } from './bob-job-journal.ts'
+import { fingerprint, rethrowContinuation } from './bob-job-journal.ts'
 import { createKnowledgeReader } from './building-knowledge.ts'
 import { createOperationalReader } from './project-operations.ts'
 import { BobContinuation, type BobJournal, type JournalIdentity } from './bob-job-journal.ts'
@@ -43,7 +43,8 @@ import { createMediaTransport } from './project-context/media-transport.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2.110.2'
 import { callOpenAIResponses, callOpenAIEmbeddings, generateImage, uploadOpenAIVisionFile } from './openai-service.ts'
 import { createBobContextContinuation, type ContextSurface } from './bob-context-continuation.ts'
-import { BOB_RESULT_WINDOW_TOKENS } from './bob-result-references.ts'
+import { BOB_RESULT_WINDOW_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS } from './bob-result-references.ts'
+import { CONSTRUCTION_VIEW_TOOL, constructionViewBudget } from './construction-views.ts'
 import { readWithStatementRetry } from './read-retry.ts'
 import { createMemoryRetrieval, journalMemoryStore } from './bob-memory-retrieval.ts'
 import { createJournalledMemoryEmbedder } from './bob-memory-embedding.ts'
@@ -163,6 +164,10 @@ export async function answerWithOpenAi(opts: {
   let drawingRequestId:string|null=null
   let drawingBudget:ReturnType<typeof createDrawingBudget>|undefined
   let modelBudget: ReturnType<typeof createBobModelBudget>
+  // Set once the thread is known; see the invoke closure below.
+  let promptCacheKey: string | undefined
+  // Construction reads in the model step being executed (page budget share).
+  let constructionReadsInStep = 1
   const dispatchModel = async (requested: OpenAIServiceOptions, beforeDispatch?:()=>Promise<void>) => {
    const options = applyCatalogModelOptions(aiCatalog, requested)
    const drawingAuthority:DrawingBudgetAuthority|undefined=drawingRequestId&&drawingBudget
@@ -188,6 +193,9 @@ export async function answerWithOpenAi(opts: {
     let result
     try {
       const invoke=(recovery?:{key?:string;context?:Record<string,unknown>;expiresAt?:string;fingerprint?:string})=>callOpenAIResponses<string>({ ...options, timeoutMs: allowed, resolveImage,
+        // Routing hint only, added after the journal, job and drawing-budget
+        // fingerprints so recorded steps of in-flight jobs still match.
+        ...(promptCacheKey && (options.catalogRoleKey ?? options.functionName) === 'ask-bob' ? { promptCacheKey } : {}),
         ...(asyncModels && identity ? { background: {
           key: opts.background!.jobId + '/' + identity.key, fingerprint: identity.fingerprint, receiver: 'bob',
           context: { jobId: opts.background!.jobId, role: options.aiFunction },
@@ -293,9 +301,11 @@ export async function answerWithOpenAi(opts: {
   const contract = aiCatalog.definition('agent-contract.ask-bob', 'agent_contract').metadata
   const unlimitedWork = opts.background?.workAllowanceVersion === 1 && contract.work_allowance_version === 1
   const deadline = opts.background?.deadline ?? Date.now() + 215000
-  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; turnUsdStop?: number } =
+  const execution: { id: string; startedAt: number; constructionReplayVersion: number; memoryManagementVersion?: 1 | 2; contextStrategyVersion?: 1; lookupObservationVersion?: 1; contextPagingVersion?: 1; toolCarryVersion?: 1; rolloverVersion?: 1; groundingReadOrderVersion?: 1; modelDeadlineVersion?: 1; completeRequestVersion?: 1; resultReferenceVersion?: 1; resultWindowVersion?: 1; constructionPageVersion?: 1; turnUsdStop?: number } =
     await memo('execution:identity', {}, async () => ({ id: crypto.randomUUID(), startedAt: Date.now(), constructionReplayVersion: 2,
       lookupObservationVersion: 1 as const, contextPagingVersion: 1 as const, toolCarryVersion: 1 as const, rolloverVersion: 1 as const,
+      // Larger construction pages (decision A). Jobs without this pin keep 2,000.
+      constructionPageVersion: 1 as const,
       ...(checkpoint ? { groundingReadOrderVersion: 1 as const, modelDeadlineVersion: 1 as const } : {}),
       ...bobCompleteRequestVersions(!!checkpoint, contract),
       ...(checkpoint && contract.result_reference_version === 1 ? { resultWindowVersion: 1 as const } : {}),
@@ -313,6 +323,7 @@ export async function answerWithOpenAi(opts: {
   if (execution.completeRequestVersion !== undefined && execution.completeRequestVersion !== 1) throw new Error('complete_request_version_invalid')
   if (execution.resultReferenceVersion !== undefined && (execution.resultReferenceVersion !== 1 || execution.completeRequestVersion !== 1)) throw new Error('result_reference_version_invalid')
   if (execution.resultWindowVersion !== undefined && (execution.resultWindowVersion !== 1 || execution.resultReferenceVersion !== 1)) throw new Error('result_window_version_invalid')
+  if (execution.constructionPageVersion !== undefined && execution.constructionPageVersion !== 1) throw new Error('construction_page_version_invalid')
   const lookupOptions = { unlimitedWork,
     // Existing in-flight journals retain their recorded clock policy. New
     // work pins each observation, including invalid/failed reads, before its
@@ -332,6 +343,7 @@ export async function answerWithOpenAi(opts: {
   if (contextStrategy) contextContinuation = createBobContextContinuation({ version: 1, aiCatalog, callModel: dispatchModel,
     ...(execution.resultReferenceVersion === 1 ? { mainResultReferences: 1 } : {}),
     ...(execution.resultWindowVersion === 1 ? { resultWindowTokens: BOB_RESULT_WINDOW_TOKENS } : {}),
+    ...(execution.constructionPageVersion === 1 ? { literalResultTokens: { [CONSTRUCTION_VIEW_TOOL.function.name]: BOB_CONSTRUCTION_RESULT_TOKENS } } : {}),
     ...(execution.rolloverVersion === 1 ? { rolloverVersion: 1 as const } : {}),
     // Older in-flight journals keep their recorded call sequence and re-page.
     ...(execution.contextPagingVersion === 1 && journal ? { pageBoundaries: (source: string, compute: () => Promise<(number | null)[]>) =>
@@ -355,6 +367,10 @@ export async function answerWithOpenAi(opts: {
     if(error)throw new Error('metrics_unavailable')
   }})
   const threadId = claimedServer?.thread_id ?? null
+  // One routing key per conversation thread (guest/local turns: per run), so
+  // a turn's steps and the thread's next turn reach the provider machine that
+  // holds their cached prefix. A hash: no project or user identity is sent.
+  promptCacheKey = 'bob-ask-' + (await fingerprint({ v: 1, scope: threadId ?? execution.id })).slice(0, 32)
   const binding = { p_project: opts.projectId, p_thread: threadId, p_turn: opts.clientTurnId, p_generation: claimedServer?.generation }
   let currentView: CurrentView | undefined
   let validateCurrentView: (() => Promise<boolean>) | undefined
@@ -452,6 +468,7 @@ export async function answerWithOpenAi(opts: {
     return result
   }
   const constructionOptions = {unlimitedWork,projectId:opts.projectId,message:opts.message,writer,hasAccess,
+    ...(execution.constructionPageVersion === 1 ? { viewPageTokens: () => constructionViewBudget(constructionReadsInStep) } : {}),
     readDesignReadiness,
     ...constructionChangeReaders({
     prepareRoleChange:async(payload:import('./project-write.ts').WritePayload)=>{
@@ -780,6 +797,7 @@ export async function answerWithOpenAi(opts: {
   const result=await runClaimedProjectTurn({
     aiCatalog,
     observe:value=>metrics!.observe(value), onTool:value=>metrics!.tool(value), onProgress:opts.background?.progress,
+    onToolBatch:names=>{ constructionReadsInStep = names.filter(name => name === CONSTRUCTION_VIEW_TOOL.function.name).length },
     // A fresh explicit retry of a failed durable job has receipts but no old
     // journal. Continue from current records as well as during journal replay;
     // receipt-only recovery would abandon the unfinished part of the request.

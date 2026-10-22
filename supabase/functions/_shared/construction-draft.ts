@@ -105,6 +105,8 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
  readCurrent?:(id:string)=>Promise<unknown>;
  preciseEditDiagnostics?:boolean;
  constructionViews?:boolean;
+ /** Page budget for this read; absent keeps the default 2,000-token page. */
+ viewPageTokens?:()=>number;
  constructionRepeats?:boolean;
  observationTime?:(input:unknown)=>Promise<string>;
  prepareEdit?:(payload:WritePayload)=>Promise<Record<string,any>>;
@@ -247,7 +249,7 @@ export function createConstructionTools(opts:{projectId:string;message:string;wr
      if(draft?.projectId!==opts.projectId||!['ok','not_found'].includes(draft.status))return {status:'unavailable'}
      if(draft.status==='not_found')return {status:'not_found',projectId:opts.projectId}
      if(draft.artifact_id!==v.artifact_id||v.revision!==null&&draft.revision!==v.revision)return {status:'unavailable'}
-     return await views.read(draft,v)
+     return await views.read(draft,v,opts.viewPageTokens?.())
     }
     const result=await opts.read(v.artifact_id,v.revision,v.after) as Record<string,any>
     if(!await opts.hasAccess())return {status:'denied'}

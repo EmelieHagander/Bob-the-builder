@@ -103,6 +103,15 @@ test('actual shared AI service opts into background, resumes tools and preserves
   stored.output=[{type:'reasoning',summary:[]}]
   const missing=await service.callOpenAIResponses({...complete,background})
   assert.equal(missing.success,false);assert.equal(missing.error,'native_reasoning_content_missing');assert.equal(missing.toolCalls,undefined)
+  // Provider cache routing hint (2026-10-22): sent only when a caller asks, on both wires.
+  const routingKey='bob-ask-'+'b'.repeat(32)
+  for(const request of requests)assert.equal(request.prompt_cache_key,undefined,'callers without a routing key keep their exact body')
+  await service.callOpenAIResponses({...complete,promptCacheKey:routingKey})
+  assert.equal(requests.at(-1).prompt_cache_key,routingKey,'the synchronous wire carries the routing hint')
+  reserved=false;stored=null
+  g.fetch=async (_url:string,init:RequestInit)=>{const request=JSON.parse(String(init.body));requests.push(request);return Response.json({id:'resp_background',status:'queued',metadata:{ai_job_id:id},output:[]})}
+  await assert.rejects(()=>service.callOpenAIResponses({...vision,background,promptCacheKey:routingKey}),AIBackgroundPending)
+  assert.equal(requests.at(-1).background,true);assert.equal(requests.at(-1).prompt_cache_key,routingKey,'the durable background submission carries it too')
 
  } finally {g.fetch=oldFetch;g.Deno=oldDeno;delete g.__backgroundClient}
 })

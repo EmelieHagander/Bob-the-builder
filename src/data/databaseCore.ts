@@ -2187,25 +2187,18 @@ export async function getProjectStepWorkspace(projectId:string):Promise<import('
 export interface ProjectDrawingCard extends DrawingSourceStatus {
  id:string; project_id:string; revision:number; title:string; status:'concept'|'measured'|'build_ready';
  area_id:string|null; steps:{id:string;title:string}[];
+ // Read with the card: the source check is the expensive part, so run it once.
+ preview_svg:string|null; parametric_recipe:unknown; source_media_id:string|null;
 }
 export async function getProjectDrawingCards(projectId:string):Promise<ProjectDrawingCard[]> {
  const guard=captureFileContext(projectId);guard()
  if(!db)return []
  const result=await db.from('current_drawing_overview')
-  .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons').eq('project_id',projectId)
+  .select('id,project_id,revision,title,status,area_id,steps,source_state,source_reasons,preview_svg,parametric_recipe,source_media_id').eq('project_id',projectId)
   .order('recorded_at',{ascending:false}).order('id').limit(4)
  guard();if(result.error)throw new Error('Project drawings could not be loaded.')
  return result.data??[]
 }
-export async function getProjectDrawingPreview(projectId:string,id:string,revision:number) {
- const guard=captureFileContext(projectId);guard()
- if(!db)throw new Error('Open a connected project.')
- const result=await db.from('current_drawing_overview').select('preview_svg,parametric_recipe,source_media_id')
-  .eq('project_id',projectId).eq('id',id).eq('revision',revision).single()
- guard();if(result.error)throw new Error('Drawing preview is unavailable. Open the saved drawing to inspect its version.')
- return result.data as {preview_svg:string|null;parametric_recipe:unknown;source_media_id:string|null}
-}
-
 export interface DrawingRequestWork {
  request:{id:string;revision:number;status:string;reason:string|null;artifact_id:string|null;artifact_revision:number|null;scope:{step_id:string|null}}
  gaps:{id:string;action:string;blocking:boolean;observed_revision:number;task_id:string|null;task_name:string|null;step_id:string|null;label?:string|null;owner_label?:string|null;step_title?:string|null;area_id?:string|null}[]

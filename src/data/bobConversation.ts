@@ -114,16 +114,11 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
     if (epoch !== historyEpoch || projectId !== getActiveProjectId()) throw new Error('Conversation scope changed.')
   }
 
-  const threadResult = await bobDb.from('bob_threads').select('id')
-    .eq('project_id', projectId).eq('owner_user_id', user.id).eq('status', 'active').abortSignal(AbortSignal.timeout(12000)).maybeSingle()
-  current()
-  if (threadResult.error) throw new Error(`database: ${threadResult.error.message}`)
-  if (!threadResult.data) { recentHistory.delete(cacheKey); return { mode: 'server', messages: [], ownerId: user.id } }
-  if (options.threadId && options.threadId !== threadResult.data.id) throw new Error('The conversation changed. Reopen Bob.')
-
+  // One request: the active thread is joined onto its messages. A new thread
+  // with no messages yet returns no rows, so only then is the thread read alone.
   let request = bobDb.from('bob_messages')
-    .select('role,text,evidence,delivery_state,seq,turn_id,updated_at,image_ids')
-    .eq('thread_id', threadResult.data.id)
+    .select('role,text,evidence,delivery_state,seq,turn_id,updated_at,image_ids,thread_id,bob_threads!inner(id)')
+    .eq('bob_threads.project_id', projectId).eq('bob_threads.owner_user_id', user.id).eq('bob_threads.status', 'active')
     .order('seq', { ascending: false }).limit(BOB_HISTORY_PAGE_SIZE + 1)
   if (options.beforeSeq !== undefined) {
     if (!Number.isSafeInteger(options.beforeSeq) || options.beforeSeq < 1) throw new Error('Invalid history cursor.')
@@ -132,6 +127,17 @@ export async function getAskBobConversation(projectId: string, options: HistoryO
   const rows = await request.abortSignal(AbortSignal.timeout(12000))
   current()
   if (rows.error) throw new Error(`database: ${rows.error.message}`)
+  let threadId: string | undefined = rows.data?.[0]?.thread_id
+  if (!threadId) {
+    const threadResult = await bobDb.from('bob_threads').select('id')
+      .eq('project_id', projectId).eq('owner_user_id', user.id).eq('status', 'active').abortSignal(AbortSignal.timeout(12000)).maybeSingle()
+    current()
+    if (threadResult.error) throw new Error(`database: ${threadResult.error.message}`)
+    threadId = threadResult.data?.id
+  }
+  if (!threadId) { recentHistory.delete(cacheKey); return { mode: 'server', messages: [], ownerId: user.id } }
+  if (options.threadId && options.threadId !== threadId) throw new Error('The conversation changed. Reopen Bob.')
+  const threadResult = { data: { id: threadId } }
   const page = readHistoryWindow(rows.data ?? [])
 
   if (options.beforeSeq === undefined) options.onTranscript?.({ mode: 'server',

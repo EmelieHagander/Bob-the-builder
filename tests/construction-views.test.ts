@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {createConstructionViews,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
+import {createConstructionViews,CONSTRUCTION_VIEW_TOKENS,CONSTRUCTION_VIEW_MAX_TOKENS,CONSTRUCTION_VIEW_STEP_TOKENS,constructionViewBudget,CONSTRUCTION_VIEW_TOOL,type ConstructionViewQuery} from '../supabase/functions/_shared/construction-views.ts'
 import {createConstructionTools,checkedConstructionForDrawing} from '../supabase/functions/_shared/construction-draft.ts'
 import {checkConstruction} from '../supabase/functions/_shared/construction-checks.ts'
 import {countSerializedTokens} from '../supabase/functions/_shared/bob-token-budget.ts'
@@ -195,4 +195,68 @@ test('published view contract matches migrated catalog and old pinned manifests 
   assert(!('view'in preConstructionViewsCatalogFixture().tool('read_construction_draft').function.parameters.properties))
   assert.equal(catalog.definition('tools.read_construction_draft').metadata.construction_view_version,1)
  }finally{await pg.close()}
+})
+
+// Owner decision A (2026-10-22): each page costs Bob a whole model step.
+test('reads in one model step share the larger page budget and never fall below the former page',()=>{
+ assert.deepEqual([1,2,3,4,5,6,7,12].map(constructionViewBudget),[6000,6000,4000,3000,2400,2000,2000,2000])
+ for(const bad of [0,-1,Number.NaN,1.5])assert.equal(constructionViewBudget(bad),CONSTRUCTION_VIEW_MAX_TOKENS)
+ // An exchange is never larger than with 2,000-token pages for the same number of reads.
+ for(let n=1;n<=12;n++)assert(n*constructionViewBudget(n)<=Math.max(CONSTRUCTION_VIEW_STEP_TOKENS,n*CONSTRUCTION_VIEW_TOKENS))
+})
+
+function reassemble(items:any[]){
+ const out:any[]=[];let open:any=null
+ for(const item of items){
+  if(!item.fragment){assert.equal(open,null,'a whole row inside an unfinished fragment');out.push(item);continue}
+  if(!open)open={collection:item.collection,id:item.id,text:''}
+  assert.equal(item.collection,open.collection);assert.equal(item.id,open.id)
+  assert.equal(item.fragment.offset,Array.from(open.text).length,'fragments continue at their exact offset')
+  open.text+=item.fragment.text
+  if(item.fragment.complete){out.push({collection:open.collection,id:open.id,value:JSON.parse(open.text)});open=null}
+ }
+ assert.equal(open,null,'no unfinished fragment at the end of the selection')
+ return out
+}
+async function readAll(views:ReturnType<typeof createConstructionViews>,draft:any,q:ConstructionViewQuery,budget:(page:number)=>number|undefined){
+ const items:any[]=[];let pages=0
+ do{
+  const size=budget(pages),page=await views.read(draft,q,size)
+  assert.equal(page.status,'ok',JSON.stringify(page).slice(0,300))
+  assert(countSerializedTokens(page)<=(size??CONSTRUCTION_VIEW_TOKENS),`page was ${countSerializedTokens(page)} tokens`)
+  items.push(...page.items);q=page.next_read;if(++pages>2000)throw Error('Non-advancing cursor')
+ }while(q)
+ return {items:reassemble(items),pages}
+}
+
+test('larger pages return the same exact records in fewer reads, and a cursor from a 2,000-token page continues exactly',async()=>{
+ const {draft}=fixture(150)
+ for(const n of draft.parameters.nodes)n.reason='Synthetic "quoted" explanation å😀 '.repeat(30)
+ draft.description='Original owner description with "quotes", å and 😀 kept exactly. '.repeat(900)
+ const views=createConstructionViews(project,now)
+ for(const view of ['parts','parameters','notes']){
+  const small=await readAll(views,draft,query(view),()=>undefined)
+  const large=await readAll(views,draft,query(view),()=>CONSTRUCTION_VIEW_MAX_TOKENS)
+  // A job's first page at 2,000 (for example a cursor recorded before a deploy), then 6,000.
+  const mixed=await readAll(views,draft,query(view),page=>page===0?CONSTRUCTION_VIEW_TOKENS:CONSTRUCTION_VIEW_MAX_TOKENS)
+  assert.deepEqual(large.items,small.items,view);assert.deepEqual(mixed.items,small.items,view)
+  assert(large.pages*2<=small.pages,`${view}: ${large.pages} pages at 6,000 vs ${small.pages} at 2,000`)
+ }
+ const first=await views.read(draft,query('notes'),CONSTRUCTION_VIEW_TOKENS)
+ assert(first.items[0].fragment&&!first.items[0].fragment.complete,'the fixture cursor stops inside a fragment')
+ assert.deepEqual(await views.read(draft,query('parts')),await views.read(draft,query('parts'),CONSTRUCTION_VIEW_TOKENS),'jobs without the new pin keep identical pages')
+ for(const bad of [CONSTRUCTION_VIEW_TOKENS-1,CONSTRUCTION_VIEW_MAX_TOKENS+1,2500.5])await assert.rejects(views.read(draft,query('parts'),bad),/construction_view_budget_invalid/)
+})
+
+test('the read tool uses the pinned page budget, and without it keeps the former page',async()=>{
+ const {draft,record}=fixture(150)
+ const make=(viewPageTokens?:()=>number)=>createConstructionTools({projectId:project,message:'Inspect',constructionViews:true,hasAccess:async()=>true,read:async()=>draft,
+  readCatalog:async()=>({projectId:project,status:'ok',record}),readSources:async()=>({project:new Map(),physical:new Map()}),...(viewPageTokens?{viewPageTokens}:{})})
+ const legacy:any=await make().execute('read_construction_draft',query('parts'))
+ const larger:any=await make(()=>CONSTRUCTION_VIEW_MAX_TOKENS).execute('read_construction_draft',query('parts'))
+ assert.equal(legacy.status,'ok');assert.equal(larger.status,'ok')
+ assert(countSerializedTokens(legacy)<=CONSTRUCTION_VIEW_TOKENS)
+ assert(countSerializedTokens(larger)>CONSTRUCTION_VIEW_TOKENS&&countSerializedTokens(larger)<=CONSTRUCTION_VIEW_MAX_TOKENS)
+ assert(larger.items.length>legacy.items.length)
+ assert.deepEqual(larger.items.slice(0,legacy.items.length),legacy.items,'the larger page starts with the same exact records')
 })

@@ -203,60 +203,59 @@ export function createArtifacts(
 
   async function version(projectId: string, id: string, revision: number): Promise<ArtifactVersion> {
     const { db, guard } = connection(projectId)
-    const r = checked(await db.from('artifact_revision_details').select('*').eq('project_id', projectId)
-      .eq('artifact_id', id).eq('revision', revision).single()) as Row
+    const exact = <T>(table: string, query: (q: any) => PromiseLike<T>) =>
+      query(db.from(table).select('*').eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision))
+    // Independent reads run together: one round trip instead of one per table.
+    // Every read still goes through RLS; nothing here is cached.
+    const [details, headRead, statusRead, refsRead, parametric, cadRead] = await Promise.all([
+      db.from('artifact_revision_details').select('*').eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).single(),
+      db.from('artifacts').select('current_revision').eq('project_id', projectId).eq('id', id).maybeSingle(),
+      db.from('artifact_source_status').select('source_state,source_reasons')
+        .eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).maybeSingle(),
+      db.from('artifact_measurement_details').select('*')
+        .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision)
+        .order('measurement_id').limit(20),
+      recipes(projectId, [{ id, revision }]),
+      exact('artifact_cad_revisions', q => q.maybeSingle()),
+    ])
     guard()
+    const r = checked(details) as Row
     if (!r) throw new Error('Drawing version unavailable. Reload to check access.')
     scoped([r], projectId)
-    const head = checked(await db.from('artifacts').select('current_revision').eq('project_id', projectId).eq('id', id).maybeSingle()) as { current_revision: number } | null
+    const head = checked(headRead) as { current_revision: number } | null
+    let sourceStatus = checked(statusRead) as DrawingSourceStatus | null
+    const refs = checked(refsRead) as Row[]
+    const cad = checked(cadRead as { data: CadDrawing | null; error: { message: string } | null })
+    // Second round: reads that depend on what the first round returned.
+    const [delta, generated, layout, study, plan, parent, shellRead] = await Promise.all([
+      sourceStatus && sourceStatus.source_state !== 'current'
+        ? db.rpc('artifact_source_changes', { p_project: projectId, p_artifact: id, p_revision: revision }) : null,
+      r.generator ? generation(projectId, id, revision) : null,
+      r.has_room_layout ? exact('artifact_room_layout_details', q => q.maybeSingle()) : null,
+      r.has_stair_study ? exact('artifact_stair_details', q => q.maybeSingle()) : null,
+      r.has_multifloor_plan ? exact('artifact_multifloor_details', q => q.maybeSingle()) : null,
+      cad?.source_artifact_id ? db.from('artifacts').select('current_revision').eq('project_id', projectId).eq('id', cad.source_artifact_id).maybeSingle() : null,
+      // Until the shell migration is live the function is absent; ordinary drawings still open.
+      cad ? null : db.rpc('read_cad_shell', { p_project: projectId, p_shell: id, p_revision: revision }),
+    ])
     guard()
-    let sourceStatus = checked(await db.from('artifact_source_status').select('source_state,source_reasons')
-      .eq('project_id', projectId).eq('artifact_id', id).eq('revision', revision).maybeSingle()) as DrawingSourceStatus | null
-    guard()
-    if (sourceStatus && sourceStatus.source_state !== 'current') {
-      const delta = await db.rpc('artifact_source_changes', { p_project: projectId, p_artifact: id, p_revision: revision })
-      guard()
+    if (sourceStatus && delta) {
       const result = parseDrawingSourceChanges(delta.data)
       sourceStatus = { ...sourceStatus, ...(delta.error || !result
         ? { changesUnavailable: true }
         : result) }
     }
-    const refs = checked(await db.from('artifact_measurement_details').select('*')
-      .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision)
-      .order('measurement_id').limit(20)) as Row[]
-    guard()
-    const generated = r.generator ? await generation(projectId, id, revision) : null
-    const parametric = await recipes(projectId, [{ id, revision }])
-    let roomLayout: RoomLayoutDetails | null = null
-    if (r.has_room_layout) {
-      const layout = checked(await db.from('artifact_room_layout_details').select('*').eq('project_id', projectId)
-        .eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle())
-      guard()
-      if (layout) roomLayout = checkedRoomLayout(layout, projectId, id, revision)
+    const layoutRow = layout && checked(layout as { data: Row | null; error: { message: string } | null })
+    const roomLayout: RoomLayoutDetails | null = layoutRow ? checkedRoomLayout(layoutRow, projectId, id, revision) : null
+    const studyRow = study && checked(study as { data: Row | null; error: { message: string } | null })
+    const stairStudy: StairDetails | null = studyRow ? checkedStairStudy(studyRow, projectId, id, revision) : null
+    const planRow = plan && checked(plan as { data: Row | null; error: { message: string } | null })
+    const multifloorPlan: BuildingPlanDetails | null = planRow ? checkedBuildingPlan(planRow, projectId, id, revision) : null
+    if (cad?.source_artifact_id) {
+      const source = checked(parent!) as { current_revision: number } | null
+      cad.source_changed = !source || source.current_revision !== cad.source_revision
     }
-    let stairStudy: StairDetails | null = null
-    if (r.has_stair_study) {
-      const study = checked(await db.from('artifact_stair_details').select('*').eq('project_id', projectId)
-        .eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle())
-      guard()
-      if (study) stairStudy = checkedStairStudy(study, projectId, id, revision)
-    }
-    let multifloorPlan: BuildingPlanDetails | null = null
-    if (r.has_multifloor_plan) {
-      const plan = checked(await db.from('artifact_multifloor_details').select('*').eq('project_id', projectId)
-        .eq('artifact_id', id).eq('artifact_revision', revision).maybeSingle())
-      guard()
-      if (plan) multifloorPlan = checkedBuildingPlan(plan, projectId, id, revision)
-    }
-    const cad = checked(await db.from('artifact_cad_revisions').select('*').eq('project_id',projectId).eq('artifact_id',id).eq('artifact_revision',revision).maybeSingle()) as CadDrawing | null
-    if(cad?.source_artifact_id){
-      const parent=checked(await db.from('artifacts').select('current_revision').eq('project_id',projectId).eq('id',cad.source_artifact_id).maybeSingle())
-      cad.source_changed=!parent||parent.current_revision!==cad.source_revision
-    }
-    // Until the shell migration is live the function is absent; ordinary drawings still open.
-    const shellRead = cad ? null : await db.rpc('read_cad_shell', { p_project: projectId, p_shell: id, p_revision: revision })
     const shell = !shellRead || shellRead.error?.code === 'PGRST202' ? null : checked(shellRead) as CadShell | null
-    guard()
     return {
       latestRevision: head?.current_revision,
       shell,
@@ -296,16 +295,19 @@ export function createArtifacts(
       const rows = checked(await query.order('recorded_at', { ascending: false }).order('id').range(offset, offset + 24)) as Row[]
       guard()
       const page = scoped(rows.slice(0, 24), projectId)
-      const parametric = await recipes(projectId, page.map(r => ({ id: r.id, revision: r.revision })))
-      guard()
       const filter = page.map(row => `and(artifact_id.eq.${row.id},revision.eq.${row.revision})`).join(',')
-      const states = filter ? checked(await db.from('artifact_source_status').select('artifact_id,revision,source_state,source_reasons')
-        .eq('project_id', projectId).or(filter).limit(24)) as Row[] : []
+      // The three reads only need the listed versions, so they run together.
+      const [parametric, stateRead, constructionRead] = await Promise.all([
+        recipes(projectId, page.map(r => ({ id: r.id, revision: r.revision }))),
+        filter ? db.from('artifact_source_status').select('artifact_id,revision,source_state,source_reasons')
+          .eq('project_id', projectId).or(filter).limit(24) : null,
+        // Exact listed versions that are construction sources, not rendered drawings.
+        filter ? db.from('artifact_construction_revisions').select('artifact_id,artifact_revision')
+          .eq('project_id', projectId).or(page.map(row => `and(artifact_id.eq.${row.id},artifact_revision.eq.${row.revision})`).join(',')).limit(24) : null,
+      ])
       guard()
-      // Exact listed versions that are construction sources, not rendered drawings.
-      const constructions = filter ? checked(await db.from('artifact_construction_revisions').select('artifact_id,artifact_revision')
-        .eq('project_id', projectId).or(page.map(row => `and(artifact_id.eq.${row.id},artifact_revision.eq.${row.revision})`).join(',')).limit(24)) as Row[] : []
-      guard()
+      const states = stateRead ? checked(stateRead) as Row[] : []
+      const constructions = constructionRead ? checked(constructionRead) as Row[] : []
       return { items: page.map(r => ({ ...artifact({ ...r, parametric_recipe: parametric.find(p => p.artifact_id === r.id && p.artifact_revision === r.revision)?.recipe }),
         isConstruction: constructions.some(c => c.artifact_id === r.id && c.artifact_revision === r.revision),
         sourceStatus: states.find(state => state.artifact_id === r.id && state.revision === r.revision) as DrawingSourceStatus | undefined

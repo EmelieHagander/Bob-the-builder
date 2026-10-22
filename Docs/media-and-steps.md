@@ -57,7 +57,7 @@ Image pixel dimensions describe the file, never measured dimensions of the build
    cannot be recalled from a user's device after membership is revoked.
    Visible thumbnail views downsample the first authenticated download to at
    most 640 pixels per edge. A shared memory-only cache holds at most 24 previews,
-   8 MiB and two minutes; every reuse first rechecks the ready metadata through
+   8 MiB and fifteen minutes (raised from two on 2026-10-22); every reuse first rechecks the ready metadata through
    RLS. Account/project changes, session refresh and media removal clear it.
    Originals always use a fresh authenticated Storage download. Closed Project
    Images sections and offscreen tiles do not fetch image bytes. On the current

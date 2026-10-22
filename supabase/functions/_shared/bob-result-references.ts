@@ -1,5 +1,5 @@
 import type { OpenAIServiceOptions } from './openai-service.ts'
-import { countSerializedTokens } from './bob-token-budget.ts'
+import { countContextTokens, countSerializedTokens } from './bob-token-budget.ts'
 
 type Content = NonNullable<OpenAIServiceOptions['messages']>[number]['content']
 export type BobArchivedOperation = { call_id: string; tool_name: string; arguments: string; output: Content;
@@ -9,6 +9,12 @@ export type BobArchivedOperation = { call_id: string; tool_name: string; argumen
  * page stays literal: at 2000 every view page was cut again here and Bob
  * paid one or two get_work_history steps per read (96 pages on 2026-10-20). */
 export const BOB_RESULT_PAGE_TOKENS = 3000
+/** Construction view pages are already bounded by their own pager (up to
+ * CONSTRUCTION_VIEW_MAX_TOKENS, 6000, for jobs pinning constructionPageVersion).
+ * A pinned allowance is measured on the text the model receives, so a whole
+ * page plus its execution envelope stays literal instead of costing
+ * get_work_history steps. Other tools keep BOB_RESULT_PAGE_TOKENS. */
+export const BOB_CONSTRUCTION_RESULT_TOKENS = 8000
 /** Recent results kept whole across exchanges before older ones become references. */
 export const BOB_RESULT_WINDOW_TOKENS = 20000
 
@@ -61,7 +67,7 @@ export function bobResultPage(operation: BobArchivedOperation, after = 0): Recor
  * their capacity is checked by the native request estimator. Old successful
  * read bodies become references; writes, checks and errors keep their bounded
  * first page, so receipts and repair feedback do not disappear with age. */
-export function projectBobResult(operation: BobArchivedOperation, older: boolean): Content {
+export function projectBobResult(operation: BobArchivedOperation, older: boolean, literalTokens?: number): Content {
   if (operation.presentation && older) return operation.presentation.older
   if (typeof operation.output !== 'string') return operation.output
   const summary = observed(operation)
@@ -72,8 +78,12 @@ export function projectBobResult(operation: BobArchivedOperation, older: boolean
   }
   let page = firstPages.get(operation)
   if (page === undefined) {
-    page = operation.output.length <= BOB_RESULT_PAGE_TOKENS * 8 && countSerializedTokens(operation.output) <= BOB_RESULT_PAGE_TOKENS
-      ? operation.output : JSON.stringify(bobResultPage(operation))
+    // Default: the original escaped count, unchanged for older jobs and other
+    // tools. A pinned per-tool allowance counts what the model receives; one
+    // more escape level would cut quote-dense pages the pager already bounded.
+    const limit = literalTokens ?? BOB_RESULT_PAGE_TOKENS
+    const size = literalTokens === undefined ? countSerializedTokens(operation.output) : countContextTokens(operation.output)
+    page = operation.output.length <= limit * 8 && size <= limit ? operation.output : JSON.stringify(bobResultPage(operation))
     firstPages.set(operation, page)
   }
   return page
@@ -81,9 +91,9 @@ export function projectBobResult(operation: BobArchivedOperation, older: boolean
 
 /** Persist the small projections at first observation. A resumed worker must
  * not parse/tokenize every old original to rebuild its reference again. */
-export function prepareBobResult(operation: BobArchivedOperation): BobArchivedOperation {
-  const recent = projectBobResult(operation, false)
-  const prepared = { ...operation, presentation: { older: projectBobResult(operation, true), observed: observed(operation) } }
+export function prepareBobResult(operation: BobArchivedOperation, literalTokens?: number): BobArchivedOperation {
+  const recent = projectBobResult(operation, false, literalTokens)
+  const prepared = { ...operation, presentation: { older: projectBobResult(operation, true, literalTokens), observed: observed(operation) } }
   // The recent projection already lives in the transcript; do not persist a
   // second copy of every page in the archive. Only future demotion is cached.
   if (typeof recent === 'string') firstPages.set(prepared, recent)

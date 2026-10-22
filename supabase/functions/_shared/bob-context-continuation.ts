@@ -203,6 +203,9 @@ export function createBobContextContinuation(opts: {
    * many tokens before they become references. A fixed two-exchange window
    * hid results Bob had just reopened, so he reopened them again (2026-10-20). */
   resultWindowTokens?: number
+  /** Per-tool literal size for a recent result, pinned per job. Tools not
+   * named here keep BOB_RESULT_PAGE_TOKENS. */
+  literalResultTokens?: Record<string, number>
   /** Pinned per execution. Version 1 counts the provider-reported input once
    * (it already contains the tool surface) and refreshes only when the part
    * it would summarize is large enough to make the next request smaller. */
@@ -313,9 +316,10 @@ export function createBobContextContinuation(opts: {
         const { presentation: _view, ...original } = prior
         if (JSON.stringify(stableJsonValue(original)) !== JSON.stringify(stableJsonValue(operation))) throw new Error('context_operation_changed')
       }
-      const archived = prior ?? (chain.resultReferences === 1 ? prepareBobResult(operation) : operation)
+      const literal = Object.hasOwn(opts.literalResultTokens ?? {}, operation.tool_name) ? opts.literalResultTokens![operation.tool_name] : undefined
+      const archived = prior ?? (chain.resultReferences === 1 ? prepareBobResult(operation, literal) : operation)
       chain.operations.set(tool.id, archived)
-      if (chain.resultReferences === 1) message.content = projectBobResult(archived, false)
+      if (chain.resultReferences === 1) message.content = projectBobResult(archived, false, literal)
     }
   }
 

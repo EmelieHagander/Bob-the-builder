@@ -82,6 +82,12 @@ The dispatcher independently rejects extra/invalid tool arguments before a
 database call. The optional background transport also requires the companion
 `ai-background.ts`; its activation and rollout prerequisites are owned by
 [Shared AI background calls](../Docs/shared-ai-background.md).
+Callers may pass `promptCacheKey`, sent as the Responses `prompt_cache_key`
+routing hint. Bob's main `ask-bob` requests send a hashed, content-free per-thread
+key (per run without a server thread), added after journal, job and drawing-budget
+fingerprints so in-flight jobs replay unchanged. It changes no input, authority or
+price; other roles and apps omit it. Prepared 2026-10-22, not yet deployed or
+measured ([conversation owner](../Docs/ask-bob-conversations.md)).
 
 ## AI definition catalog and model tiers
 

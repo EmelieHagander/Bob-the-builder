@@ -232,3 +232,17 @@ test('legacy memory still stops after four folds', async () => {
   await assert.rejects(prepareWorkingContext(fixture.opts), /context_preparing/)
   assert.equal(fixture.folded, 4)
 })
+
+test('each tool batch is announced before its first call runs, limited to the calls that will execute (2026-10-22)', async () => {
+  for (const unlimitedWork of [true, false]) {
+    const events: string[] = []
+    let calls = 0
+    const lookup = createProjectLookup('A', async (_project, input) => { events.push('run:' + input.dataset); return payload(input.dataset) }, 1000, 1000)
+    const result = await runProjectAnswer({ ...base(), unlimitedWork, lookup, onToolBatch: names => events.push('batch:' + names.length + ':' + names[0]),
+      callModel: async () => ++calls === 1 ? response(null, Array.from({ length: 10 }, (_, index) => search(`batch-${index}`))) : response('Done.') })
+    assert(result.ok, JSON.stringify(result))
+    const batches = events.filter(event => event.startsWith('batch:'))
+    assert.deepEqual(batches, [`batch:${unlimitedWork ? 10 : 8}:search_project_data`])
+    assert(events.indexOf(batches[0]) < events.indexOf('run:tasks'), 'announced before the first call of the batch runs')
+  }
+})
