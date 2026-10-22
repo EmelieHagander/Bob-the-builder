@@ -1,5 +1,34 @@
 # Foundation verification and rollout
 
+## Construction view pages and cache routing — 2026-10-22
+
+**Prepared on `ccr-1d0233bb-b84nk5` (PR #317); not merged, deployed or measured
+live.** Owner decision A, owned by [conversations](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)
+and [Artifacts](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19).
+
+- **Baseline (read-only production metrics, 2026-10-19 to 2026-10-22):** 539 main
+  `ask-bob` calls, 14.56M input tokens of which 9.17M cached, USD 25.71. A third of
+  steps were construction draft reads; 12 of 168 read steps over ten days ran 5–7
+  reads in parallel. Peak main input since 2026-10-18 was about 57k (ceiling 96k).
+- **Local evidence:** 165 tests pass across 20 focused files (construction views,
+  edits, checks, result references, context continuation, release capacity and
+  delivery, replay/background/lookup continuation, open-work loop, wire and
+  grounding source checks). New tests cover the shared step budget, identical
+  records in at least half the pages, a 2,000-token cursor continuing exactly at
+  6,000 (inside a fragment), unchanged pages without the pin, the literal
+  allowance for one tool only, and `prompt_cache_key` on synchronous and
+  background wires but never in hashed call options.
+- **Capacity:** the 40-step release probe still peaks at 50k/54k (its reads are
+  project searches, unchanged). With two latest exchanges holding full 6,000-token
+  pages instead of 1,850-token reads the estimate is about 62k; parallel reads stay
+  within 12,000 per step, never more than 2,000-token pages gave the same count.
+- **Not verified here:** `npm run check:edge` could not resolve
+  `https://esm.sh/...` in this environment (proxy 403); TypeScript over the changed
+  edge files with local shims shows the same 13 pre-existing shim errors before
+  and after. No full suite, CI, deploy or paid model call was run. Deploy needs zero
+  queued/running/paused Bob jobs or relies on the per-job pin; cache effect and
+  read-step reduction must be measured from ordinary use after deployment.
+
 ## Bob final integration — 2026-10-19
 
 **Merged source, followed by a separately verified hosted technical release.**

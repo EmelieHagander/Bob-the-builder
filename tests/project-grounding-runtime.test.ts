@@ -85,3 +85,26 @@ test('deployment adapter applies the policy to the main answer model, not the pr
   assert.doesNotMatch(summary, /createGroundedModelCall/)
   assert.match(code, /const invoke=\([^\n]+=>callOpenAIResponses<string>\(\{ \.\.\.options, timeoutMs: allowed,/)
 })
+
+test('provider cache routing key stays outside the journal, job and drawing-budget fingerprints (2026-10-22)', async () => {
+  const code = await readFile(new URL('../supabase/functions/_shared/ask-openai.ts', import.meta.url), 'utf8')
+  const invoke = code.slice(code.indexOf('const invoke=('), code.indexOf('result=boundDrawing'))
+  assert.match(invoke, /promptCacheKey && \(options\.catalogRoleKey \?\? options\.functionName\) === 'ask-bob' \? \{ promptCacheKey \} : \{\}/)
+  // Hashed call options are built before invoke; the key is never part of them.
+  const dispatch = code.slice(code.indexOf('const dispatchModel'), code.indexOf('const invoke=('))
+  assert.doesNotMatch(dispatch, /promptCacheKey/)
+  assert.match(code, /promptCacheKey = 'bob-ask-' \+ \(await fingerprint\(\{ v: 1, scope: threadId \?\? execution\.id \}\)\)\.slice\(0, 32\)/)
+  for (const file of ['project-answer.ts', 'drawing-budget.ts', 'bob-job-journal.ts', 'ai-background.ts', 'bob-context-continuation.ts']) {
+    assert.doesNotMatch(await readFile(new URL('../supabase/functions/_shared/' + file, import.meta.url), 'utf8'), /promptCacheKey|prompt_cache_key/, file)
+  }
+})
+
+test('larger construction pages are pinned per job and share one step budget (2026-10-22)', async () => {
+  const code = await readFile(new URL('../supabase/functions/_shared/ask-openai.ts', import.meta.url), 'utf8')
+  const identity = code.slice(code.indexOf("memo('execution:identity'"), code.indexOf('modelBudget = createBobModelBudget'))
+  assert.match(identity, /constructionPageVersion: 1 as const,/)
+  assert.match(code, /execution\.constructionPageVersion !== 1\) throw new Error\('construction_page_version_invalid'\)/)
+  assert.match(code, /execution\.constructionPageVersion === 1 \? \{ viewPageTokens: \(\) => constructionViewBudget\(constructionReadsInStep\) \} : \{\}/)
+  assert.match(code, /execution\.constructionPageVersion === 1 \? \{ literalResultTokens: \{ \[CONSTRUCTION_VIEW_TOOL\.function\.name\]: BOB_CONSTRUCTION_RESULT_TOKENS \} \} : \{\}/)
+  assert.match(code, /onToolBatch:names=>\{ constructionReadsInStep = names\.filter\(name => name === CONSTRUCTION_VIEW_TOOL\.function\.name\)\.length \}/)
+})

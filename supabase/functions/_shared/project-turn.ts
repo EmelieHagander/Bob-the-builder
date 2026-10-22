@@ -41,6 +41,7 @@ export async function runClaimedProjectTurn(opts: {
   prepareContext?: () => Promise<WorkingContext>;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
+  onToolBatch?: (names: string[]) => void;
   deadline?: number; resume?: boolean; beforeSettle?: () => void; modelTimeoutMs?: number; unlimitedWork?: boolean;
   checkpoint?: BobAnswerCheckpoint;
   commit?: (result: Extract<ProjectAnswer, { ok: true }>, generation: number) => Promise<void>;

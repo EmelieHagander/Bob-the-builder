@@ -182,7 +182,11 @@ bindings/parts and directly attached joints/materials/roles. Its declared scope
 does not claim to traverse every additional dependency of newly reached neighbor
 parts; those can be selected in a further dependency read. Every page identifies
 its selection, missing IDs, total selected rows and `next_read`. Pages fit 2,000
-serialized content tokens. Whole posts are preferred; an oversized post uses
+serialized content tokens. Jobs started from 2026-10-22 (owner decision A) give a
+read up to 6,000 tokens; reads in the same model step share 12,000, never below
+2,000 each. Larger pages only cut read steps: selection still comes from the view
+and IDs, and the whole construction does not reach the main model for a partial
+task. Older jobs keep 2,000, and a cursor continues exactly at either size. Whole posts are preferred; an oversized post uses
 explicit exact JSON fragments with Unicode offsets. Original data is not shortened
 or replaced by model-generated text. Cursors cannot move between revisions/views.
 

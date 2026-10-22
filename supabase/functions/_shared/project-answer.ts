@@ -146,6 +146,9 @@ export type ProjectAnswerOptions = {
   writer?: ProjectWriter; context?: WorkingContext; deadline?: number; modelTimeoutMs?: number; unlimitedWork?: boolean;
   observe?: (value: TurnObservation) => void; onProgress?: (value: TurnProgress) => void;
   onTool?: (value: { name: string; status: string; step: number; index: number; ms: number; validation_code?: string }) => void;
+  /** Names of the calls this model step will execute, before the first runs.
+   * Called again with the same names when a checkpointed step resumes. */
+  onToolBatch?: (names: string[]) => void;
   projectContext?: ProjectContext; readToolPolicy?: ToolPolicyReader;
   /** Internal comparison only; never read from the owner's request body. */
   toolInstructions?: ToolInstructions;
@@ -394,6 +397,7 @@ async function runProjectAnswerFromState(opts: ProjectAnswerOptions): Promise<Pr
         previousResponseId = response.responseId; messages = []; toolIndex = 0; phase = 'tools'
         await save(step)
       }
+      opts.onToolBatch?.(response.toolCalls.slice(0, unlimitedWork ? undefined : BOB_TURN_LIMITS.callsPerStep).map(call => call.function.name))
       for (let index = toolIndex; index < response.toolCalls.length; index++) {
         const call = response.toolCalls[index]
         if (Date.now() >= deadline) { observe('failed'); return { ok: false, error: 'turn_timeout' } }

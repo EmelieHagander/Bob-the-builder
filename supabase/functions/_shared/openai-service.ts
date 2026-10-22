@@ -180,6 +180,9 @@ export interface OpenAIServiceOptions {
   }>;
   fileName?: string;
   previousResponseId?: string;
+  /** Provider cache routing hint for requests that share a long prefix.
+   * Trusted callers only; it is added outside journal fingerprints. */
+  promptCacheKey?: string;
   /** Trusted caller opt-in, pinned with that caller's execution contract.
    * Legacy callers retain their exact output selection and input wire shape. */
   responsePhaseMode?: 'aware';
@@ -630,6 +633,7 @@ export async function callOpenAIResponses<T = unknown>(
     if (options.previousResponseId) {
       requestBody.previous_response_id = options.previousResponseId;
     }
+    if (options.promptCacheKey) requestBody.prompt_cache_key = options.promptCacheKey;
     if (options.responseItemsMode === 'preserve') requestBody.include = ['reasoning.encrypted_content'];
     
     // Add tools if provided

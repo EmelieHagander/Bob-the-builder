@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bobResultPage, projectBobResult, BOB_RESULT_PAGE_TOKENS, type BobArchivedOperation } from '../supabase/functions/_shared/bob-result-references.ts'
+import { bobResultPage, projectBobResult, BOB_RESULT_PAGE_TOKENS, BOB_CONSTRUCTION_RESULT_TOKENS, type BobArchivedOperation } from '../supabase/functions/_shared/bob-result-references.ts'
+import { createConstructionViews, CONSTRUCTION_VIEW_MAX_TOKENS } from '../supabase/functions/_shared/construction-views.ts'
 import { countSerializedTokens } from '../supabase/functions/_shared/bob-token-budget.ts'
 import { createBobContextContinuation } from '../supabase/functions/_shared/bob-context-continuation.ts'
 import { createResumeProbe } from '../scripts/benchmark-bob-resume.ts'
@@ -211,4 +212,47 @@ test('one whole construction view page stays literal in the recent window', () =
   const read: BobArchivedOperation = { call_id: 'view', tool_name: 'read_construction_draft',
     arguments: '{"view":"parts","artifact_id":"dafa721c-3aa6-406d-aa18-fb658c00223b","revision":11,"ids":[],"after":null,"section":null,"result_id":null}', output: view }
   assert.equal(projectBobResult(read, false), view)
+})
+
+// Owner decision A (2026-10-22): a whole larger construction page reaches Bob
+// in the step that read it, without get_work_history steps.
+async function fullViewPage() {
+  const artifact = 'dafa721c-3aa6-406d-aa18-fb658c00223b'
+  const instances = Array.from({ length: 400 }, (_, i) => ({ id: 'left_post_' + i, definition_id: 'd_post', note: 'Keep "18 mm" é 😀 exactly',
+    placement: { x: 18 + i, y: 282, z: 1430, rx: 0, ry: 0, rz: 0 } }))
+  const draft = { projectId: 'p', status: 'ok', artifact_id: artifact, revision: 11, current_revision: 11, archived: false, source_state: 'current',
+    recipe: { definitions: [{ id: 'd_post', primitive: 'box' }], instances }, parameters: { nodes: [], bindings: [] }, open_questions: [] }
+  const page = await createConstructionViews('p').read(draft, { artifact_id: artifact, revision: 11, after: null, view: 'parts', ids: [], result_id: null, section: null }, CONSTRUCTION_VIEW_MAX_TOKENS)
+  assert(countSerializedTokens(page) > CONSTRUCTION_VIEW_MAX_TOKENS - 300, 'fixture fills a whole page: ' + countSerializedTokens(page))
+  return page
+}
+
+test('a whole 6,000-token construction page stays literal with its pinned allowance; without it the page is cut', async () => {
+  const page = await fullViewPage()
+  const args = JSON.stringify({ view: 'parts', artifact_id: page.artifact_id, revision: 11, ids: [], after: null, section: null, result_id: null })
+  const budget = { model_steps: 23, project_reads: 32, writes: 4, corrections: 2, cad_consultations: 1, catalog_reads: 8, image_operations: 6, history_reads: 12 }
+  for (const output of [JSON.stringify(page), JSON.stringify({ ...page, execution_budget: budget })]) {
+    const read: BobArchivedOperation = { call_id: 'view', tool_name: 'read_construction_draft', arguments: args, output }
+    assert.equal(projectBobResult(read, false, BOB_CONSTRUCTION_RESULT_TOKENS), output)
+    assert.equal(JSON.parse(String(projectBobResult({ ...read }, false))).truncated, true, 'other tools and older jobs keep the 3,000-token first page')
+  }
+})
+
+test('the pinned literal allowance applies only to the named tool in the newest exchange', async () => {
+  const page = JSON.stringify(await fullViewPage())
+  const run = async (literalResultTokens?: Record<string, number>) => {
+    const sent: OpenAIServiceOptions[] = []
+    const adapter = createBobContextContinuation({ version: 1, mainResultReferences: 1, aiCatalog: catalog, ...(literalResultTokens ? { literalResultTokens } : {}),
+      callModel: async (request: OpenAIServiceOptions) => { sent.push(disk(request)); return response('r' + sent.length, [call('c' + sent.length, 'read_construction_draft'), call('d' + sent.length, 'search_project_data')]) } })
+    await adapter.call(seed)
+    await adapter.call({ ...seed, previousResponseId: 'r1', messages: [output('c1', page), output('d1', page)] })
+    const results = sent.at(-1)!.messages!.filter(m => m.role === 'tool')
+    return Object.fromEntries(results.map(m => [m.tool_call_id, String(m.content)]))
+  }
+  const pinned = await run({ read_construction_draft: BOB_CONSTRUCTION_RESULT_TOKENS })
+  assert.equal(pinned.c1, page)
+  assert.equal(JSON.parse(pinned.d1).truncated, true)
+  const legacy = await run()
+  assert.equal(JSON.parse(legacy.c1).truncated, true)
+  assert.equal(JSON.parse(legacy.d1).truncated, true)
 })

@@ -125,7 +125,11 @@ One request builder assembles trusted base instructions, the complete eligible
 short-tool directory and workflow cards, loaded manuals, managed memory and five
 unchanged recent originals, turn-start orientation/view and the current turn's
 ordered native exchanges. Keep stable content first without promoting project or
-tool content into trusted instructions. Tool counts are catalog-derived. A loaded
+tool content into trusted instructions. Forward rule (2026-10-22): static content
+first, new content last; changing earlier content invalidates the provider's cached
+prefix. For later request migrations or models with explicit cache breakpoints
+(OpenAI documents these for GPT-5.6), place breakpoints at those boundaries and
+verify the provider semantics at that time. Tool counts are catalog-derived. A loaded
 manual remains carried for the turn, subject to current eligibility and the pinned
 definition; carrying it never enlarges authority.
 
@@ -193,7 +197,9 @@ same probe peaks at about 36k estimated input.
 
 At the model boundary, large string results receive a bounded first page (3,000
 tokens since 2026-10-20, sized so that one whole 2,000-token construction view
-page stays literal instead of costing one or two `get_work_history` steps). Successful
+page stays literal instead of costing one or two `get_work_history` steps; jobs
+started from 2026-10-22 keep a whole `read_construction_draft` page literal up to
+8,000 tokens, other tools 3,000). Successful
 read/list/search/open results older than two model exchanges become explicit
 historical references; small write receipts, check results and error feedback stay
 literal. Large receipts/feedback keep their bounded first page plus exact recall.
@@ -212,8 +218,24 @@ pin `resultWindowVersion: 1`: older results stay whole, newest first, up to
 retention is unchanged. If the spending stop ends the completion review, Bob's
 reviewed answer is delivered as partial instead of the recovery template.
 
+**Larger read pages and cache routing (2026-10-22, owner decision A; prepared,
+not deployed).** Measured read-only from `bob.execution_events` and edge logs:
+one drawing run read a construction in 9 sequential ~2,000-token pages, each a
+model step re-sending 17k–40k input tokens; a third of Bob's steps were draft
+reads. Across 106 consecutive step pairs, instructions and tool schemas never
+changed size when the offered tools stayed the same, yet those steps sent
+2.67M uncached input tokens over three days where about 0.53M was new content;
+cached input often stopped near 16,896 tokens, the prefix shared by all runs.
+Decision: [larger construction view pages](artifacts.md#construction-views-and-observed-results--prepared-2026-10-19)
+pinned per job (`constructionPageVersion: 1`), and a hashed per-thread
+`prompt_cache_key` on main `ask-bob` requests, added after all journal, job and
+drawing-budget fingerprints. Tool loading, instruction placement, effort and
+model are unchanged. The cache effect is a hypothesis until measured after
+deployment; compare `ask-bob` cached input separately for step 0 and later steps.
+
 Reduce default tool pages toward approximately 2,000 content tokens where their
-contract permits, with explicit continuation. Retain complete original results in
+contract permits, with explicit continuation. (Construction views since 2026-10-22:
+fewer, larger pages, because each page costs a model step; see decision A above.) Retain complete original results in
 an authorized, versioned archive before replacing old result bodies with exact
 references. Reopening retrieves that observed result, not a newly executed mutation
 or a silently changed current record. Preserve tool-call/output pairs, governing

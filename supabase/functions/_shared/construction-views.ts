@@ -3,7 +3,19 @@ import { stableJsonValue } from './bob-job-journal.ts'
 
 type Row = Record<string, any>
 type Item = { collection: string; id: string; value: unknown }
+/** Default page and the floor for every read. Jobs started before 2026-10-22
+ * keep exactly this page size, so their recorded cursors and replays match. */
 export const CONSTRUCTION_VIEW_TOKENS = 2000
+/** Owner decision A (2026-10-22): each page costs Bob a whole model step, so
+ * one read may return up to this much of the selected view. */
+export const CONSTRUCTION_VIEW_MAX_TOKENS = 6000
+/** Reads in the same model step share this, never below the default page:
+ * an exchange is never larger than with 2,000-token pages for the same count. */
+export const CONSTRUCTION_VIEW_STEP_TOKENS = 12000
+export function constructionViewBudget(readsInStep:number):number{
+ const reads=Number.isSafeInteger(readsInStep)&&readsInStep>0?readsInStep:1
+ return Math.max(CONSTRUCTION_VIEW_TOKENS,Math.min(CONSTRUCTION_VIEW_MAX_TOKENS,Math.floor(CONSTRUCTION_VIEW_STEP_TOKENS/reads)))
+}
 const views = ['overview','parts','parameters','bindings','joints','materials','roles','notes','dependencies','result']
 const nullable = (schema: Row) => ({ anyOf: [schema, { type: 'null' }] })
 export const CONSTRUCTION_VIEW_TOOL = { type: 'function' as const, function: {
@@ -96,7 +108,8 @@ function resultItems(output:Row):Item[]{
 /** A cursor binds the immutable record selection, not the latest project head.
  * Whole rows are preferred. Oversized rows expose exact Unicode JSON fragments,
  * never an unlabeled truncation or a fabricated shortened fact. */
-async function page(query:ConstructionViewQuery,header:Row,rows:Item[]):Promise<Row>{
+async function page(query:ConstructionViewQuery,header:Row,rows:Item[],budget:number):Promise<Row>{
+ if(!Number.isSafeInteger(budget)||budget<CONSTRUCTION_VIEW_TOKENS||budget>CONSTRUCTION_VIEW_MAX_TOKENS)throw new Error('construction_view_budget_invalid')
  const binding=(await exactHash({artifact_id:query.artifact_id,revision:query.revision,view:query.view,ids:query.ids,result_id:query.result_id,section:query.section})).slice(0,24)
  let index=0,offset=0
  if(query.after){const m=/^cv1:([a-f0-9]{24}):(\d+):(\d+)$/.exec(query.after);if(!m||m[1]!==binding)throw new Error('construction_view_cursor_invalid');index=Number(m[2]);offset=Number(m[3])}
@@ -108,16 +121,17 @@ async function page(query:ConstructionViewQuery,header:Row,rows:Item[]):Promise<
    end_of_selection:i===rows.length,complete:index===0&&startOffset===0&&i===rows.length,scope:'selected_view_only'},
   next_read:i<rows.length?{...query,after:token(i,o)}:null})
  const records:unknown[]=[];let next=index
- if(countSerializedTokens(envelope([],next,offset))>CONSTRUCTION_VIEW_TOKENS)throw new Error('construction_view_header_too_large')
+ if(countSerializedTokens(envelope([],next,offset))>budget)throw new Error('construction_view_header_too_large')
  while(next<rows.length){
   const row=rows[next]
-  if(offset===0&&countSerializedTokens(envelope([...records,row],next+1,0))<=CONSTRUCTION_VIEW_TOKENS){records.push(row);next++;continue}
+  if(offset===0&&countSerializedTokens(envelope([...records,row],next+1,0))<=budget){records.push(row);next++;continue}
   if(records.length)break
   const chars=Array.from(JSON.stringify(stableJsonValue(row.value)))
   if(offset>=chars.length)throw new Error('construction_view_cursor_invalid')
   const fragment=(end:number)=>({collection:row.collection,id:row.id,fragment:{encoding:'json',offset,total_characters:chars.length,text:chars.slice(offset,end).join(''),complete:end===chars.length}})
-  let low=offset,high=Math.min(chars.length,offset+8000)
-  while(low<high){const end=Math.ceil((low+high)/2);if(countSerializedTokens(envelope([fragment(end)],end===chars.length?next+1:next,end===chars.length?0:end))<=CONSTRUCTION_VIEW_TOKENS)low=end;else high=end-1}
+  // Four characters per token: exactly the former 8,000 at the default page.
+  let low=offset,high=Math.min(chars.length,offset+budget*4)
+  while(low<high){const end=Math.ceil((low+high)/2);if(countSerializedTokens(envelope([fragment(end)],end===chars.length?next+1:next,end===chars.length?0:end))<=budget)low=end;else high=end-1}
   if(low===offset)throw new Error('construction_view_page_unavailable')
   records.push(fragment(low));if(low===chars.length){next++;offset=0}else offset=low
   break
@@ -152,7 +166,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    details_omitted:true,message:'Open the exact result sections for findings and constraints before relying on this assessment. A construction result is not a drawing or manufacturing approval.'}
  }
  function sections(rows:Item[]){const counts=new Map<string,number>();for(const row of rows)counts.set(row.collection,(counts.get(row.collection)??0)+1);return [...counts].map(([name,count])=>({name,count}))}
- async function read(draft:Row,query:ConstructionViewQuery):Promise<Row>{
+ async function read(draft:Row,query:ConstructionViewQuery,budget=CONSTRUCTION_VIEW_TOKENS):Promise<Row>{
   if(query.view==='result'){
    const o=query.result_id&&seen.get(query.result_id)
    if(!o||o.artifact_id!==query.artifact_id||o.revision!==query.revision)return {status:'not_found',projectId,message:'No observed result for this exact construction revision in this turn.'}
@@ -161,7 +175,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
    if(query.section&&!selected.length)return {status:'not_found',projectId,sections:sections(rows)}
    return page(query,{projectId,status:'ok',artifact_id:o.artifact_id,revision:o.revision,result_id:o.id,observed_at:o.observed_at,
     observation:'historical',current_revision:draft.current_revision??draft.revision,source_state:draft.source_state,archived:draft.archived,
-    sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.'},selected)
+    sections:sections(rows),message:'Exact earlier observation. Current source status is shown separately; this does not rerun the check or renew approval.'},selected,budget)
   }
   if(query.result_id!==null||query.section!==null)return {status:'invalid',message:'result_id and section are only used with view=result.'}
   if(query.view==='notes'&&query.ids.length)return {status:'invalid',message:'Read notes without an ID filter; all original questions remain available.'}
@@ -180,7 +194,7 @@ export function createConstructionViews(projectId:string,now:()=>Date=()=>new Da
   const selected=constructionViewItems(draft,query.view,query.ids)
   return page({...query,revision:draft.revision},{...header,missing_ids:selected.missing_ids,selection:query.ids,
    dependency_scope:query.view==='dependencies'?'parameter ancestors/dependents, bound parts and directly attached joints; newly reached neighboring parts may have further dependencies':'selected view; use dependencies for formulas, sources and affected parts',
-   open_question_count:arr(draft.open_questions).length,notes_view:'notes'},selected.items)
+   open_question_count:arr(draft.open_questions).length,notes_view:'notes'},selected.items,budget)
  }
  return {read,observe,exportState:()=>structuredClone(observations),restoreState:restore}
 }
