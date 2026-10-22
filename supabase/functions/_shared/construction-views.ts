@@ -3,14 +3,14 @@ import { stableJsonValue } from './bob-job-journal.ts'
 
 type Row = Record<string, any>
 type Item = { collection: string; id: string; value: unknown }
-/** Default page and the floor for every read. Jobs started before 2026-10-22
- * keep exactly this page size, so their recorded cursors and replays match. */
+/** Default page and the floor for every read. Jobs without the
+ * constructionPageVersion pin keep exactly this size, so their replays match. */
 export const CONSTRUCTION_VIEW_TOKENS = 2000
-/** Owner decision A (2026-10-22): each page costs Bob a whole model step, so
- * one read may return up to this much of the selected view. */
+/** Owner decision A (2026-10-22, pinned per job): each page costs Bob a whole
+ * model step, so one read may return up to this much of the selected view. */
 export const CONSTRUCTION_VIEW_MAX_TOKENS = 6000
-/** Reads in the same model step share this, never below the default page:
- * an exchange is never larger than with 2,000-token pages for the same count. */
+/** Reads in the same model step share this, never below the default page, so
+ * a step holds at most max(12,000, 2,000 x reads) tokens of construction pages. */
 export const CONSTRUCTION_VIEW_STEP_TOKENS = 12000
 export function constructionViewBudget(readsInStep:number):number{
  const reads=Number.isSafeInteger(readsInStep)&&readsInStep>0?readsInStep:1

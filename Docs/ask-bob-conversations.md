@@ -198,8 +198,8 @@ same probe peaks at about 36k estimated input.
 At the model boundary, large string results receive a bounded first page (3,000
 tokens since 2026-10-20, sized so that one whole 2,000-token construction view
 page stays literal instead of costing one or two `get_work_history` steps; jobs
-started from 2026-10-22 keep a whole `read_construction_draft` page literal up to
-8,000 tokens, other tools 3,000). Successful
+pinning `constructionPageVersion: 1` keep a whole `read_construction_draft` page
+literal up to 8,000 tokens of model-visible text, other tools 3,000). Successful
 read/list/search/open results older than two model exchanges become explicit
 historical references; small write receipts, check results and error feedback stay
 literal. Large receipts/feedback keep their bounded first page plus exact recall.
@@ -232,10 +232,15 @@ pinned per job (`constructionPageVersion: 1`), and a hashed per-thread
 drawing-budget fingerprints. Tool loading, instruction placement, effort and
 model are unchanged. The cache effect is a hypothesis until measured after
 deployment; compare `ask-bob` cached input separately for step 0 and later steps.
+At the deploy boundary: a retried job that failed before the deploy reuses paid
+model results only up to its first construction read (later inputs differ), and
+rolling the code back while pinned jobs are paused or running stops them with
+`continuation_changed`. There is no catalog switch; fix forward, or roll back
+only with zero queued, running or paused Bob jobs.
 
 Reduce default tool pages toward approximately 2,000 content tokens where their
-contract permits, with explicit continuation. (Construction views since 2026-10-22:
-fewer, larger pages, because each page costs a model step; see decision A above.) Retain complete original results in
+contract permits, with explicit continuation. (Construction views for jobs pinning
+decision A: fewer, larger pages, because each page costs a model step; see above.) Retain complete original results in
 an authorized, versioned archive before replacing old result bodies with exact
 references. Reopening retrieves that observed result, not a newly executed mutation
 or a silently changed current record. Preserve tool-call/output pairs, governing

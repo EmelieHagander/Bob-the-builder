@@ -29,7 +29,7 @@ manual load hit the provider cache 9% of the time against 81% otherwise (2.03 of
 
 **Owner decision — 2026-10-22:** do not redesign selective loading, allowed-tool
 restriction or instruction placement for provider caching. The cache work kept is
-a routing hint only ([conversation owner](ask-bob-conversations.md#pr2--build-each-request-from-complete-state)).
+a routing hint only ([decision A](ask-bob-conversations.md#pr3--bound-result-payloads-without-an-ai-history-summary)).
 
 Tool-session checkpoint v2 saves selected method names and loaded tool versions.
 Methods resolve from the immutable manifest; current instructions and per-tool

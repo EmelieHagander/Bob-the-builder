@@ -256,3 +256,23 @@ test('the pinned literal allowance applies only to the named tool in the newest 
   assert.equal(JSON.parse(legacy.c1).truncated, true)
   assert.equal(JSON.parse(legacy.d1).truncated, true)
 })
+
+test('quote-dense pages and JSON fragments of a 6,000-token construction view stay literal for pinned jobs', async () => {
+  const artifact = 'dafa721c-3aa6-406d-aa18-fb658c00223b'
+  const draft = { projectId: 'p', status: 'ok', artifact_id: artifact, revision: 11, current_revision: 11, archived: false, source_state: 'current',
+    description: JSON.stringify(Array.from({ length: 900 }, (_, i) => ({ label: `"A${i}"`, note: 'pasted "spec" \\ value' }))),
+    open_questions: Array.from({ length: 400 }, (_, i) => `Is "${i}" the "post", "beam" or "rim" for "A${i}"?`),
+    recipe: { definitions: [], instances: [] }, parameters: { nodes: [], bindings: [] } }
+  const views = createConstructionViews('p')
+  let q: any = { artifact_id: artifact, revision: 11, after: null, view: 'notes', ids: [], result_id: null, section: null }, pages = 0, fragments = 0
+  const budget = { model_steps: 23, project_reads: 32, writes: 4, corrections: 2, cad_consultations: 1, catalog_reads: 8, image_operations: 6, history_reads: 12 }
+  do {
+    const page = await views.read(draft, q, CONSTRUCTION_VIEW_MAX_TOKENS)
+    if (page.items.some((item: any) => item.fragment)) fragments++
+    const output = JSON.stringify({ ...page, execution_budget: budget })
+    const read: BobArchivedOperation = { call_id: 'notes' + pages, tool_name: 'read_construction_draft', arguments: JSON.stringify(q), output }
+    assert.equal(projectBobResult(read, false, BOB_CONSTRUCTION_RESULT_TOKENS), output, `page ${pages} stays literal`)
+    q = page.next_read; pages++
+  } while (q && pages < 100)
+  assert(pages > 2 && fragments > 0, `${pages} pages, ${fragments} with fragments`)
+})
