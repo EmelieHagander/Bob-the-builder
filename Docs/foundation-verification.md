@@ -1,5 +1,31 @@
 # Foundation verification and rollout
 
+## Stored source status — 2026-10-22
+
+**Prepared on `ccr-1d0233bb-b84nk5` (PR #319); not merged or applied.** The
+[database owner](../db/README.md#stored-source-status--2026-10-22) and
+[Artifact contract](artifacts.md#source-freshness-corrections--september-24-deployed)
+describe the design.
+
+- **Why:** hosted logs for 2026-10-21/22 show 8 s statement timeouts (about 40
+  a day) on `drawing_work_list`, `current_drawing_steps`,
+  `current_drawing_overview` and `artifact_source_status`, all display reads.
+  Postgres also restarted after a crash at 17:58 UTC on 2026-10-22. A CAD save
+  timed out the same evening (`write_not_saved`); nothing was partially saved.
+- **Local evidence:** `tests/stored-source-status-sql.test.ts`, 6 tests: stored
+  equals live as a member, executed plans show no assessment for fresh rows
+  (also through `current_drawing_overview` and `current_drawing_steps`), every
+  source change falls back to live at once, the storable gate, global catalog
+  fan-out, project delete, RLS/grants, and the rollback-only release proof
+  (which also detects a forged stored row). The input-coverage guard derives
+  27 base tables from the installed definitions: 18 carry the change trigger,
+  9 shared physical tables are gated. A broad database subset (138 files that
+  touch drawings, constructions, CAD, materials, media, measurements, physical
+  sources and projects) passed: 870 tests, 0 failures, on PGlite.
+- **Not verified here:** PGlite is single-connection, so concurrent writers and
+  the drain's counter race are reasoned, not exercised. pg_cron scheduling is
+  skipped in PGlite. Not applied, no CI, no full suite.
+
 ## Construction view pages and cache routing — 2026-10-22
 
 **Merged in PR #317 (`7e37918`) and technically deployed 2026-10-22 18:07 UTC;
