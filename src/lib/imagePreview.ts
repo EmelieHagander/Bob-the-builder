@@ -1,7 +1,7 @@
 import { createSharedRead } from './sharedRead'
 
 /** Bounded, memory-only decoded previews. Callers reauthorize before every hit. */
-export function createImagePreviewCache(maxBytes = 8 * 1024 * 1024, maxEntries = 24, ttlMs = 120_000) {
+export function createImagePreviewCache(maxBytes = 8 * 1024 * 1024, maxEntries = 24, ttlMs = 15 * 60_000) {
   const entries = new Map<string, { blob: Blob; expires: number }>()
   const reads = createSharedRead()
   let bytes = 0, epoch = 0

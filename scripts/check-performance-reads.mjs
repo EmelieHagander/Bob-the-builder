@@ -35,6 +35,8 @@ function query(table) {
       if (table === 'bob_messages') rows = scenario === 'pending'
         ? [{ seq: 5, role: 'user', text: 'fixture', turn_id: turn, delivery_state: 'pending', updated_at: new Date().toISOString() }]
         : [{ seq: 6, role: 'assistant', text: 'fixture answer', turn_id: turn, delivery_state: 'completed' }, { seq: 5, role: 'user', text: 'fixture', turn_id: turn, delivery_state: 'completed' }]
+      // Messages carry their joined active thread, as the real read does.
+      if (table === 'bob_messages') rows = rows.map(row => ({ ...row, thread_id: thread }))
       return request(table, single ? rows[0] ?? null : rows, operations).then(resolve, reject)
     }
     if (['insert', 'update', 'delete', 'upsert'].includes(method)) throw new Error('Mutation blocked in audit fixture')
