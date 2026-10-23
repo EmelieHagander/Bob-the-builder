@@ -42,6 +42,14 @@ export function BuildPreparation() {
   const linkedNeeds = (data?.needs.items ?? []).filter(item => chosen && item.artifactId === chosen.id
     && item.artifactRevision === chosen.revision && !item.artifactChanged && !item.targetChanged
     && !item.stockChanged && !item.componentChanged)
+  const provisionalMaterials = validPreview ? [...validPreview.parts.reduce((groups, part) => {
+    const key = part.materialId + '@' + part.materialRevision
+    const existing = groups.get(key)
+    if (existing) existing.blanks += part.quantity
+    else groups.set(key, { key, name: part.materialName, revision: part.materialRevision, blanks: part.quantity })
+    return groups
+  }, new Map<string, { key: string; name: string; revision: number; blanks: number }>()).values()]
+    .sort((a, b) => a.name.localeCompare(b.name, 'sv') || a.revision - b.revision) : []
   const currentPlans = (data?.cutPlans.items ?? []).filter(item => chosen && item.artifact_id === chosen.id
     && item.artifact_revision === chosen.revision && item.source_state === 'current')
   const currentPlan = currentPlans[0]
@@ -139,6 +147,16 @@ export function BuildPreparation() {
       <section className="card" style={{ ...pageCard, marginTop: 'var(--section-gap)' }} aria-label="Material och inköpsstatus">
         <h2>Material &amp; inköp</h2>
         <p className="foundation-hint">Råmaterial och inköp räknas från en verifierad kapplan, inte genom att summera delarnas mått.</p>
+        {provisionalMaterials.length > 0 && <details>
+          <summary>Materialöversikt från konstruktionen · {provisionalMaterials.length} material</summary>
+          <p className="foundation-hint">Antalet nedan är delar att tillverka, inte skivor eller löpmeter att köpa. Materialformat, sågspår, spill och lager måste bedömas i den sparade kapplanen.</p>
+          <div style={{ overflowX: 'auto' }}><table>
+            <thead><tr><th>Material</th><th>Ämnen i ritningen</th></tr></thead>
+            <tbody>{provisionalMaterials.map(group => <tr key={group.key}>
+              <td>{group.name} · v{group.revision}</td><td>{group.blanks}</td>
+            </tr>)}</tbody>
+          </table></div>
+        </details>}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--layout-gap)' }}>
           <div>
             <strong>Materialbehov</strong>
