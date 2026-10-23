@@ -14,6 +14,7 @@ export interface ProjectTargetScope {
   areaId: string | null
   revision: number
   solutionId: string | null
+  solutionRevision: number | null
 }
 
 export interface ConstructionDraftSnapshot {
@@ -57,11 +58,12 @@ export function createBuildPreparation(client: SupabaseClient<any, any, any> | n
     async targets(projectId: string): Promise<ProjectTargetScope[]> {
       if (!client) return []
       const { db, guard } = connection(projectId)
-      const rows = checked(await db.from('current_target').select('area_id,revision,solution_id')
+      const rows = checked(await db.from('current_target').select('area_id,revision,solution_id,solution_revision')
         .eq('project_id', projectId)) as Row[]
       guard()
       return rows.filter(row => row.solution_id).map(row => ({
-        areaId: row.area_id ?? null, revision: row.revision, solutionId: row.solution_id,
+        areaId: row.area_id ?? null, revision: row.revision,
+        solutionId: row.solution_id, solutionRevision: row.solution_revision ?? null,
       }))
     },
 
