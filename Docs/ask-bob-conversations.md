@@ -82,6 +82,23 @@ fails the job with `turn_checkpoint_too_large` instead of retrying the write.
 This fence exists because a 4.8 MB snapshot timed out on every save and starved
 the database on 2026-10-21.
 
+#### CAD candidate files stay in their render step
+
+A reviewed CAD candidate's files (about 0.7 MB) made every later save about
+1.2 MB (2026-10-22). In a checkpoint job the CAD state (version 2) keeps the
+candidate without `packet.files` and names its `cad:render` journal step by
+input fingerprint (`cadRenderInput`). The step itself is unchanged and stays
+until the job finishes. `save_cad_design` and the drawing-request save call
+`candidateForSave()`: it reads the files once per worker through
+`bob_checkpoint_render_files` (claim-fenced, not journaled) and checks the
+exact export set and SHA-256 against the reviewed manifest. A missing,
+changed or unreadable step releases the candidate with
+`candidate_files_unavailable`; nothing is written, rendered or reviewed
+again. Jobs without the loader, and version 1 state from before this change,
+keep the files inline. An older worker refuses version 2 state, so roll the
+worker back only after active checkpoint jobs finish.
+[Database function](../db/README.md#checkpoint-render-files--2026-10-23).
+
 Current membership, policy, model enablement, image/source versions and canonical
 write guards remain checked at new-work boundaries, including after model waits.
 Removing checks for replayed operations must not reduce live checks to once per

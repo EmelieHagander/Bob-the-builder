@@ -683,7 +683,8 @@ export async function answerWithOpenAi(opts: {
     }
     if(['paused','cancelled'].includes(request.status))return {ok:false,error:'drawing_request_inactive'}
     const outcome:Record<string,any>=await cadAssistant.consult({...request.payload.brief,request_id:request.id})
-    const candidate=cadAssistant.candidate
+    const ready=await cadAssistant.candidateForSave()
+    const candidate=ready.status==='ready'?ready.candidate:null
     let drawingReceipt
     if(candidate&&writer){
       const receipt=await writer.commit({kind:'cad',record_id:candidate.artifact_id,expected_updated_at:null,expected_revision:candidate.expected_revision,request_quote:opts.message.slice(0,500),data:candidate})
