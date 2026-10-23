@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
+import type { Measurement } from '../data/projectFacts'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { TaskModal } from '../components/editors'
@@ -35,7 +36,7 @@ export function Dashboard() {
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const areaById = new Map((areas ?? []).map((area) => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
-  const missingMeasurements = (planning?.missing.items ?? []).filter(item => item.kind === 'measurement' && item.required)
+  const missingMeasurements = (planning?.missing.items ?? []).filter((item): item is Measurement => item.kind === 'measurement' && item.required)
   const snapshot = {
     missing: missingMeasurements,
     targets: planning?.targets ?? [],
