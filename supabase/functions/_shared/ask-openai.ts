@@ -31,7 +31,7 @@ export const RESEND_NOTICE = 'Obs: ett modellanrop tappade kontakten innan svare
 import type { OpenAIServiceOptions } from './openai-service.ts'
 import { createRecordDetailReader } from './project-record-detail.ts'
 import { createProjectImageTools } from './project-image-tools.ts'
-import { createCadAssistant } from './cad-assistant.ts'
+import { createCadAssistant, cadRenderInput } from './cad-assistant.ts'
 import { createCadTransport } from './cad-transport.ts'
 import { createMaterialCatalogReader } from './material-catalog.ts'
 import { createToolPolicyReader } from './project-tools/policy-reader.ts'
@@ -78,7 +78,7 @@ export async function answerWithOpenAi(opts: {
   authHeader: string; userId: string; projectId: string; message: string; clientTurnId: string;
   screen?: BobScreenPointer | null;
   imageIds?: string[];
-  background?: { checkpoint?: BobTurnCheckpointStore; workAllowanceVersion?: number; catalogManifestId?: string; authorityExpiresAt?: string; drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
+  background?: { checkpoint?: BobTurnCheckpointStore; /** Claim-fenced read of this job's successful cad:render results; never journaled. */ loadRenderFiles?: (renderFingerprint: string) => Promise<unknown>; workAllowanceVersion?: number; catalogManifestId?: string; authorityExpiresAt?: string; drawingRequestId?:string; jobId?: string; asyncModels?: boolean; claim: Extract<BobTurnClaim, { status: 'claimed'; mode: 'server' }>; journal: BobJournal; deadline: number; replay: boolean; progress?: (value: TurnProgress) => void };
 }): Promise<ProjectAnswer> {
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_ANON_KEY')
@@ -607,13 +607,15 @@ export async function answerWithOpenAi(opts: {
     },
     ...(requestStore ? { requestStore } : {}),
     projectId:opts.projectId,userId:opts.userId,hasAccess,deadline,knowledgeReader,ownerRequest:opts.message,durable:!!opts.background?.asyncModels,
+    // Checkpoints name a reviewed candidate's render step instead of copying its files.
+    ...(checkpoint && opts.background?.loadRenderFiles ? { loadRenderFiles: opts.background.loadRenderFiles } : {}),
     readDesignReadiness,
     available:!!Deno.env.get('BOB_CAD_URL')&&!!Deno.env.get('BOB_CAD_TOKEN'),
     makeLookup:()=>createProjectLookup(opts.projectId,lookupTransport,10000,40,undefined,lookupOptions),
     callModel,
     render:(recipe,source,beforeDispatch)=>{
      if(!source)throw new Error('checked_construction_source_required')
-     return memo('cad:render',{recipe,drawing_source:source},async()=>{
+     return memo('cad:render',cadRenderInput(recipe,source),async()=>{
       await beforeDispatch?.()
       return createCadTransport(Deno.env.get('BOB_CAD_URL'),Deno.env.get('BOB_CAD_TOKEN'))(recipe,source)
      },45000)

@@ -16,6 +16,11 @@ import {manufacturePolicy} from './support/construction-instance-policy-fixture.
 import {projectSchema,asProjectUser} from './support/project-schema.ts'
 import {drawingCandidateCommitment} from '../supabase/functions/_shared/drawing-request-recovery.ts'
 import {BobContinuation,createBobJournal,type JournalEntry} from '../supabase/functions/_shared/bob-job-journal.ts'
+import {createHash,randomBytes} from 'node:crypto'
+import {cadRenderInput} from '../supabase/functions/_shared/cad-assistant.ts'
+import {createProjectWriter} from '../supabase/functions/_shared/project-write.ts'
+import {createBobToolSession} from '../supabase/functions/_shared/project-tools/bob-tools.ts'
+import {seedToolPolicy} from './support/main-catalog-fixture.ts'
 
 const artifact='11111111-1111-4111-8111-111111111111',material='22222222-2222-4222-8222-222222222222'
 test('larger checked constructions render verbatim and every numbered sheet reaches independent review',async()=>{
@@ -367,4 +372,50 @@ test('a saved request can be redrawn from other sides; null keeps its views and 
  const again=f.assistant({requestStore:store})
  assert.equal((await again.consult({...request,request_id:id,handoff:null,requirement_changes:[],construction_revision:1,views:null})).status,'ready')
  assert.deepEqual(again.candidate!.packet.recipe.views,views)
+})
+
+/** A reviewed version 2 checkpoint restored by a fresh worker, saved through the production tool. */
+async function restoredRenderStepSave(load:(files:Record<string,string>,fingerprint:string)=>Promise<unknown>){
+ const f=runtime(),recipe=f.draft.recipe,files:Record<string,string>={},exports:Record<string,{file:string;sha256:string}>={}
+ for(const key of ['step',...recipe.views]){files[key]=randomBytes(174_999).toString('base64');exports[key]={file:key+'.out',sha256:createHash('sha256').update(Buffer.from(files[key],'base64')).digest('hex')}}
+ const steps:JournalEntry[]=[],journal=createBobJournal({entries:[],save:async e=>{steps.push(JSON.parse(JSON.stringify(e)))}},Infinity)
+ let renders=0,loads=0;const payloads:any[]=[]
+ const render=(r:any,source:any)=>journal.run('cad:render',cadRenderInput(r,source),async()=>{renders++
+  return {recipe:r,manifest:{bounding_box_mm:checkConstruction(f.draft,f.catalog,'2026-10-04').bounds_mm,checks:{collisions:{status:'complete',overlaps:[]}},annotations:{version:1,coverage:'complete'},engine:{name:'build123d'},assembly_id:r.assembly_id,exports},
+   files,previews:Object.fromEntries(cadPreviewKeys(r).map(v=>[v,'Zml4dHVyZQ==']))}})
+ const loadRenderFiles=async(fingerprint:string)=>{loads++;assert.equal(fingerprint,steps.find(e=>e.key==='cad:render:0')!.fingerprint);return load(files,fingerprint)}
+ const first=f.assistant({render,loadRenderFiles})
+ assert.equal((await first.consult(request)).status,'ready')
+ const state=JSON.parse(JSON.stringify(first.exportState()))
+ assert.equal(state.version,2);assert.equal(state.candidate.packet.files,undefined)
+ assert(JSON.stringify(state).length<20_000,'cadAssistant checkpoint stays small with ~700 KB of files')
+ const before=f.counts(),cad=f.assistant({render,loadRenderFiles});cad.restoreState(state)
+ const writer=createProjectWriter(f.draft.projectId,request.brief,async payload=>{payloads.push(payload);return {data:null,error:{code:'PT409',message:'fixture_stop'}}},async()=>({data:[],error:null}),async()=>({data:{generation:1,receipts:[]},error:null}))
+ const lookup=createProjectLookup(f.draft.projectId,async()=>({data:{records:[],related:[],truncated:false},error:null}),1000,40)
+ const tools=createBobToolSession({writer,cadAssistant:cad,lookup,readPolicy:seedToolPolicy,message:request.brief})
+ await tools.prepare()
+ const result=await tools.execute('save_cad_design',{request_quote:request.brief})
+ const offered=(await tools.prepare()).some(tool=>tool.function.name==='save_cad_design')
+ return {result,payloads,files,cad,offered,loads,renders,reviewsAfter:f.counts().reviews-before.reviews,rendersAfter:f.counts().renders-before.renders}
+}
+test('a restored version 2 candidate saves its exact render-step files, read once',async()=>{
+ const r=await restoredRenderStepSave(async files=>[structuredClone(files)])
+ assert.equal(r.payloads.length,1,JSON.stringify(r.result));assert.deepEqual(r.payloads[0].data.packet.files,r.files)
+ assert.equal(r.payloads[0].data.packet.previews,undefined)
+ assert.equal(r.loads,1);assert.equal(r.renders,1);assert.equal(r.reviewsAfter,0)
+})
+test('a missing, changed or unreadable render step releases the candidate without a write, render or model call',async()=>{
+ const cases:[string,(files:Record<string,string>)=>Promise<unknown>][]=[
+  ['missing step',async()=>[]],
+  ['hash mismatch',async files=>[{...files,step:randomBytes(30).toString('base64')}]],
+  ['partial file set',async files=>[{step:files.step}]],
+  ['loader error',async()=>{throw new Error('job_not_claimed')}],
+ ]
+ for(const [name,load] of cases){
+  const r=await restoredRenderStepSave(load)
+  assert.deepEqual(r.result,{status:'unavailable',stage:'save',reason:'candidate_files_unavailable',saved:false},name)
+  assert.equal(r.payloads.length,0,name);assert.equal(r.renders,1,name);assert.equal(r.reviewsAfter,0,name);assert.equal(r.loads,1,name)
+  assert.equal(r.cad.candidate,null,name);assert.equal(r.cad.exportState().candidate,null,name);assert.equal(r.cad.partial,true,name)
+  assert.equal(r.offered,false,name+': no unsaved drawing stays offered')
+ }
 })

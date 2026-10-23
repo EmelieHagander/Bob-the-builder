@@ -161,7 +161,7 @@ export async function serveBobWorker(req: Request): Promise<Response> {
         s.rpc('bob_job_progress', { ...args, p_progress: payload }).catch(() => { /* advisory */ })
       }
       const result = await answerWithOpenAi({ authHeader: 'Bearer ' + token, userId: job.userId, projectId: job.projectId, message: job.message, clientTurnId: job.clientTurnId, screen: parseBobScreen(job.screen),
-        background: { checkpoint, drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
+        background: { checkpoint, ...(checkpoint ? { loadRenderFiles: (renderFingerprint: string) => s.rpc('bob_checkpoint_render_files', { ...args, p_fingerprint: renderFingerprint }) } : {}), drawingRequestId:job.drawingRequestId??undefined, jobId: job.id, asyncModels: job.asyncModels === true, claim: { mode: 'server', status: 'claimed', thread_id: job.threadId, generation: job.generation }, journal,
           workAllowanceVersion:job.workAllowanceVersion,catalogManifestId:job.catalogManifestId,authorityExpiresAt:job.expiresAt,
           deadline: unlimitedWork ? Infinity : Date.parse(job.expiresAt) - 10000, replay: job.entries.length > 0, progress } })
       journal.check()

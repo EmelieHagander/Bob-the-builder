@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash, randomBytes } from 'node:crypto'
 import { createToolSession, type ToolDefinition, type ToolPolicy } from '../supabase/functions/_shared/project-tools/session.ts'
 import { createBobModelBudget } from '../supabase/functions/_shared/bob-model-budget.ts'
 import { createConstructionTools } from '../supabase/functions/_shared/construction-draft.ts'
@@ -8,7 +9,8 @@ import { createCadPieces } from '../supabase/functions/_shared/cad-pieces.ts'
 import { createProjectLookup } from '../supabase/functions/_shared/project-lookup.ts'
 import { createProjectCalculator } from '../supabase/functions/_shared/project-calculator.ts'
 import { createDrawingRequestStore } from '../supabase/functions/_shared/drawing-request-store.ts'
-import { createBobJournal } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { createBobJournal, type JournalEntry } from '../supabase/functions/_shared/bob-job-journal.ts'
+import { cadRenderInput, type CadAssistantState } from '../supabase/functions/_shared/cad-assistant.ts'
 import { createCadAssistant, createPlanAssistant } from './support/colleague-catalog-fixture.ts'
 import { catalogFixture } from './support/ai-catalog-fixture.ts'
 import { checkedCadFixture, fixtureConstructionId } from './support/checked-cad-fixture.ts'
@@ -205,6 +207,7 @@ test('reviewed CAD checkpoint restores candidate, provenance and exact save iden
   assert.equal((await first.consult({request_id:null,brief:'Draw the panel',handoff,requirement_changes:[],area_id:null,component_id:null,step_id:null,artifact_id:fixtureConstructionId,construction_revision:1})).status,'ready')
   await first.lifecycle('read_drawing_requests',{request_id:null,after_id:null})
   const state=roundtrip(first.exportState()),next=make(),beforeWrites=writes.length
+  assert.equal(state.version,1,'without a render-step loader the files stay inline')
   next.restoreState(state)
   assert.deepEqual(next.exportState(),state)
   // Preview pixels never enter checkpoint state; everything else restores exactly.
@@ -224,4 +227,74 @@ test('reviewed CAD checkpoint restores candidate, provenance and exact save iden
   assert.equal(models,1);assert.equal(renders,1)
   const again=make();again.restoreState(roundtrip(next.exportState()))
   assert.equal(again.exportState().savedRequest?.revision,row!.revision)
+})
+
+/** Base64 files of about `chars` characters whose hashes are in the manifest exports. */
+function renderedFiles(views:string[],chars:number){
+  const files:Record<string,string>={},exports:Record<string,{file:string;sha256:string}>={}
+  for(const key of ['step',...views]){
+    files[key]=randomBytes(Math.floor(chars/(views.length+1)/4)*3).toString('base64')
+    exports[key]={file:key==='step'?'assembly.step':key+'.svg',sha256:createHash('sha256').update(Buffer.from(files[key],'base64')).digest('hex')}
+  }
+  return {files,exports}
+}
+/** Durable worker shape: render results live in the cad:render journal step; the loader reads them back by input fingerprint. */
+function renderStepFixture(chars=700_000){
+  const recipe:any={contract_version:1,units:'mm',assembly_id:'panel',definitions:[{id:'panel',primitive:'box',material_ref:null,x_mm:18,y_mm:80,z_mm:200}],instances:[{id:'panel',definition_id:'panel',placement:{x:0,y:0,z:0,rx:0,ry:0,rz:0}}],views:['front','top']}
+  const source=checkedCadFixture('A',recipe),rendered=renderedFiles(recipe.views,chars),entries:JournalEntry[]=[]
+  const journal=createBobJournal({entries:[],save:async entry=>{entries.push(roundtrip(entry))}},Infinity)
+  const counts={renders:0,models:0,loads:0}
+  const loadRenderFiles=async(fingerprint:string)=>{counts.loads++;return entries.filter(e=>/^cad:render:\d+$/.test(e.key)&&e.fingerprint===fingerprint&&(e.value as any).ok).map(e=>(e.value as any).result.files)}
+  const make=(extra:Record<string,unknown>={})=>createCadAssistant({projectId:'A',userId:'owner',ownerRequest:'Draw the panel',hasAccess:async()=>true,deadline:Date.now()+200000,available:true,
+    makeLookup:()=>createProjectLookup('A',async(_p,q)=>({data:{records:q.dataset==='target'?[{id:'project',revision:1,solution_id:'44444444-4444-4444-8444-444444444444'}]:[],related:[],truncated:false},error:null}),1000,40),
+    readArtifact:source.readArtifact,checkConstruction:source.checkConstruction,callModel:async()=>{counts.models++;return reviewReply()},loadRenderFiles,
+    render:(r,drawingSource)=>journal.run('cad:render',cadRenderInput(r,drawingSource!),async()=>{counts.renders++;return source.packet(r,{files:rendered.files,manifest:{exports:rendered.exports}})}),
+    ...extra})
+  const consult=(a:ReturnType<typeof make>)=>a.consult({request_id:null,brief:'Draw the panel',handoff,requirement_changes:[],area_id:null,component_id:null,step_id:null,artifact_id:fixtureConstructionId,construction_revision:1})
+  return {rendered,entries,counts,make,consult}
+}
+
+test('a reviewed CAD candidate keeps its files in the render step; a restored save reads them once',async t=>{
+  const f=renderStepFixture(),first=f.make()
+  assert.equal((await f.consult(first)).status,'ready')
+  const state=roundtrip(first.exportState())
+  assert.equal(state.version,2);assert.equal(state.candidate!.packet.files,undefined);assert.equal(state.candidate!.packet.previews,undefined)
+  assert.equal(state.renderFingerprint,f.entries.find(e=>e.key==='cad:render:0')!.fingerprint,'names the exact cad:render journal step')
+  const {previews:_pixels,...packet}=first.candidate!.packet
+  const inline=JSON.stringify({...state,version:1,renderFingerprint:undefined,candidate:{...state.candidate,packet}}).length,size=JSON.stringify(state).length
+  t.diagnostic(JSON.stringify({version1_chars:inline,version2_chars:size}))
+  assert(inline>700_000&&size<20_000,JSON.stringify({inline,size}))
+  const next=f.make();next.restoreState(roundtrip(state))
+  assert.deepEqual(next.exportState(),state);assert.equal(f.counts.loads,0,'restoring reads nothing')
+  assert.equal(next.candidate!.packet.files,undefined)
+  const ready=await next.candidateForSave()
+  assert.equal(ready.status,'ready');assert.deepEqual((ready as any).candidate,{...first.candidate!,packet})
+  assert.equal((await next.candidateForSave()).status,'ready');assert.equal(f.counts.loads,1,'once per worker')
+  assert.deepEqual(next.exportState(),state,'the checkpoint keeps naming the step after the files are back')
+  assert.deepEqual(f.counts,{renders:1,models:1,loads:1})
+})
+
+test('version 1 CAD checkpoints keep inline files and save without a render-step read; malformed version 2 fails closed',async()=>{
+  const f=renderStepFixture(4000),inline=f.make({loadRenderFiles:undefined})
+  assert.equal((await f.consult(inline)).status,'ready')
+  const v1=roundtrip(inline.exportState())
+  assert.equal(v1.version,1);assert.deepEqual(v1.candidate!.packet.files,f.rendered.files)
+  // A new worker with the loader resumes an in-flight version 1 job unchanged.
+  const resumed=f.make();resumed.restoreState(roundtrip(v1))
+  assert.deepEqual(resumed.exportState(),v1)
+  const ready=await resumed.candidateForSave()
+  assert.equal(ready.status,'ready');assert.deepEqual((ready as any).candidate.packet.files,f.rendered.files);assert.equal(f.counts.loads,0)
+  const held=roundtrip(f.make().exportState())
+  assert.equal(held.version,1,'no candidate, nothing held by reference')
+  const withLoader=f.make();assert.equal((await f.consult(withLoader)).status,'ready')
+  const v2=roundtrip(withLoader.exportState())
+  const invalid:CadAssistantState[]=[
+    {...v2,renderFingerprint:'not-a-fingerprint'},
+    {...v2,candidate:{...v2.candidate!,packet:{...v2.candidate!.packet,files:f.rendered.files}}},
+    {...v2,candidate:null},
+    {...v2,version:3 as any},
+  ]
+  for(const state of invalid)assert.throws(()=>f.make().restoreState(roundtrip(state)),/cad_assistant_checkpoint_invalid/)
+  assert.throws(()=>f.make({loadRenderFiles:undefined}).restoreState(roundtrip(v2)),/cad_assistant_checkpoint_store_changed/)
+  assert.deepEqual([f.counts.renders,f.counts.models,f.counts.loads],[2,2,0])
 })

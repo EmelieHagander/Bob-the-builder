@@ -144,7 +144,8 @@ export function createBobToolSession(opts: {
       {spec:SAVE_CAD_TOOL,version:1,waitingFor:opts.aiCatalog?.text('tools.waiting.cad-ready') ?? 'appears when design_project_cad returns a reviewed candidate',
        gate:():ToolGate=>writeGate()!=='available'?writeGate():opts.cadAssistant!.candidate?'available':'missing_context',execute:async(v:unknown)=>{
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length!==1||typeof (v as any).request_quote!=='string')return {status:'invalid'}
-        const c=opts.cadAssistant!.candidate;if(!c)return {status:'missing_context'}
+        const ready=await opts.cadAssistant!.candidateForSave();if(ready.status!=='ready')return ready
+        const c=ready.candidate
         const receipt=await opts.writer!.commit({kind:'cad',record_id:c.artifact_id,expected_updated_at:null,expected_revision:c.expected_revision,request_quote:(v as any).request_quote,data:c})
         if(receipt.status==='saved')await opts.cadAssistant!.markSaved()
         return receipt
