@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { BuildEvent } from '../data/types'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../data/database'
+import type { Measurement } from '../data/projectFacts'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
@@ -76,7 +77,7 @@ export function ProjectHome() {
   const byId = new Map((people ?? []).map(person => [person.id, person]))
   const areaById = new Map(areaItems.map(area => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
-  const missingMeasurements = (planning?.missing.items ?? []).filter(item => item.kind === 'measurement' && item.required)
+  const missingMeasurements = (planning?.missing.items ?? []).filter((item): item is Measurement => item.kind === 'measurement' && item.required)
   const nextPlanningAction = nextProjectPlanningAction({
     missing: missingMeasurements,
     targets: planning?.targets ?? [],
