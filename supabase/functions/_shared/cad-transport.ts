@@ -3,6 +3,17 @@ import type { CadPacket } from './cad-assistant.ts'
 /** Plain loop: Uint8Array.from with a mapper costs ~100 ms per MB of CPU. */
 function decodeBase64(encoded:string):Uint8Array<ArrayBuffer>{const text=atob(encoded),raw=new Uint8Array(text.length);for(let i=0;i<text.length;i++)raw[i]=text.charCodeAt(i);return raw}
 export const CAD_TRANSPORT_CONTRACT='2026-10-17-paged-construction-annotations'
+const sha256Hex=async(raw:Uint8Array<ArrayBuffer>)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
+/** Exact export set and bytes of a rendering. A resumed save restores candidate
+ * files from their journal step through this same check. */
+export async function verifyCadFiles(files:Record<string,unknown>,views:readonly string[],exports:Record<string,any>):Promise<void>{
+ const expected=['step',...views]
+ if(Object.keys(files).sort().join(',')!==expected.sort().join(','))throw new Error('invalid_cad_files')
+ for(const k of expected){
+  const encoded=files[k];if(typeof encoded!=='string'||encoded.length>4*1024*1024)throw new Error('invalid_cad_file')
+  if(await sha256Hex(decodeBase64(encoded))!==exports?.[k]?.sha256)throw new Error('cad_hash_mismatch')
+ }
+}
 
 /** The host and secret are deployment configuration, never model input. */
 export function createCadTransport(endpoint:string|undefined,token:string|undefined,fetcher:typeof fetch=fetch){
@@ -19,14 +30,7 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
   if(!manifest||!packet.files||typeof packet.files!=='object')throw new Error('invalid_cad_result')
   if(drawingSource&&(packet.manifest.drawing_source?.artifact_id!==drawingSource.artifact_id||packet.manifest.drawing_source?.revision!==drawingSource.revision
    ||Object.keys(packet.manifest.drawing_source).sort().join(',')!=='artifact_id,revision'))throw new Error('cad_construction_source_mismatch')
-  const expected=['step',...recipe.views]
-  if(Object.keys(packet.files).sort().join(',')!==expected.sort().join(','))throw new Error('invalid_cad_files')
-  for(const k of expected){
-   const encoded=packet.files[k];if(typeof encoded!=='string'||encoded.length>4*1024*1024)throw new Error('invalid_cad_file')
-   const raw=decodeBase64(encoded)
-   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
-   if(digest!==manifest.exports[k].sha256)throw new Error('cad_hash_mismatch')
-  }
+  await verifyCadFiles(packet.files,recipe.views,manifest.exports)
   const previewKeys=cadPreviewKeys(recipe)
   if(!packet.previews || typeof packet.previews!=='object' || Object.keys(packet.previews).sort().join(',')!==[...previewKeys].sort().join(',')
     ||!packet.manifest.previews||Object.keys(packet.manifest.previews).sort().join(',')!==[...previewKeys].sort().join(','))throw new Error('cad_previews_missing')
@@ -39,8 +43,7 @@ export function createCadTransport(endpoint:string|undefined,token:string|undefi
    if(![137,80,78,71,13,10,26,10].every((n,i)=>raw[i]===n)||raw.length<24)throw new Error('invalid_cad_preview')
    const header=new DataView(raw.buffer),width=header.getUint32(16),height=header.getUint32(20)
    if(!width||!height||width>1024||height>1024)throw new Error('invalid_cad_preview')
-   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),b=>b.toString(16).padStart(2,'0')).join('')
-   if(digest!==metadata.sha256)throw new Error('cad_preview_hash_mismatch')
+   if(await sha256Hex(raw)!==metadata.sha256)throw new Error('cad_preview_hash_mismatch')
    previewMetadata[view]={file:metadata.file,sha256:metadata.sha256,source_sha256:metadata.source_sha256}
   }
   // Keep checked hashes in the exact review/save commitment, while reserving

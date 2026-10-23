@@ -23,6 +23,7 @@ import { createGroundedModelCall } from './project-grounding.ts'
 import { parseDesignHandoff, CAD_REVIEW_SCOPE, parseCadReview, candidateFingerprint, type CadReview } from './cad-review.ts'
 import { HANDOFF_INPUT_SCHEMA, REQUIREMENT_CHANGES_SCHEMA, prepareDesignHandoff } from './cad-handoff.ts'
 import { designIntentHandoff, parseDesignReadiness, type DesignReadiness } from './project-design-intent.ts'
+import { verifyCadFiles } from './cad-transport.ts'
 
 const object=(v:unknown):v is Record<string,any>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const text=(v:unknown,n:number)=>typeof v==='string'&&v.trim().length>0&&v.length<=n
@@ -50,6 +51,9 @@ const ENSURE_GAP_TOOL=tool('ensure_drawing_gap_task','Atomically reuse/create th
 const REQUEST_WORK_TOOL=tool('read_drawing_request_work','Read stable gaps and existing Task/Step links. A completed Task does not prove a missing measurement has been supplied.',{request_id:{type:'string'}})
 const LINK_GAP_TOOL=tool('link_drawing_gap','Link a stable drawing gap to an existing project Task and/or Step. Read request work first and reuse existing links; never duplicate a Task by its title. Do not copy private assessment prose into project Tasks. Null references leave the gap as a chat complement.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},gap_id:{type:'string'},task_id:{type:['string','null']},step_id:{type:['string','null']}})
 export type CadPacket={recipe:CadAssemblyRequest;manifest:Record<string,any>;files:Record<string,string>;previews?:Record<string,string>}
+/** The cad:render journal input. Its fingerprint names the immutable step that
+ * keeps a reviewed candidate's files while a checkpoint holds only that name. */
+export const cadRenderInput=(recipe:CadAssemblyRequest,source:CadDrawingSource)=>({recipe,drawing_source:source})
 export const RESTORE_REQUEST_TOOL=tool('restore_drawing_request','Restore your paused request from ALL canonical requirements of a current approved plan Step and the current owner instruction. Read request and plan first. Keeps the same ID; starts fresh intake without recovering deleted chat. Then call design_project_cad with that ID and preserve the restored requirements. Does not grant readiness.',{request_id:{type:'string'},expected_revision:{type:'integer',minimum:0},plan_revision:{type:'integer',minimum:1},step_id:{type:'string'},request_quote:{type:'string',maxLength:500}})
 
 export type CadCandidate={packet:CadPacket;title:string;description:string;assumptions:string;target_revision:number;measurements:{id:string;revision:number}[];source_artifact_id:string|null;source_revision:number|null;part_ids:string[];area_id:string|null;component_id:string|null;step_id:string|null;artifact_id:string|null;expected_revision:number;drawing_request?:{id:string;revision:number}}
@@ -57,7 +61,9 @@ export type CadCandidate={packet:CadPacket;title:string;description:string;assum
 /** Top-level tool boundaries only. In-flight review/render work resumes through
  * its operation journal; no JavaScript closure or nested stack is persisted. */
 export interface CadAssistantState {
- version:1
+ /** 2: the candidate's files stay in their cad:render journal step, named by
+  * renderFingerprint. Version 1 carries them inline. */
+ version:1|2
  lifecycleUsed:number
  used:number
  candidate:CadCandidate|null
@@ -69,15 +75,17 @@ export interface CadAssistantState {
  metrics:{consultations:number;renders:number;input_corrections:number;reviews:number;review_rejections:number;review_unavailable:number}
  sources:ReturnType<typeof createProjectLookup>['sources']
  pieces:CadPiecesState
+ renderFingerprint?:string
 }
 
-export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];deadline:number;available:boolean}){
+export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journaled turns read the two grounding lookups in a fixed order; a parallel pair can swap journal positions on resume (continuation_changed, 2026-10-21). */groundingReadOrder?:'serial'|'parallel';registerContextSurface?:SpecialistContextSurfaceRegistrar;allowSourceRenewal?:boolean;calculator?:ProjectCalculator;unlimitedWork?:boolean;runtimeVersion?:()=>Promise<string>;requestModel?:(id:string,o:OpenAIServiceOptions,work:()=>Promise<OpenAIServiceResponse<string>>)=>Promise<OpenAIServiceResponse<string>>;requestStore?:DrawingRequestStore;durable?:boolean;ownerRequest?:string;projectId:string;userId:string;hasAccess:()=>Promise<boolean>;makeLookup:()=>ReturnType<typeof createProjectLookup>;callModel:(o:OpenAIServiceOptions,beforeDispatch?:()=>Promise<void>)=>Promise<OpenAIServiceResponse<string>>;render:(r:CadAssemblyRequest,source?:CadDrawingSource,beforeDispatch?:()=>Promise<void>)=>Promise<CadPacket>;readArtifact:(id:string,revision:number|null,fresh?:boolean)=>Promise<any>;readDesignReadiness?:(targetRevision:number,purpose:'construction'|null,areaId?:string|null,fresh?:boolean)=>Promise<DesignReadiness>;readShell?:(id:string,revision:number|null)=>Promise<any>;checkConstruction?:(id:string,revision:number,fresh?:boolean)=>Promise<Record<string,any>>;knowledgeReader?:KnowledgeReader;catalog?:MaterialCatalogReader;context?:ProjectContext;referenceImageRefs?:()=>string[];/** Durable checkpoints: the successful cad:render results with this input fingerprint, never journaled. */loadRenderFiles?:(renderFingerprint:string)=>Promise<unknown>;deadline:number;available:boolean}){
  const catalogText=(key:string,variables?:AiVariables)=>{if(!opts.aiCatalog)throw new Error('ai_catalog_unavailable');return opts.aiCatalog.text(key,variables)}
  let lifecycleUsed=0
  let used=0,candidate:CadCandidate|null=null,partial=false,requiredTools:string[]=[]
  let savedRequest:CadAssistantState['savedRequest']=null
  let terminalFailure:Record<string,unknown>|null=null
  let acceptedReview:{fingerprint:string;review:CadReview}|null=null
+ let renderFingerprint:string|null=null
  const metrics={consultations:0,renders:0,input_corrections:0,reviews:0,review_rejections:0,review_unavailable:0}
  const sources:ReturnType<typeof createProjectLookup>['sources']=[]
  const pieces=createCadPieces({unlimitedWork:opts.unlimitedWork,aiCatalog:opts.aiCatalog,projectId:opts.projectId,requestStore:opts.requestStore,ownerRequest:opts.ownerRequest??null,hasAccess:opts.hasAccess,checkConstruction:opts.checkConstruction})
@@ -86,18 +94,26 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
  // never enter private state. Up to 700 kB per view and sheet, they made every
  // turn checkpoint after a render several MB (checkpoint_unavailable 2026-10-20/21).
  // Save uses packet.files and the manifest's preview hashes, never the pixels.
- exportState():CadAssistantState{return JSON.parse(JSON.stringify({version:1,lifecycleUsed,used,candidate:candidate?{...candidate,packet:{...candidate.packet,previews:undefined}}:null,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState()}))},
+ // With a loader, the files (~0.7 MB) also stay out: their cad:render step keeps
+ // them, and every checkpoint save rewrote them (1.2 MB snapshots, 2026-10-22).
+ exportState():CadAssistantState{
+  const held=!!candidate&&!!renderFingerprint&&!!opts.loadRenderFiles
+  return JSON.parse(JSON.stringify({version:held?2:1,lifecycleUsed,used,candidate:candidate?{...candidate,packet:{...candidate.packet,previews:undefined,...(held?{files:undefined}:{})}}:null,partial,requiredTools,savedRequest,terminalFailure,acceptedReview,metrics,sources,pieces:pieces.exportState(),...(held?{renderFingerprint}:{})}))
+ },
  restoreState(state:CadAssistantState){
-  if(state?.version!==1||![state.lifecycleUsed,state.used].every(n=>Number.isSafeInteger(n)&&n>=0)||typeof state.partial!=='boolean'
+  if(state?.version!==1&&state?.version!==2||![state.lifecycleUsed,state.used].every(n=>Number.isSafeInteger(n)&&n>=0)||typeof state.partial!=='boolean'
     ||!Array.isArray(state.requiredTools)||state.requiredTools.some(name=>typeof name!=='string')||!Array.isArray(state.sources)
     ||!object(state.metrics)||Object.keys(metrics).some(key=>!Number.isSafeInteger((state.metrics as any)[key])||(state.metrics as any)[key]<0)
     ||![state.candidate,state.terminalFailure,state.acceptedReview].every(value=>value===null||object(value))
     ||!(state.savedRequest===null||object(state.savedRequest)&&uuid(state.savedRequest.id)&&Number.isSafeInteger(state.savedRequest.revision)&&state.savedRequest.revision>=0&&object(state.savedRequest.payload)))throw new Error('cad_assistant_checkpoint_invalid')
-  if(state.savedRequest&&(!opts.requestStore||opts.requestStore.atomicSave))throw new Error('cad_assistant_checkpoint_store_changed')
+  if(state.version===2&&!(object(state.candidate)&&object(state.candidate.packet)&&state.candidate.packet.files===undefined
+    &&typeof state.renderFingerprint==='string'&&/^[0-9a-f]{64}$/.test(state.renderFingerprint)))throw new Error('cad_assistant_checkpoint_invalid')
+  if(state.savedRequest&&(!opts.requestStore||opts.requestStore.atomicSave)||state.version===2&&!opts.loadRenderFiles)throw new Error('cad_assistant_checkpoint_store_changed')
   const restored:CadAssistantState=JSON.parse(JSON.stringify(state))
   pieces.restoreState(restored.pieces)
   lifecycleUsed=restored.lifecycleUsed;used=restored.used;candidate=restored.candidate;partial=restored.partial;requiredTools=restored.requiredTools
   savedRequest=restored.savedRequest;terminalFailure=restored.terminalFailure;acceptedReview=restored.acceptedReview
+  renderFingerprint=restored.version===2?restored.renderFingerprint!:null
   Object.assign(metrics,restored.metrics);sources.splice(0,sources.length,...restored.sources)
  },
  tools:[DESIGN_CAD_TOOL],lifecycleTools:opts.requestStore?.read&&opts.requestStore?.cancel?[...pieces.tools,...(opts.readShell?[READ_CAD_SHELL_TOOL]:[]),READ_REQUESTS_TOOL,CANCEL_REQUEST_TOOL,...(opts.requestStore.work&&opts.requestStore.linkGap?[REQUEST_WORK_TOOL,LINK_GAP_TOOL,...(opts.requestStore.ensureGapTask?[ENSURE_GAP_TOOL]:[])]:[]),...(opts.requestStore.restore?[RESTORE_REQUEST_TOOL]:[])]:[],get lifecycleRemaining(){return opts.unlimitedWork?Infinity:Math.max(0,12-lifecycleUsed)},
@@ -143,6 +159,33 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
   // The accepted review stays for quality/metrics.
   candidate=null
  },pending:()=>opts.requestStore?.list()??Promise.resolve([]),get metrics(){return {...metrics,review_passed:!!acceptedReview}},get quality(){return acceptedReview?structuredClone(acceptedReview):null},get requiredTools(){return requiredTools.slice()},get failure(){return terminalFailure?structuredClone(terminalFailure):null},get remaining(){return terminalFailure?0:opts.unlimitedWork?Infinity:Math.max(0,2-used)},get partial(){return partial},get candidate(){return candidate&&acceptedReview?structuredClone(candidate):null},
+ /** The reviewed candidate with its files. A version 2 checkpoint restores them
+  * once per worker from their cad:render step, verified against the reviewed
+  * manifest. Anything else releases the candidate: no partial files, no re-render. */
+ async candidateForSave():Promise<{status:'ready';candidate:CadCandidate}|{status:'missing_context'}|{status:'unavailable';stage:'save';reason:'candidate_files_unavailable';saved:false}>{
+  const held=candidate
+  if(!held||!acceptedReview)return {status:'missing_context'}
+  if(!held.packet.files){
+   let found:Record<string,string>|null=null,steps=0,reason='missing_step'
+   try{
+    if(!renderFingerprint||!opts.loadRenderFiles)throw new Error('cad_render_loader_unavailable')
+    const rows=await opts.loadRenderFiles(renderFingerprint)
+    for(const row of Array.isArray(rows)?rows:[]){
+     steps++
+     try{if(!object(row))throw new Error('invalid_cad_files');await verifyCadFiles(row,held.packet.recipe.views,held.packet.manifest.exports);found=row;break}
+     catch{reason='hash_mismatch'}
+    }
+   }catch(error){rethrowContinuation(error);reason='loader_error'}
+   if(candidate!==held)return {status:'missing_context'}
+   if(!found){
+    console.error('[CAD candidate files]',JSON.stringify({reason,steps}))
+    candidate=null;acceptedReview=null;partial=true
+    return {status:'unavailable',stage:'save',reason:'candidate_files_unavailable',saved:false}
+   }
+   held.packet={...held.packet,files:found}
+  }
+  return {status:'ready',candidate:structuredClone(held)}
+ },
  async consult(raw:unknown){
   if(terminalFailure)return withoutBudgetDetails(terminalFailure)
   candidate=null;acceptedReview=null;requiredTools=[];savedRequest=null
@@ -539,7 +582,8 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
    await persist('draft',{draft:{...metadata,recipe,lineage,parameters,construction:pin}})
    renders++;metrics.renders++
    let packet:CadPacket
-   try{packet=await opts.render(recipe,{artifact_id:construction.artifact_id,revision:construction.revision},constructionDispatchGuard)}catch(error){
+   const drawingSource={artifact_id:construction.artifact_id,revision:construction.revision}
+   try{packet=await opts.render(recipe,drawingSource,constructionDispatchGuard)}catch(error){
     rethrowContinuation(error)
     if(error instanceof Error&&['project_denied','drawing_request_cancelled','drawing_context_cleared','drawing_request_complete','drawing_requirements_changed','checked_construction_unavailable','checked_construction_changed','design_readiness_unavailable','design_readiness_changed'].includes(error.message))throw error
     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'render_failed'}
@@ -554,6 +598,7 @@ export function createCadAssistant(opts:{aiCatalog:AiCatalogSession;/** Journale
      ||(!referenceIds.has(overlap.first_id)&&!referenceIds.has(overlap.second_id))))
     return terminalFailure={status:'unavailable',stage:'cad_engine',saved:false,reason:'construction_geometry_disagrees',next_action:catalogText("feedback.cad-assistant.next-action.482e8923bc81")}
    packet={...packet,manifest:{...packet.manifest,bob_lineage:lineage,bob_parameters:parameters,bob_construction:pin,bob_design_intent:readiness.pin,bob_design_images:designImages}}
+   renderFingerprint=opts.loadRenderFiles?await fingerprint(cadRenderInput(recipe,drawingSource)):null
    candidate={...metadata,packet};reviewPending=true
    const checked=await reviewCurrentCandidate()
    if(checked.status==='revise'){

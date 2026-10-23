@@ -1285,3 +1285,26 @@ the trigger nor the physical gate. Rollout: apply before or without an Edge
 deploy (no Edge change); the first drain fills rows within 30 s and reads stay
 live until then. Rollback: unschedule `bob-source-states` and restore the
 previous view definition; the tables can stay.
+
+### Checkpoint render files — 2026-10-23
+
+**Not applied yet.** A reviewed CAD candidate's files (about 0.7 MB of base64
+STEP/SVG) were copied into every turn checkpoint save after a render, making
+each save about 1.2 MB (2026-10-22). The same files already sit in the job's
+`cad:render:N` journal step. `20261023050000_checkpoint_render_files.sql` adds
+`bob.bob_checkpoint_render_files(p_job, p_claim, p_fingerprint)`:
+
+- Same fence as `bob_checkpoint_steps_page`: checkpoint job, `running`, the
+  current claim token and an unexpired lease; otherwise `job_not_claimed`
+  (`PT409`). The fingerprint must be 64 lowercase hex characters.
+- Returns `result.files` of this job's successful `cad:render:N` steps with
+  that exact input fingerprint, never previews, other steps or other jobs.
+- Security definer, empty search path, executable by `service_role` only. No
+  table, grant or existing function changes. Steps are deleted when the job
+  finishes, so nothing is read after that.
+
+The contract lives in
+[Ask bob conversations](../Docs/ask-bob-conversations.md#cad-candidate-files-stay-in-their-render-step).
+Rollout: apply, then deploy `bob-worker` and `ask-bob` from the same source.
+Rollback: an older worker refuses version 2 CAD state; let active checkpoint
+jobs finish before rolling the worker back. The function can stay.

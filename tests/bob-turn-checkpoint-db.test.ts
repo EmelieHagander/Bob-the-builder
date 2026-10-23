@@ -290,3 +290,38 @@ test('an in-flight operation cannot publish or restore a committed cursor', asyn
   await operation
   assert.equal(journal.exportState().positions.read, 1)
 })
+
+test('candidate render files are read only from the claimed checkpoint job and its successful cad:render steps', async () => {
+  const fp = 'b'.repeat(64), files = { step: 'c3RlcA==', front: 'ZnJvbnQ=' }
+  const read = (job: any, token = job.claimToken, fingerprint = fp) => service('bob_checkpoint_render_files', [job.id, token, fingerprint])
+  const step = (job: any, key: string, fingerprint: string, value: unknown) => service('bob_save_job_step', [job.id, job.claimToken, key, fingerprint, value])
+  // A legacy (non-checkpoint) claim never reads through this path.
+  const old = await enqueue(3), legacy = await claim(old.jobId)
+  await assert.rejects(read(legacy), /job_not_claimed/)
+  await finish(old.jobId, legacy.claimToken)
+  const finished = await claim((await enqueue()).jobId)
+  await step(finished, 'cad:render:0', fp, { ok: true, result: { files: { step: 'ZmluaXNoZWQ=' } } })
+  await finish(finished.id, finished.claimToken)
+  await assert.rejects(read(finished), /job_not_claimed/, 'nothing after finish')
+  // Another job's step with the same input fingerprint is never visible.
+  await pg.query("insert into bob_private.bob_job_steps(job_id,key,fingerprint,value) values($1,'cad:render:0',$2,$3)", [finished.id, fp, { ok: true, result: { files: { step: 'b3RoZXI=' } } }])
+  const q = await enqueue(), job = await claim(q.jobId)
+  assert.deepEqual(await read(job), [], 'no render step yet')
+  await step(job, 'cad:render:0', fp, { ok: true, result: { recipe: {}, manifest: {}, files, previews: { front: 'cGl4ZWxz' } } })
+  await step(job, 'cad:render:1', fp, { ok: false, error: 'render_failed' })
+  await step(job, 'cad:render:2:retry:1', fp, { reason: 'provider_retry' })
+  await step(job, 'cad:render:3', 'd'.repeat(64), { ok: true, result: { files: { step: 'b3RoZXIgaW5wdXQ=' } } })
+  await step(job, 'rpc:cad:render:4', fp, { ok: true, result: { files: { step: 'bm90IGEgcmVuZGVy' } } })
+  assert.deepEqual(await read(job), [files], 'only the successful render files, never previews or other steps')
+  await assert.rejects(read(job, job.claimToken, 'not-a-fingerprint'), /invalid_render_fingerprint/)
+  await assert.rejects(read(job, randomUUID()), /job_not_claimed/)
+  for (const role of ['anon', 'authenticated']) assert.equal((await pg.query<any>("select has_function_privilege($1,'bob.bob_checkpoint_render_files(uuid,uuid,text)','execute') allowed", [role])).rows[0].allowed, false)
+  await assert.rejects(asProjectUser(pg, owner, 'select bob.bob_checkpoint_render_files($1,$2,$3)', [job.id, job.claimToken, fp]), /permission denied/)
+  await pg.query("update bob_private.bob_jobs set lease_until=clock_timestamp()-interval '1 second' where id=$1", [q.jobId])
+  await assert.rejects(read(job), /job_not_claimed/, 'expired lease')
+  const second = await claim(q.jobId)
+  assert.deepEqual(await read(second), [files], 'a new claim reads the same immutable step')
+  await assert.rejects(read(job), /job_not_claimed/, 'the stale claim stays fenced')
+  await asProjectUser(pg, owner, 'select bob.bob_cancel_job($1,$2)', ['A', q.jobId])
+  await assert.rejects(read(second), /job_not_claimed/, 'cancelled')
+})
