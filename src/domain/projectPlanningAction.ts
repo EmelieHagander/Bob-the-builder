@@ -9,6 +9,8 @@ export interface PlanningArtifact {
   id: string
   areaId: string | null
   targetRevision: number
+  solutionId: string
+  solutionRevision: number
   archived: boolean
   sourceStatus?: { source_state: string }
 }
@@ -35,7 +37,9 @@ export function hasCurrentScopeDrawing(snapshot: ProjectPlanningSnapshot): boole
   return snapshot.artifacts.some(artifact => !artifact.archived && !drafts.has(artifact.id)
     && artifact.sourceStatus?.source_state === 'current'
     && snapshot.targets.some(target => target.areaId === artifact.areaId
-      && target.revision === artifact.targetRevision))
+      && target.revision === artifact.targetRevision
+      && target.solutionId === artifact.solutionId
+      && target.solutionRevision === artifact.solutionRevision))
 }
 
 export function nextProjectPlanningAction(snapshot: ProjectPlanningSnapshot, areaNames: Map<string, string>): PlanningAction {
