@@ -4,6 +4,7 @@ import * as db from '../data/database'
 import { useBobSurface, openBobWithDraft } from '../lib/bobSurface'
 import { preliminaryConstructionList, preliminaryCutCsv } from '../domain/constructionPreview'
 import { Icon, Loading, useAsync, useProjectVersion } from '../components/ui'
+import { inputStyle } from '../components/form'
 
 const pageCard = { padding: 'var(--panel-padding)' }
 const shortName = (id: string) => id.replace(/^d_/, '').replace(/[_-]+/g, ' ')
@@ -46,10 +47,6 @@ export function BuildPreparation() {
   const currentPlan = currentPlans[0]
   const area = data?.areas.find(item => item.id === chosen?.areaId)
   const areaQuery = chosen?.areaId ? '?area=' + encodeURIComponent(chosen.areaId) : ''
-  const currentNeedCoverage = validPreview && validPreview.parts.length > 0
-    && validPreview.parts.every(part => linkedNeeds.some(need => need.artifactId === chosen?.id
-      && need.artifactRevision === chosen?.revision && need.name))
-  // A count of requirements is not proof of per-definition coverage or approved procurement.
   const statusLabel = sourceLoading ? 'Läser konstruktionskälla' : validPreview
     ? 'Preliminärt underlag' : preview?.status === 'changed' ? 'Källan har ändrats' : 'Behöver kompletteras'
 
@@ -79,7 +76,7 @@ export function BuildPreparation() {
         <div className="fact-filters">
           <label>
             <strong>Område</strong>
-            <select className="input" value={areaFilter} onChange={event => changeArea(event.target.value)}>
+            <select style={inputStyle} value={areaFilter} onChange={event => changeArea(event.target.value)}>
               <option value="">Alla områden</option>
               {data.areas.filter(item => !item.archivedAt).map(item =>
                 <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -87,7 +84,7 @@ export function BuildPreparation() {
           </label>
           {!!filtered.length && <label>
             <strong>Aktuell konstruktion</strong>
-            <select className="input" value={chosen?.id ?? ''} onChange={event => choose(event.target.value)}>
+            <select style={inputStyle} value={chosen?.id ?? ''} onChange={event => choose(event.target.value)}>
               {filtered.map(head => <option key={head.id} value={head.id}>{head.title} · v{head.revision}</option>)}
             </select>
           </label>}
@@ -159,7 +156,6 @@ export function BuildPreparation() {
         {data.needs.hasMore && <p className="foundation-hint">Materialbehov har fler sidor; täckningen för denna konstruktion kan inte bekräftas här.</p>}
         {data.cutPlans.hasMore && <p className="foundation-hint">Fler kapplaner finns; kontrollera dem hos Bob innan du använder en plan.</p>}
         {currentPlan && <p className="foundation-hint">Kapplanen är källversionsbunden. En sparad plan är inte i sig ett bevis på materialkvalitet, infästning, hållfasthet eller säkert arbetsutförande.</p>}
-        {currentNeedCoverage && <p className="foundation-hint">Materialbehov finns för delgrupper, men leveranskedjan måste ändå verifieras innan kapning och beställning.</p>}
         <div className="foundation-actions">
           <Link className="btn" to={'/material-plan' + areaQuery}>Materialplan</Link>
           <Link className="btn" to="/shopping">Inköpslista</Link>
