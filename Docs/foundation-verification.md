@@ -2,7 +2,7 @@
 
 ## Stored source status — 2026-10-22
 
-**Prepared on `ccr-1d0233bb-b84nk5` (PR #319); not merged or applied.** The
+**Merged in PR #319 (`cc4df1e`) and applied 2026-10-23 03:44 UTC.** The
 [database owner](../db/README.md#stored-source-status--2026-10-22) and
 [Artifact contract](artifacts.md#source-freshness-corrections--september-24-deployed)
 describe the design.
@@ -22,9 +22,25 @@ describe the design.
   9 shared physical tables are gated. A broad database subset (138 files that
   touch drawings, constructions, CAD, materials, media, measurements, physical
   sources and projects) passed: 870 tests, 0 failures, on PGlite.
+- **Hosted application (2026-10-23):** a read-only check found no active Bob
+  jobs and the original view. The migration file `20261022193000` was applied
+  through the managed ledger as `20261023034405_stored_source_status`. Readback:
+  18 `mark_artifact_source_changed` triggers, the fenced view, cron job
+  `bob-source-states` every 30 s and active, members select-only, no client
+  role can execute the functions. The first drain (03:44:37) stored all 33
+  revisions of the 4 projects in 648 ms; all 4 are storable. Later idle drains
+  took 2–23 ms.
+- **Hosted proof (rolled back):** `scripts/check-stored-source-status.sql`
+  passed. A summary variant confirmed it compared, as a direct member, every
+  revision of all 4 projects (1/1, 5/5, 1/1, 26/26 fresh stored rows), with no
+  difference from the live assessment.
+- **Hosted timing (rolled back, as a member, bunk-bed project, idle server):**
+  `artifact_source_status` 34–41 ms, `current_drawing_overview` 28–44 ms,
+  `current_drawing_steps` 5–24 ms, against 846–1078 ms for the same 26 live
+  assessments.
 - **Not verified here:** PGlite is single-connection, so concurrent writers and
-  the drain's counter race are reasoned, not exercised. pg_cron scheduling is
-  skipped in PGlite. Not applied, no CI, no full suite.
+  the drain's counter race are reasoned, not exercised. No CI or full suite.
+  The effect on statement timeouts under real load is still to be observed.
 
 ## Construction view pages and cache routing — 2026-10-22
 

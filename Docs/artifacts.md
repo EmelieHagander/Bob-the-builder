@@ -858,7 +858,7 @@ unavailable. Saved classifications and history are never rewritten: a recorded
 **Build ready** version whose sources changed shows a review warning. A
 `current` source assessment is not proof that all required inputs were recorded.
 
-**Stored answers (2026-10-22; prepared, not deployed).** Reading this view no
+**Stored answers (applied 2026-10-23).** Reading this view no
 longer runs the assessment when nothing has changed. Every write to an input
 bumps a per-project change counter; a background drain stores the live answer
 for every revision of a changed project. A stored row is used only while the

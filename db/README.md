@@ -1246,7 +1246,9 @@ identical. Rule: a hot read function with `SET` clauses should be plpgsql, not
 
 ### Stored source status — 2026-10-22
 
-**Prepared; not applied.** Display reads of `bob.artifact_source_status`
+**Applied 2026-10-23 as ledger `20261023034405`** (file `20261022193000`;
+[evidence](../Docs/foundation-verification.md#stored-source-status--2026-10-22)).
+Display reads of `bob.artifact_source_status`
 (project home cards, drawing Steps, the drawing work list, artifact lists) ran
 the assessment for every returned revision on every read and reached the 8 s
 authenticated statement timeout under load on 2026-10-21/22.
