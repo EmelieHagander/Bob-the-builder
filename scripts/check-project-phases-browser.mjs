@@ -51,6 +51,7 @@ try {
     await context.route('https://fonts.googleapis.com/**', route => route.abort())
     await context.route(`${api}/**`, async route => {
       const inboxPath = new URL(route.request().url()).pathname
+      if (inboxPath === '/rest/v1/rpc/read_construction_draft') return route.fulfill({status:200,json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/rest/v1/rpc/drawing_work_list') return route.fulfill({status:200,json:{items:[],next_cursor:null},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
       if (inboxPath === '/functions/v1/ask-bob' && route.request().method()==='POST' && route.request().postDataJSON()?.action==='renew_requests') return route.fulfill({status:200,json:{ok:true,renewed:0},headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-api-version, accept-profile, content-profile','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}})
 

@@ -68,6 +68,7 @@ try {
         return respond({json:{ok:true,status:'cancelled',projectId:body.projectId,jobId:body.jobId}})
       }
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_plan_read') return respond({json:{record:null}})
+      if (url.pathname === '/rest/v1/rpc/read_construction_draft') return respond({json:{status:'ok',projectId:route.request().postDataJSON().p_project,items:[],truncated:false,next_cursor:null}})
       if (new URL(route.request().url()).pathname === '/rest/v1/rpc/project_work_read') return respond({json:{project_id:route.request().postDataJSON().p_project,vocabulary_version:'2026-09-24.1',status:'not_initialized',revision:null,focus_step_id:null,areas:[],steps:[],unorganised_tasks:[]}})
       if (url.pathname === '/auth/v1/token') return respond({ json: { access_token: token, refresh_token: 'fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, user: who } })
       if (url.pathname === '/auth/v1/user') return authMode === 'failure' ? respond({ status: 503, json: { message: 'Offline fixture' } }) : respond({ json: who })

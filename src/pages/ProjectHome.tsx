@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { BuildEvent } from '../data/types'
 import { Link, useNavigate } from 'react-router-dom'
 import * as db from '../data/database'
+import type { Measurement } from '../data/projectFacts'
 import { PhasePill, PhaseRail, PhaseTransitionDialog, NextActionCard } from '../components/PhaseUI'
 import { ProjectThumbnail } from '../components/ProjectThumbnail'
 import { ProjectMetadata } from '../components/ProjectMetadata'
@@ -15,6 +16,7 @@ import { ProjectStart } from '../components/ProjectStart'
 import { FormError } from '../components/form'
 import { AvatarStack, Icon, Loading, SectionTitle, useAsync, useProjectVersion } from '../components/ui'
 import { areaNextAction, areaPhaseSummary, projectFocus } from '../lib/projectPhase'
+import { nextProjectPlanningAction } from '../domain/projectPlanningAction'
 
 export function ProjectHome() {
   const projectVersion = useProjectVersion()
@@ -43,10 +45,11 @@ export function ProjectHome() {
   const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
       ? Promise.all([
-          db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0),
-          db.getSelectedTarget(projectId),
+          db.getProjectFacts(projectId, 'measurement', { status: 'missing', requiredOnly: true }, 0),
+          db.getProjectTargetScopes(projectId),
           db.getProjectArtifacts(projectId, '', false, 0),
-        ]).then(([missing, target, artifacts]) => ({ missing, target, artifacts }))
+          db.getBuildConstructions(projectId),
+        ]).then(([missing, targets, artifacts, constructions]) => ({ missing, targets, artifacts, constructions }))
       : Promise.resolve(null),
     [projectId, projectVersion, version],
   )
@@ -74,30 +77,13 @@ export function ProjectHome() {
   const byId = new Map((people ?? []).map(person => [person.id, person]))
   const areaById = new Map(areaItems.map(area => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map(id => byId.get(id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
-  const missingMeasurements = (planning?.missing.items ?? []).filter(item => item.kind === 'measurement')
-  const selectedTarget = planning?.target.solution ?? null
-  const selectedDecision = planning?.target.decision ?? null
-  const hasCurrentDrawing = Boolean(selectedTarget && selectedDecision && planning?.artifacts.items.some(artifact =>
-    !artifact.areaId
-    && artifact.targetRevision === selectedDecision.revision
-    && artifact.solutionId === selectedTarget.id
-    && artifact.solutionRevision === selectedTarget.revision
-    && artifact.sourceStatus?.source_state === 'current',
-  ))
-  const nextPlanningAction = missingMeasurements.length > 0
-    ? {
-        to: '/facts?kind=measurement&status=missing',
-        icon: 'ruler',
-        title: `Measure ${missingMeasurements.length} ${missingMeasurements.length === 1 ? 'missing dimension' : 'missing dimensions'}`,
-        text: missingMeasurements[0]
-          ? `Start with ${missingMeasurements[0].subject}${missingMeasurements[0].areaId ? ` in ${areaById.get(missingMeasurements[0].areaId) ?? 'its Area'}` : ''}.`
-          : 'Collect the missing measurements before planning from assumptions.',
-      }
-    : !selectedTarget
-      ? { to: '/solutions', icon: 'path', title: 'Choose the Project target', text: 'Compare alternatives and explicitly choose the Project-level target when the shared direction is clear.' }
-      : !hasCurrentDrawing
-        ? { to: '/artifacts', icon: 'blueprint', title: 'Turn the Project target into a drawing', text: `“${selectedTarget.title}” is selected. Keep the next Project-level plan tied to that exact version and its evidence.` }
-        : { to: '/areas', icon: 'check-circle', title: 'Review the areas', text: 'The Project-level planning foundation is recorded. Review each Area for its local phase, target and next action.' }
+  const missingMeasurements = (planning?.missing.items ?? []).filter((item): item is Measurement => item.kind === 'measurement' && item.required)
+  const nextPlanningAction = nextProjectPlanningAction({
+    missing: missingMeasurements,
+    targets: planning?.targets ?? [],
+    constructions: planning?.constructions ?? [],
+    artifacts: planning?.artifacts.items ?? [],
+  }, areaById)
 
   return <div className="page project-home">
     <div className="page-head">
@@ -144,16 +130,9 @@ export function ProjectHome() {
       <Link to="/facts" className="project-detail-link">Measurements &amp; existing parts <Icon name="arrow-right" size={15} /></Link>
     </details>}
 
-    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
-
-    {/* Drawings and open drawing requests stay visible on site. */}
-    {db.authEnabled() && <>
-      <ProjectDrawings key={project.id} projectId={project.id} />
-      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
-    </>}
-
     <PlanningTools folded={building}>
     <nav className="project-shortcuts" aria-label="Project tools">
+      <Link className="btn" to="/build-lists"><Icon name="package" size={18} /><span>Kaplista &amp; inköp</span></Link>
       <Link className="btn" to="/facts" aria-label="Measurements & existing parts"><Icon name="ruler" size={18} /><span>Measurements</span></Link>
       <Link className="btn" to="/material-plan"><Icon name="package" size={18} /><span>Material plan</span></Link>
       <Link className="btn" to="/solutions"><Icon name="path" size={18} /><span>Solutions &amp; target</span></Link>
@@ -186,7 +165,7 @@ export function ProjectHome() {
                   <Icon name={nextPlanningAction.icon} size={21} color="var(--accent-2)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>Evidence next</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--accent-2)' }}>{nextPlanningAction.eyebrow}</div>
                   <h2 className="font-display" style={{ fontSize: 20, lineHeight: 1.12, margin: '4px 0 5px' }}>{nextPlanningAction.title}</h2>
                   <p className="foundation-hint" style={{ margin: 0 }}>{nextPlanningAction.text}</p>
                   <div style={{ marginTop: 11, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13 }}>Open <Icon name="arrow-right" size={14} /></div>
@@ -204,11 +183,21 @@ export function ProjectHome() {
                     <div className="foundation-hint">{measurement.truth === 'estimated' ? 'Estimated — verify' : 'Not measured yet'}{measurement.areaId ? ` · ${areaById.get(measurement.areaId) ?? 'Area'}` : ''}</div></div>
                   <Icon name="arrow-right" size={14} color="var(--ink-faint)" />
                 </Link>)}
-              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>No required unknown or estimated measurements are recorded at Project scope. This does not confirm that every needed measurement has been identified.</p>}
+              </div> : <p className="foundation-hint" style={{ marginBottom: 0 }}>No recorded required measurements currently need checking. Other design or safety prerequisites may still be unresolved.</p>}
             </div>
           </div>}
     </section>}
     </PlanningTools>
+
+    {db.authEnabled() && <ProjectStepWorkspace projectId={project.id} />}
+
+    {/* Drawings and open drawing requests stay visible on site. */}
+    {db.authEnabled() && <>
+      <ProjectDrawings key={project.id} projectId={project.id} />
+      <DrawingRequests key={project.id+':requests'} projectId={project.id} />
+    </>}
+
+
 
     <details className="card project-photo-details" id="project-images" onToggle={event => setImagesOpen(event.currentTarget.open)}>
       <summary>Project images</summary>

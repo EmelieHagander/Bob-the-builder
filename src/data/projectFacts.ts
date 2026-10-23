@@ -21,7 +21,7 @@ export interface ExistingComponent extends FactBase {
 }
 export type ProjectFact = Measurement | ExistingComponent
 export interface FactPage { items: ProjectFact[]; hasMore: boolean }
-export interface FactFilter { areaId?: string; componentId?: string; status?: 'active' | 'missing' | 'archived' }
+export interface FactFilter { areaId?: string; componentId?: string; status?: 'active' | 'missing' | 'archived'; requiredOnly?: boolean }
 type Row = Record<string, any> // Mapped PostgREST boundary; never passed raw to UI.
 
 export const TRUTH_LABELS: Record<MeasurementTruth, string> = {
@@ -85,6 +85,7 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
       if (filter.areaId) query = query.eq('area_id', filter.areaId)
       if (kind === 'measurement' && filter.componentId) query = query.eq('component_id', filter.componentId)
       if (kind === 'measurement' && filter.status === 'missing') query = query.in('truth', ['unknown', 'estimated'])
+      if (kind === 'measurement' && filter.requiredOnly) query = query.eq('required', true)
       const rows = value(await query.order('recorded_at', { ascending: false }).order('id').range(offset, offset + 24)) as Row[]
       assertCurrent()
       return page(rows, kind, projectId, 24)

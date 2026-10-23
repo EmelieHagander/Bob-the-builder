@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as db from '../data/database'
+import type { Measurement } from '../data/projectFacts'
 import { AvatarStack, Icon, Loading, ProgressBar, Ring, SectionTitle, useAsync } from '../components/ui'
 import { useAuthTick } from '../components/Layout'
 import { TaskModal } from '../components/editors'
 import { ProjectImages } from '../components/ProjectImages'
+import { nextProjectPlanningAction, hasCurrentScopeDrawing } from '../domain/projectPlanningAction'
 
 export function Dashboard() {
   const [version, setVersion] = useState(0)
@@ -22,10 +24,11 @@ export function Dashboard() {
   const { data: planning, loading: planningLoading, error: planningError } = useAsync(
     () => projectId && db.authEnabled()
       ? Promise.all([
-          db.getProjectFacts(projectId, 'measurement', { status: 'missing' }, 0),
-          db.getSelectedTarget(projectId),
+          db.getProjectFacts(projectId, 'measurement', { status: 'missing', requiredOnly: true }, 0),
+          db.getProjectTargetScopes(projectId),
           db.getProjectArtifacts(projectId, '', false, 0),
-        ]).then(([missing, target, artifacts]) => ({ missing, target, artifacts }))
+          db.getBuildConstructions(projectId),
+        ]).then(([missing, targets, artifacts, constructions]) => ({ missing, targets, artifacts, constructions }))
       : Promise.resolve(null),
     [projectId, version],
   )
@@ -33,48 +36,17 @@ export function Dashboard() {
   const byId = new Map((people ?? []).map((p) => [p.id, p]))
   const areaById = new Map((areas ?? []).map((area) => [area.id, area.name]))
   const resolve = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => Boolean(p))
-  const missingMeasurements = (planning?.missing.items ?? []).filter((item) => item.kind === 'measurement')
-  const selectedTarget = planning?.target.solution ?? null
-  const selectedDecision = planning?.target.decision ?? null
-  const hasCurrentDrawing = Boolean(selectedTarget && selectedDecision && planning?.artifacts.items.some((artifact) =>
-    artifact.targetRevision === selectedDecision.revision
-    && artifact.solutionId === selectedTarget.id
-    && artifact.solutionRevision === selectedTarget.revision,
-  ))
-
-  const nextPlanningAction = missingMeasurements.length > 0
-    ? {
-        to: '/facts?kind=measurement&status=missing',
-        icon: 'ruler',
-        eyebrow: 'Next step',
-        title: `Measure ${missingMeasurements.length} ${missingMeasurements.length === 1 ? 'missing dimension' : 'missing dimensions'}`,
-        text: missingMeasurements[0]
-          ? `Start with ${missingMeasurements[0].subject}${missingMeasurements[0].areaId ? ` in ${areaById.get(missingMeasurements[0].areaId) ?? 'its area'}` : ''}.`
-          : 'Collect the missing measurements before planning from assumptions.',
-      }
-    : !selectedTarget
-      ? {
-          to: '/solutions',
-          icon: 'path',
-          eyebrow: 'Next step',
-          title: 'Choose the shared target',
-          text: 'Your recorded measurements are clear enough to move on to comparing and selecting a solution.',
-        }
-      : !hasCurrentDrawing
-        ? {
-            to: '/artifacts',
-            icon: 'blueprint',
-            eyebrow: 'Next step',
-            title: 'Turn the target into a drawing',
-            text: `“${selectedTarget.title}” is selected. Keep the next plan tied to that exact version and its evidence.`,
-          }
-        : {
-            to: '/areas',
-            icon: 'check-circle',
-            eyebrow: 'Next step',
-            title: 'Review what the crew can do next',
-            text: 'The current planning foundation has measurements, a selected target and a drawing tied to that target. Review areas and tasks for the next build action.',
-          }
+  const missingMeasurements = (planning?.missing.items ?? []).filter((item): item is Measurement => item.kind === 'measurement' && item.required)
+  const snapshot = {
+    missing: missingMeasurements,
+    targets: planning?.targets ?? [],
+    constructions: planning?.constructions ?? [],
+    artifacts: planning?.artifacts.items ?? [],
+  }
+  const nextPlanningAction = nextProjectPlanningAction(snapshot, areaById)
+  const hasSelectedTarget = snapshot.targets.length > 0
+  const hasCurrentDrawing = hasCurrentScopeDrawing(snapshot)
+  const hasConstruction = snapshot.constructions.length > 0
 
   return (
     <div className="page">
@@ -136,7 +108,7 @@ export function Dashboard() {
                   <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.12em', fontWeight: 750, color: 'var(--clay)' }}>Still missing</div>
                     <h2 className="font-display" style={{ fontSize: 19, margin: '4px 0 8px' }}>
-                      {missingMeasurements.length ? `${missingMeasurements.length} to measure` : 'Planning gaps'}
+                      {missingMeasurements.length ? `${missingMeasurements.length} to check` : 'Design and work readiness'}
                     </h2>
                   </div>
                   {missingMeasurements.length > 0 && <Link to="/facts?kind=measurement&status=missing" style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--accent-2)' }}>View all</Link>}
@@ -157,10 +129,11 @@ export function Dashboard() {
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No unknown or estimated measurements</div>
-                    {!selectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
-                    {selectedTarget && !hasCurrentDrawing && <Link to="/artifacts" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
-                    {selectedTarget && hasCurrentDrawing && <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
+                    <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> No required unknown or estimated measurements</div>
+                    {hasConstruction && <Link to="/build-lists" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="package" size={16} color="var(--clay)" /> Construction saved — review preliminary cut and purchasing needs</Link>}
+                     {!hasSelectedTarget && <Link to="/solutions" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No selected solution yet</Link>}
+                    {hasSelectedTarget && !hasCurrentDrawing && !hasConstruction && <Link to="/artifacts" style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5, color: 'inherit' }}><Icon name="circle-dashed" size={16} color="var(--clay)" /> No drawing tied to the selected solution yet</Link>}
+                    {hasSelectedTarget && hasCurrentDrawing && !hasConstruction && <div style={{ display: 'flex', gap: 'var(--layout-gap)', alignItems: 'center', fontSize: 13.5 }}><Icon name="check" size={16} color="var(--leaf)" /> Target and matching drawing are recorded</div>}
                   </div>
                 )}
               </div>
