@@ -1288,7 +1288,9 @@ previous view definition; the tables can stay.
 
 ### Checkpoint render files — 2026-10-23
 
-**Not applied yet.** A reviewed CAD candidate's files (about 0.7 MB of base64
+**Applied 2026-10-23 as ledger `20261023055027`** (file `20261023050000`;
+[evidence](../Docs/foundation-verification.md#checkpoint-render-files--2026-10-23)).
+A reviewed CAD candidate's files (about 0.7 MB of base64
 STEP/SVG) were copied into every turn checkpoint save after a render, making
 each save about 1.2 MB (2026-10-22). The same files already sit in the job's
 `cad:render:N` journal step. `20261023050000_checkpoint_render_files.sql` adds
