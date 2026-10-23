@@ -1243,3 +1243,43 @@ pooled backend). Signature, result, invoker security, settings and grants are
 unchanged; a rollback-only comparison over every hosted artifact revision was
 identical. Rule: a hot read function with `SET` clauses should be plpgsql, not
 `LANGUAGE sql`.
+
+### Stored source status — 2026-10-22
+
+**Prepared; not applied.** Display reads of `bob.artifact_source_status`
+(project home cards, drawing Steps, the drawing work list, artifact lists) ran
+the assessment for every returned revision on every read and reached the 8 s
+authenticated statement timeout under load on 2026-10-21/22.
+`20261022193000_stored_source_status.sql` keeps the view's columns and meaning:
+
+- `bob.artifact_source_epochs` holds one change counter per project. An O(1)
+  security-definer AFTER trigger (`mark_artifact_source_changed`) bumps it on
+  every write to the 18 project-scoped assessment inputs; a shared catalog
+  item bumps every project with a construction. Projects are bumped in sorted
+  order. Nothing is computed in the writer's transaction.
+- `bob_private.drain_artifact_source_states`, scheduled by pg_cron every 30
+  seconds (`bob-source-states`, pure SQL), refreshes changed projects within a
+  20 s budget. `refresh_artifact_source_states` reads the counter first, then
+  stores the live assessment of every revision with that counter value in
+  `bob.artifact_source_states` (null state when the assessment returns no row).
+- The view returns a stored row only while its counter equals the project's
+  current counter; otherwise the live assessment runs for that row only. An
+  `OFFSET 0` subquery makes that check a one-time filter, so fresh reads never
+  run the assessment (asserted from executed plans in the test).
+- The drain runs as owner, so `artifact_source_states_storable` refuses
+  projects whose answer can depend on a member's own building or catalog
+  access: physical detail rows, multifloor/stair flags, any physical pin in
+  construction parameters or CAD manifests, or a pin to another project's
+  private catalog item. Those projects stay live. The nine shared
+  physical-model tables therefore carry no trigger.
+- Members can only select stored rows and counters of their projects; the
+  functions are executable by no client role. Write guards keep calling
+  `bob_private.artifact_source_assessment` directly.
+
+`tests/stored-source-status-sql.test.ts` derives the assessment's base tables
+from the installed function and view definitions
+(`tests/support/source-status-inputs.ts`) and fails when an input has neither
+the trigger nor the physical gate. Rollout: apply before or without an Edge
+deploy (no Edge change); the first drain fills rows within 30 s and reads stay
+live until then. Rollback: unschedule `bob-source-states` and restore the
+previous view definition; the tables can stay.

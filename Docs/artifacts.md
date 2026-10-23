@@ -858,6 +858,18 @@ unavailable. Saved classifications and history are never rewritten: a recorded
 **Build ready** version whose sources changed shows a review warning. A
 `current` source assessment is not proof that all required inputs were recorded.
 
+**Stored answers (2026-10-22; prepared, not deployed).** Reading this view no
+longer runs the assessment when nothing has changed. Every write to an input
+bumps a per-project change counter; a background drain stores the live answer
+for every revision of a changed project. A stored row is used only while the
+counter still matches, otherwise that row is assessed live as before, so the
+answer never differs from the live check, only its cost. Projects whose answer
+can depend on a member's own access are never stored and stay live: any
+physical-model reference (building, space, element, multifloor, stair, room,
+generation or space-measurement pin) or a pin to another project's private
+catalog item. Write and render guards still call the live assessment directly.
+[Database owner](../db/README.md#stored-source-status--2026-10-22).
+
 Intentional CAD revisions can reattach a previously unlinked Step. The guarded
 save writes the relationship and reads back `step_ids` into the durable receipt;
 archive/restore do not recreate links. Area drawing links carry their scope into
