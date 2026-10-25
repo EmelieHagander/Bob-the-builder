@@ -1313,7 +1313,7 @@ jobs finish before rolling the worker back. The function can stay.
 
 ### Project rooms and Area rooms — 2026-10-25
 
-**Not applied yet.** Owner decision: a project links a whole Building, then marks
+**Applied 2026-10-25 as ledger `20261025163923`** (file `20261025133000`; [evidence](../Docs/foundation-verification.md#building-and-room-links--2026-10-25)). Owner decision: a project links a whole Building, then marks
 its rooms; Areas map to rooms of that Building
 ([building model](../Docs/building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)).
 `20261025133000_project_room_scope.sql` replaces the body of
@@ -1338,7 +1338,7 @@ restore the previous function body from `20260913213712_household_project_sharin
 
 ### Bob building scope — 2026-10-25
 
-**Not applied yet.** Owner decisions: [building model](../Docs/building-model.md#bob-building-scope--owner-decisions-2026-10-25);
+**Applied 2026-10-25:** core `20261025163936` (file `20261025150000`) and catalog `20261025164051` (file `20261025150500`); [evidence](../Docs/foundation-verification.md#building-and-room-links--2026-10-25). Owner decisions: [building model](../Docs/building-model.md#bob-building-scope--owner-decisions-2026-10-25);
 tool contract: [Ask bob writes](../Docs/ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25).
 `20261025150000_bob_building_scope.sql` stops unless the room-scope helper
 `project_targets_whole_building` exists, then adds:

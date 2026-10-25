@@ -588,7 +588,7 @@ Database details: [db/README](../db/README.md#project-rooms-and-area-rooms--2026
 
 ### Bob building scope — owner decisions 2026-10-25
 
-**Source only; not applied or deployed.** In a claimed chat turn Bob can set
+**Applied, deployed and activated 2026-10-25** ([evidence](foundation-verification.md#building-and-room-links--2026-10-25)); not yet exercised in a live turn. In a claimed chat turn Bob can set
 the project's Building, rooms and Area mappings within the rules above, so an
 owner can name the rooms of their house and Bob does it in a few steps:
 

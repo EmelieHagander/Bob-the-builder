@@ -94,7 +94,7 @@ The original product uses `Area` as a project-scoped physical/work zone. The per
 
 - `Area` — project work-zone container used by current collaboration/runtime flows;
 - `Site` / `Building` / `Space` / `BuildingElement` — implemented persistent physical context that may be reused across projects;
-- Areas may map to rooms of a Building the Project links as a whole (Area **Rooms** panel, source ready 2026-10-25, not deployed; [building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)); Area and Space must not be silently conflated.
+- Areas may map to rooms of a Building the Project links as a whole (Area **Rooms** panel, live 2026-10-25; [building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25)); Area and Space must not be silently conflated.
 
 See `Docs/building-model.md` for the owning contract and `Docs/v1-plan.md` for delivery order.
 
@@ -158,7 +158,7 @@ When a new major journey moves toward implementation, give it one canonical succ
 
 - [Server-bound edits and canonical data reuse](ask-bob-writes.md#server-bound-edits-and-canonical-data-reuse--owner-decision-2026-10-14) — **owner decision 2026-10-14; description/solution/alternative/selection/evidence adapters technically deployed; work-record core/runtime installed with catalog blocked; plan focus/Task links in source; broader migration and member/model acceptance remaining**: Bob reads and changes data while the runtime owns identities, concurrency and reuse of canonical values. Includes create/revise separation, preservation rules and acceptance gates.
 
-- [Bob building scope](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25) — **source only 2026-10-25; not applied, deployed or activated**: Bob finds the caller's own Buildings, links or unlinks one and marks rooms and Area mappings through the unchanged physical scope command. Owner decisions in the [building model](building-model.md#bob-building-scope--owner-decisions-2026-10-25); release order in [supabase/README](../supabase/README.md#bob-building-scope--source-2026-10-25).
+- [Bob building scope](ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25) — **live 2026-10-25** ([evidence](foundation-verification.md#building-and-room-links--2026-10-25); not yet exercised in a live turn): Bob finds the caller's own Buildings, links or unlinks one and marks rooms and Area mappings through the unchanged physical scope command. Owner decisions in the [building model](building-model.md#bob-building-scope--owner-decisions-2026-10-25); release order in [supabase/README](../supabase/README.md#bob-building-scope--source-2026-10-25).
 
 - [Docs/bob-delivery-flow.md](bob-delivery-flow.md) — **cross-domain delivery contract and active State**: parallel source flow, Bob/collector/designer/reviewer handoffs, just-in-time context, source lineage, resume/error outcomes and staged delivery. Domain owners distinguish implemented, deployed and remaining target scope. Its [State](bob-delivery-flow.md#state) contains only remaining work; dated evidence lives in PR/CI or the archive below.
 - `supabase/README.md` — provider path, versioned AI definition catalog, per-app model tiers, pinned manifests, activation/rollback, setup and the Slice 0 project-lookup contract (allowed datasets/fields, authority and result semantics).
