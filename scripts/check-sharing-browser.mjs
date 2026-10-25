@@ -86,6 +86,8 @@ async function fixture(viewport, fresh = false) {
     if (path === '/rest/v1/project_buildings') return respond({ json: buildings.map(building => ({ ...building, project_id: url.searchParams.get('project_id')?.replace(/^eq\./, '') })) })
     if (['/rest/v1/current_drawing_overview', '/rest/v1/media_assets', '/rest/v1/current_measurements', '/rest/v1/current_target', '/rest/v1/current_artifacts', '/rest/v1/current_drawing_steps'].includes(path) && method === 'GET') return respond({ json: [] })
     if (path === '/rest/v1/current_spaces') return respond({ json: state.spaces })
+    // Room rows read their saved measurements (2026-10-25); sharing has none.
+    if (path === '/rest/v1/space_measurement_details') return respond({ json: [] })
     if (path === '/rest/v1/rpc/can_edit_building') return respond({ json: state.canEditBuilding })
     if (path === '/rest/v1/rpc/physical_node_command') {
       const body = request.postDataJSON()
