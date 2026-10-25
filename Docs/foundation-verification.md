@@ -1,5 +1,28 @@
 # Foundation verification and rollout
 
+## Core reading preload — 2026-10-25
+
+**Merged in PR #324 (`7d26b7c`) and deployed 2026-10-25 13:00 UTC; not yet
+measured live.** The [tool contract](ask-bob-tools.md#selective-methods-and-tools--prepared-2026-10-19)
+describes the design.
+
+- **Why (read-only production metrics, 2026-10-19 to 2026-10-25):** 99 of 611
+  main steps only loaded manuals (about 3 of 29 USD); 38 of 57 turns began with
+  such a step. The most loaded tools were `open_project_item` (27),
+  `list_project_category` (26) and `search_project_data` (24). Since
+  2026-10-21: 14 of 170 steps, 5 of which loaded only these three.
+- **Local evidence:** 72 Bob runtime/tool/checkpoint/delivery files, 506 tests,
+  0 failures. A new runtime test shows a read at step 1 with the pin (2 model
+  calls) against describe → read → answer without it (3). Typecheck of the
+  changed Edge files: the same 13 pre-existing import-shim errors before and
+  after.
+- **Hosted deploy from `7d26b7c`:** a read-only check at 13:00 UTC found no
+  active Bob jobs. `bob-worker` v135 (JWT verification off, as before) and
+  `ask-bob` v167 (on, as before); both retrieved bundles contain
+  `CORE_READ_PRELOAD` and `corePreloadVersion`. No migration, no Pages deploy.
+- **Not verified here:** effect on manual-only steps and cache share in real
+  turns. No CI or full suite.
+
 ## Checkpoint render files — 2026-10-23
 
 **Merged in PR #321 (`c3604c2`), applied and deployed 2026-10-23 05:51 UTC;
