@@ -1,5 +1,37 @@
 # Foundation verification and rollout
 
+## Checkpoint render files — 2026-10-23
+
+**Merged in PR #321 (`c3604c2`), applied and deployed 2026-10-23 05:51 UTC;
+not yet observed on a live CAD turn.** The
+[contract](ask-bob-conversations.md#cad-candidate-files-stay-in-their-render-step)
+and [database function](../db/README.md#checkpoint-render-files--2026-10-23)
+describe the design.
+
+- **Why:** after a CAD render every turn checkpoint save carried the reviewed
+  candidate's files (~0.7 MB), about 1.2 MB per save, on a database that was
+  timing out (2026-10-22).
+- **Local evidence:** 23 focused files, 162 tests, 0 failures (checkpoint DB
+  fence and roundtrips, version 1/2 and malformed version 2 state, CAD
+  assistant/transport/review, drawing delivery, resume and release paths). The
+  fixture's CAD state drops from 707,495 to 7,546 characters. Typecheck of the
+  changed Edge files: the same 14 pre-existing import-shim errors before and
+  after.
+- **Hosted application:** a read-only check at 05:50 UTC found no active Bob
+  jobs and no existing function. File `20261023050000` was applied through the
+  managed ledger as `20261023055027_checkpoint_render_files` (SQL SHA-256
+  `e044a5f6ca6820b54e1708872aa7ca0ad4bd4357ef46bc14056b8a579b716bb8`).
+  Readback: security definer, empty search path, `PT409` fence, executable by
+  `service_role` only (not `anon`, `authenticated` or `public`).
+- **Hosted deploy from `c3604c2`:** `bob-worker` v134 (JWT verification off,
+  as before) and `ask-bob` v166 (on, as before). Both retrieved bundles contain
+  `bob_checkpoint_render_files`, `candidateForSave` and `verifyCadFiles`.
+  No Pages deploy (no frontend change).
+- **Not verified here:** no live CAD turn has run on this release, so the
+  real save size and a restored version 2 save are not yet observed. No
+  checkpoint rows are retained after jobs finish; the `[Checkpoint size]` log
+  (above 500,000 characters) is the live signal. No CI or full suite.
+
 ## Stored source status — 2026-10-22
 
 **Merged in PR #319 (`cc4df1e`) and applied 2026-10-23 03:44 UTC.** The
