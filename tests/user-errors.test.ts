@@ -55,6 +55,7 @@ test('unknown failures never show raw text, codes or IDs', () => {
     assert.equal(userErrorMessage(leak), GENERIC_ERROR)
   }
   assert(!userErrorMessage({ code: '42501', message: `permission denied for table tasks ${uuid}` }).includes(uuid))
+  assert.equal(userErrorMessage(new DataError('project_mismatch', 'Solution project mismatch.')), 'These records do not belong to the open project. Reload to continue.')
   const typed = new DataError('no_data', 'query returned no data')
   assert.equal(typed.kind, 'not_found'); assert.equal(typed.message, 'query returned no data', 'Raw detail stays available to logs and tests')
 })

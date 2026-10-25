@@ -81,6 +81,7 @@ const CODE_COPY: Record<string, string> = {
   signup_disabled: 'New accounts cannot be created right now.',
   over_email_send_rate_limit: 'Too many sign-in emails were sent. Wait a few minutes and try again.',
   already_invited: 'That person is already invited.',
+  project_mismatch: 'These records do not belong to the open project. Reload to continue.',
 }
 
 /*
@@ -174,7 +175,7 @@ const KIND_BY_CODE: Record<string, ErrorKind> = {
   signup_disabled: 'not_configured', not_configured: 'not_configured',
   over_email_send_rate_limit: 'rate_limited', over_request_rate_limit: 'rate_limited', rate_limited: 'rate_limited',
   not_found: 'not_found', no_data: 'not_found', in_use: 'in_use',
-  conflict: 'conflict', record_changed: 'conflict', revision_conflict: 'conflict', turn_in_flight: 'conflict',
+  conflict: 'conflict', project_mismatch: 'conflict', record_changed: 'conflict', revision_conflict: 'conflict', turn_in_flight: 'conflict',
   network: 'network', timeout: 'timeout',
 }
 

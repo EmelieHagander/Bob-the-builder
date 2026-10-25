@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { readSheetLayer, sheetPurchaseCount } from './sheetLayers'
 import type { SheetLayerSnapshot } from './sheetLayers'
-import { UserError, toDataError } from '../lib/userErrors'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export type QuantityUnit = 'pcs' | 'm' | 'm2' | 'm3' | 'kg' | 'l'
 export type StockStatus = 'available' | 'inspect' | 'unavailable'
@@ -276,7 +276,7 @@ export function createMaterialPlanning(
   }
 
   function scoped<T extends Row>(rows: T[], projectId: string): T[] {
-    if (rows.some(row => row.project_id !== projectId)) throw new Error('Material planning project mismatch.')
+    if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Material planning project mismatch.')
     return rows
   }
 
@@ -354,7 +354,7 @@ export function createMaterialPlanning(
       const { db, guard } = connection(projectId)
       const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'cut_plan', record_id: null, after_id: afterId } })) as Row
       guard()
-      if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Cut plan project mismatch.')
+      if (result.projectId !== projectId || !Array.isArray(result.records)) throw new DataError('project_mismatch', 'Cut plan project mismatch.')
       return { items: scoped(result.records, projectId) as MaterialCutPlan[], nextCursor: result.next_cursor as string | null, hasMore: Boolean(result.truncated) }
     },
     async stock(projectId: string, archived = false, offset = 0) {
@@ -462,7 +462,7 @@ export function createMaterialPlanning(
       do {
         const result = checked(await db.rpc('read_project_work', { p_project: projectId, p_input: { resource: 'shopping', record_id: null, after_id: cursor } })) as Row
         guard()
-        if (result.projectId !== projectId || !Array.isArray(result.records)) throw new Error('Shopping source project mismatch.')
+        if (result.projectId !== projectId || !Array.isArray(result.records)) throw new DataError('project_mismatch', 'Shopping source project mismatch.')
         for (const row of result.records) if (row.cut_plan_source || row.pack_source) rows.push({ materialId: row.id, ...(row.cut_plan_source ? { source: row.cut_plan_source } : {}), ...(row.pack_source ? { pack: row.pack_source } : {}) })
         cursor = result.next_cursor ?? null
         if (result.truncated && !cursor || cursor && seen.has(cursor)) throw new UserError('Shopping source list incomplete. Retry.')

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TruthState } from './provenance'
-import { UserError, toDataError } from '../lib/userErrors'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export type FactKind = 'measurement' | 'component'
 export type LengthUnit = 'mm' | 'cm' | 'm'
@@ -75,7 +75,7 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
     return { db: client, assertCurrent }
   }
   function page(rows: Row[], kind: FactKind, projectId: string, size: number): FactPage {
-    if (rows.some(r => r.project_id !== projectId)) throw new Error('Project fact mismatch.')
+    if (rows.some(r => r.project_id !== projectId)) throw new DataError('project_mismatch', 'Project fact mismatch.')
     return { items: rows.slice(0, size).map(r => map(r, kind)), hasMore: rows.length > size }
   }
   return {
@@ -94,7 +94,7 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
       const { db, assertCurrent } = connection(projectId)
       const row = value(await db.from(view(kind)).select('*').eq('project_id', projectId).eq('id', id).single()) as Row
       assertCurrent()
-      if (row.project_id !== projectId) throw new Error('Project fact mismatch.')
+      if (row.project_id !== projectId) throw new DataError('project_mismatch', 'Project fact mismatch.')
       return map(row, kind)
     },
     async history(projectId: string, kind: FactKind, id: string, offset = 0): Promise<FactPage> {
@@ -113,7 +113,7 @@ export function createProjectFacts(client: SupabaseClient<any, any, any> | null,
       assertCurrent()
       const row = value(await db.from(view(kind)).select('*').eq('project_id', projectId).eq('id', id).single()) as Row
       assertCurrent()
-      if (row.project_id !== projectId) throw new Error('Project fact mismatch.')
+      if (row.project_id !== projectId) throw new DataError('project_mismatch', 'Project fact mismatch.')
       return map(row, kind)
     },
   }

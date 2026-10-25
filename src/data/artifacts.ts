@@ -8,7 +8,7 @@ import type { StorageBoxRecipe } from '../lib/storageBox'
 import type { CadShell } from '../lib/cadShell'
 import { parseDrawingSourceChanges, type DrawingSourceStatus } from './drawingSources'
 import { parseCadViewerPin, parseCadWireframe, type CadViewerResult } from '../../supabase/functions/_shared/cad-wireframe.ts'
-import { UserError, toDataError } from '../lib/userErrors'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export type ArtifactKind = 'plan' | 'elevation' | 'section' | 'detail'
 export type ArtifactStatus = 'concept' | 'measured' | 'build_ready'
@@ -154,7 +154,7 @@ export function createArtifacts(
   }
 
   function scoped<T extends Row>(rows: T[], projectId: string): T[] {
-    if (rows.some(row => row.project_id !== projectId)) throw new Error('Drawing project mismatch.')
+    if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Drawing project mismatch.')
     return rows
   }
 
@@ -166,7 +166,7 @@ export function createArtifacts(
     guard()
     if (!result.data) return null
     const row = result.data as Row
-    if (row.project_id !== projectId) throw new Error('Generated drawing project mismatch.')
+    if (row.project_id !== projectId) throw new DataError('project_mismatch', 'Generated drawing project mismatch.')
     const inputs = checked(await db.from('artifact_geometry_input_details').select('*')
       .eq('project_id', projectId).eq('artifact_id', id).eq('artifact_revision', revision).order('role')) as Row[]
     guard()

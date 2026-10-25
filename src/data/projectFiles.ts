@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MediaAsset, MediaPage, MediaPurpose, MediaTarget, TaskDetail, TaskStep, TaskStatus, SkillLevel } from './types'
 import { createImagePreviewCache, imagePreview } from '../lib/imagePreview'
 import { createSharedRead } from '../lib/sharedRead'
-import { UserError, toDataError } from '../lib/userErrors'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export const IMAGE_LIMIT = 6 * 1024 * 1024
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -65,7 +65,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     if (target.kind !== 'project') query = query.eq('target.' + target.kind + '_id', target.id)
     const rows = value(await query.order('created_at', { ascending: false }).order('id').range(offset, offset + 12)) as unknown as Row[]
     assertCurrent()
-    if (rows.some(row => row.project_id !== projectId)) throw new Error('Image project mismatch.')
+    if (rows.some(row => row.project_id !== projectId)) throw new DataError('project_mismatch', 'Image project mismatch.')
     return { items: rows.slice(0, 12).map(mapImage), hasMore: rows.length > 12 }
   }
   async function getImage(projectId: string, mediaId: string) {
@@ -73,7 +73,7 @@ export function createProjectFiles(client: SupabaseClient<any, any, any> | null,
     const row = await imageReads.run(`${projectId}/${mediaId}`, async () => value(await db.from('media_assets').select('*,media_links(id,area_id,task_id,step_id,plan_step_id)')
       .eq('project_id', projectId).eq('id', mediaId).single()) as Row)
     assertCurrent()
-    if (row.project_id !== projectId) throw new Error('Image project mismatch.')
+    if (row.project_id !== projectId) throw new DataError('project_mismatch', 'Image project mismatch.')
     return mapImage(row)
   }
   return {

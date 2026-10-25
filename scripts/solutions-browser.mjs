@@ -204,7 +204,7 @@ export async function verifySolutionsBrowser(page, base, fixture, facts, width) 
   await page.getByLabel('Show alternatives', { exact: true }).selectOption('active'); await a.waitFor()
   fixture.wrongVersionProjectOnce = true
   await page.reload()
-  await page.getByRole('alert').getByText('Solution project mismatch.', { exact: true }).waitFor()
+  await page.getByRole('alert').getByText('These records do not belong to the open project. Reload to continue.', { exact: true }).waitFor()
   assert.equal(await page.getByRole('region', { name: 'Design & choices', exact: true }).count(), 0, 'Wrong-project advice must not be rendered')
   await page.getByRole('button', { name: 'Reload solutions', exact: true }).click()
   await target.getByRole('heading', { name: 'Extend the porch · Version 1', exact: true }).waitFor()

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MeasurementTruth } from './projectFacts'
 import { parseDesignIntent, type DesignIntent } from '../../supabase/functions/_shared/project-design-intent.ts'
-import { UserError, toDataError } from '../lib/userErrors'
+import { DataError, UserError, toDataError } from '../lib/userErrors'
 
 export interface Solution {
   id: string; projectId: string; areaId: string | null; revision: number
@@ -56,7 +56,7 @@ export function createSolutions(client: SupabaseClient<any, any, any> | null, ca
     return { db: client, guard }
   }
   function scoped<T extends Row>(rows: T[], projectId: string): T[] {
-    if (rows.some(r => r.project_id !== projectId)) throw new Error('Solution project mismatch.')
+    if (rows.some(r => r.project_id !== projectId)) throw new DataError('project_mismatch', 'Solution project mismatch.')
     return rows
   }
   async function version(projectId: string, id: string, revision: number): Promise<SolutionVersion> {
