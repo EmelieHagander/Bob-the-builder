@@ -177,7 +177,7 @@ identities remain outside this slice.
 
 ### Fifth implementation: building and room scope — source 2026-10-25
 
-**Source only: not applied, deployed or activated.** The owner decisions and
+**Applied, deployed and activated 2026-10-25** ([evidence](foundation-verification.md#building-and-room-links--2026-10-25)); not yet exercised in a live turn. The owner decisions and
 linking rules live in the [building model](building-model.md#bob-building-scope--owner-decisions-2026-10-25).
 `project-building-scope.ts` adds two tools on the Building and site shelf:
 
@@ -221,7 +221,7 @@ same source, then the generated catalog.
 | Materials and procurement | `manage_project_material`, `derive_cad_material_requirement`, supplier articles and pack purchases still expose source/allocation/version fields. Preserve deterministic quantities, stock reservations, existing allocations and exact published commitments. |
 | Catalog | `save_catalog_definition` needs bound existing definitions/materials/profile versions and preserved properties; source claims stay explicit. |
 | Image and drawing links | Attachment/detachment, finalization, drawing links and lifecycle choices still need complete bound source/target reads. |
-| Building, room and stair inputs | Project and Area links to a Building and its rooms are bound in the fifth slice (source only). Intake, room-layout and stair inputs still need bound physical context, source dimensions, current geometry and unchanged saved values. |
+| Building, room and stair inputs | Project and Area links to a Building and its rooms are bound in the fifth slice (live 2026-10-25). Intake, room-layout and stair inputs still need bound physical context, source dimensions, current geometry and unchanged saved values. |
 | Construction and CAD | Existing candidate/draft/calculation adapters already own portions of identity and derivation; audit every nested source/definition/instance/Step reference and stateful update before declaring this family complete. |
 
 This inventory describes migration work, not exceptions to the ownership rule.

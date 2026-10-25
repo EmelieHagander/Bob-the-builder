@@ -1,5 +1,43 @@
 # Foundation verification and rollout
 
+## Building and room links — 2026-10-25
+
+**Merged in PR #326 (`535c6d2`, app and room rules) and PR #327 (`5aac4ae`,
+Bob tools); applied, deployed and activated 2026-10-25 16:39–16:42 UTC; not
+yet exercised by a real user or a live Bob turn.** Owner decisions and rules:
+[building model](building-model.md#project-rooms-and-area-rooms--owner-decision-2026-10-25),
+[Bob building scope](building-model.md#bob-building-scope--owner-decisions-2026-10-25).
+
+- **Local evidence:** room-scope SQL and unit tests, the Bob building-scope
+  suite (12 new tests) and catalog, workflow, writer, release and toolbox
+  files: 75/75 on top of `main`; earlier 97/97 across the building, drawing and
+  sharing SQL files and 479/479 across 49 catalog/toolbox/writer/checkpoint
+  files. The catalog `--check` passes. `npm run build` is clean; the browser
+  checks `check-project-rooms-browser` and `check-building-context-browser`
+  pass on fixtures at 320/390/1280 px.
+- **Production data before (read-only):** 1 Building link, 2 Site links,
+  2 room links (1 without a Building link), 10 Area targets; kept unchanged.
+- **Hosted application (managed ledger, from `main`):**
+  `20261025163923_project_room_scope` (file `20261025133000`, SQL SHA-256
+  `8951f553dd62e95d465399580038070c262a5aa84f33df3f69ec3d52e901f7d0`),
+  `20261025163936_bob_building_scope` (file `20261025150000`,
+  `b980417394185cee0b50cd31b96a39e5671b7b4bf938eaa4c0dd754957246e77`),
+  `20261025164051_ai_building_scope_catalog` (file `20261025150500`,
+  `4c91a171d49424e7e8e1822bc5561b5129b1f867160179a2edbd06dafd9a3956`).
+  Readback: the new command rules are installed, the private helper is not
+  executable by `authenticated`; `bob_project_write_v21` and the building-scope
+  reads are executable by `authenticated`, not `anon`; both tools are active in
+  `bob.tool_catalog` and their catalog prompts have active versions (the next
+  Bob turn pins a new manifest).
+- **Hosted deploy from `5aac4ae`:** a read-only check at 16:39 UTC found no
+  active Bob jobs. `bob-worker` v136 (JWT verification off, as before) and
+  `ask-bob` v168 (on, as before); both bundles contain
+  `bob_project_write_v21` and `read_bob_building_scope_context`.
+  Pages: `deploy.yml` run 377 from `5aac4ae` succeeded (build and deploy
+  16:41–16:42 UTC).
+- **Not verified here:** a real Bob turn using the tools, the app flows against
+  the hosted database, and a real phone. No CI or full suite.
+
 ## Core reading preload — 2026-10-25
 
 **Merged in PR #324 (`7d26b7c`) and deployed 2026-10-25 13:00 UTC; not yet

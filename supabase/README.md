@@ -657,7 +657,7 @@ tracks actual installation separately from the code contract.
 
 ### Bob building scope — source 2026-10-25
 
-**Source only; nothing is applied or deployed.** `ask-openai.ts` routes kind
+**Deployed 2026-10-25** (`ask-bob` v168, `bob-worker` v136; [evidence](../Docs/foundation-verification.md#building-and-room-links--2026-10-25)). `ask-openai.ts` routes kind
 `bound_building_scope` to `bob_project_write_v21` and reads through
 `read_bob_building_scope_context`; every other kind keeps its RPC. The
 [write contract](../Docs/ask-bob-writes.md#fifth-implementation-building-and-room-scope--source-2026-10-25)
