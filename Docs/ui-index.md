@@ -257,6 +257,28 @@ physical-phone and named-participant acceptance.
 - **Phase is not readiness.** `Design`, `Planning` or `Build` must not be styled as proof that required evidence/materials/checks are ready.
 - **Responsive shell must survive feature work.** In particular, do not introduce fixed elements that collide with mobile nav or the Ask bob affordance.
 - **Print surfaces stay print-clean.** Shopping/other printable views should not require background colors or interactive chrome to make sense.
+- **Screens speak to people.** No raw database/runtime error text, internal codes, recipe paths or IDs on screen (see below).
+
+### Errors, codes and IDs on screen
+
+`src/lib/userErrors.ts` owns failure copy. The data layer throws `DataError`
+(stable `code` + `kind`; raw `detail` kept for logs and tests only) or
+`UserError` (a sentence written for people). Screens render
+`userErrorMessage(error, fallback)`: authored copy, then a known rule or code,
+then the failure's kind (permission, conflict, network…), then the screen's
+own "what failed" fallback or **Something went wrong. Try again.** It never
+returns raw text. Behaviour that depends on a code uses `hasErrorCode`, not
+message matching. English rules the backend still raises as sentences are
+matched exactly as codes in that module; backend codes should replace them.
+Pure local validators may show their authored sentence via `validatorMessage`.
+
+`src/lib/labels.ts` names codes for people (truth classes, Bob's record types,
+material categories, drawing/request statuses, calculation methods and CAD
+parameter terms), extending `TRUTH_LABELS` and `DOMAIN_TERMS`. Show a record's
+own name; when none is loaded, use a neutral label such as **Saved project
+measurement · revision 2**, never an ID. `tests/user-facing-errors.test.ts`
+scans `.tsx` files for raw error rendering and the data layer for
+`database: ${…}`; `tests/user-errors.test.ts` covers the mapping and labels.
 
 ## Stable shared ownership
 
@@ -269,6 +291,7 @@ physical-phone and named-participant acceptance.
 - Modal frame: `src/components/Modal.tsx`
 - Domain editors: `src/components/editors.tsx`
 - Room measurement list and truth labels: `src/components/RoomMeasurements.tsx` + `src/lib/roomMeasurements.ts`
+- Failure copy and code labels: `src/lib/userErrors.ts`, `src/lib/labels.ts`
 - AI drawer: `src/components/AskBob.tsx`
 - Page focus to Bob: `src/lib/bobSurface.ts` + `src/domain/bobScreen.ts`; [context contract](ask-bob-context.md#implemented-scope-and-remaining-target)
 - Drawing source map, exact-version status and shared request complements: `src/components/CadSourceMap.tsx`, `DrawingRequests.tsx` + [artifact contract](artifacts.md#parameter-sources-changes-and-request-complements--p3-deployed)
